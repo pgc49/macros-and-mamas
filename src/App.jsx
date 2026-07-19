@@ -419,10 +419,9 @@ export default function App() {
       macros={macros}
       totals={totals}
       waterOz={waterOz}
-      estimateBusy={estimateBusy}
-      estimate={estimate}
-      setEstimate={setEstimate}
-      analyzePhoto={analyzePhoto}
+        estimateBusy={estimateBusy}
+        estimate={estimate}
+        analyzePhoto={analyzePhoto}
       analyzeText={analyzeText}
       confirmEstimate={confirmEstimate}
       discardEstimate={discardEstimate}

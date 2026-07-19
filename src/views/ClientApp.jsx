@@ -12,7 +12,7 @@ export function ClientApp({
   tab, setTab,
   profile, macros,
   totals, waterOz,
-  estimateBusy, estimate, setEstimate,
+  estimateBusy, estimate,
   analyzePhoto, analyzeText, confirmEstimate, discardEstimate,
   logManualMeal, logRecipe, todayLog, deleteMealEntry,
   viewWk, setViewWk, curWk, editPast, setEditPast,
@@ -70,7 +70,6 @@ export function ClientApp({
           <MealLogCard
             busy={estimateBusy}
             estimate={estimate}
-            setEstimate={setEstimate}
             onAnalyzePhoto={analyzePhoto}
             onAnalyzeText={analyzeText}
             onConfirmEstimate={confirmEstimate}
