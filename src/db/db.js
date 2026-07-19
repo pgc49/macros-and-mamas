@@ -109,7 +109,7 @@ export const db = {
       supabase.from("macros").select("*").eq("profile_id", uid).maybeSingle(),
       supabase.from("checkins").select("week_start, item_id, day").eq("profile_id", uid),
       supabase.from("weighins").select("date, weight").eq("profile_id", uid).order("date", { ascending: true }),
-      supabase.from("meal_logs").select("id, date, name, cal, p, c, f").eq("profile_id", uid).eq("date", today).order("id", { ascending: true }),
+      supabase.from("meal_logs").select("id, date, name, cal, p, c, f, source").eq("profile_id", uid).eq("date", today).order("id", { ascending: true }),
     ]);
 
     if (pErr) throw pErr;
@@ -154,6 +154,7 @@ export const db = {
           p: r.p,
           c: r.c,
           f: r.f,
+          source: r.source || null,
         })),
       },
     };
@@ -226,11 +227,22 @@ export const db = {
         p: entry.p,
         c: entry.c,
         f: entry.f,
+        source: entry.source || null,
       })
-      .select("id, date, name, cal, p, c, f")
+      .select("id, date, name, cal, p, c, f, source")
       .single();
     if (error) throw error;
     return data;
+  },
+
+  async deleteMealLog(id) {
+    const uid = await requireUserId();
+    const { error } = await supabase
+      .from("meal_logs")
+      .delete()
+      .eq("profile_id", uid)
+      .eq("id", id);
+    if (error) throw error;
   },
 
   async clearTodayMeals(date = new Date().toISOString().slice(0, 10)) {

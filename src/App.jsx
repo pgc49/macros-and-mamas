@@ -46,8 +46,9 @@ export default function App() {
   const [mealFilter, setMealFilter] = useState("All");
   const [roster, setRoster] = useState([]); // loads from db
   const [adminSel, setAdminSel] = useState(null);
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const [photoResult, setPhotoResult] = useState(null);
+  const [estimateBusy, setEstimateBusy] = useState(false);
+  const [estimate, setEstimate] = useState(null); // AI estimate awaiting confirm, or { error: true }
+  const [estimateSource, setEstimateSource] = useState("photo"); // photo | text
   const [todayLog, setTodayLog] = useState({ date: new Date().toISOString().slice(0, 10), entries: [] });
   const [loaded, setLoaded] = useState(false);
 
@@ -156,67 +157,120 @@ export default function App() {
 
   const waterOz = profile.goalWeight ? Math.round(Number(profile.goalWeight) / 2) : null;
 
-  /* Photo analysis — now proxied through /api/analyze so the
-     Anthropic key stays server-side. See functions/api/analyze.js.
-     The server returns the parsed JSON estimate directly. */
-  const analyzePhoto = async (file) => {
-    if (!file) return;
-    setPhotoBusy(true); setPhotoResult(null);
+  const downscaleImage = (file, max = 1024) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.8).split(",")[1]);
+    };
+    img.onerror = () => resolve(null);
+    img.src = URL.createObjectURL(file);
+  });
+
+  const runEstimate = async (payload, source) => {
+    setEstimateBusy(true);
+    setEstimate(null);
+    setEstimateSource(source);
     try {
-      const b64 = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result.split(",")[1]);
-        r.onerror = () => rej(new Error("read failed"));
-        r.readAsDataURL(file);
-      });
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("not signed in");
-      const resp = await fetch(CONFIG.ANALYZE_ENDPOINT, {
+      const resp = await fetch(CONFIG.ESTIMATE_ENDPOINT, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ image: b64, media_type: file.type || "image/jpeg" }),
+        body: JSON.stringify(payload),
       });
-      if (!resp.ok) throw new Error(`analyze failed: ${resp.status}`);
-      const parsed = await resp.json();
-      setPhotoResult(parsed.error ? { error: true } : parsed);
+      const parsed = await resp.json().catch(() => ({}));
+      if (!resp.ok || parsed.error) setEstimate({ error: true });
+      else setEstimate(parsed);
     } catch (e) {
-      console.error("photo analysis failed", e);
-      setPhotoResult({ error: true });
+      console.error("estimate failed", e);
+      setEstimate({ error: true });
     }
-    setPhotoBusy(false);
+    setEstimateBusy(false);
   };
 
-  const logMeal = async () => {
-    if (!photoResult || photoResult.error) return;
-    const entry = {
-      name: photoResult.meal,
-      cal: photoResult.calories,
-      p: photoResult.protein_g,
-      c: photoResult.carbs_g,
-      f: photoResult.fat_g,
-    };
+  const analyzePhoto = async (file) => {
+    if (!file) return;
+    const b64 = await downscaleImage(file);
+    if (!b64) { setEstimate({ error: true }); return; }
+    await runEstimate({ type: "photo", image_b64: b64, media_type: "image/jpeg" }, "photo");
+  };
+
+  const analyzeText = async (description) => {
+    if (!description?.trim()) return;
+    await runEstimate({ type: "text", description: description.trim() }, "text");
+  };
+
+  const appendMealEntry = async (entry) => {
     try {
       const row = await db.addMealLog(entry);
       setTodayLog((tl) => ({
         date: new Date().toISOString().slice(0, 10),
-        entries: [...tl.entries, { ...entry, id: row.id }],
+        entries: [...tl.entries, {
+          id: row.id,
+          name: entry.name,
+          cal: entry.cal,
+          p: entry.p,
+          c: entry.c,
+          f: entry.f,
+          source: entry.source || null,
+        }],
       }));
+      return true;
     } catch (e) {
-      console.error("logMeal failed", e);
+      console.error("addMealLog failed", e);
+      return false;
     }
-    setPhotoResult(null);
   };
 
-  const clearTodayMeals = async () => {
-    const date = new Date().toISOString().slice(0, 10);
+  const confirmEstimate = async () => {
+    if (!estimate || estimate.error) return;
+    await appendMealEntry({
+      name: estimate.meal,
+      cal: estimate.calories,
+      p: estimate.protein_g,
+      c: estimate.carbs_g,
+      f: estimate.fat_g,
+      source: estimateSource,
+    });
+    setEstimate(null);
+  };
+
+  const discardEstimate = () => setEstimate(null);
+
+  const logRecipe = async (recipe) => {
+    const ok = await appendMealEntry({
+      name: recipe.name,
+      cal: recipe.cal,
+      p: recipe.p,
+      c: recipe.c,
+      f: recipe.f,
+      source: "recipe",
+    });
+    if (ok) setTab("today");
+  };
+
+  const logManualMeal = async (entry) => {
+    await appendMealEntry(entry);
+  };
+
+  const deleteMealEntry = async (id) => {
+    if (!id) return;
     try {
-      await db.clearTodayMeals(date);
-      setTodayLog({ date, entries: [] });
+      await db.deleteMealLog(id);
+      setTodayLog((tl) => ({
+        ...tl,
+        entries: tl.entries.filter((e) => e.id !== id),
+      }));
     } catch (e) {
-      console.error("clearTodayMeals failed", e);
+      console.error("deleteMealLog failed", e);
     }
   };
 
@@ -377,13 +431,17 @@ export default function App() {
         macros={macros}
         totals={totals}
         waterOz={waterOz}
-        photoBusy={photoBusy}
-        photoResult={photoResult}
-        setPhotoResult={setPhotoResult}
+        estimateBusy={estimateBusy}
+        estimate={estimate}
+        setEstimate={setEstimate}
         analyzePhoto={analyzePhoto}
-        logMeal={logMeal}
+        analyzeText={analyzeText}
+        confirmEstimate={confirmEstimate}
+        discardEstimate={discardEstimate}
+        logRecipe={logRecipe}
+        logManualMeal={logManualMeal}
         todayLog={todayLog}
-        clearTodayMeals={clearTodayMeals}
+        deleteMealEntry={deleteMealEntry}
         viewWk={viewWk}
         setViewWk={setViewWk}
         curWk={curWk}
