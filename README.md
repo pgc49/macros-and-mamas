@@ -1,0 +1,113 @@
+# Macros and Mamas
+
+Production app for [macrosandmamas.com](https://macrosandmamas.com) — an 8-week postpartum macro coaching program.
+
+**Stack:** Vite + React SPA on Cloudflare Pages · Pages Functions (`/functions`) · Supabase Auth + Postgres (RLS) · Stripe Checkout · OpenRouter (meal photo AI)
+
+**Flow:** intake → Callie approves in admin → client pays $149 via Stripe → dashboard unlocks.
+
+## Local development
+
+```bash
+npm install
+cp .env.example .env   # fill VITE_SUPABASE_* (and optional public URLs)
+npm run dev            # SPA at http://localhost:5173
+```
+
+To run Pages Functions locally (checkout, webhook, analyze):
+
+```bash
+cp .dev.vars.example .dev.vars   # fill secrets — never commit .dev.vars
+npx wrangler pages dev dist --compatibility-date=2024-11-01
+# or: npm run build && npx wrangler pages dev dist
+```
+
+Typical loop: `npm run build` then `npx wrangler pages dev dist` so `/api/*` and the SPA share one origin.
+
+## Deploy
+
+| Trigger | Result |
+|---------|--------|
+| Push to `main` | Production deploy (Cloudflare Pages) |
+| Pull request | Preview URL |
+
+**Pages build settings**
+
+- Build command: `npm run build`
+- Build output directory: `dist`
+- Root directory: `/` (empty)
+- Framework preset: none / Vite
+
+## Environment variables
+
+### Client build-time (Vite — set in Cloudflare Pages + local `.env`)
+
+These are **public** (embedded in the JS bundle). Safe under RLS.
+
+| Name | Purpose |
+|------|---------|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Publishable / anon key |
+| `VITE_WHATSAPP_GROUP_URL` | Optional WhatsApp invite; hides Open button if unset |
+| `VITE_FULLSCRIPT_ELECTROLYTES_URL` | Optional Fullscript link |
+| `VITE_FULLSCRIPT_SLEEP_URL` | Optional Fullscript link |
+| `VITE_FULLSCRIPT_DIGESTION_URL` | Optional Fullscript link |
+
+The app also has project fallbacks for Supabase URL/publishable key in `src/config.js`.
+
+### Server runtime (Pages Functions — Cloudflare secrets / `.dev.vars`)
+
+**Never commit real values. Never put these in client code.**
+
+| Name | Purpose | Where |
+|------|---------|--------|
+| `OPENROUTER_API_KEY` | Meal photo AI | Cloudflare secret |
+| `STRIPE_SECRET_KEY` | Create Checkout Sessions | Cloudflare secret (`sk_test_…` first) |
+| `STRIPE_PRICE_ID` | $149 Price ID (`price_…`) | Cloudflare env |
+| `STRIPE_WEBHOOK_SECRET` | Verify webhook signatures (`whsec_…`) | Cloudflare secret |
+| `SUPABASE_URL` | Used by `/api/checkout`, `/api/analyze`, webhook | Cloudflare env |
+| `SUPABASE_ANON_KEY` | Validate JWTs in functions | Cloudflare env/secret |
+| `SUPABASE_SERVICE_ROLE_KEY` | Webhook marks `profiles.paid` (**server only**) | Cloudflare secret |
+
+Local copies live in `.dev.vars` (gitignored). See `.dev.vars.example`.
+
+## Supabase setup
+
+1. Create a project; run `/supabase/schema.sql` in the SQL editor.
+2. Auth → URL configuration: Site URL + redirect URLs for production, `*.pages.dev` previews, and `http://localhost:5173`.
+3. After Callie signs in once, promote her:
+
+```sql
+update public.profiles
+set role = 'admin'
+where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
+```
+
+## Stripe setup (test mode first)
+
+1. Create a one-time **$149** product → copy **Price ID** (`price_…`).
+2. Webhook endpoint: `https://YOUR_DOMAIN/api/stripe-webhook`  
+   Event: `checkout.session.completed` → copy signing secret (`whsec_…`).
+3. Set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` in Cloudflare.
+4. Before real charges: switch to live keys, live price, and a live webhook.
+
+## Key paths
+
+| Path | Role |
+|------|------|
+| `/spec/macros-and-mamas.jsx` | Approved product spec (reference; do not “improve” copy) |
+| `/functions/api/analyze.js` | Meal photo → OpenRouter (JWT required) |
+| `/functions/api/checkout.js` | Stripe Checkout Session |
+| `/functions/api/stripe-webhook.js` | Marks profile paid |
+| `/supabase/schema.sql` | Tables + RLS |
+| `/src` | Production React app |
+
+## Definition of done (checklist)
+
+- [ ] Push to `main` deploys; PRs get preview URLs
+- [ ] Visitor can view sales, complete intake, land in pending; gated applicants see decline copy
+- [ ] Callie (admin) sees pending queue, edits macros, approves
+- [ ] Approved client pays in Stripe test mode, then sees ranges, checklist, weigh-in, plate photo via `/api/analyze`
+- [ ] Unauthenticated `curl` to `/api/analyze` returns **401**
+- [ ] Reload / second browser shows the same persisted data
+- [ ] No secret key material in git (`sk-or-`, `sk_live`, `sk_test` values, etc.)

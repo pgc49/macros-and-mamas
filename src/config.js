@@ -1,14 +1,21 @@
 /* ------------------------------------------------------------------ */
 /*  CONFIG — every external dependency lives here.                     */
-/*  Replace remaining {{PLACEHOLDER}} tokens before launch.            */
 /* ------------------------------------------------------------------ */
+
+function envUrl(name) {
+  const v = import.meta.env[name];
+  if (typeof v !== "string") return "";
+  const trimmed = v.trim();
+  if (!trimmed || trimmed.includes("{{") || trimmed.includes("PLACEHOLDER")) return "";
+  return trimmed;
+}
 
 // Public by design under RLS. Prefer Vite env so preview/prod can differ;
 // fallbacks are this project's publishable credentials.
 const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL || "https://reangkqbsazwxvrqvsdo.supabase.co";
+  envUrl("VITE_SUPABASE_URL") || "https://reangkqbsazwxvrqvsdo.supabase.co";
 const SUPABASE_ANON_KEY =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  envUrl("VITE_SUPABASE_ANON_KEY") ||
   "sb_publishable_VZroN1jvDKeAjcaBkmyGFw_yhsl0d5G";
 
 export const CONFIG = {
@@ -25,13 +32,14 @@ export const CONFIG = {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
 
-  // PROD-TODO(whatsapp): Callie invites each mama personally by text
-  // after approval, so this may stay a no-op. If a group invite link
-  // is ever used instead, it goes here.
-  WHATSAPP_GROUP_URL: "{{WHATSAPP_GROUP_INVITE_URL}}",
-
-  // PROD-TODO(fullscript): Callie's practitioner links.
-  FULLSCRIPT_ELECTROLYTES: "{{FULLSCRIPT_ELECTROLYTES_URL}}",
-  FULLSCRIPT_SLEEP: "{{FULLSCRIPT_SLEEP_URL}}",
-  FULLSCRIPT_DIGESTION: "{{FULLSCRIPT_DIGESTION_URL}}",
+  // Optional public links — hide UI if unset (Callie may invite by text).
+  WHATSAPP_GROUP_URL: envUrl("VITE_WHATSAPP_GROUP_URL"),
+  FULLSCRIPT_ELECTROLYTES: envUrl("VITE_FULLSCRIPT_ELECTROLYTES_URL"),
+  FULLSCRIPT_SLEEP: envUrl("VITE_FULLSCRIPT_SLEEP_URL"),
+  FULLSCRIPT_DIGESTION: envUrl("VITE_FULLSCRIPT_DIGESTION_URL"),
 };
+
+/** True when a config URL is set and safe to render as a link. */
+export function hasPublicUrl(url) {
+  return typeof url === "string" && /^https?:\/\//i.test(url);
+}

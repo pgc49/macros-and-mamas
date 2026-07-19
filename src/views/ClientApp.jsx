@@ -1,7 +1,7 @@
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { CONFIG } from "../config";
+import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/data";
 import { addDaysIso, fmtRange } from "../utils/dates";
@@ -19,6 +19,11 @@ export function ClientApp({
   mealFilter, setMealFilter,
 }) {
   const hi = (n, d = 10) => n + d;
+  const hasWhatsApp = hasPublicUrl(CONFIG.WHATSAPP_GROUP_URL);
+  const hasElectrolytes = hasPublicUrl(CONFIG.FULLSCRIPT_ELECTROLYTES);
+  const hasSleep = hasPublicUrl(CONFIG.FULLSCRIPT_SLEEP);
+  const hasDigestion = hasPublicUrl(CONFIG.FULLSCRIPT_DIGESTION);
+  const hasAnySupport = hasElectrolytes || hasSleep || hasDigestion;
   return (
     <Shell>
       <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", gap: 4, padding: "8px 0 14px", zIndex: 5 }}>
@@ -43,8 +48,9 @@ export function ClientApp({
               <b>The Mamas group chat</b><br />
               <span style={{ color: T.inkSoft, fontSize: 13 }}>Callie's in the chat Mon–Fri and answers in voice notes. Her Monday drop sets the week's focus — plate pics and wins always welcome.</span>
             </div>
-            {/* PROD-TODO(whatsapp): wire or hide until the group link/flow is decided */}
-            <Btn small onClick={() => window.open(CONFIG.WHATSAPP_GROUP_URL, "_blank")}>Open</Btn>
+            {hasWhatsApp && (
+              <Btn small onClick={() => window.open(CONFIG.WHATSAPP_GROUP_URL, "_blank")}>Open</Btn>
+            )}
           </Card>
 
           <Card>
@@ -133,8 +139,9 @@ export function ClientApp({
             <div style={{ fontSize: 26 }}>💧</div>
             <div style={{ fontSize: 14, lineHeight: 1.5 }}>
               <b>{waterOz} oz of water today</b> (half your goal weight), plus electrolytes.
-              {/* PROD-TODO(fullscript) */}
-              <a href={CONFIG.FULLSCRIPT_ELECTROLYTES} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}> Callie's electrolytes on Fullscript →</a>
+              {hasElectrolytes && (
+                <a href={CONFIG.FULLSCRIPT_ELECTROLYTES} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}> Callie's electrolytes on Fullscript →</a>
+              )}
             </div>
           </Card>
 
@@ -348,15 +355,16 @@ export function ClientApp({
             </div>
           </Card>
 
-          <Card style={{ marginTop: 12 }}>
-            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Need extra support?</div>
-            <div style={{ fontSize: 13.5, lineHeight: 1.8 }}>
-              {/* PROD-TODO(fullscript): wire all three links */}
-              <a href={CONFIG.FULLSCRIPT_SLEEP} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}>Sleep support →</a><br />
-              <a href={CONFIG.FULLSCRIPT_DIGESTION} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}>Digestion support →</a><br />
-              <a href={CONFIG.FULLSCRIPT_ELECTROLYTES} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}>Electrolytes →</a>
-            </div>
-          </Card>
+          {hasAnySupport && (
+            <Card style={{ marginTop: 12 }}>
+              <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Need extra support?</div>
+              <div style={{ fontSize: 13.5, lineHeight: 1.8 }}>
+                {hasSleep && <><a href={CONFIG.FULLSCRIPT_SLEEP} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}>Sleep support →</a><br /></>}
+                {hasDigestion && <><a href={CONFIG.FULLSCRIPT_DIGESTION} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}>Digestion support →</a><br /></>}
+                {hasElectrolytes && <a href={CONFIG.FULLSCRIPT_ELECTROLYTES} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}>Electrolytes →</a>}
+              </div>
+            </Card>
+          )}
         </>
       )}
     </Shell>
