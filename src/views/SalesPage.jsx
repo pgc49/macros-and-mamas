@@ -1,6 +1,8 @@
-import { T, FD } from "../theme/tokens";
+import { Link } from "react-router-dom";
+import { T, FD, F } from "../theme/tokens";
 import { FEATURES } from "../content/data";
 import { Shell, Card, Btn } from "../components/ui";
+import { PATHS } from "../routing";
 
 export function SalesPage({ onStartIntake, onSignIn }) {
   return (
@@ -62,6 +64,15 @@ export function SalesPage({ onStartIntake, onSignIn }) {
       <div style={{ margin: "20px 0 6px" }}>
         <Btn onClick={onStartIntake} style={{ width: "100%" }}>Start my intake</Btn>
       </div>
+
+      <p style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, margin: "18px 0 0" }}>
+        <Link
+          to={PATHS.terms}
+          style={{ fontFamily: F, fontWeight: 700, color: T.accent, textDecoration: "underline" }}
+        >
+          Terms and Conditions
+        </Link>
+      </p>
     </Shell>
   );
 }

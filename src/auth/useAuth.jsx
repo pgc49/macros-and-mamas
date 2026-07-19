@@ -77,16 +77,38 @@ export function AuthProvider({ children }) {
     return { error };
   };
 
-  const signUpWithPassword = async (email, password) => {
+  const signUpWithPassword = async (email, password, { termsAcceptedAt, termsVersion } = {}) => {
+    if (!termsAcceptedAt || !termsVersion) {
+      return { error: { message: "You must agree to the Terms and Conditions to create an account." }, needsEmailConfirm: false };
+    }
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
         emailRedirectTo: window.location.origin,
+        data: {
+          terms_accepted_at: termsAcceptedAt,
+          terms_version: termsVersion,
+        },
       },
     });
-    // If email confirmation is required, session stays null until they confirm
+    // If email confirmation is required, session stays null until they confirm.
+    // Acceptance is also written onto profiles via the signup trigger + metadata.
     const needsEmailConfirm = !error && !data.session;
+
+    // When a session exists immediately, stamp the profile row as a backup
+    // (trigger may race or an older trigger may not copy metadata yet).
+    if (!error && data.session?.user?.id) {
+      const { error: stampErr } = await supabase
+        .from("profiles")
+        .update({
+          terms_accepted_at: termsAcceptedAt,
+          terms_version: termsVersion,
+        })
+        .eq("id", data.session.user.id);
+      if (stampErr) console.error("terms stamp failed", stampErr);
+    }
+
     return { error, needsEmailConfirm };
   };
 
