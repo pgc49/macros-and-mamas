@@ -9,7 +9,6 @@ const AuthContext = createContext({
   loading: true,
   signInWithPassword: async () => ({ error: null }),
   signUpWithPassword: async () => ({ error: null, needsEmailConfirm: false }),
-  signInWithEmail: async () => ({ error: null }),
   signOut: async () => {},
   refreshProfile: async () => {},
 });
@@ -91,17 +90,6 @@ export function AuthProvider({ children }) {
     return { error, needsEmailConfirm };
   };
 
-  // Optional fallback — hits Supabase email rate limits on free built-in SMTP
-  const signInWithEmail = async (email) => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    return { error };
-  };
-
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
@@ -115,7 +103,6 @@ export function AuthProvider({ children }) {
     loading,
     signInWithPassword,
     signUpWithPassword,
-    signInWithEmail,
     signOut,
     refreshProfile,
   };
