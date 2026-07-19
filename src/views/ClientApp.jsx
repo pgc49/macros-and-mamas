@@ -6,13 +6,15 @@ import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/data";
 import { addDaysIso, fmtRange } from "../utils/dates";
 import { Shell, Card, Btn, Chip, RangeBand, inputStyle } from "../components/ui";
+import { MealLogCard } from "../components/MealLogCard";
 
 export function ClientApp({
   tab, setTab,
   profile, macros,
   totals, waterOz,
-  photoBusy, photoResult, setPhotoResult, analyzePhoto, logMeal,
-  todayLog, clearTodayMeals,
+  estimateBusy, estimate, setEstimate,
+  analyzePhoto, analyzeText, confirmEstimate, discardEstimate,
+  logManualMeal, logRecipe, todayLog, deleteMealEntry,
   viewWk, setViewWk, curWk, editPast, setEditPast,
   checksByWeek, toggleCheck, adherenceFor, progWeekNum, earliestWk,
   weighins, wInput, setWInput, logWeighin, weeklyRate, trends,
@@ -65,75 +67,18 @@ export function ClientApp({
             </div>
           </Card>
 
-          <Card style={{ marginTop: 12 }}>
-            <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-              <div style={{ fontSize: 26 }}>📸</div>
-              <div style={{ flex: 1, fontSize: 14, lineHeight: 1.5 }}>
-                <b>Snap your plate</b><br />
-                <span style={{ color: T.inkSoft, fontSize: 13 }}>Photo in, macro estimate out. No weighing, no guessing.</span>
-              </div>
-              <label style={{
-                fontFamily: F, fontWeight: 700, fontSize: 13, cursor: photoBusy ? "default" : "pointer",
-                padding: "8px 14px", borderRadius: 999, background: photoBusy ? "#D9C4CE" : T.accent, color: "#fff",
-              }}>
-                {photoBusy ? "Reading…" : "Snap"}
-                <input type="file" accept="image/*" capture="environment" disabled={photoBusy} style={{ display: "none" }}
-                  onChange={(e) => { analyzePhoto(e.target.files?.[0]); e.target.value = ""; }} />
-              </label>
-            </div>
-            <label style={{ display: "inline-block", marginTop: 8, fontSize: 13, fontWeight: 700, color: T.accent, cursor: photoBusy ? "default" : "pointer", textDecoration: "underline" }}>
-              or choose from your photo library
-              <input type="file" accept="image/*" disabled={photoBusy} style={{ display: "none" }}
-                onChange={(e) => { analyzePhoto(e.target.files?.[0]); e.target.value = ""; }} />
-            </label>
-
-            {photoBusy && (
-              <div style={{ marginTop: 12, fontSize: 13.5, color: T.inkSoft }}>Looking at your plate… this takes a few seconds.</div>
-            )}
-
-            {photoResult && photoResult.error && (
-              <div style={{ marginTop: 12, background: T.amberSoft, borderRadius: 12, padding: "10px 14px", fontSize: 13.5, color: T.amber, lineHeight: 1.5 }}>
-                Couldn't read that one — try a clearer shot from above, with the whole plate in frame.
-              </div>
-            )}
-
-            {photoResult && !photoResult.error && (
-              <div style={{ marginTop: 12, background: T.accentSoft, borderRadius: 12, padding: "12px 14px" }}>
-                <div style={{ fontFamily: FD, fontSize: 17 }}>{photoResult.meal}</div>
-                <div style={{ fontSize: 12.5, color: T.inkSoft, margin: "2px 0 8px" }}>{(photoResult.items || []).join(" · ")}</div>
-                <div style={{ display: "flex", gap: 14, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>
-                  <span>{photoResult.calories} cal</span>
-                  <span style={{ color: T.accentDeep }}>P {photoResult.protein_g}g</span>
-                  <span style={{ color: T.inkSoft }}>C {photoResult.carbs_g}g</span>
-                  <span style={{ color: T.inkSoft }}>F {photoResult.fat_g}g</span>
-                </div>
-                {photoResult.tip && <div style={{ fontSize: 13, color: T.accentDeep, lineHeight: 1.5, marginBottom: 10 }}>💬 {photoResult.tip}</div>}
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <Btn small onClick={logMeal}>Add to today</Btn>
-                  <button onClick={() => setPhotoResult(null)} style={{ background: "none", border: "none", fontSize: 13, color: T.inkSoft, cursor: "pointer", textDecoration: "underline" }}>discard</button>
-                  <span style={{ fontSize: 11.5, color: T.inkSoft, marginLeft: "auto" }}>AI estimate · {photoResult.confidence} confidence</span>
-                </div>
-              </div>
-            )}
-
-            {todayLog.entries.length > 0 && (
-              <div style={{ marginTop: 12, borderTop: `1px dashed ${T.border}`, paddingTop: 10 }}>
-                {todayLog.entries.map((e, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}>
-                    <span style={{ color: T.ink }}>{e.name}</span>
-                    <span style={{ color: T.inkSoft }}>{e.cal} cal · P{e.p} C{e.c} F{e.f}</span>
-                  </div>
-                ))}
-                <button onClick={clearTodayMeals}
-                  style={{ background: "none", border: "none", fontSize: 12, color: T.accent, cursor: "pointer", padding: "6px 0 0", textDecoration: "underline" }}>
-                  clear today
-                </button>
-              </div>
-            )}
-            <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 10, lineHeight: 1.4 }}>
-              Estimates are ballpark — great for awareness, and your Cronometer log is still the source of truth.
-            </div>
-          </Card>
+          <MealLogCard
+            busy={estimateBusy}
+            estimate={estimate}
+            setEstimate={setEstimate}
+            onAnalyzePhoto={analyzePhoto}
+            onAnalyzeText={analyzeText}
+            onConfirmEstimate={confirmEstimate}
+            onDiscardEstimate={discardEstimate}
+            onManualLog={logManualMeal}
+            todayLog={todayLog}
+            onDeleteEntry={deleteMealEntry}
+          />
 
           <Card style={{ marginTop: 12, display: "flex", gap: 14, alignItems: "center" }}>
             <div style={{ fontSize: 26 }}>💧</div>
@@ -260,9 +205,23 @@ export function ClientApp({
 
           {RECIPES.filter((r) => mealFilter === "All" || r.cat === mealFilter).map((r) => (
             <Card key={r.name} style={{ marginBottom: 10, padding: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}>{r.cat}{r.serves > 1 ? ` · serves ${r.serves}` : ""}</div>
-              <div style={{ fontFamily: FD, fontSize: 18, margin: "2px 0 4px" }}>{r.name}</div>
-              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>{r.desc}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}>{r.cat}{r.serves > 1 ? ` · serves ${r.serves}` : ""}</div>
+                  <div style={{ fontFamily: FD, fontSize: 18, margin: "2px 0 4px" }}>{r.name}</div>
+                  <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>{r.desc}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => logRecipe(r)}
+                  style={{
+                    flexShrink: 0, fontFamily: F, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 999,
+                    border: `1.5px solid ${T.accent}`, background: T.accentSoft, color: T.accentDeep, cursor: "pointer",
+                  }}
+                >
+                  + Log
+                </button>
+              </div>
               <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 13, fontWeight: 700 }}>
                 <span>{r.cal} cal</span>
                 <span style={{ color: T.accentDeep }}>P {r.p}g</span>

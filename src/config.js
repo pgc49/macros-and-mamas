@@ -23,8 +23,10 @@ export const CONFIG = {
   // approves (intake → approve → pay → unlock). No Payment Link.
   CHECKOUT_ENDPOINT: "/api/checkout",
 
-  // Meal photo analysis — Cloudflare Pages Function (OpenRouter).
+  // Meal photo analysis — legacy; prefer ESTIMATE_ENDPOINT.
   ANALYZE_ENDPOINT: "/api/analyze",
+  // Photo + text meal estimates (OpenRouter), auth-gated.
+  ESTIMATE_ENDPOINT: "/api/estimate",
 
   // Supabase project URL + anon (publishable) key.
   // The anon key is safe client-side ONLY with row-level security on

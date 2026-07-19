@@ -14,7 +14,7 @@ cp .env.example .env   # fill VITE_SUPABASE_* (and optional public URLs)
 npm run dev            # SPA at http://localhost:5173
 ```
 
-To run Pages Functions locally (checkout, webhook, analyze):
+To run Pages Functions locally (checkout, webhook, estimate, analyze):
 
 ```bash
 cp .dev.vars.example .dev.vars   # fill secrets — never commit .dev.vars
@@ -96,18 +96,22 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 | Path | Role |
 |------|------|
 | `/spec/macros-and-mamas.jsx` | Approved product spec (reference; do not “improve” copy) |
-| `/functions/api/analyze.js` | Meal photo → OpenRouter (JWT required) |
+| `/functions/api/estimate.js` | Meal photo + text → OpenRouter (JWT required) |
+| `/functions/api/analyze.js` | Legacy photo-only endpoint (JWT required) |
 | `/functions/api/checkout.js` | Stripe Checkout Session |
 | `/functions/api/stripe-webhook.js` | Marks profile paid |
 | `/supabase/schema.sql` | Tables + RLS |
+| `/supabase/migrations/002_meal_logging.sql` | `meal_logs.source` + `estimate_calls` |
 | `/src` | Production React app |
+
+**After deploy:** run `supabase/migrations/002_meal_logging.sql` in the Supabase SQL editor if not already applied (adds `source` on `meal_logs` and the `estimate_calls` cost-watch table).
 
 ## Definition of done (checklist)
 
 - [ ] Push to `main` deploys; PRs get preview URLs
 - [ ] Visitor can view sales, complete intake, land in pending; gated applicants see decline copy
 - [ ] Callie (admin) sees pending queue, edits macros, approves
-- [ ] Approved client pays in Stripe test mode, then sees ranges, checklist, weigh-in, plate photo via `/api/analyze`
-- [ ] Unauthenticated `curl` to `/api/analyze` returns **401**
+- [ ] Approved client pays in Stripe test mode, then sees ranges, checklist, weigh-in, meal log (recipe / photo / text / manual) via `/api/estimate`
+- [ ] Unauthenticated `curl` to `/api/estimate` returns **401**
 - [ ] Reload / second browser shows the same persisted data
 - [ ] No secret key material in git (`sk-or-`, `sk_live`, `sk_test` values, etc.)
