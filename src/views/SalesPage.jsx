@@ -2,7 +2,7 @@ import { T, FD } from "../theme/tokens";
 import { FEATURES } from "../content/data";
 import { Shell, Card, Btn } from "../components/ui";
 
-export function SalesPage({ onStartIntake }) {
+export function SalesPage({ onStartIntake, onSignIn }) {
   return (
     <Shell>
       <div style={{ padding: "30px 4px 8px" }}>
@@ -19,6 +19,19 @@ export function SalesPage({ onStartIntake }) {
         <div style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, marginTop: 8 }}>
           Founding price. Goes to $299+ after this group fills.
         </div>
+        {onSignIn && (
+          <div style={{ textAlign: "center", marginTop: 14 }}>
+            <button
+              onClick={onSignIn}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, color: T.accent, textDecoration: "underline",
+              }}
+            >
+              Already enrolled? Sign in
+            </button>
+          </div>
+        )}
       </div>
 
       <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 24, margin: "26px 0 12px" }}>What's inside</h2>

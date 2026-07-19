@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { CONFIG } from "./config";
-import { useAuth } from "./auth/useAuth";
+import { useAuth } from "./auth/useAuth.jsx";
 import { db } from "./db/db";
 import { computeMacros } from "./engine/computeMacros";
 import { DEFAULT_ITEMS, DAYS } from "./content/data";
@@ -9,15 +9,19 @@ import { SalesPage } from "./views/SalesPage";
 import { IntakeFlow } from "./views/IntakeFlow";
 import { DeclinedPage } from "./views/DeclinedPage";
 import { PendingPage } from "./views/PendingPage";
+import { SignInPage } from "./views/SignInPage";
 import { ClientApp } from "./views/ClientApp";
 import { AdminPortal } from "./admin/AdminPortal";
+import { Shell } from "./components/ui";
+import { T, FD } from "./theme/tokens";
 
 /* ------------------------------------------------------------------ */
 /*  Main app                                                           */
 /* ------------------------------------------------------------------ */
 export default function App() {
-  const { isAdmin } = useAuth(); // replaces the prototype's client-side coach toggle
-  const [view, setView] = useState("sales"); // sales | intake | declined | pending | app
+  const { user, isAdmin, loading: authLoading } = useAuth(); // Supabase magic-link auth
+  const [view, setView] = useState("sales"); // sales | intake | declined | pending | app | signin
+  const [signInNext, setSignInNext] = useState("intake"); // where to go after magic-link for new sessions
   const [tab, setTab] = useState("today");
   const [step, setStep] = useState(0);
   const [declineReason, setDeclineReason] = useState("");
@@ -78,6 +82,18 @@ export default function App() {
     if (!loaded) return;
     db.saveClientState({ profile, macros, view, approved, checksByWeek, strengthByWeek, weighins, todayLog });
   }, [profile, macros, view, approved, checksByWeek, strengthByWeek, weighins, todayLog, loaded]);
+
+  // After magic-link lands, leave the sign-in screen
+  useEffect(() => {
+    if (!user || isAdmin || view !== "signin") return;
+    if (signInNext === "intake") {
+      setView("intake");
+      setStep(0);
+    } else {
+      // Returning clients: Step 4 will hydrate real status; pending is safe until then
+      setView("pending");
+    }
+  }, [user, isAdmin, view, signInNext]);
 
   const set = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
 
@@ -206,13 +222,56 @@ export default function App() {
     return { locked: false, n, overall, delta, items, best, worst };
   }, [wkKeys, checksByWeek]);
 
+  if (authLoading) {
+    return (
+      <Shell>
+        <div style={{ padding: "40px 8px", textAlign: "center", color: T.inkSoft, fontFamily: FD, fontSize: 18 }}>
+          Loading…
+        </div>
+      </Shell>
+    );
+  }
+
+  const goIntake = () => {
+    if (!user) {
+      setSignInNext("intake");
+      setView("signin");
+      return;
+    }
+    setView("intake");
+    setStep(0);
+  };
+
+  /* ------------------------- SIGN IN ------------------------------ */
+  if (view === "signin" && !isAdmin && !user) {
+    return (
+      <SignInPage
+        title={signInNext === "intake" ? "Sign in to start your intake" : "Welcome back"}
+        onBack={() => setView("sales")}
+      />
+    );
+  }
+
   /* ------------------------- SALES PAGE --------------------------- */
   if (view === "sales" && !isAdmin) {
-    return <SalesPage onStartIntake={() => { setView("intake"); setStep(0); }} />;
+    return (
+      <SalesPage
+        onStartIntake={goIntake}
+        onSignIn={() => { setSignInNext("app"); setView("signin"); }}
+      />
+    );
   }
 
   /* ------------------------- INTAKE ------------------------------- */
   if (view === "intake" && !isAdmin) {
+    if (!user) {
+      return (
+        <SignInPage
+          title="Sign in to start your intake"
+          onBack={() => setView("sales")}
+        />
+      );
+    }
     return (
       <IntakeFlow
         profile={profile}

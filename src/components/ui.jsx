@@ -1,5 +1,6 @@
 import { T, F, FD } from "../theme/tokens";
 import { Fonts } from "../theme/Fonts";
+import { useAuth } from "../auth/useAuth.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  Building blocks (defined OUTSIDE the app so inputs keep focus)     */
@@ -75,19 +76,35 @@ export const RangeBand = ({ label, lo, hi, unit = "g", color = T.accent, soft = 
 };
 
 /* Shell — prototype's coach toggle and reset button removed.
-   PROD-TODO(auth): add a signed-in indicator / sign-out control here
-   once Supabase Auth is wired. */
-export const Shell = ({ children }) => (
-  <div style={{ fontFamily: F, background: T.bg, minHeight: "100vh", color: T.ink }}>
-    <Fonts />
-    <div style={{ maxWidth: 560, margin: "0 auto", padding: "0 16px 90px" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 2px 6px" }}>
-        <div>
-          <div style={{ fontFamily: FD, fontSize: 24, letterSpacing: 0.3 }}>Macros and Mamas</div>
-          <div style={{ fontSize: 12, color: T.accentDeep, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase" }}>ranges, not rules</div>
-        </div>
-      </header>
-      {children}
+   Shows signed-in email + sign-out when a session exists. */
+export const Shell = ({ children }) => {
+  const { user, signOut } = useAuth();
+  return (
+    <div style={{ fontFamily: F, background: T.bg, minHeight: "100vh", color: T.ink }}>
+      <Fonts />
+      <div style={{ maxWidth: 560, margin: "0 auto", padding: "0 16px 90px" }}>
+        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 2px 6px", gap: 12 }}>
+          <div>
+            <div style={{ fontFamily: FD, fontSize: 24, letterSpacing: 0.3 }}>Macros and Mamas</div>
+            <div style={{ fontSize: 12, color: T.accentDeep, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase" }}>ranges, not rules</div>
+          </div>
+          {user?.email && (
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 11.5, color: T.inkSoft, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
+              <button
+                onClick={signOut}
+                style={{
+                  marginTop: 2, background: "none", border: "none", padding: 0,
+                  fontFamily: F, fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", textDecoration: "underline",
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </header>
+        {children}
+      </div>
     </div>
-  </div>
-);
+  );
+};
