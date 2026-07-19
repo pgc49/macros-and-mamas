@@ -42,9 +42,9 @@ export function TermsPage() {
             <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 20, margin: "0 0 8px" }}>
               {section.title}
             </h2>
-            {section.body.map((para) => (
+            {section.body.map((para, i) => (
               <p
-                key={para.slice(0, 48)}
+                key={`${section.title}-${i}`}
                 style={{ fontSize: 14, lineHeight: 1.6, color: T.ink, margin: "0 0 10px" }}
               >
                 {para}
