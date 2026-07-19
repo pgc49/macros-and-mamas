@@ -1,9 +1,17 @@
-# Copy to .dev.vars for local `wrangler pages dev`.
+# Copy to .dev.vars for local `npx wrangler pages dev`.
 # NEVER commit .dev.vars — it is gitignored.
-# Set the same secrets in Cloudflare Pages → Settings → Environment variables.
+# Set the same values in Cloudflare Pages → Settings → Environment variables
+# (Production + Preview). Use encrypted/secret for every key below.
 
-# OpenRouter (meal photo AI) — already set in Cloudflare by the human
+# OpenRouter (meal photo AI)
 OPENROUTER_API_KEY=replace-me
 
-# Stripe + Supabase server secrets are added in Step 5.
-# See README for the exact Cloudflare secret names (never commit real values).
+# Stripe Checkout ($149 product) — use test mode first
+STRIPE_SECRET_KEY=replace-me
+STRIPE_PRICE_ID=replace-me
+STRIPE_WEBHOOK_SECRET=replace-me
+
+# Supabase — URL is public; the server key is webhook-only (never ship to the client)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-publishable-or-anon-key
+SUPABASE_SERVICE_ROLE_KEY=replace-me

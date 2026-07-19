@@ -89,6 +89,42 @@ export default function App() {
     }
   }, [user, isAdmin, view, signInNext]);
 
+  // Stripe success/cancel return — reload paid status
+  useEffect(() => {
+    if (!user || isAdmin) return;
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get("checkout");
+    if (!checkout) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    (async () => {
+      try {
+        const s = await db.loadClientState();
+        if (!s) return;
+        setApproved(!!s.approved);
+        setPaid(!!s.paid);
+        if (s.macros) setMacros(s.macros);
+        if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
+        if (s.view) setView(s.view);
+      } catch (e) {
+        console.error("post-checkout refresh failed", e);
+      }
+    })();
+  }, [user?.id, isAdmin]);
+
+  const refreshClientState = async () => {
+    try {
+      const s = await db.loadClientState();
+      if (!s) return;
+      if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
+      if (s.macros) setMacros(s.macros);
+      setApproved(!!s.approved);
+      setPaid(!!s.paid);
+      if (s.view) setView(s.view);
+    } catch (e) {
+      console.error("refreshClientState failed", e);
+    }
+  };
+
   const set = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
 
   /* Gating rules — PRESERVE VERBATIM. These run BEFORE any payment. */
@@ -108,15 +144,6 @@ export default function App() {
     }
     setView("pending");
   };
-
-  /* PROD-TODO(stripe): checkout entry point. Wire to either the
-     Payment Link or a Checkout Session created by a Pages Function.
-     See the SEQUENCING DECISION note in CONFIG before wiring this to
-     the sales-page button — the intake gates decline some applicants. */
-  const startCheckout = () => {
-    window.location.href = CONFIG.STRIPE_PAYMENT_LINK;
-  };
-  // startCheckout is wired in Step 5 (approve → pay → unlock)
 
   const waterOz = profile.goalWeight ? Math.round(Number(profile.goalWeight) / 2) : null;
 
@@ -373,7 +400,12 @@ export default function App() {
   }
 
   if (macros || view === "pending") {
-    return <PendingPage />;
+    return (
+      <PendingPage
+        approved={!!approved}
+        onPaidRefresh={refreshClientState}
+      />
+    );
   }
 
   // Signed-in but no intake yet — back to sales
