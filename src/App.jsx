@@ -1,0 +1,288 @@
+import { useState, useEffect, useMemo } from "react";
+import { CONFIG } from "./config";
+import { useAuth } from "./auth/useAuth";
+import { db } from "./db/db";
+import { computeMacros } from "./engine/computeMacros";
+import { DEFAULT_ITEMS, DAYS } from "./content/data";
+import { wkStartOf } from "./utils/dates";
+import { SalesPage } from "./views/SalesPage";
+import { IntakeFlow } from "./views/IntakeFlow";
+import { DeclinedPage } from "./views/DeclinedPage";
+import { PendingPage } from "./views/PendingPage";
+import { ClientApp } from "./views/ClientApp";
+import { AdminPortal } from "./admin/AdminPortal";
+
+/* ------------------------------------------------------------------ */
+/*  Main app                                                           */
+/* ------------------------------------------------------------------ */
+export default function App() {
+  const { isAdmin } = useAuth(); // replaces the prototype's client-side coach toggle
+  const [view, setView] = useState("sales"); // sales | intake | declined | pending | app
+  const [tab, setTab] = useState("today");
+  const [step, setStep] = useState(0);
+  const [declineReason, setDeclineReason] = useState("");
+  const [profile, setProfile] = useState({
+    name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
+    breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
+    stress: "medium", insulinResistance: false, diet: "none",
+    prefB: "", prefL: "", prefD: "",
+  });
+  const [macros, setMacros] = useState(null);
+  const [approved, setApproved] = useState(false);
+  const curWk = wkStartOf();
+  const [checksByWeek, setChecksByWeek] = useState({});
+  const [strengthByWeek, setStrengthByWeek] = useState({ [curWk]: ["M", "W", "F"] });
+  const [viewWk, setViewWk] = useState(curWk);
+  const [editPast, setEditPast] = useState(false);
+  const [weighins, setWeighins] = useState([]);
+  const [wInput, setWInput] = useState("");
+  const [mealFilter, setMealFilter] = useState("All");
+  const [roster, setRoster] = useState([]); // prototype's MOCK_CLIENTS removed — loads from db
+  const [adminSel, setAdminSel] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoResult, setPhotoResult] = useState(null);
+  const [todayLog, setTodayLog] = useState({ date: new Date().toISOString().slice(0, 10), entries: [] });
+  const [loaded, setLoaded] = useState(false);
+
+  /* PROD-TODO(db): initial load — replaces window.storage.get.
+     For a signed-in client: hydrate profile, macros, approved,
+     checksByWeek, strengthByWeek, weighins, todayLog from Supabase.
+     For Callie (isAdmin): hydrate the roster. */
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await db.loadClientState();
+        if (s) {
+          if (s.profile) setProfile(s.profile);
+          if (s.macros) setMacros(s.macros);
+          if (s.view) setView(s.view);
+          if (s.approved) setApproved(s.approved);
+          if (s.checksByWeek) setChecksByWeek(s.checksByWeek);
+          if (s.strengthByWeek) setStrengthByWeek(s.strengthByWeek);
+          if (s.weighins) setWeighins(s.weighins);
+          if (s.todayLog && s.todayLog.date === new Date().toISOString().slice(0, 10)) setTodayLog(s.todayLog);
+        }
+        if (isAdmin) setRoster(await db.loadRoster());
+      } catch (e) { console.error("initial load failed", e); }
+      setLoaded(true);
+    })();
+  }, [isAdmin]);
+
+  /* PROD-TODO(db): persistence — replaces window.storage.set.
+     The prototype blobbed all state into one key on every change.
+     In production, write on the event that changed it instead:
+     toggleCheck -> checkins row, weigh-in -> weighins row, logMeal ->
+     meal_logs row, etc. This effect is left as a marker of everything
+     that must persist; delete it once per-event writes exist. */
+  useEffect(() => {
+    if (!loaded) return;
+    db.saveClientState({ profile, macros, view, approved, checksByWeek, strengthByWeek, weighins, todayLog });
+  }, [profile, macros, view, approved, checksByWeek, strengthByWeek, weighins, todayLog, loaded]);
+
+  const set = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
+
+  /* Gating rules — PRESERVE VERBATIM. These run BEFORE any payment. */
+  const submitIntake = () => {
+    if (profile.pregnant) { setDeclineReason("pregnant"); setView("declined"); return; }
+    if (profile.breastfeeding && Number(profile.monthsPP) < 6) { setDeclineReason("early"); setView("declined"); return; }
+    if (profile.diet !== "none") { setDeclineReason("diet"); setView("declined"); return; }
+    const m = computeMacros(profile);
+    setMacros(m);
+    setApproved(false);
+    db.submitIntake(profile, m); // PROD-TODO(db): puts this mama in Callie's pending queue
+    setView("pending");
+  };
+
+  /* PROD-TODO(stripe): checkout entry point. Wire to either the
+     Payment Link or a Checkout Session created by a Pages Function.
+     See the SEQUENCING DECISION note in CONFIG before wiring this to
+     the sales-page button — the intake gates decline some applicants. */
+  const startCheckout = () => {
+    window.location.href = CONFIG.STRIPE_PAYMENT_LINK;
+  };
+  // startCheckout is wired in Step 5 (approve → pay → unlock)
+
+  const waterOz = profile.goalWeight ? Math.round(Number(profile.goalWeight) / 2) : null;
+
+  /* Photo analysis — now proxied through /api/analyze so the
+     Anthropic key stays server-side. See functions/api/analyze.js.
+     The server returns the parsed JSON estimate directly. */
+  const analyzePhoto = async (file) => {
+    if (!file) return;
+    setPhotoBusy(true); setPhotoResult(null);
+    try {
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(",")[1]);
+        r.onerror = () => rej(new Error("read failed"));
+        r.readAsDataURL(file);
+      });
+      const resp = await fetch(CONFIG.ANALYZE_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: b64, media_type: file.type || "image/jpeg" }),
+      });
+      if (!resp.ok) throw new Error(`analyze failed: ${resp.status}`);
+      const parsed = await resp.json();
+      setPhotoResult(parsed.error ? { error: true } : parsed);
+    } catch (e) {
+      console.error("photo analysis failed", e);
+      setPhotoResult({ error: true });
+    }
+    setPhotoBusy(false);
+  };
+
+  const logMeal = () => {
+    if (!photoResult || photoResult.error) return;
+    setTodayLog((tl) => ({
+      date: new Date().toISOString().slice(0, 10),
+      entries: [...tl.entries, { name: photoResult.meal, cal: photoResult.calories, p: photoResult.protein_g, c: photoResult.carbs_g, f: photoResult.fat_g }],
+    }));
+    setPhotoResult(null);
+  };
+
+  const totals = useMemo(() => todayLog.entries.reduce(
+    (a, e) => ({ cal: a.cal + (e.cal || 0), p: a.p + (e.p || 0), c: a.c + (e.c || 0), f: a.f + (e.f || 0) }),
+    { cal: 0, p: 0, c: 0, f: 0 }
+  ), [todayLog]);
+
+  const weeklyRate = useMemo(() => {
+    if (weighins.length < 2) return null;
+    const first = weighins[0], last = weighins[weighins.length - 1];
+    const days = (new Date(last.date) - new Date(first.date)) / 86400000;
+    if (days < 5) return null;
+    return ((first.w - last.w) / days) * 7;
+  }, [weighins]);
+
+  const toggleCheck = (itemId, day) => {
+    if (viewWk !== curWk && !editPast) return; // past weeks locked unless explicitly unlocked
+    const key = `${itemId}|${day}`;
+    setChecksByWeek((cw) => ({ ...cw, [viewWk]: { ...(cw[viewWk] || {}), [key]: !(cw[viewWk] || {})[key] } }));
+  };
+
+  const adherenceFor = (wk) => {
+    const ch = checksByWeek[wk] || {};
+    let done = 0, total = 0;
+    DEFAULT_ITEMS.forEach((it) => {
+      if (it.daily) {
+        DAYS.forEach((d) => { total += 1; if (ch[`${it.id}|${d}`]) done += 1; });
+      } else {
+        total += 3; // goal is 3 strength sessions, extra sessions are bonus
+        const sc = DAYS.filter((d) => ch[`${it.id}|${d}`]).length;
+        done += Math.min(sc, 3);
+      }
+    });
+    return total ? Math.round((done / total) * 100) : 0;
+  };
+
+  const wkKeys = useMemo(() => {
+    const ks = new Set([...Object.keys(checksByWeek), curWk]);
+    return [...ks].sort();
+  }, [checksByWeek, curWk]);
+  const earliestWk = wkKeys[0];
+  const progWeekNum = (wk) => Math.round((new Date(wk) - new Date(earliestWk)) / (7 * 86400000)) + 1;
+
+  const trends = useMemo(() => {
+    const weeks = wkKeys.filter((w) => Object.keys(checksByWeek[w] || {}).length > 0 || w === curWk);
+    const n = weeks.length;
+    if (n < 4) return { locked: true, n };
+    const overall = weeks.map(adherenceFor);
+    const half = Math.floor(n / 2);
+    const avg = (a) => a.reduce((x, y) => x + y, 0) / (a.length || 1);
+    const delta = avg(overall.slice(half)) - avg(overall.slice(0, half));
+    const items = DEFAULT_ITEMS.map((it) => {
+      if (it.daily) {
+        let hits = 0;
+        weeks.forEach((w) => { const ch = checksByWeek[w] || {}; DAYS.forEach((d) => { if (ch[`${it.id}|${d}`]) hits += 1; }); });
+        return { label: it.label, pct: Math.round((hits / (7 * n)) * 100), strength: false };
+      }
+      let sessions = 0;
+      weeks.forEach((w) => { const ch = checksByWeek[w] || {}; sessions += DAYS.filter((d) => ch[`${it.id}|${d}`]).length; });
+      return { label: it.label, avgSessions: sessions / n, strength: true };
+    });
+    const dailyItems = items.filter((i) => !i.strength);
+    const best = [...dailyItems].sort((a, b) => b.pct - a.pct)[0];
+    const worst = [...dailyItems].sort((a, b) => a.pct - b.pct)[0];
+    return { locked: false, n, overall, delta, items, best, worst };
+  }, [wkKeys, checksByWeek]);
+
+  /* ------------------------- SALES PAGE --------------------------- */
+  if (view === "sales" && !isAdmin) {
+    return <SalesPage onStartIntake={() => { setView("intake"); setStep(0); }} />;
+  }
+
+  /* ------------------------- INTAKE ------------------------------- */
+  if (view === "intake" && !isAdmin) {
+    return (
+      <IntakeFlow
+        profile={profile}
+        step={step}
+        setStep={setStep}
+        set={set}
+        onSubmit={submitIntake}
+      />
+    );
+  }
+
+  /* ------------------------- DECLINED ----------------------------- */
+  if (view === "declined" && !isAdmin) {
+    return <DeclinedPage declineReason={declineReason} onBack={() => setView("sales")} />;
+  }
+
+  /* ------------------------- ADMIN PORTAL -------------------------
+     Prototype used a client-side toggle + a merged "you" live-intake
+     row. In production this route is reached only when isAdmin is
+     true, and every client (including fresh intakes) is a real row
+     in the roster loaded from the database. RLS must also protect
+     these queries server-side. */
+  if (isAdmin) {
+    return (
+      <AdminPortal
+        roster={roster}
+        setRoster={setRoster}
+        adminSel={adminSel}
+        setAdminSel={setAdminSel}
+      />
+    );
+  }
+
+  /* ------------------------- PENDING (client) --------------------- */
+  if (view === "pending") return <PendingPage />;
+
+  /* ------------------------- CLIENT APP --------------------------- */
+  return (
+    <ClientApp
+      tab={tab}
+      setTab={setTab}
+      profile={profile}
+      macros={macros}
+      totals={totals}
+      waterOz={waterOz}
+      photoBusy={photoBusy}
+      photoResult={photoResult}
+      setPhotoResult={setPhotoResult}
+      analyzePhoto={analyzePhoto}
+      logMeal={logMeal}
+      todayLog={todayLog}
+      setTodayLog={setTodayLog}
+      viewWk={viewWk}
+      setViewWk={setViewWk}
+      curWk={curWk}
+      editPast={editPast}
+      setEditPast={setEditPast}
+      checksByWeek={checksByWeek}
+      toggleCheck={toggleCheck}
+      adherenceFor={adherenceFor}
+      progWeekNum={progWeekNum}
+      earliestWk={earliestWk}
+      weighins={weighins}
+      setWeighins={setWeighins}
+      wInput={wInput}
+      setWInput={setWInput}
+      weeklyRate={weeklyRate}
+      trends={trends}
+      mealFilter={mealFilter}
+      setMealFilter={setMealFilter}
+    />
+  );
+}

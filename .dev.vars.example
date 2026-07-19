@@ -1,0 +1,9 @@
+# Copy to .dev.vars for local `wrangler pages dev`.
+# NEVER commit .dev.vars — it is gitignored.
+# Set the same secrets in Cloudflare Pages → Settings → Environment variables.
+
+# OpenRouter (meal photo AI) — already set in Cloudflare by the human
+OPENROUTER_API_KEY=replace-me
+
+# Stripe + Supabase server secrets are added in Step 5.
+# See README for the exact Cloudflare secret names (never commit real values).
