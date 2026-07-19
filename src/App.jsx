@@ -64,17 +64,22 @@ export default function App() {
         if (user) {
           const s = await db.loadClientState();
           if (cancelled) return;
-          if (s?.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
-          if (s?.macros) setMacros(s.macros);
-          else setMacros(null);
-          setApproved(!!s?.approved);
-          setPaid(!!s?.paid);
-          if (s?.checksByWeek) setChecksByWeek(s.checksByWeek);
-          if (s?.weighins) setWeighins(s.weighins);
-          if (s?.todayLog && s.todayLog.date === new Date().toISOString().slice(0, 10)) {
-            setTodayLog(s.todayLog);
+          // Never wipe enrollment state on a null/failed fetch — that was sending
+          // paid clients back to /onboarding after the meal-log migration.
+          if (!s) {
+            console.error("loadClientState returned null while signed in");
           } else {
-            setTodayLog({ date: new Date().toISOString().slice(0, 10), entries: [] });
+            if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
+            setMacros(s.macros || null);
+            setApproved(!!s.approved);
+            setPaid(!!s.paid);
+            if (s.checksByWeek) setChecksByWeek(s.checksByWeek);
+            if (s.weighins) setWeighins(s.weighins);
+            if (s.todayLog && s.todayLog.date === new Date().toISOString().slice(0, 10)) {
+              setTodayLog(s.todayLog);
+            } else {
+              setTodayLog({ date: new Date().toISOString().slice(0, 10), entries: [] });
+            }
           }
         } else {
           setMacros(null);
@@ -82,8 +87,12 @@ export default function App() {
           setPaid(false);
         }
         if (isAdmin) {
-          const r = await db.loadRoster();
-          if (!cancelled) setRoster(r);
+          try {
+            const r = await db.loadRoster();
+            if (!cancelled) setRoster(r);
+          } catch (rosterErr) {
+            console.error("loadRoster failed", rosterErr);
+          }
         }
       } catch (e) {
         console.error("initial load failed", e);
