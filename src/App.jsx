@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { CONFIG } from "./config";
 import { useAuth } from "./auth/useAuth.jsx";
 import { db } from "./db/db";
+import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { DEFAULT_ITEMS, DAYS } from "./content/data";
 import { wkStartOf } from "./utils/dates";
@@ -160,9 +161,14 @@ export default function App() {
         r.onerror = () => rej(new Error("read failed"));
         r.readAsDataURL(file);
       });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("not signed in");
       const resp = await fetch(CONFIG.ANALYZE_ENDPOINT, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ image: b64, media_type: file.type || "image/jpeg" }),
       });
       if (!resp.ok) throw new Error(`analyze failed: ${resp.status}`);

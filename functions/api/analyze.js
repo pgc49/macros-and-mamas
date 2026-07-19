@@ -17,11 +17,8 @@
    quality disappoints in testing, step up to google/gemini-3-flash
    or anthropic/claude-haiku-4.5 — one constant below.
 
-   ABUSE NOTE: this endpoint is unauthenticated as written. Anyone
-   who finds macrosandmamas.com/api/analyze can burn your OpenRouter
-   budget. PROD-TODO(auth): once Supabase Auth exists, verify the
-   Supabase JWT from the Authorization header here and add per-user
-   rate limiting. Do not launch publicly without this.
+   AUTH: requires a valid Supabase access token in Authorization: Bearer.
+   Per-user rate limiting (e.g. KV, 20/hour) is a fast-follow.
    ================================================================== */
 
 const MODEL = "google/gemini-3.1-flash-lite"; // the one knob for cost/quality
@@ -32,6 +29,11 @@ const PROMPT =
 
 export async function onRequestPost({ request, env }) {
   try {
+    const user = await requireSupabaseUser(request, env);
+    if (!user) {
+      return json({ error: "unauthorized" }, 401);
+    }
+
     const { image, media_type } = await request.json();
     if (!image) {
       return json({ error: "missing image" }, 400);
@@ -76,6 +78,27 @@ export async function onRequestPost({ request, env }) {
     console.error("analyze failed", e);
     return json({ error: "analysis failed" }, 500);
   }
+}
+
+async function requireSupabaseUser(request, env) {
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  if (!token) return null;
+
+  const base = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
+  if (!base) {
+    console.error("missing SUPABASE_URL");
+    return null;
+  }
+
+  const resp = await fetch(`${base.replace(/\/$/, "")}/auth/v1/user`, {
+    headers: {
+      authorization: `Bearer ${token}`,
+      apikey: env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || "",
+    },
+  });
+  if (!resp.ok) return null;
+  return resp.json();
 }
 
 function json(obj, status = 200) {
