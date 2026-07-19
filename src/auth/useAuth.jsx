@@ -7,6 +7,8 @@ const AuthContext = createContext({
   profile: null,
   isAdmin: false,
   loading: true,
+  signInWithPassword: async () => ({ error: null }),
+  signUpWithPassword: async () => ({ error: null, needsEmailConfirm: false }),
   signInWithEmail: async () => ({ error: null }),
   signOut: async () => {},
   refreshProfile: async () => {},
@@ -68,6 +70,28 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  const signInWithPassword = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    return { error };
+  };
+
+  const signUpWithPassword = async (email, password) => {
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    });
+    // If email confirmation is required, session stays null until they confirm
+    const needsEmailConfirm = !error && !data.session;
+    return { error, needsEmailConfirm };
+  };
+
+  // Optional fallback — hits Supabase email rate limits on free built-in SMTP
   const signInWithEmail = async (email) => {
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
@@ -89,6 +113,8 @@ export function AuthProvider({ children }) {
     profile,
     isAdmin: profile?.role === "admin",
     loading,
+    signInWithPassword,
+    signUpWithPassword,
     signInWithEmail,
     signOut,
     refreshProfile,
