@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { FD, T } from "../theme/tokens";
+import { Link } from "react-router-dom";
+import { FD, T, F } from "../theme/tokens";
 import { Shell, Card, Btn, Field, inputStyle } from "../components/ui";
 import { useAuth } from "../auth/useAuth.jsx";
+import { PATHS } from "../routing";
+import { TERMS_VERSION } from "../content/terms";
 
 /**
  * One auth screen. Mode comes from the entry point:
@@ -16,6 +19,7 @@ export function SignInPage({
   const { signInWithPassword, signUpWithPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [agreeTerms, setAgreeTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -28,15 +32,22 @@ export function SignInPage({
       setError("Password must be at least 6 characters.");
       return;
     }
+    if (isCreate && !agreeTerms) {
+      setError("Please agree to the Terms and Conditions to create your account.");
+      return;
+    }
     setBusy(true);
     setError("");
     setInfo("");
 
     if (isCreate) {
-      const { error: err, needsEmailConfirm } = await signUpWithPassword(email, password);
+      const termsAcceptedAt = new Date().toISOString();
+      const { error: err, needsEmailConfirm } = await signUpWithPassword(email, password, {
+        termsAcceptedAt,
+        termsVersion: TERMS_VERSION,
+      });
       setBusy(false);
       if (err) {
-        // Common case: account already exists — point them to sign in
         const msg = err.message || "Could not create account.";
         if (/already|registered|exists/i.test(msg) && onSwitchMode) {
           setError("That email already has an account. Sign in instead.");
@@ -90,6 +101,34 @@ export function SignInPage({
           />
         </Field>
 
+        {isCreate && (
+          <label
+            style={{
+              display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14,
+              fontSize: 13.5, lineHeight: 1.45, color: T.ink, cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={agreeTerms}
+              onChange={(e) => setAgreeTerms(e.target.checked)}
+              style={{ marginTop: 3, width: 16, height: 16, accentColor: T.accent, flexShrink: 0 }}
+            />
+            <span>
+              I agree to the{" "}
+              <Link
+                to={PATHS.terms}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontFamily: F, fontWeight: 700, color: T.accent, textDecoration: "underline" }}
+              >
+                Terms and Conditions
+              </Link>
+              . My agreement will be recorded with a timestamp.
+            </span>
+          </label>
+        )}
+
         {error && (
           <div style={{ background: T.amberSoft, borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 13.5, color: T.amber, lineHeight: 1.5 }}>
             {error}
@@ -115,7 +154,7 @@ export function SignInPage({
 
         <Btn
           style={{ width: "100%" }}
-          disabled={busy || !email.trim() || !password}
+          disabled={busy || !email.trim() || !password || (isCreate && !agreeTerms)}
           onClick={submit}
         >
           {busy ? "Working…" : isCreate ? "Create account" : "Sign in"}

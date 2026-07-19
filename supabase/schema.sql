@@ -28,6 +28,8 @@ create table if not exists public.profiles (
   status text not null default 'pending',
   paid boolean not null default false,
   week int not null default 0,
+  terms_accepted_at timestamptz,
+  terms_version text,
   created_at timestamptz not null default now()
 );
 
@@ -87,9 +89,16 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  accepted text := new.raw_user_meta_data ->> 'terms_accepted_at';
+  version text := new.raw_user_meta_data ->> 'terms_version';
 begin
-  insert into public.profiles (id)
-  values (new.id);
+  insert into public.profiles (id, terms_accepted_at, terms_version)
+  values (
+    new.id,
+    case when accepted is not null and accepted <> '' then accepted::timestamptz else null end,
+    nullif(version, '')
+  );
   return new;
 end;
 $$;

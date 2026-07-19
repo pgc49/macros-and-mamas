@@ -7,6 +7,7 @@ export const PATHS = {
   declined: "/declined",
   dashboard: "/dashboard",
   admin: "/admin",
+  terms: "/terms",
 };
 
 /** Where a signed-in user should land after auth / cold load. */

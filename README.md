@@ -96,8 +96,9 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 | URL | Who | Role |
 |-----|-----|------|
 | `/` | Public | Sales / marketing |
+| `/terms` | Public | Terms and Conditions |
 | `/onboarding` | Signed-in | Intake form |
-| `/signin` | Public | Create account / sign in |
+| `/signin` | Public | Create account / sign in (create requires Terms checkbox) |
 | `/pending` | Client | Awaiting Callie approval or payment |
 | `/dashboard` | Approved + paid (admins too) | Client app — ranges, meals, progress |
 | `/admin` | `profiles.role = admin` only | Callie's roster / approvals |
@@ -115,9 +116,12 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 | `/functions/api/stripe-webhook.js` | Marks profile paid |
 | `/supabase/schema.sql` | Tables + RLS |
 | `/supabase/migrations/002_meal_logging.sql` | `meal_logs.source` + `estimate_calls` |
+| `/supabase/migrations/003_terms_accepted.sql` | `profiles.terms_accepted_at` + signup trigger |
 | `/src` | Production React app |
 
-**After deploy:** run `supabase/migrations/002_meal_logging.sql` in the Supabase SQL editor if not already applied (adds `source` on `meal_logs` and the `estimate_calls` cost-watch table).
+**After deploy:** run pending migrations in the Supabase SQL editor if not already applied:
+- `002_meal_logging.sql` — `meal_logs.source` + `estimate_calls`
+- `003_terms_accepted.sql` — Terms acceptance timestamp + signup trigger metadata copy
 
 ## Definition of done (checklist)
 
