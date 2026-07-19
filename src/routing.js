@@ -17,6 +17,11 @@ export function homePathFor({ isAdmin, approved, paid, macros }) {
   return PATHS.onboarding;
 }
 
+/** Dashboard access: approve + pay, or admin dogfooding an approved intake. */
+export function canAccessDashboard({ isAdmin, approved, paid, macros }) {
+  return !!(macros && approved && (paid || isAdmin));
+}
+
 /** Map persisted client state to a path segment (legacy "app" → dashboard). */
 export function pathFromClientView(view) {
   if (view === "app" || view === "dashboard") return PATHS.dashboard;

@@ -418,7 +418,9 @@ export default function App() {
     navigate(PATHS.home);
   };
 
-  const dashboardUnlocked = !!(macros && approved && paid);
+  // Clients need approve + pay. Admins with an approved intake can dogfood
+  // /dashboard without a Stripe payment on their own account.
+  const dashboardUnlocked = !!(macros && approved && (paid || isAdmin));
 
   const clientApp = (
     <ClientApp

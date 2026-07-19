@@ -73,11 +73,17 @@ function adherenceFromChecks(checkRows, weekStart) {
   return total ? Math.round((done / total) * 100) : 0;
 }
 
+/** Approved = macros.approved, or profiles.status already flipped to active
+ *  (admin Approve button / manual SQL both set status=active). */
+function isApproved({ profileRow, macrosRow }) {
+  return !!(macrosRow?.approved || profileRow?.status === "active");
+}
+
 function viewFromState({ profileRow, macrosRow }) {
   if (!profileRow) return "onboarding";
   const hasIntake = !!(macrosRow || profileRow.name || profileRow.phone);
   if (!hasIntake) return "onboarding";
-  const approved = !!macrosRow?.approved;
+  const approved = isApproved({ profileRow, macrosRow });
   const paid = !!profileRow.paid;
   if (approved && paid) return "dashboard";
   // pending covers: awaiting Callie, and approved-but-unpaid (pay screen)
@@ -164,7 +170,7 @@ export const db = {
     return {
       profile,
       macros,
-      approved: !!macrosRow?.approved,
+      approved: isApproved({ profileRow, macrosRow }),
       paid: !!profileRow?.paid,
       status: profileRow?.status || "pending",
       view: viewFromState({ profileRow, macrosRow }),
