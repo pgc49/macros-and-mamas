@@ -22,8 +22,8 @@ export async function onRequestPost({ request, env }) {
     const origin = new URL(request.url).origin;
     const body = new URLSearchParams();
     body.set("mode", "payment");
-    body.set("success_url", `${origin}/?checkout=success`);
-    body.set("cancel_url", `${origin}/?checkout=cancel`);
+    body.set("success_url", `${origin}/dashboard?checkout=success`);
+    body.set("cancel_url", `${origin}/pending?checkout=cancel`);
     body.set("client_reference_id", user.id);
     body.set("customer_email", user.email || "");
     body.set("line_items[0][price]", priceId);

@@ -1,10 +1,12 @@
 import { useRef } from "react";
+import { Link } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import { T, F, FD } from "../theme/tokens";
 import { rateOf } from "../utils/dates";
 import { db } from "../db/db";
+import { PATHS } from "../routing";
 import { Shell, Card, Btn, inputStyle } from "../components/ui";
 
 export function AdminPortal({ roster, setRoster, adminSel, setAdminSel }) {
@@ -145,6 +147,10 @@ export function AdminPortal({ roster, setRoster, adminSel, setAdminSel }) {
   return (
     <Shell>
       <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 4px" }}>Your mamas</h2>
+      <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 4px", lineHeight: 1.45 }}>
+        Admin roster. To use the program yourself, open{" "}
+        <Link to={PATHS.dashboard} style={{ color: T.accent, fontWeight: 700 }}>your dashboard</Link>.
+      </p>
       <div style={{ display: "flex", gap: 8, margin: "8px 0 18px" }}>
         {[["Active", actives.length, T.sageSoft, T.sage], ["Pending", pendings.length, T.amberSoft, T.amber], ["Need you", attentionCount, T.accentSoft, T.accentDeep]].map(([l, n, bg, col]) => (
           <div key={l} style={{ flex: 1, background: bg, borderRadius: 12, padding: "10px 0", textAlign: "center" }}>

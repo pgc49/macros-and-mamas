@@ -91,6 +91,19 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 3. Set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` in Cloudflare.
 4. Before real charges: switch to live keys, live price, and a live webhook.
 
+## App URLs
+
+| URL | Who | Role |
+|-----|-----|------|
+| `/` | Public | Sales / marketing |
+| `/onboarding` | Signed-in | Intake form |
+| `/signin` | Public | Create account / sign in |
+| `/pending` | Client | Awaiting Callie approval or payment |
+| `/dashboard` | Approved + paid (admins too) | Client app — ranges, meals, progress |
+| `/admin` | `profiles.role = admin` only | Callie's roster / approvals |
+
+Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboard`) to dogfood the product. Non-admins hitting `/admin` are redirected away.
+
 ## Key paths
 
 | Path | Role |
