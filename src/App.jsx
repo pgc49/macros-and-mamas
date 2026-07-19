@@ -22,7 +22,7 @@ import { T, FD } from "./theme/tokens";
 export default function App() {
   const { user, isAdmin, loading: authLoading, refreshProfile } = useAuth(); // Supabase magic-link auth
   const [view, setView] = useState("sales"); // sales | intake | declined | pending | app | signin
-  const [signInNext, setSignInNext] = useState("intake"); // where to go after magic-link for new sessions
+  const [signInNext, setSignInNext] = useState("intake"); // "intake" → create account; "app" → sign in
   const [tab, setTab] = useState("today");
   const [step, setStep] = useState(0);
   const [declineReason, setDeclineReason] = useState("");
@@ -79,7 +79,7 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authLoading, user?.id, isAdmin]);
 
-  // After magic-link lands, leave the sign-in screen (load effect sets real view next)
+  // After password auth succeeds, leave the auth screen
   useEffect(() => {
     if (!user || isAdmin || view !== "signin") return;
     if (signInNext === "intake") {
@@ -89,6 +89,11 @@ export default function App() {
       setView("pending");
     }
   }, [user, isAdmin, view, signInNext]);
+
+  const authMode = signInNext === "intake" ? "create" : "signin";
+  const switchAuthMode = (next) => {
+    setSignInNext(next === "create" ? "intake" : "app");
+  };
 
   // Stripe success/cancel return — reload paid status
   useEffect(() => {
@@ -335,11 +340,12 @@ export default function App() {
     return <DeclinedPage declineReason={declineReason} onBack={() => setView("sales")} />;
   }
 
-  /* ------------------------- SIGN IN ------------------------------ */
+  /* ------------------------- AUTH (one page) ---------------------- */
   if (view === "signin" && !user) {
     return (
       <SignInPage
-        title={signInNext === "intake" ? "Sign in to start your intake" : "Welcome back"}
+        mode={authMode}
+        onSwitchMode={switchAuthMode}
         onBack={() => setView("sales")}
       />
     );
