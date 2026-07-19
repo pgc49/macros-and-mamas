@@ -16,22 +16,24 @@ import { AdminPortal } from "./admin/AdminPortal";
 import { Shell } from "./components/ui";
 import { T, FD } from "./theme/tokens";
 
+const EMPTY_PROFILE = {
+  name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
+  breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
+  stress: "medium", insulinResistance: false, diet: "none",
+  prefB: "", prefL: "", prefD: "",
+};
+
 /* ------------------------------------------------------------------ */
 /*  Main app                                                           */
 /* ------------------------------------------------------------------ */
 export default function App() {
-  const { user, isAdmin, loading: authLoading, refreshProfile } = useAuth(); // Supabase magic-link auth
+  const { user, isAdmin, loading: authLoading, refreshProfile } = useAuth();
   const [view, setView] = useState("sales"); // sales | intake | declined | pending | app | signin
   const [signInNext, setSignInNext] = useState("intake"); // "intake" → create account; "app" → sign in
   const [tab, setTab] = useState("today");
   const [step, setStep] = useState(0);
   const [declineReason, setDeclineReason] = useState("");
-  const [profile, setProfile] = useState({
-    name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
-    breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
-    stress: "medium", insulinResistance: false, diet: "none",
-    prefB: "", prefL: "", prefD: "",
-  });
+  const [profile, setProfile] = useState(() => ({ ...EMPTY_PROFILE }));
   const [macros, setMacros] = useState(null);
   const [approved, setApproved] = useState(false);
   const [paid, setPaid] = useState(false);
@@ -71,6 +73,7 @@ export default function App() {
           // Don't clobber an in-progress intake/declined flow with sales/pending
           if (view === "sales" || view === "signin" || view === "pending" || view === "app") {
             if (s.view) setView(s.view);
+            else if (!s.macros) setView("intake");
           }
         }
       } catch (e) { console.error("initial load failed", e); }
@@ -322,6 +325,18 @@ export default function App() {
     setStep(0);
   };
 
+  // Decline gates never write to the DB. Reset the form so "Back to start"
+  // returns to the sales page instead of re-opening the same intake answers.
+  const backToStart = () => {
+    setDeclineReason("");
+    setStep(0);
+    setProfile({ ...EMPTY_PROFILE });
+    setMacros(null);
+    setApproved(false);
+    setPaid(false);
+    setView("sales");
+  };
+
   /* ------------------------- ADMIN PORTAL ------------------------- */
   // Callie: set profiles.role = 'admin' in Supabase after first sign-in
   if (isAdmin) {
@@ -337,7 +352,7 @@ export default function App() {
 
   /* ------------------------- DECLINED ----------------------------- */
   if (view === "declined") {
-    return <DeclinedPage declineReason={declineReason} onBack={() => setView("sales")} />;
+    return <DeclinedPage declineReason={declineReason} onBack={backToStart} />;
   }
 
   /* ------------------------- AUTH (one page) ---------------------- */
@@ -401,14 +416,25 @@ export default function App() {
     );
   }
 
+  /* ------------------------- SALES -------------------------------- */
+  // Shown to visitors and to signed-in users who hit "Back to start"
+  // after a decline. Join / Start intake begins (or resumes) intake.
+  if (view === "sales") {
+    return (
+      <SalesPage
+        onStartIntake={goIntake}
+        onSignIn={() => { setSignInNext("app"); setView("signin"); }}
+      />
+    );
+  }
+
   /* ------------------------- INTAKE ------------------------------- */
-  // Signed-in clients with no intake yet go straight into the form
-  // (dashboard is not available until approve + pay).
-  if (user || view === "intake") {
+  if (view === "intake") {
     if (!user) {
       return (
         <SignInPage
-          title="Sign in to start your intake"
+          mode="create"
+          onSwitchMode={switchAuthMode}
           onBack={() => setView("sales")}
         />
       );
@@ -424,7 +450,7 @@ export default function App() {
     );
   }
 
-  /* ------------------------- SALES (signed out) ------------------- */
+  // Fallback
   return (
     <SalesPage
       onStartIntake={goIntake}
