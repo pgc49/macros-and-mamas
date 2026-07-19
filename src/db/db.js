@@ -244,10 +244,11 @@ export const db = {
   },
 
   async loadRoster() {
+    // Include admins who submitted a test intake — previously .neq("role","admin")
+    // hid Callie/you from the pending queue during testing.
     const { data: profiles, error: pErr } = await supabase
       .from("profiles")
       .select("*")
-      .neq("role", "admin")
       .order("created_at", { ascending: false });
     if (pErr) throw pErr;
 
@@ -280,30 +281,40 @@ export const db = {
       checksBy[c.profile_id].push(c);
     });
 
-    return (profiles || []).map((p) => {
-      const m = macrosBy[p.id];
-      return {
-        id: p.id,
-        name: p.name || "Mama",
-        age: p.age,
-        currentWeight: p.current_weight,
-        goalWeight: p.goal_weight,
-        monthsPP: p.months_pp,
-        breastfeeding: p.breastfeeding,
-        phone: p.phone,
-        prefB: p.pref_b,
-        prefL: p.pref_l,
-        prefD: p.pref_d,
-        status: p.status,
-        week: p.week,
-        paid: p.paid,
-        macros: m
-          ? { cal: m.cal, protein: m.protein, fat: m.fat, carbs: m.carbs, notes: m.notes || [], approved: m.approved }
-          : { cal: 0, protein: 0, fat: 0, carbs: 0, notes: [] },
-        weighins: weighBy[p.id] || [],
-        adherence: adherenceFromChecks(checksBy[p.id] || [], curWk),
-      };
-    });
+    // Only show people who completed intake (have a macros row). Empty admin
+    // accounts with no intake stay off the roster.
+    return (profiles || [])
+      .filter((p) => !!macrosBy[p.id])
+      .map((p) => {
+        const m = macrosBy[p.id];
+        return {
+          id: p.id,
+          name: p.name || "Mama",
+          age: p.age,
+          currentWeight: p.current_weight,
+          goalWeight: p.goal_weight,
+          monthsPP: p.months_pp,
+          breastfeeding: p.breastfeeding,
+          phone: p.phone,
+          prefB: p.pref_b,
+          prefL: p.pref_l,
+          prefD: p.pref_d,
+          status: p.status,
+          week: p.week,
+          paid: p.paid,
+          role: p.role,
+          macros: {
+            cal: m.cal,
+            protein: m.protein,
+            fat: m.fat,
+            carbs: m.carbs,
+            notes: m.notes || [],
+            approved: m.approved,
+          },
+          weighins: weighBy[p.id] || [],
+          adherence: adherenceFromChecks(checksBy[p.id] || [], curWk),
+        };
+      });
   },
 
   async updateClientMacros(clientId, macros) {
