@@ -74,13 +74,13 @@ function adherenceFromChecks(checkRows, weekStart) {
 }
 
 function viewFromState({ profileRow, macrosRow }) {
-  if (!profileRow) return "sales";
+  if (!profileRow) return "onboarding";
   const hasIntake = !!(macrosRow || profileRow.name || profileRow.phone);
-  if (!hasIntake) return "sales";
+  if (!hasIntake) return "onboarding";
   const approved = !!macrosRow?.approved;
   const paid = !!profileRow.paid;
-  if (approved && paid) return "app";
-  // pending covers: awaiting Callie, and approved-but-unpaid (Step 5 pay screen)
+  if (approved && paid) return "dashboard";
+  // pending covers: awaiting Callie, and approved-but-unpaid (pay screen)
   return "pending";
 }
 

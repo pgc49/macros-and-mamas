@@ -1,6 +1,8 @@
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { T, F, FD } from "../theme/tokens";
 import { Fonts } from "../theme/Fonts";
 import { useAuth } from "../auth/useAuth.jsx";
+import { PATHS } from "../routing";
 
 /* ------------------------------------------------------------------ */
 /*  Building blocks (defined OUTSIDE the app so inputs keep focus)     */
@@ -78,7 +80,12 @@ export const RangeBand = ({ label, lo, hi, unit = "g", color = T.accent, soft = 
 /* Shell — prototype's coach toggle and reset button removed.
    Shows signed-in email + sign-out when a session exists. */
 export const Shell = ({ children }) => {
-  const { user, signOut } = useAuth();
+  const { user, isAdmin, signOut } = useAuth();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const linkStyle = {
+    fontFamily: F, fontSize: 12, fontWeight: 700, color: T.accent, textDecoration: "underline",
+  };
   return (
     <div style={{ fontFamily: F, background: T.bg, minHeight: "100vh", color: T.ink }}>
       <Fonts />
@@ -91,8 +98,21 @@ export const Shell = ({ children }) => {
           {user?.email && (
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 11.5, color: T.inkSoft, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
+              {isAdmin && (
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 2 }}>
+                  {pathname !== PATHS.admin && (
+                    <Link to={PATHS.admin} style={linkStyle}>Admin</Link>
+                  )}
+                  {pathname !== PATHS.dashboard && (
+                    <Link to={PATHS.dashboard} style={linkStyle}>My dashboard</Link>
+                  )}
+                </div>
+              )}
               <button
-                onClick={signOut}
+                onClick={async () => {
+                  await signOut();
+                  navigate(PATHS.home);
+                }}
                 style={{
                   marginTop: 2, background: "none", border: "none", padding: 0,
                   fontFamily: F, fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", textDecoration: "underline",

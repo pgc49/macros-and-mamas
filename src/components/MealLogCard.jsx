@@ -5,7 +5,6 @@ import { Card, Btn, Field, inputStyle } from "./ui";
 export function MealLogCard({
   busy,
   estimate,
-  setEstimate,
   onAnalyzePhoto,
   onAnalyzeText,
   onConfirmEstimate,

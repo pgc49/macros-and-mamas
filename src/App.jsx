@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { CONFIG } from "./config";
 import { useAuth } from "./auth/useAuth.jsx";
 import { db } from "./db/db";
@@ -6,6 +7,7 @@ import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { DEFAULT_ITEMS, DAYS } from "./content/data";
 import { wkStartOf } from "./utils/dates";
+import { PATHS, homePathFor, pathFromClientView } from "./routing";
 import { SalesPage } from "./views/SalesPage";
 import { IntakeFlow } from "./views/IntakeFlow";
 import { DeclinedPage } from "./views/DeclinedPage";
@@ -23,13 +25,11 @@ const EMPTY_PROFILE = {
   prefB: "", prefL: "", prefD: "",
 };
 
-/* ------------------------------------------------------------------ */
-/*  Main app                                                           */
-/* ------------------------------------------------------------------ */
 export default function App() {
   const { user, isAdmin, loading: authLoading, refreshProfile } = useAuth();
-  const [view, setView] = useState("sales"); // sales | intake | declined | pending | app | signin
-  const [signInNext, setSignInNext] = useState("intake"); // "intake" → create account; "app" → sign in
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [signInNext, setSignInNext] = useState("intake"); // "intake" → create; "app" → returning
   const [tab, setTab] = useState("today");
   const [step, setStep] = useState(0);
   const [declineReason, setDeclineReason] = useState("");
@@ -44,68 +44,88 @@ export default function App() {
   const [weighins, setWeighins] = useState([]);
   const [wInput, setWInput] = useState("");
   const [mealFilter, setMealFilter] = useState("All");
-  const [roster, setRoster] = useState([]); // loads from db
+  const [roster, setRoster] = useState([]);
   const [adminSel, setAdminSel] = useState(null);
   const [estimateBusy, setEstimateBusy] = useState(false);
-  const [estimate, setEstimate] = useState(null); // AI estimate awaiting confirm, or { error: true }
-  const [estimateSource, setEstimateSource] = useState("photo"); // photo | text
+  const [estimate, setEstimate] = useState(null);
+  const [estimateSource, setEstimateSource] = useState("photo");
   const [todayLog, setTodayLog] = useState({ date: new Date().toISOString().slice(0, 10), entries: [] });
   const [loaded, setLoaded] = useState(false);
+  const routedAfterLoad = useRef(false);
 
-  /* Initial load — hydrate from Supabase per signed-in user / admin roster. */
+  /* Hydrate client state for every signed-in user (admins included — dogfood). */
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
+    routedAfterLoad.current = false;
     (async () => {
       setLoaded(false);
       try {
-        if (isAdmin) {
-          if (!cancelled) setRoster(await db.loadRoster());
-        } else if (user) {
+        if (user) {
           const s = await db.loadClientState();
-          if (cancelled || !s) return;
-          if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
-          if (s.macros) setMacros(s.macros);
-          setApproved(!!s.approved);
-          setPaid(!!s.paid);
-          if (s.checksByWeek) setChecksByWeek(s.checksByWeek);
-          if (s.weighins) setWeighins(s.weighins);
-          if (s.todayLog && s.todayLog.date === new Date().toISOString().slice(0, 10)) setTodayLog(s.todayLog);
-          // Don't clobber an in-progress intake/declined flow with sales/pending
-          if (view === "sales" || view === "signin" || view === "pending" || view === "app") {
-            if (s.view) setView(s.view);
-            else if (!s.macros) setView("intake");
+          if (cancelled) return;
+          if (s?.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
+          if (s?.macros) setMacros(s.macros);
+          else setMacros(null);
+          setApproved(!!s?.approved);
+          setPaid(!!s?.paid);
+          if (s?.checksByWeek) setChecksByWeek(s.checksByWeek);
+          if (s?.weighins) setWeighins(s.weighins);
+          if (s?.todayLog && s.todayLog.date === new Date().toISOString().slice(0, 10)) {
+            setTodayLog(s.todayLog);
+          } else {
+            setTodayLog({ date: new Date().toISOString().slice(0, 10), entries: [] });
           }
+        } else {
+          setMacros(null);
+          setApproved(false);
+          setPaid(false);
         }
-      } catch (e) { console.error("initial load failed", e); }
+        if (isAdmin) {
+          const r = await db.loadRoster();
+          if (!cancelled) setRoster(r);
+        }
+      } catch (e) {
+        console.error("initial load failed", e);
+      }
       if (!cancelled) setLoaded(true);
     })();
     return () => { cancelled = true; };
   }, [authLoading, user?.id, isAdmin]);
 
-  // After password auth succeeds, leave the auth screen
+  /* After load / sign-in: send users from entry paths to the right home. */
   useEffect(() => {
-    if (!user || isAdmin || view !== "signin") return;
-    if (signInNext === "intake") {
-      setView("intake");
-      setStep(0);
-    } else {
-      setView("pending");
+    if (authLoading || !loaded || !user) return;
+    const entryPaths = [PATHS.home, PATHS.signin, "/home"];
+    if (!entryPaths.includes(location.pathname)) return;
+    if (routedAfterLoad.current && location.pathname === PATHS.home) return;
+
+    const dest = homePathFor({ isAdmin, approved, paid, macros });
+    // Signed-in visitors may still browse marketing at `/` — only auto-route
+    // from `/signin` and legacy `/home`. From `/`, route approved clients + admins.
+    if (location.pathname === PATHS.home) {
+      if (isAdmin || (macros && approved && paid)) {
+        routedAfterLoad.current = true;
+        navigate(dest, { replace: true });
+      }
+      return;
     }
-  }, [user, isAdmin, view, signInNext]);
+    routedAfterLoad.current = true;
+    navigate(dest, { replace: true });
+  }, [authLoading, loaded, user, isAdmin, approved, paid, macros, location.pathname, navigate]);
 
   const authMode = signInNext === "intake" ? "create" : "signin";
   const switchAuthMode = (next) => {
     setSignInNext(next === "create" ? "intake" : "app");
   };
 
-  // Stripe success/cancel return — reload paid status
+  // Stripe return — reload paid status, then land on dashboard or pending
   useEffect(() => {
-    if (!user || isAdmin) return;
-    const params = new URLSearchParams(window.location.search);
+    if (!user || authLoading || !loaded) return;
+    const params = new URLSearchParams(location.search);
     const checkout = params.get("checkout");
     if (!checkout) return;
-    window.history.replaceState({}, "", window.location.pathname);
+    navigate({ pathname: location.pathname, search: "" }, { replace: true });
     (async () => {
       try {
         const s = await db.loadClientState();
@@ -114,12 +134,12 @@ export default function App() {
         setPaid(!!s.paid);
         if (s.macros) setMacros(s.macros);
         if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
-        if (s.view) setView(s.view);
+        navigate(pathFromClientView(s.view), { replace: true });
       } catch (e) {
         console.error("post-checkout refresh failed", e);
       }
     })();
-  }, [user?.id, isAdmin]);
+  }, [user?.id, authLoading, loaded, location.search]);
 
   const refreshClientState = async () => {
     try {
@@ -129,7 +149,7 @@ export default function App() {
       if (s.macros) setMacros(s.macros);
       setApproved(!!s.approved);
       setPaid(!!s.paid);
-      if (s.view) setView(s.view);
+      navigate(pathFromClientView(s.view), { replace: true });
     } catch (e) {
       console.error("refreshClientState failed", e);
     }
@@ -139,20 +159,20 @@ export default function App() {
 
   /* Gating rules — PRESERVE VERBATIM. These run BEFORE any payment. */
   const submitIntake = async () => {
-    if (profile.pregnant) { setDeclineReason("pregnant"); setView("declined"); return; }
-    if (profile.breastfeeding && Number(profile.monthsPP) < 6) { setDeclineReason("early"); setView("declined"); return; }
-    if (profile.diet !== "none") { setDeclineReason("diet"); setView("declined"); return; }
+    if (profile.pregnant) { setDeclineReason("pregnant"); navigate(PATHS.declined); return; }
+    if (profile.breastfeeding && Number(profile.monthsPP) < 6) { setDeclineReason("early"); navigate(PATHS.declined); return; }
+    if (profile.diet !== "none") { setDeclineReason("diet"); navigate(PATHS.declined); return; }
     const m = computeMacros(profile);
     setMacros(m);
     setApproved(false);
     setPaid(false);
     try {
-      await db.submitIntake(profile, m); // puts this mama in Callie's pending queue
+      await db.submitIntake(profile, m);
       await refreshProfile();
     } catch (e) {
       console.error("submitIntake failed", e);
     }
-    setView("pending");
+    navigate(PATHS.pending);
   };
 
   const waterOz = profile.goalWeight ? Math.round(Number(profile.goalWeight) / 2) : null;
@@ -300,7 +320,7 @@ export default function App() {
   }, [weighins]);
 
   const toggleCheck = async (itemId, day) => {
-    if (viewWk !== curWk && !editPast) return; // past weeks locked unless explicitly unlocked
+    if (viewWk !== curWk && !editPast) return;
     const key = `${itemId}|${day}`;
     const prev = !!(checksByWeek[viewWk] || {})[key];
     const next = !prev;
@@ -320,7 +340,7 @@ export default function App() {
       if (it.daily) {
         DAYS.forEach((d) => { total += 1; if (ch[`${it.id}|${d}`]) done += 1; });
       } else {
-        total += 3; // goal is 3 strength sessions, extra sessions are bonus
+        total += 3;
         const sc = DAYS.filter((d) => ch[`${it.id}|${d}`]).length;
         done += Math.min(sc, 3);
       }
@@ -359,7 +379,7 @@ export default function App() {
     return { locked: false, n, overall, delta, items, best, worst };
   }, [wkKeys, checksByWeek]);
 
-  if (authLoading || (user && !loaded && !isAdmin)) {
+  if (authLoading || (user && !loaded)) {
     return (
       <Shell>
         <div style={{ padding: "40px 8px", textAlign: "center", color: T.inkSoft, fontFamily: FD, fontSize: 18 }}>
@@ -369,18 +389,16 @@ export default function App() {
     );
   }
 
-  const goIntake = () => {
+  const goOnboarding = () => {
     if (!user) {
       setSignInNext("intake");
-      setView("signin");
+      navigate(PATHS.signin);
       return;
     }
-    setView("intake");
     setStep(0);
+    navigate(PATHS.onboarding);
   };
 
-  // Decline gates never write to the DB. Reset the form so "Back to start"
-  // returns to the sales page instead of re-opening the same intake answers.
   const backToStart = () => {
     setDeclineReason("");
     setStep(0);
@@ -388,131 +406,152 @@ export default function App() {
     setMacros(null);
     setApproved(false);
     setPaid(false);
-    setView("sales");
+    navigate(PATHS.home);
   };
 
-  /* ------------------------- ADMIN PORTAL ------------------------- */
-  // Callie: set profiles.role = 'admin' in Supabase after first sign-in
-  if (isAdmin) {
-    return (
-      <AdminPortal
-        roster={roster}
-        setRoster={setRoster}
-        adminSel={adminSel}
-        setAdminSel={setAdminSel}
-      />
-    );
-  }
+  const dashboardUnlocked = !!(macros && approved && paid);
 
-  /* ------------------------- DECLINED ----------------------------- */
-  if (view === "declined") {
-    return <DeclinedPage declineReason={declineReason} onBack={backToStart} />;
-  }
-
-  /* ------------------------- AUTH (one page) ---------------------- */
-  if (view === "signin" && !user) {
-    return (
-      <SignInPage
-        mode={authMode}
-        onSwitchMode={switchAuthMode}
-        onBack={() => setView("sales")}
-      />
-    );
-  }
-
-  /* ------------------------- CLIENT DASHBOARD --------------------- */
-  // Unlocks only after Callie approves AND Stripe payment succeeds.
-  if (macros && approved && paid) {
-    return (
-      <ClientApp
-        tab={tab}
-        setTab={setTab}
-        profile={profile}
-        macros={macros}
-        totals={totals}
-        waterOz={waterOz}
+  const clientApp = (
+    <ClientApp
+      tab={tab}
+      setTab={setTab}
+      profile={profile}
+      macros={macros}
+      totals={totals}
+      waterOz={waterOz}
         estimateBusy={estimateBusy}
         estimate={estimate}
-        setEstimate={setEstimate}
         analyzePhoto={analyzePhoto}
-        analyzeText={analyzeText}
-        confirmEstimate={confirmEstimate}
-        discardEstimate={discardEstimate}
-        logRecipe={logRecipe}
-        logManualMeal={logManualMeal}
-        todayLog={todayLog}
-        deleteMealEntry={deleteMealEntry}
-        viewWk={viewWk}
-        setViewWk={setViewWk}
-        curWk={curWk}
-        editPast={editPast}
-        setEditPast={setEditPast}
-        checksByWeek={checksByWeek}
-        toggleCheck={toggleCheck}
-        adherenceFor={adherenceFor}
-        progWeekNum={progWeekNum}
-        earliestWk={earliestWk}
-        weighins={weighins}
-        wInput={wInput}
-        setWInput={setWInput}
-        logWeighin={logWeighin}
-        weeklyRate={weeklyRate}
-        trends={trends}
-        mealFilter={mealFilter}
-        setMealFilter={setMealFilter}
-      />
-    );
-  }
-
-  /* ------------------------- PENDING / PAY ------------------------ */
-  if (macros || view === "pending") {
-    return (
-      <PendingPage
-        approved={!!approved}
-        onPaidRefresh={refreshClientState}
-      />
-    );
-  }
-
-  /* ------------------------- SALES -------------------------------- */
-  // Shown to visitors and to signed-in users who hit "Back to start"
-  // after a decline. Join / Start intake begins (or resumes) intake.
-  if (view === "sales") {
-    return (
-      <SalesPage
-        onStartIntake={goIntake}
-        onSignIn={() => { setSignInNext("app"); setView("signin"); }}
-      />
-    );
-  }
-
-  /* ------------------------- INTAKE ------------------------------- */
-  if (view === "intake") {
-    if (!user) {
-      return (
-        <SignInPage
-          mode="create"
-          onSwitchMode={switchAuthMode}
-          onBack={() => setView("sales")}
-        />
-      );
-    }
-    return (
-      <IntakeFlow
-        profile={profile}
-        step={step}
-        setStep={setStep}
-        set={set}
-        onSubmit={submitIntake}
-      />
-    );
-  }
-
-  // Fallback
-  return (
-    <SalesPage
-      onStartIntake={goIntake}
-      onSignIn={() => { setSignInNext("app"); setView("signin"); }}
+      analyzeText={analyzeText}
+      confirmEstimate={confirmEstimate}
+      discardEstimate={discardEstimate}
+      logRecipe={logRecipe}
+      logManualMeal={logManualMeal}
+      todayLog={todayLog}
+      deleteMealEntry={deleteMealEntry}
+      viewWk={viewWk}
+      setViewWk={setViewWk}
+      curWk={curWk}
+      editPast={editPast}
+      setEditPast={setEditPast}
+      checksByWeek={checksByWeek}
+      toggleCheck={toggleCheck}
+      adherenceFor={adherenceFor}
+      progWeekNum={progWeekNum}
+      earliestWk={earliestWk}
+      weighins={weighins}
+      wInput={wInput}
+      setWInput={setWInput}
+      logWeighin={logWeighin}
+      weeklyRate={weeklyRate}
+      trends={trends}
+      mealFilter={mealFilter}
+      setMealFilter={setMealFilter}
     />
+  );
+
+  return (
+    <Routes>
+      <Route
+        path={PATHS.home}
+        element={(
+          <SalesPage
+            onStartIntake={goOnboarding}
+            onSignIn={() => { setSignInNext("app"); navigate(PATHS.signin); }}
+          />
+        )}
+      />
+
+      <Route path="/home" element={<Navigate to={PATHS.dashboard} replace />} />
+
+      <Route
+        path={PATHS.signin}
+        element={
+          user
+            ? <Navigate to={homePathFor({ isAdmin, approved, paid, macros })} replace />
+            : (
+              <SignInPage
+                mode={authMode}
+                onSwitchMode={switchAuthMode}
+                onBack={() => navigate(PATHS.home)}
+              />
+            )
+        }
+      />
+
+      <Route
+        path={PATHS.onboarding}
+        element={
+          !user
+            ? (
+              <SignInPage
+                mode="create"
+                onSwitchMode={switchAuthMode}
+                onBack={() => navigate(PATHS.home)}
+              />
+            )
+            : macros && !declineReason
+              ? <Navigate to={PATHS.pending} replace />
+              : (
+                <IntakeFlow
+                  profile={profile}
+                  step={step}
+                  setStep={setStep}
+                  set={set}
+                  onSubmit={submitIntake}
+                />
+              )
+        }
+      />
+
+      <Route
+        path={PATHS.declined}
+        element={<DeclinedPage declineReason={declineReason} onBack={backToStart} />}
+      />
+
+      <Route
+        path={PATHS.pending}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace />
+            : dashboardUnlocked
+              ? <Navigate to={PATHS.dashboard} replace />
+              : macros
+                ? <PendingPage approved={!!approved} onPaidRefresh={refreshClientState} />
+                : <Navigate to={PATHS.onboarding} replace />
+        }
+      />
+
+      <Route
+        path={PATHS.dashboard}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace />
+            : dashboardUnlocked
+              ? clientApp
+              : <Navigate to={macros ? PATHS.pending : PATHS.onboarding} replace />
+        }
+      />
+
+      <Route
+        path={PATHS.admin}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace />
+            : !isAdmin
+              ? <Navigate to={dashboardUnlocked ? PATHS.dashboard : PATHS.home} replace />
+              : (
+                <AdminPortal
+                  roster={roster}
+                  setRoster={setRoster}
+                  adminSel={adminSel}
+                  setAdminSel={setAdminSel}
+                />
+              )
+        }
+      />
+
+      <Route path="*" element={<Navigate to={PATHS.home} replace />} />
+    </Routes>
   );
 }
