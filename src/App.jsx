@@ -19,7 +19,7 @@ import { T, FD } from "./theme/tokens";
 /*  Main app                                                           */
 /* ------------------------------------------------------------------ */
 export default function App() {
-  const { user, isAdmin, loading: authLoading } = useAuth(); // Supabase magic-link auth
+  const { user, isAdmin, loading: authLoading, refreshProfile } = useAuth(); // Supabase magic-link auth
   const [view, setView] = useState("sales"); // sales | intake | declined | pending | app | signin
   const [signInNext, setSignInNext] = useState("intake"); // where to go after magic-link for new sessions
   const [tab, setTab] = useState("today");
@@ -33,64 +33,58 @@ export default function App() {
   });
   const [macros, setMacros] = useState(null);
   const [approved, setApproved] = useState(false);
+  const [paid, setPaid] = useState(false);
   const curWk = wkStartOf();
   const [checksByWeek, setChecksByWeek] = useState({});
-  const [strengthByWeek, setStrengthByWeek] = useState({ [curWk]: ["M", "W", "F"] });
   const [viewWk, setViewWk] = useState(curWk);
   const [editPast, setEditPast] = useState(false);
   const [weighins, setWeighins] = useState([]);
   const [wInput, setWInput] = useState("");
   const [mealFilter, setMealFilter] = useState("All");
-  const [roster, setRoster] = useState([]); // prototype's MOCK_CLIENTS removed — loads from db
+  const [roster, setRoster] = useState([]); // loads from db
   const [adminSel, setAdminSel] = useState(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoResult, setPhotoResult] = useState(null);
   const [todayLog, setTodayLog] = useState({ date: new Date().toISOString().slice(0, 10), entries: [] });
   const [loaded, setLoaded] = useState(false);
 
-  /* PROD-TODO(db): initial load — replaces window.storage.get.
-     For a signed-in client: hydrate profile, macros, approved,
-     checksByWeek, strengthByWeek, weighins, todayLog from Supabase.
-     For Callie (isAdmin): hydrate the roster. */
+  /* Initial load — hydrate from Supabase per signed-in user / admin roster. */
   useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
     (async () => {
+      setLoaded(false);
       try {
-        const s = await db.loadClientState();
-        if (s) {
-          if (s.profile) setProfile(s.profile);
+        if (isAdmin) {
+          if (!cancelled) setRoster(await db.loadRoster());
+        } else if (user) {
+          const s = await db.loadClientState();
+          if (cancelled || !s) return;
+          if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
           if (s.macros) setMacros(s.macros);
-          if (s.view) setView(s.view);
-          if (s.approved) setApproved(s.approved);
+          setApproved(!!s.approved);
+          setPaid(!!s.paid);
           if (s.checksByWeek) setChecksByWeek(s.checksByWeek);
-          if (s.strengthByWeek) setStrengthByWeek(s.strengthByWeek);
           if (s.weighins) setWeighins(s.weighins);
           if (s.todayLog && s.todayLog.date === new Date().toISOString().slice(0, 10)) setTodayLog(s.todayLog);
+          // Don't clobber an in-progress intake/declined flow with sales/pending
+          if (view === "sales" || view === "signin" || view === "pending" || view === "app") {
+            if (s.view) setView(s.view);
+          }
         }
-        if (isAdmin) setRoster(await db.loadRoster());
       } catch (e) { console.error("initial load failed", e); }
-      setLoaded(true);
+      if (!cancelled) setLoaded(true);
     })();
-  }, [isAdmin]);
+    return () => { cancelled = true; };
+  }, [authLoading, user?.id, isAdmin]);
 
-  /* PROD-TODO(db): persistence — replaces window.storage.set.
-     The prototype blobbed all state into one key on every change.
-     In production, write on the event that changed it instead:
-     toggleCheck -> checkins row, weigh-in -> weighins row, logMeal ->
-     meal_logs row, etc. This effect is left as a marker of everything
-     that must persist; delete it once per-event writes exist. */
-  useEffect(() => {
-    if (!loaded) return;
-    db.saveClientState({ profile, macros, view, approved, checksByWeek, strengthByWeek, weighins, todayLog });
-  }, [profile, macros, view, approved, checksByWeek, strengthByWeek, weighins, todayLog, loaded]);
-
-  // After magic-link lands, leave the sign-in screen
+  // After magic-link lands, leave the sign-in screen (load effect sets real view next)
   useEffect(() => {
     if (!user || isAdmin || view !== "signin") return;
     if (signInNext === "intake") {
       setView("intake");
       setStep(0);
     } else {
-      // Returning clients: Step 4 will hydrate real status; pending is safe until then
       setView("pending");
     }
   }, [user, isAdmin, view, signInNext]);
@@ -98,14 +92,20 @@ export default function App() {
   const set = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
 
   /* Gating rules — PRESERVE VERBATIM. These run BEFORE any payment. */
-  const submitIntake = () => {
+  const submitIntake = async () => {
     if (profile.pregnant) { setDeclineReason("pregnant"); setView("declined"); return; }
     if (profile.breastfeeding && Number(profile.monthsPP) < 6) { setDeclineReason("early"); setView("declined"); return; }
     if (profile.diet !== "none") { setDeclineReason("diet"); setView("declined"); return; }
     const m = computeMacros(profile);
     setMacros(m);
     setApproved(false);
-    db.submitIntake(profile, m); // PROD-TODO(db): puts this mama in Callie's pending queue
+    setPaid(false);
+    try {
+      await db.submitIntake(profile, m); // puts this mama in Callie's pending queue
+      await refreshProfile();
+    } catch (e) {
+      console.error("submitIntake failed", e);
+    }
     setView("pending");
   };
 
@@ -148,13 +148,47 @@ export default function App() {
     setPhotoBusy(false);
   };
 
-  const logMeal = () => {
+  const logMeal = async () => {
     if (!photoResult || photoResult.error) return;
-    setTodayLog((tl) => ({
-      date: new Date().toISOString().slice(0, 10),
-      entries: [...tl.entries, { name: photoResult.meal, cal: photoResult.calories, p: photoResult.protein_g, c: photoResult.carbs_g, f: photoResult.fat_g }],
-    }));
+    const entry = {
+      name: photoResult.meal,
+      cal: photoResult.calories,
+      p: photoResult.protein_g,
+      c: photoResult.carbs_g,
+      f: photoResult.fat_g,
+    };
+    try {
+      const row = await db.addMealLog(entry);
+      setTodayLog((tl) => ({
+        date: new Date().toISOString().slice(0, 10),
+        entries: [...tl.entries, { ...entry, id: row.id }],
+      }));
+    } catch (e) {
+      console.error("logMeal failed", e);
+    }
     setPhotoResult(null);
+  };
+
+  const clearTodayMeals = async () => {
+    const date = new Date().toISOString().slice(0, 10);
+    try {
+      await db.clearTodayMeals(date);
+      setTodayLog({ date, entries: [] });
+    } catch (e) {
+      console.error("clearTodayMeals failed", e);
+    }
+  };
+
+  const logWeighin = async () => {
+    const w = parseFloat(wInput);
+    if (!w) return;
+    try {
+      const row = await db.addWeighin(w);
+      setWeighins((arr) => [...arr, row]);
+      setWInput("");
+    } catch (e) {
+      console.error("weigh-in failed", e);
+    }
   };
 
   const totals = useMemo(() => todayLog.entries.reduce(
@@ -170,10 +204,18 @@ export default function App() {
     return ((first.w - last.w) / days) * 7;
   }, [weighins]);
 
-  const toggleCheck = (itemId, day) => {
+  const toggleCheck = async (itemId, day) => {
     if (viewWk !== curWk && !editPast) return; // past weeks locked unless explicitly unlocked
     const key = `${itemId}|${day}`;
-    setChecksByWeek((cw) => ({ ...cw, [viewWk]: { ...(cw[viewWk] || {}), [key]: !(cw[viewWk] || {})[key] } }));
+    const prev = !!(checksByWeek[viewWk] || {})[key];
+    const next = !prev;
+    setChecksByWeek((cw) => ({ ...cw, [viewWk]: { ...(cw[viewWk] || {}), [key]: next } }));
+    try {
+      await db.toggleCheckin(viewWk, itemId, day, next);
+    } catch (e) {
+      console.error("toggleCheck failed", e);
+      setChecksByWeek((cw) => ({ ...cw, [viewWk]: { ...(cw[viewWk] || {}), [key]: prev } }));
+    }
   };
 
   const adherenceFor = (wk) => {
@@ -242,8 +284,25 @@ export default function App() {
     setStep(0);
   };
 
+  /* ------------------------- ADMIN PORTAL ------------------------- */
+  if (isAdmin) {
+    return (
+      <AdminPortal
+        roster={roster}
+        setRoster={setRoster}
+        adminSel={adminSel}
+        setAdminSel={setAdminSel}
+      />
+    );
+  }
+
+  /* ------------------------- DECLINED ----------------------------- */
+  if (view === "declined") {
+    return <DeclinedPage declineReason={declineReason} onBack={() => setView("sales")} />;
+  }
+
   /* ------------------------- SIGN IN ------------------------------ */
-  if (view === "signin" && !isAdmin && !user) {
+  if (view === "signin" && !user) {
     return (
       <SignInPage
         title={signInNext === "intake" ? "Sign in to start your intake" : "Welcome back"}
@@ -252,18 +311,8 @@ export default function App() {
     );
   }
 
-  /* ------------------------- SALES PAGE --------------------------- */
-  if (view === "sales" && !isAdmin) {
-    return (
-      <SalesPage
-        onStartIntake={goIntake}
-        onSignIn={() => { setSignInNext("app"); setView("signin"); }}
-      />
-    );
-  }
-
   /* ------------------------- INTAKE ------------------------------- */
-  if (view === "intake" && !isAdmin) {
+  if (view === "intake") {
     if (!user) {
       return (
         <SignInPage
@@ -283,65 +332,55 @@ export default function App() {
     );
   }
 
-  /* ------------------------- DECLINED ----------------------------- */
-  if (view === "declined" && !isAdmin) {
-    return <DeclinedPage declineReason={declineReason} onBack={() => setView("sales")} />;
-  }
-
-  /* ------------------------- ADMIN PORTAL -------------------------
-     Prototype used a client-side toggle + a merged "you" live-intake
-     row. In production this route is reached only when isAdmin is
-     true, and every client (including fresh intakes) is a real row
-     in the roster loaded from the database. RLS must also protect
-     these queries server-side. */
-  if (isAdmin) {
+  /* ------------------------- CLIENT DASHBOARD / PENDING ------------ */
+  // Dashboard unlocks only when Callie approved AND Stripe paid (Step 5).
+  if (macros && approved && paid) {
     return (
-      <AdminPortal
-        roster={roster}
-        setRoster={setRoster}
-        adminSel={adminSel}
-        setAdminSel={setAdminSel}
+      <ClientApp
+        tab={tab}
+        setTab={setTab}
+        profile={profile}
+        macros={macros}
+        totals={totals}
+        waterOz={waterOz}
+        photoBusy={photoBusy}
+        photoResult={photoResult}
+        setPhotoResult={setPhotoResult}
+        analyzePhoto={analyzePhoto}
+        logMeal={logMeal}
+        todayLog={todayLog}
+        clearTodayMeals={clearTodayMeals}
+        viewWk={viewWk}
+        setViewWk={setViewWk}
+        curWk={curWk}
+        editPast={editPast}
+        setEditPast={setEditPast}
+        checksByWeek={checksByWeek}
+        toggleCheck={toggleCheck}
+        adherenceFor={adherenceFor}
+        progWeekNum={progWeekNum}
+        earliestWk={earliestWk}
+        weighins={weighins}
+        wInput={wInput}
+        setWInput={setWInput}
+        logWeighin={logWeighin}
+        weeklyRate={weeklyRate}
+        trends={trends}
+        mealFilter={mealFilter}
+        setMealFilter={setMealFilter}
       />
     );
   }
 
-  /* ------------------------- PENDING (client) --------------------- */
-  if (view === "pending") return <PendingPage />;
+  if (macros || view === "pending") {
+    return <PendingPage />;
+  }
 
-  /* ------------------------- CLIENT APP --------------------------- */
+  // Signed-in but no intake yet — back to sales
   return (
-    <ClientApp
-      tab={tab}
-      setTab={setTab}
-      profile={profile}
-      macros={macros}
-      totals={totals}
-      waterOz={waterOz}
-      photoBusy={photoBusy}
-      photoResult={photoResult}
-      setPhotoResult={setPhotoResult}
-      analyzePhoto={analyzePhoto}
-      logMeal={logMeal}
-      todayLog={todayLog}
-      setTodayLog={setTodayLog}
-      viewWk={viewWk}
-      setViewWk={setViewWk}
-      curWk={curWk}
-      editPast={editPast}
-      setEditPast={setEditPast}
-      checksByWeek={checksByWeek}
-      toggleCheck={toggleCheck}
-      adherenceFor={adherenceFor}
-      progWeekNum={progWeekNum}
-      earliestWk={earliestWk}
-      weighins={weighins}
-      setWeighins={setWeighins}
-      wInput={wInput}
-      setWInput={setWInput}
-      weeklyRate={weeklyRate}
-      trends={trends}
-      mealFilter={mealFilter}
-      setMealFilter={setMealFilter}
+    <SalesPage
+      onStartIntake={goIntake}
+      onSignIn={() => { setSignInNext("app"); setView("signin"); }}
     />
   );
 }
