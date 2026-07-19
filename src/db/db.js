@@ -90,6 +90,30 @@ async function requireUserId() {
   return user.id;
 }
 
+async function loadTodayMealLogs(uid, today) {
+  const withSource = await supabase
+    .from("meal_logs")
+    .select("id, date, name, cal, p, c, f, source")
+    .eq("profile_id", uid)
+    .eq("date", today)
+    .order("id", { ascending: true });
+
+  if (!withSource.error) return withSource.data || [];
+
+  // Column missing or other meal_logs issue — retry without source, then empty.
+  console.warn("meal_logs select (with source) failed; retrying", withSource.error);
+  const withoutSource = await supabase
+    .from("meal_logs")
+    .select("id, date, name, cal, p, c, f")
+    .eq("profile_id", uid)
+    .eq("date", today)
+    .order("id", { ascending: true });
+
+  if (!withoutSource.error) return withoutSource.data || [];
+  console.warn("meal_logs select failed; continuing without today's log", withoutSource.error);
+  return [];
+}
+
 export const db = {
   async loadClientState() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -103,20 +127,21 @@ export const db = {
       { data: macrosRow, error: mErr },
       { data: checkRows, error: cErr },
       { data: weighRows, error: wErr },
-      { data: mealRows, error: mealErr },
     ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
       supabase.from("macros").select("*").eq("profile_id", uid).maybeSingle(),
       supabase.from("checkins").select("week_start, item_id, day").eq("profile_id", uid),
       supabase.from("weighins").select("date, weight").eq("profile_id", uid).order("date", { ascending: true }),
-      supabase.from("meal_logs").select("id, date, name, cal, p, c, f, source").eq("profile_id", uid).eq("date", today).order("id", { ascending: true }),
     ]);
 
     if (pErr) throw pErr;
     if (mErr) throw mErr;
     if (cErr) throw cErr;
     if (wErr) throw wErr;
-    if (mealErr) throw mealErr;
+
+    // Meal logs are non-fatal: a missing `source` column (migration not applied)
+    // must not block the whole dashboard / enrollment state.
+    const mealRows = await loadTodayMealLogs(uid, today);
 
     const checksByWeek = {};
     (checkRows || []).forEach((r) => {
@@ -217,22 +242,30 @@ export const db = {
 
   async addMealLog(entry, date = new Date().toISOString().slice(0, 10)) {
     const uid = await requireUserId();
-    const { data, error } = await supabase
+    const base = {
+      profile_id: uid,
+      date,
+      name: entry.name,
+      cal: entry.cal,
+      p: entry.p,
+      c: entry.c,
+      f: entry.f,
+    };
+    // Prefer writing source; fall back if the column isn't migrated yet.
+    let { data, error } = await supabase
       .from("meal_logs")
-      .insert({
-        profile_id: uid,
-        date,
-        name: entry.name,
-        cal: entry.cal,
-        p: entry.p,
-        c: entry.c,
-        f: entry.f,
-        source: entry.source || null,
-      })
+      .insert({ ...base, source: entry.source || null })
       .select("id, date, name, cal, p, c, f, source")
       .single();
+    if (error && /source/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("meal_logs")
+        .insert(base)
+        .select("id, date, name, cal, p, c, f")
+        .single());
+    }
     if (error) throw error;
-    return data;
+    return { ...data, source: data.source || entry.source || null };
   },
 
   async deleteMealLog(id) {
