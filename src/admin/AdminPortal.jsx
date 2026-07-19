@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -10,6 +11,7 @@ export function AdminPortal({ roster, setRoster, adminSel, setAdminSel }) {
   const all = roster;
   const pendings = all.filter((c) => c.status === "pending");
   const actives = all.filter((c) => c.status === "active");
+  const debounceRef = useRef({});
   const needsAttention = (c) => {
     const r = rateOf(c.weighins);
     const flags = [];
@@ -22,11 +24,18 @@ export function AdminPortal({ roster, setRoster, adminSel, setAdminSel }) {
   const patchMacros = (c, k, v) => {
     const next = { ...c.macros, [k]: Number(v) || 0 };
     setRoster((rs) => rs.map((x) => (x.id === c.id ? { ...x, macros: next } : x)));
-    db.updateClientMacros(c.id, next); // PROD-TODO(db): persist edit; debounce in real build
+    clearTimeout(debounceRef.current[c.id]);
+    debounceRef.current[c.id] = setTimeout(() => {
+      db.updateClientMacros(c.id, next).catch((e) => console.error("updateClientMacros failed", e));
+    }, 400);
   };
-  const approveClient = (c) => {
+  const approveClient = async (c) => {
     setRoster((rs) => rs.map((x) => (x.id === c.id ? { ...x, status: "active", week: 1 } : x)));
-    db.approveClient(c.id); // PROD-TODO(db): sets approved=true; Callie then texts the WhatsApp invite
+    try {
+      await db.approveClient(c.id); // sets macros.approved=true, status=active, week=1
+    } catch (e) {
+      console.error("approveClient failed", e);
+    }
   };
 
   const sel = all.find((c) => c.id === adminSel);

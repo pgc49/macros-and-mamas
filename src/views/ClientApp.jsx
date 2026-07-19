@@ -12,10 +12,10 @@ export function ClientApp({
   profile, macros,
   totals, waterOz,
   photoBusy, photoResult, setPhotoResult, analyzePhoto, logMeal,
-  todayLog, setTodayLog,
+  todayLog, clearTodayMeals,
   viewWk, setViewWk, curWk, editPast, setEditPast,
   checksByWeek, toggleCheck, adherenceFor, progWeekNum, earliestWk,
-  weighins, setWeighins, wInput, setWInput, weeklyRate, trends,
+  weighins, wInput, setWInput, logWeighin, weeklyRate, trends,
   mealFilter, setMealFilter,
 }) {
   const hi = (n, d = 10) => n + d;
@@ -118,7 +118,7 @@ export function ClientApp({
                     <span style={{ color: T.inkSoft }}>{e.cal} cal · P{e.p} C{e.c} F{e.f}</span>
                   </div>
                 ))}
-                <button onClick={() => setTodayLog({ date: new Date().toISOString().slice(0, 10), entries: [] })}
+                <button onClick={clearTodayMeals}
                   style={{ background: "none", border: "none", fontSize: 12, color: T.accent, cursor: "pointer", padding: "6px 0 0", textDecoration: "underline" }}>
                   clear today
                 </button>
@@ -276,12 +276,7 @@ export function ClientApp({
           <Card>
             <div style={{ display: "flex", gap: 8 }}>
               <input style={{ ...inputStyle, flex: 1 }} inputMode="decimal" placeholder="This week's weight (lbs)" value={wInput} onChange={(e) => setWInput(e.target.value)} />
-              <Btn small onClick={() => {
-                const w = parseFloat(wInput);
-                if (!w) return;
-                setWeighins((arr) => [...arr, { date: new Date().toISOString().slice(0, 10), w }]);
-                setWInput("");
-              }}>Log it</Btn>
+              <Btn small onClick={logWeighin}>Log it</Btn>
             </div>
 
             {weighins.length > 1 && (
