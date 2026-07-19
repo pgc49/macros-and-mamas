@@ -297,7 +297,7 @@ export default function App() {
     return { locked: false, n, overall, delta, items, best, worst };
   }, [wkKeys, checksByWeek]);
 
-  if (authLoading) {
+  if (authLoading || (user && !loaded && !isAdmin)) {
     return (
       <Shell>
         <div style={{ padding: "40px 8px", textAlign: "center", color: T.inkSoft, fontFamily: FD, fontSize: 18 }}>
@@ -318,6 +318,7 @@ export default function App() {
   };
 
   /* ------------------------- ADMIN PORTAL ------------------------- */
+  // Callie: set profiles.role = 'admin' in Supabase after first sign-in
   if (isAdmin) {
     return (
       <AdminPortal
@@ -344,29 +345,8 @@ export default function App() {
     );
   }
 
-  /* ------------------------- INTAKE ------------------------------- */
-  if (view === "intake") {
-    if (!user) {
-      return (
-        <SignInPage
-          title="Sign in to start your intake"
-          onBack={() => setView("sales")}
-        />
-      );
-    }
-    return (
-      <IntakeFlow
-        profile={profile}
-        step={step}
-        setStep={setStep}
-        set={set}
-        onSubmit={submitIntake}
-      />
-    );
-  }
-
-  /* ------------------------- CLIENT DASHBOARD / PENDING ------------ */
-  // Dashboard unlocks only when Callie approved AND Stripe paid (Step 5).
+  /* ------------------------- CLIENT DASHBOARD --------------------- */
+  // Unlocks only after Callie approves AND Stripe payment succeeds.
   if (macros && approved && paid) {
     return (
       <ClientApp
@@ -405,6 +385,7 @@ export default function App() {
     );
   }
 
+  /* ------------------------- PENDING / PAY ------------------------ */
   if (macros || view === "pending") {
     return (
       <PendingPage
@@ -414,7 +395,30 @@ export default function App() {
     );
   }
 
-  // Signed-in but no intake yet — back to sales
+  /* ------------------------- INTAKE ------------------------------- */
+  // Signed-in clients with no intake yet go straight into the form
+  // (dashboard is not available until approve + pay).
+  if (user || view === "intake") {
+    if (!user) {
+      return (
+        <SignInPage
+          title="Sign in to start your intake"
+          onBack={() => setView("sales")}
+        />
+      );
+    }
+    return (
+      <IntakeFlow
+        profile={profile}
+        step={step}
+        setStep={setStep}
+        set={set}
+        onSubmit={submitIntake}
+      />
+    );
+  }
+
+  /* ------------------------- SALES (signed out) ------------------- */
   return (
     <SalesPage
       onStartIntake={goIntake}
