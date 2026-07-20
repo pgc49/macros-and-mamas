@@ -488,7 +488,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
       {tab === "emails" && (
         <>
           <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 14px" }}>
-            Read-only view of Callie&apos;s lifecycle emails (first person, from her). Numbers match the full plan — #1 and #3 are scheduled nudges and not wired yet. For early cohort, send copy feedback to Patrick.
+            Read-only view of Callie&apos;s lifecycle emails (first person, from her). #1 and #3 run on an hourly cron once CRON_SECRET is set. For early cohort, send copy feedback to Patrick.
           </p>
           {EMAIL_CATALOG.map((em) => (
             <Card key={em.id} style={{ marginBottom: 12, opacity: em.status === "scheduled" ? 0.85 : 1 }}>

@@ -3,11 +3,7 @@
  * Copy lives in Edge Functions for sending; this mirrors it for Callie to review.
  * Edits for early cohort: change functions + this catalog together (via Patrick → agent).
  *
- * Numbers match the email plan:
- *   #1 Finish joining (scheduled) — not live yet
- *   #2 Welcome — live on payment
- *   #3 Intake reminder (scheduled) — not live yet
- *   #4–6 + Callie A/B/C — live on events
+ * Numbers match the email plan (#1–#6 client + Callie A/B/C).
  */
 
 export const EMAIL_CATALOG = [
@@ -15,14 +11,20 @@ export const EMAIL_CATALOG = [
     id: "finish_joining",
     number: 1,
     name: "Finish joining",
-    status: "scheduled",
-    trigger: "Account created, still unpaid — +1 hour, again +24 hours, then stop",
+    status: "live",
+    trigger: "Account created, still unpaid — +1 hour, again +24 hours, then stop (hourly cron)",
     subject: "Your spot's waiting, mama",
     audience: "Client",
     cta: "Finish joining — $149",
-    bodyPreview: `Not live yet — needs the scheduled (cron) sender.
+    bodyPreview: `Hi [First name],
 
-Warm nudge back to checkout. 24-hour follow-up adds founding-price scarcity. Stop after two sends.`,
+You started joining Macros and Mamas — I'm glad you're here.
+
+When you're ready: personalized macros I build myself, our moms WhatsApp group, and a Monday voice note to keep it simple. One button and you're in.
+
+Callie
+
+(24h follow-up adds founding-price scarcity. Reply to stop anytime.)`,
   },
   {
     id: "welcome",
@@ -64,16 +66,20 @@ Callie`,
     id: "intake_reminder",
     number: 3,
     name: "Intake reminder",
-    status: "scheduled",
-    trigger: "Paid, intake incomplete — +24 hours, again +72 hours, then stop",
+    status: "live",
+    trigger: "Paid, intake incomplete — +24 hours, again +72 hours, then stop (hourly cron)",
     subject: "I can't build your macros yet",
     audience: "Client",
     cta: "Complete my intake",
-    bodyPreview: `Not live yet — needs the scheduled (cron) sender.
+    bodyPreview: `Hi [First name],
 
 Your spot is paid for, but your numbers are waiting on you — 3 minutes and I'll get to work.
 
-72-hour version adds: reply to this email if anything's confusing.`,
+Finish your intake whenever you can; that's what I need before I build your ranges.
+
+Callie
+
+(72h follow-up adds: reply if anything's confusing — I read everything.)`,
   },
   {
     id: "intake_received",
@@ -174,7 +180,11 @@ Callie`,
 ];
 
 export const EMAIL_TYPE_LABELS = {
+  finish_joining_1h: "Finish joining (+1h)",
+  finish_joining_24h: "Finish joining (+24h)",
   welcome: "Welcome",
+  intake_reminder_24h: "Intake reminder (+24h)",
+  intake_reminder_72h: "Intake reminder (+72h)",
   intake_received: "Intake received",
   macros_live: "Macros live",
   eligibility_refund: "Refund confirm",

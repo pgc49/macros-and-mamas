@@ -17,3 +17,6 @@ SUPABASE_ANON_KEY=your-publishable-or-anon-key
 SUPABASE_SERVICE_ROLE_KEY=replace-me
 # Service role also invokes Supabase Edge Functions (welcome / approve / refund emails).
 # RESEND_API_KEY lives in Supabase secrets — not here.
+
+# Hourly email cron (#1 finish joining, #3 intake reminder) — same value in GitHub Actions
+CRON_SECRET=replace-with-long-random-string

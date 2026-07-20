@@ -1,0 +1,40 @@
+# Hourly nudge runner for emails #1 and #3 (no Mac / CLI needed).
+# One-time setup (when at a computer):
+#   1. Cloudflare Pages → Settings → Environment variables (Production):
+#        CRON_SECRET = long random string (encrypt/secret)
+#   2. GitHub → Settings → Secrets → Actions:
+#        CRON_SECRET = same value
+# Then this workflow POSTs /api/email-cron every hour.
+
+name: Lifecycle email cron
+
+on:
+  schedule:
+    - cron: "15 * * * *" # hourly at :15 UTC
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require CRON_SECRET
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Add GitHub Actions secret CRON_SECRET (match Cloudflare Pages CRON_SECRET)."
+            exit 1
+          fi
+
+      - name: Trigger email-cron
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -e
+          resp=$(curl -sS -o /tmp/cron-out.json -w "%{http_code}" -X POST \
+            "https://www.macrosandmamas.com/api/email-cron" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $resp"
+          cat /tmp/cron-out.json
+          test "$resp" = "200"

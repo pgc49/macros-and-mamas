@@ -184,6 +184,44 @@ export async function sendApprovedEmail(env, { email, name, userId }) {
   });
 }
 
+export async function sendFinishJoiningEmail(env, { email, name, userId, variant }) {
+  if (!email) return { ok: false };
+  const subject = "Your spot's waiting, mama";
+  const emailType = variant === "24h" ? "finish_joining_24h" : "finish_joining_1h";
+  const result = await invokeEdgeFunction(env, "finish-joining", {
+    email, name, userId, variant: variant === "24h" ? "24h" : "1h",
+  });
+  await logEmailEvent(env, {
+    profileId: userId,
+    emailType,
+    toEmail: email,
+    subject,
+    resendId: resendIdFrom(result),
+    status: result.ok ? "sent" : "failed",
+    meta: { slug: "finish-joining", variant },
+  });
+  return result;
+}
+
+export async function sendIntakeReminderEmail(env, { email, name, userId, variant }) {
+  if (!email) return { ok: false };
+  const subject = "I can't build your macros yet";
+  const emailType = variant === "72h" ? "intake_reminder_72h" : "intake_reminder_24h";
+  const result = await invokeEdgeFunction(env, "intake-reminder", {
+    email, name, userId, variant: variant === "72h" ? "72h" : "24h",
+  });
+  await logEmailEvent(env, {
+    profileId: userId,
+    emailType,
+    toEmail: email,
+    subject,
+    resendId: resendIdFrom(result),
+    status: result.ok ? "sent" : "failed",
+    meta: { slug: "intake-reminder", variant },
+  });
+  return result;
+}
+
 export async function sendRefundEmails(env, { email, name, userId, reason }) {
   if (email) {
     const subject = "Refund confirmation";

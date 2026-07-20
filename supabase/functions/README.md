@@ -9,13 +9,21 @@ Stripe keys stay on **Cloudflare** — do not add them here.
 
 | Slug | Email | Trigger |
 |------|--------|---------|
+| `finish-joining` | #1 Finish joining | Cloudflare `/api/email-cron` (1h / 24h) |
 | `welcome-email` | #2 Welcome | Cloudflare `stripe-webhook` after paid |
+| `intake-reminder` | #3 Intake reminder | Cloudflare `/api/email-cron` (24h / 72h) |
 | `intake-received` | #4 Intake received | Cloudflare `/api/intake-submitted` |
 | `application-approved` | #5 Macros live | Cloudflare `/api/macros-approved` |
 | `eligibility-refund` | #6 Refund confirm | Cloudflare `/api/refund` |
 | `notify-callie` | Callie A/B/C | Same handlers as above |
 
-Scheduled emails (#1, #3, #7, #8, Callie D) are not wired yet.
+#7 / #8 / Callie D (quiet check-in, graduation) not wired yet.
+
+## Remote deploy (no Mac)
+
+GitHub Action `.github/workflows/deploy-supabase-functions.yml` deploys on push to `main` when `SUPABASE_ACCESS_TOKEN` is set in repo secrets.
+
+Cron: `.github/workflows/email-cron.yml` hits `/api/email-cron` hourly when `CRON_SECRET` matches Cloudflare.
 
 ## Deploy (from repo root on your Mac)
 
