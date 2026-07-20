@@ -53,6 +53,7 @@ export default function App() {
   const [wInput, setWInput] = useState("");
   const [mealFilter, setMealFilter] = useState("All");
   const [roster, setRoster] = useState([]);
+  const [adminStats, setAdminStats] = useState(null);
   const [adminSel, setAdminSel] = useState(null);
   const [estimateBusy, setEstimateBusy] = useState(false);
   const [estimate, setEstimate] = useState(null);
@@ -101,7 +102,16 @@ export default function App() {
         if (isAdmin) {
           try {
             const r = await db.loadRoster();
-            if (!cancelled) setRoster(r);
+            if (!cancelled) {
+              // Supports new { clients, stats } shape and legacy array
+              if (Array.isArray(r)) {
+                setRoster(r);
+                setAdminStats(null);
+              } else {
+                setRoster(r.clients || []);
+                setAdminStats(r.stats || null);
+              }
+            }
           } catch (rosterErr) {
             console.error("loadRoster failed", rosterErr);
           }
@@ -675,6 +685,7 @@ export default function App() {
                 <AdminPortal
                   roster={roster}
                   setRoster={setRoster}
+                  stats={adminStats}
                   adminSel={adminSel}
                   setAdminSel={setAdminSel}
                 />

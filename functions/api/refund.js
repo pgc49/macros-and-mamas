@@ -69,6 +69,7 @@ export async function onRequestPost({ request, env }) {
       await sendRefundEmails(env, {
         email: contact.email || user.email,
         name: contact.name || profile.name,
+        userId: user.id,
         reason,
       });
     } catch (mailErr) {

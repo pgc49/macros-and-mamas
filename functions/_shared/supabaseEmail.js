@@ -1,6 +1,7 @@
 /**
  * Invoke Supabase Edge Functions that send Resend emails.
  * Uses SUPABASE_SERVICE_ROLE_KEY (already on Cloudflare for the Stripe webhook).
+ * Also logs each client-facing send to public.email_events (admin-only read).
  */
 
 export async function invokeEdgeFunction(env, slug, payload) {
@@ -33,6 +34,51 @@ export async function invokeEdgeFunction(env, slug, payload) {
   }
 }
 
+export async function logEmailEvent(env, {
+  profileId,
+  emailType,
+  toEmail,
+  subject,
+  resendId = null,
+  status = "sent",
+  meta = {},
+}) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key || !emailType) return;
+
+  try {
+    const resp = await fetch(`${base}/rest/v1/email_events`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        apikey: key,
+        authorization: `Bearer ${key}`,
+        prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        profile_id: profileId || null,
+        email_type: emailType,
+        to_email: toEmail || null,
+        subject: subject || null,
+        resend_id: resendId || null,
+        status,
+        meta,
+      }),
+    });
+    if (!resp.ok) {
+      const detail = await resp.text();
+      console.error("email_events insert failed", resp.status, detail);
+    }
+  } catch (e) {
+    console.error("email_events insert error", e);
+  }
+}
+
+function resendIdFrom(result) {
+  return result?.data?.data?.id || result?.data?.id || null;
+}
+
 /** Best-effort profile + auth email lookup via service role. */
 export async function loadUserContact(env, userId) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
@@ -62,39 +108,112 @@ export async function loadUserContact(env, userId) {
 
 export async function sendWelcomeEmails(env, { email, name, userId }) {
   if (!email) return;
-  await invokeEdgeFunction(env, "welcome-email", { email, name, userId });
-  await invokeEdgeFunction(env, "notify-callie", {
+  const subject = "You're in, mama 🤍 (here's what happens next)";
+  const result = await invokeEdgeFunction(env, "welcome-email", { email, name, userId });
+  await logEmailEvent(env, {
+    profileId: userId,
+    emailType: "welcome",
+    toEmail: email,
+    subject,
+    resendId: resendIdFrom(result),
+    status: result.ok ? "sent" : "failed",
+    meta: { slug: "welcome-email" },
+  });
+
+  const callie = await invokeEdgeFunction(env, "notify-callie", {
     type: "payment",
     email,
     name: name || email,
+    userId,
+  });
+  await logEmailEvent(env, {
+    profileId: userId,
+    emailType: "callie_payment",
+    toEmail: "callie",
+    subject: `💰 New mama: ${name || email} — paid $149`,
+    resendId: resendIdFrom(callie),
+    status: callie.ok ? "sent" : "failed",
+    meta: { slug: "notify-callie", type: "payment" },
   });
 }
 
-export async function sendIntakeEmails(env, { email, name, stats }) {
+export async function sendIntakeEmails(env, { email, name, userId, stats }) {
   if (email) {
-    await invokeEdgeFunction(env, "intake-received", { email, name });
+    const subject = "Got it — I'm building your macros right now";
+    const result = await invokeEdgeFunction(env, "intake-received", { email, name, userId });
+    await logEmailEvent(env, {
+      profileId: userId,
+      emailType: "intake_received",
+      toEmail: email,
+      subject,
+      resendId: resendIdFrom(result),
+      status: result.ok ? "sent" : "failed",
+      meta: { slug: "intake-received" },
+    });
   }
-  await invokeEdgeFunction(env, "notify-callie", {
+  const callie = await invokeEdgeFunction(env, "notify-callie", {
     type: "intake",
     email,
     name: name || email,
+    userId,
     stats,
+  });
+  await logEmailEvent(env, {
+    profileId: userId,
+    emailType: "callie_intake",
+    toEmail: "callie",
+    subject: `✅ ${name || email} finished intake — review + approve`,
+    resendId: resendIdFrom(callie),
+    status: callie.ok ? "sent" : "failed",
+    meta: { slug: "notify-callie", type: "intake" },
   });
 }
 
-export async function sendApprovedEmail(env, { email, name }) {
+export async function sendApprovedEmail(env, { email, name, userId }) {
   if (!email) return;
-  await invokeEdgeFunction(env, "application-approved", { email, name });
+  const subject = "Your ranges are ready 🤍";
+  const result = await invokeEdgeFunction(env, "application-approved", { email, name, userId });
+  await logEmailEvent(env, {
+    profileId: userId,
+    emailType: "macros_live",
+    toEmail: email,
+    subject,
+    resendId: resendIdFrom(result),
+    status: result.ok ? "sent" : "failed",
+    meta: { slug: "application-approved" },
+  });
 }
 
-export async function sendRefundEmails(env, { email, name, reason }) {
+export async function sendRefundEmails(env, { email, name, userId, reason }) {
   if (email) {
-    await invokeEdgeFunction(env, "eligibility-refund", { email, name, reason });
+    const subject = "Refund confirmation";
+    const result = await invokeEdgeFunction(env, "eligibility-refund", {
+      email, name, reason, userId,
+    });
+    await logEmailEvent(env, {
+      profileId: userId,
+      emailType: "eligibility_refund",
+      toEmail: email,
+      subject,
+      resendId: resendIdFrom(result),
+      status: result.ok ? "sent" : "failed",
+      meta: { slug: "eligibility-refund", reason },
+    });
   }
-  await invokeEdgeFunction(env, "notify-callie", {
+  const callie = await invokeEdgeFunction(env, "notify-callie", {
     type: "refund",
     email,
     name: name || email,
+    userId,
     reason,
+  });
+  await logEmailEvent(env, {
+    profileId: userId,
+    emailType: "callie_refund",
+    toEmail: "callie",
+    subject: `↩️ Refund: ${name || email} (${reason || "eligibility"}) — waitlisted`,
+    resendId: resendIdFrom(callie),
+    status: callie.ok ? "sent" : "failed",
+    meta: { slug: "notify-callie", type: "refund", reason },
   });
 }

@@ -104,7 +104,7 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 | `/pending` | Paid + intake done | Awaiting Callie approval |
 | `/goodbye` | Refunded after eligibility decline | Warm exit; no app access |
 | `/dashboard` | Approved + paid (admins too) | Client app — ranges, meals, progress |
-| `/admin` | `profiles.role = admin` only | Callie's roster / approvals |
+| `/admin` | `profiles.role = admin` only | Overview (signups/paid), clients, email templates + per-mama send log |
 
 Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboard`) to dogfood the product. Non-admins hitting `/admin` are redirected away.
 
@@ -133,6 +133,7 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 - `003_terms_accepted.sql` — Terms acceptance timestamp + signup trigger metadata copy
 - `004_intake_step2.sql` — waitlist + season note for intake redesign
 - `005_pay_first.sql` — **required for pay-first** (Stripe fields, refunds, protect `paid`)
+- `006_email_events.sql` — **required for admin email history** (admin-only `email_events`)
 
 ## Definition of done (checklist)
 
