@@ -11,33 +11,67 @@ export function SalesPage({ onStartIntake, onSignIn }) {
   return (
     <div style={{ fontFamily: F, background: T.bg, minHeight: "100vh", color: T.ink }}>
       <Fonts />
+      <style>{`
+        .mm-hero {
+          position: relative;
+          min-height: 100dvh;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-end;
+          overflow: hidden;
+          background: ${T.ink};
+        }
+        .mm-hero-img {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: center 18%;
+        }
+        .mm-hero-copy {
+          position: relative;
+          z-index: 1;
+          max-width: 560px;
+          width: 100%;
+          margin: 0 auto;
+          padding: 28px 20px 40px;
+          color: #fff;
+        }
+        /* Desktop: shorter hero so the portrait crop feels composed, not face-filling */
+        @media (min-width: 768px) {
+          .mm-hero {
+            min-height: min(72vh, 700px);
+            max-height: 760px;
+          }
+          .mm-hero-img {
+            object-position: center 22%;
+          }
+          .mm-hero-copy {
+            max-width: 640px;
+            padding: 36px 32px 48px;
+          }
+        }
+        @media (min-width: 1100px) {
+          .mm-hero {
+            min-height: min(68vh, 640px);
+            max-height: 680px;
+          }
+          .mm-hero-img {
+            object-position: center 20%;
+          }
+        }
+      `}</style>
 
       {/* Full-bleed first viewport: brand + photo + one CTA */}
-      <section
-        style={{
-          position: "relative",
-          minHeight: "100dvh",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-end",
-          overflow: "hidden",
-          background: T.ink,
-        }}
-      >
+      <section className="mm-hero">
         <img
+          className="mm-hero-img"
           src={heroImg}
           alt="Callie outdoors with her baby"
           width={1600}
           height={2133}
           decoding="async"
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            objectPosition: "center 18%",
-          }}
         />
         <div
           aria-hidden
@@ -49,17 +83,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           }}
         />
 
-        <div
-          style={{
-            position: "relative",
-            zIndex: 1,
-            maxWidth: 560,
-            width: "100%",
-            margin: "0 auto",
-            padding: "28px 20px 40px",
-            color: "#fff",
-          }}
-        >
+        <div className="mm-hero-copy">
           <div>
             <div style={{ fontFamily: FD, fontSize: "clamp(36px, 9vw, 48px)", letterSpacing: 0.3, lineHeight: 1.05, marginBottom: 4 }}>
               Macros and Mamas
