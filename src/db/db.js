@@ -100,6 +100,18 @@ async function requireUserId() {
   return user.id;
 }
 
+function emptyAdminStats() {
+  return {
+    signups: 0,
+    paid: 0,
+    unpaid: 0,
+    awaitingIntake: 0,
+    awaitingApproval: 0,
+    active: 0,
+    refunded: 0,
+  };
+}
+
 async function loadTodayMealLogs(uid, today) {
   const withSource = await supabase
     .from("meal_logs")
@@ -329,8 +341,8 @@ export const db = {
   },
 
   async loadRoster() {
-    // Include admins who submitted a test intake — previously .neq("role","admin")
-    // hid Callie/you from the pending queue during testing.
+    // Full admin directory: every profile (funnel + approved clients).
+    // RLS: only admins can select all profiles / email_events.
     const { data: profiles, error: pErr } = await supabase
       .from("profiles")
       .select("*")
@@ -338,7 +350,7 @@ export const db = {
     if (pErr) throw pErr;
 
     const ids = (profiles || []).map((p) => p.id);
-    if (!ids.length) return [];
+    if (!ids.length) return { clients: [], stats: emptyAdminStats() };
 
     const curWk = wkStartOf();
     const [
@@ -366,42 +378,97 @@ export const db = {
       checksBy[c.profile_id].push(c);
     });
 
-    // Only show people who completed intake (have a macros row). Empty admin
-    // accounts with no intake stay off the roster.
-    return (profiles || [])
-      .filter((p) => !!macrosBy[p.id])
-      .map((p) => {
-        const m = macrosBy[p.id];
-        return {
-          id: p.id,
-          name: p.name || "Mama",
-          age: p.age,
-          currentWeight: p.current_weight,
-          goalWeight: p.goal_weight,
-          monthsPP: p.months_pp,
-          breastfeeding: p.breastfeeding,
-          phone: p.phone,
-          prefB: p.pref_b,
-          prefL: p.pref_l,
-          prefD: p.pref_d,
-          seasonNote: p.season_note || "",
-          status: p.status,
-          week: p.week,
-          paid: p.paid,
-          refunded: !!p.refunded,
-          role: p.role,
-          macros: {
-            cal: m.cal,
-            protein: m.protein,
-            fat: m.fat,
-            carbs: m.carbs,
-            notes: m.notes || [],
-            approved: m.approved,
-          },
-          weighins: weighBy[p.id] || [],
-          adherence: adherenceFromChecks(checksBy[p.id] || [], curWk),
-        };
-      });
+    const clients = (profiles || []).map((p) => {
+      const m = macrosBy[p.id] || null;
+      const approved = !!(m?.approved || p.status === "active");
+      const paid = !!p.paid;
+      const refunded = !!p.refunded;
+      const hasIntake = !!m;
+      let stage = "signed_up";
+      if (refunded) stage = "refunded";
+      else if (paid && approved) stage = "active";
+      else if (paid && hasIntake && !approved) stage = "awaiting_approval";
+      else if (paid && !hasIntake) stage = "paid_awaiting_intake";
+      else if (!paid) stage = "signed_up";
+
+      return {
+        id: p.id,
+        name: p.name || (hasIntake ? "Mama" : "New signup"),
+        age: p.age,
+        currentWeight: p.current_weight,
+        goalWeight: p.goal_weight,
+        monthsPP: p.months_pp,
+        breastfeeding: p.breastfeeding,
+        phone: p.phone,
+        prefB: p.pref_b,
+        prefL: p.pref_l,
+        prefD: p.pref_d,
+        seasonNote: p.season_note || "",
+        status: p.status,
+        week: p.week,
+        paid,
+        refunded,
+        paidAt: p.paid_at || null,
+        createdAt: p.created_at || null,
+        role: p.role,
+        stage,
+        hasIntake,
+        macros: m
+          ? {
+              cal: m.cal,
+              protein: m.protein,
+              fat: m.fat,
+              carbs: m.carbs,
+              notes: m.notes || [],
+              approved: !!m.approved,
+            }
+          : null,
+        weighins: weighBy[p.id] || [],
+        adherence: adherenceFromChecks(checksBy[p.id] || [], curWk),
+      };
+    });
+
+    const nonAdmin = clients.filter((c) => c.role !== "admin");
+    const stats = {
+      signups: nonAdmin.length,
+      paid: nonAdmin.filter((c) => c.paid && !c.refunded).length,
+      unpaid: nonAdmin.filter((c) => !c.paid && !c.refunded).length,
+      awaitingIntake: nonAdmin.filter((c) => c.stage === "paid_awaiting_intake").length,
+      awaitingApproval: nonAdmin.filter((c) => c.stage === "awaiting_approval").length,
+      active: nonAdmin.filter((c) => c.stage === "active").length,
+      refunded: nonAdmin.filter((c) => c.stage === "refunded").length,
+    };
+
+    return { clients, stats };
+  },
+
+  async loadEmailEvents(profileId) {
+    if (!profileId) return [];
+    const { data, error } = await supabase
+      .from("email_events")
+      .select("id, profile_id, email_type, to_email, subject, status, resend_id, meta, created_at")
+      .eq("profile_id", profileId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) {
+      // Table may not exist until migration 006 is run
+      console.warn("loadEmailEvents failed", error);
+      return [];
+    }
+    return data || [];
+  },
+
+  async loadRecentEmailEvents(limit = 20) {
+    const { data, error } = await supabase
+      .from("email_events")
+      .select("id, profile_id, email_type, to_email, subject, status, created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("loadRecentEmailEvents failed", error);
+      return [];
+    }
+    return data || [];
   },
 
   async updateClientMacros(clientId, macros) {

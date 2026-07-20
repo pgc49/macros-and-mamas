@@ -360,3 +360,34 @@ drop trigger if exists profiles_protect_payment on public.profiles;
 create trigger profiles_protect_payment
   before update on public.profiles
   for each row execute function public.protect_payment_columns();
+
+-- Email send log (admin-only read; service role writes from Cloudflare)
+create table if not exists public.email_events (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete set null,
+  email_type text not null,
+  to_email text,
+  subject text,
+  resend_id text,
+  status text not null default 'sent',
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists email_events_profile_created_idx
+  on public.email_events (profile_id, created_at desc);
+
+alter table public.email_events enable row level security;
+
+drop policy if exists "email_events_select_admin" on public.email_events;
+create policy "email_events_select_admin"
+  on public.email_events for select
+  to authenticated
+  using (public.is_admin());
+
+drop policy if exists "email_events_insert_admin" on public.email_events;
+create policy "email_events_insert_admin"
+  on public.email_events for insert
+  to authenticated
+  with check (public.is_admin());
+

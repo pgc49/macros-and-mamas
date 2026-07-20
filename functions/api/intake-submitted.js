@@ -31,6 +31,7 @@ export async function onRequestPost({ request, env }) {
     await sendIntakeEmails(env, {
       email: contact.email || user.email,
       name: body.name || contact.name || profile.name,
+      userId: user.id,
       stats,
     });
 

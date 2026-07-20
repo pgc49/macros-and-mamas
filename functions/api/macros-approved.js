@@ -26,6 +26,7 @@ export async function onRequestPost({ request, env }) {
     await sendApprovedEmail(env, {
       email: contact.email,
       name: contact.name || contact.profile?.name,
+      userId: clientId,
     });
 
     return json({ ok: true }, 200);
