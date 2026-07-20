@@ -46,32 +46,95 @@ export const Chip = ({ active, onClick, children }) => (
   }}>{children}</button>
 );
 
-export const RangeBand = ({ label, lo, hi, unit = "g", color = T.accent, soft = T.accentSoft, eaten }) => {
-  const start = 22, width = 56;
-  let dot = null;
-  if (typeof eaten === "number" && eaten > 0) {
-    const pos = eaten <= lo ? (eaten / lo) * start : start + Math.min((eaten - lo) / (hi - lo), 1.35) * width;
-    dot = Math.min(pos, 96);
-  }
+export const RANGE_START = 22;
+export const RANGE_WIDTH = 56;
+export const GRACE_G = 5;
+export const GRACE_CAL = 75;
+
+const SAGE_DEEP = "#3E5A46";
+
+/** empty | under | in | over — grace past `hi` still counts as in. */
+export function rangeState(eaten, lo, hi, grace = GRACE_G) {
+  if (typeof eaten !== "number" || eaten <= 0) return "empty";
+  if (eaten < lo) return "under";
+  if (eaten <= hi + grace) return "in";
+  return "over";
+}
+
+function rangeDotPos(eaten, lo, hi) {
+  if (typeof eaten !== "number" || eaten <= 0) return null;
+  const pos = eaten <= lo
+    ? (eaten / lo) * RANGE_START
+    : RANGE_START + Math.min((eaten - lo) / (hi - lo), 1.35) * RANGE_WIDTH;
+  return Math.min(pos, 96);
+}
+
+export const RangeBand = ({ label, lo, hi, unit = "g", eaten, grace = GRACE_G }) => {
+  const st = rangeState(eaten, lo, hi, grace);
+  const dot = rangeDotPos(eaten, lo, hi);
+  const fillColor = st === "over" ? T.amber : st === "in" ? T.sage : T.accent;
+  const bandBg = st === "in" ? T.sageSoft : T.accentSoft;
+  const bandEdge = st === "in" ? T.sage : T.accent;
+  const rangeColor = st === "in" ? SAGE_DEEP : T.ink;
+
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: T.inkSoft, letterSpacing: 0.4, textTransform: "uppercase" }}>{label}</span>
-        <span style={{ fontFamily: FD, fontSize: 26, color: T.ink }}>
+        <span style={{ fontFamily: FD, fontSize: 26, color: rangeColor }}>
           {lo}<span style={{ color: T.inkSoft, fontSize: 20 }}>–</span>{hi}<span style={{ fontSize: 15, color: T.inkSoft }}> {unit}</span>
         </span>
       </div>
+
       <div style={{ position: "relative", height: 10, background: T.track, borderRadius: 999, marginTop: 6 }}>
-        <div style={{ position: "absolute", left: `${start}%`, width: `${width}%`, top: 0, bottom: 0, background: soft, border: `1.5px solid ${color}`, borderRadius: 999 }} />
-        <div style={{ position: "absolute", left: `${start}%`, top: -3, width: 3, height: 16, background: color, borderRadius: 2 }} />
-        <div style={{ position: "absolute", left: `${start + width}%`, top: -3, width: 3, height: 16, background: color, borderRadius: 2 }} />
         {dot !== null && (
-          <div style={{ position: "absolute", left: `${dot}%`, top: -5, width: 14, height: 20, background: T.ink, borderRadius: 6, border: "2.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)", transform: "translateX(-50%)" }} />
+          <div style={{ position: "absolute", left: 0, width: `${dot}%`, top: 0, bottom: 0, background: fillColor, opacity: 0.35, borderRadius: 999 }} />
+        )}
+        <div style={{ position: "absolute", left: `${RANGE_START}%`, width: `${RANGE_WIDTH}%`, top: 0, bottom: 0, background: bandBg, border: `1.5px solid ${bandEdge}`, borderRadius: 999 }} />
+        <div style={{ position: "absolute", left: `${RANGE_START}%`, top: -3, width: 3, height: 16, background: bandEdge, borderRadius: 2 }} />
+        <div style={{ position: "absolute", left: `${RANGE_START + RANGE_WIDTH}%`, top: -3, width: 3, height: 16, background: bandEdge, borderRadius: 2 }} />
+        {dot !== null && (
+          <div style={{
+            position: "absolute", left: `${dot}%`, top: -5, width: 14, height: 20, borderRadius: 6,
+            border: "2.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)", transform: "translateX(-50%)",
+            background: fillColor,
+          }} />
         )}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.inkSoft, marginTop: 4 }}>
-        <span>slower day → aim low</span>
-        {typeof eaten === "number" && eaten > 0 ? <span style={{ fontWeight: 700, color: T.ink }}>logged: {Math.round(eaten)}{unit}</span> : <span>active day → aim high</span>}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, marginTop: 5, minHeight: 16 }}>
+        {st === "empty" && (
+          <>
+            <span style={{ color: T.inkSoft }}>slower day → aim low</span>
+            <span style={{ color: T.inkSoft }}>active day → aim high</span>
+          </>
+        )}
+        {st === "under" && (
+          <>
+            <span />
+            <span style={{ fontWeight: 700, color: T.ink }}>logged: {Math.round(eaten)}{unit}</span>
+          </>
+        )}
+        {st === "in" && (
+          <>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700, color: T.sage }}>
+              <span style={{
+                width: 14, height: 14, borderRadius: "50%", background: T.sage, color: "#fff",
+                fontSize: 9.5, display: "inline-flex", alignItems: "center", justifyContent: "center",
+              }}>✓</span>
+              in range
+            </span>
+            <span style={{ fontWeight: 700, color: SAGE_DEEP }}>logged: {Math.round(eaten)}{unit}</span>
+          </>
+        )}
+        {st === "over" && (
+          <>
+            <span />
+            <span style={{ fontWeight: 700, color: T.amber }}>
+              logged: {Math.round(eaten)}{unit} · {Math.round(eaten - hi)}{unit} over
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

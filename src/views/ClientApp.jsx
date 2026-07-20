@@ -2,7 +2,7 @@ import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
-import { Shell, Card, Btn, Chip, RangeBand } from "../components/ui";
+import { Shell, Card, Btn, Chip, RangeBand, rangeState, GRACE_G, GRACE_CAL } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
@@ -29,6 +29,19 @@ export function ClientApp({
   const hasAnySupport = hasElectrolytes || hasSleep || hasDigestion;
   const viewingToday = isTodayIso(mealLogDate || todayLog?.date);
   const todayWeekday = weekdayKey();
+  const pLo = macros?.protein ?? 0;
+  const pHi = hi(pLo);
+  const cLo = macros?.carbs ?? 0;
+  const cHi = hi(cLo);
+  const fLo = macros?.fat ?? 0;
+  const fHi = hi(fLo);
+  const calLo = macros?.cal ?? 0;
+  const calHi = calLo + 150;
+  const pSt = rangeState(totals?.p, pLo, pHi, GRACE_G);
+  const cSt = rangeState(totals?.c, cLo, cHi, GRACE_G);
+  const fSt = rangeState(totals?.f, fLo, fHi, GRACE_G);
+  const calSt = rangeState(totals?.cal, calLo, calHi, GRACE_CAL);
+  const anyOver = [pSt, cSt, fSt, calSt].includes("over");
   const daysWithEntries = Object.fromEntries(
     Object.entries(mealLogsByDate || {}).map(([d, list]) => [d, (list || []).length > 0]),
   );
@@ -71,15 +84,28 @@ export function ClientApp({
           </Card>
 
           <Card style={{ marginBottom: 4 }}>
-            <RangeBand label="Protein" lo={macros.protein} hi={hi(macros.protein)} eaten={totals.p} />
-            <RangeBand label="Carbs" lo={macros.carbs} hi={hi(macros.carbs)} eaten={totals.c} />
-            <RangeBand label="Fat — watch this one" lo={macros.fat} hi={hi(macros.fat)} eaten={totals.f} />
+            <RangeBand label="Protein" lo={pLo} hi={pHi} eaten={totals.p} />
+            <RangeBand label="Carbs" lo={cLo} hi={cHi} eaten={totals.c} />
+            <RangeBand label="Fat" lo={fLo} hi={fHi} eaten={totals.f} />
             <div style={{ borderTop: `1px dashed ${T.border}`, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: T.inkSoft, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                Calories land around{totals.cal > 0 ? ` · logged ${Math.round(totals.cal)}` : ""}
+              <span style={{
+                fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4,
+                color: calSt === "over" ? T.amber : calSt === "in" ? T.sage : T.inkSoft,
+              }}>
+                {calSt === "empty" && "Calories land around"}
+                {calSt === "under" && <>Calories · {Math.round(totals.cal)}</>}
+                {calSt === "in" && <>Calories · {Math.round(totals.cal)} · ✓</>}
+                {calSt === "over" && <>Calories · {Math.round(totals.cal)} · {Math.round(totals.cal - calHi)} over</>}
               </span>
-              <span style={{ fontFamily: FD, fontSize: 22 }}>{macros.cal}–{macros.cal + 150}</span>
+              <span style={{ fontFamily: FD, fontSize: 22, color: calSt === "in" ? "#3E5A46" : T.ink }}>
+                {calLo}–{calHi}
+              </span>
             </div>
+            {anyOver && (
+              <div style={{ marginTop: 10, fontSize: 12, color: T.amber, lineHeight: 1.5 }}>
+                Over on something today? Happens. Tomorrow start fresh.
+              </div>
+            )}
           </Card>
 
           <MealLogCard
