@@ -56,8 +56,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
       <Card style={{ marginTop: 12 }}>
         <div style={{ fontFamily: FD, fontSize: 17, marginBottom: 6 }}>Who this is for</div>
         <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.7 }}>
-          Moms 6+ months postpartum with weight they're ready to lose — including breastfeeding mamas (your macros are set gently; supply comes first).
-          Not for pregnancy or the first six months of nursing, and the plan is built around animal protein.
+          Moms ready to lose the weight and build strength — whether your baby is three months or sixteen years. Breastfeeding mamas are welcome from three months postpartum (your macros are set gently; supply comes first). Not for pregnancy.
         </div>
       </Card>
 

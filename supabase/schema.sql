@@ -24,6 +24,7 @@ create table if not exists public.profiles (
   pref_b text,
   pref_l text,
   pref_d text,
+  season_note text,
   role text not null default 'client',
   status text not null default 'pending',
   paid boolean not null default false,
@@ -78,6 +79,19 @@ create index if not exists weighins_profile_date_idx
 
 create index if not exists meal_logs_profile_date_idx
   on public.meal_logs (profile_id, date);
+
+create table if not exists public.waitlist (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  reason text not null check (reason in ('pregnant', 'early_nursing')),
+  months_pp numeric,
+  eligible_on date,
+  profile_id uuid references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists waitlist_reason_created_idx
+  on public.waitlist (reason, created_at desc);
 
 -- ---------------------------------------------------------------------------
 -- Auth signup → create empty profiles row
@@ -271,3 +285,18 @@ create policy "meal_logs_delete_own"
   on public.meal_logs for delete
   to authenticated
   using (profile_id = auth.uid());
+
+-- waitlist (intake gates)
+alter table public.waitlist enable row level security;
+
+drop policy if exists "waitlist_insert_public" on public.waitlist;
+create policy "waitlist_insert_public"
+  on public.waitlist for insert
+  to anon, authenticated
+  with check (true);
+
+drop policy if exists "waitlist_select_admin" on public.waitlist;
+create policy "waitlist_select_admin"
+  on public.waitlist for select
+  to authenticated
+  using (public.is_admin());

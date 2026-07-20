@@ -23,7 +23,7 @@ const EMPTY_PROFILE = {
   name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
   breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
   stress: "medium", insulinResistance: false, diet: "none",
-  prefB: "", prefL: "", prefD: "",
+  prefB: "", prefL: "", prefD: "", seasonNote: "",
 };
 
 export default function App() {
@@ -167,17 +167,23 @@ export default function App() {
 
   const set = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
 
-  /* Gating rules — PRESERVE VERBATIM. These run BEFORE any payment. */
+  /* Gating: pregnant + early nursing are handled inline on step 2.
+     Diet gate still runs here before any payment / DB write. */
   const submitIntake = async () => {
     if (profile.pregnant) { setDeclineReason("pregnant"); navigate(PATHS.declined); return; }
-    if (profile.breastfeeding && Number(profile.monthsPP) < 6) { setDeclineReason("early"); navigate(PATHS.declined); return; }
+    if (profile.breastfeeding && Number(profile.monthsPP) < 3) { setDeclineReason("early"); navigate(PATHS.declined); return; }
     if (profile.diet !== "none") { setDeclineReason("diet"); navigate(PATHS.declined); return; }
-    const m = computeMacros(profile);
+    const forEngine = {
+      ...profile,
+      // monthsPP only applies when nursing; clear for non-BF so storage stays clean
+      monthsPP: profile.breastfeeding ? profile.monthsPP : "",
+    };
+    const m = computeMacros(forEngine);
     setMacros(m);
     setApproved(false);
     setPaid(false);
     try {
-      await db.submitIntake(profile, m);
+      await db.submitIntake(forEngine, m);
       await refreshProfile();
     } catch (e) {
       console.error("submitIntake failed", e);

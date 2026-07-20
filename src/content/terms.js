@@ -20,7 +20,7 @@ export const TERMS_SECTIONS = [
       "You represent and warrant that you:",
       "(a) are at least 18 years old;",
       "(b) are not currently pregnant;",
-      "(c) if breastfeeding, are at least six (6) months postpartum;",
+      "(c) if breastfeeding, are at least three (3) months postpartum;",
       "(d) do not have a current or past diagnosis of an eating disorder, and are not currently experiencing disordered eating patterns, unless you are participating with the knowledge and approval of your treating healthcare provider;",
       "(e) have no medical condition that makes participation in a nutrition and exercise program unsafe for you, or have obtained clearance from your physician; and",
       "(f) have provided truthful and complete information in your intake questionnaire.",

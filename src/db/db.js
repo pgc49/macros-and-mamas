@@ -26,6 +26,7 @@ function profileToRow(p) {
     pref_b: p.prefB || null,
     pref_l: p.prefL || null,
     pref_d: p.prefD || null,
+    season_note: p.seasonNote?.trim() ? p.seasonNote.trim() : null,
   };
 }
 
@@ -48,6 +49,7 @@ function rowToProfile(row) {
     prefB: row.pref_b || "",
     prefL: row.pref_l || "",
     prefD: row.pref_d || "",
+    seasonNote: row.season_note || "",
     status: row.status,
     paid: !!row.paid,
     week: row.week ?? 0,
@@ -189,6 +191,25 @@ export const db = {
         })),
       },
     };
+  },
+
+  async joinWaitlist({ email, reason, monthsPp = null }) {
+    const { data: { user } } = await supabase.auth.getUser();
+    let eligibleOn = null;
+    if (reason === "early_nursing" && monthsPp != null && !Number.isNaN(Number(monthsPp))) {
+      const monthsUntil = Math.max(0, 3 - Number(monthsPp));
+      const d = new Date();
+      d.setMonth(d.getMonth() + Math.ceil(monthsUntil));
+      eligibleOn = d.toISOString().slice(0, 10);
+    }
+    const { error } = await supabase.from("waitlist").insert({
+      email: email.trim().toLowerCase(),
+      reason,
+      months_pp: monthsPp,
+      eligible_on: eligibleOn,
+      profile_id: user?.id || null,
+    });
+    if (error) throw error;
   },
 
   async submitIntake(profile, macros) {
@@ -350,6 +371,7 @@ export const db = {
           prefB: p.pref_b,
           prefL: p.pref_l,
           prefD: p.pref_d,
+          seasonNote: p.season_note || "",
           status: p.status,
           week: p.week,
           paid: p.paid,
