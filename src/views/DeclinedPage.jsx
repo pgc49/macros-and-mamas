@@ -3,8 +3,8 @@ import { Shell, Card, Btn } from "../components/ui";
 
 export function DeclinedPage({ declineReason, onBack }) {
   const msgs = {
-    pregnant: { title: "Congratulations, mama.", body: "This program isn't built for pregnancy — your body needs abundance right now, not a deficit. Come back after baby arrives and you're at least six months postpartum. I'd love to have you then." },
-    early: { title: "Not yet — and that's on purpose.", body: "You're under six months postpartum while breastfeeding, and I won't risk your milk supply. Your body is doing its most important work right now. Circle back once you pass the six-month mark; the program will be here." },
+    pregnant: { title: "Congratulations, mama.", body: "This program isn't recommended during pregnancy — your body needs abundance right now, not a deficit. Come back after baby arrives; we'd love to have you then." },
+    early: { title: "Not yet — and that's on purpose.", body: "You're under three months postpartum while nursing, and we won't risk your milk supply while it's still establishing. Your body is doing its most important work right now. Circle back once you pass the three-month mark; the program will be here." },
     diet: { title: "This one isn't the right fit.", body: "The program is built around animal protein — hitting these targets on a vegetarian or vegan diet is a different playbook, and I'd rather point you to a coach who specializes in it than give you a plan that fights you." },
   };
   const m = msgs[declineReason] || msgs.diet;

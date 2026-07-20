@@ -54,10 +54,11 @@ export function AdminPortal({ roster, setRoster, adminSel, setAdminSel }) {
             <div>
               <div style={{ fontFamily: FD, fontSize: 22 }}>{sel.name}</div>
               <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.6 }}>
-                {sel.age} yrs · {sel.currentWeight} → {sel.goalWeight} lbs · {sel.monthsPP} mo postpartum
-                {sel.breastfeeding ? " · breastfeeding" : ""}
+                {sel.age} yrs · {sel.currentWeight} → {sel.goalWeight} lbs
+                {sel.breastfeeding ? ` · breastfeeding${sel.monthsPP != null && sel.monthsPP !== "" ? ` · ${sel.monthsPP} mo pp` : ""}` : ""}
                 {sel.phone ? <><br />📱 {sel.phone}{sel.status === "pending" ? " — send WhatsApp invite on approval" : ""}</> : null}
                 {(sel.prefB || sel.prefL || sel.prefD) ? <><br />🍽 Loves: {[sel.prefB, sel.prefL, sel.prefD].filter(Boolean).join(" · ")}</> : null}
+                {sel.seasonNote ? <><br />💬 {sel.seasonNote}</> : null}
               </div>
             </div>
             <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 99, background: sel.status === "active" ? T.sageSoft : T.amberSoft, color: sel.status === "active" ? T.sage : T.amber, whiteSpace: "nowrap" }}>

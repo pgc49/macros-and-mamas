@@ -117,11 +117,13 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 | `/supabase/schema.sql` | Tables + RLS |
 | `/supabase/migrations/002_meal_logging.sql` | `meal_logs.source` + `estimate_calls` |
 | `/supabase/migrations/003_terms_accepted.sql` | `profiles.terms_accepted_at` + signup trigger |
+| `/supabase/migrations/004_intake_step2.sql` | `waitlist` table + `profiles.season_note` |
 | `/src` | Production React app |
 
 **After deploy:** run pending migrations in the Supabase SQL editor if not already applied:
 - `002_meal_logging.sql` — `meal_logs.source` + `estimate_calls`
 - `003_terms_accepted.sql` — Terms acceptance timestamp + signup trigger metadata copy
+- `004_intake_step2.sql` — waitlist + season note for intake redesign
 
 ## Definition of done (checklist)
 
