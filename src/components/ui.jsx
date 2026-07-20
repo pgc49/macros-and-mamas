@@ -48,16 +48,14 @@ export const Chip = ({ active, onClick, children }) => (
 
 export const RANGE_START = 22;
 export const RANGE_WIDTH = 56;
-export const GRACE_G = 5;
-export const GRACE_CAL = 75;
 
 const SAGE_DEEP = "#3E5A46";
 
-/** empty | under | in | over — grace past `hi` still counts as in. */
-export function rangeState(eaten, lo, hi, grace = GRACE_G) {
+/** empty | under | in | over — sage only inside Callie's lo–hi. */
+export function rangeState(eaten, lo, hi) {
   if (typeof eaten !== "number" || eaten <= 0) return "empty";
   if (eaten < lo) return "under";
-  if (eaten <= hi + grace) return "in";
+  if (eaten <= hi) return "in";
   return "over";
 }
 
@@ -69,8 +67,8 @@ function rangeDotPos(eaten, lo, hi) {
   return Math.min(pos, 96);
 }
 
-export const RangeBand = ({ label, lo, hi, unit = "g", eaten, grace = GRACE_G }) => {
-  const st = rangeState(eaten, lo, hi, grace);
+export const RangeBand = ({ label, lo, hi, unit = "g", eaten }) => {
+  const st = rangeState(eaten, lo, hi);
   const dot = rangeDotPos(eaten, lo, hi);
   const fillColor = st === "over" ? T.amber : st === "in" ? T.sage : T.accent;
   const bandBg = st === "in" ? T.sageSoft : T.accentSoft;

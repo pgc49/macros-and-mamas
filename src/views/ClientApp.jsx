@@ -2,7 +2,7 @@ import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
-import { Shell, Card, Btn, Chip, RangeBand, rangeState, GRACE_G, GRACE_CAL } from "../components/ui";
+import { Shell, Card, Btn, Chip, RangeBand, rangeState } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
@@ -37,10 +37,10 @@ export function ClientApp({
   const fHi = hi(fLo);
   const calLo = macros?.cal ?? 0;
   const calHi = calLo + 150;
-  const pSt = rangeState(totals?.p, pLo, pHi, GRACE_G);
-  const cSt = rangeState(totals?.c, cLo, cHi, GRACE_G);
-  const fSt = rangeState(totals?.f, fLo, fHi, GRACE_G);
-  const calSt = rangeState(totals?.cal, calLo, calHi, GRACE_CAL);
+  const pSt = rangeState(totals?.p, pLo, pHi);
+  const cSt = rangeState(totals?.c, cLo, cHi);
+  const fSt = rangeState(totals?.f, fLo, fHi);
+  const calSt = rangeState(totals?.cal, calLo, calHi);
   const anyOver = [pSt, cSt, fSt, calSt].includes("over");
   const daysWithEntries = Object.fromEntries(
     Object.entries(mealLogsByDate || {}).map(([d, list]) => [d, (list || []).length > 0]),
