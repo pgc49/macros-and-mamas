@@ -371,11 +371,49 @@ export const db = {
     const uid = await requireUserId();
     const { data, error } = await supabase
       .from("weighins")
-      .insert({ profile_id: uid, date, weight: Number(weight) })
+      .upsert(
+        { profile_id: uid, date, weight: Number(weight) },
+        { onConflict: "profile_id,date" },
+      )
       .select("date, weight")
       .single();
-    if (error) throw error;
+    if (error) {
+      // Fallback when unique index isn't migrated yet: update existing day, else insert.
+      const existing = await supabase
+        .from("weighins")
+        .select("id")
+        .eq("profile_id", uid)
+        .eq("date", date)
+        .maybeSingle();
+      if (existing.data?.id) {
+        const upd = await supabase
+          .from("weighins")
+          .update({ weight: Number(weight) })
+          .eq("id", existing.data.id)
+          .select("date, weight")
+          .single();
+        if (upd.error) throw upd.error;
+        return { date: upd.data.date, w: Number(upd.data.weight) };
+      }
+      const ins = await supabase
+        .from("weighins")
+        .insert({ profile_id: uid, date, weight: Number(weight) })
+        .select("date, weight")
+        .single();
+      if (ins.error) throw ins.error;
+      return { date: ins.data.date, w: Number(ins.data.weight) };
+    }
     return { date: data.date, w: Number(data.weight) };
+  },
+
+  async deleteWeighin(date) {
+    const uid = await requireUserId();
+    const { error } = await supabase
+      .from("weighins")
+      .delete()
+      .eq("profile_id", uid)
+      .eq("date", date);
+    if (error) throw error;
   },
 
   async addMealLog(entry, date = entry?.logged_date || localDateIso()) {

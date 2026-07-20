@@ -50,7 +50,6 @@ export default function App() {
   const [viewWk, setViewWk] = useState(curWk);
   const [editPast, setEditPast] = useState(false);
   const [weighins, setWeighins] = useState([]);
-  const [wInput, setWInput] = useState("");
   const [mealFilter, setMealFilter] = useState("All");
   const [roster, setRoster] = useState([]);
   const [adminStats, setAdminStats] = useState(null);
@@ -452,15 +451,27 @@ export default function App() {
     }
   };
 
-  const logWeighin = async () => {
-    const w = parseFloat(wInput);
+  const logWeighin = async (weight, date = localDateIso()) => {
+    const w = typeof weight === "number" ? weight : parseFloat(weight);
     if (!w) return;
     try {
-      const row = await db.addWeighin(w);
-      setWeighins((arr) => [...arr, row]);
-      setWInput("");
+      const row = await db.addWeighin(w, date);
+      setWeighins((arr) => {
+        const without = arr.filter((x) => x.date !== row.date);
+        return [...without, row].sort((a, b) => (a.date < b.date ? -1 : 1));
+      });
     } catch (e) {
       console.error("weigh-in failed", e);
+    }
+  };
+
+  const deleteWeighin = async (date) => {
+    if (!date) return;
+    try {
+      await db.deleteWeighin(date);
+      setWeighins((arr) => arr.filter((x) => x.date !== date));
+    } catch (e) {
+      console.error("delete weigh-in failed", e);
     }
   };
 
@@ -470,8 +481,14 @@ export default function App() {
   ), [todayLog]);
 
   const weeklyRate = useMemo(() => {
-    if (weighins.length < 2) return null;
-    const first = weighins[0], last = weighins[weighins.length - 1];
+    // Dedupe by date (newest wins) before rate math — same-day doubles break the chart.
+    const byDate = new Map();
+    weighins.forEach((x) => byDate.set(x.date, x.w));
+    const series = [...byDate.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([date, w]) => ({ date, w }));
+    if (series.length < 2) return null;
+    const first = series[0], last = series[series.length - 1];
     const days = (new Date(last.date) - new Date(first.date)) / 86400000;
     if (days < 5) return null;
     return ((first.w - last.w) / days) * 7;
@@ -645,9 +662,8 @@ export default function App() {
       progWeekNum={progWeekNum}
       earliestWk={earliestWk}
       weighins={weighins}
-      wInput={wInput}
-      setWInput={setWInput}
       logWeighin={logWeighin}
+      deleteWeighin={deleteWeighin}
       weeklyRate={weeklyRate}
       trends={trends}
       macroHistory={macroHistory}

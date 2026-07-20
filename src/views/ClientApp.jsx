@@ -1,13 +1,11 @@
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid,
-} from "recharts";
 import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
-import { Shell, Card, Btn, Chip, RangeBand, inputStyle } from "../components/ui";
+import { Shell, Card, Btn, Chip, RangeBand } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
 import { ProgressCharts } from "../components/ProgressCharts";
+import { WeighInCard } from "../components/WeighInCard";
 
 export function ClientApp({
   tab, setTab,
@@ -19,7 +17,7 @@ export function ClientApp({
   mealLogDate, mealLogWeekStart, mealLogsByDate, selectMealLogDate, changeMealWeek,
   viewWk, setViewWk, curWk, editPast, setEditPast,
   checksByWeek, toggleCheck, adherenceFor, progWeekNum, earliestWk,
-  weighins, wInput, setWInput, logWeighin, weeklyRate, trends,
+  weighins, logWeighin, deleteWeighin, weeklyRate, trends,
   macroHistory, habitHistory,
   mealFilter, setMealFilter,
 }) {
@@ -266,43 +264,18 @@ export function ClientApp({
 
       {tab === "progress" && (
         <>
-          <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Weekly weigh-in</h2>
-          <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>Same day each week, first thing in the morning, before coffee. The trend matters, the daily number doesn't.</p>
+          <p style={{ fontSize: 14, color: T.inkSoft, margin: "6px 0 14px" }}>
+            Pick a day, log your weight, edit anytime — same rhythm as meal logging. The trend matters; any single number doesn't.
+          </p>
 
-          <Card>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input style={{ ...inputStyle, flex: 1 }} inputMode="decimal" placeholder="This week's weight (lbs)" value={wInput} onChange={(e) => setWInput(e.target.value)} />
-              <Btn small onClick={logWeighin}>Log it</Btn>
-            </div>
-
-            {weighins.length > 1 && (
-              <div style={{ height: 190, marginTop: 16 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={weighins.map((x) => ({ ...x, label: x.date.slice(5) }))} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
-                    <CartesianGrid stroke={T.track} vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: T.inkSoft }} axisLine={false} tickLine={false} />
-                    <YAxis domain={["dataMin - 2", "dataMax + 2"]} tick={{ fontSize: 11, fill: T.inkSoft }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ fontFamily: F, fontSize: 13, borderRadius: 10, border: `1px solid ${T.border}` }} />
-                    {profile.goalWeight && <ReferenceLine y={Number(profile.goalWeight)} stroke={T.sage} strokeDasharray="5 4" label={{ value: "goal", fontSize: 11, fill: T.sage, position: "right" }} />}
-                    <Line type="monotone" dataKey="w" stroke={T.accent} strokeWidth={2.5} dot={{ r: 4, fill: T.accent }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {weeklyRate !== null && (
-              <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 12, background: weeklyRate > 1.5 ? T.amberSoft : T.sageSoft }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: weeklyRate > 1.5 ? T.amber : "#3E5A46" }}>
-                  Trending {Math.abs(weeklyRate).toFixed(1)} lb/week {weeklyRate < 0 ? "up" : "down"}
-                </div>
-                <div style={{ fontSize: 13.5, lineHeight: 1.55, color: weeklyRate > 1.5 ? T.amber : "#3E5A46" }}>
-                  {weeklyRate > 1.5
-                    ? "That's faster than 1.5 lbs a week, which means you're likely losing muscle, not just fat. Eat the top of your ranges this week — more food, not less. This is the rule of the whole program."
-                    : "Right in the healthy zone. Fat is leaving, muscle is staying. Keep doing exactly this."}
-                </div>
-              </div>
-            )}
-          </Card>
+          <WeighInCard
+            weighins={weighins}
+            goalWeight={profile.goalWeight}
+            weeklyRate={weeklyRate}
+            onSave={logWeighin}
+            onDelete={deleteWeighin}
+            earliestWeekStart={mealEarliestWeek}
+          />
 
           <ProgressCharts macros={macros} macroHistory={macroHistory} habitHistory={habitHistory} />
 
