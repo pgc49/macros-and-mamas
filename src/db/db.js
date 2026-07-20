@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase";
 import { DEFAULT_ITEMS, DAYS } from "../content/data";
-import { wkStartOf } from "../utils/dates";
+import { localDateIso, wkStartOf } from "../utils/dates";
 
 /* ------------------------------------------------------------------ */
 /*  DATA LAYER — per-event Supabase writes (not blob persistence)      */
@@ -112,12 +112,12 @@ function emptyAdminStats() {
   };
 }
 
-async function loadTodayMealLogs(uid, today) {
+async function loadMealLogsForDate(uid, date) {
   const withSource = await supabase
     .from("meal_logs")
     .select("id, date, name, cal, p, c, f, source")
     .eq("profile_id", uid)
-    .eq("date", today)
+    .eq("date", date)
     .order("id", { ascending: true });
 
   if (!withSource.error) return withSource.data || [];
@@ -128,12 +128,24 @@ async function loadTodayMealLogs(uid, today) {
     .from("meal_logs")
     .select("id, date, name, cal, p, c, f")
     .eq("profile_id", uid)
-    .eq("date", today)
+    .eq("date", date)
     .order("id", { ascending: true });
 
   if (!withoutSource.error) return withoutSource.data || [];
-  console.warn("meal_logs select failed; continuing without today's log", withoutSource.error);
+  console.warn("meal_logs select failed; continuing without day's log", withoutSource.error);
   return [];
+}
+
+function mapMealRows(mealRows) {
+  return (mealRows || []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    cal: r.cal,
+    p: r.p,
+    c: r.c,
+    f: r.f,
+    source: r.source || null,
+  }));
 }
 
 export const db = {
@@ -142,7 +154,7 @@ export const db = {
     if (!user) return null;
 
     const uid = user.id;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateIso();
 
     const [
       { data: profileRow, error: pErr },
@@ -163,7 +175,7 @@ export const db = {
 
     // Meal logs are non-fatal: a missing `source` column (migration not applied)
     // must not block the whole dashboard / enrollment state.
-    const mealRows = await loadTodayMealLogs(uid, today);
+    const mealRows = await loadMealLogsForDate(uid, today);
 
     const checksByWeek = {};
     (checkRows || []).forEach((r) => {
@@ -195,17 +207,15 @@ export const db = {
       weighins: (weighRows || []).map((r) => ({ date: r.date, w: Number(r.weight) })),
       todayLog: {
         date: today,
-        entries: (mealRows || []).map((r) => ({
-          id: r.id,
-          name: r.name,
-          cal: r.cal,
-          p: r.p,
-          c: r.c,
-          f: r.f,
-          source: r.source || null,
-        })),
+        entries: mapMealRows(mealRows),
       },
     };
+  },
+
+  async loadMealLogs(date = localDateIso()) {
+    const uid = await requireUserId();
+    const mealRows = await loadMealLogsForDate(uid, date);
+    return { date, entries: mapMealRows(mealRows) };
   },
 
   async joinWaitlist({ email, reason, monthsPp = null }) {
@@ -281,7 +291,7 @@ export const db = {
     }
   },
 
-  async addWeighin(weight, date = new Date().toISOString().slice(0, 10)) {
+  async addWeighin(weight, date = localDateIso()) {
     const uid = await requireUserId();
     const { data, error } = await supabase
       .from("weighins")
@@ -292,7 +302,7 @@ export const db = {
     return { date: data.date, w: Number(data.weight) };
   },
 
-  async addMealLog(entry, date = new Date().toISOString().slice(0, 10)) {
+  async addMealLog(entry, date = entry?.logged_date || localDateIso()) {
     const uid = await requireUserId();
     const base = {
       profile_id: uid,
@@ -330,7 +340,7 @@ export const db = {
     if (error) throw error;
   },
 
-  async clearTodayMeals(date = new Date().toISOString().slice(0, 10)) {
+  async clearTodayMeals(date = localDateIso()) {
     const uid = await requireUserId();
     const { error } = await supabase
       .from("meal_logs")

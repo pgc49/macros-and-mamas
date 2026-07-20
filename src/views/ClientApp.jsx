@@ -4,7 +4,7 @@ import {
 import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/data";
-import { addDaysIso, fmtRange } from "../utils/dates";
+import { addDaysIso, fmtRange, formatLongDay, isTodayIso, localDateIso, weekdayKey } from "../utils/dates";
 import { Shell, Card, Btn, Chip, RangeBand, inputStyle } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
 
@@ -15,6 +15,7 @@ export function ClientApp({
   estimateBusy, estimate,
   analyzePhoto, analyzeText, confirmEstimate, discardEstimate,
   logManualMeal, logRecipe, todayLog, deleteMealEntry,
+  mealLogDate, selectMealLogDate,
   viewWk, setViewWk, curWk, editPast, setEditPast,
   checksByWeek, toggleCheck, adherenceFor, progWeekNum, earliestWk,
   weighins, wInput, setWInput, logWeighin, weeklyRate, trends,
@@ -26,6 +27,8 @@ export function ClientApp({
   const hasSleep = hasPublicUrl(CONFIG.FULLSCRIPT_SLEEP);
   const hasDigestion = hasPublicUrl(CONFIG.FULLSCRIPT_DIGESTION);
   const hasAnySupport = hasElectrolytes || hasSleep || hasDigestion;
+  const viewingToday = isTodayIso(mealLogDate || localDateIso());
+  const todayWeekday = weekdayKey();
   return (
     <Shell>
       <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", gap: 4, padding: "8px 0 14px", zIndex: 5 }}>
@@ -42,7 +45,11 @@ export function ClientApp({
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
             {profile.name ? `Hi ${profile.name}.` : "Your ranges."}
           </h2>
-          <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win.</p>
+          <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
+            {viewingToday
+              ? "Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win."
+              : `Showing logged food for ${formatLongDay(mealLogDate)} — not today. Use the arrows on the meal log to move between days.`}
+          </p>
 
           <Card style={{ marginBottom: 12, background: T.accentSoft, border: "none", display: "flex", gap: 14, alignItems: "center" }}>
             <div style={{ fontSize: 26 }}>💬</div>
@@ -77,6 +84,8 @@ export function ClientApp({
             onManualLog={logManualMeal}
             todayLog={todayLog}
             onDeleteEntry={deleteMealEntry}
+            mealLogDate={mealLogDate}
+            onSelectMealDate={selectMealLogDate}
           />
 
           <Card style={{ marginTop: 12, display: "flex", gap: 14, alignItems: "center" }}>
@@ -145,15 +154,19 @@ export function ClientApp({
                         <div style={{ display: "flex", gap: 6 }}>
                           {DAYS.map((d) => {
                             const done = vChecks[`${it.id}|${d}`];
+                            const isTodayDot = isCur && d === todayWeekday;
                             return (
                               <button key={d}
                                 onClick={() => { if (editable) toggleCheck(it.id, d); }}
+                                title={isTodayDot ? "Today" : undefined}
+                                aria-current={isTodayDot ? "date" : undefined}
                                 style={{
                                   width: 36, height: 36, borderRadius: "50%", fontSize: 12, fontWeight: 700,
                                   cursor: editable ? "pointer" : "default",
-                                  border: `1.5px solid ${done ? T.sage : T.border}`,
+                                  border: `1.5px solid ${done ? T.sage : isTodayDot ? T.accent : T.border}`,
                                   background: done ? T.sage : "#fff",
-                                  color: done ? "#fff" : T.ink,
+                                  color: done ? "#fff" : isTodayDot ? T.accentDeep : T.ink,
+                                  boxShadow: isTodayDot && !done ? `0 0 0 3px ${T.accentSoft}` : "none",
                                   opacity: editable ? 1 : 0.85,
                                 }}>{DAY_LABEL[d]}</button>
                             );

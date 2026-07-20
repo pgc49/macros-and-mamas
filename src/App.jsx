@@ -6,7 +6,7 @@ import { db } from "./db/db";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { DEFAULT_ITEMS, DAYS } from "./content/data";
-import { wkStartOf } from "./utils/dates";
+import { localDateIso, wkStartOf } from "./utils/dates";
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
 import { SalesPage } from "./views/SalesPage";
 import { IntakeFlow } from "./views/IntakeFlow";
@@ -58,7 +58,8 @@ export default function App() {
   const [estimateBusy, setEstimateBusy] = useState(false);
   const [estimate, setEstimate] = useState(null);
   const [estimateSource, setEstimateSource] = useState("photo");
-  const [todayLog, setTodayLog] = useState({ date: new Date().toISOString().slice(0, 10), entries: [] });
+  const [todayLog, setTodayLog] = useState({ date: localDateIso(), entries: [] });
+  const [mealLogDate, setMealLogDate] = useState(() => localDateIso());
   const [loaded, setLoaded] = useState(false);
   const routedAfterLoad = useRef(false);
 
@@ -85,10 +86,13 @@ export default function App() {
             setRefunded(!!s.refunded);
             if (s.checksByWeek) setChecksByWeek(s.checksByWeek);
             if (s.weighins) setWeighins(s.weighins);
-            if (s.todayLog && s.todayLog.date === new Date().toISOString().slice(0, 10)) {
+            if (s.todayLog && s.todayLog.date === localDateIso()) {
               setTodayLog(s.todayLog);
+              setMealLogDate(s.todayLog.date);
             } else {
-              setTodayLog({ date: new Date().toISOString().slice(0, 10), entries: [] });
+              const today = localDateIso();
+              setTodayLog({ date: today, entries: [] });
+              setMealLogDate(today);
             }
           }
         } else {
@@ -307,21 +311,38 @@ export default function App() {
     await runEstimate({ type: "text", description: description.trim() }, "text");
   };
 
-  const appendMealEntry = async (entry) => {
+  const selectMealLogDate = async (date) => {
+    if (!date || date === mealLogDate) return;
+    setMealLogDate(date);
+    setEstimate(null);
     try {
-      const row = await db.addMealLog(entry);
-      setTodayLog((tl) => ({
-        date: new Date().toISOString().slice(0, 10),
-        entries: [...tl.entries, {
-          id: row.id,
-          name: entry.name,
-          cal: entry.cal,
-          p: entry.p,
-          c: entry.c,
-          f: entry.f,
-          source: entry.source || null,
-        }],
-      }));
+      const log = await db.loadMealLogs(date);
+      setTodayLog(log);
+    } catch (e) {
+      console.error("loadMealLogs failed", e);
+      setTodayLog({ date, entries: [] });
+    }
+  };
+
+  const appendMealEntry = async (entry) => {
+    const date = entry.logged_date || mealLogDate || localDateIso();
+    try {
+      const row = await db.addMealLog(entry, date);
+      setTodayLog((tl) => {
+        if (tl.date !== date) return tl;
+        return {
+          date,
+          entries: [...tl.entries, {
+            id: row.id,
+            name: entry.name,
+            cal: entry.cal,
+            p: entry.p,
+            c: entry.c,
+            f: entry.f,
+            source: entry.source || null,
+          }],
+        };
+      });
       return true;
     } catch (e) {
       console.error("addMealLog failed", e);
@@ -338,6 +359,7 @@ export default function App() {
       c: estimate.carbs_g,
       f: estimate.fat_g,
       source: estimateSource,
+      logged_date: mealLogDate,
     });
     setEstimate(null);
   };
@@ -345,6 +367,7 @@ export default function App() {
   const discardEstimate = () => setEstimate(null);
 
   const logRecipe = async (recipe) => {
+    // Recipes from the Meals tab always land on the day currently open in the log.
     const ok = await appendMealEntry({
       name: recipe.name,
       cal: recipe.cal,
@@ -352,6 +375,7 @@ export default function App() {
       c: recipe.c,
       f: recipe.f,
       source: "recipe",
+      logged_date: mealLogDate,
     });
     if (ok) setTab("today");
   };
@@ -509,6 +533,8 @@ export default function App() {
       logRecipe={logRecipe}
       logManualMeal={logManualMeal}
       todayLog={todayLog}
+      mealLogDate={mealLogDate}
+      selectMealLogDate={selectMealLogDate}
       deleteMealEntry={deleteMealEntry}
       viewWk={viewWk}
       setViewWk={setViewWk}
