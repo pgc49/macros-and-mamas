@@ -56,7 +56,7 @@ export const TERMS_SECTIONS = [
     body: [
       "(a) Price. The Program fee is stated at checkout. Founding or promotional pricing applies only to the enrollment for which it was offered and does not entitle you to the same price for future programs or renewals.",
       "(b) Payment processing. Payments are processed by third-party processors (e.g., Stripe). Your payment is also subject to the processor's terms.",
-      "(c) Refunds. You may request a full refund within seven (7) calendar days of purchase, provided your personalized macro targets have not yet been released to you. Once your targets are released or seven days have passed, whichever comes first, all sales are final and no refunds will be issued, except (i) as described in Section 2 (declined enrollment), or (ii) where required by applicable law. We may, at our sole discretion, offer a transfer to a future program start in lieu of a refund.",
+      "(c) Refunds. All purchases are final and non-refundable. Once you complete payment for the Program, you are not entitled to a refund for any reason, except where required by applicable law. We may, at our sole discretion, offer a transfer to a future program start as an accommodation, but we are not obligated to do so.",
       "(d) Chargebacks. Initiating a chargeback for a valid, delivered purchase instead of contacting us constitutes a breach of these Terms and may result in immediate termination of access.",
     ],
   },
