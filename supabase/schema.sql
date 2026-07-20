@@ -285,3 +285,18 @@ create policy "meal_logs_delete_own"
   on public.meal_logs for delete
   to authenticated
   using (profile_id = auth.uid());
+
+-- waitlist (intake gates)
+alter table public.waitlist enable row level security;
+
+drop policy if exists "waitlist_insert_public" on public.waitlist;
+create policy "waitlist_insert_public"
+  on public.waitlist for insert
+  to anon, authenticated
+  with check (true);
+
+drop policy if exists "waitlist_select_admin" on public.waitlist;
+create policy "waitlist_select_admin"
+  on public.waitlist for select
+  to authenticated
+  using (public.is_admin());
