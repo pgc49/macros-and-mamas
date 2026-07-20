@@ -144,11 +144,11 @@ export const TERMS_SECTIONS = [
     title: "18. Dispute Resolution; Arbitration; Class Action Waiver",
     body: [
       "Please read this section carefully. It affects your legal rights.",
-      "(a) Informal resolution first. Before filing any claim, you agree to contact us at hello@macrosandmamas.com and give us 30 days to attempt to resolve the dispute informally.",
+      "(a) Informal resolution first. Before filing any claim, you agree to contact us at calista@nourishwithcalista.com and give us 30 days to attempt to resolve the dispute informally.",
       "(b) Binding arbitration. Except as provided in (d), any dispute arising out of or relating to these Terms or the Program shall be resolved by binding individual arbitration administered by JAMS under its applicable rules, conducted in Marin County, California, or remotely by videoconference at either party's election. Judgment on the award may be entered in any court of competent jurisdiction. We will pay arbitration filing, administrative, and arbitrator fees to the extent required by applicable law or JAMS consumer rules.",
       "(c) Class action waiver. ALL CLAIMS MUST BE BROUGHT IN THE PARTIES' INDIVIDUAL CAPACITY, AND NOT AS A PLAINTIFF OR CLASS MEMBER IN ANY PURPORTED CLASS, COLLECTIVE, OR REPRESENTATIVE PROCEEDING. The arbitrator may not consolidate claims or preside over any form of representative proceeding.",
       "(d) Exceptions. Either party may bring an individual claim in small claims court, and either party may seek injunctive relief in court for infringement or misuse of intellectual property or confidential information.",
-      "(e) Opt-out. You may opt out of this arbitration agreement by emailing hello@macrosandmamas.com within 30 days of first accepting these Terms, stating your name and that you opt out of arbitration.",
+      "(e) Opt-out. You may opt out of this arbitration agreement by emailing calista@nourishwithcalista.com within 30 days of first accepting these Terms, stating your name and that you opt out of arbitration.",
     ],
   },
   {
@@ -181,7 +181,7 @@ export const TERMS_SECTIONS = [
       "C&C Health Coaching LLC",
       "2108 N St, Ste N",
       "Sacramento, CA 95816-5712",
-      "hello@macrosandmamas.com",
+      "calista@nourishwithcalista.com",
     ],
   },
 ];
