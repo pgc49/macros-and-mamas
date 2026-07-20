@@ -488,12 +488,13 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
       {tab === "emails" && (
         <>
           <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 14px" }}>
-            Read-only view of lifecycle emails. For early cohort, send copy feedback to Patrick — he&apos;ll have them updated in code. Scheduled nudge emails aren&apos;t live yet.
+            Read-only view of Callie&apos;s lifecycle emails (first person, from her). Numbers match the full plan — #1 and #3 are scheduled nudges and not wired yet. For early cohort, send copy feedback to Patrick.
           </p>
           {EMAIL_CATALOG.map((em) => (
-            <Card key={em.id} style={{ marginBottom: 12 }}>
+            <Card key={em.id} style={{ marginBottom: 12, opacity: em.status === "scheduled" ? 0.85 : 1 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.accentDeep, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>
                 {typeof em.number === "number" ? `Email #${em.number}` : `Notify ${em.number}`} · {em.audience}
+                {em.status === "scheduled" ? " · Not live yet" : " · Live"}
               </div>
               <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>{em.name}</div>
               <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 8 }}>

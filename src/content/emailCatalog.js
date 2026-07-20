@@ -2,13 +2,33 @@
  * Read-only catalog of lifecycle emails for the admin UI.
  * Copy lives in Edge Functions for sending; this mirrors it for Callie to review.
  * Edits for early cohort: change functions + this catalog together (via Patrick → agent).
+ *
+ * Numbers match the email plan:
+ *   #1 Finish joining (scheduled) — not live yet
+ *   #2 Welcome — live on payment
+ *   #3 Intake reminder (scheduled) — not live yet
+ *   #4–6 + Callie A/B/C — live on events
  */
 
 export const EMAIL_CATALOG = [
   {
+    id: "finish_joining",
+    number: 1,
+    name: "Finish joining",
+    status: "scheduled",
+    trigger: "Account created, still unpaid — +1 hour, again +24 hours, then stop",
+    subject: "Your spot's waiting, mama",
+    audience: "Client",
+    cta: "Finish joining — $149",
+    bodyPreview: `Not live yet — needs the scheduled (cron) sender.
+
+Warm nudge back to checkout. 24-hour follow-up adds founding-price scarcity. Stop after two sends.`,
+  },
+  {
     id: "welcome",
     number: 2,
     name: "Welcome",
+    status: "live",
     trigger: "Right after Stripe payment succeeds",
     subject: "You're in, mama 🤍 (here's what happens next)",
     audience: "Client",
@@ -17,21 +37,49 @@ export const EMAIL_CATALOG = [
 
 Welcome to Macros and Mamas — I'm so glad you're here!
 
-Philosophy (ranges, not rules; eat enough; Callie will tell you to eat more if you lose too fast). Personal story about tracking for 8 weeks.
+I want to tell you what makes this different, because you've probably tried the other way. This is not a 1,200-calorie plan. We don't crash, we don't punish, and we don't earn our food. We eat enough, we lift, and we lose fat while keeping the muscle that makes us strong enough for everything our lives ask of us. If you ever lose faster than about a pound to a pound and a half a week, I'll be the one telling you to eat more. That's the whole philosophy, and I mean it.
+
+I also want to reinforce that tracking your macros and meals doesn't have to happen for perpetuity! I tracked for 8 weeks, lost 11 pounds, stopped tracking for 3 months (but still used everything I learned as my guide), and I have maintained that 11 pound weight loss! This system works! I was the guinea pig! And now I get to teach you!
 
 Here's what happens next:
-1. Complete your intake (~3 minutes)
-2. Callie builds macros personally (within a day of intake)
-3. WhatsApp invite lands by text after approval
 
-Homework: before photos + tomorrow morning weigh-in.
+First, complete your intake — it takes about 3 minutes. That's where I learn your goals, your season of life, and even the foods you love. The moment you finish, I get to work.
 
-Blessings, Callie`,
+Then your macros get built — not by a calculator — by me. I personally review every mama's numbers before they go live. You'll get them within a day of finishing your intake, as flexible ranges, because real life doesn't happen in exact grams.
+
+Once your macros are approved, your invite to our WhatsApp Macros group is coming by text. That's where I live Monday through Friday — voice notes, plate pics, wins, questions, all of it. Every Monday I drop a short voice note that sets the week's focus. Listen while you pump, nurse, walk, or hide in the pantry. No judgment!
+
+While you're at it, do these two things — today if you can:
+1. Take your before photos. Same outfit, same spot, same lighting — front, side, and back. Your face doesn't need to be in them. You will not believe how much you'll want these in eight weeks!
+2. Weigh yourself tomorrow morning — first thing, before coffee, before your morning hydration, and right after you pee! That's your starting point, and it's the last time that number gets to feel like a verdict. From here on, it's just data.
+
+That's it. No prep, no pantry purge, no guilt about whatever you ate today.
+
+I'll see you inside, mama! We're going to do this together! I am truly so honored to spend the next 8 weeks with you!
+
+Blessings,
+Callie`,
+  },
+  {
+    id: "intake_reminder",
+    number: 3,
+    name: "Intake reminder",
+    status: "scheduled",
+    trigger: "Paid, intake incomplete — +24 hours, again +72 hours, then stop",
+    subject: "I can't build your macros yet",
+    audience: "Client",
+    cta: "Complete my intake",
+    bodyPreview: `Not live yet — needs the scheduled (cron) sender.
+
+Your spot is paid for, but your numbers are waiting on you — 3 minutes and I'll get to work.
+
+72-hour version adds: reply to this email if anything's confusing.`,
   },
   {
     id: "intake_received",
     number: 4,
     name: "Intake received",
+    status: "live",
     trigger: "Client finishes intake",
     subject: "Got it — I'm building your macros right now",
     audience: "Client",
@@ -50,20 +98,23 @@ Callie`,
     id: "macros_live",
     number: 5,
     name: "Your macros are live",
+    status: "live",
     trigger: "Callie taps Approve",
     subject: "Your ranges are ready 🤍",
     audience: "Client",
     cta: "Open my dashboard",
     bodyPreview: `Hi [First name],
 
-I just finished your numbers — they're live in your dashboard. Ranges, not rules.
+I just finished your numbers — they're live in your dashboard right now, built from everything you told me. Remember: these are ranges, not rules. Active day, eat the top. Slow day, the bottom. Both count.
 
-WhatsApp invite is on its way.
+Your WhatsApp invite is on its way to your phone — come say hi so I can welcome you properly.
 
-First 48 hours:
-1. Today — log one meal
-2. Tomorrow morning — weigh-in
-3. In the group — say hi
+Your first 48 hours, and this is the whole assignment:
+1. Today: log one meal. Tap it from your plan, snap it, or type it. Just one.
+2. Tomorrow morning: log your weigh-in.
+3. In the group: say hi. That's it.
+
+Small on purpose. Mamas who do these three in the first two days are the ones standing in their week-8 photos amazed. Let's go.
 
 Callie`,
   },
@@ -71,24 +122,27 @@ Callie`,
     id: "eligibility_refund",
     number: 6,
     name: "Not this time + refund",
+    status: "live",
     trigger: "Eligibility decline after payment (pregnant / early nursing / diet)",
     subject: "Depends on reason (congratulations / not yet / not the right fit)",
     audience: "Client",
     cta: null,
     bodyPreview: `Hi [First name],
 
-Warm decline copy for the specific reason.
+Warm decline copy for the specific reason (first person, from me).
 
-Your $149 has been fully refunded — a few days back to the card.
+Your $149 has been fully refunded — it'll land back on your card in a few days.
 
-Waitlist: I'll personally check in when the time is right.
+If you left your email for the waitlist, I'll personally check in when the time is right.
 
+Take care of yourself, mama.
 Callie`,
   },
   {
     id: "callie_payment",
     number: "A",
     name: "Callie: new payment",
+    status: "live",
     trigger: "Stripe payment succeeded",
     subject: "💰 New mama: [name] — paid $149",
     audience: "Callie",
@@ -99,6 +153,7 @@ Callie`,
     id: "callie_intake",
     number: "B",
     name: "Callie: intake ready",
+    status: "live",
     trigger: "Intake submitted",
     subject: "✅ [name] finished intake — review + approve",
     audience: "Callie",
@@ -109,6 +164,7 @@ Callie`,
     id: "callie_refund",
     number: "C",
     name: "Callie: refund issued",
+    status: "live",
     trigger: "Auto-refund after eligibility decline",
     subject: "↩️ Refund: [name] ([reason]) — waitlisted",
     audience: "Callie",
@@ -118,11 +174,11 @@ Callie`,
 ];
 
 export const EMAIL_TYPE_LABELS = {
-  welcome: "Welcome (#2)",
-  intake_received: "Intake received (#4)",
-  macros_live: "Macros live (#5)",
-  eligibility_refund: "Refund confirm (#6)",
-  callie_payment: "Callie: new payment (A)",
-  callie_intake: "Callie: intake ready (B)",
-  callie_refund: "Callie: refund (C)",
+  welcome: "Welcome",
+  intake_received: "Intake received",
+  macros_live: "Macros live",
+  eligibility_refund: "Refund confirm",
+  callie_payment: "Callie: new payment",
+  callie_intake: "Callie: intake ready",
+  callie_refund: "Callie: refund",
 };
