@@ -11,28 +11,12 @@ export function SalesPage({ onStartIntake, onSignIn }) {
   return (
     <div style={{ fontFamily: F, background: T.bg, minHeight: "100vh", color: T.ink }}>
       <Fonts />
-      <style>{`
-        @keyframes mmHeroFade {
-          from { opacity: 0; transform: translateY(14px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes mmHeroZoom {
-          from { transform: scale(1.06); }
-          to { transform: scale(1); }
-        }
-        .mm-hero-copy { animation: mmHeroFade 0.9s ease-out both; }
-        .mm-hero-cta { animation: mmHeroFade 0.9s ease-out 0.15s both; }
-        .mm-hero-photo { animation: mmHeroZoom 1.4s ease-out both; }
-        @media (prefers-reduced-motion: reduce) {
-          .mm-hero-copy, .mm-hero-cta, .mm-hero-photo { animation: none; }
-        }
-      `}</style>
 
       {/* Full-bleed first viewport: brand + photo + one CTA */}
       <section
         style={{
           position: "relative",
-          minHeight: "100svh",
+          minHeight: "100dvh",
           display: "flex",
           flexDirection: "column",
           justifyContent: "flex-end",
@@ -41,12 +25,11 @@ export function SalesPage({ onStartIntake, onSignIn }) {
         }}
       >
         <img
-          className="mm-hero-photo"
           src={heroImg}
           alt="Callie outdoors with her baby"
           width={1600}
           height={2133}
-          fetchPriority="high"
+          decoding="async"
           style={{
             position: "absolute",
             inset: 0,
@@ -77,7 +60,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             color: "#fff",
           }}
         >
-          <div className="mm-hero-copy">
+          <div>
             <div style={{ fontFamily: FD, fontSize: "clamp(36px, 9vw, 48px)", letterSpacing: 0.3, lineHeight: 1.05, marginBottom: 4 }}>
               Macros and Mamas
             </div>
@@ -103,7 +86,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             </p>
           </div>
 
-          <div className="mm-hero-cta">
+          <div>
             <Btn
               onClick={onStartIntake}
               style={{ width: "100%", background: "#fff", color: T.accentDeep }}
