@@ -21,13 +21,23 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           overflow: hidden;
           background: ${T.ink};
         }
-        .mm-hero-img {
+        .mm-hero-media {
           position: absolute;
           inset: 0;
+        }
+        .mm-hero-img {
           width: 100%;
           height: 100%;
           object-fit: cover;
           object-position: center 18%;
+          display: block;
+        }
+        .mm-hero-scrim {
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(180deg, rgba(51,39,46,0.22) 0%, rgba(51,39,46,0.18) 40%, rgba(51,39,46,0.78) 78%, rgba(51,39,46,0.92) 100%);
+          pointer-events: none;
         }
         .mm-hero-copy {
           position: relative;
@@ -38,98 +48,168 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           padding: 28px 20px 40px;
           color: #fff;
         }
-        /* Desktop: shorter hero so the portrait crop feels composed, not face-filling */
-        @media (min-width: 768px) {
-          .mm-hero {
-            min-height: min(72vh, 700px);
-            max-height: 760px;
-          }
-          .mm-hero-img {
-            object-position: center 22%;
-          }
-          .mm-hero-copy {
-            max-width: 640px;
-            padding: 36px 32px 48px;
-          }
+        .mm-hero-brand {
+          font-family: ${FD};
+          font-size: clamp(36px, 9vw, 48px);
+          letter-spacing: 0.3px;
+          line-height: 1.05;
+          margin-bottom: 4px;
         }
-        @media (min-width: 1100px) {
+        .mm-hero-kicker {
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 1.4px;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.82);
+          margin-bottom: 18px;
+        }
+        .mm-hero-headline {
+          font-family: ${FD};
+          font-size: clamp(28px, 7vw, 36px);
+          line-height: 1.15;
+          margin: 0 0 12px;
+          font-weight: 400;
+        }
+        .mm-hero-accent {
+          color: #F6C9D8;
+        }
+        .mm-hero-lede {
+          font-size: 16px;
+          line-height: 1.5;
+          margin: 0 0 20px;
+          color: rgba(255,255,255,0.88);
+          max-width: 420px;
+        }
+        .mm-hero-cta-note {
+          text-align: center;
+          font-size: 12.5px;
+          color: rgba(255,255,255,0.7);
+          margin-top: 8px;
+        }
+        .mm-hero-signin {
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-family: ${F};
+          font-size: 13.5px;
+          font-weight: 700;
+          color: #fff;
+          text-decoration: underline;
+        }
+
+        /* Desktop: text left / photo right — fixed readability, no overlay crop lottery */
+        @media (min-width: 900px) {
           .mm-hero {
-            min-height: min(68vh, 640px);
-            max-height: 680px;
+            display: grid;
+            grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.05fr);
+            align-items: stretch;
+            min-height: min(100dvh, 820px);
+            max-height: none;
+            background:
+              radial-gradient(120% 80% at 0% 100%, ${T.accentSoft} 0%, transparent 55%),
+              linear-gradient(165deg, #FFF9F6 0%, ${T.bg} 48%, #F3E8E4 100%);
+          }
+          .mm-hero-media {
+            position: relative;
+            inset: auto;
+            min-height: 100%;
+            order: 2;
           }
           .mm-hero-img {
             object-position: center 20%;
           }
+          .mm-hero-scrim {
+            display: none;
+          }
+          .mm-hero-copy {
+            order: 1;
+            max-width: none;
+            width: auto;
+            margin: 0;
+            padding: clamp(40px, 6vw, 72px) clamp(32px, 4vw, 64px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            color: ${T.ink};
+          }
+          .mm-hero-brand {
+            font-size: clamp(42px, 4.2vw, 56px);
+            color: ${T.ink};
+          }
+          .mm-hero-kicker {
+            color: ${T.accentDeep};
+          }
+          .mm-hero-headline {
+            font-size: clamp(30px, 3.2vw, 40px);
+            color: ${T.ink};
+          }
+          .mm-hero-accent {
+            color: ${T.accent};
+          }
+          .mm-hero-lede {
+            color: ${T.inkSoft};
+            max-width: 34ch;
+          }
+          .mm-hero-cta > button {
+            background: ${T.accent} !important;
+            color: #fff !important;
+            max-width: 360px;
+          }
+          .mm-hero-cta-note {
+            text-align: left;
+            color: ${T.inkSoft};
+            max-width: 360px;
+          }
+          .mm-hero-signin-wrap {
+            text-align: left !important;
+          }
+          .mm-hero-signin {
+            color: ${T.accentDeep};
+          }
         }
+
       `}</style>
 
-      {/* Full-bleed first viewport: brand + photo + one CTA */}
       <section className="mm-hero">
-        <img
-          className="mm-hero-img"
-          src={heroImg}
-          alt="Callie outdoors with her baby"
-          width={1600}
-          height={2133}
-          decoding="async"
-        />
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(180deg, rgba(51,39,46,0.22) 0%, rgba(51,39,46,0.18) 40%, rgba(51,39,46,0.78) 78%, rgba(51,39,46,0.92) 100%)",
-          }}
-        />
+        <div className="mm-hero-media">
+          <img
+            className="mm-hero-img"
+            src={heroImg}
+            alt="Callie outdoors with her baby"
+            width={1600}
+            height={2133}
+            decoding="async"
+          />
+          <div className="mm-hero-scrim" aria-hidden />
+        </div>
 
         <div className="mm-hero-copy">
           <div>
-            <div style={{ fontFamily: FD, fontSize: "clamp(36px, 9vw, 48px)", letterSpacing: 0.3, lineHeight: 1.05, marginBottom: 4 }}>
-              Macros and Mamas
-            </div>
-            <div style={{
-              fontSize: 12, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase",
-              color: "rgba(255,255,255,0.82)", marginBottom: 18,
-            }}>
-              ranges, not rules
-            </div>
-            <h1 style={{
-              fontFamily: FD, fontSize: "clamp(28px, 7vw, 36px)", lineHeight: 1.15,
-              margin: "0 0 12px", fontWeight: 400,
-            }}>
+            <div className="mm-hero-brand">Macros and Mamas</div>
+            <div className="mm-hero-kicker">ranges, not rules</div>
+            <h1 className="mm-hero-headline">
               Lose the weight.<br />
               Keep the muscle.<br />
-              <span style={{ color: "#F6C9D8" }}>Eat like a mother.</span>
+              <span className="mm-hero-accent">Eat like a mother.</span>
             </h1>
-            <p style={{
-              fontSize: 16, lineHeight: 1.5, margin: "0 0 20px",
-              color: "rgba(255,255,255,0.88)", maxWidth: 420,
-            }}>
+            <p className="mm-hero-lede">
               An 8-week macro program for moms — personalized ranges, real food, and Callie in your pocket all week.
             </p>
           </div>
 
-          <div>
+          <div className="mm-hero-cta">
             <Btn
               onClick={onStartIntake}
               style={{ width: "100%", background: "#fff", color: T.accentDeep }}
             >
               Join the founding group — $149
             </Btn>
-            <div style={{ textAlign: "center", fontSize: 12.5, color: "rgba(255,255,255,0.7)", marginTop: 8 }}>
+            <div className="mm-hero-cta-note">
               Founding price. Goes to $299+ after this group fills.
             </div>
             {onSignIn && (
-              <div style={{ textAlign: "center", marginTop: 14 }}>
-                <button
-                  onClick={onSignIn}
-                  style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    fontFamily: F, fontSize: 13.5, fontWeight: 700,
-                    color: "#fff", textDecoration: "underline",
-                  }}
-                >
+              <div className="mm-hero-signin-wrap" style={{ textAlign: "center", marginTop: 14 }}>
+                <button type="button" onClick={onSignIn} className="mm-hero-signin">
                   Already enrolled? Sign in
                 </button>
               </div>
