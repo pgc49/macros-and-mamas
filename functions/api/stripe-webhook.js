@@ -29,7 +29,7 @@ export async function onRequestPost({ request, env }) {
         return json({ error: "missing user" }, 400);
       }
 
-      await markPaid(env, userId);
+      await markPaid(env, userId, session);
     }
 
     return json({ received: true }, 200);
@@ -39,12 +39,23 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-async function markPaid(env, userId) {
+async function markPaid(env, userId, session) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key) {
     throw new Error("missing SUPABASE_URL or server key");
   }
+
+  // Do NOT set status=active here — that means Callie approved.
+  // Payment only flips paid + stores Stripe ids for refunds.
+  const patch = {
+    paid: true,
+    refunded: false,
+    paid_at: new Date().toISOString(),
+  };
+  if (session.customer) patch.stripe_customer_id = String(session.customer);
+  const pi = session.payment_intent;
+  if (pi) patch.stripe_payment_intent = String(pi);
 
   const resp = await fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
     method: "PATCH",
@@ -54,7 +65,7 @@ async function markPaid(env, userId) {
       authorization: `Bearer ${key}`,
       prefer: "return=minimal",
     },
-    body: JSON.stringify({ paid: true, status: "active" }),
+    body: JSON.stringify(patch),
   });
 
   if (!resp.ok) {

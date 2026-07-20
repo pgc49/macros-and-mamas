@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FD, T, F } from "../theme/tokens";
 import { Shell, Card, Btn, Field, Chip, inputStyle } from "../components/ui";
 import { useAuth } from "../auth/useAuth.jsx";
 import { db } from "../db/db";
+
+const REFUND_COPY =
+  "Your $149 has been fully refunded — it'll land back on your card in a few days. We'll be here when the time is right.";
 
 function WaitlistCapture({
   reason,
@@ -73,13 +76,28 @@ function WaitlistCapture({
   );
 }
 
-export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
+export function IntakeFlow({ profile, step, setStep, set, onSubmit, onEligibilityDecline, refundIssued = false }) {
   const steps = ["About you", "You right now", "Your goal", "Your tastes"];
   const [earlyGateShown, setEarlyGateShown] = useState(false);
+  const declinedOnce = useRef(false);
 
   const monthsNum = Number(profile.monthsPP);
   const monthsValid = profile.monthsPP !== "" && !Number.isNaN(monthsNum);
   const earlyNursing = profile.breastfeeding === true && monthsValid && monthsNum < 3;
+
+  const fireDecline = (reason) => {
+    if (declinedOnce.current) return;
+    declinedOnce.current = true;
+    onEligibilityDecline?.(reason);
+  };
+
+  useEffect(() => {
+    if (profile.pregnant === true) fireDecline("pregnant");
+  }, [profile.pregnant]);
+
+  useEffect(() => {
+    if (earlyGateShown && earlyNursing) fireDecline("early");
+  }, [earlyGateShown, earlyNursing]);
 
   const setPregnant = (v) => {
     set("pregnant", v);
@@ -186,6 +204,14 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
                 buttonLabel="Keep me posted"
                 footnote="Leave your email and Callie will check in when the time is right."
               />
+              {refundIssued && (
+                <p style={{
+                  fontSize: 13.5, lineHeight: 1.5, color: T.accentDeep, fontWeight: 700,
+                  margin: "12px 0 0",
+                }}>
+                  {REFUND_COPY}
+                </p>
+              )}
             </div>
           )}
 
@@ -239,6 +265,14 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
                     buttonLabel="Remind me when it's time"
                     footnote="We'll reach out as you pass the three-month mark."
                   />
+                  {refundIssued && (
+                    <p style={{
+                      fontSize: 13.5, lineHeight: 1.5, color: T.accentDeep, fontWeight: 700,
+                      margin: "12px 0 0",
+                    }}>
+                      {REFUND_COPY}
+                    </p>
+                  )}
                 </div>
               )}
 

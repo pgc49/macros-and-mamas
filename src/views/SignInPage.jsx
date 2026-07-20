@@ -75,7 +75,7 @@ export function SignInPage({
         </h2>
         <p style={{ fontSize: 14.5, lineHeight: 1.55, color: T.inkSoft, margin: "0 0 18px" }}>
           {isCreate
-            ? "Create an account to start your intake. Use the same email every time so Callie can find your macros."
+            ? "Create an account to join the founding group. Next you'll pay $149, then complete a short intake so Callie can build your macros."
             : "Sign in with the email you used when you enrolled."}
         </p>
 

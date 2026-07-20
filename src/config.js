@@ -19,9 +19,10 @@ const SUPABASE_ANON_KEY =
   "sb_publishable_VZroN1jvDKeAjcaBkmyGFw_yhsl0d5G";
 
 export const CONFIG = {
-  // Stripe Checkout Session is created by /api/checkout after Callie
-  // approves (intake → approve → pay → unlock). No Payment Link.
+  // Stripe Checkout Session is created by /api/checkout after account
+  // create (account → pay → intake → approve → unlock). No Payment Link.
   CHECKOUT_ENDPOINT: "/api/checkout",
+  REFUND_ENDPOINT: "/api/refund",
 
   // Meal photo analysis — legacy; prefer ESTIMATE_ENDPOINT.
   ANALYZE_ENDPOINT: "/api/analyze",

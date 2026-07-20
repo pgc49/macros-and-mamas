@@ -7,17 +7,21 @@ import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { DEFAULT_ITEMS, DAYS } from "./content/data";
 import { wkStartOf } from "./utils/dates";
-import { PATHS, homePathFor, pathFromClientView } from "./routing";
+import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
 import { SalesPage } from "./views/SalesPage";
 import { IntakeFlow } from "./views/IntakeFlow";
 import { DeclinedPage } from "./views/DeclinedPage";
 import { PendingPage } from "./views/PendingPage";
+import { JoinPage } from "./views/JoinPage";
+import { WelcomePage } from "./views/WelcomePage";
+import { GoodbyePage } from "./views/GoodbyePage";
 import { SignInPage } from "./views/SignInPage";
 import { TermsPage } from "./views/TermsPage";
 import { ClientApp } from "./views/ClientApp";
 import { AdminPortal } from "./admin/AdminPortal";
 import { Shell } from "./components/ui";
 import { T, FD } from "./theme/tokens";
+import { requestEligibilityRefund } from "./lib/checkout";
 
 const EMPTY_PROFILE = {
   name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
@@ -38,6 +42,9 @@ export default function App() {
   const [macros, setMacros] = useState(null);
   const [approved, setApproved] = useState(false);
   const [paid, setPaid] = useState(false);
+  const [refunded, setRefunded] = useState(false);
+  const [refundIssued, setRefundIssued] = useState(false);
+  const refundOnce = useRef(false);
   const curWk = wkStartOf();
   const [checksByWeek, setChecksByWeek] = useState({});
   const [viewWk, setViewWk] = useState(curWk);
@@ -74,6 +81,7 @@ export default function App() {
             setMacros(s.macros || null);
             setApproved(!!s.approved);
             setPaid(!!s.paid);
+            setRefunded(!!s.refunded);
             if (s.checksByWeek) setChecksByWeek(s.checksByWeek);
             if (s.weighins) setWeighins(s.weighins);
             if (s.todayLog && s.todayLog.date === new Date().toISOString().slice(0, 10)) {
@@ -86,6 +94,9 @@ export default function App() {
           setMacros(null);
           setApproved(false);
           setPaid(false);
+          setRefunded(false);
+          setRefundIssued(false);
+          refundOnce.current = false;
         }
         if (isAdmin) {
           try {
@@ -110,11 +121,11 @@ export default function App() {
     if (!entryPaths.includes(location.pathname)) return;
     if (routedAfterLoad.current && location.pathname === PATHS.home) return;
 
-    const dest = homePathFor({ isAdmin, approved, paid, macros });
+    const dest = homePathFor({ isAdmin, approved, paid, macros, refunded });
     // Signed-in visitors may still browse marketing at `/` — only auto-route
-    // from `/signin` and legacy `/home`. From `/`, route approved clients + admins.
+    // from `/signin` and legacy `/home`. From `/`, route enrolled clients + admins.
     if (location.pathname === PATHS.home) {
-      if (isAdmin || (macros && approved && paid)) {
+      if (isAdmin || refunded || paid) {
         routedAfterLoad.current = true;
         navigate(dest, { replace: true });
       }
@@ -122,44 +133,28 @@ export default function App() {
     }
     routedAfterLoad.current = true;
     navigate(dest, { replace: true });
-  }, [authLoading, loaded, user, isAdmin, approved, paid, macros, location.pathname, navigate]);
+  }, [authLoading, loaded, user, isAdmin, approved, paid, macros, refunded, location.pathname, navigate]);
 
   const authMode = signInNext === "intake" ? "create" : "signin";
   const switchAuthMode = (next) => {
     setSignInNext(next === "create" ? "intake" : "app");
   };
 
-  // Stripe return — reload paid status, then land on dashboard or pending
-  useEffect(() => {
-    if (!user || authLoading || !loaded) return;
-    const params = new URLSearchParams(location.search);
-    const checkout = params.get("checkout");
-    if (!checkout) return;
-    navigate({ pathname: location.pathname, search: "" }, { replace: true });
-    (async () => {
-      try {
-        const s = await db.loadClientState();
-        if (!s) return;
-        setApproved(!!s.approved);
-        setPaid(!!s.paid);
-        if (s.macros) setMacros(s.macros);
-        if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
-        navigate(pathFromClientView(s.view), { replace: true });
-      } catch (e) {
-        console.error("post-checkout refresh failed", e);
-      }
-    })();
-  }, [user?.id, authLoading, loaded, location.search]);
+  const applyClientState = (s) => {
+    if (!s) return;
+    if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
+    if (s.macros) setMacros(s.macros);
+    else if (s.view === "onboarding" || s.view === "join") setMacros(null);
+    setApproved(!!s.approved);
+    setPaid(!!s.paid);
+    setRefunded(!!s.refunded);
+  };
 
   const refreshClientState = async () => {
     try {
       const s = await db.loadClientState();
-      if (!s) return;
-      if (s.profile) setProfile((prev) => ({ ...prev, ...s.profile }));
-      if (s.macros) setMacros(s.macros);
-      setApproved(!!s.approved);
-      setPaid(!!s.paid);
-      navigate(pathFromClientView(s.view), { replace: true });
+      applyClientState(s);
+      if (s) navigate(pathFromClientView(s.view), { replace: true });
     } catch (e) {
       console.error("refreshClientState failed", e);
     }
@@ -167,12 +162,41 @@ export default function App() {
 
   const set = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
 
-  /* Gating: pregnant + early nursing are handled inline on step 2.
-     Diet gate still runs here before any payment / DB write. */
+  const runEligibilityRefund = async (reason) => {
+    if (refundOnce.current) return;
+    refundOnce.current = true;
+    setDeclineReason(reason === "early_nursing" ? "early" : reason);
+    try {
+      await requestEligibilityRefund(reason);
+      setRefundIssued(true);
+      setPaid(false);
+      setRefunded(true);
+      await refreshProfile();
+    } catch (e) {
+      console.error("eligibility refund failed", e);
+      // Allow a retry if the API failed (e.g. webhook lag on payment_intent)
+      refundOnce.current = false;
+    }
+  };
+
+  /* Gating: pregnant + early nursing are handled inline on step 2 (post-pay).
+     Diet gate still runs here; both paths issue a full refund when paid. */
   const submitIntake = async () => {
-    if (profile.pregnant) { setDeclineReason("pregnant"); navigate(PATHS.declined); return; }
-    if (profile.breastfeeding && Number(profile.monthsPP) < 3) { setDeclineReason("early"); navigate(PATHS.declined); return; }
-    if (profile.diet !== "none") { setDeclineReason("diet"); navigate(PATHS.declined); return; }
+    if (profile.pregnant) {
+      await runEligibilityRefund("pregnant");
+      navigate(PATHS.declined);
+      return;
+    }
+    if (profile.breastfeeding && Number(profile.monthsPP) < 3) {
+      await runEligibilityRefund("early_nursing");
+      navigate(PATHS.declined);
+      return;
+    }
+    if (profile.diet !== "none") {
+      await runEligibilityRefund("diet");
+      navigate(PATHS.declined);
+      return;
+    }
     const forEngine = {
       ...profile,
       // monthsPP only applies when nursing; clear for non-BF so storage stays clean
@@ -181,12 +205,15 @@ export default function App() {
     const m = computeMacros(forEngine);
     setMacros(m);
     setApproved(false);
-    setPaid(false);
     try {
       await db.submitIntake(forEngine, m);
       await refreshProfile();
     } catch (e) {
       console.error("submitIntake failed", e);
+      if (/Payment required/i.test(e?.message || "")) {
+        navigate(PATHS.join, { replace: true });
+        return;
+      }
     }
     navigate(PATHS.pending);
   };
@@ -405,29 +432,29 @@ export default function App() {
     );
   }
 
-  const goOnboarding = () => {
+  /** Sales CTA: create account (or join/pay / intake if already signed in). */
+  const goJoin = () => {
     if (!user) {
       setSignInNext("intake");
       navigate(PATHS.signin);
       return;
     }
-    setStep(0);
-    navigate(PATHS.onboarding);
+    navigate(homePathFor({ isAdmin, approved, paid, macros, refunded }));
   };
 
   const backToStart = () => {
     setDeclineReason("");
+    setRefundIssued(false);
     setStep(0);
     setProfile({ ...EMPTY_PROFILE });
     setMacros(null);
     setApproved(false);
-    setPaid(false);
     navigate(PATHS.home);
   };
 
   // Clients need approve + pay. Admins with an approved intake can dogfood
   // /dashboard without a Stripe payment on their own account.
-  const dashboardUnlocked = !!(macros && approved && (paid || isAdmin));
+  const dashboardUnlocked = canAccessDashboard({ isAdmin, approved, paid, macros, refunded });
 
   const clientApp = (
     <ClientApp
@@ -474,7 +501,7 @@ export default function App() {
         path={PATHS.home}
         element={(
           <SalesPage
-            onStartIntake={goOnboarding}
+            onStartIntake={goJoin}
             onSignIn={() => { setSignInNext("app"); navigate(PATHS.signin); }}
           />
         )}
@@ -488,7 +515,7 @@ export default function App() {
         path={PATHS.signin}
         element={
           user
-            ? <Navigate to={homePathFor({ isAdmin, approved, paid, macros })} replace />
+            ? <Navigate to={homePathFor({ isAdmin, approved, paid, macros, refunded })} replace />
             : (
               <SignInPage
                 mode={authMode}
@@ -496,6 +523,46 @@ export default function App() {
                 onBack={() => navigate(PATHS.home)}
               />
             )
+        }
+      />
+
+      <Route
+        path={PATHS.join}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace />
+            : refunded
+              ? <Navigate to={PATHS.goodbye} replace />
+              : paid || isAdmin
+                ? <Navigate to={homePathFor({ isAdmin, approved, paid, macros, refunded })} replace />
+                : <JoinPage onRefresh={refreshClientState} />
+        }
+      />
+
+      <Route
+        path={PATHS.welcome}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace />
+            : (
+              <WelcomePage
+                navigate={navigate}
+                onPaid={(s) => {
+                  applyClientState(s);
+                }}
+              />
+            )
+        }
+      />
+
+      <Route
+        path={PATHS.goodbye}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace />
+            : refunded || refundIssued
+              ? <GoodbyePage onBack={backToStart} />
+              : <Navigate to={homePathFor({ isAdmin, approved, paid, macros, refunded })} replace />
         }
       />
 
@@ -510,23 +577,35 @@ export default function App() {
                 onBack={() => navigate(PATHS.home)}
               />
             )
-            : macros && !declineReason
-              ? <Navigate to={PATHS.pending} replace />
-              : (
-                <IntakeFlow
-                  profile={profile}
-                  step={step}
-                  setStep={setStep}
-                  set={set}
-                  onSubmit={submitIntake}
-                />
-              )
+            : refunded && !refundIssued
+              ? <Navigate to={PATHS.goodbye} replace />
+              : !paid && !isAdmin && !refundIssued
+                ? <Navigate to={PATHS.join} replace />
+                : macros && !declineReason && !refundIssued
+                  ? <Navigate to={PATHS.pending} replace />
+                  : (
+                    <IntakeFlow
+                      profile={profile}
+                      step={step}
+                      setStep={setStep}
+                      set={set}
+                      onSubmit={submitIntake}
+                      onEligibilityDecline={runEligibilityRefund}
+                      refundIssued={refundIssued}
+                    />
+                  )
         }
       />
 
       <Route
         path={PATHS.declined}
-        element={<DeclinedPage declineReason={declineReason} onBack={backToStart} />}
+        element={(
+          <DeclinedPage
+            declineReason={declineReason}
+            onBack={backToStart}
+            refundIssued={refundIssued || refunded}
+          />
+        )}
       />
 
       <Route
@@ -534,11 +613,15 @@ export default function App() {
         element={
           !user
             ? <Navigate to={PATHS.signin} replace />
-            : dashboardUnlocked
-              ? <Navigate to={PATHS.dashboard} replace />
-              : macros
-                ? <PendingPage approved={!!approved} onPaidRefresh={refreshClientState} />
-                : <Navigate to={PATHS.onboarding} replace />
+            : refunded
+              ? <Navigate to={PATHS.goodbye} replace />
+              : !paid && !isAdmin
+                ? <Navigate to={PATHS.join} replace />
+                : dashboardUnlocked
+                  ? <Navigate to={PATHS.dashboard} replace />
+                  : macros
+                    ? <PendingPage />
+                    : <Navigate to={PATHS.onboarding} replace />
         }
       />
 
@@ -547,9 +630,11 @@ export default function App() {
         element={
           !user
             ? <Navigate to={PATHS.signin} replace />
-            : dashboardUnlocked
-              ? clientApp
-              : <Navigate to={macros ? PATHS.pending : PATHS.onboarding} replace />
+            : refunded
+              ? <Navigate to={PATHS.goodbye} replace />
+              : dashboardUnlocked
+                ? clientApp
+                : <Navigate to={homePathFor({ isAdmin, approved, paid, macros, refunded })} replace />
         }
       />
 

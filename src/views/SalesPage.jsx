@@ -243,12 +243,15 @@ export function SalesPage({ onStartIntake, onSignIn }) {
         <div style={{ marginTop: 22 }}>
           <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 6 }}>Who this is for</div>
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.7 }}>
-            Moms ready to lose the weight and build strength — whether your baby is three months or sixteen years. Breastfeeding mamas are welcome from three months postpartum (your macros are set gently; supply comes first). Not for pregnancy.
+            Moms ready to lose the weight and build strength — whether your baby is three months or sixteen years. Breastfeeding mamas are welcome from three months postpartum (your macros are set gently; supply comes first).{" "}
+            <span style={{ fontWeight: 700, color: T.accentDeep }}>
+              Not for pregnancy or the first three months of nursing.
+            </span>
           </div>
         </div>
 
         <div style={{ margin: "22px 0 6px" }}>
-          <Btn onClick={onStartIntake} style={{ width: "100%" }}>Start my intake</Btn>
+          <Btn onClick={onStartIntake} style={{ width: "100%" }}>Join the founding group — $149</Btn>
         </div>
 
         <p style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, margin: "18px 0 0" }}>

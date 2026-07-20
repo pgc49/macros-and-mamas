@@ -28,6 +28,10 @@ create table if not exists public.profiles (
   role text not null default 'client',
   status text not null default 'pending',
   paid boolean not null default false,
+  refunded boolean not null default false,
+  stripe_customer_id text,
+  stripe_payment_intent text,
+  paid_at timestamptz,
   week int not null default 0,
   terms_accepted_at timestamptz,
   terms_version text,
@@ -300,3 +304,59 @@ create policy "waitlist_select_admin"
   on public.waitlist for select
   to authenticated
   using (public.is_admin());
+
+-- refunds log (eligibility declines after pay-first)
+create table if not exists public.refunds (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  reason text not null,
+  amount_cents int,
+  stripe_refund_id text,
+  stripe_payment_intent text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists refunds_profile_created_idx
+  on public.refunds (profile_id, created_at desc);
+
+alter table public.refunds enable row level security;
+
+drop policy if exists "refunds_select_admin" on public.refunds;
+create policy "refunds_select_admin"
+  on public.refunds for select
+  to authenticated
+  using (public.is_admin());
+
+-- Clients must not flip payment / role / approval columns themselves.
+create or replace function public.protect_payment_columns()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.role() = 'service_role' then
+    return new;
+  end if;
+
+  if public.is_admin() then
+    return new;
+  end if;
+
+  new.paid := old.paid;
+  new.refunded := old.refunded;
+  new.stripe_customer_id := old.stripe_customer_id;
+  new.stripe_payment_intent := old.stripe_payment_intent;
+  new.paid_at := old.paid_at;
+  new.role := old.role;
+  if new.status is distinct from old.status and new.status = 'active' then
+    new.status := old.status;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_protect_payment on public.profiles;
+create trigger profiles_protect_payment
+  before update on public.profiles
+  for each row execute function public.protect_payment_columns();

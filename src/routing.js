@@ -1,6 +1,9 @@
 /** Canonical app paths */
 export const PATHS = {
   home: "/",
+  join: "/join",
+  welcome: "/welcome",
+  goodbye: "/goodbye",
   onboarding: "/onboarding",
   signin: "/signin",
   pending: "/pending",
@@ -10,24 +13,33 @@ export const PATHS = {
   terms: "/terms",
 };
 
-/** Where a signed-in user should land after auth / cold load. */
-export function homePathFor({ isAdmin, approved, paid, macros }) {
+/**
+ * Where a signed-in user should land after auth / cold load.
+ * Pay-first: account → pay → intake → Callie approve → dashboard.
+ */
+export function homePathFor({ isAdmin, approved, paid, macros, refunded }) {
   if (isAdmin) return PATHS.admin;
-  if (macros && approved && paid) return PATHS.dashboard;
-  if (macros) return PATHS.pending;
-  return PATHS.onboarding;
+  if (refunded) return PATHS.goodbye;
+  if (!paid) return PATHS.join;
+  if (!macros) return PATHS.onboarding;
+  if (!approved) return PATHS.pending;
+  return PATHS.dashboard;
 }
 
 /** Dashboard access: approve + pay, or admin dogfooding an approved intake. */
-export function canAccessDashboard({ isAdmin, approved, paid, macros }) {
+export function canAccessDashboard({ isAdmin, approved, paid, macros, refunded }) {
+  if (refunded) return false;
   return !!(macros && approved && (paid || isAdmin));
 }
 
-/** Map persisted client state to a path segment (legacy "app" → dashboard). */
+/** Map persisted client state to a path segment. */
 export function pathFromClientView(view) {
   if (view === "app" || view === "dashboard") return PATHS.dashboard;
   if (view === "intake" || view === "onboarding") return PATHS.onboarding;
   if (view === "pending") return PATHS.pending;
+  if (view === "join") return PATHS.join;
+  if (view === "welcome") return PATHS.welcome;
+  if (view === "goodbye") return PATHS.goodbye;
   if (view === "declined") return PATHS.declined;
   if (view === "signin") return PATHS.signin;
   return PATHS.home;

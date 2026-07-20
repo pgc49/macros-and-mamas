@@ -14,8 +14,14 @@ const MAX_BODY_CHARS = 2_500_000; // ~2MB guard on base64 payload
 
 export async function onRequestPost({ request, env }) {
   try {
+    const authHeader = request.headers.get("authorization") || "";
     const user = await requireSupabaseUser(request, env);
     if (!user) return json({ error: "unauthorized" }, 401);
+
+    const access = await fetchEnrollment(env, user.id, authHeader);
+    if (!access || access.refunded || (!access.paid && access.role !== "admin")) {
+      return json({ error: "payment required" }, 403);
+    }
 
     const rawLen = Number(request.headers.get("content-length") || 0);
     if (rawLen > MAX_BODY_CHARS) return json({ error: "payload too large" }, 413);
@@ -50,7 +56,6 @@ export async function onRequestPost({ request, env }) {
     }
 
     // Best-effort cost watch (ignore failures — table may not exist yet)
-    const authHeader = request.headers.get("authorization") || "";
     logEstimateCall(env, user.id, type, authHeader).catch(() => {});
 
     const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -107,6 +112,25 @@ async function requireSupabaseUser(request, env) {
   });
   if (!resp.ok) return null;
   return resp.json();
+}
+
+async function fetchEnrollment(env, userId, authHeader) {
+  const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+  const anon = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || "";
+  if (!base || !anon || !userId || !authHeader) return null;
+
+  const resp = await fetch(
+    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid,refunded,role`,
+    {
+      headers: {
+        apikey: anon,
+        authorization: authHeader,
+      },
+    }
+  );
+  if (!resp.ok) return null;
+  const rows = await resp.json().catch(() => []);
+  return rows[0] || null;
 }
 
 async function logEstimateCall(env, userId, type, authHeader) {

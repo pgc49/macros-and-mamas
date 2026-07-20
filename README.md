@@ -4,7 +4,7 @@ Production app for [macrosandmamas.com](https://macrosandmamas.com) — an 8-wee
 
 **Stack:** Vite + React SPA on Cloudflare Pages · Pages Functions (`/functions`) · Supabase Auth + Postgres (RLS) · Stripe Checkout · OpenRouter (meal photo AI)
 
-**Flow:** intake → Callie approves in admin → client pays $149 via Stripe → dashboard unlocks.
+**Flow:** create account → pay $149 (Stripe) → intake → Callie approves in admin → dashboard unlocks.
 
 ## Local development
 
@@ -97,9 +97,12 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 |-----|-----|------|
 | `/` | Public | Sales / marketing |
 | `/terms` | Public | Terms and Conditions |
-| `/onboarding` | Signed-in | Intake form |
 | `/signin` | Public | Create account / sign in (create requires Terms checkbox) |
-| `/pending` | Client | Awaiting Callie approval or payment |
+| `/join` | Signed-in, unpaid | Stripe checkout CTA |
+| `/welcome` | After Stripe success | Polls until webhook sets `paid`, then intake |
+| `/onboarding` | Paid (or admin) | Intake form |
+| `/pending` | Paid + intake done | Awaiting Callie approval |
+| `/goodbye` | Refunded after eligibility decline | Warm exit; no app access |
 | `/dashboard` | Approved + paid (admins too) | Client app — ranges, meals, progress |
 | `/admin` | `profiles.role = admin` only | Callie's roster / approvals |
 
@@ -112,25 +115,28 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 | `/spec/macros-and-mamas.jsx` | Approved product spec (reference; do not “improve” copy) |
 | `/functions/api/estimate.js` | Meal photo + text → OpenRouter (JWT required) |
 | `/functions/api/analyze.js` | Legacy photo-only endpoint (JWT required) |
-| `/functions/api/checkout.js` | Stripe Checkout Session |
-| `/functions/api/stripe-webhook.js` | Marks profile paid |
+| `/functions/api/checkout.js` | Stripe Checkout Session (pay-first) |
+| `/functions/api/stripe-webhook.js` | Marks profile paid + stores Stripe ids |
+| `/functions/api/refund.js` | Full eligibility refund after intake decline |
 | `/supabase/schema.sql` | Tables + RLS |
 | `/supabase/migrations/002_meal_logging.sql` | `meal_logs.source` + `estimate_calls` |
 | `/supabase/migrations/003_terms_accepted.sql` | `profiles.terms_accepted_at` + signup trigger |
 | `/supabase/migrations/004_intake_step2.sql` | `waitlist` table + `profiles.season_note` |
+| `/supabase/migrations/005_pay_first.sql` | Stripe ids, `refunded`, refunds log, payment column protection |
 | `/src` | Production React app |
 
 **After deploy:** run pending migrations in the Supabase SQL editor if not already applied:
 - `002_meal_logging.sql` — `meal_logs.source` + `estimate_calls`
 - `003_terms_accepted.sql` — Terms acceptance timestamp + signup trigger metadata copy
 - `004_intake_step2.sql` — waitlist + season note for intake redesign
+- `005_pay_first.sql` — **required for pay-first** (Stripe fields, refunds, protect `paid`)
 
 ## Definition of done (checklist)
 
 - [ ] Push to `main` deploys; PRs get preview URLs
-- [ ] Visitor can view sales, complete intake, land in pending; gated applicants see decline copy
+- [ ] Visitor creates account → pays → completes intake → pending; gated applicants get refund + decline copy
 - [ ] Callie (admin) sees pending queue, edits macros, approves
-- [ ] Approved client pays in Stripe test mode, then sees ranges, checklist, weigh-in, meal log (recipe / photo / text / manual) via `/api/estimate`
-- [ ] Unauthenticated `curl` to `/api/estimate` returns **401**
+- [ ] Approved + paid client sees ranges, checklist, weigh-in, meal log via `/api/estimate`
+- [ ] Unauthenticated `curl` to `/api/estimate` returns **401**; unpaid returns **403**
 - [ ] Reload / second browser shows the same persisted data
 - [ ] No secret key material in git (`sk-or-`, `sk_live`, `sk_test` values, etc.)

@@ -9,8 +9,17 @@
 
 export async function onRequestPost({ request, env }) {
   try {
+    const authHeader = request.headers.get("authorization") || "";
     const user = await requireUser(request, env);
     if (!user) return json({ error: "unauthorized" }, 401);
+
+    const profile = await fetchProfile(env, user.id, authHeader);
+    if (profile?.refunded) {
+      return json({ error: "enrollment refunded" }, 403);
+    }
+    if (profile?.paid) {
+      return json({ error: "already paid" }, 409);
+    }
 
     const secret = env.STRIPE_SECRET_KEY;
     const priceId = env.STRIPE_PRICE_ID;
@@ -22,8 +31,8 @@ export async function onRequestPost({ request, env }) {
     const origin = new URL(request.url).origin;
     const body = new URLSearchParams();
     body.set("mode", "payment");
-    body.set("success_url", `${origin}/dashboard?checkout=success`);
-    body.set("cancel_url", `${origin}/pending?checkout=cancel`);
+    body.set("success_url", `${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`);
+    body.set("cancel_url", `${origin}/join`);
     body.set("client_reference_id", user.id);
     body.set("customer_email", user.email || "");
     body.set("line_items[0][price]", priceId);
@@ -71,6 +80,31 @@ async function requireUser(request, env) {
   });
   if (!resp.ok) return null;
   return resp.json();
+}
+
+async function fetchProfile(env, userId, authHeader) {
+  const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+  const anon = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || "";
+  const service = env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!base || !userId) return null;
+
+  // Prefer service role; fall back to the caller's JWT under RLS.
+  const apikey = service || anon;
+  const authorization = service ? `Bearer ${service}` : authHeader;
+  if (!apikey || !authorization) return null;
+
+  const resp = await fetch(
+    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid,refunded`,
+    {
+      headers: {
+        apikey,
+        authorization,
+      },
+    }
+  );
+  if (!resp.ok) return null;
+  const rows = await resp.json().catch(() => []);
+  return rows[0] || null;
 }
 
 function json(obj, status = 200) {

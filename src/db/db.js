@@ -52,6 +52,7 @@ function rowToProfile(row) {
     seasonNote: row.season_note || "",
     status: row.status,
     paid: !!row.paid,
+    refunded: !!row.refunded,
     week: row.week ?? 0,
     role: row.role,
   };
@@ -82,13 +83,14 @@ function isApproved({ profileRow, macrosRow }) {
 }
 
 function viewFromState({ profileRow, macrosRow }) {
-  if (!profileRow) return "onboarding";
+  if (!profileRow) return "join";
+  if (profileRow.refunded) return "goodbye";
+  const paid = !!profileRow.paid;
+  if (!paid) return "join";
   const hasIntake = !!(macrosRow || profileRow.name || profileRow.phone);
   if (!hasIntake) return "onboarding";
   const approved = isApproved({ profileRow, macrosRow });
-  const paid = !!profileRow.paid;
-  if (approved && paid) return "dashboard";
-  // pending covers: awaiting Callie, and approved-but-unpaid (pay screen)
+  if (approved) return "dashboard";
   return "pending";
 }
 
@@ -174,6 +176,7 @@ export const db = {
       macros,
       approved: isApproved({ profileRow, macrosRow }),
       paid: !!profileRow?.paid,
+      refunded: !!profileRow?.refunded,
       status: profileRow?.status || "pending",
       view: viewFromState({ profileRow, macrosRow }),
       checksByWeek,
@@ -214,6 +217,16 @@ export const db = {
 
   async submitIntake(profile, macros) {
     const uid = await requireUserId();
+    const { data: prof, error: gateErr } = await supabase
+      .from("profiles")
+      .select("paid, refunded, role")
+      .eq("id", uid)
+      .maybeSingle();
+    if (gateErr) throw gateErr;
+    const isAdmin = prof?.role === "admin";
+    if (prof?.refunded) throw new Error("Enrollment was refunded");
+    if (!prof?.paid && !isAdmin) throw new Error("Payment required before intake");
+
     const { error: pErr } = await supabase
       .from("profiles")
       .update({
@@ -375,6 +388,7 @@ export const db = {
           status: p.status,
           week: p.week,
           paid: p.paid,
+          refunded: !!p.refunded,
           role: p.role,
           macros: {
             cal: m.cal,
