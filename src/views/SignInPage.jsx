@@ -124,7 +124,7 @@ export function SignInPage({
               >
                 Terms and Conditions
               </Link>
-              . My agreement will be recorded with a timestamp.
+              .
             </span>
           </label>
         )}
