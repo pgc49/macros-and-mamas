@@ -71,6 +71,7 @@ export const FEATURES = [
   { icon: "🎙️", title: "A Monday voice note from Callie", body: "Every week opens with a short voice note: the week's focus, one skill to practice, one thing to let go of. Listen while you pump, walk, or hide in the pantry." },
   { icon: "🎯", title: "Macros built for you, by a human", body: "Not a generic calculator. You fill out a real intake, and Callie personally reviews and approves your numbers — as flexible ranges, never rigid targets." },
   { icon: "🍳", title: "A meal plan that tastes like you", body: "Simple meal formulas plus 21 high-protein recipes with exact quantities and every macro counted. Then tell Callie what you love to eat, and get recipes adapted to your tastes — high-protein versions of your favorites." },
-  { icon: "✅", title: "A weekly rhythm you can keep", body: "One movable checklist: macros, water + electrolytes, 8k+ steps or two walks, morning sunlight, and three strength workouts on the days you choose." },
-  { icon: "📈", title: "Progress that protects your muscle", body: "Weekly weigh-ins with a built-in guardrail: lose faster than 1.5 lbs a week and we tell you to eat more, not less." },
+  { icon: "📸", title: "Food logging that takes seconds", body: "Snap a plate, type what you ate, tap a recipe from your plan, or enter macros yourself. Your ranges update as you go — and you can backfill a past day when life gets messy." },
+  { icon: "✅", title: "A weekly rhythm you can keep", body: "One simple checklist: macros, water + electrolytes, 8k+ steps or two walks, morning sunlight, and three strength workouts on the days you choose. Tap the days as you go." },
+  { icon: "📈", title: "Progress you can actually see", body: "Weigh-ins by day, habit rhythm, and how you're landing in your macro ranges over time — plus a built-in guardrail: lose faster than 1.5 lbs a week and we tell you to eat more, not less." },
 ];
