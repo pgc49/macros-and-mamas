@@ -6,7 +6,7 @@ import { db } from "./db/db";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { DEFAULT_ITEMS, DAYS } from "./content/data";
-import { addDaysIso, localDateIso, wkStartOf } from "./utils/dates";
+import { addDaysIso, fmtRange, localDateIso, wkStartOf } from "./utils/dates";
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
 import { SalesPage } from "./views/SalesPage";
 import { IntakeFlow } from "./views/IntakeFlow";
@@ -62,6 +62,7 @@ export default function App() {
   const [mealLogDate, setMealLogDate] = useState(() => localDateIso());
   const [mealLogWeekStart, setMealLogWeekStart] = useState(() => wkStartOf());
   const [mealLogsByDate, setMealLogsByDate] = useState({});
+  const [mealHistoryByDate, setMealHistoryByDate] = useState({});
   const [loaded, setLoaded] = useState(false);
   const routedAfterLoad = useRef(false);
 
@@ -98,6 +99,7 @@ export default function App() {
             }
             if (s.mealLogsByDate) setMealLogsByDate(s.mealLogsByDate);
             if (s.mealLogWeekStart) setMealLogWeekStart(s.mealLogWeekStart);
+            if (s.mealHistoryByDate) setMealHistoryByDate(s.mealHistoryByDate);
           }
         } else {
           setMacros(null);
@@ -337,6 +339,7 @@ export default function App() {
     try {
       const { byDate } = await db.loadMealLogsWeek(weekStart);
       setMealLogsByDate(byDate);
+      setMealHistoryByDate((prev) => ({ ...prev, ...byDate }));
       const today = localDateIso();
       let nextDate = preferDate;
       if (!nextDate || nextDate < weekStart || nextDate > addDaysIso(weekStart, 6)) {
@@ -356,6 +359,14 @@ export default function App() {
 
   const syncEntryIntoWeek = (date, updater) => {
     setMealLogsByDate((prev) => {
+      const list = prev[date] || [];
+      const nextList = updater(list);
+      const next = { ...prev };
+      if (!nextList.length) delete next[date];
+      else next[date] = nextList;
+      return next;
+    });
+    setMealHistoryByDate((prev) => {
       const list = prev[date] || [];
       const nextList = updater(list);
       const next = { ...prev };
@@ -526,6 +537,45 @@ export default function App() {
     return { locked: false, n, overall, delta, items, best, worst };
   }, [wkKeys, checksByWeek]);
 
+  /** Daily macro totals for Progress charts (logged days only, last ~28 days). */
+  const macroHistory = useMemo(() => {
+    const today = localDateIso();
+    const start = addDaysIso(today, -27);
+    const rows = [];
+    Object.keys(mealHistoryByDate || {})
+      .filter((d) => d >= start && d <= today)
+      .sort()
+      .forEach((d) => {
+        const entries = mealHistoryByDate[d] || [];
+        if (!entries.length) return;
+        const tot = entries.reduce(
+          (a, e) => ({
+            cal: a.cal + (Number(e.cal) || 0),
+            p: a.p + (Number(e.p) || 0),
+            c: a.c + (Number(e.c) || 0),
+            f: a.f + (Number(e.f) || 0),
+          }),
+          { cal: 0, p: 0, c: 0, f: 0 },
+        );
+        rows.push({
+          date: d,
+          label: d.slice(5),
+          ...tot,
+        });
+      });
+    return rows;
+  }, [mealHistoryByDate]);
+
+  /** Weekly habit adherence series for Progress chart. */
+  const habitHistory = useMemo(() => {
+    return wkKeys.map((w) => ({
+      week: w,
+      label: `W${progWeekNum(w)}`,
+      pct: adherenceFor(w),
+      rangeLabel: fmtRange(w),
+    }));
+  }, [wkKeys, checksByWeek]);
+
   if (authLoading || (user && !loaded)) {
     return (
       <Shell>
@@ -600,6 +650,8 @@ export default function App() {
       logWeighin={logWeighin}
       weeklyRate={weeklyRate}
       trends={trends}
+      macroHistory={macroHistory}
+      habitHistory={habitHistory}
       mealFilter={mealFilter}
       setMealFilter={setMealFilter}
     />

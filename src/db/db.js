@@ -220,9 +220,15 @@ export const db = {
 
     // Meal logs are non-fatal: missing via/source columns must not block dashboard.
     const weekStart = wkStartOf();
-    const weekEnd = addDaysIso(weekStart, 6);
-    const mealRows = await loadMealLogsRange(uid, weekStart, weekEnd);
-    const byDate = groupMealRowsByDate(mealRows);
+    // Progress charts need ~4 weeks of history; day strip still uses the current week subset.
+    const historyStart = addDaysIso(today, -27);
+    const mealRows = await loadMealLogsRange(uid, historyStart, today);
+    const historyByDate = groupMealRowsByDate(mealRows);
+    const byDate = {};
+    for (let i = 0; i < 7; i++) {
+      const d = addDaysIso(weekStart, i);
+      if (historyByDate[d]) byDate[d] = historyByDate[d];
+    }
 
     const checksByWeek = {};
     (checkRows || []).forEach((r) => {
@@ -254,10 +260,11 @@ export const db = {
       weighins: (weighRows || []).map((r) => ({ date: r.date, w: Number(r.weight) })),
       todayLog: {
         date: today,
-        entries: byDate[today] || [],
+        entries: historyByDate[today] || [],
       },
       mealLogsByDate: byDate,
       mealLogWeekStart: weekStart,
+      mealHistoryByDate: historyByDate,
     };
   },
 
@@ -276,6 +283,15 @@ export const db = {
       weekStart,
       byDate: groupMealRowsByDate(mealRows),
     };
+  },
+
+  /** Longer history for Progress charts (defaults to last 28 local days). */
+  async loadMealLogsHistory(days = 28) {
+    const uid = await requireUserId();
+    const today = localDateIso();
+    const start = addDaysIso(today, -(Math.max(1, days) - 1));
+    const mealRows = await loadMealLogsRange(uid, start, today);
+    return { start, end: today, byDate: groupMealRowsByDate(mealRows) };
   },
 
   async joinWaitlist({ email, reason, monthsPp = null }) {

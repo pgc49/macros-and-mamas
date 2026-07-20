@@ -7,6 +7,7 @@ import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/d
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
 import { Shell, Card, Btn, Chip, RangeBand, inputStyle } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
+import { ProgressCharts } from "../components/ProgressCharts";
 
 export function ClientApp({
   tab, setTab,
@@ -19,6 +20,7 @@ export function ClientApp({
   viewWk, setViewWk, curWk, editPast, setEditPast,
   checksByWeek, toggleCheck, adherenceFor, progWeekNum, earliestWk,
   weighins, wInput, setWInput, logWeighin, weeklyRate, trends,
+  macroHistory, habitHistory,
   mealFilter, setMealFilter,
 }) {
   const hi = (n, d = 10) => n + d;
@@ -301,6 +303,8 @@ export function ClientApp({
               </div>
             )}
           </Card>
+
+          <ProgressCharts macros={macros} macroHistory={macroHistory} habitHistory={habitHistory} />
 
           <Card style={{ marginTop: 12 }}>
             <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Your 4-week trends</div>
