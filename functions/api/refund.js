@@ -6,6 +6,8 @@
    Secrets: STRIPE_SECRET_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
    ================================================================== */
 
+import { loadUserContact, sendRefundEmails } from "../_shared/supabaseEmail.js";
+
 export async function onRequestPost({ request, env }) {
   try {
     const user = await requireUser(request, env);
@@ -61,6 +63,18 @@ export async function onRequestPost({ request, env }) {
       paymentIntent: profile.stripe_payment_intent,
     });
 
+    // Email #6 + Callie C — best-effort
+    try {
+      const contact = await loadUserContact(env, user.id);
+      await sendRefundEmails(env, {
+        email: contact.email || user.email,
+        name: contact.name || profile.name,
+        reason,
+      });
+    } catch (mailErr) {
+      console.error("refund email failed", mailErr);
+    }
+
     return json({ ok: true, refund_id: refund.id || null }, 200);
   } catch (e) {
     console.error("refund failed", e);
@@ -92,7 +106,7 @@ async function fetchProfile(env, userId) {
   if (!base || !key) throw new Error("missing SUPABASE_URL or server key");
 
   const resp = await fetch(
-    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid,refunded,stripe_payment_intent`,
+    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid,refunded,stripe_payment_intent,name`,
     {
       headers: {
         apikey: key,

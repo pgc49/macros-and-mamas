@@ -8,6 +8,7 @@ import { rateOf } from "../utils/dates";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
 import { Shell, Card, Btn, inputStyle } from "../components/ui";
+import { supabase } from "../lib/supabase";
 
 export function AdminPortal({ roster, setRoster, adminSel, setAdminSel }) {
   const all = roster;
@@ -34,9 +35,29 @@ export function AdminPortal({ roster, setRoster, adminSel, setAdminSel }) {
   const approveClient = async (c) => {
     setRoster((rs) => rs.map((x) => (x.id === c.id ? { ...x, status: "active", week: 1 } : x)));
     try {
-      await db.approveClient(c.id); // sets macros.approved=true, status=active, week=1
+      // Server path: approve + email #5 ("Your ranges are ready")
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const resp = await fetch("/api/macros-approved", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ clientId: c.id }),
+        });
+        if (!resp.ok) throw new Error(`macros-approved ${resp.status}`);
+      } else {
+        await db.approveClient(c.id);
+      }
     } catch (e) {
       console.error("approveClient failed", e);
+      // Fallback: still approve in DB even if email notify fails
+      try {
+        await db.approveClient(c.id);
+      } catch (e2) {
+        console.error("approveClient fallback failed", e2);
+      }
     }
   };
 

@@ -116,8 +116,11 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 | `/functions/api/estimate.js` | Meal photo + text → OpenRouter (JWT required) |
 | `/functions/api/analyze.js` | Legacy photo-only endpoint (JWT required) |
 | `/functions/api/checkout.js` | Stripe Checkout Session (pay-first) |
-| `/functions/api/stripe-webhook.js` | Marks profile paid + stores Stripe ids |
-| `/functions/api/refund.js` | Full eligibility refund after intake decline |
+| `/functions/api/stripe-webhook.js` | Marks profile paid + stores Stripe ids + welcome email |
+| `/functions/api/refund.js` | Full eligibility refund + refund email |
+| `/functions/api/intake-submitted.js` | Intake received email + Callie notify |
+| `/functions/api/macros-approved.js` | Approve + macros-live email |
+| `/supabase/functions/` | Resend Edge Functions (deploy via Supabase CLI) |
 | `/supabase/schema.sql` | Tables + RLS |
 | `/supabase/migrations/002_meal_logging.sql` | `meal_logs.source` + `estimate_calls` |
 | `/supabase/migrations/003_terms_accepted.sql` | `profiles.terms_accepted_at` + signup trigger |

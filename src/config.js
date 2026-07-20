@@ -23,6 +23,8 @@ export const CONFIG = {
   // create (account → pay → intake → approve → unlock). No Payment Link.
   CHECKOUT_ENDPOINT: "/api/checkout",
   REFUND_ENDPOINT: "/api/refund",
+  INTAKE_SUBMITTED_ENDPOINT: "/api/intake-submitted",
+  MACROS_APPROVED_ENDPOINT: "/api/macros-approved",
 
   // Meal photo analysis — legacy; prefer ESTIMATE_ENDPOINT.
   ANALYZE_ENDPOINT: "/api/analyze",

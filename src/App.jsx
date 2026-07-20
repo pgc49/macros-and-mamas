@@ -208,6 +208,32 @@ export default function App() {
     try {
       await db.submitIntake(forEngine, m);
       await refreshProfile();
+      // Email #4 + Callie B (best-effort)
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          await fetch("/api/intake-submitted", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: forEngine.name,
+              age: forEngine.age,
+              currentWeight: forEngine.currentWeight,
+              goalWeight: forEngine.goalWeight,
+              breastfeeding: forEngine.breastfeeding,
+              monthsPP: forEngine.monthsPP,
+              phone: forEngine.phone,
+              tastes: [forEngine.prefB, forEngine.prefL, forEngine.prefD].filter(Boolean).join(" · "),
+              seasonNote: forEngine.seasonNote,
+            }),
+          });
+        }
+      } catch (mailErr) {
+        console.error("intake-submitted notify failed", mailErr);
+      }
     } catch (e) {
       console.error("submitIntake failed", e);
       if (/Payment required/i.test(e?.message || "")) {

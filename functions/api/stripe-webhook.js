@@ -7,6 +7,11 @@
      SUPABASE_SERVICE_ROLE_KEY   (server-side only)
    ================================================================== */
 
+import {
+  loadUserContact,
+  sendWelcomeEmails,
+} from "../_shared/supabaseEmail.js";
+
 export async function onRequestPost({ request, env }) {
   try {
     const rawBody = await request.text();
@@ -30,6 +35,16 @@ export async function onRequestPost({ request, env }) {
       }
 
       await markPaid(env, userId, session);
+
+      // Email #2 + Callie A — best-effort (don't fail the webhook)
+      try {
+        const contact = await loadUserContact(env, userId);
+        const email = contact.email || session.customer_email || session.customer_details?.email;
+        const name = contact.name || session.customer_details?.name || null;
+        await sendWelcomeEmails(env, { email, name, userId });
+      } catch (mailErr) {
+        console.error("welcome email failed", mailErr);
+      }
     }
 
     return json({ received: true }, 200);
