@@ -6,7 +6,7 @@ import { db } from "./db/db";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { DEFAULT_ITEMS, DAYS } from "./content/data";
-import { localDateIso, wkStartOf } from "./utils/dates";
+import { addDaysIso, localDateIso, wkStartOf } from "./utils/dates";
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
 import { SalesPage } from "./views/SalesPage";
 import { IntakeFlow } from "./views/IntakeFlow";
@@ -60,6 +60,8 @@ export default function App() {
   const [estimateSource, setEstimateSource] = useState("photo");
   const [todayLog, setTodayLog] = useState({ date: localDateIso(), entries: [] });
   const [mealLogDate, setMealLogDate] = useState(() => localDateIso());
+  const [mealLogWeekStart, setMealLogWeekStart] = useState(() => wkStartOf());
+  const [mealLogsByDate, setMealLogsByDate] = useState({});
   const [loaded, setLoaded] = useState(false);
   const routedAfterLoad = useRef(false);
 
@@ -94,6 +96,8 @@ export default function App() {
               setTodayLog({ date: today, entries: [] });
               setMealLogDate(today);
             }
+            if (s.mealLogsByDate) setMealLogsByDate(s.mealLogsByDate);
+            if (s.mealLogWeekStart) setMealLogWeekStart(s.mealLogWeekStart);
           }
         } else {
           setMacros(null);
@@ -308,41 +312,69 @@ export default function App() {
 
   const analyzeText = async (description) => {
     if (!description?.trim()) return;
-    await runEstimate({ type: "text", description: description.trim() }, "text");
+    await runEstimate({ type: "text", description: description.trim() }, "describe");
   };
 
-  const selectMealLogDate = async (date) => {
-    if (!date || date === mealLogDate) return;
+  const applyDayFromCache = (date, byDate) => {
     setMealLogDate(date);
+    setTodayLog({ date, entries: byDate[date] || [] });
+  };
+
+  const selectMealLogDate = (date) => {
+    if (!date) return;
+    setEstimate(null);
+    const ws = wkStartOf(new Date(`${date}T12:00:00`));
+    if (ws !== mealLogWeekStart) {
+      changeMealWeek(ws, date);
+      return;
+    }
+    applyDayFromCache(date, mealLogsByDate);
+  };
+
+  const changeMealWeek = async (weekStart, preferDate) => {
+    setMealLogWeekStart(weekStart);
     setEstimate(null);
     try {
-      const log = await db.loadMealLogs(date);
-      setTodayLog(log);
+      const { byDate } = await db.loadMealLogsWeek(weekStart);
+      setMealLogsByDate(byDate);
+      const today = localDateIso();
+      let nextDate = preferDate;
+      if (!nextDate || nextDate < weekStart || nextDate > addDaysIso(weekStart, 6)) {
+        // Prefer today when this is the current week; otherwise Monday of that week.
+        nextDate = today >= weekStart && today <= addDaysIso(weekStart, 6) ? today : weekStart;
+      }
+      if (nextDate > today) nextDate = today;
+      applyDayFromCache(nextDate, byDate);
     } catch (e) {
-      console.error("loadMealLogs failed", e);
-      setTodayLog({ date, entries: [] });
+      console.error("loadMealLogsWeek failed", e);
+      setMealLogsByDate({});
+      const today = localDateIso();
+      const fallback = preferDate && preferDate <= today ? preferDate : weekStart;
+      applyDayFromCache(fallback > today ? today : fallback, {});
     }
+  };
+
+  const syncEntryIntoWeek = (date, updater) => {
+    setMealLogsByDate((prev) => {
+      const list = prev[date] || [];
+      const nextList = updater(list);
+      const next = { ...prev };
+      if (!nextList.length) delete next[date];
+      else next[date] = nextList;
+      return next;
+    });
+    setTodayLog((tl) => {
+      if (tl.date !== date) return tl;
+      return { date, entries: updater(tl.entries) };
+    });
   };
 
   const appendMealEntry = async (entry) => {
     const date = entry.logged_date || mealLogDate || localDateIso();
+    const via = entry.via || (entry.source === "text" ? "describe" : entry.source) || "manual";
     try {
-      const row = await db.addMealLog(entry, date);
-      setTodayLog((tl) => {
-        if (tl.date !== date) return tl;
-        return {
-          date,
-          entries: [...tl.entries, {
-            id: row.id,
-            name: entry.name,
-            cal: entry.cal,
-            p: entry.p,
-            c: entry.c,
-            f: entry.f,
-            source: entry.source || null,
-          }],
-        };
-      });
+      const row = await db.addMealLog({ ...entry, via }, date);
+      syncEntryIntoWeek(date, (list) => [...list, row]);
       return true;
     } catch (e) {
       console.error("addMealLog failed", e);
@@ -358,7 +390,7 @@ export default function App() {
       p: estimate.protein_g,
       c: estimate.carbs_g,
       f: estimate.fat_g,
-      source: estimateSource,
+      via: estimateSource === "text" ? "describe" : estimateSource,
       logged_date: mealLogDate,
     });
     setEstimate(null);
@@ -367,31 +399,43 @@ export default function App() {
   const discardEstimate = () => setEstimate(null);
 
   const logRecipe = async (recipe) => {
-    // Recipes from the Meals tab always land on the day currently open in the log.
     const ok = await appendMealEntry({
       name: recipe.name,
       cal: recipe.cal,
       p: recipe.p,
       c: recipe.c,
       f: recipe.f,
-      source: "recipe",
+      via: "recipe",
       logged_date: mealLogDate,
     });
     if (ok) setTab("today");
   };
 
   const logManualMeal = async (entry) => {
-    await appendMealEntry(entry);
+    await appendMealEntry({
+      ...entry,
+      via: entry.via || "manual",
+      logged_date: entry.logged_date || mealLogDate,
+    });
+  };
+
+  const updateMealEntry = async (id, patch) => {
+    if (!id) return;
+    try {
+      const row = await db.updateMealLog(id, patch);
+      const date = mealLogDate;
+      syncEntryIntoWeek(date, (list) => list.map((e) => (e.id === id ? { ...e, ...row } : e)));
+    } catch (e) {
+      console.error("updateMealLog failed", e);
+    }
   };
 
   const deleteMealEntry = async (id) => {
     if (!id) return;
     try {
       await db.deleteMealLog(id);
-      setTodayLog((tl) => ({
-        ...tl,
-        entries: tl.entries.filter((e) => e.id !== id),
-      }));
+      const date = mealLogDate;
+      syncEntryIntoWeek(date, (list) => list.filter((e) => e.id !== id));
     } catch (e) {
       console.error("deleteMealLog failed", e);
     }
@@ -534,7 +578,11 @@ export default function App() {
       logManualMeal={logManualMeal}
       todayLog={todayLog}
       mealLogDate={mealLogDate}
+      mealLogWeekStart={mealLogWeekStart}
+      mealLogsByDate={mealLogsByDate}
       selectMealLogDate={selectMealLogDate}
+      changeMealWeek={changeMealWeek}
+      updateMealEntry={updateMealEntry}
       deleteMealEntry={deleteMealEntry}
       viewWk={viewWk}
       setViewWk={setViewWk}

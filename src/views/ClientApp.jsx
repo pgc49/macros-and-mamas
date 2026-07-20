@@ -4,31 +4,37 @@ import {
 import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/data";
-import { addDaysIso, fmtRange, formatLongDay, isTodayIso, localDateIso, weekdayKey } from "../utils/dates";
-import { Shell, Card, Btn, Chip, RangeBand, inputStyle } from "../components/ui";
+import { addDaysIso, fmtRange, weekdayKey, wkStartOf } from "../utils/dates";
+import { Shell, Card, Btn, Chip, inputStyle } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
 
 export function ClientApp({
   tab, setTab,
   profile, macros,
-  totals, waterOz,
+  waterOz,
   estimateBusy, estimate,
   analyzePhoto, analyzeText, confirmEstimate, discardEstimate,
-  logManualMeal, logRecipe, todayLog, deleteMealEntry,
-  mealLogDate, selectMealLogDate,
+  logManualMeal, logRecipe, todayLog, deleteMealEntry, updateMealEntry,
+  mealLogDate, mealLogWeekStart, mealLogsByDate, selectMealLogDate, changeMealWeek,
   viewWk, setViewWk, curWk, editPast, setEditPast,
   checksByWeek, toggleCheck, adherenceFor, progWeekNum, earliestWk,
   weighins, wInput, setWInput, logWeighin, weeklyRate, trends,
   mealFilter, setMealFilter,
 }) {
-  const hi = (n, d = 10) => n + d;
   const hasWhatsApp = hasPublicUrl(CONFIG.WHATSAPP_GROUP_URL);
   const hasElectrolytes = hasPublicUrl(CONFIG.FULLSCRIPT_ELECTROLYTES);
   const hasSleep = hasPublicUrl(CONFIG.FULLSCRIPT_SLEEP);
   const hasDigestion = hasPublicUrl(CONFIG.FULLSCRIPT_DIGESTION);
   const hasAnySupport = hasElectrolytes || hasSleep || hasDigestion;
-  const viewingToday = isTodayIso(mealLogDate || localDateIso());
   const todayWeekday = weekdayKey();
+  const daysWithEntries = Object.fromEntries(
+    Object.entries(mealLogsByDate || {}).map(([d, list]) => [d, (list || []).length > 0]),
+  );
+  const mealEarliestWeek = (() => {
+    const fromChecks = earliestWk || wkStartOf();
+    const floor = addDaysIso(wkStartOf(), -7 * 52);
+    return fromChecks < floor ? fromChecks : floor;
+  })();
   return (
     <Shell>
       <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", gap: 4, padding: "8px 0 14px", zIndex: 5 }}>
@@ -46,9 +52,7 @@ export function ClientApp({
             {profile.name ? `Hi ${profile.name}.` : "Your ranges."}
           </h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-            {viewingToday
-              ? "Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win."
-              : `Showing logged food for ${formatLongDay(mealLogDate)} — not today. Use the arrows on the meal log to move between days.`}
+            Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win.
           </p>
 
           <Card style={{ marginBottom: 12, background: T.accentSoft, border: "none", display: "flex", gap: 14, alignItems: "center" }}>
@@ -62,19 +66,9 @@ export function ClientApp({
             )}
           </Card>
 
-          <Card>
-            <RangeBand label="Protein" lo={macros.protein} hi={hi(macros.protein)} eaten={totals.p} />
-            <RangeBand label="Carbs" lo={macros.carbs} hi={hi(macros.carbs)} eaten={totals.c} />
-            <RangeBand label="Fat — watch this one" lo={macros.fat} hi={hi(macros.fat)} eaten={totals.f} />
-            <div style={{ borderTop: `1px dashed ${T.border}`, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: T.inkSoft, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                Calories land around{totals.cal > 0 ? ` · logged ${Math.round(totals.cal)}` : ""}
-              </span>
-              <span style={{ fontFamily: FD, fontSize: 22 }}>{macros.cal}–{macros.cal + 150}</span>
-            </div>
-          </Card>
-
           <MealLogCard
+            macros={macros}
+            recipes={RECIPES}
             busy={estimateBusy}
             estimate={estimate}
             onAnalyzePhoto={analyzePhoto}
@@ -82,10 +76,16 @@ export function ClientApp({
             onConfirmEstimate={confirmEstimate}
             onDiscardEstimate={discardEstimate}
             onManualLog={logManualMeal}
+            onLogRecipe={logRecipe}
             todayLog={todayLog}
+            onUpdateEntry={updateMealEntry}
             onDeleteEntry={deleteMealEntry}
             mealLogDate={mealLogDate}
+            mealLogWeekStart={mealLogWeekStart}
+            daysWithEntries={daysWithEntries}
             onSelectMealDate={selectMealLogDate}
+            onChangeMealWeek={(ws) => changeMealWeek(ws)}
+            earliestWeekStart={mealEarliestWeek}
           />
 
           <Card style={{ marginTop: 12, display: "flex", gap: 14, alignItems: "center" }}>

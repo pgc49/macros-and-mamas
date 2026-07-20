@@ -1,23 +1,87 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
-import { Card, Btn, Field, inputStyle } from "./ui";
+import { Btn, inputStyle } from "./ui";
+import { RECIPES } from "../content/data";
 import {
   addDaysIso,
-  dayRelationLabel,
   formatLongDay,
+  fmtRange,
   isTodayIso,
   localDateIso,
+  wkStartOf,
 } from "../utils/dates";
 
-function sourceLabel(source) {
-  if (source === "photo") return "Photo";
-  if (source === "text") return "Estimate";
-  if (source === "manual") return "Manual";
-  if (source === "recipe") return "Recipe";
-  return null;
+const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+
+const VIA_LABEL = {
+  photo: "AI estimate from photo",
+  describe: "AI estimate from description",
+  recipe: "from your plan · exact",
+  manual: "entered by you",
+  adjusted: "adjusted by you",
+};
+
+const navBtn = (disabled) => ({
+  width: 30,
+  height: 30,
+  borderRadius: "50%",
+  border: `1.5px solid ${disabled ? T.track : T.border}`,
+  background: "#fff",
+  color: disabled ? "#D8CCD1" : T.ink,
+  fontSize: 15,
+  cursor: disabled ? "default" : "pointer",
+});
+
+const pill = (ghost, disabled) => ({
+  fontFamily: F,
+  fontWeight: 700,
+  fontSize: 13,
+  cursor: disabled ? "default" : "pointer",
+  padding: "9px 16px",
+  borderRadius: 999,
+  border: ghost ? `1.5px solid ${T.accent}` : "none",
+  background: ghost ? "transparent" : disabled ? "#D9C4CE" : T.accent,
+  color: ghost ? T.accent : "#fff",
+  whiteSpace: "nowrap",
+});
+
+function totCell(label, val, lo, hi, unit) {
+  const over = val > hi;
+  return (
+    <div
+      key={label}
+      style={{
+        flex: 1,
+        textAlign: "center",
+        padding: "8px 0",
+        borderRadius: 10,
+        background: over ? T.amberSoft : T.sageSoft,
+      }}
+    >
+      <div style={{ fontFamily: FD, fontSize: 17, color: over ? T.amber : "#3E5A46" }}>
+        {Math.round(val)}
+        {unit}
+      </div>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: over ? T.amber : T.sage, letterSpacing: 0.4 }}>
+        {label} · {lo}–{hi}
+      </div>
+    </div>
+  );
+}
+
+function totalsCaption(totals, ranges) {
+  if (totals.cal < ranges.cal[0]) {
+    return "Room left in your ranges — under is fine mid-day, and low days happen.";
+  }
+  if (totals.cal > ranges.cal[1]) {
+    return "A touch over the top of your range — tomorrow's a clean slate, no making up for it.";
+  }
+  return "Right inside your ranges. This is the win.";
 }
 
 export function MealLogCard({
+  macros,
+  recipes = RECIPES,
   busy,
   estimate,
   onAnalyzePhoto,
@@ -25,371 +89,601 @@ export function MealLogCard({
   onConfirmEstimate,
   onDiscardEstimate,
   onManualLog,
+  onLogRecipe,
   todayLog,
+  onUpdateEntry,
   onDeleteEntry,
   mealLogDate,
+  mealLogWeekStart,
+  daysWithEntries = {},
   onSelectMealDate,
+  onChangeMealWeek,
+  earliestWeekStart,
 }) {
+  const [method, setMethod] = useState(null); // snap | describe | recipes | manual
   const [desc, setDesc] = useState("");
-  const [showManual, setShowManual] = useState(false);
-  const [manual, setManual] = useState({ name: "", p: "", c: "", f: "" });
+  const [manual, setManual] = useState({ name: "", cal: "", p: "", c: "", f: "" });
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const camRef = useRef(null);
+  const libRef = useRef(null);
 
   const today = localDateIso();
   const date = mealLogDate || todayLog?.date || today;
+  const weekStart = mealLogWeekStart || wkStartOf(date);
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDaysIso(weekStart, i));
   const onToday = isTodayIso(date);
-  const relation = dayRelationLabel(date);
-  const canGoForward = date < today;
   const entries = todayLog?.entries || [];
+  const curWk = wkStartOf();
+  const earliest = earliestWeekStart || addDaysIso(curWk, -7 * 52);
+  const canPrevWeek = weekStart > earliest;
+  const canNextWeek = weekStart < curWk;
 
-  const manP = Number(manual.p) || 0;
-  const manC = Number(manual.c) || 0;
-  const manF = Number(manual.f) || 0;
-  const manCal = Math.round(manP * 4 + manC * 4 + manF * 9);
+  const ranges = macros
+    ? {
+        cal: [macros.cal, macros.cal + 150],
+        p: [macros.protein, macros.protein + 10],
+        c: [macros.carbs, macros.carbs + 10],
+        f: [macros.fat, macros.fat + 10],
+      }
+    : { cal: [0, 0], p: [0, 0], c: [0, 0], f: [0, 0] };
 
-  const dayTotals = entries.reduce(
+  const totals = entries.reduce(
     (a, e) => ({
-      cal: a.cal + (e.cal || 0),
-      p: a.p + (e.p || 0),
-      c: a.c + (e.c || 0),
-      f: a.f + (e.f || 0),
+      cal: a.cal + (Number(e.cal) || 0),
+      p: a.p + (Number(e.p) || 0),
+      c: a.c + (Number(e.c) || 0),
+      f: a.f + (Number(e.f) || 0),
     }),
     { cal: 0, p: 0, c: 0, f: 0 },
   );
 
-  const addLabel = onToday ? "Add to today" : `Add to ${formatLongDay(date)}`;
-  const headerTitle = relation ? `Log for ${relation}` : `Log for ${formatLongDay(date)}`;
+  const toggleMethod = (key) => setMethod((m) => (m === key ? null : key));
 
-  function goDay(delta) {
-    const next = addDaysIso(date, delta);
-    if (next > today) return;
-    onSelectMealDate?.(next);
-    setShowManual(false);
-  }
+  const selectDay = (d) => {
+    if (d > today) return;
+    setEditingId(null);
+    setDraft(null);
+    onSelectMealDate?.(d);
+  };
 
-  function jumpToday() {
-    onSelectMealDate?.(today);
-    setShowManual(false);
-  }
+  const changeWeek = (dir) => {
+    const next = addDaysIso(weekStart, 7 * dir);
+    if (dir < 0 && next < earliest) return;
+    if (dir > 0 && next > curWk) return;
+    setEditingId(null);
+    setDraft(null);
+    onChangeMealWeek?.(next);
+  };
+
+  const methodTile = (key, icon, label, sub) => (
+    <button
+      key={key}
+      type="button"
+      onClick={() => toggleMethod(key)}
+      style={{
+        flex: 1,
+        padding: "12px 6px 10px",
+        borderRadius: 14,
+        cursor: "pointer",
+        textAlign: "center",
+        border: `1.5px solid ${method === key ? T.accent : T.border}`,
+        background: method === key ? T.accentSoft : "#fff",
+      }}
+    >
+      <div style={{ fontSize: 20 }}>{icon}</div>
+      <div
+        style={{
+          fontFamily: F,
+          fontSize: 12.5,
+          fontWeight: 700,
+          color: method === key ? T.accentDeep : T.ink,
+          marginTop: 3,
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ fontFamily: F, fontSize: 10, color: T.inkSoft, marginTop: 1 }}>{sub}</div>
+    </button>
+  );
 
   const submitManual = () => {
     if (!manual.name.trim()) return;
-    onManualLog({
+    onManualLog?.({
       name: manual.name.trim(),
-      cal: manCal,
-      p: manP,
-      c: manC,
-      f: manF,
-      source: "manual",
+      cal: Number(manual.cal) || 0,
+      p: Number(manual.p) || 0,
+      c: Number(manual.c) || 0,
+      f: Number(manual.f) || 0,
+      via: "manual",
       logged_date: date,
     });
-    setManual({ name: "", p: "", c: "", f: "" });
-    setShowManual(false);
+    setManual({ name: "", cal: "", p: "", c: "", f: "" });
+    setMethod(null);
   };
 
+  const startEdit = (e) => {
+    setEditingId(e.id);
+    setDraft({ name: e.name, cal: e.cal, p: e.p, c: e.c, f: e.f, via: e.via });
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || !draft) return;
+    const prevVia = draft.via;
+    const nextVia = prevVia === "photo" || prevVia === "describe" ? "adjusted" : prevVia;
+    await onUpdateEntry?.(editingId, {
+      name: draft.name,
+      cal: Number(draft.cal) || 0,
+      p: Number(draft.p) || 0,
+      c: Number(draft.c) || 0,
+      f: Number(draft.f) || 0,
+      via: nextVia || "manual",
+    });
+    setEditingId(null);
+    setDraft(null);
+  };
+
+  const removeWhileEditing = async (id) => {
+    await onDeleteEntry?.(id);
+    setEditingId(null);
+    setDraft(null);
+  };
+
+  const numIn = (k, w = 58) => (
+    <input
+      inputMode="numeric"
+      value={draft[k]}
+      onChange={(ev) => setDraft((d) => ({ ...d, [k]: ev.target.value }))}
+      style={{
+        width: w,
+        padding: "8px 8px",
+        fontSize: 15,
+        textAlign: "center",
+        border: `1.5px solid ${T.border}`,
+        borderRadius: 10,
+        fontFamily: F,
+      }}
+    />
+  );
+
   return (
-    <Card style={{ marginTop: 12 }}>
-      {/* Day navigator */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <button
-          type="button"
-          aria-label="Previous day"
-          onClick={() => goDay(-1)}
-          style={{
-            width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
-            border: `1.5px solid ${T.border}`, background: "#fff",
-            color: T.ink, fontSize: 20, lineHeight: 1, cursor: "pointer",
-          }}
-        >
-          ‹
-        </button>
-        <div style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
-          <div style={{ fontFamily: FD, fontSize: 18, lineHeight: 1.2 }}>{headerTitle}</div>
-          <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 2 }}>
-            {onToday ? formatLongDay(date) : formatLongDay(date)}
-            {!onToday && (
-              <>
-                {" · "}
-                <button
-                  type="button"
-                  onClick={jumpToday}
-                  style={{
-                    background: "none", border: "none", padding: 0, cursor: "pointer",
-                    fontFamily: F, fontSize: 13, fontWeight: 700, color: T.accent,
-                    textDecoration: "underline",
-                  }}
-                >
-                  Jump to today
-                </button>
-              </>
-            )}
-          </div>
+    <div style={{ marginTop: 4 }}>
+      {/* Day strip */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "10px 0 4px" }}>
+        <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 22, margin: 0 }}>
+          {formatLongDay(date)}
+          {onToday && (
+            <span style={{ fontFamily: F, fontSize: 13, color: T.accentDeep, fontWeight: 700 }}> · Today</span>
+          )}
+        </h2>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button type="button" disabled={!canPrevWeek} onClick={() => changeWeek(-1)} style={navBtn(!canPrevWeek)} aria-label="Previous week">
+            ‹
+          </button>
+          <button type="button" disabled={!canNextWeek} onClick={() => changeWeek(1)} style={navBtn(!canNextWeek)} aria-label="Next week">
+            ›
+          </button>
         </div>
-        <button
-          type="button"
-          aria-label="Next day"
-          disabled={!canGoForward}
-          onClick={() => goDay(1)}
-          style={{
-            width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
-            border: `1.5px solid ${canGoForward ? T.border : T.track}`,
-            background: "#fff",
-            color: canGoForward ? T.ink : "#D8CCD1",
-            fontSize: 20, lineHeight: 1,
-            cursor: canGoForward ? "pointer" : "default",
-          }}
-        >
-          ›
-        </button>
+      </div>
+      <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 8 }}>
+        {fmtRange(weekStart)}
+        {weekStart === curWk ? " · this week" : ""}
       </div>
 
-      <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 14px", textAlign: "center" }}>
-        {onToday
-          ? "Snap a photo, describe it, or enter macros — everything saves to today’s food log."
-          : `Browsing a past day. Add anything you forgot — it saves to ${formatLongDay(date)}.`}
-      </p>
-
-      {/* Full food log */}
-      <div style={{
-        background: T.bg, borderRadius: 14, padding: "12px 14px", marginBottom: 14,
-        border: `1px solid ${T.border}`,
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, textTransform: "uppercase", letterSpacing: 0.4 }}>
-            {onToday ? "Today’s food log" : "Food log"}
-          </div>
-          {entries.length > 0 && (
-            <div style={{ fontSize: 12.5, color: T.inkSoft }}>
-              {entries.length} {entries.length === 1 ? "entry" : "entries"}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {weekDays.map((d, i) => {
+          const isFuture = d > today;
+          const sel = d === date;
+          const has = !!daysWithEntries[d];
+          return (
+            <div key={d} style={{ flex: 1, textAlign: "center" }}>
+              <button
+                type="button"
+                disabled={isFuture}
+                onClick={() => selectDay(d)}
+                aria-current={sel ? "date" : undefined}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: "50%",
+                  fontFamily: F,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: isFuture ? "default" : "pointer",
+                  position: "relative",
+                  border: `1.5px solid ${sel ? T.accent : T.border}`,
+                  background: sel ? T.accent : "#fff",
+                  color: isFuture ? "#D8CCD1" : sel ? "#fff" : T.ink,
+                }}
+              >
+                {DAY_LABELS[i]}
+                {has && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      bottom: 5,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      width: 5,
+                      height: 5,
+                      borderRadius: "50%",
+                      background: sel ? "#fff" : T.accent,
+                    }}
+                  />
+                )}
+              </button>
+              {d === today && (
+                <div
+                  style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: "50%",
+                    background: T.accentDeep,
+                    margin: "4px auto 0",
+                  }}
+                />
+              )}
             </div>
+          );
+        })}
+      </div>
+
+      {/* Entry methods */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 14, marginBottom: 12 }}>
+        <div style={{ fontFamily: FD, fontSize: 17, marginBottom: 2 }}>Log a meal</div>
+        <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10 }}>
+          {onToday ? (
+            "Adding to today."
+          ) : (
+            <>
+              Adding to <b style={{ color: T.accentDeep }}>{formatLongDay(date)}</b>.
+            </>
           )}
         </div>
+        <div style={{ display: "flex", gap: 7 }}>
+          {methodTile("snap", "📸", "Snap", "photo")}
+          {methodTile("describe", "✏️", "Describe", "type it")}
+          {methodTile("recipes", "🍳", "My plan", "exact")}
+          {methodTile("manual", "＃", "Macros", "I know them")}
+        </div>
 
-        {entries.length === 0 ? (
-          <div style={{ padding: "10px 0 4px", textAlign: "center" }}>
-            <div style={{ fontSize: 14, color: T.ink, marginBottom: 4 }}>Nothing logged for this day yet.</div>
-            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
-              Use the options below to add what you ate.
+        {method === "snap" && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <button type="button" disabled={busy} style={pill(false, busy)} onClick={() => camRef.current?.click()}>
+                {busy ? "Reading…" : "Open camera"}
+              </button>
+              <button type="button" disabled={busy} style={pill(true, busy)} onClick={() => libRef.current?.click()}>
+                Photo library
+              </button>
+              <span style={{ fontSize: 11.5, color: T.inkSoft }}>estimate comes back in seconds</span>
+            </div>
+            <input
+              ref={camRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              disabled={busy}
+              style={{ display: "none" }}
+              onChange={(e) => {
+                onAnalyzePhoto?.(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <input
+              ref={libRef}
+              type="file"
+              accept="image/*"
+              disabled={busy}
+              style={{ display: "none" }}
+              onChange={(e) => {
+                onAnalyzePhoto?.(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </div>
+        )}
+
+        {method === "describe" && (
+          <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+            <input
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              placeholder="2 eggs and sourdough toast"
+              disabled={busy}
+              style={{ ...inputStyle, flex: 1, padding: "11px 13px", fontSize: 15 }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && desc.trim() && !busy) {
+                  onAnalyzeText?.(desc.trim());
+                  setDesc("");
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={busy || !desc.trim()}
+              style={pill(false, busy || !desc.trim())}
+              onClick={() => {
+                const text = desc.trim();
+                if (!text) return;
+                onAnalyzeText?.(text);
+                setDesc("");
+              }}
+            >
+              {busy ? "…" : "Estimate"}
+            </button>
+          </div>
+        )}
+
+        {method === "recipes" && (
+          <div style={{ marginTop: 12, maxHeight: 280, overflowY: "auto" }}>
+            {recipes.map((r) => (
+              <button
+                key={r.name}
+                type="button"
+                onClick={() => {
+                  onLogRecipe?.(r);
+                  setMethod(null);
+                }}
+                style={{
+                  display: "flex",
+                  width: "100%",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "10px 12px",
+                  marginBottom: 6,
+                  borderRadius: 12,
+                  border: `1.5px solid ${T.border}`,
+                  background: "#fff",
+                  cursor: "pointer",
+                  fontFamily: F,
+                }}
+              >
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: T.ink, textAlign: "left" }}>{r.name}</span>
+                <span style={{ fontSize: 12, color: T.inkSoft, whiteSpace: "nowrap", marginLeft: 8 }}>
+                  {r.cal} cal · tap to log
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {method === "manual" && (
+          <div style={{ marginTop: 12 }}>
+            <input
+              value={manual.name}
+              onChange={(e) => setManual((m) => ({ ...m, name: e.target.value }))}
+              placeholder="What was it?"
+              style={{
+                width: "100%",
+                padding: "10px 13px",
+                fontSize: 15,
+                border: `1.5px solid ${T.border}`,
+                borderRadius: 12,
+                fontFamily: F,
+                marginBottom: 8,
+              }}
+            />
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {["cal", "p", "c", "f"].map((k) => (
+                <div key={k} style={{ flex: 1 }}>
+                  <input
+                    inputMode="numeric"
+                    value={manual[k]}
+                    onChange={(e) => setManual((m) => ({ ...m, [k]: e.target.value }))}
+                    placeholder={k.toUpperCase()}
+                    style={{
+                      width: "100%",
+                      padding: "9px 6px",
+                      fontSize: 14,
+                      textAlign: "center",
+                      border: `1.5px solid ${T.border}`,
+                      borderRadius: 10,
+                      fontFamily: F,
+                    }}
+                  />
+                </div>
+              ))}
+              <button type="button" disabled={!manual.name.trim()} style={pill(false, !manual.name.trim())} onClick={submitManual}>
+                Add
+              </button>
             </div>
           </div>
-        ) : (
-          <>
-            {entries.map((e) => {
-              const src = sourceLabel(e.source);
-              return (
-                <div
-                  key={e.id || `${e.name}-${e.cal}`}
-                  style={{
-                    display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-                    fontSize: 13.5, padding: "8px 0", gap: 8,
-                    borderBottom: `1px solid ${T.border}`,
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ color: T.ink, fontWeight: 700 }}>{e.name}</span>
-                      {src && (
-                        <span style={{
-                          fontSize: 11, fontWeight: 700, color: T.accentDeep,
-                          background: T.accentSoft, borderRadius: 6, padding: "2px 7px",
-                        }}>
-                          {src}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ color: T.inkSoft, marginTop: 2, fontSize: 13 }}>
-                      {Math.round(e.p)}P · {Math.round(e.c)}C · {Math.round(e.f)}F · {Math.round(e.cal)} cal
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteEntry(e.id)}
-                    aria-label={`Remove ${e.name}`}
-                    style={{
-                      background: "none", border: "none", cursor: "pointer",
-                      color: T.inkSoft, fontSize: 12, fontWeight: 700, padding: "2px 0",
-                      textDecoration: "underline", flexShrink: 0,
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              );
-            })}
-            <div style={{
-              display: "flex", justifyContent: "space-between", alignItems: "baseline",
-              paddingTop: 10, fontSize: 13.5,
-            }}>
-              <span style={{ fontWeight: 700, color: T.inkSoft }}>Day total</span>
-              <strong style={{ color: T.ink }}>
-                {Math.round(dayTotals.p)}P · {Math.round(dayTotals.c)}C · {Math.round(dayTotals.f)}F ·{" "}
-                {Math.round(dayTotals.cal)} cal
-              </strong>
+        )}
+
+        {busy && (
+          <div style={{ marginTop: 12, fontSize: 13.5, color: T.inkSoft }}>
+            Looking at your meal… this takes a few seconds.
+          </div>
+        )}
+
+        {estimate?.error && (
+          <div
+            style={{
+              marginTop: 12,
+              background: T.amberSoft,
+              borderRadius: 12,
+              padding: "10px 14px",
+              fontSize: 13.5,
+              color: T.amber,
+              lineHeight: 1.5,
+            }}
+          >
+            Couldn&apos;t read that one — try a clearer photo from above, or a shorter description of real food.
+          </div>
+        )}
+
+        {estimate && !estimate.error && (
+          <div style={{ marginTop: 12, background: T.accentSoft, borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ fontFamily: FD, fontSize: 17 }}>{estimate.meal}</div>
+            <div style={{ fontSize: 12.5, color: T.inkSoft, margin: "2px 0 8px" }}>
+              {(estimate.items || []).join(" · ")}
             </div>
-          </>
+            <div style={{ display: "flex", gap: 14, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>
+              <span>{estimate.calories} cal</span>
+              <span style={{ color: T.accentDeep }}>P {estimate.protein_g}g</span>
+              <span style={{ color: T.inkSoft }}>C {estimate.carbs_g}g</span>
+              <span style={{ color: T.inkSoft }}>F {estimate.fat_g}g</span>
+            </div>
+            {estimate.tip && (
+              <div style={{ fontSize: 13, color: T.accentDeep, lineHeight: 1.5, marginBottom: 10 }}>💬 {estimate.tip}</div>
+            )}
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <Btn
+                small
+                onClick={async () => {
+                  await onConfirmEstimate?.();
+                  setMethod(null);
+                }}
+              >
+                {onToday ? "Add to today" : `Add to ${formatLongDay(date)}`}
+              </Btn>
+              <button
+                type="button"
+                onClick={onDiscardEstimate}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: 13,
+                  color: T.inkSoft,
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+              >
+                discard
+              </button>
+              <span style={{ fontSize: 11.5, color: T.inkSoft, marginLeft: "auto" }}>
+                AI estimate · {estimate.confidence} confidence
+              </span>
+            </div>
+          </div>
         )}
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 10 }}>
-        {onToday ? "Add to today" : "Add to this day"}
+      {/* Day's log */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16 }}>
+        <div style={{ fontFamily: FD, fontSize: 17, marginBottom: 8 }}>
+          {onToday ? "Today's log" : `${formatLongDay(date)} log`}
+        </div>
+
+        {entries.length === 0 ? (
+          <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6, padding: "6px 0 10px" }}>
+            Nothing logged this day. Snap, describe, or tap a recipe to add it here.
+          </div>
+        ) : (
+          <>
+            {entries.map((e) =>
+              editingId === e.id && draft ? (
+                <div
+                  key={e.id}
+                  style={{
+                    padding: "10px",
+                    borderBottom: `1px solid ${T.border}`,
+                    background: T.accentSoft,
+                    borderRadius: 12,
+                    marginBottom: 6,
+                  }}
+                >
+                  <input
+                    value={draft.name}
+                    onChange={(ev) => setDraft((d) => ({ ...d, name: ev.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      border: `1.5px solid ${T.border}`,
+                      borderRadius: 10,
+                      fontFamily: F,
+                      marginBottom: 8,
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    {["cal", "p", "c", "f"].map((k) => (
+                      <div key={k} style={{ textAlign: "center" }}>
+                        {numIn(k, 58)}
+                        <div style={{ fontSize: 10, fontWeight: 700, color: T.inkSoft, marginTop: 2 }}>
+                          {k.toUpperCase()}
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+                      <button type="button" style={pill(false)} onClick={saveEdit}>
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeWhileEditing(e.id)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          fontSize: 12.5,
+                          color: T.inkSoft,
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          fontFamily: F,
+                        }}
+                      >
+                        remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => startEdit(e)}
+                  style={{
+                    display: "flex",
+                    width: "100%",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "9px 2px",
+                    border: "none",
+                    borderBottom: `1px solid ${T.border}`,
+                    background: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontFamily: F,
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{e.name}</div>
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        color: e.via === "photo" || e.via === "describe" ? T.accentDeep : T.inkSoft,
+                      }}
+                    >
+                      {VIA_LABEL[e.via] || "adjusted by you"}
+                      {e.via === "photo" || e.via === "describe" ? " · tap to adjust" : ""}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: T.inkSoft, whiteSpace: "nowrap" }}>
+                    {Math.round(e.cal)} cal · P{Math.round(e.p)} C{Math.round(e.c)} F{Math.round(e.f)}
+                  </div>
+                  <span style={{ color: T.inkSoft, fontSize: 15 }}>›</span>
+                </button>
+              ),
+            )}
+
+            {macros && (
+              <>
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  {totCell("CAL", totals.cal, ranges.cal[0], ranges.cal[1], "")}
+                  {totCell("P", totals.p, ranges.p[0], ranges.p[1], "g")}
+                  {totCell("C", totals.c, ranges.c[0], ranges.c[1], "g")}
+                  {totCell("F", totals.f, ranges.f[0], ranges.f[1], "g")}
+                </div>
+                <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.5 }}>
+                  {totalsCaption(totals, ranges)}
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
-
-      {/* Photo */}
-      <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 4 }}>
-        <div style={{ fontSize: 26 }}>📸</div>
-        <div style={{ flex: 1, fontSize: 14, lineHeight: 1.5 }}>
-          <b>Snap your plate</b><br />
-          <span style={{ color: T.inkSoft, fontSize: 13 }}>Photo in, macro estimate out.</span>
-        </div>
-        <label style={{
-          fontFamily: F, fontWeight: 700, fontSize: 13, cursor: busy ? "default" : "pointer",
-          padding: "8px 14px", borderRadius: 999, background: busy ? "#D9C4CE" : T.accent, color: "#fff",
-        }}>
-          {busy ? "Reading…" : "Camera"}
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            disabled={busy}
-            style={{ display: "none" }}
-            onChange={(e) => { onAnalyzePhoto(e.target.files?.[0]); e.target.value = ""; }}
-          />
-        </label>
-      </div>
-      <label style={{
-        display: "inline-block", marginBottom: 14, fontSize: 13, fontWeight: 700, color: T.accent,
-        cursor: busy ? "default" : "pointer", textDecoration: "underline",
-      }}>
-        or choose from your photo library
-        <input
-          type="file"
-          accept="image/*"
-          disabled={busy}
-          style={{ display: "none" }}
-          onChange={(e) => { onAnalyzePhoto(e.target.files?.[0]); e.target.value = ""; }}
-        />
-      </label>
-
-      {/* Describe */}
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>Describe it</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            style={{ ...inputStyle, flex: 1 }}
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-            placeholder="2 eggs and sourdough toast"
-            disabled={busy}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && desc.trim()) {
-                onAnalyzeText(desc.trim());
-                setDesc("");
-              }
-            }}
-          />
-          <Btn
-            small
-            disabled={busy || !desc.trim()}
-            onClick={() => {
-              const text = desc.trim();
-              if (!text) return;
-              onAnalyzeText(text);
-              setDesc("");
-            }}
-          >
-            Estimate
-          </Btn>
-        </div>
-      </div>
-
-      {/* Manual */}
-      <button
-        type="button"
-        onClick={() => setShowManual((v) => !v)}
-        style={{
-          background: "none", border: "none", padding: 0, cursor: "pointer",
-          fontSize: 13, fontWeight: 700, color: T.accent, textDecoration: "underline", marginBottom: showManual ? 10 : 0,
-        }}
-      >
-        {showManual ? "Hide manual entry" : "I know my macros — enter them myself"}
-      </button>
-
-      {showManual && (
-        <div style={{ background: T.accentSoft, borderRadius: 12, padding: "12px 14px", marginTop: 8 }}>
-          <Field label="Meal name">
-            <input
-              style={inputStyle}
-              value={manual.name}
-              onChange={(e) => setManual((m) => ({ ...m, name: e.target.value }))}
-              placeholder="Greek yogurt bowl"
-            />
-          </Field>
-          <div style={{ display: "flex", gap: 8 }}>
-            {[["p", "Protein (g)"], ["c", "Carbs (g)"], ["f", "Fat (g)"]].map(([k, label]) => (
-              <label key={k} style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft, marginBottom: 4 }}>{label}</div>
-                <input
-                  style={{ ...inputStyle, padding: "10px 12px" }}
-                  inputMode="decimal"
-                  value={manual[k]}
-                  onChange={(e) => setManual((m) => ({ ...m, [k]: e.target.value }))}
-                />
-              </label>
-            ))}
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: T.ink }}>
-              {manCal} cal <span style={{ fontWeight: 400, color: T.inkSoft }}>(live)</span>
-            </span>
-            <Btn small disabled={!manual.name.trim()} onClick={submitManual}>{addLabel}</Btn>
-          </div>
-        </div>
-      )}
-
-      {busy && (
-        <div style={{ marginTop: 12, fontSize: 13.5, color: T.inkSoft }}>
-          Looking at your meal… this takes a few seconds.
-        </div>
-      )}
-
-      {estimate?.error && (
-        <div style={{ marginTop: 12, background: T.amberSoft, borderRadius: 12, padding: "10px 14px", fontSize: 13.5, color: T.amber, lineHeight: 1.5 }}>
-          Couldn&apos;t read that one — try a clearer photo from above, or a shorter description of real food.
-        </div>
-      )}
-
-      {estimate && !estimate.error && (
-        <div style={{ marginTop: 12, background: T.accentSoft, borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontFamily: FD, fontSize: 17 }}>{estimate.meal}</div>
-          <div style={{ fontSize: 12.5, color: T.inkSoft, margin: "2px 0 8px" }}>
-            {(estimate.items || []).join(" · ")}
-          </div>
-          <div style={{ display: "flex", gap: 14, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>
-            <span>{estimate.calories} cal</span>
-            <span style={{ color: T.accentDeep }}>P {estimate.protein_g}g</span>
-            <span style={{ color: T.inkSoft }}>C {estimate.carbs_g}g</span>
-            <span style={{ color: T.inkSoft }}>F {estimate.fat_g}g</span>
-          </div>
-          {estimate.tip && (
-            <div style={{ fontSize: 13, color: T.accentDeep, lineHeight: 1.5, marginBottom: 10 }}>💬 {estimate.tip}</div>
-          )}
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Btn small onClick={onConfirmEstimate}>{addLabel}</Btn>
-            <button
-              onClick={onDiscardEstimate}
-              style={{ background: "none", border: "none", fontSize: 13, color: T.inkSoft, cursor: "pointer", textDecoration: "underline" }}
-            >
-              discard
-            </button>
-            <span style={{ fontSize: 11.5, color: T.inkSoft, marginLeft: "auto" }}>
-              AI estimate · {estimate.confidence} confidence
-            </span>
-          </div>
-        </div>
-      )}
-
-      <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 12, lineHeight: 1.45 }}>
-        Recipes from your plan log exact macros. Photos and descriptions are smart estimates — plenty close for living inside your ranges. Past days stay in your history so you can catch up anytime.
-      </div>
-    </Card>
+    </div>
   );
 }

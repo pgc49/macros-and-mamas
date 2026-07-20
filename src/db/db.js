@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase";
 import { DEFAULT_ITEMS, DAYS } from "../content/data";
-import { localDateIso, wkStartOf } from "../utils/dates";
+import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 
 /* ------------------------------------------------------------------ */
 /*  DATA LAYER — per-event Supabase writes (not blob persistence)      */
@@ -112,40 +112,85 @@ function emptyAdminStats() {
   };
 }
 
-async function loadMealLogsForDate(uid, date) {
+/** Normalize legacy `source` into `via` (photo | describe | recipe | manual | adjusted). */
+export function normalizeVia(row) {
+  if (row?.via) return row.via;
+  if (row?.source === "text") return "describe";
+  if (row?.source === "photo" || row?.source === "recipe" || row?.source === "manual" || row?.source === "adjusted") {
+    return row.source;
+  }
+  return "manual";
+}
+
+function viaToLegacySource(via) {
+  if (via === "describe") return "text";
+  return via || "manual";
+}
+
+async function loadMealLogsRange(uid, startDate, endDate) {
+  const withVia = await supabase
+    .from("meal_logs")
+    .select("id, date, name, cal, p, c, f, source, via")
+    .eq("profile_id", uid)
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .order("id", { ascending: true });
+
+  if (!withVia.error) return withVia.data || [];
+
+  console.warn("meal_logs select (with via) failed; retrying", withVia.error);
   const withSource = await supabase
     .from("meal_logs")
     .select("id, date, name, cal, p, c, f, source")
     .eq("profile_id", uid)
-    .eq("date", date)
+    .gte("date", startDate)
+    .lte("date", endDate)
     .order("id", { ascending: true });
 
   if (!withSource.error) return withSource.data || [];
 
-  // Column missing or other meal_logs issue — retry without source, then empty.
   console.warn("meal_logs select (with source) failed; retrying", withSource.error);
-  const withoutSource = await supabase
+  const bare = await supabase
     .from("meal_logs")
     .select("id, date, name, cal, p, c, f")
     .eq("profile_id", uid)
-    .eq("date", date)
+    .gte("date", startDate)
+    .lte("date", endDate)
     .order("id", { ascending: true });
 
-  if (!withoutSource.error) return withoutSource.data || [];
-  console.warn("meal_logs select failed; continuing without day's log", withoutSource.error);
+  if (!bare.error) return bare.data || [];
+  console.warn("meal_logs select failed; continuing without logs", bare.error);
   return [];
 }
 
+async function loadMealLogsForDate(uid, date) {
+  return loadMealLogsRange(uid, date, date);
+}
+
 function mapMealRows(mealRows) {
-  return (mealRows || []).map((r) => ({
-    id: r.id,
-    name: r.name,
-    cal: r.cal,
-    p: r.p,
-    c: r.c,
-    f: r.f,
-    source: r.source || null,
-  }));
+  return (mealRows || []).map((r) => {
+    const via = normalizeVia(r);
+    return {
+      id: r.id,
+      date: r.date,
+      name: r.name,
+      cal: r.cal,
+      p: r.p,
+      c: r.c,
+      f: r.f,
+      via,
+      source: r.source || viaToLegacySource(via),
+    };
+  });
+}
+
+function groupMealRowsByDate(mealRows) {
+  const byDate = {};
+  mapMealRows(mealRows).forEach((e) => {
+    if (!byDate[e.date]) byDate[e.date] = [];
+    byDate[e.date].push(e);
+  });
+  return byDate;
 }
 
 export const db = {
@@ -173,9 +218,11 @@ export const db = {
     if (cErr) throw cErr;
     if (wErr) throw wErr;
 
-    // Meal logs are non-fatal: a missing `source` column (migration not applied)
-    // must not block the whole dashboard / enrollment state.
-    const mealRows = await loadMealLogsForDate(uid, today);
+    // Meal logs are non-fatal: missing via/source columns must not block dashboard.
+    const weekStart = wkStartOf();
+    const weekEnd = addDaysIso(weekStart, 6);
+    const mealRows = await loadMealLogsRange(uid, weekStart, weekEnd);
+    const byDate = groupMealRowsByDate(mealRows);
 
     const checksByWeek = {};
     (checkRows || []).forEach((r) => {
@@ -207,8 +254,10 @@ export const db = {
       weighins: (weighRows || []).map((r) => ({ date: r.date, w: Number(r.weight) })),
       todayLog: {
         date: today,
-        entries: mapMealRows(mealRows),
+        entries: byDate[today] || [],
       },
+      mealLogsByDate: byDate,
+      mealLogWeekStart: weekStart,
     };
   },
 
@@ -216,6 +265,17 @@ export const db = {
     const uid = await requireUserId();
     const mealRows = await loadMealLogsForDate(uid, date);
     return { date, entries: mapMealRows(mealRows) };
+  },
+
+  /** Load one Mon–Sun week of meal logs in a single query (for day-strip dots). */
+  async loadMealLogsWeek(weekStart = wkStartOf()) {
+    const uid = await requireUserId();
+    const end = addDaysIso(weekStart, 6);
+    const mealRows = await loadMealLogsRange(uid, weekStart, end);
+    return {
+      weekStart,
+      byDate: groupMealRowsByDate(mealRows),
+    };
   },
 
   async joinWaitlist({ email, reason, monthsPp = null }) {
@@ -304,6 +364,7 @@ export const db = {
 
   async addMealLog(entry, date = entry?.logged_date || localDateIso()) {
     const uid = await requireUserId();
+    const via = entry.via || normalizeVia({ source: entry.source, via: entry.via });
     const base = {
       profile_id: uid,
       date,
@@ -313,12 +374,19 @@ export const db = {
       c: entry.c,
       f: entry.f,
     };
-    // Prefer writing source; fall back if the column isn't migrated yet.
+    // Prefer via + source; degrade gracefully if columns aren't migrated yet.
     let { data, error } = await supabase
       .from("meal_logs")
-      .insert({ ...base, source: entry.source || null })
-      .select("id, date, name, cal, p, c, f, source")
+      .insert({ ...base, via, source: viaToLegacySource(via) })
+      .select("id, date, name, cal, p, c, f, source, via")
       .single();
+    if (error && /via/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("meal_logs")
+        .insert({ ...base, source: viaToLegacySource(via) })
+        .select("id, date, name, cal, p, c, f, source")
+        .single());
+    }
     if (error && /source/i.test(error.message || "")) {
       ({ data, error } = await supabase
         .from("meal_logs")
@@ -327,7 +395,43 @@ export const db = {
         .single());
     }
     if (error) throw error;
-    return { ...data, source: data.source || entry.source || null };
+    const mapped = mapMealRows([data])[0];
+    return mapped;
+  },
+
+  async updateMealLog(id, patch) {
+    const uid = await requireUserId();
+    const via = patch.via != null ? patch.via : undefined;
+    const fields = {
+      name: patch.name,
+      cal: patch.cal,
+      p: patch.p,
+      c: patch.c,
+      f: patch.f,
+    };
+    if (via != null) {
+      fields.via = via;
+      fields.source = viaToLegacySource(via);
+    }
+    let { data, error } = await supabase
+      .from("meal_logs")
+      .update(fields)
+      .eq("profile_id", uid)
+      .eq("id", id)
+      .select("id, date, name, cal, p, c, f, source, via")
+      .single();
+    if (error && /via/i.test(error.message || "")) {
+      const { via: _v, ...noVia } = fields;
+      ({ data, error } = await supabase
+        .from("meal_logs")
+        .update(noVia)
+        .eq("profile_id", uid)
+        .eq("id", id)
+        .select("id, date, name, cal, p, c, f, source")
+        .single());
+    }
+    if (error) throw error;
+    return mapMealRows([data])[0];
   },
 
   async deleteMealLog(id) {
