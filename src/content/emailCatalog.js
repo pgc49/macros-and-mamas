@@ -24,7 +24,7 @@ When you're ready: personalized macros I build myself, our moms WhatsApp group, 
 
 Callie
 
-(24h follow-up: founding rate ends July 27, then $299. Reply to stop anytime.)`,
+(24h follow-up adds founding-price scarcity. Reply to stop anytime.)`,
   },
   {
     id: "welcome",
