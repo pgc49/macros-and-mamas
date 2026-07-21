@@ -97,14 +97,84 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           text-decoration: underline;
         }
 
-        /* Desktop: text left / photo right — fixed readability, no overlay crop lottery */
+        .mm-body {
+          max-width: 560px;
+          margin: 0 auto;
+          padding: 28px 16px 90px;
+        }
+        .mm-section-title {
+          font-family: ${FD};
+          font-weight: 400;
+          font-size: 24px;
+          margin: 0 0 12px;
+        }
+        .mm-features {
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+        }
+        .mm-feature {
+          display: flex;
+          gap: 14px;
+          align-items: flex-start;
+        }
+        .mm-feature-icon {
+          font-size: 24px;
+          line-height: 1;
+        }
+        .mm-feature-title {
+          font-family: ${FD};
+          font-size: 17px;
+          margin-bottom: 3px;
+        }
+        .mm-feature-body {
+          font-size: 13.5px;
+          color: ${T.inkSoft};
+          line-height: 1.55;
+        }
+        .mm-meet {
+          margin-top: 28px;
+          margin-bottom: 8px;
+        }
+        .mm-meet-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .mm-meet-img {
+          width: 100%;
+          height: auto;
+          display: block;
+          border-radius: 4px;
+          object-fit: cover;
+          aspect-ratio: 3 / 2;
+        }
+        .mm-meet-bio {
+          font-size: 15px;
+          line-height: 1.65;
+          color: ${T.ink};
+          margin: 0;
+        }
+        .mm-footer-cta {
+          margin: 28px 0 6px;
+        }
+        .mm-footer-cta-note {
+          text-align: center;
+          font-size: 12.5px;
+          color: ${T.inkSoft};
+          margin-top: 8px;
+          line-height: 1.45;
+        }
+
+        /* Desktop: shorter hero, wider body, real columns */
         @media (min-width: 900px) {
           .mm-hero {
             display: grid;
-            grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.05fr);
+            grid-template-columns: minmax(340px, 0.95fr) minmax(380px, 1.05fr);
             align-items: stretch;
-            min-height: min(100dvh, 820px);
-            max-height: none;
+            min-height: 0;
+            height: min(72vh, 620px);
+            max-height: 620px;
             background:
               radial-gradient(120% 80% at 0% 100%, ${T.accentSoft} 0%, transparent 55%),
               linear-gradient(165deg, #FFF9F6 0%, ${T.bg} 48%, #F3E8E4 100%);
@@ -113,42 +183,48 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             position: relative;
             inset: auto;
             min-height: 100%;
+            height: 100%;
             order: 2;
           }
           .mm-hero-img {
-            object-position: center 20%;
+            object-position: center 22%;
           }
           .mm-hero-scrim {
             display: none;
           }
           .mm-hero-copy {
             order: 1;
-            max-width: none;
+            max-width: 440px;
             width: auto;
-            margin: 0;
-            padding: clamp(40px, 6vw, 72px) clamp(32px, 4vw, 64px);
+            margin: 0 auto 0 clamp(28px, 5vw, 72px);
+            padding: 36px 28px 36px 0;
             display: flex;
             flex-direction: column;
             justify-content: center;
             color: ${T.ink};
           }
           .mm-hero-brand {
-            font-size: clamp(42px, 4.2vw, 56px);
+            font-size: clamp(36px, 3.6vw, 48px);
             color: ${T.ink};
+            margin-bottom: 2px;
           }
           .mm-hero-kicker {
             color: ${T.accentDeep};
+            margin-bottom: 14px;
           }
           .mm-hero-headline {
-            font-size: clamp(30px, 3.2vw, 40px);
+            font-size: clamp(26px, 2.8vw, 34px);
             color: ${T.ink};
+            margin: 0 0 10px;
           }
           .mm-hero-accent {
             color: ${T.accent};
           }
           .mm-hero-lede {
             color: ${T.inkSoft};
-            max-width: 34ch;
+            max-width: 38ch;
+            margin: 0 0 16px;
+            font-size: 15.5px;
           }
           .mm-hero-cta > button {
             background: ${T.accent} !important;
@@ -162,12 +238,63 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           }
           .mm-hero-signin-wrap {
             text-align: left !important;
+            margin-top: 10px !important;
           }
           .mm-hero-signin {
             color: ${T.accentDeep};
           }
+
+          .mm-body {
+            max-width: 980px;
+            padding: 40px 32px 72px;
+          }
+          .mm-section-title {
+            font-size: 28px;
+            margin: 0 0 18px;
+          }
+          .mm-features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            column-gap: 28px;
+            row-gap: 20px;
+          }
+          .mm-feature {
+            gap: 12px;
+          }
+          .mm-meet {
+            margin-top: 40px;
+            margin-bottom: 12px;
+          }
+          .mm-meet-grid {
+            display: grid;
+            grid-template-columns: 1.05fr 1fr;
+            gap: 28px;
+            align-items: center;
+          }
+          .mm-meet-img {
+            aspect-ratio: 4 / 3;
+            margin: 0;
+          }
+          .mm-meet-bio {
+            font-size: 16px;
+            line-height: 1.7;
+          }
+          .mm-footer-cta {
+            margin: 36px auto 6px;
+            max-width: 420px;
+          }
         }
 
+        @media (min-width: 1200px) {
+          .mm-hero {
+            height: min(68vh, 580px);
+            max-height: 580px;
+          }
+          .mm-body {
+            max-width: 1040px;
+            padding: 48px 40px 80px;
+          }
+        }
       `}</style>
 
       <section className="mm-hero">
@@ -218,45 +345,41 @@ export function SalesPage({ onStartIntake, onSignIn }) {
         </div>
       </section>
 
-      <div style={{ maxWidth: 560, margin: "0 auto", padding: "28px 16px 90px" }}>
-        <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 24, margin: "0 0 12px" }}>What&apos;s inside</h2>
-        {FEATURES.map((f) => (
-          <div key={f.title} style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 18 }}>
-            <div style={{ fontSize: 24, lineHeight: 1 }}>{f.icon}</div>
-            <div>
-              <div style={{ fontFamily: FD, fontSize: 17, marginBottom: 3 }}>{f.title}</div>
-              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>{f.body}</div>
+      <div className="mm-body">
+        <h2 className="mm-section-title">What&apos;s inside</h2>
+        <div className="mm-features">
+          {FEATURES.map((f) => (
+            <div key={f.title} className="mm-feature">
+              <div className="mm-feature-icon">{f.icon}</div>
+              <div>
+                <div className="mm-feature-title">{f.title}</div>
+                <div className="mm-feature-body">{f.body}</div>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
 
-        <section style={{ marginTop: 28, marginBottom: 8 }}>
-          <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 24, margin: "0 0 14px" }}>Meet Callie</h2>
-          <img
-            src="/callie-about.jpg"
-            alt="Callie, founder of Macros and Mamas"
-            width={1200}
-            height={799}
-            loading="lazy"
-            decoding="async"
-            style={{
-              width: "100%",
-              height: "auto",
-              display: "block",
-              borderRadius: 4,
-              marginBottom: 16,
-              objectFit: "cover",
-              aspectRatio: "3 / 2",
-            }}
-          />
-          <p style={{ fontSize: 15, lineHeight: 1.65, color: T.ink, margin: 0 }}>
-            Hi, I&apos;m Callie — certified holistic nutritionist, blood chemistry certified, and a mama in the thick of it myself. I&apos;ve spent years helping women fix their energy, hormones, and gut by looking at what the data actually says instead of what diet culture yells. Macros and Mamas is everything I do with my 1:1 clients, built for postpartum. Ranges, not rules — because I will never hand you a 1,200-calorie plan and call it help.
-          </p>
+        <section className="mm-meet">
+          <h2 className="mm-section-title">Meet Callie</h2>
+          <div className="mm-meet-grid">
+            <img
+              className="mm-meet-img"
+              src="/callie-about.jpg"
+              alt="Callie, founder of Macros and Mamas"
+              width={1200}
+              height={799}
+              loading="lazy"
+              decoding="async"
+            />
+            <p className="mm-meet-bio">
+              Hi, I&apos;m Callie — certified holistic nutritionist, blood chemistry certified, and a mama in the thick of it myself. I&apos;ve spent years helping women fix their energy, hormones, and gut by looking at what the data actually says instead of what diet culture yells. Macros and Mamas is everything I do with my 1:1 clients, built for postpartum. Ranges, not rules — because I will never hand you a 1,200-calorie plan and call it help.
+            </p>
+          </div>
         </section>
 
-        <div style={{ margin: "28px 0 6px" }}>
+        <div className="mm-footer-cta">
           <Btn onClick={onStartIntake} style={{ width: "100%" }}>Join the founding group by July 27 — $149</Btn>
-          <div style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
+          <div className="mm-footer-cta-note">
             Price goes to $299 after the founding group fills
           </div>
         </div>
