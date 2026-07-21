@@ -8,6 +8,7 @@
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
+  email text,
   name text,
   age int,
   phone text,
@@ -111,9 +112,10 @@ declare
   accepted text := new.raw_user_meta_data ->> 'terms_accepted_at';
   version text := new.raw_user_meta_data ->> 'terms_version';
 begin
-  insert into public.profiles (id, terms_accepted_at, terms_version)
+  insert into public.profiles (id, email, terms_accepted_at, terms_version)
   values (
     new.id,
+    nullif(lower(trim(new.email)), ''),
     case when accepted is not null and accepted <> '' then accepted::timestamptz else null end,
     nullif(version, '')
   );

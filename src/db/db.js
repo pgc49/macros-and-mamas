@@ -571,6 +571,7 @@ export const db = {
       return {
         id: p.id,
         name: p.name || (hasIntake ? "Mama" : "New signup"),
+        email: p.email || "",
         age: p.age,
         currentWeight: p.current_weight,
         goalWeight: p.goal_weight,

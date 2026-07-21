@@ -371,6 +371,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             <span style={{ fontFamily: FD, fontSize: 16, color: T.ink }}>{c.name}</span>
             <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
               {STAGE_LABEL[stage] || stage}
+              {c.email ? ` · ${c.email}` : ""}
               {c.hasIntake && c.currentWeight != null ? ` · ${c.currentWeight} → ${c.goalWeight} lbs` : ""}
               {stage === "active" ? ` · Week ${c.week} · ${c.adherence}%` : ""}
             </div>
