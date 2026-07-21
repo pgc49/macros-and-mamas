@@ -509,7 +509,8 @@ export function MealLogCard({
               lineHeight: 1.5,
             }}
           >
-            Couldn&apos;t read that one — try a clearer photo from above, or a shorter description of real food.
+            {estimate.message
+              || "Couldn't read that one — try a clearer photo from above, or a shorter description of real food."}
           </div>
         )}
 
