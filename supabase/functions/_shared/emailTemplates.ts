@@ -49,3 +49,14 @@ export const FROM_CALLIE = "Callie · Macros and Mamas <calista@nourishwithcalis
 export const APP_URL = Deno.env.get("APP_URL") || "https://www.macrosandmamas.com";
 export const CALLIE_NOTIFY_EMAIL =
   Deno.env.get("CALLIE_NOTIFY_EMAIL") || "calista@nourishwithcalista.com";
+/** Co-owner ops alerts (payment / intake / refund). Comma-separated ok. */
+export const OWNER_NOTIFY_EMAIL =
+  Deno.env.get("OWNER_NOTIFY_EMAIL") || "pgchammas@gmail.com";
+
+export function notifyRecipients(): string[] {
+  const raw = [CALLIE_NOTIFY_EMAIL, OWNER_NOTIFY_EMAIL]
+    .flatMap((s) => String(s || "").split(","))
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return [...new Set(raw)];
+}

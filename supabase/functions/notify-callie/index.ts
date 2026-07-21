@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { APP_URL, CALLIE_NOTIFY_EMAIL, FROM_CALLIE } from "../_shared/emailTemplates.ts";
+import { APP_URL, FROM_CALLIE, notifyRecipients } from "../_shared/emailTemplates.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { assertServiceRole } from "../_shared/assertServiceRole.ts";
 
@@ -66,9 +66,12 @@ serve(async (req) => {
       return jsonResponse({ error: "unknown type" }, 400);
     }
 
+    const to = notifyRecipients();
+    if (!to.length) return jsonResponse({ error: "no notify recipients" }, 500);
+
     const { data, error } = await resend.emails.send({
       from: FROM_CALLIE,
-      to: [CALLIE_NOTIFY_EMAIL],
+      to,
       subject,
       text,
     });
