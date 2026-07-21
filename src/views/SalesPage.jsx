@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { T, FD, F } from "../theme/tokens";
-import { FEATURES } from "../content/data";
+import { FEATURES, FAQS } from "../content/data";
 import { Fonts } from "../theme/Fonts";
 import { Btn } from "../components/ui";
 import { PATHS } from "../routing";
@@ -165,6 +165,53 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           margin-top: 8px;
           line-height: 1.45;
         }
+        .mm-faq {
+          margin-top: 32px;
+        }
+        .mm-faq-list {
+          display: flex;
+          flex-direction: column;
+          border-top: 1px solid ${T.border};
+        }
+        .mm-faq-item {
+          border-bottom: 1px solid ${T.border};
+        }
+        .mm-faq-item summary {
+          list-style: none;
+          cursor: pointer;
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px 2px;
+          font-family: ${F};
+          font-size: 15px;
+          font-weight: 700;
+          color: ${T.ink};
+          line-height: 1.35;
+        }
+        .mm-faq-item summary::-webkit-details-marker {
+          display: none;
+        }
+        .mm-faq-item summary::after {
+          content: "+";
+          flex-shrink: 0;
+          font-size: 18px;
+          font-weight: 400;
+          color: ${T.accent};
+          line-height: 1;
+          margin-top: 1px;
+        }
+        .mm-faq-item[open] summary::after {
+          content: "–";
+        }
+        .mm-faq-a {
+          padding: 0 2px 14px;
+          font-size: 13.5px;
+          line-height: 1.6;
+          color: ${T.inkSoft};
+          margin: 0;
+        }
 
         /* Desktop: shorter hero, wider body, real columns */
         @media (min-width: 900px) {
@@ -283,6 +330,28 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             margin: 36px auto 6px;
             max-width: 420px;
           }
+          .mm-faq {
+            margin-top: 44px;
+          }
+          .mm-faq-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            column-gap: 32px;
+            border-top: none;
+          }
+          .mm-faq-item {
+            border-top: 1px solid ${T.border};
+            border-bottom: none;
+          }
+          .mm-faq-item summary {
+            padding: 16px 4px;
+            font-size: 15.5px;
+          }
+          .mm-faq-a {
+            padding: 0 4px 16px;
+            font-size: 14px;
+            line-height: 1.65;
+          }
         }
 
         @media (min-width: 1200px) {
@@ -374,6 +443,18 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             <p className="mm-meet-bio">
               Hi, I&apos;m Callie — certified holistic nutritionist, blood chemistry certified, and a mama in the thick of it myself. I&apos;ve spent years helping women fix their energy, hormones, and gut by looking at what the data actually says instead of what diet culture yells. Macros and Mamas is everything I do with my 1:1 clients, built for postpartum. Ranges, not rules — because I will never hand you a 1,200-calorie plan and call it help.
             </p>
+          </div>
+        </section>
+
+        <section className="mm-faq" aria-label="Frequently asked questions">
+          <h2 className="mm-section-title">FAQ</h2>
+          <div className="mm-faq-list">
+            {FAQS.map((item) => (
+              <details key={item.q} className="mm-faq-item">
+                <summary>{item.q}</summary>
+                <p className="mm-faq-a">{item.a}</p>
+              </details>
+            ))}
           </div>
         </section>
 

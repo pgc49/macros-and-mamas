@@ -74,3 +74,30 @@ export const FEATURES = [
   { icon: "📸", title: "Easy logging, real rhythm", body: "Snap a plate, type what you ate, tap a recipe, or enter macros — your ranges update as you go, and you can backfill a past day. Plus a checklist for water, walks, sunlight, and three strength workouts on the days you choose." },
   { icon: "📈", title: "Progress you can actually see", body: "Weigh-ins by day, habit rhythm, and how you're landing in your macro ranges over time — plus a built-in guardrail: lose faster than 1.5 lbs a week and we tell you to eat more, not less." },
 ];
+
+export const FAQS = [
+  {
+    q: "Who is this for?",
+    a: "Moms ready to lose fat and keep muscle — whether your baby is three months or sixteen years. It's not for pregnancy, and not for the first three months postpartum (or the first three months of nursing).",
+  },
+  {
+    q: "I'm breastfeeding. Can I join?",
+    a: "Yes — from three months postpartum on. Callie sets your macros gently with supply first. If you're earlier than that, wait and come back when you're ready.",
+  },
+  {
+    q: "Is this a low-calorie crash diet?",
+    a: "No. Ranges, not rules — and never a 1,200-calorie plan dressed up as help. If you're losing faster than about 1–1.5 lbs a week, Callie tells you to eat more, not less. Muscle is the point.",
+  },
+  {
+    q: "How do I log food?",
+    a: "Snap a plate, type what you ate, tap a recipe from your plan, or enter macros yourself. Your ranges update as you go, and you can backfill a past day when life gets messy.",
+  },
+  {
+    q: "How do I get Callie?",
+    a: "She's in your pocket Mon–Fri in a private WhatsApp group with the other mamas — voice notes, plate pics, questions. Every Monday she drops a short note that sets the week's focus.",
+  },
+  {
+    q: "What's the founding price?",
+    a: "The founding group is $149 for the full 8 weeks (about $18 a week). After this group fills, the price goes to $299. The founding group kicks off Monday, July 27.",
+  },
+];
