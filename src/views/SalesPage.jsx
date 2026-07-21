@@ -205,7 +205,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
               Join the founding group by July 27 — $149
             </Btn>
             <div className="mm-hero-cta-note">
-              Founding price. Goes to $299+ after this group fills · kicks off Mon, Jul 27.
+              Price goes to $299 after the founding group fills
             </div>
             {onSignIn && (
               <div className="mm-hero-signin-wrap" style={{ textAlign: "center", marginTop: 14 }}>
