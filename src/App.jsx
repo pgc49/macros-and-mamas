@@ -296,8 +296,19 @@ export default function App() {
         body: JSON.stringify(payload),
       });
       const parsed = await resp.json().catch(() => ({}));
-      if (!resp.ok || parsed.error) setEstimate({ error: true });
-      else setEstimate(parsed);
+      if (resp.status === 429) {
+        setEstimate({
+          error: true,
+          message: parsed.message || "Too many AI estimates — try again later or log manually.",
+        });
+      } else if (!resp.ok || parsed.error) {
+        setEstimate({
+          error: true,
+          message: parsed.error === "not food"
+            ? "That didn't look like a meal — try another photo or describe what you ate."
+            : undefined,
+        });
+      } else setEstimate(parsed);
     } catch (e) {
       console.error("estimate failed", e);
       setEstimate({ error: true });
