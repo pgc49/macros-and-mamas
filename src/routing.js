@@ -12,6 +12,7 @@ export const PATHS = {
   admin: "/admin",
   terms: "/terms",
   privacy: "/privacy",
+  resetPassword: "/reset-password",
 };
 
 /**

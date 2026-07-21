@@ -9,6 +9,8 @@ const AuthContext = createContext({
   loading: true,
   signInWithPassword: async () => ({ error: null }),
   signUpWithPassword: async () => ({ error: null, needsEmailConfirm: false }),
+  resetPasswordForEmail: async () => ({ error: null }),
+  updatePassword: async () => ({ error: null }),
   signOut: async () => {},
   refreshProfile: async () => {},
 });
@@ -55,12 +57,20 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
       if (nextSession?.user) await refreshProfile(nextSession.user.id);
       else setProfile(null);
       setLoading(false);
+
+      // Recovery link lands with a temporary session — send them to set a new password.
+      if (event === "PASSWORD_RECOVERY") {
+        const path = window.location.pathname;
+        if (path !== "/reset-password") {
+          window.location.assign(`${window.location.origin}/reset-password`);
+        }
+      }
     });
 
     return () => {
@@ -117,6 +127,18 @@ export function AuthProvider({ children }) {
     setProfile(null);
   };
 
+  const resetPasswordForEmail = async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    return { error };
+  };
+
+  const updatePassword = async (password) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    return { error };
+  };
+
   const value = {
     user,
     session,
@@ -125,6 +147,8 @@ export function AuthProvider({ children }) {
     loading,
     signInWithPassword,
     signUpWithPassword,
+    resetPasswordForEmail,
+    updatePassword,
     signOut,
     refreshProfile,
   };

@@ -16,6 +16,7 @@ import { JoinPage } from "./views/JoinPage";
 import { WelcomePage } from "./views/WelcomePage";
 import { GoodbyePage } from "./views/GoodbyePage";
 import { SignInPage } from "./views/SignInPage";
+import { ResetPasswordPage } from "./views/ResetPasswordPage";
 import { TermsPage } from "./views/TermsPage";
 import { PrivacyPage } from "./views/PrivacyPage";
 import { ClientApp } from "./views/ClientApp";
@@ -701,6 +702,7 @@ export default function App() {
 
       <Route path={PATHS.terms} element={<TermsPage />} />
       <Route path={PATHS.privacy} element={<PrivacyPage />} />
+      <Route path={PATHS.resetPassword} element={<ResetPasswordPage />} />
 
       <Route
         path={PATHS.signin}

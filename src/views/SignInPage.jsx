@@ -16,18 +16,35 @@ export function SignInPage({
   mode = "signin", // "create" | "signin"
   onSwitchMode,
 }) {
-  const { signInWithPassword, signUpWithPassword } = useAuth();
+  const { signInWithPassword, signUpWithPassword, resetPasswordForEmail } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [forgotMode, setForgotMode] = useState(false);
 
   const isCreate = mode === "create";
 
   const submit = async () => {
-    if (!email.trim() || !password) return;
+    if (!email.trim()) return;
+
+    if (forgotMode) {
+      setBusy(true);
+      setError("");
+      setInfo("");
+      const { error: err } = await resetPasswordForEmail(email);
+      setBusy(false);
+      if (err) {
+        setError(err.message || "Could not send reset email.");
+        return;
+      }
+      setInfo("If an account exists for that email, you’ll get a reset link shortly. Check spam too.");
+      return;
+    }
+
+    if (!password) return;
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
       return;
@@ -71,12 +88,14 @@ export function SignInPage({
     <Shell>
       <Card style={{ marginTop: 24, padding: 28 }}>
         <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "0 0 8px" }}>
-          {isCreate ? "Create your account" : "Welcome back"}
+          {forgotMode ? "Reset your password" : isCreate ? "Create your account" : "Welcome back"}
         </h2>
         <p style={{ fontSize: 14.5, lineHeight: 1.55, color: T.inkSoft, margin: "0 0 18px" }}>
-          {isCreate
-            ? "Create an account to join the founding group. Next you'll pay $149, then complete a short intake so Callie can build your macros."
-            : "Sign in with the email you used when you enrolled."}
+          {forgotMode
+            ? "Enter the email you enrolled with. We’ll send a link to choose a new password."
+            : isCreate
+              ? "Create an account to join the founding group. Next you'll pay $149, then complete a short intake so Callie can build your macros."
+              : "Sign in with the email you used when you enrolled."}
         </p>
 
         <Field label="Email">
@@ -89,19 +108,33 @@ export function SignInPage({
             placeholder="you@email.com"
           />
         </Field>
-        <Field label="Password">
-          <input
-            style={inputStyle}
-            type="password"
-            autoComplete={isCreate ? "new-password" : "current-password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 6 characters"
-            onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-          />
-        </Field>
+        {!forgotMode && (
+          <Field label="Password">
+            <input
+              style={inputStyle}
+              type="password"
+              autoComplete={isCreate ? "new-password" : "current-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 6 characters"
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+            />
+          </Field>
+        )}
 
-        {isCreate && (
+        {!isCreate && !forgotMode && (
+          <div style={{ textAlign: "right", marginTop: -6, marginBottom: 14 }}>
+            <button
+              type="button"
+              onClick={() => { setForgotMode(true); setError(""); setInfo(""); }}
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, fontWeight: 700, color: T.accent, textDecoration: "underline" }}
+            >
+              Forgot password?
+            </button>
+          </div>
+        )}
+
+        {isCreate && !forgotMode && (
           <label
             style={{
               display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14,
@@ -154,13 +187,25 @@ export function SignInPage({
 
         <Btn
           style={{ width: "100%" }}
-          disabled={busy || !email.trim() || !password || (isCreate && !agreeTerms)}
+          disabled={busy || !email.trim() || (!forgotMode && !password) || (isCreate && !forgotMode && !agreeTerms)}
           onClick={submit}
         >
-          {busy ? "Working…" : isCreate ? "Create account" : "Sign in"}
+          {busy ? "Working…" : forgotMode ? "Send reset link" : isCreate ? "Create account" : "Sign in"}
         </Btn>
 
-        {onSwitchMode && (
+        {forgotMode && (
+          <p style={{ textAlign: "center", fontSize: 13.5, color: T.inkSoft, margin: "16px 0 0" }}>
+            <button
+              type="button"
+              onClick={() => { setForgotMode(false); setError(""); setInfo(""); }}
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 700, color: T.accent, textDecoration: "underline" }}
+            >
+              Back to sign in
+            </button>
+          </p>
+        )}
+
+        {onSwitchMode && !forgotMode && (
           <p style={{ textAlign: "center", fontSize: 13.5, color: T.inkSoft, margin: "16px 0 0" }}>
             {isCreate ? (
               <>
