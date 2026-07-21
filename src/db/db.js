@@ -509,15 +509,23 @@ export const db = {
   },
 
   async loadRoster() {
-    // Full admin directory: every profile (funnel + approved clients).
+    // Full admin directory: every client profile (funnel + approved).
+    // Admins (and the signed-in admin user) are excluded from counts + list.
     // RLS: only admins can select all profiles / email_events.
-    const { data: profiles, error: pErr } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const [{ data: { user } }, { data: profiles, error: pErr }] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+    ]);
     if (pErr) throw pErr;
 
-    const ids = (profiles || []).map((p) => p.id);
+    const selfId = user?.id || null;
+    const clientProfiles = (profiles || []).filter((p) => {
+      if (selfId && p.id === selfId) return false;
+      if (String(p.role || "").toLowerCase() === "admin") return false;
+      return true;
+    });
+
+    const ids = clientProfiles.map((p) => p.id);
     if (!ids.length) return { clients: [], stats: emptyAdminStats() };
 
     const curWk = wkStartOf();
@@ -546,7 +554,7 @@ export const db = {
       checksBy[c.profile_id].push(c);
     });
 
-    const clients = (profiles || []).map((p) => {
+    const clients = clientProfiles.map((p) => {
       const m = macrosBy[p.id] || null;
       const approved = !!(m?.approved || p.status === "active");
       const paid = !!p.paid;
@@ -596,15 +604,14 @@ export const db = {
       };
     });
 
-    const nonAdmin = clients.filter((c) => c.role !== "admin");
     const stats = {
-      signups: nonAdmin.length,
-      paid: nonAdmin.filter((c) => c.paid && !c.refunded).length,
-      unpaid: nonAdmin.filter((c) => !c.paid && !c.refunded).length,
-      awaitingIntake: nonAdmin.filter((c) => c.stage === "paid_awaiting_intake").length,
-      awaitingApproval: nonAdmin.filter((c) => c.stage === "awaiting_approval").length,
-      active: nonAdmin.filter((c) => c.stage === "active").length,
-      refunded: nonAdmin.filter((c) => c.stage === "refunded").length,
+      signups: clients.length,
+      paid: clients.filter((c) => c.paid && !c.refunded).length,
+      unpaid: clients.filter((c) => !c.paid && !c.refunded).length,
+      awaitingIntake: clients.filter((c) => c.stage === "paid_awaiting_intake").length,
+      awaitingApproval: clients.filter((c) => c.stage === "awaiting_approval").length,
+      active: clients.filter((c) => c.stage === "active").length,
+      refunded: clients.filter((c) => c.stage === "refunded").length,
     };
 
     return { clients, stats };
