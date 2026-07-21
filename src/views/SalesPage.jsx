@@ -251,7 +251,10 @@ export function SalesPage({ onStartIntake, onSignIn }) {
         </div>
 
         <div style={{ margin: "22px 0 6px" }}>
-          <Btn onClick={onStartIntake} style={{ width: "100%" }}>Join the founding group — $149</Btn>
+          <Btn onClick={onStartIntake} style={{ width: "100%" }}>Join the founding group by July 27 — $149</Btn>
+          <div style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
+            Founding price. Group kicks off Mon, Jul 27 — then this price closes.
+          </div>
         </div>
 
         <p style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, margin: "18px 0 0" }}>
