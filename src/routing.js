@@ -11,6 +11,7 @@ export const PATHS = {
   dashboard: "/dashboard",
   admin: "/admin",
   terms: "/terms",
+  privacy: "/privacy",
 };
 
 /**

@@ -17,6 +17,7 @@ import { WelcomePage } from "./views/WelcomePage";
 import { GoodbyePage } from "./views/GoodbyePage";
 import { SignInPage } from "./views/SignInPage";
 import { TermsPage } from "./views/TermsPage";
+import { PrivacyPage } from "./views/PrivacyPage";
 import { ClientApp } from "./views/ClientApp";
 import { AdminPortal } from "./admin/AdminPortal";
 import { Shell } from "./components/ui";
@@ -688,6 +689,7 @@ export default function App() {
       <Route path="/home" element={<Navigate to={PATHS.dashboard} replace />} />
 
       <Route path={PATHS.terms} element={<TermsPage />} />
+      <Route path={PATHS.privacy} element={<PrivacyPage />} />
 
       <Route
         path={PATHS.signin}

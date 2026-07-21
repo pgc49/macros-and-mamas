@@ -441,10 +441,10 @@ export function SalesPage({ onStartIntake, onSignIn }) {
               onClick={onStartIntake}
               style={{ width: "100%", background: "#fff", color: T.accentDeep }}
             >
-              Join the founding group by July 27 — $149
+              Join the founding group — $149
             </Btn>
             <div className="mm-hero-cta-note">
-              Price goes to $299 after the founding group fills
+              Founding rate ends July 27. Price goes to $299 after that.
             </div>
             {onSignIn && (
               <div className="mm-hero-signin-wrap" style={{ textAlign: "center", marginTop: 14 }}>
@@ -511,9 +511,9 @@ export function SalesPage({ onStartIntake, onSignIn }) {
         </section>
 
         <div className="mm-footer-cta">
-          <Btn onClick={onStartIntake} style={{ width: "100%" }}>Join the founding group by July 27 — $149</Btn>
+          <Btn onClick={onStartIntake} style={{ width: "100%" }}>Join the founding group — $149</Btn>
           <div className="mm-footer-cta-note">
-            Price goes to $299 after the founding group fills
+            Founding rate ends July 27. Price goes to $299 after that.
           </div>
         </div>
 
@@ -528,16 +528,6 @@ export function SalesPage({ onStartIntake, onSignIn }) {
               <path d="M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9A5.5 5.5 0 0 1 16.5 22h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2zm0 2A3.5 3.5 0 0 0 4 7.5v9A3.5 3.5 0 0 0 7.5 20h9a3.5 3.5 0 0 0 3.5-3.5v-9A3.5 3.5 0 0 0 16.5 4h-9zm9.75 1.5a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
             </svg>
           </a>
-          <a
-            href="https://www.linkedin.com/in/calista-chammas-b5570020/"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Callie on LinkedIn"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4.98 3.5C4.98 4.88 3.87 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1s2.48 1.12 2.48 2.5zM.25 8.25h4.5V23H.25V8.25zM8.5 8.25h4.31v2.01h.06c.6-1.14 2.07-2.34 4.26-2.34 4.56 0 5.4 3 5.4 6.9V23h-4.5v-7.66c0-1.83-.03-4.18-2.55-4.18-2.55 0-2.94 1.99-2.94 4.05V23H8.5V8.25z" />
-            </svg>
-          </a>
         </div>
 
         <p className="mm-legal">
@@ -546,6 +536,13 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             style={{ fontFamily: F, fontWeight: 700, color: T.accent, textDecoration: "underline" }}
           >
             Terms and Conditions
+          </Link>
+          {" · "}
+          <Link
+            to={PATHS.privacy}
+            style={{ fontFamily: F, fontWeight: 700, color: T.accent, textDecoration: "underline" }}
+          >
+            Privacy Policy
           </Link>
         </p>
       </div>

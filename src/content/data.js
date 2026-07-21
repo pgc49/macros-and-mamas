@@ -89,15 +89,15 @@ export const FAQS = [
     a: "No. Ranges, not rules — and never a 1,200-calorie plan dressed up as help. If you're losing faster than about 1–1.5 lbs a week, Callie tells you to eat more, not less. Muscle is the point.",
   },
   {
-    q: "How do I log food?",
-    a: "Snap a plate, type what you ate, tap a recipe from your plan, or enter macros yourself. Your ranges update as you go, and you can backfill a past day when life gets messy.",
+    q: "How much access do I get to Callie?",
+    a: "I'm in our private WhatsApp group Monday through Friday, answering in voice notes. Ask me anything — plate pics, plateaus, \"is this enough protein,\" the 4pm snack spiral. Every Monday I drop a short voice note setting the week's focus. You're not buying a PDF and a good luck; you're getting me for eight weeks.",
   },
   {
-    q: "How do I get Callie?",
-    a: "She's in your pocket Mon–Fri in a private WhatsApp group with the other mamas — voice notes, plate pics, questions. Every Monday she drops a short note that sets the week's focus.",
+    q: "Do I need a gym?",
+    a: "Nope. Three strength or sculpt sessions a week is the goal, and that can happen in your living room with bands, dumbbells, or just your body weight while the baby naps. Do what fits your life. The consistency matters more than the equipment.",
   },
   {
-    q: "What's the founding price?",
-    a: "The founding group is $149 for the full 8 weeks (about $18 a week). After this group fills, the price goes to $299. The founding group kicks off Monday, July 27.",
+    q: "What if I have a bad week?",
+    a: "You will. Teething, travel, a stomach bug, a week where dinner is whatever's in the freezer. That's not falling off — that's life with kids. Your tracker rolls into a fresh week every Monday, and I'm right there in the group when you want to talk it through.",
   },
 ];
