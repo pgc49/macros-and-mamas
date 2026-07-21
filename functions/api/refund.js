@@ -9,7 +9,7 @@
 
 import { loadUserContact, sendRefundEmails } from "../_shared/supabaseEmail.js";
 
-const ALLOWED_REASONS = new Set(["pregnant", "early_nursing", "diet"]);
+const ALLOWED_REASONS = new Set(["pregnant", "early_nursing"]);
 
 export async function onRequestPost({ request, env }) {
   try {

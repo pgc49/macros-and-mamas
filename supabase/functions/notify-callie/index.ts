@@ -44,6 +44,9 @@ serve(async (req) => {
         s.breastfeeding != null
           ? `Breastfeeding: ${s.breastfeeding ? "yes" : "no"}${s.monthsPP != null ? ` (${s.monthsPP} mo pp)` : ""}`
           : "",
+        s.diet && s.diet !== "none"
+          ? `⚠️ Diet: ${s.diet} — connect before approving (no auto-refund)`
+          : "",
         s.tastes ? `Tastes: ${s.tastes}` : "",
         s.seasonNote ? `Season note: ${s.seasonNote}` : "",
         s.phone ? `Phone: ${s.phone}` : "",

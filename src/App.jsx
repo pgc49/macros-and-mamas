@@ -200,8 +200,8 @@ export default function App() {
     }
   };
 
-  /* Gating: pregnant + early nursing are handled inline on step 2 (post-pay).
-     Diet gate still runs here; both paths issue a full refund when paid. */
+  /* Gating: pregnant + early nursing auto-refund (post-pay).
+     Diet (veg/vegan) does NOT auto-refund — intake still goes to Callie to connect first. */
   const submitIntake = async () => {
     if (profile.pregnant) {
       await runEligibilityRefund("pregnant");
@@ -210,11 +210,6 @@ export default function App() {
     }
     if (profile.breastfeeding && Number(profile.monthsPP) < 3) {
       await runEligibilityRefund("early_nursing");
-      navigate(PATHS.declined);
-      return;
-    }
-    if (profile.diet !== "none") {
-      await runEligibilityRefund("diet");
       navigate(PATHS.declined);
       return;
     }
@@ -247,6 +242,7 @@ export default function App() {
               breastfeeding: forEngine.breastfeeding,
               monthsPP: forEngine.monthsPP,
               phone: forEngine.phone,
+              diet: forEngine.diet,
               tastes: [forEngine.prefB, forEngine.prefL, forEngine.prefD].filter(Boolean).join(" · "),
               seasonNote: forEngine.seasonNote,
             }),

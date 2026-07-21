@@ -21,6 +21,7 @@ export async function onRequestPost({ request, env }) {
       goalWeight: body.goalWeight ?? profile.goal_weight ?? null,
       breastfeeding: body.breastfeeding ?? profile.breastfeeding ?? null,
       monthsPP: body.monthsPP ?? profile.months_pp ?? null,
+      diet: body.diet ?? profile.diet ?? null,
       phone: body.phone ?? profile.phone ?? null,
       tastes: body.tastes
         || [profile.pref_b, profile.pref_l, profile.pref_d].filter(Boolean).join(" · ")

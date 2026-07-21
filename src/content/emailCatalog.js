@@ -120,6 +120,8 @@ Your first 48 hours, and this is the whole assignment:
 2. Tomorrow morning: log your weigh-in.
 3. In the group: say hi. That's it.
 
+One phone tip that makes this feel like an app: open macrosandmamas.com in Safari (iPhone) or Chrome (Android), tap Share, then Add to Home Screen. You'll get an icon on your phone — tap it anytime and you're right back in your dashboard. No App Store needed.
+
 Small on purpose. Mamas who do these three in the first two days are the ones standing in their week-8 photos amazed. Let's go.
 
 Callie`,
@@ -129,8 +131,8 @@ Callie`,
     number: 6,
     name: "Not this time + refund",
     status: "live",
-    trigger: "Eligibility decline after payment (pregnant / early nursing / diet)",
-    subject: "Depends on reason (congratulations / not yet / not the right fit)",
+    trigger: "Eligibility decline after payment (pregnant / early nursing only — diet is Callie review, no auto-refund)",
+    subject: "Depends on reason (congratulations / not yet)",
     audience: "Client",
     cta: null,
     bodyPreview: `Hi [First name],

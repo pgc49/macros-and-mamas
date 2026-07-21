@@ -37,6 +37,7 @@ serve(async (req) => {
             <li><b>Tomorrow morning:</b> log your weigh-in.</li>
             <li><b>In the group:</b> say hi. That's it.</li>
           </ol>
+          <p><b>One phone tip that makes this feel like an app:</b> open macrosandmamas.com in Safari (iPhone) or Chrome (Android), tap Share, then <b>Add to Home Screen</b>. You'll get an icon on your phone — tap it anytime and you're right back in your dashboard. No App Store needed.</p>
           <p>Small on purpose. Mamas who do these three in the first two days are the ones standing in their week-8 photos amazed. Let's go.</p>
           <p>Callie</p>
         `,
