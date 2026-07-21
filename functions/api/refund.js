@@ -3,7 +3,8 @@
    ==================================================================
    Authed. Issues Stripe refund on stored payment_intent, sets
    profiles.refunded=true / paid=false, logs row in refunds.
-   Only for pre-approval eligibility declines (pregnant / early nursing / diet).
+   Only for pre-approval eligibility declines (pregnant / early nursing).
+   Diet (veg/vegan) is Callie review — not auto-refunded.
    Secrets: STRIPE_SECRET_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
    ================================================================== */
 
