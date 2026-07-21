@@ -512,13 +512,14 @@ export const db = {
     // Full admin directory: every client profile (funnel + approved).
     // Admins (and the signed-in admin user) are excluded from counts + list.
     // RLS: only admins can select all profiles / email_events.
-    const [{ data: { user } }, { data: profiles, error: pErr }] = await Promise.all([
+    const [authRes, profilesRes] = await Promise.all([
       supabase.auth.getUser(),
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
     ]);
+    const { data: profiles, error: pErr } = profilesRes;
     if (pErr) throw pErr;
 
-    const selfId = user?.id || null;
+    const selfId = authRes?.data?.user?.id || null;
     const clientProfiles = (profiles || []).filter((p) => {
       if (selfId && p.id === selfId) return false;
       if (String(p.role || "").toLowerCase() === "admin") return false;
