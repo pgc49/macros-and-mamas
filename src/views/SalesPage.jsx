@@ -230,8 +230,32 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           </div>
         ))}
 
+        <section style={{ marginTop: 28, marginBottom: 8 }}>
+          <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 24, margin: "0 0 14px" }}>Meet Callie</h2>
+          <img
+            src="/callie-about.jpg"
+            alt="Callie, founder of Macros and Mamas"
+            width={1200}
+            height={799}
+            loading="lazy"
+            decoding="async"
+            style={{
+              width: "100%",
+              height: "auto",
+              display: "block",
+              borderRadius: 4,
+              marginBottom: 16,
+              objectFit: "cover",
+              aspectRatio: "3 / 2",
+            }}
+          />
+          <p style={{ fontSize: 15, lineHeight: 1.65, color: T.ink, margin: 0 }}>
+            Hi, I&apos;m Callie — certified holistic nutritionist, blood chemistry certified, and a mama in the thick of it myself. I&apos;ve spent years helping women fix their energy, hormones, and gut by looking at what the data actually says instead of what diet culture yells. Macros and Mamas is everything I do with my 1:1 clients, built for postpartum. Ranges, not rules — because I will never hand you a 1,200-calorie plan and call it help.
+          </p>
+        </section>
+
         <div style={{
-          marginTop: 8, padding: "16px 0",
+          marginTop: 22, padding: "16px 0",
           borderTop: `1px solid ${T.border}`,
           borderBottom: `1px solid ${T.border}`,
         }}>
