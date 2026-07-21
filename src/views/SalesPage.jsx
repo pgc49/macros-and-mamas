@@ -254,31 +254,14 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           </p>
         </section>
 
-        <div style={{
-          marginTop: 22, padding: "16px 0",
-          borderTop: `1px solid ${T.border}`,
-          borderBottom: `1px solid ${T.border}`,
-        }}>
-          <div style={{ fontSize: 14, lineHeight: 1.6, color: T.accentDeep }}>
-            <b>The promise:</b> we never crash. Losing faster than 1–1.5 lbs a week means you&apos;re losing muscle, and muscle is the whole point. We eat enough, we lift, we lose fat.
-          </div>
-        </div>
-
-        <div style={{ marginTop: 22 }}>
-          <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 6 }}>Who this is for</div>
-          <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.7 }}>
-            Moms ready to lose the weight and build strength — whether your baby is three months or sixteen years. Breastfeeding mamas are welcome from three months postpartum (your macros are set gently; supply comes first).{" "}
-            <span style={{ fontWeight: 700, color: T.accentDeep }}>
-              Not for pregnancy or the first three months of nursing.
-            </span>
-          </div>
-        </div>
-
-        <div style={{ margin: "22px 0 6px" }}>
+        <div style={{ margin: "28px 0 6px" }}>
           <Btn onClick={onStartIntake} style={{ width: "100%" }}>Join the founding group by July 27 — $149</Btn>
           <div style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
             Price goes to $299 after the founding group fills
           </div>
+          <p style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, margin: "12px 0 0", lineHeight: 1.5 }}>
+            For moms from three months postpartum on — including breastfeeding. Not for pregnancy or the first three months of nursing.
+          </p>
         </div>
 
         <p style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, margin: "18px 0 0" }}>
