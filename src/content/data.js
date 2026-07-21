@@ -78,7 +78,7 @@ export const FEATURES = [
 export const FAQS = [
   {
     q: "Who is this for?",
-    a: "Moms and women ready to lose fat and gain muscle — whether you have a baby at home, kids in high school, or no kids at all. You don't have to be postpartum or a mom to join. It's not for pregnancy, and not for the first three months postpartum (or the first three months of nursing).",
+    a: "Moms and women ready to lose fat and gain muscle — whether you have a baby at home, kids in high school, or no kids at all. You don't have to be postpartum or a mom to join. It's not for pregnancy, and not for the first three months postpartum.",
   },
   {
     q: "I'm breastfeeding. Can I join?",
