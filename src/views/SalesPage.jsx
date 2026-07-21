@@ -205,7 +205,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
               Join the founding group by July 27 — $149
             </Btn>
             <div className="mm-hero-cta-note">
-              Founding price. Group kicks off Mon, Jul 27 — then this price closes.
+              Founding price. Goes to $299+ after this group fills · kicks off Mon, Jul 27.
             </div>
             {onSignIn && (
               <div className="mm-hero-signin-wrap" style={{ textAlign: "center", marginTop: 14 }}>
@@ -253,7 +253,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
         <div style={{ margin: "22px 0 6px" }}>
           <Btn onClick={onStartIntake} style={{ width: "100%" }}>Join the founding group by July 27 — $149</Btn>
           <div style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
-            Founding price. Group kicks off Mon, Jul 27 — then this price closes.
+            Founding price. Goes to $299+ after this group fills · kicks off Mon, Jul 27.
           </div>
         </div>
 
