@@ -78,7 +78,7 @@ export const FEATURES = [
 export const FAQS = [
   {
     q: "Who is this for?",
-    a: "Moms ready to lose fat and keep muscle — whether your baby is three months or sixteen years. It's not for pregnancy, and not for the first three months postpartum (or the first three months of nursing).",
+    a: "Moms and women ready to lose fat and keep muscle — whether you have a baby at home, kids in high school, or no kids at all. You don't have to be postpartum or a mom to join. It's not for pregnancy, and not for the first three months postpartum (or the first three months of nursing).",
   },
   {
     q: "I'm breastfeeding. Can I join?",
@@ -89,6 +89,10 @@ export const FAQS = [
     a: "No. Ranges, not rules — and never a 1,200-calorie plan dressed up as help. If you're losing faster than about 1–1.5 lbs a week, Callie tells you to eat more, not less. Muscle is the point.",
   },
   {
+    q: "Are there additional expenses I have to cover?",
+    a: "No shakes, no proprietary products, no shopping list of expensive specialty foods. This is about tweaking the meals you already enjoy so they fit your macro ranges — groceries you recognize, food your family will actually eat.",
+  },
+  {
     q: "How much access do I get to Callie?",
     a: "I'm in our private WhatsApp group Monday through Friday, answering in voice notes. Ask me anything — plate pics, plateaus, \"is this enough protein,\" the 4pm snack spiral. Every Monday I drop a short voice note setting the week's focus. You're not buying a PDF and a good luck; you're getting me for eight weeks.",
   },
@@ -97,7 +101,11 @@ export const FAQS = [
     a: "Nope. Three strength or sculpt sessions a week is the goal, and that can happen in your living room with bands, dumbbells, or just your body weight while the baby naps. Do what fits your life. The consistency matters more than the equipment.",
   },
   {
+    q: "Do I have to count macros forever?",
+    a: "Absolutely not, and that's the point. I tracked for eight weeks, lost 11 pounds, stopped tracking for three months, and kept it off — because by then I knew what my plates looked like. Eight weeks of paying attention buys you years of intuition.",
+  },
+  {
     q: "What if I have a bad week?",
-    a: "You will. Teething, travel, a stomach bug, a week where dinner is whatever's in the freezer. That's not falling off — that's life with kids. Your tracker rolls into a fresh week every Monday, and I'm right there in the group when you want to talk it through.",
+    a: "You will. Teething, travel, a stomach bug, a week where dinner is whatever's in the freezer. That's not falling off — that's life with kids (and life without them). Your tracker rolls into a fresh week every Monday, and I'm right there in the group when you want to talk it through.",
   },
 ];
