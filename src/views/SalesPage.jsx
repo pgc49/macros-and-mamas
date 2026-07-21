@@ -259,9 +259,6 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           <div style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
             Price goes to $299 after the founding group fills
           </div>
-          <p style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, margin: "12px 0 0", lineHeight: 1.5 }}>
-            For moms from three months postpartum on — including breastfeeding. Not for pregnancy or the first three months of nursing.
-          </p>
         </div>
 
         <p style={{ textAlign: "center", fontSize: 12.5, color: T.inkSoft, margin: "18px 0 0" }}>
