@@ -19,6 +19,11 @@ Stripe keys stay on **Cloudflare** — do not add them here.
 
 #7 / #8 / Callie D (quiet check-in, graduation) not wired yet.
 
+## Auth
+
+All email functions require the **service role** Bearer token (Cloudflare → Edge Function).
+Anon / user JWTs are rejected with 403.
+
 ## Remote deploy (no Mac)
 
 GitHub Action `.github/workflows/deploy-supabase-functions.yml` deploys on push to `main` when `SUPABASE_ACCESS_TOKEN` is set in repo secrets.
@@ -40,6 +45,8 @@ supabase functions deploy application-approved --project-ref reangkqbsazwxvrqvsd
 supabase functions deploy intake-received --project-ref reangkqbsazwxvrqvsdo
 supabase functions deploy eligibility-refund --project-ref reangkqbsazwxvrqvsdo
 supabase functions deploy notify-callie --project-ref reangkqbsazwxvrqvsdo
+supabase functions deploy finish-joining --project-ref reangkqbsazwxvrqvsdo
+supabase functions deploy intake-reminder --project-ref reangkqbsazwxvrqvsdo
 ```
 
 Cloudflare already has `SUPABASE_SERVICE_ROLE_KEY` for the webhook; that same key invokes these functions.

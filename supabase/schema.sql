@@ -167,11 +167,10 @@ create policy "profiles_select_own_or_admin"
   to authenticated
   using (id = auth.uid() or public.is_admin());
 
+-- Inserts come from handle_new_user (SECURITY DEFINER). Clients must not
+-- insert/delete profiles (blocks delete+reinsert admin escalation).
 drop policy if exists "profiles_insert_own" on public.profiles;
-create policy "profiles_insert_own"
-  on public.profiles for insert
-  to authenticated
-  with check (id = auth.uid());
+drop policy if exists "profiles_delete_own" on public.profiles;
 
 drop policy if exists "profiles_update_own_or_admin" on public.profiles;
 create policy "profiles_update_own_or_admin"
@@ -179,12 +178,6 @@ create policy "profiles_update_own_or_admin"
   to authenticated
   using (id = auth.uid() or public.is_admin())
   with check (id = auth.uid() or public.is_admin());
-
-drop policy if exists "profiles_delete_own" on public.profiles;
-create policy "profiles_delete_own"
-  on public.profiles for delete
-  to authenticated
-  using (id = auth.uid());
 
 -- macros
 drop policy if exists "macros_select_own_or_admin" on public.macros;
@@ -360,6 +353,81 @@ drop trigger if exists profiles_protect_payment on public.profiles;
 create trigger profiles_protect_payment
   before update on public.profiles
   for each row execute function public.protect_payment_columns();
+
+create or replace function public.protect_profile_privileges()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.role() = 'service_role' then
+    return new;
+  end if;
+
+  if public.is_admin() then
+    return new;
+  end if;
+
+  if TG_OP = 'INSERT' then
+    new.role := 'client';
+    new.paid := false;
+    new.refunded := false;
+    new.stripe_customer_id := null;
+    new.stripe_payment_intent := null;
+    new.paid_at := null;
+    if new.status = 'active' then
+      new.status := 'pending';
+    end if;
+    return new;
+  end if;
+
+  new.paid := old.paid;
+  new.refunded := old.refunded;
+  new.stripe_customer_id := old.stripe_customer_id;
+  new.stripe_payment_intent := old.stripe_payment_intent;
+  new.paid_at := old.paid_at;
+  new.role := old.role;
+  if new.status is distinct from old.status and new.status = 'active' then
+    new.status := old.status;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_protect_privileges_insert on public.profiles;
+create trigger profiles_protect_privileges_insert
+  before insert on public.profiles
+  for each row execute function public.protect_profile_privileges();
+
+create or replace function public.protect_macros_approval()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.role() = 'service_role' then
+    return new;
+  end if;
+
+  if public.is_admin() then
+    return new;
+  end if;
+
+  if TG_OP = 'INSERT' then
+    new.approved := false;
+  elsif TG_OP = 'UPDATE' then
+    new.approved := old.approved;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists macros_protect_approval on public.macros;
+create trigger macros_protect_approval
+  before insert or update on public.macros
+  for each row execute function public.protect_macros_approval();
 
 -- Email send log (admin-only read; service role writes from Cloudflare)
 create table if not exists public.email_events (

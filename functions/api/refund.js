@@ -3,10 +3,13 @@
    ==================================================================
    Authed. Issues Stripe refund on stored payment_intent, sets
    profiles.refunded=true / paid=false, logs row in refunds.
+   Only for pre-approval eligibility declines (pregnant / early nursing / diet).
    Secrets: STRIPE_SECRET_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
    ================================================================== */
 
 import { loadUserContact, sendRefundEmails } from "../_shared/supabaseEmail.js";
+
+const ALLOWED_REASONS = new Set(["pregnant", "early_nursing", "diet"]);
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -14,7 +17,11 @@ export async function onRequestPost({ request, env }) {
     if (!user) return json({ error: "unauthorized" }, 401);
 
     const body = await request.json().catch(() => ({}));
-    const reason = String(body.reason || "intake_decline").slice(0, 80);
+    let reason = String(body.reason || "intake_decline").slice(0, 80);
+    if (reason === "early") reason = "early_nursing";
+    if (!ALLOWED_REASONS.has(reason)) {
+      return json({ error: "invalid reason" }, 400);
+    }
 
     const profile = await fetchProfile(env, user.id);
     if (!profile) return json({ error: "profile not found" }, 404);
@@ -24,6 +31,13 @@ export async function onRequestPost({ request, env }) {
     }
     if (!profile.paid) {
       return json({ error: "not paid" }, 409);
+    }
+    // Self-serve refunds only during intake / before Callie approval
+    if (profile.status === "active") {
+      return json({ error: "contact coach for refund" }, 403);
+    }
+    if (profile.macros_approved) {
+      return json({ error: "contact coach for refund" }, 403);
     }
     if (!profile.stripe_payment_intent) {
       console.error("refund missing payment_intent", user.id);
@@ -35,6 +49,9 @@ export async function onRequestPost({ request, env }) {
       console.error("missing STRIPE_SECRET_KEY");
       return json({ error: "refund unavailable" }, 503);
     }
+
+    // Persist attested eligibility reason on the profile for Callie's records
+    await attestEligibility(env, user.id, reason, body);
 
     const stripeBody = new URLSearchParams();
     stripeBody.set("payment_intent", profile.stripe_payment_intent);
@@ -107,7 +124,7 @@ async function fetchProfile(env, userId) {
   if (!base || !key) throw new Error("missing SUPABASE_URL or server key");
 
   const resp = await fetch(
-    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid,refunded,stripe_payment_intent,name`,
+    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid,refunded,stripe_payment_intent,name,status`,
     {
       headers: {
         apikey: key,
@@ -120,7 +137,61 @@ async function fetchProfile(env, userId) {
     throw new Error(`profile fetch failed: ${resp.status} ${detail}`);
   }
   const rows = await resp.json();
-  return rows[0] || null;
+  const row = rows[0] || null;
+  if (!row) return null;
+
+  // Join macros.approved (may not exist yet during early intake gates)
+  const mResp = await fetch(
+    `${base}/rest/v1/macros?profile_id=eq.${encodeURIComponent(userId)}&select=approved`,
+    {
+      headers: {
+        apikey: key,
+        authorization: `Bearer ${key}`,
+      },
+    }
+  );
+  let macrosApproved = false;
+  if (mResp.ok) {
+    const mRows = await mResp.json();
+    macrosApproved = !!mRows[0]?.approved;
+  }
+
+  return { ...row, macros_approved: macrosApproved };
+}
+
+async function attestEligibility(env, userId, reason, body) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key) return;
+
+  const patch = {};
+  if (reason === "pregnant") {
+    patch.pregnant = true;
+  } else if (reason === "early_nursing") {
+    patch.breastfeeding = true;
+    const months = body.monthsPP ?? body.months_pp;
+    if (months != null && months !== "") patch.months_pp = Number(months);
+  } else if (reason === "diet") {
+    const diet = body.diet != null ? String(body.diet).slice(0, 40) : "restricted";
+    if (diet && diet !== "none") patch.diet = diet;
+    else patch.diet = "restricted";
+  }
+  if (!Object.keys(patch).length) return;
+
+  const resp = await fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+      apikey: key,
+      authorization: `Bearer ${key}`,
+      prefer: "return=minimal",
+    },
+    body: JSON.stringify(patch),
+  });
+  if (!resp.ok) {
+    const detail = await resp.text();
+    console.error("attest eligibility failed", resp.status, detail);
+  }
 }
 
 async function markRefunded(env, userId, { reason, amountCents, stripeRefundId, paymentIntent }) {

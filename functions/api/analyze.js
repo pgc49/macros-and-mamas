@@ -1,104 +1,17 @@
 /* ==================================================================
-   /functions/api/analyze.js — Cloudflare Pages Function (OpenRouter)
+   /functions/api/analyze.js — DEPRECATED legacy plate photo endpoint
    ==================================================================
-   Server-side proxy for the "Snap your plate" feature. All AI calls
-   route through OpenRouter using an OpenAI-compatible request. The
-   key lives ONLY as a Cloudflare secret and never ships to the
-   client or the repo.
-
-   PROD-TODO(secrets): set the secret before deploy —
-     npx wrangler pages secret put OPENROUTER_API_KEY
-   or Cloudflare dashboard: Pages project > Settings > Environment
-   variables > add OPENROUTER_API_KEY (encrypted) for Production
-   and Preview. NEVER commit the key or paste it into agent chats.
-
-   MODEL: google/gemini-3.1-flash-lite — cheap multimodal, image
-   input, fast. Fractions of a cent per plate photo. If food ID
-   quality disappoints in testing, step up to google/gemini-3-flash
-   or anthropic/claude-haiku-4.5 — one constant below.
-
-   AUTH: requires a valid Supabase access token in Authorization: Bearer.
-   Per-user rate limiting (e.g. KV, 20/hour) is a fast-follow.
+   Kept so old clients get a clear error. Use /api/estimate (paid-gated).
    ================================================================== */
 
-const MODEL = "google/gemini-3.1-flash-lite"; // the one knob for cost/quality
-
-// Prompt preserved verbatim from the approved prototype.
-const PROMPT =
-  'You are a nutritionist\'s assistant estimating macros from a meal photo for a postpartum macro coaching program. Identify the foods and estimate portion sizes from visual cues (plate size, volume). Respond with ONLY a JSON object, no markdown fences, no other text: {"meal":"short name","items":["item with portion"],"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"low"|"medium"|"high","tip":"one warm, practical sentence a coach named Callie might say about this plate"} If the image is not food, return {"error":"not food"}.';
-
-export async function onRequestPost({ request, env }) {
-  try {
-    const user = await requireSupabaseUser(request, env);
-    if (!user) {
-      return json({ error: "unauthorized" }, 401);
-    }
-
-    const { image, media_type } = await request.json();
-    if (!image) {
-      return json({ error: "missing image" }, 400);
-    }
-
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${env.OPENROUTER_API_KEY}`, // Cloudflare secret
-        // Optional OpenRouter attribution headers (app rankings):
-        "http-referer": "https://macrosandmamas.com",
-        "x-title": "Macros and Mamas",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "image_url",
-              image_url: { url: `data:${media_type || "image/jpeg"};base64,${image}` },
-            },
-            { type: "text", text: PROMPT },
-          ],
-        }],
-      }),
-    });
-
-    if (!resp.ok) {
-      const detail = await resp.text();
-      console.error("openrouter error", resp.status, detail);
-      return json({ error: "analysis unavailable" }, 502);
-    }
-
-    const data = await resp.json();
-    const text = data.choices?.[0]?.message?.content || "";
-    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
-    return json(parsed, 200);
-  } catch (e) {
-    console.error("analyze failed", e);
-    return json({ error: "analysis failed" }, 500);
-  }
-}
-
-async function requireSupabaseUser(request, env) {
-  const auth = request.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token) return null;
-
-  const base = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
-  if (!base) {
-    console.error("missing SUPABASE_URL");
-    return null;
-  }
-
-  const resp = await fetch(`${base.replace(/\/$/, "")}/auth/v1/user`, {
-    headers: {
-      authorization: `Bearer ${token}`,
-      apikey: env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || "",
+export async function onRequestPost() {
+  return json(
+    {
+      error: "gone",
+      message: "Use /api/estimate",
     },
-  });
-  if (!resp.ok) return null;
-  return resp.json();
+    410
+  );
 }
 
 function json(obj, status = 200) {

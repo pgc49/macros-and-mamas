@@ -2,11 +2,15 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { APP_URL, FROM_CALLIE, renderEmail } from "../_shared/emailTemplates.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import { assertServiceRole } from "../_shared/assertServiceRole.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const denied = assertServiceRole(req);
+  if (denied) return denied;
 
   try {
     const { email, name } = await req.json();
