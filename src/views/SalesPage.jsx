@@ -155,6 +155,14 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           color: ${T.ink};
           margin: 0;
         }
+        .mm-meet-bio + .mm-meet-bio {
+          margin-top: 12px;
+        }
+        .mm-meet-bio a {
+          color: ${T.accent};
+          font-weight: 700;
+          text-decoration: underline;
+        }
         .mm-footer-cta {
           margin: 28px 0 6px;
         }
@@ -475,9 +483,18 @@ export function SalesPage({ onStartIntake, onSignIn }) {
               loading="lazy"
               decoding="async"
             />
-            <p className="mm-meet-bio">
-              Hi, I&apos;m Callie — certified holistic nutritionist, blood chemistry certified, and a mama in the thick of it myself. I&apos;ve spent years helping women fix their energy, hormones, and gut by looking at what the data actually says instead of what diet culture yells. Macros and Mamas is everything I do with my 1:1 clients, built for postpartum. Ranges, not rules — because I will never hand you a 1,200-calorie plan and call it help.
-            </p>
+            <div>
+              <p className="mm-meet-bio">
+                Hi, I&apos;m Callie — certified holistic nutritionist, blood chemistry certified, and a mama in the thick of it myself. I&apos;ve spent years helping women fix their energy, hormones, and gut by looking at what the data actually says instead of what diet culture yells. Macros and Mamas is everything I do with my 1:1 clients, built for postpartum. Ranges, not rules — because I will never hand you a 1,200-calorie plan and call it help.
+              </p>
+              <p className="mm-meet-bio">
+                I also founded{" "}
+                <a href="https://www.nourishwithcalista.com/" target="_blank" rel="noopener noreferrer">
+                  Nourish with Calista
+                </a>
+                , my private practice, where I work one-on-one on nutrition and preconception health — and talk corporate teams into caring about what they eat.
+              </p>
+            </div>
           </div>
         </section>
 
