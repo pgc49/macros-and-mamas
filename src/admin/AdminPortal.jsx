@@ -261,6 +261,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 {STAGE_LABEL[stage] || stage}
                 {sel.paid ? " · Paid" : " · Unpaid"}
                 {sel.refunded ? " · Refunded" : ""}
+                {sel.email ? <><br />✉️ {sel.email}</> : null}
                 {sel.age ? <><br />{sel.age} yrs</> : null}
                 {sel.currentWeight != null && sel.goalWeight != null ? <> · {sel.currentWeight} → {sel.goalWeight} lbs</> : null}
                 {sel.breastfeeding ? ` · breastfeeding${sel.monthsPP != null && sel.monthsPP !== "" ? ` · ${sel.monthsPP} mo pp` : ""}` : ""}
