@@ -61,9 +61,9 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
             {cat}{r.serves > 1 ? ` · serves ${r.serves}` : ""}
           </div>
           <div style={{ fontFamily: FD, fontSize: 18, margin: "2px 0 4px", color: T.ink }}>{r.name}</div>
-          {(r.why || r.desc) && (
-            <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>{r.why || r.desc}</div>
-          )}
+          {r.desc ? (
+            <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>{r.desc}</div>
+          ) : null}
           <div style={{ fontSize: 12, color: T.accent, fontWeight: 700, marginTop: 6 }}>
             {open ? "Hide ▴" : "Open recipe ▾"}
           </div>
