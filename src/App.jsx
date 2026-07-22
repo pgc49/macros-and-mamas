@@ -54,7 +54,7 @@ export default function App() {
   const [viewWk, setViewWk] = useState(curWk);
   const [editPast, setEditPast] = useState(false);
   const [weighins, setWeighins] = useState([]);
-  const [mealFilter, setMealFilter] = useState("By Day");
+  const [mealFilter, setMealFilter] = useState("Breakfast");
   const [roster, setRoster] = useState([]);
   const [adminStats, setAdminStats] = useState(null);
   const [adminSel, setAdminSel] = useState(null);
