@@ -222,6 +222,7 @@ export function MealPlanDraft({ client }) {
           <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>Meal plan draft</div>
           <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
             Admin-only preview. Uses her intake tastes, your recipe bank, and her ranges.
+            Prompt requires ingredient-grounded macros (no guessing) and day totals that truly land in band.
             Not shown to her yet.
           </div>
         </div>

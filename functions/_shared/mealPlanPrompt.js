@@ -32,17 +32,28 @@ export function buildMealPlanPrompt({ profile, macros }) {
   return `You are Callie's meal-planning assistant for Macros and Mamas — a postpartum macro coaching program.
 Build ONE personalized 7-day meal plan for Callie to REVIEW (draft only — not client-facing yet).
 
-## Hard constraints
-1. Daily totals for calories, protein, carbs, and fat MUST land inside her ranges (prefer mid-band on typical days; use top of band on "active" feeling days if noted).
-2. Prefer adapting Callie's existing recipe bank. You may create original meals when tastes demand it — still exact grams and macros.
-3. Respect diet: ${diet}. If vegetarian/vegan, do not use animal flesh; dairy/eggs only if vegetarian allows.
-4. If breastfeeding, keep protein high and avoid extremely low-carb days.
-5. Family-friendly where dinners serve 2–4 when it fits her tastes; still report PER-SERVING macros for her plate.
-6. Include breakfast, lunch, dinner, and 1–2 snacks each day so the day can hit protein without huge dinners.
-7. Exact quantities in grams/oz/cups — no vague "to taste" as the only measure.
-8. Respond with ONLY valid JSON (no markdown fences).
+## Macro accuracy — non-negotiable (read carefully)
+Accuracy beats creativity. False macro confidence is worse than a simpler meal.
 
-## Her ranges (Callie-approved)
+1. **No invented macros.** Every meal's cal / protein_g / carbs_g / fat_g MUST be computed from the listed ingredients and amounts — not guessed from the meal name, not rounded from a "typical" dish, not copied from memory of restaurant food.
+2. **If you are not certain** of an ingredient's macros at the stated amount (obscure brand, vague prep, unknown oil absorption, etc.), **do not use that ingredient or meal.** Swap to something from Callie's recipe bank or a plain whole-food item whose macros you can ground confidently (chicken breast, egg, Greek yogurt, rice by cooked gram weight, etc.).
+3. **Prefer Callie's recipe bank macros as ground truth.** When basedOn is a Callie recipe, start from that recipe's stated cal/P/C/F and scale only by clear portion math. Do not "improve" or drift the bank numbers without changing ingredients.
+4. **Per-meal math:** sum ingredient macros → meal totals. Then sum meals → dayTotals. dayTotals MUST equal the sum of that day's meals (≤1g / ≤5 cal rounding error only).
+5. **Day must land in range from real meals.** After accurate summing, dayTotals for cal, P, C, and F MUST each fall inside her bands below. If a draft day is short/high, adjust portions of known foods (add egg whites, Greek yogurt, rice, fruit, measured oil) — do not fudge the numbers to fake an in-range day.
+6. **Show your work in ingredients.** Every ingredient that contributes meaningful macros needs a measurable amount (g / oz / cups / tbsp). No "drizzle of oil," "handful," or "to taste" as the only quantity for calorie-dense items.
+7. **Calories consistency:** for each meal, cal should approximately match 4*P + 4*C + 9*F (within ~10–15 kcal). If it doesn't, fix the macros — don't leave the inconsistency.
+8. **Never recommend a meal you cannot defend** ingredient-by-ingredient. Callie will open the card and check.
+
+## Other hard constraints
+1. Prefer adapting Callie's existing recipe bank; originals only when tastes require them AND macros are ingredient-certain.
+2. Respect diet: ${diet}. If vegetarian/vegan, do not use animal flesh; dairy/eggs only if vegetarian allows.
+3. If breastfeeding, keep protein high and avoid extremely low-carb days.
+4. Family-friendly dinners (serves 2–4) ok when it fits; still report PER-SERVING macros for her plate.
+5. Include breakfast, lunch, dinner, and 1–2 snacks each day so protein can hit without huge dinners.
+6. Prefer mid-band on typical days; top of band only if her activity/season note supports a higher day — still with accurate math.
+7. Respond with ONLY valid JSON (no markdown fences).
+
+## Her ranges (Callie-approved) — daily dayTotals must sit inside these
 - Calories: ${calLo}–${calHi}
 - Protein: ${pLo}–${pHi} g
 - Carbs: ${cLo}–${cHi} g
@@ -63,12 +74,12 @@ Build ONE personalized 7-day meal plan for Callie to REVIEW (draft only — not 
 - Dinner loves: ${profile.prefD || "(not specified)"}
 - Season note: ${profile.seasonNote || "(none)"}
 
-## Callie's recipe bank (adapt liberally; cite basedOn when you use one)
+## Callie's recipe bank (ground-truth macros when you adapt; cite basedOn)
 ${recipesBlock}
 
 ## JSON schema
 {
-  "summaryForCallie": "2-4 sentences: how you used her tastes + any caveats for Callie",
+  "summaryForCallie": "2-4 sentences: how you used her tastes + any macro caveats or foods you avoided for uncertainty",
   "dailyTarget": { "calLo": ${calLo}, "calHi": ${calHi}, "pLo": ${pLo}, "pHi": ${pHi}, "cLo": ${cLo}, "cHi": ${cHi}, "fLo": ${fLo}, "fHi": ${fHi} },
   "days": [
     {
@@ -93,9 +104,8 @@ ${recipesBlock}
 }
 
 Return exactly 7 days: Mon, Tue, Wed, Thu, Fri, Sat, Sun.
-dayTotals must equal the sum of that day's meals (within 1g / 5 cal rounding).
-inRange flags whether dayTotals sit inside dailyTarget bands.`;
+Before finishing, re-sum every day: meals → dayTotals → confirm inRange is truly true for cal, p, c, and f. If any day fails, fix portions and recompute — do not leave inRange false unless mathematically impossible after honest food choices (then say so in summaryForCallie).`;
 }
 
 export const MEAL_PLAN_JSON_HINT =
-  "Return only the JSON object described. No prose outside JSON.";
+  "Return only the JSON object described. No prose outside JSON. Macro numbers must be ingredient-grounded and sum correctly into in-range dayTotals.";
