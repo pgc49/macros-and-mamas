@@ -226,24 +226,29 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   };
 
   const filtered = useMemo(() => {
-    const list = nonAdmin;
+    // Include admins in the directory so Patrick/Callie can test meal plans on themselves.
+    // Funnel filters still make sense for admin rows that have intake/macros.
+    const list = all;
     if (filter === "all") return list;
     if (filter === "needs_you") {
       return list.filter((c) =>
-        c.stage === "awaiting_approval"
+        c.role === "admin"
+        || c.stage === "awaiting_approval"
         || (c.status === "pending" && c.hasIntake && c.paid && !c.refunded)
         || needsAttention(c).length > 0
       );
     }
-    if (filter === "unpaid") return list.filter((c) => c.stage === "signed_up");
+    if (filter === "unpaid") return list.filter((c) => c.stage === "signed_up" && c.role !== "admin");
     if (filter === "awaiting_intake") return list.filter((c) => c.stage === "paid_awaiting_intake");
     if (filter === "awaiting_approval") {
       return list.filter((c) => c.stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid));
     }
-    if (filter === "active") return list.filter((c) => c.stage === "active" || c.status === "active");
+    if (filter === "active") {
+      return list.filter((c) => c.stage === "active" || c.status === "active" || (c.role === "admin" && c.hasIntake));
+    }
     if (filter === "refunded") return list.filter((c) => c.refunded || c.stage === "refunded");
     return list;
-  }, [nonAdmin, filter]);
+  }, [all, filter]);
 
   const patchMacros = (c, k, v) => {
     if (!c.macros) return;
@@ -497,6 +502,14 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <span style={{ fontFamily: FD, fontSize: 16, color: T.ink }}>{c.name}</span>
+            {c.role === "admin" && (
+              <span style={{
+                marginLeft: 8, fontSize: 11, fontWeight: 700, fontFamily: F,
+                padding: "2px 8px", borderRadius: 99, background: T.accentSoft, color: T.accentDeep,
+              }}>
+                Admin · test
+              </span>
+            )}
             <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
               {STAGE_LABEL[stage] || stage}
               {c.email ? ` · ${c.email}` : ""}

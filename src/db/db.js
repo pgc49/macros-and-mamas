@@ -542,24 +542,17 @@ export const db = {
   },
 
   async loadRoster() {
-    // Full admin directory: every client profile (funnel + approved).
-    // Admins (and the signed-in admin user) are excluded from counts + list.
+    // Full admin directory: every profile including admins (so Callie/Patrick
+    // can open their own row and test meal plans). Funnel stats still exclude admins.
     // RLS: only admins can select all profiles / email_events.
-    const [authRes, profilesRes] = await Promise.all([
-      supabase.auth.getUser(),
-      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-    ]);
-    const { data: profiles, error: pErr } = profilesRes;
+    const { data: profiles, error: pErr } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
     if (pErr) throw pErr;
 
-    const selfId = authRes?.data?.user?.id || null;
-    const clientProfiles = (profiles || []).filter((p) => {
-      if (selfId && p.id === selfId) return false;
-      if (String(p.role || "").toLowerCase() === "admin") return false;
-      return true;
-    });
-
-    const ids = clientProfiles.map((p) => p.id);
+    const allProfiles = profiles || [];
+    const ids = allProfiles.map((p) => p.id);
     if (!ids.length) return { clients: [], stats: emptyAdminStats() };
 
     const curWk = wkStartOf();
@@ -588,18 +581,21 @@ export const db = {
       checksBy[c.profile_id].push(c);
     });
 
-    const clients = clientProfiles.map((p) => {
+    const clients = allProfiles.map((p) => {
       const m = macrosBy[p.id] || null;
       const approved = !!(m?.approved || p.status === "active");
       const paid = !!p.paid;
       const refunded = !!p.refunded;
       const hasIntake = !!m;
+      const isAdminRow = String(p.role || "").toLowerCase() === "admin";
       let stage = "signed_up";
       if (refunded) stage = "refunded";
       else if (paid && approved) stage = "active";
       else if (paid && hasIntake && !approved) stage = "awaiting_approval";
       else if (paid && !hasIntake) stage = "paid_awaiting_intake";
       else if (!paid) stage = "signed_up";
+      // Admins with dashboard access often skip pay — still show as active when they have macros
+      if (isAdminRow && hasIntake && approved) stage = "active";
 
       return {
         id: p.id,
@@ -641,14 +637,15 @@ export const db = {
       };
     });
 
+    const nonAdminClients = clients.filter((c) => String(c.role || "").toLowerCase() !== "admin");
     const stats = {
-      signups: clients.length,
-      paid: clients.filter((c) => c.paid && !c.refunded).length,
-      unpaid: clients.filter((c) => !c.paid && !c.refunded).length,
-      awaitingIntake: clients.filter((c) => c.stage === "paid_awaiting_intake").length,
-      awaitingApproval: clients.filter((c) => c.stage === "awaiting_approval").length,
-      active: clients.filter((c) => c.stage === "active").length,
-      refunded: clients.filter((c) => c.stage === "refunded").length,
+      signups: nonAdminClients.length,
+      paid: nonAdminClients.filter((c) => c.paid && !c.refunded).length,
+      unpaid: nonAdminClients.filter((c) => !c.paid && !c.refunded).length,
+      awaitingIntake: nonAdminClients.filter((c) => c.stage === "paid_awaiting_intake").length,
+      awaitingApproval: nonAdminClients.filter((c) => c.stage === "awaiting_approval").length,
+      active: nonAdminClients.filter((c) => c.stage === "active").length,
+      refunded: nonAdminClients.filter((c) => c.stage === "refunded").length,
     };
 
     return { clients, stats };
