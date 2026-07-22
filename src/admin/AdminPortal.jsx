@@ -10,6 +10,7 @@ import { db } from "../db/db";
 import { PATHS } from "../routing";
 import { Shell, Card, Btn, inputStyle } from "../components/ui";
 import { ProgressCharts } from "../components/ProgressCharts";
+import { MealPlanDraft } from "./MealPlanDraft";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 
@@ -369,6 +370,10 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             </>
           )}
         </Card>
+
+        {sel.macros && (
+          <MealPlanDraft client={sel} />
+        )}
 
         <Card style={{ marginTop: 12 }}>
           <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>Emails sent</div>
