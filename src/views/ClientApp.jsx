@@ -243,12 +243,22 @@ export function ClientApp({
           </Card>
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {["All", "Breakfast", "Lunch", "Dinner"].map((c) => (
+            {["By Day", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
               <Chip key={c} active={mealFilter === c} onClick={() => setMealFilter(c)}>{c}</Chip>
             ))}
           </div>
 
-          {RECIPES.filter((r) => mealFilter === "All" || r.cat === mealFilter).map((r) => (
+          {mealFilter === "By Day" && (
+            <Card style={{ marginBottom: 12, background: T.accentSoft, border: "none" }}>
+              <div style={{ fontFamily: FD, fontSize: 17, color: T.accentDeep, marginBottom: 4 }}>Your week by day</div>
+              <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.55 }}>
+                Personalized Mon–Sun cards (with recipes + Log) will land here after Callie reviews and publishes your plan.
+                Until then, filter Breakfast / Lunch / Dinner / Snack for ideas you can log today.
+              </div>
+            </Card>
+          )}
+
+          {mealFilter !== "By Day" && RECIPES.filter((r) => r.cat === mealFilter).map((r) => (
             <Card key={r.name} style={{ marginBottom: 10, padding: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>

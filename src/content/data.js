@@ -53,6 +53,10 @@ export const RECIPES = [
   { cat: "Dinner", name: "Turkey meatballs + rice", desc: "1 lb 99% lean ground turkey + 1 egg + ¼ cup (28g) breadcrumbs = 12 meatballs. Per serving: 3 meatballs, ½ cup marinara, 1 cup (158g) cooked rice, 1 cup green beans.", cal: 470, p: 36, c: 67, f: 6, serves: 4 },
   { cat: "Dinner", name: "Sheet pan chicken", desc: "1½ lbs chicken breast. Per serving: 6 oz (170g) raw chicken, 1 cup (133g) cubed sweet potato, 1 cup brussels sprouts, 2 tsp olive oil + herbs, roasted at 425°F for 25 min.", cal: 440, p: 45, c: 35, f: 14, serves: 4 },
   { cat: "Dinner", name: "Ground turkey stir fry", desc: "1 lb 93% lean ground turkey, 4 cups frozen stir-fry vegetables; sauce: 3 tbsp coconut aminos + 1 tbsp honey + garlic. Per serving: ¼ of skillet with 1 cup (158g) cooked rice.", cal: 460, p: 28, c: 59, f: 10, serves: 4 },
+  { cat: "Snack", name: "Greek yogurt + berries", desc: "170g nonfat Greek yogurt, 75g berries.", cal: 180, p: 24, c: 16, f: 2, serves: 1 },
+  { cat: "Snack", name: "Cottage cheese + cucumber", desc: "150g 2% cottage cheese, 1 cup cucumber slices, cracked pepper.", cal: 160, p: 20, c: 8, f: 4, serves: 1 },
+  { cat: "Snack", name: "Protein shake", desc: "1 scoop (30g) protein, 1 cup unsweetened almond milk, ice.", cal: 150, p: 25, c: 4, f: 3, serves: 1 },
+  { cat: "Snack", name: "Apple + peanut butter", desc: "1 medium apple, 16g (1 tbsp) natural peanut butter.", cal: 190, p: 5, c: 28, f: 8, serves: 1 },
 ];
 
 export const DEFAULT_ITEMS = [

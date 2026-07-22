@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
-import { Card, Btn } from "../components/ui";
+import { Card, Btn, inputStyle } from "../components/ui";
 import { supabase } from "../lib/supabase";
 
 const STORAGE_PREFIX = "mm_meal_plan_draft_";
@@ -119,6 +119,7 @@ function DayBlock({ day, target }) {
   const [openKey, setOpenKey] = useState(null);
   const t = day.dayTotals || {};
   const ir = day.inRange || {};
+  const dayOk = ir.cal !== false && ir.p !== false && ir.c !== false && ir.f !== false;
 
   return (
     <div style={{ marginBottom: 18 }}>
@@ -127,6 +128,9 @@ function DayBlock({ day, target }) {
           <span style={{ fontFamily: FD, fontSize: 18 }}>{day.day}</span>
           {day.theme && (
             <span style={{ fontSize: 13, color: T.inkSoft, marginLeft: 8 }}>{day.theme}</span>
+          )}
+          {!dayOk && (
+            <span style={{ fontSize: 12, fontWeight: 700, color: T.amber, marginLeft: 8 }}>out of range</span>
           )}
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -156,38 +160,60 @@ function DayBlock({ day, target }) {
   );
 }
 
+function countOutOfRange(plan) {
+  if (typeof plan?.meta?.outOfRangeDays === "number") return plan.meta.outOfRangeDays;
+  return (plan?.days || []).filter((d) => {
+    const ir = d.inRange || {};
+    return Object.values(ir).some((v) => v === false);
+  }).length;
+}
+
 /**
  * Admin-only: generate & review a 7-day meal plan draft for one client.
  * Not client-facing. Drafts cached in localStorage for Callie's browser.
+ * Callie can leave revision notes and regenerate from the prior draft.
  */
 export function MealPlanDraft({ client }) {
   const [plan, setPlan] = useState(null);
+  const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setPlan(loadCached(client.id));
+    setFeedback("");
     setError("");
   }, [client.id]);
 
-  const generate = async () => {
+  const generate = async ({ withFeedback = false } = {}) => {
+    const notes = withFeedback ? feedback.trim() : "";
+    if (withFeedback && !notes) {
+      setError("Add a short note for Callie first — what to change on the next pass.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Sign in again");
+      const body = { clientId: client.id };
+      if (withFeedback) {
+        body.feedback = notes;
+        body.previousPlan = plan;
+      }
       const resp = await fetch("/api/meal-plan", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ clientId: client.id }),
+        body: JSON.stringify(body),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.error || `Generate failed (${resp.status})`);
       setPlan(data.plan);
       saveCached(client.id, data.plan);
+      if (withFeedback) setFeedback("");
     } catch (e) {
       console.error("meal plan generate failed", e);
       setError(e.message || "Couldn’t generate plan");
@@ -197,6 +223,7 @@ export function MealPlanDraft({ client }) {
 
   const clearDraft = () => {
     setPlan(null);
+    setFeedback("");
     try {
       localStorage.removeItem(STORAGE_PREFIX + client.id);
     } catch {
@@ -215,20 +242,22 @@ export function MealPlanDraft({ client }) {
     );
   }
 
+  const oob = countOutOfRange(plan);
+
   return (
     <Card style={{ marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
         <div>
           <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>Meal plan draft</div>
           <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
-            Admin-only preview. Uses her intake tastes, your recipe bank, and her ranges.
-            Prompt requires ingredient-grounded macros (no guessing) and day totals that truly land in band.
+            Admin-only. Uses her tastes, your recipe bank, and her ranges.
+            Days must land in band (prompt forces portion adjusts). Leave notes below to regenerate with your feedback.
             Not shown to her yet.
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Btn small disabled={busy} onClick={generate}>
-            {busy ? "Generating…" : plan ? "Regenerate week" : "Generate 7-day draft"}
+          <Btn small disabled={busy} onClick={() => generate({ withFeedback: false })}>
+            {busy ? "Generating…" : plan ? "Fresh 7-day draft" : "Generate 7-day draft"}
           </Btn>
           {plan && (
             <Btn small ghost disabled={busy} onClick={clearDraft}>Clear draft</Btn>
@@ -238,7 +267,7 @@ export function MealPlanDraft({ client }) {
 
       {busy && (
         <div style={{ fontSize: 13.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.5 }}>
-          Building her week — this can take 30–90 seconds with a reasoning model.
+          Building her week — this can take 30–90 seconds. Ranges + any Callie notes are in the prompt.
         </div>
       )}
       {error && (
@@ -247,6 +276,13 @@ export function MealPlanDraft({ client }) {
 
       {plan && (
         <>
+          {oob > 0 && (
+            <div style={{ background: T.amberSoft, borderRadius: 12, padding: "12px 14px", marginBottom: 12, fontSize: 13.5, lineHeight: 1.55, color: T.amber }}>
+              <b>{oob} day{oob === 1 ? "" : "s"} still out of range</b> (amber chips).
+              Tell the model what to fix in the box below — e.g. “Thu fat too low, add oil/avocado; bump calories into band” — then regenerate with feedback.
+            </div>
+          )}
+
           {plan.summaryForCallie && (
             <div style={{ background: T.accentSoft, borderRadius: 12, padding: "12px 14px", marginBottom: 14, fontSize: 13.5, lineHeight: 1.55, color: T.accentDeep }}>
               <b>For Callie:</b> {plan.summaryForCallie}
@@ -254,9 +290,33 @@ export function MealPlanDraft({ client }) {
           )}
           {plan.meta && (
             <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12 }}>
-              Draft · {plan.meta.model} · {plan.meta.generatedAt ? new Date(plan.meta.generatedAt).toLocaleString() : ""} · not client-facing
+              Draft · {plan.meta.model} · {plan.meta.generatedAt ? new Date(plan.meta.generatedAt).toLocaleString() : ""}
+              {plan.meta.hadFeedback ? " · revised from your notes" : ""} · not client-facing
             </div>
           )}
+
+          <div style={{ marginBottom: 16, padding: 14, borderRadius: 12, border: `1px solid ${T.border}`, background: "#fff" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 6 }}>
+              Your notes for the next pass
+            </div>
+            <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 8, lineHeight: 1.45 }}>
+              Proteins to lean on, recipes to swap, days that miss, house rules — anything you want fixed. The next generate includes this draft + your notes.
+            </div>
+            <textarea
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              disabled={busy}
+              rows={4}
+              placeholder="Example: Swap Thu pancakes for eggs + sausage. Fat is chronically low — add measured olive oil or avocado at dinner. Keep chicken teriyaki but she needs closer to mid-band calories."
+              style={{ ...inputStyle, resize: "vertical", minHeight: 96, fontFamily: F }}
+            />
+            <div style={{ marginTop: 10 }}>
+              <Btn small disabled={busy || !feedback.trim()} onClick={() => generate({ withFeedback: true })}>
+                {busy ? "Generating…" : "Regenerate with my notes"}
+              </Btn>
+            </div>
+          </div>
+
           {(plan.days || []).map((day) => (
             <DayBlock key={day.day} day={day} target={plan.dailyTarget} />
           ))}

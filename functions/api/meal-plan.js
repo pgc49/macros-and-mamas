@@ -1,13 +1,18 @@
 /* ==================================================================
    /functions/api/meal-plan.js — admin draft week meal plans (OpenRouter)
    ==================================================================
-   Admin-only. Body: { clientId }
+   Admin-only. Body: { clientId, feedback?, previousPlan? }
    Builds a 7-day plan from intake tastes + Callie recipe bank + ranges.
+   Optional Callie feedback regenerates from a prior draft digest.
    Draft for Callie review — not shown to clients.
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
    ================================================================== */
 
-import { buildMealPlanPrompt, MEAL_PLAN_JSON_HINT } from "../_shared/mealPlanPrompt.js";
+import {
+  buildMealPlanPrompt,
+  digestPreviousPlan,
+  MEAL_PLAN_JSON_HINT,
+} from "../_shared/mealPlanPrompt.js";
 
 /** Stronger model for multi-day planning; override with MEAL_PLAN_MODEL. */
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4";
@@ -27,12 +32,22 @@ export async function onRequestPost({ request, env }) {
     const clientId = body.clientId;
     if (!clientId) return json({ error: "missing clientId" }, 400);
 
+    const feedback = typeof body.feedback === "string" ? body.feedback.trim().slice(0, 2500) : "";
+    const previousDigest = body.previousPlan
+      ? digestPreviousPlan(body.previousPlan)
+      : "";
+
     const { profile, macros } = await loadClientForPlan(env, clientId);
     if (!profile) return json({ error: "profile not found" }, 404);
     if (!macros) return json({ error: "macros required — approve ranges first" }, 409);
 
     const model = String(env.MEAL_PLAN_MODEL || DEFAULT_MODEL).slice(0, 120);
-    const prompt = buildMealPlanPrompt({ profile, macros });
+    const prompt = buildMealPlanPrompt({
+      profile,
+      macros,
+      feedback: feedback || undefined,
+      previousDigest: previousDigest || undefined,
+    });
 
     const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -45,12 +60,12 @@ export async function onRequestPost({ request, env }) {
       body: JSON.stringify({
         model,
         max_tokens: 16000,
-        temperature: 0.35,
+        temperature: 0.2,
         messages: [
           {
             role: "system",
             content:
-              "You are a careful postpartum nutrition meal planner for Callie. Macro accuracy is non-negotiable: compute from ingredients only, never invent or drift numbers, and never recommend a meal whose macros you cannot defend. Day totals must honestly sum into her approved ranges. Prefer Callie's recipe bank as ground truth. Output JSON only.",
+              "You are a careful postpartum nutrition meal planner for Callie. #1 job: every day's totals MUST land inside her approved cal/P/C/F bands by adjusting real food quantities — never invent macros and never return out-of-range days. Prefer Callie's recipe bank. Honor her revision notes when provided. Output JSON only.",
           },
           { role: "user", content: `${prompt}\n\n${MEAL_PLAN_JSON_HINT}` },
         ],
@@ -122,6 +137,11 @@ export async function onRequestPost({ request, env }) {
       };
     });
     plan.dailyTarget = target;
+
+    const outOfRangeDays = plan.days.filter(
+      (d) => d.inRange && Object.values(d.inRange).some((v) => v === false),
+    ).length;
+
     plan.meta = {
       clientId,
       clientName: profile.name || null,
@@ -129,9 +149,11 @@ export async function onRequestPost({ request, env }) {
       generatedAt: new Date().toISOString(),
       status: "draft",
       clientFacing: false,
+      hadFeedback: Boolean(feedback),
+      outOfRangeDays,
     };
 
-    return json({ ok: true, plan }, 200);
+    return json({ ok: true, plan, outOfRangeDays }, 200);
   } catch (e) {
     console.error("meal-plan failed", e);
     return json({ error: "meal plan failed" }, 500);
