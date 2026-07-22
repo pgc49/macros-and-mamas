@@ -232,6 +232,30 @@ export const db = {
       if (historyByDate[d]) byDate[d] = historyByDate[d];
     }
 
+    // Water history (same 28-day window) — non-fatal if migration 012 not applied yet
+    let waterByDate = {};
+    try {
+      const { data: waterRows, error: waterErr } = await supabase
+        .from("water_logs")
+        .select("id, date, oz, created_at")
+        .eq("profile_id", uid)
+        .gte("date", historyStart)
+        .lte("date", today)
+        .order("created_at", { ascending: true });
+      if (!waterErr && waterRows) {
+        waterRows.forEach((r) => {
+          if (!waterByDate[r.date]) waterByDate[r.date] = [];
+          waterByDate[r.date].push({
+            id: r.id,
+            oz: Number(r.oz),
+            created_at: r.created_at,
+          });
+        });
+      }
+    } catch (e) {
+      console.warn("water history load failed", e);
+    }
+
     const checksByWeek = {};
     (checkRows || []).forEach((r) => {
       const wk = r.week_start;
@@ -267,6 +291,7 @@ export const db = {
       mealLogsByDate: byDate,
       mealLogWeekStart: weekStart,
       mealHistoryByDate: historyByDate,
+      waterLogsByDate: waterByDate,
     };
   },
 

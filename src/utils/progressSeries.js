@@ -59,6 +59,29 @@ export function buildMacroHistory(mealHistoryByDate, days = 28) {
   return rows;
 }
 
+/** Daily water totals for Progress chart (logged days only, last ~28 days). */
+export function buildWaterHistory(waterLogsByDate, goalOz, days = 28) {
+  const today = localDateIso();
+  const start = addDaysIso(today, -(Math.max(1, days) - 1));
+  const goal = Number(goalOz) || 0;
+  const rows = [];
+  Object.keys(waterLogsByDate || {})
+    .filter((d) => d >= start && d <= today)
+    .sort()
+    .forEach((d) => {
+      const entries = waterLogsByDate[d] || [];
+      if (!entries.length) return;
+      const oz = entries.reduce((s, e) => s + (Number(e.oz) || 0), 0);
+      rows.push({
+        date: d,
+        label: d.slice(5),
+        oz: Math.round(oz),
+        hit: goal > 0 && oz >= goal,
+      });
+    });
+  return rows;
+}
+
 /** Weekly habit adherence series for Progress chart. */
 export function buildHabitHistory(checksByWeek, curWk = wkStartOf()) {
   const wkKeys = weekKeysFromChecks(checksByWeek, curWk);

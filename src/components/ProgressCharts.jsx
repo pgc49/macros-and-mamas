@@ -1,6 +1,7 @@
 import {
   Bar,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Line,
   LineChart,
@@ -13,6 +14,9 @@ import {
 } from "recharts";
 import { T, F, FD } from "../theme/tokens";
 import { Card } from "./ui";
+
+const WATER = "#4F7F97";
+const WATER_SOFT = "#E4F0F5";
 
 function MacroBarChart({ title, data, dataKey, lo, hi, unit = "g" }) {
   const maxVal = Math.max(hi * 1.25, ...data.map((d) => Number(d[dataKey]) || 0), lo);
@@ -67,11 +71,22 @@ function MacroBarChart({ title, data, dataKey, lo, hi, unit = "g" }) {
  * Progress-tab charts: macros vs Callie's ranges + weekly habit adherence.
  * @param {"client"|"admin"} audience — tweaks empty-state / intro copy for Callie.
  */
-export function ProgressCharts({ macros, macroHistory = [], habitHistory = [], audience = "client" }) {
+export function ProgressCharts({
+  macros,
+  macroHistory = [],
+  habitHistory = [],
+  waterHistory = [],
+  waterGoalOz = null,
+  audience = "client",
+}) {
   const hi = (n, d = 10) => n + d;
   const hasMacros = macros && macroHistory.length > 0;
   const hasHabits = habitHistory.some((h) => h.pct > 0) || habitHistory.length > 1;
+  const hasWater = waterHistory.length > 0;
+  const waterGoal = Number(waterGoalOz) || 0;
+  const waterHits = waterHistory.filter((d) => d.hit).length;
   const admin = audience === "admin";
+  const waterMax = Math.max(waterGoal * 1.15, ...waterHistory.map((d) => Number(d.oz) || 0), 8);
 
   return (
     <>
@@ -124,6 +139,54 @@ export function ProgressCharts({ macros, macroHistory = [], habitHistory = [], a
             />
             <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5 }}>
               {macroHistory.length} logged {macroHistory.length === 1 ? "day" : "days"} shown. Empty days stay off the chart on purpose.
+            </div>
+          </>
+        )}
+      </Card>
+
+      <Card style={{ marginTop: 12 }}>
+        <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>
+          {admin ? "Water by day" : "Water by day"}
+        </div>
+        <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
+          {admin
+            ? `Days she logged water. Goal line is half her goal weight${waterGoal ? ` (${waterGoal} oz)` : ""}. Sage bars hit the goal.`
+            : `Days you logged water. The line is your goal${waterGoal ? ` (${waterGoal} oz)` : ""} — half your goal weight. Sage bars mean you hit it.`}
+        </p>
+
+        {!hasWater ? (
+          <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6 }}>
+            {admin
+              ? "No water logs yet — this fills in when she taps her bottle on Today."
+              : "Tap + My bottle on Today as you go. After a few days, your streak shows up here."}
+          </div>
+        ) : (
+          <>
+            <div style={{ height: 160 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={waterHistory} margin={{ top: 8, right: 6, bottom: 0, left: -22 }}>
+                  <CartesianGrid stroke={T.track} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: T.inkSoft }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                  <YAxis domain={[0, Math.ceil(waterMax)]} tick={{ fontSize: 10, fill: T.inkSoft }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ fontFamily: F, fontSize: 12, borderRadius: 10, border: `1px solid ${T.border}` }}
+                    formatter={(v) => [`${Math.round(v)} oz`, "Water"]}
+                    labelFormatter={(l, payload) => payload?.[0]?.payload?.date || l}
+                  />
+                  {waterGoal > 0 && (
+                    <ReferenceLine y={waterGoal} stroke={T.sage} strokeDasharray="4 3" strokeWidth={1.5} />
+                  )}
+                  <Bar dataKey="oz" radius={[4, 4, 0, 0]} maxBarSize={18}>
+                    {waterHistory.map((d) => (
+                      <Cell key={d.date} fill={d.hit ? T.sage : WATER} />
+                    ))}
+                  </Bar>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.5, marginTop: 6 }}>
+              {waterHits} of {waterHistory.length} logged {waterHistory.length === 1 ? "day" : "days"} hit the goal
+              {waterGoal ? ` (${waterGoal} oz)` : ""}. Empty days stay off the chart on purpose.
             </div>
           </>
         )}

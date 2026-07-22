@@ -11,6 +11,7 @@ import {
   buildHabitHistory,
   buildMacroHistory,
   buildTrends,
+  buildWaterHistory,
   progWeekNum as weekNumberFromEarliest,
   weekKeysFromChecks,
 } from "./utils/progressSeries";
@@ -127,12 +128,15 @@ export default function App() {
             if (s.mealLogsByDate) setMealLogsByDate(s.mealLogsByDate);
             if (s.mealLogWeekStart) setMealLogWeekStart(s.mealLogWeekStart);
             if (s.mealHistoryByDate) setMealHistoryByDate(s.mealHistoryByDate);
-            try {
-              const weekStart = s.mealLogWeekStart || wkStartOf();
-              const water = await db.loadWaterLogsWeek(weekStart);
-              if (!cancelled) setWaterLogsByDate(water.byDate || {});
-            } catch (wErr) {
-              console.warn("loadWaterLogsWeek failed", wErr);
+            if (s.waterLogsByDate) setWaterLogsByDate(s.waterLogsByDate);
+            else {
+              try {
+                const weekStart = s.mealLogWeekStart || wkStartOf();
+                const water = await db.loadWaterLogsWeek(weekStart);
+                if (!cancelled) setWaterLogsByDate(water.byDate || {});
+              } catch (wErr) {
+                console.warn("loadWaterLogsWeek failed", wErr);
+              }
             }
             if (!cancelled) await refreshMealPlan(user.id);
           }
@@ -627,6 +631,12 @@ export default function App() {
     [mealHistoryByDate],
   );
 
+  /** Daily water totals for Progress chart. */
+  const waterHistory = useMemo(
+    () => buildWaterHistory(waterLogsByDate, waterOz),
+    [waterLogsByDate, waterOz],
+  );
+
   /** Weekly habit adherence series for Progress chart. */
   const habitHistory = useMemo(
     () => buildHabitHistory(checksByWeek, curWk),
@@ -711,6 +721,7 @@ export default function App() {
       trends={trends}
       macroHistory={macroHistory}
       habitHistory={habitHistory}
+      waterHistory={waterHistory}
       mealFilter={mealFilter}
       setMealFilter={setMealFilter}
       mealPlanMode={mealPlanMode}

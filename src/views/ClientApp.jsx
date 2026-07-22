@@ -23,7 +23,7 @@ export function ClientApp({
   viewWk, setViewWk, curWk, editPast, setEditPast,
   checksByWeek, toggleCheck, adherenceFor, progWeekNum, earliestWk,
   weighins, logWeighin, deleteWeighin, weeklyRate, trends,
-  macroHistory, habitHistory,
+  macroHistory, habitHistory, waterHistory = [],
   mealFilter, setMealFilter,
   mealPlanMode = "default",
   publishedPlan = null,
@@ -324,7 +324,13 @@ export function ClientApp({
             earliestWeekStart={mealEarliestWeek}
           />
 
-          <ProgressCharts macros={macros} macroHistory={macroHistory} habitHistory={habitHistory} />
+          <ProgressCharts
+            macros={macros}
+            macroHistory={macroHistory}
+            habitHistory={habitHistory}
+            waterHistory={waterHistory}
+            waterGoalOz={waterOz}
+          />
 
           <Card style={{ marginTop: 12 }}>
             <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Your 4-week trends</div>
