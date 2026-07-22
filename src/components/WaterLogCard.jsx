@@ -81,7 +81,7 @@ export function WaterLogCard({
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: T.inkSoft, marginBottom: 14 }}>
-        <span>half your goal weight, plus electrolytes</span>
+        <span>half your current weight, plus electrolytes</span>
         <span style={{ fontWeight: 700, color: hit ? T.sage : T.inkSoft, whiteSpace: "nowrap" }}>
           {total > 0 ? `${bottleLabel} × your bottle` : "tap to log"}
         </span>
