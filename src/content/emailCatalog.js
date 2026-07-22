@@ -49,7 +49,7 @@ First, complete your intake — it takes about 3 minutes. That's where I learn y
 
 Then your macros get built — not by a calculator — by me. I personally review every mama's numbers before they go live. You'll get them within a day of finishing your intake, as flexible ranges, because real life doesn't happen in exact grams.
 
-Once your macros are approved, your invite to our WhatsApp Macros group is coming by text. That's where I live Monday through Friday — voice notes, plate pics, wins, questions, all of it. Every Monday I drop a short voice note that sets the week's focus. Listen while you pump, nurse, walk, or hide in the pantry. No judgment!
+Once your macros are approved, your invite to our WhatsApp Macros group comes in that email — with a join link. That's where I live Monday through Friday — voice notes, plate pics, wins, questions, all of it. Every Monday I drop a short voice note that sets the week's focus. Listen while you pump, nurse, walk, or hide in the pantry. No judgment!
 
 While you're at it, do these two things — today if you can:
 1. Take your before photos. Same outfit, same spot, same lighting — front, side, and back. Your face doesn't need to be in them. You will not believe how much you'll want these in eight weeks!
@@ -94,7 +94,7 @@ Callie
 
 I have your intake — thank you. I'm reviewing your numbers personally and you'll usually have them within a day.
 
-When I approve, your dashboard unlocks and your WhatsApp group invite lands by text.
+When I approve, your dashboard unlocks and your WhatsApp group invite arrives in that email (with a join link).
 
 If your before photos and first weigh-in are still on the list — now's the moment.
 
