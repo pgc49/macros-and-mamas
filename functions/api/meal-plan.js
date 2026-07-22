@@ -50,7 +50,7 @@ export async function onRequestPost({ request, env }) {
           {
             role: "system",
             content:
-              "You are a careful postpartum nutrition meal planner. Obey ranges. Prefer Callie's recipe bank. Output JSON only.",
+              "You are a careful postpartum nutrition meal planner for Callie. Macro accuracy is non-negotiable: compute from ingredients only, never invent or drift numbers, and never recommend a meal whose macros you cannot defend. Day totals must honestly sum into her approved ranges. Prefer Callie's recipe bank as ground truth. Output JSON only.",
           },
           { role: "user", content: `${prompt}\n\n${MEAL_PLAN_JSON_HINT}` },
         ],
