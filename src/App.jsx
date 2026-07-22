@@ -71,6 +71,25 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const routedAfterLoad = useRef(false);
 
+  const refreshMealPlan = async (uid = user?.id) => {
+    if (!uid) {
+      setMealPlanMode("default");
+      setPublishedPlan(null);
+      return null;
+    }
+    try {
+      const mp = await db.loadClientMealPlan(uid);
+      const personalized = mp.mode === "personalized" && Array.isArray(mp.published?.days) && mp.published.days.length > 0;
+      setMealPlanMode(personalized ? "personalized" : "default");
+      setPublishedPlan(personalized ? mp.published : null);
+      if (personalized) setMealFilter("By Day");
+      return mp;
+    } catch (mpErr) {
+      console.warn("loadClientMealPlan failed", mpErr);
+      return null;
+    }
+  };
+
   /* Hydrate client state for every signed-in user (admins included — dogfood). */
   useEffect(() => {
     if (authLoading) return;
@@ -105,18 +124,7 @@ export default function App() {
             if (s.mealLogsByDate) setMealLogsByDate(s.mealLogsByDate);
             if (s.mealLogWeekStart) setMealLogWeekStart(s.mealLogWeekStart);
             if (s.mealHistoryByDate) setMealHistoryByDate(s.mealHistoryByDate);
-            try {
-              const mp = await db.loadClientMealPlan(user.id);
-              if (!cancelled) {
-                setMealPlanMode(mp.mode || "default");
-                setPublishedPlan(mp.published || null);
-                if (mp.mode === "personalized" && mp.published?.days?.length) {
-                  setMealFilter("By Day");
-                }
-              }
-            } catch (mpErr) {
-              console.warn("loadClientMealPlan failed", mpErr);
-            }
+            if (!cancelled) await refreshMealPlan(user.id);
           }
         } else {
           setMacros(null);
@@ -150,6 +158,20 @@ export default function App() {
     })();
     return () => { cancelled = true; };
   }, [authLoading, user?.id, isAdmin]);
+
+  /* Re-fetch published plan when opening dashboard / Meals (Admin → My dashboard). */
+  useEffect(() => {
+    if (!user?.id || authLoading || !loaded) return;
+    if (location.pathname !== PATHS.dashboard) return;
+    refreshMealPlan(user.id);
+  }, [location.pathname, user?.id, authLoading, loaded]);
+
+  useEffect(() => {
+    if (!user?.id || authLoading || !loaded) return;
+    if (location.pathname !== PATHS.dashboard) return;
+    if (tab !== "meals") return;
+    refreshMealPlan(user.id);
+  }, [tab, location.pathname, user?.id, authLoading, loaded]);
 
   /* After load / sign-in: send users from entry paths to the right home. */
   useEffect(() => {

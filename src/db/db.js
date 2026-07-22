@@ -722,11 +722,13 @@ export const db = {
       return { mode: "default", draft: null, published: null };
     }
     if (!data) return { mode: "default", draft: null, published: null, published_at: null };
+    const published = data.published || null;
+    const hasWeek = Array.isArray(published?.days) && published.days.length > 0;
     return {
-      mode: data.mode === "personalized" && data.published ? "personalized" : "default",
+      mode: data.mode === "personalized" && hasWeek ? "personalized" : "default",
       draft: data.draft || null,
       draft_meta: data.draft_meta || null,
-      published: data.published || null,
+      published: hasWeek ? published : null,
       published_at: data.published_at || null,
       published_by: data.published_by || null,
       updated_at: data.updated_at || null,
@@ -767,20 +769,24 @@ export const db = {
     const existing = await this.loadClientMealPlan(clientId);
     const plan = planOverride || existing.draft;
     if (!plan?.days?.length) throw new Error("Generate a draft before publishing");
-    const { error } = await supabase.from("client_meal_plans").upsert(
-      {
-        profile_id: clientId,
-        mode: "personalized",
-        draft: plan,
-        draft_meta: existing.draft_meta || plan.meta || null,
-        published: plan,
-        published_at: new Date().toISOString(),
-        published_by: adminId || null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "profile_id" },
-    );
+    const payload = {
+      profile_id: clientId,
+      mode: "personalized",
+      draft: plan,
+      draft_meta: existing.draft_meta || plan.meta || null,
+      published: plan,
+      published_at: new Date().toISOString(),
+      published_by: adminId || null,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("client_meal_plans").upsert(payload, { onConflict: "profile_id" });
     if (error) throw error;
+
+    // Confirm the write — surfaces RLS / schema issues instead of a silent miss
+    const verify = await this.loadClientMealPlan(clientId);
+    if (verify.mode !== "personalized" || !verify.published?.days?.length) {
+      throw new Error("Publish didn’t stick — check client_meal_plans table / RLS (migration 011)");
+    }
   },
 
   /**
