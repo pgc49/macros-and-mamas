@@ -32,6 +32,7 @@ import { T, FD } from "./theme/tokens";
 
 const EMPTY_PROFILE = {
   name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
+  bottleOz: 24,
   breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
   stress: "medium", insulinResistance: false, diet: "none",
   prefB: "", prefL: "", prefD: "", seasonNote: "",
