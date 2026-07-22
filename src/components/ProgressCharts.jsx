@@ -150,8 +150,8 @@ export function ProgressCharts({
         </div>
         <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
           {admin
-            ? `Days she logged water. Goal line is half her current weight${waterGoal ? ` (${waterGoal} oz)` : ""}. Sage bars hit the goal.`
-            : `Days you logged water. The line is your goal${waterGoal ? ` (${waterGoal} oz)` : ""} — half your current weight. Sage bars mean you hit it.`}
+            ? `Days she logged water. Goal line is half her goal weight${waterGoal ? ` (${waterGoal} oz)` : ""}. Sage bars hit the goal.`
+            : `Days you logged water. The line is your goal${waterGoal ? ` (${waterGoal} oz)` : ""} — half your goal weight. Sage bars mean you hit it.`}
         </p>
 
         {!hasWater ? (

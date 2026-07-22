@@ -286,7 +286,7 @@ export default function App() {
     navigate(PATHS.pending);
   };
 
-  const waterOz = profile.currentWeight ? Math.round(Number(profile.currentWeight) / 2) : null;
+  const waterOz = profile.goalWeight ? Math.round(Number(profile.goalWeight) / 2) : null;
 
   const downscaleImage = (file, max = 1024) => new Promise((resolve) => {
     const img = new Image();
