@@ -19,7 +19,7 @@ function persistDismissed() {
   }
 }
 
-/** One-time visual tip: Add to Home Screen. Gone forever after dismiss. */
+/** One-time tip matching the getting-started mockup. Gone forever after dismiss. */
 export function HomeScreenTip() {
   const [visible, setVisible] = useState(() => !wasDismissed());
 
@@ -31,69 +31,88 @@ export function HomeScreenTip() {
   };
 
   return (
-    <div
-      role="region"
-      aria-label="Add to Home Screen tip"
+    <aside
+      aria-label="Getting started tip"
       style={{
         position: "relative",
         background: T.accentSoft,
-        borderRadius: 14,
-        padding: "12px 36px 12px 14px",
-        marginBottom: 12,
+        borderRadius: 16,
+        padding: "14px 16px 16px",
+        marginBottom: 14,
       }}
     >
       <button
         type="button"
         onClick={dismiss}
-        aria-label="Dismiss tip"
+        aria-label="Dismiss"
         style={{
           position: "absolute",
-          top: 4,
-          right: 6,
+          top: 10,
+          right: 12,
           border: "none",
           background: "transparent",
           color: T.inkSoft,
-          fontSize: 22,
+          fontSize: 20,
           lineHeight: 1,
           cursor: "pointer",
-          padding: "6px 8px",
+          padding: 4,
           fontFamily: F,
         }}
       >
         ×
       </button>
 
-      <div
+      <p
         style={{
-          fontSize: 11,
+          margin: "0 0 6px",
+          fontSize: 11.5,
           fontWeight: 700,
-          letterSpacing: 0.04,
+          letterSpacing: "0.04em",
           textTransform: "uppercase",
           color: T.accentDeep,
-          marginBottom: 4,
+          fontFamily: F,
         }}
       >
         Getting started
-      </div>
+      </p>
 
-      <div style={{ fontFamily: FD, fontSize: 17, lineHeight: 1.25, marginBottom: 6 }}>
+      <h3
+        style={{
+          fontFamily: FD,
+          fontSize: 18,
+          fontWeight: 400,
+          margin: "0 0 8px",
+          color: T.ink,
+          lineHeight: 1.25,
+          paddingRight: 28,
+        }}
+      >
         Put Macros and Mamas on your home screen
-      </div>
+      </h3>
 
-      <p style={{ margin: "0 0 8px", fontSize: 13, lineHeight: 1.4, color: T.inkSoft }}>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 14,
+          lineHeight: 1.55,
+          color: T.inkSoft,
+          fontFamily: F,
+        }}
+      >
         It&apos;ll feel like an app — tap the icon anytime and you&apos;re back in your dashboard. No App Store.
       </p>
 
       <ol
         style={{
-          margin: 0,
+          margin: "10px 0 0",
           paddingLeft: 18,
-          fontSize: 12.5,
-          lineHeight: 1.45,
+          fontSize: 13.5,
+          lineHeight: 1.55,
           color: T.ink,
+          fontFamily: F,
         }}
       >
-        <li style={{ marginBottom: 3 }}>
+        <li style={{ marginBottom: 4 }}>
           <b>iPhone:</b> Safari → Share → <b>Add to Home Screen</b>
         </li>
         <li>
@@ -101,24 +120,25 @@ export function HomeScreenTip() {
         </li>
       </ol>
 
-      <button
-        type="button"
-        onClick={dismiss}
-        style={{
-          marginTop: 10,
-          border: "none",
-          background: T.accent,
-          color: "#fff",
-          fontFamily: F,
-          fontWeight: 700,
-          fontSize: 13,
-          padding: "8px 14px",
-          borderRadius: 999,
-          cursor: "pointer",
-        }}
-      >
-        Got it
-      </button>
-    </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={dismiss}
+          style={{
+            border: "none",
+            borderRadius: 999,
+            padding: "10px 16px",
+            fontFamily: F,
+            fontWeight: 700,
+            fontSize: 13.5,
+            cursor: "pointer",
+            background: T.accent,
+            color: "#fff",
+          }}
+        >
+          Got it
+        </button>
+      </div>
+    </aside>
   );
 }
