@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Meal plan recipe card mockup</title>
+  <title>Meal plan recipe card mockup — Meals tab</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Karla:wght@400;700&family=Marcellus&display=swap" rel="stylesheet" />
@@ -49,6 +49,25 @@
       padding: 16px 14px 22px;
       box-shadow: 0 10px 32px rgba(51, 39, 46, 0.07);
     }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+    .tabs span {
+      flex: 1;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--inkSoft);
+      padding: 6px 0;
+    }
+    .tabs span.on {
+      color: var(--accentDeep);
+      box-shadow: inset 0 -2px 0 var(--accent);
+    }
     .day-head {
       display: flex;
       justify-content: space-between;
@@ -75,7 +94,7 @@
       margin-bottom: 8px;
       overflow: hidden;
     }
-    .card > button {
+    .card-top {
       width: 100%;
       text-align: left;
       border: none;
@@ -104,10 +123,34 @@
       margin-top: 2px;
     }
     .why { font-size: 12.5px; color: var(--inkSoft); margin-top: 4px; line-height: 1.4; }
-    .macros { text-align: right; flex-shrink: 0; }
+    .side {
+      flex-shrink: 0;
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
     .macros .cal { font-size: 13px; font-weight: 700; }
     .macros .pcf { font-size: 12px; color: var(--inkSoft); }
-    .macros .tog { font-size: 12px; color: var(--accent); font-weight: 700; margin-top: 4px; }
+    .tog { font-size: 12px; color: var(--accent); font-weight: 700; margin-top: 2px; }
+    .log-btn {
+      flex-shrink: 0;
+      font-family: Karla, sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1.5px solid var(--accent);
+      background: var(--accentSoft);
+      color: var(--accentDeep);
+      cursor: pointer;
+    }
+    .log-btn.done {
+      border-color: var(--sage);
+      background: var(--sageSoft);
+      color: var(--sage);
+    }
     .detail {
       display: none;
       padding: 0 14px 14px;
@@ -131,6 +174,11 @@
       line-height: 1.5;
     }
     .detail li { margin-bottom: 3px; }
+    .detail-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
     .note {
       margin-top: 18px;
       font-size: 13.5px;
@@ -142,20 +190,49 @@
       padding: 12px 14px;
     }
     .hint { font-size: 12px; color: var(--accentDeep); font-weight: 700; margin: 0 0 10px; }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%) translateY(120%);
+      background: var(--ink);
+      color: #fff;
+      font-size: 13.5px;
+      font-weight: 700;
+      padding: 12px 18px;
+      border-radius: 999px;
+      opacity: 0;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+      z-index: 20;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
   <div class="wide">
-    <h1>Recipe card mockup</h1>
+    <h1>Meals tab — plan recipe cards</h1>
     <p class="lede">
-      Collapsed: name + macros. Tap → ingredients with amounts + steps.
-      This matches what admin Meal plan draft already renders from the AI JSON (no separate transform step beyond parse + sum).
+      Customer Meals view (future): her week plan as expandable cards.
+      Same <b>+ Log</b> control as today’s recipe bank — adds that meal’s macros to her day.
+      Tap the card body to open ingredients + steps. Today tab search/add stays as-is.
     </p>
   </div>
 
   <div class="wrap">
     <div class="phone">
-      <p class="hint">Tap “Callie’s chicken teriyaki” to open / close</p>
+      <div class="tabs" aria-hidden="true">
+        <span>Today</span>
+        <span class="on">Meals</span>
+        <span>Progress</span>
+        <span>Habits</span>
+      </div>
+
+      <p class="hint">Tap a meal for the recipe · + Log adds macros (mock)</p>
       <div class="day-head">
         <div>
           <span class="d">Mon</span>
@@ -170,17 +247,20 @@
       </div>
 
       <div class="card" id="bf">
-        <button type="button" onclick="toggle('bf')">
+        <button type="button" class="card-top" onclick="toggle('bf')">
           <div class="row">
             <div>
               <div class="slot">Breakfast</div>
               <div class="name">Protein oatmeal</div>
               <div class="why">Matches her “anything with peanut butter” morning note — PB stirred in.</div>
-            </div>
-            <div class="macros">
-              <div class="cal">340 cal</div>
-              <div class="pcf">32P · 38C · 8F</div>
               <div class="tog" data-tog>Open recipe ▾</div>
+            </div>
+            <div class="side">
+              <button type="button" class="log-btn" data-log="Protein oatmeal" data-macros="340 cal · 32P · 38C · 8F" onclick="logMeal(event, this)">+ Log</button>
+              <div class="macros">
+                <div class="cal">340 cal</div>
+                <div class="pcf">32P · 38C · 8F</div>
+              </div>
             </div>
           </div>
         </button>
@@ -200,21 +280,27 @@
             <li>Stir in protein off heat until smooth.</li>
             <li>Top with berries, peanut butter, cinnamon.</li>
           </ol>
+          <div class="detail-actions">
+            <button type="button" class="log-btn" data-log="Protein oatmeal" data-macros="340 cal · 32P · 38C · 8F" onclick="logMeal(event, this)">+ Log</button>
+          </div>
         </div>
       </div>
 
       <div class="card" id="lunch">
-        <button type="button" onclick="toggle('lunch')">
+        <button type="button" class="card-top" onclick="toggle('lunch')">
           <div class="row">
             <div>
               <div class="slot">Lunch</div>
               <div class="name">Chicken salad on sourdough</div>
               <div class="why">Uses her “sandwiches / leftovers” lunch preference.</div>
-            </div>
-            <div class="macros">
-              <div class="cal">410 cal</div>
-              <div class="pcf">53P · 30C · 6F</div>
               <div class="tog" data-tog>Open recipe ▾</div>
+            </div>
+            <div class="side">
+              <button type="button" class="log-btn" data-log="Chicken salad on sourdough" data-macros="410 cal · 53P · 30C · 6F" onclick="logMeal(event, this)">+ Log</button>
+              <div class="macros">
+                <div class="cal">410 cal</div>
+                <div class="pcf">53P · 30C · 6F</div>
+              </div>
             </div>
           </div>
         </button>
@@ -233,21 +319,27 @@
             <li>Mix chicken, yogurt, Dijon, celery.</li>
             <li>Toast sourdough; pile salad on top open-face.</li>
           </ol>
+          <div class="detail-actions">
+            <button type="button" class="log-btn" data-log="Chicken salad on sourdough" data-macros="410 cal · 53P · 30C · 6F" onclick="logMeal(event, this)">+ Log</button>
+          </div>
         </div>
       </div>
 
       <div class="card open" id="dinner">
-        <button type="button" onclick="toggle('dinner')">
+        <button type="button" class="card-top" onclick="toggle('dinner')">
           <div class="row">
             <div>
               <div class="slot">Dinner</div>
               <div class="name">Callie’s chicken teriyaki</div>
               <div class="why">Family dinner she already loves — macros from the bank recipe, her plate only.</div>
-            </div>
-            <div class="macros">
-              <div class="cal">540 cal</div>
-              <div class="pcf">38P · 64C · 13F</div>
               <div class="tog" data-tog>Hide ▴</div>
+            </div>
+            <div class="side">
+              <button type="button" class="log-btn" data-log="Callie’s chicken teriyaki" data-macros="540 cal · 38P · 64C · 13F" onclick="logMeal(event, this)">+ Log</button>
+              <div class="macros">
+                <div class="cal">540 cal</div>
+                <div class="pcf">38P · 64C · 13F</div>
+              </div>
             </div>
           </div>
         </button>
@@ -267,21 +359,27 @@
             <li>Plate her serving: 6 oz thighs + glaze share, rice, broccoli.</li>
             <li>Leftovers cover family plates — same recipe, her macros stay the per-serving numbers above.</li>
           </ol>
+          <div class="detail-actions">
+            <button type="button" class="log-btn" data-log="Callie’s chicken teriyaki" data-macros="540 cal · 38P · 64C · 13F" onclick="logMeal(event, this)">+ Log</button>
+          </div>
         </div>
       </div>
 
       <div class="card" id="snack">
-        <button type="button" onclick="toggle('snack')">
+        <button type="button" class="card-top" onclick="toggle('snack')">
           <div class="row">
             <div>
               <div class="slot">Snack</div>
               <div class="name">Greek yogurt + berries</div>
               <div class="why">Fills protein to land inside her band without another heavy meal.</div>
-            </div>
-            <div class="macros">
-              <div class="cal">180 cal</div>
-              <div class="pcf">24P · 16C · 2F</div>
               <div class="tog" data-tog>Open recipe ▾</div>
+            </div>
+            <div class="side">
+              <button type="button" class="log-btn" data-log="Greek yogurt + berries" data-macros="180 cal · 24P · 16C · 2F" onclick="logMeal(event, this)">+ Log</button>
+              <div class="macros">
+                <div class="cal">180 cal</div>
+                <div class="pcf">24P · 16C · 2F</div>
+              </div>
             </div>
           </div>
         </button>
@@ -295,15 +393,22 @@
           <ol>
             <li>Bowl yogurt; top with berries. Eat cold.</li>
           </ol>
+          <div class="detail-actions">
+            <button type="button" class="log-btn" data-log="Greek yogurt + berries" data-macros="180 cal · 24P · 16C · 2F" onclick="logMeal(event, this)">+ Log</button>
+          </div>
         </div>
       </div>
     </div>
 
     <p class="note">
-      <b>Data flow:</b> OpenRouter returns JSON → we parse it → server re-sums day totals → admin renders these cards.
-      Clicking doesn’t call AI again; it just expands the JSON already stored on the draft.
+      <b>Customer UX:</b> Meals tab shows her personalized week. <b>+ Log</b> = same action as today’s recipe bank (adds P/C/F/cal to the selected day).
+      Expand = cook instructions only. Today tab search stays for one-off meals.
+      <br /><br />
+      <b>Admin today:</b> Callie still generates drafts in admin without + Log (review only). Client + Log ships when we publish plans.
     </p>
   </div>
+
+  <div class="toast" id="toast" role="status"></div>
 
   <script>
     function toggle(id) {
@@ -311,6 +416,25 @@
       const open = el.classList.toggle("open");
       const tog = el.querySelector("[data-tog]");
       if (tog) tog.textContent = open ? "Hide ▴" : "Open recipe ▾";
+    }
+
+    function logMeal(event, btn) {
+      event.stopPropagation();
+      event.preventDefault();
+      const name = btn.getAttribute("data-log") || "Meal";
+      const macros = btn.getAttribute("data-macros") || "";
+      const card = btn.closest(".card");
+      if (card) {
+        card.querySelectorAll(".log-btn").forEach((b) => {
+          b.textContent = "Logged";
+          b.classList.add("done");
+        });
+      }
+      const toast = document.getElementById("toast");
+      toast.textContent = "Added to today · " + name + (macros ? " · " + macros : "");
+      toast.classList.add("show");
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
     }
   </script>
 </body>
