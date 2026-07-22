@@ -139,18 +139,52 @@ export const RangeBand = ({ label, lo, hi, unit = "g", eaten }) => {
 };
 
 /* Shell — prototype's coach toggle and reset button removed.
-   Shows signed-in email + sign-out when a session exists. */
-export const Shell = ({ children }) => {
+   Shows signed-in email + sign-out when a session exists.
+   Optional bottomBar docks via flex (avoids iOS position:fixed mid-screen jumps). */
+export const Shell = ({ children, bottomBar = null }) => {
   const { user, isAdmin, signOut } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const linkStyle = {
     fontFamily: F, fontSize: 12, fontWeight: 700, color: T.accent, textDecoration: "underline",
   };
+  const hasBar = !!bottomBar;
   return (
-    <div style={{ fontFamily: F, background: T.bg, minHeight: "100vh", color: T.ink }}>
+    <div
+      style={{
+        fontFamily: F,
+        background: T.bg,
+        color: T.ink,
+        minHeight: "100vh",
+        ...(hasBar
+          ? {
+              height: "100dvh",
+              maxHeight: "100dvh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }
+          : null),
+      }}
+    >
       <Fonts />
-      <div style={{ maxWidth: 560, margin: "0 auto", padding: "0 16px 90px" }}>
+      <div
+        style={{
+          maxWidth: 560,
+          width: "100%",
+          margin: "0 auto",
+          padding: hasBar ? "0 16px 20px" : "0 16px 90px",
+          boxSizing: "border-box",
+          ...(hasBar
+            ? {
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                WebkitOverflowScrolling: "touch",
+              }
+            : null),
+        }}
+      >
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 2px 6px", gap: 12 }}>
           <div>
             <div style={{ fontFamily: FD, fontSize: 24, letterSpacing: 0.3 }}>Macros and Mamas</div>
@@ -186,6 +220,18 @@ export const Shell = ({ children }) => {
         </header>
         {children}
       </div>
+      {hasBar && (
+        <div
+          style={{
+            flexShrink: 0,
+            background: "#fff",
+            borderTop: `1px solid ${T.border}`,
+            paddingBottom: "max(10px, env(safe-area-inset-bottom, 0px))",
+          }}
+        >
+          {bottomBar}
+        </div>
+      )}
     </div>
   );
 };

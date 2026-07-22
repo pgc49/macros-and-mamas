@@ -60,17 +60,43 @@ export function ClientApp({
     const floor = addDaysIso(wkStartOf(), -7 * 52);
     return fromChecks < floor ? fromChecks : floor;
   })();
-  return (
-    <Shell>
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", gap: 4, padding: "8px 0 14px", zIndex: 5 }}>
-        {[["today", "Today"], ["meals", "Meals"], ["progress", "Progress"]].map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} style={{
-            fontFamily: F, fontSize: 14, fontWeight: 700, padding: "9px 22px", borderRadius: 999, border: "none", cursor: "pointer",
-            background: tab === k ? T.accentSoft : "transparent", color: tab === k ? T.accentDeep : T.inkSoft,
-          }}>{l}</button>
-        ))}
-      </nav>
+  const tabBar = (
+    <nav
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        gap: 4,
+        padding: "8px 16px 4px",
+        maxWidth: 560,
+        margin: "0 auto",
+      }}
+      aria-label="Main"
+    >
+      {[["today", "Today"], ["meals", "Meals"], ["progress", "Progress"]].map(([k, l]) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => setTab(k)}
+          style={{
+            fontFamily: F,
+            fontSize: 14,
+            fontWeight: 700,
+            padding: "9px 22px",
+            borderRadius: 999,
+            border: "none",
+            cursor: "pointer",
+            background: tab === k ? T.accentSoft : "transparent",
+            color: tab === k ? T.accentDeep : T.inkSoft,
+          }}
+        >
+          {l}
+        </button>
+      ))}
+    </nav>
+  );
 
+  return (
+    <Shell bottomBar={tabBar}>
       {tab === "today" && macros && (
         <>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
