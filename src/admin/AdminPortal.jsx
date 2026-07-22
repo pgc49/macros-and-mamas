@@ -207,6 +207,11 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   const needsAttention = (c) => {
     const r = rateOf(c.weighins);
     const flags = [];
+    if (c.pregnant) flags.push("pregnant — connect 1:1");
+    if (c.breastfeeding && c.monthsPP != null && c.monthsPP !== "" && Number(c.monthsPP) < 3) {
+      flags.push("early nursing — connect 1:1");
+    }
+    if (c.diet && c.diet !== "none") flags.push(`diet: ${c.diet} — connect before approving`);
     if (r !== null && r > 1.5) flags.push("losing too fast");
     if (c.status === "active" && c.adherence < 60) flags.push("low adherence");
     return flags;
@@ -299,7 +304,9 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 {sel.email ? <><br />✉️ {sel.email}</> : null}
                 {sel.age ? <><br />{sel.age} yrs</> : null}
                 {sel.currentWeight != null && sel.goalWeight != null ? <> · {sel.currentWeight} → {sel.goalWeight} lbs</> : null}
+                {sel.pregnant ? <><br />⚠️ Currently pregnant — connect 1:1 before approving or refunding</> : null}
                 {sel.breastfeeding ? ` · breastfeeding${sel.monthsPP != null && sel.monthsPP !== "" ? ` · ${sel.monthsPP} mo pp` : ""}` : ""}
+                {sel.diet && sel.diet !== "none" ? <><br />⚠️ Diet: {sel.diet} — connect before approving</> : null}
                 {sel.phone ? <><br />📱 {sel.phone}{stage === "awaiting_approval" ? " — send WhatsApp invite on approval" : ""}</> : null}
                 {(sel.prefB || sel.prefL || sel.prefD) ? <><br />🍽 Loves: {[sel.prefB, sel.prefL, sel.prefD].filter(Boolean).join(" · ")}</> : null}
                 {sel.seasonNote ? <><br />💬 {sel.seasonNote}</> : null}
@@ -366,7 +373,11 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
               <div style={{ background: T.amberSoft, borderRadius: 12, padding: "10px 14px", marginBottom: 10 }}>
                 {flags.map((f) => (
                   <div key={f} style={{ fontSize: 13, color: T.amber, lineHeight: 1.5 }}>
-                    ⚠ {f === "losing too fast" ? "Losing faster than 1.5 lb/wk — voice-note her to eat the top of her ranges." : "Adherence under 60% — a personal check-in usually turns this around."}
+                    ⚠ {f === "losing too fast"
+                      ? "Losing faster than 1.5 lb/wk — voice-note her to eat the top of her ranges."
+                      : f === "low adherence"
+                        ? "Adherence under 60% — a personal check-in usually turns this around."
+                        : f}
                   </div>
                 ))}
               </div>

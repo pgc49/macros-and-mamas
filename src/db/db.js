@@ -610,6 +610,8 @@ export const db = {
         goalWeight: p.goal_weight,
         monthsPP: p.months_pp,
         breastfeeding: p.breastfeeding,
+        pregnant: !!p.pregnant,
+        diet: p.diet || "none",
         phone: p.phone,
         prefB: p.pref_b,
         prefL: p.pref_l,

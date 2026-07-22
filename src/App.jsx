@@ -30,7 +30,7 @@ import { ClientApp } from "./views/ClientApp";
 import { AdminPortal } from "./admin/AdminPortal";
 import { Shell } from "./components/ui";
 import { T, FD } from "./theme/tokens";
-import { requestEligibilityRefund } from "./lib/checkout";
+import { requestEligibilityHold } from "./lib/checkout";
 
 const EMPTY_PROFILE = {
   name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
@@ -190,36 +190,25 @@ export default function App() {
 
   const set = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
 
-  const runEligibilityRefund = async (reason) => {
+  const flagEligibilityHold = async (reason) => {
     if (refundOnce.current) return;
     refundOnce.current = true;
-    setDeclineReason(reason === "early_nursing" ? "early" : reason);
+    const normalized = reason === "early" || reason === "early_nursing" ? "early_nursing" : reason;
+    setDeclineReason(normalized === "early_nursing" ? "early" : normalized);
     try {
-      await requestEligibilityRefund(reason);
-      setRefundIssued(true);
-      setPaid(false);
-      setRefunded(true);
-      await refreshProfile();
+      await requestEligibilityHold(normalized, {
+        monthsPP: profile.monthsPP,
+        name: profile.name,
+      });
+      // Stay paid — Callie decides refund 1:1. Do not set refunded/refundIssued.
     } catch (e) {
-      console.error("eligibility refund failed", e);
-      // Allow a retry if the API failed (e.g. webhook lag on payment_intent)
+      console.error("eligibility hold failed", e);
       refundOnce.current = false;
     }
   };
 
-  /* Gating: pregnant + early nursing auto-refund (post-pay).
-     Diet (veg/vegan) does NOT auto-refund — intake still goes to Callie to connect first. */
+  /* No auto-refunds. Pregnant / early nursing / diet all stay for Callie to review. */
   const submitIntake = async () => {
-    if (profile.pregnant) {
-      await runEligibilityRefund("pregnant");
-      navigate(PATHS.declined);
-      return;
-    }
-    if (profile.breastfeeding && Number(profile.monthsPP) < 3) {
-      await runEligibilityRefund("early_nursing");
-      navigate(PATHS.declined);
-      return;
-    }
     const forEngine = {
       ...profile,
       // monthsPP only applies when nursing; clear for non-BF so storage stays clean
@@ -248,6 +237,7 @@ export default function App() {
               goalWeight: forEngine.goalWeight,
               breastfeeding: forEngine.breastfeeding,
               monthsPP: forEngine.monthsPP,
+              pregnant: forEngine.pregnant,
               phone: forEngine.phone,
               diet: forEngine.diet,
               tastes: [forEngine.prefB, forEngine.prefL, forEngine.prefD].filter(Boolean).join(" · "),
@@ -727,8 +717,7 @@ export default function App() {
                       setStep={setStep}
                       set={set}
                       onSubmit={submitIntake}
-                      onEligibilityDecline={runEligibilityRefund}
-                      refundIssued={refundIssued}
+                      onEligibilityDecline={flagEligibilityHold}
                     />
                   )
         }

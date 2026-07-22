@@ -1,8 +1,8 @@
 import { FD, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
 
-const REFUND_COPY =
-  "Your $149 has been fully refunded — it'll land back on your card in a few days. We'll be here when the time is right.";
+const HOLD_COPY =
+  "You're still enrolled for now — Callie will reach out to sort next steps with you.";
 
 export function DeclinedPage({ declineReason, onBack, refundIssued = false }) {
   const msgs = {
@@ -26,14 +26,14 @@ export function DeclinedPage({ declineReason, onBack, refundIssued = false }) {
         <div style={{ fontSize: 34 }}>🤍</div>
         <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "10px 0" }}>{m.title}</h2>
         <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft }}>{m.body}</p>
-        {refundIssued && (
-          <p style={{
-            fontSize: 14.5, lineHeight: 1.55, color: T.accentDeep, fontWeight: 700,
-            margin: "16px 0 0", padding: "12px 14px", background: T.accentSoft, borderRadius: 12,
-          }}>
-            {REFUND_COPY}
-          </p>
-        )}
+        <p style={{
+          fontSize: 14.5, lineHeight: 1.55, color: T.accentDeep, fontWeight: 700,
+          margin: "16px 0 0", padding: "12px 14px", background: T.accentSoft, borderRadius: 12,
+        }}>
+          {refundIssued
+            ? "Your $149 has been fully refunded — it'll land back on your card in a few days. We'll be here when the time is right."
+            : HOLD_COPY}
+        </p>
         <Btn ghost onClick={onBack} style={{ marginTop: 14 }}>Back to start</Btn>
       </Card>
     </Shell>

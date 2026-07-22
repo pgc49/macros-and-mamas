@@ -22,6 +22,7 @@ export async function onRequestPost({ request, env }) {
       breastfeeding: body.breastfeeding ?? profile.breastfeeding ?? null,
       monthsPP: body.monthsPP ?? profile.months_pp ?? null,
       diet: body.diet ?? profile.diet ?? null,
+      pregnant: body.pregnant ?? profile.pregnant ?? null,
       phone: body.phone ?? profile.phone ?? null,
       tastes: body.tastes
         || [profile.pref_b, profile.pref_l, profile.pref_d].filter(Boolean).join(" · ")

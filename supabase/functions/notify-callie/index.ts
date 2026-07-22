@@ -44,6 +44,12 @@ serve(async (req) => {
         s.breastfeeding != null
           ? `Breastfeeding: ${s.breastfeeding ? "yes" : "no"}${s.monthsPP != null ? ` (${s.monthsPP} mo pp)` : ""}`
           : "",
+        s.pregnant
+          ? `⚠️ Pregnant — connect 1:1 before approving or refunding (no auto-refund)`
+          : "",
+        s.breastfeeding && s.monthsPP != null && Number(s.monthsPP) < 3
+          ? `⚠️ Early nursing (<3 mo) — connect 1:1 before approving or refunding (no auto-refund)`
+          : "",
         s.diet && s.diet !== "none"
           ? `⚠️ Diet: ${s.diet} — connect before approving (no auto-refund)`
           : "",
@@ -55,10 +61,25 @@ serve(async (req) => {
       ]
         .filter((line) => line !== undefined)
         .join("\n");
+    } else if (type === "eligibility_hold") {
+      const label = reason === "pregnant" ? "pregnant" : "early nursing (<3 mo)";
+      subject = `⚠️ ${display} — ${label} (no auto-refund)`;
+      const s = stats || {};
+      text = [
+        `${display} hit an eligibility gate during intake.`,
+        email ? `Email: ${email}` : "",
+        `Reason: ${label}`,
+        s.monthsPP != null && s.monthsPP !== "" ? `Months postpartum: ${s.monthsPP}` : "",
+        "",
+        "No auto-refund was issued. Reach out 1:1 and decide whether to refund in Stripe.",
+        `${APP_URL}/admin`,
+      ]
+        .filter(Boolean)
+        .join("\n");
     } else if (type === "refund") {
       subject = `↩️ Refund: ${display} (${reason || "eligibility"}) — waitlisted`;
       text = [
-        `Auto-refund issued for ${display}.`,
+        `Refund recorded for ${display}.`,
         email ? `Email: ${email}` : "",
         `Reason: ${reason || "eligibility"}`,
         "They should be on the waitlist if they left an email.",

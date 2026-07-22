@@ -4,8 +4,8 @@ import { Shell, Card, Btn, Field, Chip, inputStyle } from "../components/ui";
 import { useAuth } from "../auth/useAuth.jsx";
 import { db } from "../db/db";
 
-const REFUND_COPY =
-  "Your $149 has been fully refunded — it'll land back on your card in a few days. We'll be here when the time is right.";
+const HOLD_COPY =
+  "You're still enrolled for now — Callie will reach out to sort next steps with you. No automatic refund.";
 
 function WaitlistCapture({
   reason,
@@ -76,7 +76,7 @@ function WaitlistCapture({
   );
 }
 
-export function IntakeFlow({ profile, step, setStep, set, onSubmit, onEligibilityDecline, refundIssued = false }) {
+export function IntakeFlow({ profile, step, setStep, set, onSubmit, onEligibilityDecline }) {
   const steps = ["About you", "You right now", "Your goal", "Your tastes"];
   const [earlyGateShown, setEarlyGateShown] = useState(false);
   const declinedOnce = useRef(false);
@@ -204,14 +204,12 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit, onEligibilit
                 buttonLabel="Keep me posted"
                 footnote="Leave your email and Callie will check in when the time is right."
               />
-              {refundIssued && (
-                <p style={{
-                  fontSize: 13.5, lineHeight: 1.5, color: T.accentDeep, fontWeight: 700,
-                  margin: "12px 0 0",
-                }}>
-                  {REFUND_COPY}
-                </p>
-              )}
+              <p style={{
+                fontSize: 13.5, lineHeight: 1.5, color: T.accentDeep, fontWeight: 700,
+                margin: "12px 0 0",
+              }}>
+                {HOLD_COPY}
+              </p>
             </div>
           )}
 
@@ -265,14 +263,12 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit, onEligibilit
                     buttonLabel="Remind me when it's time"
                     footnote="We'll reach out as you pass the three-month mark."
                   />
-                  {refundIssued && (
-                    <p style={{
-                      fontSize: 13.5, lineHeight: 1.5, color: T.accentDeep, fontWeight: 700,
-                      margin: "12px 0 0",
-                    }}>
-                      {REFUND_COPY}
-                    </p>
-                  )}
+                  <p style={{
+                    fontSize: 13.5, lineHeight: 1.5, color: T.accentDeep, fontWeight: 700,
+                    margin: "12px 0 0",
+                  }}>
+                    {HOLD_COPY}
+                  </p>
                 </div>
               )}
 
