@@ -268,7 +268,7 @@ export function ClientApp({
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Automate your plate</h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
             {personalized
-              ? "Your week from Callie — open a meal for ingredients and steps, then + Log to add it to your day."
+              ? "Your personalized week — built from your preferences, inside your program ranges. Take what works; open a meal for ingredients and steps, then + Log."
               : "Same breakfasts, similar lunches, dinner gets to be fun. Repetition is the secret — decide once, win all week."}
           </p>
 

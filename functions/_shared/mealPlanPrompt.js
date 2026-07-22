@@ -152,7 +152,7 @@ ${recipesBlock}
           "basedOn": "Callie recipe name or null if original",
           "cal": 0, "p": 0, "c": 0, "f": 0,
           "servings": 1,
-          "why": "one line tying to her prefs",
+          "why": "private one-liner for Callie only (prefs/macros fit) — never '[Name] loves…' and never client-facing marketing",
           "ingredients": [{ "item": "chicken breast", "amount": "6 oz (170g) raw" }],
           "steps": ["Step one…", "Step two…"]
         }

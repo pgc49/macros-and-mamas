@@ -309,7 +309,9 @@ export function withRecipeDetail(recipe) {
   };
 }
 
-/** Normalize AI / published meal into the same card shape as default recipes. */
+/** Normalize AI / published meal into the same card shape as default recipes.
+ *  Do not surface AI `why` blurbs ("Patrick loves…") to clients — those stay admin-only.
+ */
 export function mealToCard(meal) {
   const slot = (meal.slot || meal.cat || "").toString();
   const cat = slot ? slot.charAt(0).toUpperCase() + slot.slice(1).toLowerCase() : "Meal";
@@ -317,8 +319,9 @@ export function mealToCard(meal) {
     cat,
     slot: slot.toLowerCase() || null,
     name: meal.name,
-    desc: meal.why || meal.desc || "",
-    why: meal.why || "",
+    // Prefer a real food description if present; never the preference "why" line.
+    desc: meal.desc || "",
+    why: "",
     basedOn: meal.basedOn || null,
     cal: meal.cal,
     p: meal.p,
