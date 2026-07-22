@@ -38,7 +38,7 @@ export function HomeScreenTip() {
         position: "relative",
         background: T.accentSoft,
         borderRadius: 12,
-        padding: "10px 40px 10px 12px",
+        padding: "11px 40px 11px 13px",
         marginBottom: 12,
       }}
     >
@@ -64,22 +64,22 @@ export function HomeScreenTip() {
       </button>
       <div
         style={{
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           letterSpacing: 0.04,
           textTransform: "uppercase",
           color: T.accentDeep,
-          marginBottom: 2,
+          marginBottom: 3,
         }}
       >
-        Tip · phone & desktop
+        Tip · works great on your phone
       </div>
-      <div style={{ fontFamily: FD, fontSize: 15, lineHeight: 1.25, marginBottom: 4 }}>
-        Add to your home screen
+      <div style={{ fontFamily: FD, fontSize: 16, lineHeight: 1.25, marginBottom: 4 }}>
+        Add Macros and Mamas to your home screen
       </div>
-      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.4, color: T.inkSoft }}>
-        Best on your phone: Safari or Chrome → Share →{" "}
-        <b style={{ color: T.ink }}>Add to Home Screen</b>. Instant icon, no App Store.
+      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.4, color: T.inkSoft }}>
+        Safari or Chrome → Share → <b style={{ color: T.ink }}>Add to Home Screen</b>.
+        Instant icon, no App Store.
       </p>
       <button
         type="button"
