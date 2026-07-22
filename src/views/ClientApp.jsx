@@ -8,6 +8,7 @@ import { MealRecipeCard } from "../components/MealRecipeCard";
 import { WaterLogCard } from "../components/WaterLogCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
+import { BeforeAfterPhotos } from "../components/BeforeAfterPhotos";
 import { HomeScreenTip } from "../components/HomeScreenTip";
 import { mealToCard } from "../content/recipeDetails";
 
@@ -366,10 +367,7 @@ export function ClientApp({
           </Card>
 
           <Card style={{ marginTop: 12 }}>
-            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Before + after photos</div>
-            <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6 }}>
-              Week 1 and week 8: same outfit, same spot, same lighting, front and side. Faces optional. The most transformed mama in this founding group wins Callie's Gut Reset Guide.
-            </div>
+            <BeforeAfterPhotos />
           </Card>
 
           {hasAnySupport && (

@@ -906,4 +906,94 @@ export const db = {
       .eq("profile_id", clientId);
     if (error) throw error;
   },
+
+  /**
+   * Progress photos (private Storage). Returns { "before|front": { url, path, … }, … }.
+   * profileId omitted → signed-in user. Admins may pass another client's id.
+   */
+  async loadProgressPhotos(profileId) {
+    const uid = profileId || (await requireUserId());
+    const { data, error } = await supabase
+      .from("progress_photos")
+      .select("id, phase, pose, storage_path, updated_at")
+      .eq("profile_id", uid);
+    if (error) {
+      console.warn("loadProgressPhotos failed", error);
+      return {};
+    }
+    const out = {};
+    await Promise.all(
+      (data || []).map(async (row) => {
+        const key = `${row.phase}|${row.pose}`;
+        const { data: signed, error: signErr } = await supabase.storage
+          .from("progress-photos")
+          .createSignedUrl(row.storage_path, 3600);
+        if (signErr) {
+          console.warn("progress photo signed URL failed", signErr);
+          return;
+        }
+        out[key] = {
+          id: row.id,
+          phase: row.phase,
+          pose: row.pose,
+          path: row.storage_path,
+          updated_at: row.updated_at,
+          url: signed?.signedUrl || null,
+        };
+      }),
+    );
+    return out;
+  },
+
+  /** Upload/replace one slot. blob must be image/jpeg (client-compressed). */
+  async upsertProgressPhoto(phase, pose, blob) {
+    const uid = await requireUserId();
+    if (!["before", "after"].includes(phase)) throw new Error("invalid phase");
+    if (!["front", "side", "back"].includes(pose)) throw new Error("invalid pose");
+    if (!blob) throw new Error("missing photo");
+
+    const path = `${uid}/${phase}/${pose}.jpg`;
+    const { error: upErr } = await supabase.storage
+      .from("progress-photos")
+      .upload(path, blob, { upsert: true, contentType: "image/jpeg", cacheControl: "3600" });
+    if (upErr) throw upErr;
+
+    const { error: rowErr } = await supabase.from("progress_photos").upsert(
+      {
+        profile_id: uid,
+        phase,
+        pose,
+        storage_path: path,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "profile_id,phase,pose" },
+    );
+    if (rowErr) throw rowErr;
+
+    const { data: signed, error: signErr } = await supabase.storage
+      .from("progress-photos")
+      .createSignedUrl(path, 3600);
+    if (signErr) throw signErr;
+    return {
+      phase,
+      pose,
+      path,
+      url: signed?.signedUrl || null,
+      updated_at: new Date().toISOString(),
+    };
+  },
+
+  async deleteProgressPhoto(phase, pose) {
+    const uid = await requireUserId();
+    const path = `${uid}/${phase}/${pose}.jpg`;
+    const { error: rmErr } = await supabase.storage.from("progress-photos").remove([path]);
+    if (rmErr) console.warn("progress photo storage remove", rmErr);
+    const { error } = await supabase
+      .from("progress_photos")
+      .delete()
+      .eq("profile_id", uid)
+      .eq("phase", phase)
+      .eq("pose", pose);
+    if (error) throw error;
+  },
 };
