@@ -6,6 +6,7 @@ import { Shell, Card, Btn, Chip, RangeBand, rangeState } from "../components/ui"
 import { MealLogCard } from "../components/MealLogCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
+import { HomeScreenTip } from "../components/HomeScreenTip";
 
 export function ClientApp({
   tab, setTab,
@@ -22,7 +23,6 @@ export function ClientApp({
   mealFilter, setMealFilter,
 }) {
   const hi = (n, d = 10) => n + d;
-  const hasWhatsApp = hasPublicUrl(CONFIG.WHATSAPP_GROUP_URL);
   const hasElectrolytes = hasPublicUrl(CONFIG.FULLSCRIPT_ELECTROLYTES);
   const hasSleep = hasPublicUrl(CONFIG.FULLSCRIPT_SLEEP);
   const hasDigestion = hasPublicUrl(CONFIG.FULLSCRIPT_DIGESTION);
@@ -72,16 +72,7 @@ export function ClientApp({
               : `Ranges below show ${formatLongDay(mealLogDate)} — switch days in the meal log to compare.`}
           </p>
 
-          <Card style={{ marginBottom: 12, background: T.accentSoft, border: "none", display: "flex", gap: 14, alignItems: "center" }}>
-            <div style={{ fontSize: 26 }}>💬</div>
-            <div style={{ fontSize: 14, lineHeight: 1.5, flex: 1 }}>
-              <b>The Mamas group chat</b><br />
-              <span style={{ color: T.inkSoft, fontSize: 13 }}>Callie's in the chat Mon–Fri and answers in voice notes. Her Monday drop sets the week's focus — plate pics and wins always welcome.</span>
-            </div>
-            {hasWhatsApp && (
-              <Btn small onClick={() => window.open(CONFIG.WHATSAPP_GROUP_URL, "_blank")}>Open</Btn>
-            )}
-          </Card>
+          <HomeScreenTip />
 
           <Card style={{ marginBottom: 4 }}>
             <RangeBand label="Protein" lo={pLo} hi={pHi} eaten={totals.p} />
