@@ -5,9 +5,11 @@ import {
 } from "recharts";
 import { T, F, FD } from "../theme/tokens";
 import { rateOf } from "../utils/dates";
+import { buildHabitHistory, buildMacroHistory, buildTrends } from "../utils/progressSeries";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
 import { Shell, Card, Btn, inputStyle } from "../components/ui";
+import { ProgressCharts } from "../components/ProgressCharts";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 
@@ -142,6 +144,9 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   const [tab, setTab] = useState("overview");
   const [filter, setFilter] = useState("needs_you");
   const [recentEmails, setRecentEmails] = useState([]);
+  const [clientProgress, setClientProgress] = useState(null);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [progressError, setProgressError] = useState(null);
   const debounceRef = useRef({});
 
   const all = roster || [];
@@ -168,6 +173,36 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
     });
     return () => { cancelled = true; };
   }, [tab]);
+
+  useEffect(() => {
+    if (!adminSel) {
+      setClientProgress(null);
+      setProgressError(null);
+      setProgressLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setProgressLoading(true);
+    setProgressError(null);
+    setClientProgress(null);
+    db.loadClientProgress(adminSel)
+      .then((payload) => {
+        if (cancelled) return;
+        setClientProgress({
+          macroHistory: buildMacroHistory(payload.mealHistoryByDate),
+          habitHistory: buildHabitHistory(payload.checksByWeek),
+          trends: buildTrends(payload.checksByWeek),
+        });
+      })
+      .catch((e) => {
+        console.error("loadClientProgress failed", e);
+        if (!cancelled) setProgressError("Couldn’t load progress charts.");
+      })
+      .finally(() => {
+        if (!cancelled) setProgressLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [adminSel]);
 
   const needsAttention = (c) => {
     const r = rateOf(c.weighins);
@@ -320,6 +355,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
         </Card>
 
         {sel.status === "active" && sel.macros && (
+          <>
           <Card style={{ marginTop: 12 }}>
             <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>Progress</div>
             <div style={{ fontSize: 13.5, color: T.inkSoft, marginBottom: 8 }}>
@@ -349,7 +385,68 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 </ResponsiveContainer>
               </div>
             )}
+            {(sel.weighins || []).length <= 1 && (
+              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
+                Weight trend needs two weigh-ins. Charts below still show macros and habits when she logs.
+              </div>
+            )}
           </Card>
+
+          {progressLoading && (
+            <Card style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 13.5, color: T.inkSoft }}>Loading her progress charts…</div>
+            </Card>
+          )}
+          {progressError && (
+            <Card style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 13.5, color: T.amber }}>{progressError}</div>
+            </Card>
+          )}
+          {clientProgress && (
+            <>
+              <ProgressCharts
+                audience="admin"
+                macros={sel.macros}
+                macroHistory={clientProgress.macroHistory}
+                habitHistory={clientProgress.habitHistory}
+              />
+              <Card style={{ marginTop: 12 }}>
+                <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Her 4-week trends</div>
+                {clientProgress.trends.locked ? (
+                  <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6 }}>
+                    Unlocks after four weeks of tracking. She&apos;s at{" "}
+                    <b style={{ color: T.ink }}>{clientProgress.trends.n} of 4</b>.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 13.5, lineHeight: 1.6, color: T.inkSoft, marginBottom: 10 }}>
+                      Across her last {clientProgress.trends.n} weeks, consistency is{" "}
+                      <b style={{ color: clientProgress.trends.delta >= 0 ? T.sage : T.amber }}>
+                        {clientProgress.trends.delta >= 3 ? "climbing" : clientProgress.trends.delta <= -3 ? "slipping" : "holding steady"}
+                      </b>
+                      {" "}({clientProgress.trends.overall.map((o) => `${o}%`).join(" → ")}).
+                    </div>
+                    {clientProgress.trends.items.map((i) => (
+                      <div key={i.label} style={{ marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 3 }}>
+                          <span style={{ color: T.ink, fontWeight: 600 }}>{i.label}</span>
+                          <span style={{ color: T.inkSoft }}>{i.strength ? `${i.avgSessions.toFixed(1)}× / wk (goal 3)` : `${i.pct}%`}</span>
+                        </div>
+                        <div style={{ height: 6, background: T.track, borderRadius: 99 }}>
+                          <div style={{ height: 6, borderRadius: 99, width: `${i.strength ? Math.min((i.avgSessions / 3) * 100, 100) : i.pct}%`, background: (i.strength ? i.avgSessions >= 3 : i.pct >= 70) ? T.sage : T.accent }} />
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ background: T.accentSoft, borderRadius: 12, padding: "10px 14px", marginTop: 10, fontSize: 13, color: T.accentDeep, lineHeight: 1.55 }}>
+                      Strongest habit: <b>{clientProgress.trends.best.label.toLowerCase()}</b> ({clientProgress.trends.best.pct}%).
+                      {" "}Worth a nudge: <b>{clientProgress.trends.worst.label.toLowerCase()}</b> ({clientProgress.trends.worst.pct}%).
+                    </div>
+                  </>
+                )}
+              </Card>
+            </>
+          )}
+        </>
         )}
       </Shell>
     );

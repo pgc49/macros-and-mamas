@@ -65,23 +65,31 @@ function MacroBarChart({ title, data, dataKey, lo, hi, unit = "g" }) {
 
 /**
  * Progress-tab charts: macros vs Callie's ranges + weekly habit adherence.
+ * @param {"client"|"admin"} audience — tweaks empty-state / intro copy for Callie.
  */
-export function ProgressCharts({ macros, macroHistory = [], habitHistory = [] }) {
+export function ProgressCharts({ macros, macroHistory = [], habitHistory = [], audience = "client" }) {
   const hi = (n, d = 10) => n + d;
   const hasMacros = macros && macroHistory.length > 0;
   const hasHabits = habitHistory.some((h) => h.pct > 0) || habitHistory.length > 1;
+  const admin = audience === "admin";
 
   return (
     <>
       <Card style={{ marginTop: 12 }}>
-        <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>Macros vs your ranges</div>
+        <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>
+          {admin ? "Macros vs her ranges" : "Macros vs your ranges"}
+        </div>
         <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
-          Days you logged food over the last few weeks. The sage band is your range — under mid-day is normal; we care about the pattern.
+          {admin
+            ? "Days she logged food over the last few weeks. The sage band is her range — under mid-day is normal; the pattern matters."
+            : "Days you logged food over the last few weeks. The sage band is your range — under mid-day is normal; we care about the pattern."}
         </p>
 
         {!hasMacros ? (
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6 }}>
-            Log a few meals on the Today tab and this fills in — protein, carbs, fat, and calories against your bands.
+            {admin
+              ? "No meal logs yet — this fills in when she logs protein, carbs, fat, and calories against her bands."
+              : "Log a few meals on the Today tab and this fills in — protein, carbs, fat, and calories against your bands."}
           </div>
         ) : (
           <>
@@ -129,7 +137,9 @@ export function ProgressCharts({ macros, macroHistory = [], habitHistory = [] })
 
         {!hasHabits ? (
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6 }}>
-            Tap the day circles on Today as you go. After a week or two, your rhythm shows up here.
+            {admin
+              ? "No habit check-ins yet. After a week or two of day circles, her rhythm shows up here."
+              : "Tap the day circles on Today as you go. After a week or two, your rhythm shows up here."}
           </div>
         ) : (
           <>

@@ -294,6 +294,39 @@ export const db = {
     return { start, end: today, byDate: groupMealRowsByDate(mealRows) };
   },
 
+  /**
+   * Admin: progress payload for one client (meal history + all checkins).
+   * Relies on RLS own-or-admin SELECT policies.
+   */
+  async loadClientProgress(clientId, days = 28) {
+    if (!clientId) throw new Error("clientId required");
+    const today = localDateIso();
+    const start = addDaysIso(today, -(Math.max(1, days) - 1));
+
+    const [{ data: checkRows, error: cErr }, mealRows] = await Promise.all([
+      supabase
+        .from("checkins")
+        .select("week_start, item_id, day")
+        .eq("profile_id", clientId),
+      loadMealLogsRange(clientId, start, today),
+    ]);
+    if (cErr) throw cErr;
+
+    const checksByWeek = {};
+    (checkRows || []).forEach((r) => {
+      const wk = r.week_start;
+      if (!checksByWeek[wk]) checksByWeek[wk] = {};
+      checksByWeek[wk][`${r.item_id}|${r.day}`] = true;
+    });
+
+    return {
+      mealHistoryByDate: groupMealRowsByDate(mealRows),
+      checksByWeek,
+      start,
+      end: today,
+    };
+  },
+
   async joinWaitlist({ email, reason, monthsPp = null }) {
     const { data: { user } } = await supabase.auth.getUser();
     let eligibleOn = null;

@@ -5,8 +5,15 @@ import { useAuth } from "./auth/useAuth.jsx";
 import { db } from "./db/db";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
-import { DEFAULT_ITEMS, DAYS } from "./content/data";
-import { addDaysIso, fmtRange, localDateIso, wkStartOf } from "./utils/dates";
+import { addDaysIso, localDateIso, wkStartOf } from "./utils/dates";
+import {
+  adherenceForWeek,
+  buildHabitHistory,
+  buildMacroHistory,
+  buildTrends,
+  progWeekNum as weekNumberFromEarliest,
+  weekKeysFromChecks,
+} from "./utils/progressSeries";
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
 import { SalesPage } from "./views/SalesPage";
 import { IntakeFlow } from "./views/IntakeFlow";
@@ -517,90 +524,31 @@ export default function App() {
     }
   };
 
-  const adherenceFor = (wk) => {
-    const ch = checksByWeek[wk] || {};
-    let done = 0, total = 0;
-    DEFAULT_ITEMS.forEach((it) => {
-      if (it.daily) {
-        DAYS.forEach((d) => { total += 1; if (ch[`${it.id}|${d}`]) done += 1; });
-      } else {
-        total += 3;
-        const sc = DAYS.filter((d) => ch[`${it.id}|${d}`]).length;
-        done += Math.min(sc, 3);
-      }
-    });
-    return total ? Math.round((done / total) * 100) : 0;
-  };
+  const adherenceFor = (wk) => adherenceForWeek(checksByWeek, wk);
 
-  const wkKeys = useMemo(() => {
-    const ks = new Set([...Object.keys(checksByWeek), curWk]);
-    return [...ks].sort();
-  }, [checksByWeek, curWk]);
+  const wkKeys = useMemo(
+    () => weekKeysFromChecks(checksByWeek, curWk),
+    [checksByWeek, curWk],
+  );
   const earliestWk = wkKeys[0];
-  const progWeekNum = (wk) => Math.round((new Date(wk) - new Date(earliestWk)) / (7 * 86400000)) + 1;
+  const progWeekNum = (wk) => weekNumberFromEarliest(wk, earliestWk);
 
-  const trends = useMemo(() => {
-    const weeks = wkKeys.filter((w) => Object.keys(checksByWeek[w] || {}).length > 0 || w === curWk);
-    const n = weeks.length;
-    if (n < 4) return { locked: true, n };
-    const overall = weeks.map(adherenceFor);
-    const half = Math.floor(n / 2);
-    const avg = (a) => a.reduce((x, y) => x + y, 0) / (a.length || 1);
-    const delta = avg(overall.slice(half)) - avg(overall.slice(0, half));
-    const items = DEFAULT_ITEMS.map((it) => {
-      if (it.daily) {
-        let hits = 0;
-        weeks.forEach((w) => { const ch = checksByWeek[w] || {}; DAYS.forEach((d) => { if (ch[`${it.id}|${d}`]) hits += 1; }); });
-        return { label: it.label, pct: Math.round((hits / (7 * n)) * 100), strength: false };
-      }
-      let sessions = 0;
-      weeks.forEach((w) => { const ch = checksByWeek[w] || {}; sessions += DAYS.filter((d) => ch[`${it.id}|${d}`]).length; });
-      return { label: it.label, avgSessions: sessions / n, strength: true };
-    });
-    const dailyItems = items.filter((i) => !i.strength);
-    const best = [...dailyItems].sort((a, b) => b.pct - a.pct)[0];
-    const worst = [...dailyItems].sort((a, b) => a.pct - b.pct)[0];
-    return { locked: false, n, overall, delta, items, best, worst };
-  }, [wkKeys, checksByWeek]);
+  const trends = useMemo(
+    () => buildTrends(checksByWeek, curWk),
+    [checksByWeek, curWk],
+  );
 
   /** Daily macro totals for Progress charts (logged days only, last ~28 days). */
-  const macroHistory = useMemo(() => {
-    const today = localDateIso();
-    const start = addDaysIso(today, -27);
-    const rows = [];
-    Object.keys(mealHistoryByDate || {})
-      .filter((d) => d >= start && d <= today)
-      .sort()
-      .forEach((d) => {
-        const entries = mealHistoryByDate[d] || [];
-        if (!entries.length) return;
-        const tot = entries.reduce(
-          (a, e) => ({
-            cal: a.cal + (Number(e.cal) || 0),
-            p: a.p + (Number(e.p) || 0),
-            c: a.c + (Number(e.c) || 0),
-            f: a.f + (Number(e.f) || 0),
-          }),
-          { cal: 0, p: 0, c: 0, f: 0 },
-        );
-        rows.push({
-          date: d,
-          label: d.slice(5),
-          ...tot,
-        });
-      });
-    return rows;
-  }, [mealHistoryByDate]);
+  const macroHistory = useMemo(
+    () => buildMacroHistory(mealHistoryByDate),
+    [mealHistoryByDate],
+  );
 
   /** Weekly habit adherence series for Progress chart. */
-  const habitHistory = useMemo(() => {
-    return wkKeys.map((w) => ({
-      week: w,
-      label: `W${progWeekNum(w)}`,
-      pct: adherenceFor(w),
-      rangeLabel: fmtRange(w),
-    }));
-  }, [wkKeys, checksByWeek]);
+  const habitHistory = useMemo(
+    () => buildHabitHistory(checksByWeek, curWk),
+    [checksByWeek, curWk],
+  );
 
   if (authLoading || (user && !loaded)) {
     return (
