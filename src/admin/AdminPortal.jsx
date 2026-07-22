@@ -321,7 +321,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                   </>
                 ) : null}
                 {sel.diet && sel.diet !== "none" ? <><br />⚠️ Diet: {sel.diet} — connect before approving</> : null}
-                {sel.phone ? <><br />📱 {sel.phone}{stage === "awaiting_approval" ? " — send WhatsApp invite on approval" : ""}</> : null}
+                {sel.phone ? <><br />📱 {sel.phone}{stage === "awaiting_approval" ? " — WhatsApp invite goes in her approve email" : ""}</> : null}
                 {(sel.prefB || sel.prefL || sel.prefD) ? <><br />🍽 Loves: {[sel.prefB, sel.prefL, sel.prefD].filter(Boolean).join(" · ")}</> : null}
                 {sel.seasonNote ? <><br />💬 {sel.seasonNote}</> : null}
               </div>

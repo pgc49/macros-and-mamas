@@ -113,7 +113,8 @@ Callie`,
 
 I just finished your numbers — they're live in your dashboard right now, built from everything you told me. Remember: these are ranges, not rules. Active day, eat the top. Slow day, the bottom. Both count.
 
-Your WhatsApp invite is on its way to your phone — come say hi so I can welcome you properly.
+Join the mamas group chat — I'm in there Monday through Friday answering in voice notes. Come say hi so I can welcome you properly:
+[Tap here to join WhatsApp → chat.whatsapp.com/…]
 
 Your first 48 hours, and this is the whole assignment:
 1. Today: log one meal. Tap it from your plan, snap it, or type it. Just one.

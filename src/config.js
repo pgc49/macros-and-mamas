@@ -37,8 +37,10 @@ export const CONFIG = {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
 
-  // Optional public links — hide UI if unset (Callie may invite by text).
-  WHATSAPP_GROUP_URL: envUrl("VITE_WHATSAPP_GROUP_URL"),
+  // Private WhatsApp invite — shown in approve email; optional in-app tip.
+  WHATSAPP_GROUP_URL:
+    envUrl("VITE_WHATSAPP_GROUP_URL") ||
+    "https://chat.whatsapp.com/GxlqCrLUooN36ST2QqHrX3",
   FULLSCRIPT_ELECTROLYTES: envUrl("VITE_FULLSCRIPT_ELECTROLYTES_URL"),
   FULLSCRIPT_SLEEP: envUrl("VITE_FULLSCRIPT_SLEEP_URL"),
   FULLSCRIPT_DIGESTION: envUrl("VITE_FULLSCRIPT_DIGESTION_URL"),

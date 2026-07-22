@@ -47,6 +47,10 @@ export function renderEmail({
 
 export const FROM_CALLIE = "Callie · Macros and Mamas <calista@nourishwithcalista.com>";
 export const APP_URL = Deno.env.get("APP_URL") || "https://www.macrosandmamas.com";
+/** Private WhatsApp invite — set WHATSAPP_GROUP_URL in function secrets to override. */
+export const WHATSAPP_GROUP_URL =
+  Deno.env.get("WHATSAPP_GROUP_URL") ||
+  "https://chat.whatsapp.com/GxlqCrLUooN36ST2QqHrX3";
 export const CALLIE_NOTIFY_EMAIL =
   Deno.env.get("CALLIE_NOTIFY_EMAIL") || "calista@nourishwithcalista.com";
 /** Co-owner ops alerts (payment / intake / refund). Comma-separated ok. */

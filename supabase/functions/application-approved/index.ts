@@ -4,7 +4,7 @@
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { APP_URL, FROM_CALLIE, renderEmail } from "../_shared/emailTemplates.ts";
+import { APP_URL, FROM_CALLIE, WHATSAPP_GROUP_URL, renderEmail } from "../_shared/emailTemplates.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { assertServiceRole } from "../_shared/assertServiceRole.ts";
 
@@ -30,7 +30,8 @@ serve(async (req) => {
         header: `Hi ${first},`,
         body: `
           <p>I just finished your numbers — they're live in your dashboard right now, built from everything you told me. Remember: these are ranges, not rules. Active day, eat the top. Slow day, the bottom. Both count.</p>
-          <p>Your WhatsApp invite is on its way to your phone — come say hi so I can welcome you properly.</p>
+          <p><b>Join the mamas group chat</b> — I'm in there Monday through Friday answering in voice notes. Come say hi so I can welcome you properly:</p>
+          <p><a href="${WHATSAPP_GROUP_URL}" style="color:#B4416B;font-weight:700">Tap here to join WhatsApp</a></p>
           <p><b>Your first 48 hours, and this is the whole assignment:</b></p>
           <ol>
             <li><b>Today:</b> log one meal. Tap it from your plan, snap it, or type it. Just one.</li>
