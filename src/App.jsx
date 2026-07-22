@@ -5,7 +5,7 @@ import { useAuth } from "./auth/useAuth.jsx";
 import { db } from "./db/db";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
-import { addDaysIso, localDateIso, wkStartOf } from "./utils/dates";
+import { addDaysIso, localDateIso, weekdayKey, wkStartOf } from "./utils/dates";
 import {
   adherenceForWeek,
   buildHabitHistory,
@@ -68,6 +68,8 @@ export default function App() {
   const [mealLogWeekStart, setMealLogWeekStart] = useState(() => wkStartOf());
   const [mealLogsByDate, setMealLogsByDate] = useState({});
   const [mealHistoryByDate, setMealHistoryByDate] = useState({});
+  const [waterLogsByDate, setWaterLogsByDate] = useState({});
+  const [waterBusy, setWaterBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const routedAfterLoad = useRef(false);
 
@@ -124,6 +126,13 @@ export default function App() {
             if (s.mealLogsByDate) setMealLogsByDate(s.mealLogsByDate);
             if (s.mealLogWeekStart) setMealLogWeekStart(s.mealLogWeekStart);
             if (s.mealHistoryByDate) setMealHistoryByDate(s.mealHistoryByDate);
+            try {
+              const weekStart = s.mealLogWeekStart || wkStartOf();
+              const water = await db.loadWaterLogsWeek(weekStart);
+              if (!cancelled) setWaterLogsByDate(water.byDate || {});
+            } catch (wErr) {
+              console.warn("loadWaterLogsWeek failed", wErr);
+            }
             if (!cancelled) await refreshMealPlan(user.id);
           }
         } else {
@@ -356,9 +365,13 @@ export default function App() {
     setMealLogWeekStart(weekStart);
     setEstimate(null);
     try {
-      const { byDate } = await db.loadMealLogsWeek(weekStart);
+      const [{ byDate }, water] = await Promise.all([
+        db.loadMealLogsWeek(weekStart),
+        db.loadWaterLogsWeek(weekStart),
+      ]);
       setMealLogsByDate(byDate);
       setMealHistoryByDate((prev) => ({ ...prev, ...byDate }));
+      setWaterLogsByDate((prev) => ({ ...prev, ...(water.byDate || {}) }));
       const today = localDateIso();
       let nextDate = preferDate;
       if (!nextDate || nextDate < weekStart || nextDate > addDaysIso(weekStart, 6)) {
@@ -373,6 +386,71 @@ export default function App() {
       const today = localDateIso();
       const fallback = preferDate && preferDate <= today ? preferDate : weekStart;
       applyDayFromCache(fallback > today ? today : fallback, {});
+    }
+  };
+
+  const maybeAutoCheckWater = async (date, dayTotal, goal) => {
+    if (!goal || dayTotal < goal) return;
+    const weekStart = wkStartOf(date);
+    const day = weekdayKey(date);
+    const key = `water|${day}`;
+    const already = !!(checksByWeek[weekStart] || {})[key];
+    if (already) return;
+    setChecksByWeek((cw) => ({
+      ...cw,
+      [weekStart]: { ...(cw[weekStart] || {}), [key]: true },
+    }));
+    try {
+      await db.toggleCheckin(weekStart, "water", day, true);
+    } catch (e) {
+      console.error("auto-check water failed", e);
+    }
+  };
+
+  const addWater = async (oz) => {
+    const date = mealLogDate || localDateIso();
+    setWaterBusy(true);
+    try {
+      const row = await db.addWaterLog(oz, date);
+      const prevList = waterLogsByDate[date] || [];
+      const list = [...prevList, row];
+      const dayTotal = list.reduce((s, e) => s + (Number(e.oz) || 0), 0);
+      setWaterLogsByDate((prev) => ({ ...prev, [date]: list }));
+      await maybeAutoCheckWater(date, dayTotal, waterOz);
+    } catch (e) {
+      console.error("addWater failed", e);
+    }
+    setWaterBusy(false);
+  };
+
+  const undoWater = async () => {
+    const date = mealLogDate || localDateIso();
+    setWaterBusy(true);
+    try {
+      const id = await db.undoLastWaterLog(date);
+      if (id) {
+        setWaterLogsByDate((prev) => {
+          const list = prev[date] || [];
+          // Remove last by created_at / id
+          const next = list.filter((e) => e.id !== id);
+          const nextMap = { ...prev };
+          if (!next.length) delete nextMap[date];
+          else nextMap[date] = next;
+          return nextMap;
+        });
+      }
+    } catch (e) {
+      console.error("undoWater failed", e);
+    }
+    setWaterBusy(false);
+  };
+
+  const changeBottleOz = async (oz) => {
+    try {
+      const n = await db.updateBottleOz(oz);
+      setProfile((p) => ({ ...p, bottleOz: n }));
+    } catch (e) {
+      console.error("updateBottleOz failed", e);
     }
   };
 
@@ -608,6 +686,11 @@ export default function App() {
       mealLogsByDate={mealLogsByDate}
       selectMealLogDate={selectMealLogDate}
       changeMealWeek={changeMealWeek}
+      waterLogsByDate={waterLogsByDate}
+      waterBusy={waterBusy}
+      onAddWater={addWater}
+      onUndoWater={undoWater}
+      onChangeBottleOz={changeBottleOz}
       updateMealEntry={updateMealEntry}
       deleteMealEntry={deleteMealEntry}
       viewWk={viewWk}

@@ -5,7 +5,7 @@ import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 /* ------------------------------------------------------------------ */
 /*  DATA LAYER — per-event Supabase writes (not blob persistence)      */
 /*  Tables (RLS on all):                                               */
-/*    profiles, macros, checkins, weighins, meal_logs                  */
+/*    profiles, macros, checkins, weighins, meal_logs, water_logs      */
 /* ------------------------------------------------------------------ */
 
 function profileToRow(p) {
@@ -27,6 +27,7 @@ function profileToRow(p) {
     pref_l: p.prefL || null,
     pref_d: p.prefD || null,
     season_note: p.seasonNote?.trim() ? p.seasonNote.trim() : null,
+    bottle_oz: p.bottleOz != null && p.bottleOz !== "" ? Math.round(Number(p.bottleOz)) : 24,
   };
 }
 
@@ -50,6 +51,7 @@ function rowToProfile(row) {
     prefL: row.pref_l || "",
     prefD: row.pref_d || "",
     seasonNote: row.season_note || "",
+    bottleOz: row.bottle_oz != null ? Number(row.bottle_oz) : 24,
     status: row.status,
     paid: !!row.paid,
     refunded: !!row.refunded,
@@ -539,6 +541,81 @@ export const db = {
       .eq("profile_id", uid)
       .eq("date", date);
     if (error) throw error;
+  },
+
+  /** Load water log rows for a Mon–Sun week → { byDate: { [iso]: [{id,oz,created_at}] } }. */
+  async loadWaterLogsWeek(weekStart = wkStartOf()) {
+    const uid = await requireUserId();
+    const end = addDaysIso(weekStart, 6);
+    const { data, error } = await supabase
+      .from("water_logs")
+      .select("id, date, oz, created_at")
+      .eq("profile_id", uid)
+      .gte("date", weekStart)
+      .lte("date", end)
+      .order("created_at", { ascending: true });
+    if (error) {
+      console.warn("loadWaterLogsWeek failed", error);
+      return { byDate: {} };
+    }
+    const byDate = {};
+    (data || []).forEach((r) => {
+      const d = r.date;
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push({
+        id: r.id,
+        oz: Number(r.oz),
+        created_at: r.created_at,
+      });
+    });
+    return { byDate };
+  },
+
+  async addWaterLog(oz, date = localDateIso()) {
+    const uid = await requireUserId();
+    const amount = Number(oz);
+    if (!amount || amount <= 0) throw new Error("invalid oz");
+    const { data, error } = await supabase
+      .from("water_logs")
+      .insert({ profile_id: uid, date, oz: amount })
+      .select("id, date, oz, created_at")
+      .single();
+    if (error) throw error;
+    return { id: data.id, oz: Number(data.oz), created_at: data.created_at, date: data.date };
+  },
+
+  /** Delete the most recent water_logs row for this date (undo last tap). */
+  async undoLastWaterLog(date = localDateIso()) {
+    const uid = await requireUserId();
+    const { data: latest, error: findErr } = await supabase
+      .from("water_logs")
+      .select("id")
+      .eq("profile_id", uid)
+      .eq("date", date)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (findErr) throw findErr;
+    if (!latest?.id) return null;
+    const { error } = await supabase
+      .from("water_logs")
+      .delete()
+      .eq("id", latest.id)
+      .eq("profile_id", uid);
+    if (error) throw error;
+    return latest.id;
+  },
+
+  async updateBottleOz(oz) {
+    const uid = await requireUserId();
+    const n = Math.round(Number(oz));
+    if (!n || n < 4 || n > 64) throw new Error("bottle size must be 4–64 oz");
+    const { error } = await supabase
+      .from("profiles")
+      .update({ bottle_oz: n })
+      .eq("id", uid);
+    if (error) throw error;
+    return n;
   },
 
   async loadRoster() {

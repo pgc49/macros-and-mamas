@@ -127,6 +127,7 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 | `/supabase/migrations/004_intake_step2.sql` | `waitlist` table + `profiles.season_note` |
 | `/supabase/migrations/005_pay_first.sql` | Stripe ids, `refunded`, refunds log, payment column protection |
 | `/supabase/migrations/011_client_meal_plans.sql` | Per-client meal plan draft + publish switch (`default` / `personalized`) |
+| `/supabase/migrations/012_water_log.sql` | `water_logs` table + `profiles.bottle_oz` for Today water log |
 | `/src` | Production React app |
 
 **After deploy:** run pending migrations in the Supabase SQL editor if not already applied:
@@ -136,6 +137,7 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 - `005_pay_first.sql` — **required for pay-first** (Stripe fields, refunds, protect `paid`)
 - `006_email_events.sql` — **required for admin email history** (admin-only `email_events`)
 - `011_client_meal_plans.sql` — **required for publishing personalized meal plans** to client Meals
+- `012_water_log.sql` — **required for water log** (`water_logs` + `bottle_oz`)
 
 ## Definition of done (checklist)
 

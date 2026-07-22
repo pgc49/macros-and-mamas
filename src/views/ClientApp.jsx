@@ -5,6 +5,7 @@ import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf 
 import { Shell, Card, Btn, Chip, RangeBand, rangeState } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
 import { MealRecipeCard } from "../components/MealRecipeCard";
+import { WaterLogCard } from "../components/WaterLogCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
@@ -18,6 +19,7 @@ export function ClientApp({
   analyzePhoto, analyzeText, confirmEstimate, discardEstimate,
   logManualMeal, logRecipe, todayLog, deleteMealEntry, updateMealEntry,
   mealLogDate, mealLogWeekStart, mealLogsByDate, selectMealLogDate, changeMealWeek,
+  waterLogsByDate, waterBusy, onAddWater, onUndoWater, onChangeBottleOz,
   viewWk, setViewWk, curWk, editPast, setEditPast,
   checksByWeek, toggleCheck, adherenceFor, progWeekNum, earliestWk,
   weighins, logWeighin, deleteWeighin, weeklyRate, trends,
@@ -129,15 +131,17 @@ export function ClientApp({
             earliestWeekStart={mealEarliestWeek}
           />
 
-          <Card style={{ marginTop: 12, display: "flex", gap: 14, alignItems: "center" }}>
-            <div style={{ fontSize: 26 }}>💧</div>
-            <div style={{ fontSize: 14, lineHeight: 1.5 }}>
-              <b>{waterOz} oz of water today</b> (half your goal weight), plus electrolytes.
-              {hasElectrolytes && (
-                <a href={CONFIG.FULLSCRIPT_ELECTROLYTES} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}> Callie's electrolytes on Fullscript →</a>
-              )}
-            </div>
-          </Card>
+          <WaterLogCard
+            date={mealLogDate || todayLog?.date}
+            goalOz={waterOz}
+            bottleOz={profile.bottleOz || 24}
+            entries={(waterLogsByDate || {})[mealLogDate || todayLog?.date] || []}
+            busy={waterBusy}
+            onAdd={onAddWater}
+            onUndo={onUndoWater}
+            onChangeBottle={onChangeBottleOz}
+            electrolytesUrl={hasElectrolytes ? CONFIG.FULLSCRIPT_ELECTROLYTES : null}
+          />
 
           {(() => {
             const isCur = viewWk === curWk;
