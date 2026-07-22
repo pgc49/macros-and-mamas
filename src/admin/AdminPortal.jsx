@@ -33,6 +33,64 @@ function formatWhen(iso) {
   }
 }
 
+function byName(a, b) {
+  return String(a.name || a.email || "").localeCompare(String(b.name || b.email || ""), undefined, {
+    sensitivity: "base",
+  });
+}
+
+/** One-tap copy for WhatsApp invites — stops row navigation when used in the roster. */
+function CopyPhoneButton({ phone, compact = false }) {
+  const [copied, setCopied] = useState(false);
+  if (!phone) {
+    return <span style={{ fontSize: 12.5, color: T.inkSoft }}>—</span>;
+  }
+  const onCopy = async (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+      await navigator.clipboard.writeText(String(phone).trim());
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch (err) {
+      console.error("clipboard write failed", err);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      title="Copy phone for WhatsApp"
+      aria-label={copied ? "Phone copied" : `Copy phone ${phone}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: compact ? 4 : 6,
+        maxWidth: "100%",
+        padding: compact ? "4px 8px" : "6px 10px",
+        borderRadius: 8,
+        border: `1px solid ${copied ? T.sage : T.border}`,
+        background: copied ? T.sageSoft : "#fff",
+        color: copied ? T.sage : T.ink,
+        fontFamily: F,
+        fontSize: compact ? 12 : 13,
+        fontWeight: 700,
+        cursor: "pointer",
+        lineHeight: 1.2,
+      }}
+    >
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {copied ? "Copied" : phone}
+      </span>
+      {!copied && (
+        <span style={{ flexShrink: 0, fontSize: compact ? 11 : 12, color: T.inkSoft, fontWeight: 600 }}>
+          copy
+        </span>
+      )}
+    </button>
+  );
+}
+
 function StatPill({ label, value, bg, color }) {
   return (
     <div style={{ flex: "1 1 30%", minWidth: 100, background: bg, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
@@ -143,7 +201,7 @@ function EmailTimeline({ profileId }) {
 
 export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel }) {
   const [tab, setTab] = useState("overview");
-  const [filter, setFilter] = useState("needs_you");
+  const [filter, setFilter] = useState("active");
   const [recentEmails, setRecentEmails] = useState([]);
   const [clientProgress, setClientProgress] = useState(null);
   const [progressLoading, setProgressLoading] = useState(false);
@@ -226,20 +284,12 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   };
 
   const filtered = useMemo(() => {
-    // Funnel filters apply to real clients; admins are pinned at the top of
-    // All / Needs you / Active so Patrick & Callie can test meal plans on themselves.
-    const admins = all.filter((c) => c.role === "admin");
+    // Funnel filters for real clients. Admins pin to the top of All / Active
+    // so Patrick & Callie can test meal plans on themselves.
+    const admins = all.filter((c) => c.role === "admin").slice().sort(byName);
     const clientsOnly = all.filter((c) => c.role !== "admin");
     let list = clientsOnly;
-    if (filter === "all") {
-      list = clientsOnly;
-    } else if (filter === "needs_you") {
-      list = clientsOnly.filter((c) =>
-        c.stage === "awaiting_approval"
-        || (c.status === "pending" && c.hasIntake && c.paid && !c.refunded)
-        || needsAttention(c).length > 0
-      );
-    } else if (filter === "unpaid") {
+    if (filter === "unpaid") {
       list = clientsOnly.filter((c) => c.stage === "signed_up");
     } else if (filter === "awaiting_intake") {
       list = clientsOnly.filter((c) => c.stage === "paid_awaiting_intake");
@@ -249,8 +299,11 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
       list = clientsOnly.filter((c) => c.stage === "active" || c.status === "active");
     } else if (filter === "refunded") {
       list = clientsOnly.filter((c) => c.refunded || c.stage === "refunded");
+    } else {
+      list = clientsOnly; // all
     }
-    if (filter === "all" || filter === "needs_you" || filter === "active") {
+    list = list.slice().sort(byName);
+    if (filter === "all" || filter === "active") {
       return [...admins, ...list];
     }
     return list;
@@ -344,7 +397,15 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                   </>
                 ) : null}
                 {sel.diet && sel.diet !== "none" ? <><br />⚠️ Diet: {sel.diet} — connect before approving</> : null}
-                {sel.phone ? <><br />📱 {sel.phone}{stage === "awaiting_approval" ? " — WhatsApp invite goes in her approve email" : ""}</> : null}
+                {sel.phone ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 6 }}>
+                    <span style={{ fontSize: 13, color: T.inkSoft }}>📱 Phone</span>
+                    <CopyPhoneButton phone={sel.phone} />
+                    {stage === "awaiting_approval" && (
+                      <span style={{ fontSize: 12, color: T.inkSoft }}>WhatsApp invite is also in her approve email</span>
+                    )}
+                  </div>
+                ) : null}
                 {(sel.prefB || sel.prefL || sel.prefD) ? <><br />🍽 Loves: {[sel.prefB, sel.prefL, sel.prefD].filter(Boolean).join(" · ")}</> : null}
                 {sel.seasonNote ? <><br />💬 {sel.seasonNote}</> : null}
               </div>
@@ -504,43 +565,14 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
     );
   }
 
-  const Row = ({ c }) => {
-    const flags = needsAttention(c);
+  const stageShort = (c) => {
     const stage = c.stage || "signed_up";
-    return (
-      <button
-        type="button"
-        onClick={() => setAdminSel(c.id)}
-        style={{
-          display: "block", width: "100%", textAlign: "left", background: T.card,
-          border: `1px solid ${T.border}`, borderRadius: 14, padding: "13px 16px", marginBottom: 8, cursor: "pointer",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <span style={{ fontFamily: FD, fontSize: 16, color: T.ink }}>{c.name}</span>
-            {c.role === "admin" && (
-              <span style={{
-                marginLeft: 8, fontSize: 11, fontWeight: 700, fontFamily: F,
-                padding: "2px 8px", borderRadius: 99, background: T.accentSoft, color: T.accentDeep,
-              }}>
-                Admin · test
-              </span>
-            )}
-            <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
-              {STAGE_LABEL[stage] || stage}
-              {c.email ? ` · ${c.email}` : ""}
-              {c.hasIntake && c.currentWeight != null ? ` · ${c.currentWeight} → ${c.goalWeight} lbs` : ""}
-              {stage === "active" ? ` · Week ${c.week} · ${c.adherence}%` : ""}
-            </div>
-            {flags.length > 0 && (
-              <div style={{ fontSize: 12, fontWeight: 700, color: T.amber, marginTop: 3 }}>⚠ {flags.join(" · ")}</div>
-            )}
-          </div>
-          <span style={{ color: T.inkSoft, fontSize: 18 }}>›</span>
-        </div>
-      </button>
-    );
+    if (stage === "active" || c.status === "active") return `W${c.week ?? "—"}`;
+    if (stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid)) return "Approve";
+    if (stage === "paid_awaiting_intake") return "Intake";
+    if (stage === "refunded" || c.refunded) return "Refunded";
+    if (stage === "signed_up") return "Unpaid";
+    return STAGE_LABEL[stage] || stage;
   };
 
   return (
@@ -582,9 +614,12 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             </div>
             <Btn
               style={{ width: "100%", marginTop: 14 }}
-              onClick={() => { setFilter("needs_you"); setTab("clients"); }}
+              onClick={() => {
+                setFilter(computedStats.awaitingApproval > 0 ? "awaiting_approval" : "active");
+                setTab("clients");
+              }}
             >
-              Open clients
+              {computedStats.awaitingApproval > 0 ? "Review approvals" : "Open client list"}
             </Btn>
           </Card>
 
@@ -608,13 +643,12 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
 
       {tab === "clients" && (
         <>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
             {[
-              ["needs_you", "Needs you"],
+              ["active", "Active"],
               ["awaiting_approval", "Approve"],
               ["awaiting_intake", "Need intake"],
               ["unpaid", "Unpaid"],
-              ["active", "Active"],
               ["refunded", "Refunded"],
               ["all", "All"],
             ].map(([id, label]) => (
@@ -635,12 +669,139 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 }}
               >
                 {label}
+                {id === "active" ? ` · ${computedStats.active}` : ""}
+                {id === "awaiting_approval" && computedStats.awaitingApproval > 0 ? ` · ${computedStats.awaitingApproval}` : ""}
               </button>
             ))}
           </div>
-          {filtered.length
-            ? filtered.map((c) => <Row key={c.id} c={c} />)
-            : <div style={{ fontSize: 13.5, color: T.inkSoft }}>Nobody in this filter right now.</div>}
+          <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.4 }}>
+            A–Z by name. Tap a row for her profile · Copy phone for WhatsApp.
+          </p>
+          {!filtered.length ? (
+            <div style={{ fontSize: 13.5, color: T.inkSoft }}>Nobody in this filter right now.</div>
+          ) : (
+            <div
+              style={{
+                background: T.card,
+                border: `1px solid ${T.border}`,
+                borderRadius: 14,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr) auto",
+                  gap: 8,
+                  padding: "8px 12px",
+                  background: T.bg,
+                  borderBottom: `1px solid ${T.border}`,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: T.inkSoft,
+                  letterSpacing: 0.3,
+                  textTransform: "uppercase",
+                }}
+              >
+                <div>Name</div>
+                <div>Phone</div>
+                <div style={{ textAlign: "right" }}>Status</div>
+              </div>
+              {filtered.map((c, i) => {
+                const flags = needsAttention(c);
+                const short = stageShort(c);
+                return (
+                  <div
+                    key={c.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setAdminSel(c.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setAdminSel(c.id);
+                      }
+                    }}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr) auto",
+                      gap: 8,
+                      alignItems: "center",
+                      padding: "10px 12px",
+                      borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
+                      cursor: "pointer",
+                      background: "#fff",
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span style={{
+                          fontFamily: FD,
+                          fontSize: 15,
+                          color: T.ink,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: "100%",
+                        }}
+                        >
+                          {c.name || "—"}
+                        </span>
+                        {c.role === "admin" && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, fontFamily: F,
+                            padding: "2px 7px", borderRadius: 99, background: T.accentSoft, color: T.accentDeep,
+                          }}
+                          >
+                            Admin
+                          </span>
+                        )}
+                      </div>
+                      {flags.length > 0 && (
+                        <div style={{
+                          fontSize: 11, fontWeight: 700, color: T.amber, marginTop: 2,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}
+                        >
+                          ⚠ {flags[0]}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
+                      <CopyPhoneButton phone={c.phone} compact />
+                    </div>
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      justifyContent: "flex-end",
+                      whiteSpace: "nowrap",
+                    }}
+                    >
+                      <span style={{
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        padding: "3px 8px",
+                        borderRadius: 99,
+                        background:
+                          short === "Approve" || short === "Intake" ? T.amberSoft
+                            : short.startsWith("W") ? T.sageSoft
+                              : T.track,
+                        color:
+                          short === "Approve" || short === "Intake" ? T.amber
+                            : short.startsWith("W") ? T.sage
+                              : T.inkSoft,
+                      }}
+                      >
+                        {short}
+                      </span>
+                      <span style={{ color: T.inkSoft, fontSize: 16, lineHeight: 1 }}>›</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 
