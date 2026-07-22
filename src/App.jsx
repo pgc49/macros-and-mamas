@@ -55,6 +55,8 @@ export default function App() {
   const [editPast, setEditPast] = useState(false);
   const [weighins, setWeighins] = useState([]);
   const [mealFilter, setMealFilter] = useState("Breakfast");
+  const [mealPlanMode, setMealPlanMode] = useState("default");
+  const [publishedPlan, setPublishedPlan] = useState(null);
   const [roster, setRoster] = useState([]);
   const [adminStats, setAdminStats] = useState(null);
   const [adminSel, setAdminSel] = useState(null);
@@ -103,12 +105,26 @@ export default function App() {
             if (s.mealLogsByDate) setMealLogsByDate(s.mealLogsByDate);
             if (s.mealLogWeekStart) setMealLogWeekStart(s.mealLogWeekStart);
             if (s.mealHistoryByDate) setMealHistoryByDate(s.mealHistoryByDate);
+            try {
+              const mp = await db.loadClientMealPlan(user.id);
+              if (!cancelled) {
+                setMealPlanMode(mp.mode || "default");
+                setPublishedPlan(mp.published || null);
+                if (mp.mode === "personalized" && mp.published?.days?.length) {
+                  setMealFilter("By Day");
+                }
+              }
+            } catch (mpErr) {
+              console.warn("loadClientMealPlan failed", mpErr);
+            }
           }
         } else {
           setMacros(null);
           setApproved(false);
           setPaid(false);
           setRefunded(false);
+          setMealPlanMode("default");
+          setPublishedPlan(null);
         }
         if (isAdmin) {
           try {
@@ -591,6 +607,8 @@ export default function App() {
       habitHistory={habitHistory}
       mealFilter={mealFilter}
       setMealFilter={setMealFilter}
+      mealPlanMode={mealPlanMode}
+      publishedPlan={publishedPlan}
     />
   );
 

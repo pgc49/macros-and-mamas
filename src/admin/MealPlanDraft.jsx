@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card, Btn, inputStyle } from "../components/ui";
 import { supabase } from "../lib/supabase";
+import { db } from "../db/db";
 
 const STORAGE_PREFIX = "mm_meal_plan_draft_";
 
@@ -170,20 +171,53 @@ function countOutOfRange(plan) {
 
 /**
  * Admin-only: generate & review a 7-day meal plan draft for one client.
- * Not client-facing. Drafts cached in localStorage for Callie's browser.
- * Callie can leave revision notes and regenerate from the prior draft.
+ * Drafts save to Supabase (client_meal_plans) + localStorage fallback.
+ * Publish switches her Meals tab to personalized; Revert restores default bank.
  */
 export function MealPlanDraft({ client }) {
   const [plan, setPlan] = useState(null);
+  const [mode, setMode] = useState("default");
+  const [publishedAt, setPublishedAt] = useState(null);
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
   const [error, setError] = useState("");
+  const [statusNote, setStatusNote] = useState("");
 
   useEffect(() => {
-    setPlan(loadCached(client.id));
+    let cancelled = false;
     setFeedback("");
     setError("");
+    setStatusNote("");
+    (async () => {
+      try {
+        const row = await db.loadClientMealPlan(client.id);
+        if (cancelled) return;
+        setMode(row.mode || "default");
+        setPublishedAt(row.published_at || null);
+        if (row.draft) {
+          setPlan(row.draft);
+          saveCached(client.id, row.draft);
+        } else {
+          const cached = loadCached(client.id);
+          setPlan(cached);
+        }
+      } catch (e) {
+        console.warn("load meal plan row failed", e);
+        if (!cancelled) setPlan(loadCached(client.id));
+      }
+    })();
+    return () => { cancelled = true; };
   }, [client.id]);
+
+  const persistDraft = async (nextPlan) => {
+    saveCached(client.id, nextPlan);
+    try {
+      await db.saveMealPlanDraft(client.id, nextPlan);
+    } catch (e) {
+      console.warn("saveMealPlanDraft failed (is migration 011 applied?)", e);
+    }
+  };
 
   const generate = async ({ withFeedback = false } = {}) => {
     const notes = withFeedback ? feedback.trim() : "";
@@ -193,6 +227,7 @@ export function MealPlanDraft({ client }) {
     }
     setBusy(true);
     setError("");
+    setStatusNote("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Sign in again");
@@ -212,8 +247,9 @@ export function MealPlanDraft({ client }) {
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.error || `Generate failed (${resp.status})`);
       setPlan(data.plan);
-      saveCached(client.id, data.plan);
+      await persistDraft(data.plan);
       if (withFeedback) setFeedback("");
+      setStatusNote("Draft saved. Not on her app until you Publish.");
     } catch (e) {
       console.error("meal plan generate failed", e);
       setError(e.message || "Couldn’t generate plan");
@@ -224,11 +260,45 @@ export function MealPlanDraft({ client }) {
   const clearDraft = () => {
     setPlan(null);
     setFeedback("");
+    setStatusNote("");
     try {
       localStorage.removeItem(STORAGE_PREFIX + client.id);
     } catch {
       /* ignore */
     }
+  };
+
+  const publish = async () => {
+    if (!plan?.days?.length) return;
+    const outCount = countOutOfRange(plan);
+    if (outCount > 0 && !window.confirm(`${outCount} day(s) still out of range. Publish anyway?`)) return;
+    setActionBusy(true);
+    setError("");
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      await db.publishMealPlan(client.id, user?.id, plan);
+      setMode("personalized");
+      setPublishedAt(new Date().toISOString());
+      setStatusNote("Published — her Meals tab now shows this personalized week.");
+    } catch (e) {
+      console.error("publish meal plan failed", e);
+      setError(e.message || "Couldn’t publish");
+    }
+    setActionBusy(false);
+  };
+
+  const revertDefault = async () => {
+    setActionBusy(true);
+    setError("");
+    try {
+      await db.revertMealPlanToDefault(client.id);
+      setMode("default");
+      setStatusNote("Reverted — she’s back on the default recipe bank. Draft kept for you.");
+    } catch (e) {
+      console.error("revert meal plan failed", e);
+      setError(e.message || "Couldn’t revert");
+    }
+    setActionBusy(false);
   };
 
   if (!client.macros) {
@@ -243,6 +313,7 @@ export function MealPlanDraft({ client }) {
   }
 
   const oob = countOutOfRange(plan);
+  const personalized = mode === "personalized";
 
   return (
     <Card style={{ marginTop: 12 }}>
@@ -250,19 +321,33 @@ export function MealPlanDraft({ client }) {
         <div>
           <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>Meal plan draft</div>
           <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
-            Admin-only. Uses her tastes, your recipe bank, and her ranges.
-            Days must land in band (prompt forces portion adjusts). Leave notes below to regenerate with your feedback.
-            Not shown to her yet.
+            Generate → review → notes → regenerate. When it looks right, <b>Publish to her Meals</b>.
+            Until then she stays on the default recipe bank.
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Btn small disabled={busy} onClick={() => generate({ withFeedback: false })}>
+          <Btn small disabled={busy || actionBusy} onClick={() => generate({ withFeedback: false })}>
             {busy ? "Generating…" : plan ? "Fresh 7-day draft" : "Generate 7-day draft"}
           </Btn>
           {plan && (
-            <Btn small ghost disabled={busy} onClick={clearDraft}>Clear draft</Btn>
+            <Btn small ghost disabled={busy || actionBusy} onClick={clearDraft}>Clear draft</Btn>
           )}
         </div>
+      </div>
+
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          marginBottom: 12,
+          padding: "10px 12px",
+          borderRadius: 10,
+          background: personalized ? T.sageSoft : T.accentSoft,
+          color: personalized ? T.sage : T.accentDeep,
+        }}
+      >
+        Her Meals tab: {personalized ? "Personalized (published)" : "Default recipe bank"}
+        {personalized && publishedAt ? ` · since ${new Date(publishedAt).toLocaleString()}` : ""}
       </div>
 
       {busy && (
@@ -273,9 +358,23 @@ export function MealPlanDraft({ client }) {
       {error && (
         <div style={{ fontSize: 13.5, color: T.amber, marginBottom: 10 }}>{error}</div>
       )}
+      {statusNote && (
+        <div style={{ fontSize: 13.5, color: T.sage, marginBottom: 10 }}>{statusNote}</div>
+      )}
 
       {plan && (
         <>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+            <Btn small disabled={busy || actionBusy} onClick={publish}>
+              {actionBusy ? "Working…" : personalized ? "Re-publish this draft" : "Publish to her Meals"}
+            </Btn>
+            {personalized && (
+              <Btn small ghost disabled={busy || actionBusy} onClick={revertDefault}>
+                Revert to default bank
+              </Btn>
+            )}
+          </div>
+
           {oob > 0 && (
             <div style={{ background: T.amberSoft, borderRadius: 12, padding: "12px 14px", marginBottom: 12, fontSize: 13.5, lineHeight: 1.55, color: T.amber }}>
               <b>{oob} day{oob === 1 ? "" : "s"} still out of range</b> (amber chips).
@@ -291,7 +390,7 @@ export function MealPlanDraft({ client }) {
           {plan.meta && (
             <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 12 }}>
               Draft · {plan.meta.model} · {plan.meta.generatedAt ? new Date(plan.meta.generatedAt).toLocaleString() : ""}
-              {plan.meta.hadFeedback ? " · revised from your notes" : ""} · not client-facing
+              {plan.meta.hadFeedback ? " · revised from your notes" : ""}
             </div>
           )}
 

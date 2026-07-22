@@ -710,4 +710,95 @@ export const db = {
       .eq("id", clientId);
     if (pErr) throw pErr;
   },
+
+  /** Load meal-plan row for a client (or self). Missing row = default mode. */
+  async loadClientMealPlan(profileId) {
+    if (!profileId) return { mode: "default", draft: null, published: null };
+    const { data, error } = await supabase
+      .from("client_meal_plans")
+      .select("profile_id, mode, draft, draft_meta, published, published_at, published_by, updated_at")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    if (error) {
+      // Table may not exist until migration 011
+      console.warn("loadClientMealPlan failed", error);
+      return { mode: "default", draft: null, published: null };
+    }
+    if (!data) return { mode: "default", draft: null, published: null, published_at: null };
+    return {
+      mode: data.mode === "personalized" && data.published ? "personalized" : "default",
+      draft: data.draft || null,
+      draft_meta: data.draft_meta || null,
+      published: data.published || null,
+      published_at: data.published_at || null,
+      published_by: data.published_by || null,
+      updated_at: data.updated_at || null,
+      rawMode: data.mode,
+    };
+  },
+
+  /** Admin: save AI draft (does not change what the client sees). */
+  async saveMealPlanDraft(clientId, plan) {
+    if (!clientId || !plan) throw new Error("missing plan");
+    const existing = await this.loadClientMealPlan(clientId);
+    const draft_meta = {
+      ...(plan.meta || {}),
+      savedAt: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("client_meal_plans").upsert(
+      {
+        profile_id: clientId,
+        mode: existing.rawMode || "default",
+        draft: plan,
+        draft_meta,
+        published: existing.published,
+        published_at: existing.published_at,
+        published_by: existing.published_by,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "profile_id" },
+    );
+    if (error) throw error;
+  },
+
+  /**
+   * Admin: publish a plan to the client (usually the current draft).
+   * Copies plan → published and sets mode=personalized.
+   */
+  async publishMealPlan(clientId, adminId, planOverride = null) {
+    if (!clientId) throw new Error("missing client");
+    const existing = await this.loadClientMealPlan(clientId);
+    const plan = planOverride || existing.draft;
+    if (!plan?.days?.length) throw new Error("Generate a draft before publishing");
+    const { error } = await supabase.from("client_meal_plans").upsert(
+      {
+        profile_id: clientId,
+        mode: "personalized",
+        draft: plan,
+        draft_meta: existing.draft_meta || plan.meta || null,
+        published: plan,
+        published_at: new Date().toISOString(),
+        published_by: adminId || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "profile_id" },
+    );
+    if (error) throw error;
+  },
+
+  /**
+   * Admin: switch client back to the shared default recipe bank.
+   * Keeps draft + last published for easy re-publish later.
+   */
+  async revertMealPlanToDefault(clientId) {
+    if (!clientId) throw new Error("missing client");
+    const { error } = await supabase
+      .from("client_meal_plans")
+      .update({
+        mode: "default",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("profile_id", clientId);
+    if (error) throw error;
+  },
 };

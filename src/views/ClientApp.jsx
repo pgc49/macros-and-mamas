@@ -4,9 +4,11 @@ import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/d
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
 import { Shell, Card, Btn, Chip, RangeBand, rangeState } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
+import { MealRecipeCard } from "../components/MealRecipeCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
+import { mealToCard } from "../content/recipeDetails";
 
 export function ClientApp({
   tab, setTab,
@@ -21,7 +23,13 @@ export function ClientApp({
   weighins, logWeighin, deleteWeighin, weeklyRate, trends,
   macroHistory, habitHistory,
   mealFilter, setMealFilter,
+  mealPlanMode = "default",
+  publishedPlan = null,
 }) {
+  const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
+  const flatPersonalized = personalized
+    ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
+    : [];
   const hi = (n, d = 10) => n + d;
   const hasElectrolytes = hasPublicUrl(CONFIG.FULLSCRIPT_ELECTROLYTES);
   const hasSleep = hasPublicUrl(CONFIG.FULLSCRIPT_SLEEP);
@@ -228,19 +236,25 @@ export function ClientApp({
       {tab === "meals" && (
         <>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Automate your plate</h2>
-          <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>Same breakfasts, similar lunches, dinner gets to be fun. Repetition is the secret — decide once, win all week.</p>
+          <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
+            {personalized
+              ? "Your week from Callie — open a meal for ingredients and steps, then + Log to add it to your day."
+              : "Same breakfasts, similar lunches, dinner gets to be fun. Repetition is the secret — decide once, win all week."}
+          </p>
 
-          <Card style={{ background: T.accentSoft, border: "none", marginBottom: 14 }}>
-            {SKELETONS.map((s) => (
-              <div key={s.meal} style={{ marginBottom: 12 }}>
-                <div style={{ fontFamily: FD, fontSize: 17, color: T.accentDeep }}>{s.meal} <span style={{ fontFamily: F, fontSize: 13, color: T.inkSoft }}>— {s.formula}</span></div>
-                <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.6 }}>{s.lines.join(" · ")}</div>
+          {!personalized && (
+            <Card style={{ background: T.accentSoft, border: "none", marginBottom: 14 }}>
+              {SKELETONS.map((s) => (
+                <div key={s.meal} style={{ marginBottom: 12 }}>
+                  <div style={{ fontFamily: FD, fontSize: 17, color: T.accentDeep }}>{s.meal} <span style={{ fontFamily: F, fontSize: 13, color: T.inkSoft }}>— {s.formula}</span></div>
+                  <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.6 }}>{s.lines.join(" · ")}</div>
+                </div>
+              ))}
+              <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.5 }}>
+                House rules: max 2 whole eggs per meal (egg whites are free game) · sweeten with honey, maple, or applesauce · organic where you can.
               </div>
-            ))}
-            <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.5 }}>
-              House rules: max 2 whole eggs per meal (egg whites are free game) · sweeten with honey, maple, or applesauce · organic where you can.
-            </div>
-          </Card>
+            </Card>
+          )}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
             {["By Day", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
@@ -248,44 +262,46 @@ export function ClientApp({
             ))}
           </div>
 
-          {mealFilter === "By Day" && (
+          {mealFilter === "By Day" && personalized && (publishedPlan?.days || []).map((day) => (
+            <div key={day.day} style={{ marginBottom: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                <div>
+                  <span style={{ fontFamily: FD, fontSize: 20 }}>{day.day}</span>
+                  {day.theme && <span style={{ fontSize: 13, color: T.inkSoft, marginLeft: 8 }}>{day.theme}</span>}
+                </div>
+                {day.dayTotals && (
+                  <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 700 }}>
+                    {Math.round(day.dayTotals.cal || 0)} cal · {Math.round(day.dayTotals.p || 0)}P · {Math.round(day.dayTotals.c || 0)}C · {Math.round(day.dayTotals.f || 0)}F
+                  </div>
+                )}
+              </div>
+              {(day.meals || []).map((m, idx) => (
+                <MealRecipeCard key={`${day.day}-${idx}`} meal={mealToCard(m)} onLog={logRecipe} />
+              ))}
+            </div>
+          ))}
+
+          {mealFilter === "By Day" && !personalized && (
             <Card style={{ marginBottom: 12, background: T.accentSoft, border: "none" }}>
               <div style={{ fontFamily: FD, fontSize: 17, color: T.accentDeep, marginBottom: 4 }}>Your week by day</div>
               <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.55 }}>
-                Personalized Mon–Sun cards (with recipes + Log) will land here after Callie reviews and publishes your plan.
-                Until then, filter Breakfast / Lunch / Dinner / Snack for ideas you can log today.
+                Callie will publish your personalized Mon–Sun here when it&apos;s ready.
+                Until then, browse Breakfast / Lunch / Dinner / Snack — open any card for the full recipe, then + Log.
               </div>
             </Card>
           )}
 
-          {mealFilter !== "By Day" && RECIPES.filter((r) => r.cat === mealFilter).map((r) => (
-            <Card key={r.name} style={{ marginBottom: 10, padding: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}>{r.cat}{r.serves > 1 ? ` · serves ${r.serves}` : ""}</div>
-                  <div style={{ fontFamily: FD, fontSize: 18, margin: "2px 0 4px" }}>{r.name}</div>
-                  <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>{r.desc}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => logRecipe(r)}
-                  style={{
-                    flexShrink: 0, fontFamily: F, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 999,
-                    border: `1.5px solid ${T.accent}`, background: T.accentSoft, color: T.accentDeep, cursor: "pointer",
-                  }}
-                >
-                  + Log
-                </button>
-              </div>
-              <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 13, fontWeight: 700 }}>
-                <span>{r.cal} cal</span>
-                <span style={{ color: T.accentDeep }}>P {r.p}g</span>
-                <span style={{ color: T.inkSoft }}>C {r.c}g</span>
-                <span style={{ color: T.inkSoft }}>F {r.f}g</span>
-                <span style={{ color: T.inkSoft, fontWeight: 400 }}>per serving</span>
-              </div>
-            </Card>
-          ))}
+          {mealFilter !== "By Day" && personalized && flatPersonalized
+            .filter((m) => (m.cat || "").toLowerCase() === mealFilter.toLowerCase())
+            .map((m, idx) => (
+              <MealRecipeCard key={`${m.name}-${idx}`} meal={m} onLog={logRecipe} />
+            ))}
+
+          {mealFilter !== "By Day" && !personalized && RECIPES
+            .filter((r) => r.cat === mealFilter)
+            .map((r) => (
+              <MealRecipeCard key={r.name} meal={r} onLog={logRecipe} />
+            ))}
         </>
       )}
 

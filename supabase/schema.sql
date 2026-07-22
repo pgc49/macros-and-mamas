@@ -461,3 +461,43 @@ create policy "email_events_insert_admin"
   to authenticated
   with check (public.is_admin());
 
+
+-- Client meal plans (draft + published; admin publish switch)
+create table if not exists public.client_meal_plans (
+  profile_id uuid primary key references public.profiles (id) on delete cascade,
+  mode text not null default 'default'
+    check (mode in ('default', 'personalized')),
+  draft jsonb,
+  draft_meta jsonb,
+  published jsonb,
+  published_at timestamptz,
+  published_by uuid references public.profiles (id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.client_meal_plans enable row level security;
+
+drop policy if exists "client_meal_plans_select_own_or_admin" on public.client_meal_plans;
+create policy "client_meal_plans_select_own_or_admin"
+  on public.client_meal_plans for select
+  to authenticated
+  using (profile_id = auth.uid() or public.is_admin());
+
+drop policy if exists "client_meal_plans_insert_admin" on public.client_meal_plans;
+create policy "client_meal_plans_insert_admin"
+  on public.client_meal_plans for insert
+  to authenticated
+  with check (public.is_admin());
+
+drop policy if exists "client_meal_plans_update_admin" on public.client_meal_plans;
+create policy "client_meal_plans_update_admin"
+  on public.client_meal_plans for update
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+drop policy if exists "client_meal_plans_delete_admin" on public.client_meal_plans;
+create policy "client_meal_plans_delete_admin"
+  on public.client_meal_plans for delete
+  to authenticated
+  using (public.is_admin());
