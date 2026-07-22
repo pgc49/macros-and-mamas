@@ -19,7 +19,7 @@ function persistDismissed() {
   }
 }
 
-/** Compact one-time tip: Add to Home Screen. Gone forever after dismiss. */
+/** One-time visual tip: Add to Home Screen. Gone forever after dismiss. */
 export function HomeScreenTip() {
   const [visible, setVisible] = useState(() => !wasDismissed());
 
@@ -37,8 +37,8 @@ export function HomeScreenTip() {
       style={{
         position: "relative",
         background: T.accentSoft,
-        borderRadius: 12,
-        padding: "11px 40px 11px 13px",
+        borderRadius: 14,
+        padding: "12px 36px 12px 14px",
         marginBottom: 12,
       }}
     >
@@ -62,6 +62,7 @@ export function HomeScreenTip() {
       >
         ×
       </button>
+
       <div
         style={{
           fontSize: 11,
@@ -69,30 +70,49 @@ export function HomeScreenTip() {
           letterSpacing: 0.04,
           textTransform: "uppercase",
           color: T.accentDeep,
-          marginBottom: 3,
+          marginBottom: 4,
         }}
       >
-        Tip · works great on your phone
+        Getting started
       </div>
-      <div style={{ fontFamily: FD, fontSize: 16, lineHeight: 1.25, marginBottom: 4 }}>
-        Add Macros and Mamas to your home screen
+
+      <div style={{ fontFamily: FD, fontSize: 17, lineHeight: 1.25, marginBottom: 6 }}>
+        Put Macros and Mamas on your home screen
       </div>
-      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.4, color: T.inkSoft }}>
-        Safari or Chrome → Share → <b style={{ color: T.ink }}>Add to Home Screen</b>.
-        Instant icon, no App Store.
+
+      <p style={{ margin: "0 0 8px", fontSize: 13, lineHeight: 1.4, color: T.inkSoft }}>
+        It&apos;ll feel like an app — tap the icon anytime and you&apos;re back in your dashboard. No App Store.
       </p>
+
+      <ol
+        style={{
+          margin: 0,
+          paddingLeft: 18,
+          fontSize: 12.5,
+          lineHeight: 1.45,
+          color: T.ink,
+        }}
+      >
+        <li style={{ marginBottom: 3 }}>
+          <b>iPhone:</b> Safari → Share → <b>Add to Home Screen</b>
+        </li>
+        <li>
+          <b>Android:</b> Chrome menu → <b>Install app</b> or Add to Home screen
+        </li>
+      </ol>
+
       <button
         type="button"
         onClick={dismiss}
         style={{
-          marginTop: 8,
+          marginTop: 10,
           border: "none",
           background: T.accent,
           color: "#fff",
           fontFamily: F,
           fontWeight: 700,
-          fontSize: 12,
-          padding: "7px 12px",
+          fontSize: 13,
+          padding: "8px 14px",
           borderRadius: 999,
           cursor: "pointer",
         }}
