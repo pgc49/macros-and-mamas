@@ -226,27 +226,33 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   };
 
   const filtered = useMemo(() => {
-    // Include admins in the directory so Patrick/Callie can test meal plans on themselves.
-    // Funnel filters still make sense for admin rows that have intake/macros.
-    const list = all;
-    if (filter === "all") return list;
-    if (filter === "needs_you") {
-      return list.filter((c) =>
-        c.role === "admin"
-        || c.stage === "awaiting_approval"
+    // Funnel filters apply to real clients; admins are pinned at the top of
+    // All / Needs you / Active so Patrick & Callie can test meal plans on themselves.
+    const admins = all.filter((c) => c.role === "admin");
+    const clientsOnly = all.filter((c) => c.role !== "admin");
+    let list = clientsOnly;
+    if (filter === "all") {
+      list = clientsOnly;
+    } else if (filter === "needs_you") {
+      list = clientsOnly.filter((c) =>
+        c.stage === "awaiting_approval"
         || (c.status === "pending" && c.hasIntake && c.paid && !c.refunded)
         || needsAttention(c).length > 0
       );
+    } else if (filter === "unpaid") {
+      list = clientsOnly.filter((c) => c.stage === "signed_up");
+    } else if (filter === "awaiting_intake") {
+      list = clientsOnly.filter((c) => c.stage === "paid_awaiting_intake");
+    } else if (filter === "awaiting_approval") {
+      list = clientsOnly.filter((c) => c.stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid));
+    } else if (filter === "active") {
+      list = clientsOnly.filter((c) => c.stage === "active" || c.status === "active");
+    } else if (filter === "refunded") {
+      list = clientsOnly.filter((c) => c.refunded || c.stage === "refunded");
     }
-    if (filter === "unpaid") return list.filter((c) => c.stage === "signed_up" && c.role !== "admin");
-    if (filter === "awaiting_intake") return list.filter((c) => c.stage === "paid_awaiting_intake");
-    if (filter === "awaiting_approval") {
-      return list.filter((c) => c.stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid));
+    if (filter === "all" || filter === "needs_you" || filter === "active") {
+      return [...admins, ...list];
     }
-    if (filter === "active") {
-      return list.filter((c) => c.stage === "active" || c.status === "active" || (c.role === "admin" && c.hasIntake));
-    }
-    if (filter === "refunded") return list.filter((c) => c.refunded || c.stage === "refunded");
     return list;
   }, [all, filter]);
 
@@ -309,7 +315,18 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
             <div>
-              <div style={{ fontFamily: FD, fontSize: 22 }}>{sel.name}</div>
+              <div style={{ fontFamily: FD, fontSize: 22 }}>
+                {sel.name}
+                {sel.role === "admin" && (
+                  <span style={{
+                    marginLeft: 10, fontSize: 12, fontWeight: 700, fontFamily: F,
+                    padding: "3px 10px", borderRadius: 99, background: T.accentSoft, color: T.accentDeep,
+                    verticalAlign: "middle",
+                  }}>
+                    Admin · test
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.6 }}>
                 {STAGE_LABEL[stage] || stage}
                 {sel.paid ? " · Paid" : " · Unpaid"}
