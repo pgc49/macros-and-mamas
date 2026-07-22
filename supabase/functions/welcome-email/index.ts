@@ -32,7 +32,7 @@ serve(async (req) => {
           <p><b>Here's what happens next:</b></p>
           <p><b>First, complete your intake — it takes about 3 minutes.</b> That's where I learn your goals, your season of life, and even the foods you love. The moment you finish, I get to work.</p>
           <p>Then your macros get built — not by a calculator — by me. I personally review every mama's numbers before they go live. You'll get them within a day of finishing your intake, as flexible ranges, because real life doesn't happen in exact grams.</p>
-          <p>Once your macros are approved, your invite to our WhatsApp Macros group is coming by text. That's where I live Monday through Friday — voice notes, plate pics, wins, questions, all of it. Every Monday I drop a short voice note that sets the week's focus. Listen while you pump, nurse, walk, or hide in the pantry. No judgment!</p>
+          <p>Once your macros are approved, your invite to our WhatsApp Macros group comes in that email — with a join link. That's where I live Monday through Friday — voice notes, plate pics, wins, questions, all of it. Every Monday I drop a short voice note that sets the week's focus. Listen while you pump, nurse, walk, or hide in the pantry. No judgment!</p>
           <p><b>While you're at it, do these two things — today if you can:</b></p>
           <ol>
             <li><b>Take your before photos.</b> Same outfit, same spot, same lighting — front, side, and back. Your face doesn't need to be in them. You will not believe how much you'll want these in eight weeks!</li>

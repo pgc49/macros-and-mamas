@@ -26,7 +26,7 @@ serve(async (req) => {
         header: `Hi ${first},`,
         body: `
           <p>I have your intake — thank you. I'm reviewing your numbers personally and you'll usually have them within a day.</p>
-          <p>When I approve, your dashboard unlocks and your WhatsApp group invite lands by text.</p>
+          <p>When I approve, your dashboard unlocks and your WhatsApp group invite arrives in that email (with a join link).</p>
           <p>If your before photos and first weigh-in are still on the list — now's the moment.</p>
           <p>Callie</p>
         `,
