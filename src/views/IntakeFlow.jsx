@@ -1,157 +1,40 @@
-import { useEffect, useRef, useState } from "react";
 import { FD, T, F } from "../theme/tokens";
 import { Shell, Card, Btn, Field, Chip, inputStyle } from "../components/ui";
-import { useAuth } from "../auth/useAuth.jsx";
-import { db } from "../db/db";
 
-const HOLD_COPY =
-  "You're still enrolled for now — Callie will reach out to sort next steps with you. No automatic refund.";
-
-function WaitlistCapture({
-  reason,
-  monthsPp,
-  buttonLabel,
-  footnote,
-  onDone,
-}) {
-  const { user } = useAuth();
-  const [email, setEmail] = useState(user?.email || "");
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState("");
-
-  const submit = async () => {
-    const trimmed = email.trim();
-    if (!trimmed || !trimmed.includes("@")) {
-      setError("Enter a valid email.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      await db.joinWaitlist({
-        email: trimmed,
-        reason,
-        monthsPp: monthsPp === "" || monthsPp == null ? null : Number(monthsPp),
-      });
-      setDone(true);
-      onDone?.();
-    } catch (e) {
-      console.error("waitlist failed", e);
-      setError("Couldn't save that — try again in a moment.");
-    }
-    setBusy(false);
-  };
-
-  if (done) {
-    return (
-      <div style={{ fontSize: 14.5, lineHeight: 1.55, color: T.accentDeep, fontWeight: 700 }}>
-        {reason === "pregnant"
-          ? "You're on the list. Congratulations again 🤍"
-          : "You're on the list — we'll be in touch when it's time."}
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <input
-          style={{ ...inputStyle, flex: 1, minWidth: 160, marginBottom: 0 }}
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@email.com"
-          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-        />
-        <Btn small disabled={busy || !email.trim()} onClick={submit}>
-          {busy ? "Saving…" : buttonLabel}
-        </Btn>
-      </div>
-      <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.45 }}>{footnote}</div>
-      {error && (
-        <div style={{ marginTop: 8, fontSize: 13, color: T.amber }}>{error}</div>
-      )}
-    </div>
-  );
-}
-
-export function IntakeFlow({ profile, step, setStep, set, onSubmit, onEligibilityDecline }) {
+/** Full intake — no eligibility denials. Callie reviews flags in admin. */
+export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
   const steps = ["About you", "You right now", "Your goal", "Your tastes"];
-  const [earlyGateShown, setEarlyGateShown] = useState(false);
-  const declinedOnce = useRef(false);
 
   const monthsNum = Number(profile.monthsPP);
   const monthsValid = profile.monthsPP !== "" && !Number.isNaN(monthsNum);
-  const earlyNursing = profile.breastfeeding === true && monthsValid && monthsNum < 3;
-
-  const fireDecline = (reason) => {
-    if (declinedOnce.current) return;
-    declinedOnce.current = true;
-    onEligibilityDecline?.(reason);
-  };
-
-  useEffect(() => {
-    if (profile.pregnant === true) fireDecline("pregnant");
-  }, [profile.pregnant]);
-
-  useEffect(() => {
-    if (earlyGateShown && earlyNursing) fireDecline("early");
-  }, [earlyGateShown, earlyNursing]);
 
   const setPregnant = (v) => {
     set("pregnant", v);
     if (v === true) {
       set("breastfeeding", null);
       set("monthsPP", "");
-      setEarlyGateShown(false);
     }
   };
 
   const setBreastfeeding = (v) => {
     set("breastfeeding", v);
-    setEarlyGateShown(false);
     if (v === false) set("monthsPP", "");
   };
 
-  const tryContinueStep1 = () => {
-    if (profile.pregnant !== false) return;
-    if (profile.breastfeeding === false) {
-      set("monthsPP", "");
-      setEarlyGateShown(false);
-      setStep(2);
-      return;
-    }
-    if (profile.breastfeeding === true) {
-      if (!monthsValid) return;
-      if (monthsNum < 3) {
-        setEarlyGateShown(true);
-        return;
-      }
-      setEarlyGateShown(false);
-      setStep(2);
-    }
-  };
-
-  // Once the early card has been shown, keep Continue disabled while still under 3.
-  // Before first Continue tap with < 3, Continue is also disabled via canContinueStep1 when months < 3.
-  // Spec: validate on Continue tap — so allow Continue to be clickable when months filled even if < 3,
-  // and on tap show the card. Re-read:
-  // "Validate on Continue tap, not per keystroke"
-  // "If < 3: stay on the page and show the inline card; Continue remains disabled while the value is under 3."
-  // So: initially with "2" typed, Continue should be enabled to tap; after tap, card shows and Continue disabled until >= 3.
-
   const continueEnabledStep1 = () => {
+    if (profile.pregnant === true) return true;
     if (profile.pregnant !== false) return false;
     if (profile.breastfeeding === false) return true;
-    if (profile.breastfeeding === true) {
-      if (!monthsValid) return false;
-      if (earlyGateShown && monthsNum < 3) return false;
-      // Before card: allow click even if < 3 so we can show the card
-      if (!earlyGateShown) return true;
-      return monthsNum >= 3;
-    }
+    if (profile.breastfeeding === true) return monthsValid;
     return false;
+  };
+
+  const goStep2 = () => {
+    if (!continueEnabledStep1()) return;
+    if (profile.pregnant === true || profile.breastfeeding === false) {
+      set("monthsPP", "");
+    }
+    setStep(2);
   };
 
   return (
@@ -173,7 +56,7 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit, onEligibilit
             <input style={inputStyle} inputMode="tel" value={profile.phone} onChange={(e) => set("phone", e.target.value)} placeholder="(555) 555-5555" />
           </Field>
           <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.5, marginBottom: 14 }}>
-            Callie personally invites every mama to the group chat. Heads up: members of a WhatsApp group can see each other's numbers.
+            Callie personally invites every mama to the group chat. Heads up: members of a WhatsApp group can see each other&apos;s numbers.
           </div>
           <Btn style={{ width: "100%", marginTop: 4 }} disabled={!profile.goalWeight || !profile.currentWeight || !profile.phone} onClick={() => setStep(1)}>Continue</Btn>
         </Card>
@@ -187,31 +70,6 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit, onEligibilit
               <Chip active={profile.pregnant === false} onClick={() => setPregnant(false)}>No</Chip>
             </div>
           </Field>
-
-          {profile.pregnant === true && (
-            <div style={{
-              background: T.accentSoft, borderRadius: 14, padding: "14px 16px", marginBottom: 4,
-            }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, marginBottom: 6 }}>
-                🤍 Congratulations, mama.
-              </div>
-              <p style={{ fontSize: 14, lineHeight: 1.55, color: T.inkSoft, margin: "0 0 14px" }}>
-                This program isn&apos;t recommended during pregnancy — your body needs abundance right now, not a deficit.
-                Come back after baby arrives; we&apos;d love to have you then.
-              </p>
-              <WaitlistCapture
-                reason="pregnant"
-                buttonLabel="Keep me posted"
-                footnote="Leave your email and Callie will check in when the time is right."
-              />
-              <p style={{
-                fontSize: 13.5, lineHeight: 1.5, color: T.accentDeep, fontWeight: 700,
-                margin: "12px 0 0",
-              }}>
-                {HOLD_COPY}
-              </p>
-            </div>
-          )}
 
           {profile.pregnant === false && (
             <>
@@ -229,14 +87,7 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit, onEligibilit
                       style={inputStyle}
                       inputMode="numeric"
                       value={profile.monthsPP}
-                      onChange={(e) => {
-                        set("monthsPP", e.target.value);
-                        // If she edits up to 3+, clear the gate card
-                        const n = Number(e.target.value);
-                        if (e.target.value !== "" && !Number.isNaN(n) && n >= 3) {
-                          setEarlyGateShown(false);
-                        }
-                      }}
+                      onChange={(e) => set("monthsPP", e.target.value)}
                       placeholder="12"
                     />
                   </Field>
@@ -245,42 +96,16 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit, onEligibilit
                   </div>
                 </>
               )}
-
-              {earlyGateShown && earlyNursing && (
-                <div style={{
-                  background: T.amberSoft, borderRadius: 14, padding: "14px 16px", marginBottom: 14,
-                }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, marginBottom: 6 }}>
-                    Not yet — and that&apos;s on purpose.
-                  </div>
-                  <p style={{ fontSize: 14, lineHeight: 1.55, color: T.inkSoft, margin: "0 0 14px" }}>
-                    You&apos;re under three months postpartum while nursing, and we won&apos;t risk your milk supply while it&apos;s still establishing.
-                    Your body is doing its most important work right now.
-                  </p>
-                  <WaitlistCapture
-                    reason="early_nursing"
-                    monthsPp={profile.monthsPP}
-                    buttonLabel="Remind me when it's time"
-                    footnote="We'll reach out as you pass the three-month mark."
-                  />
-                  <p style={{
-                    fontSize: 13.5, lineHeight: 1.5, color: T.accentDeep, fontWeight: 700,
-                    margin: "12px 0 0",
-                  }}>
-                    {HOLD_COPY}
-                  </p>
-                </div>
-              )}
-
-              <Btn
-                style={{ width: "100%" }}
-                disabled={!continueEnabledStep1()}
-                onClick={tryContinueStep1}
-              >
-                Continue
-              </Btn>
             </>
           )}
+
+          <Btn
+            style={{ width: "100%", marginTop: profile.pregnant === true ? 8 : 0 }}
+            disabled={!continueEnabledStep1()}
+            onClick={goStep2}
+          >
+            Continue
+          </Btn>
         </Card>
       )}
 

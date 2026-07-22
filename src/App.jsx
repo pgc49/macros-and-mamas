@@ -17,7 +17,6 @@ import {
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
 import { SalesPage } from "./views/SalesPage";
 import { IntakeFlow } from "./views/IntakeFlow";
-import { DeclinedPage } from "./views/DeclinedPage";
 import { PendingPage } from "./views/PendingPage";
 import { JoinPage } from "./views/JoinPage";
 import { WelcomePage } from "./views/WelcomePage";
@@ -30,7 +29,6 @@ import { ClientApp } from "./views/ClientApp";
 import { AdminPortal } from "./admin/AdminPortal";
 import { Shell } from "./components/ui";
 import { T, FD } from "./theme/tokens";
-import { requestEligibilityHold } from "./lib/checkout";
 
 const EMPTY_PROFILE = {
   name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
@@ -46,14 +44,11 @@ export default function App() {
   const [signInNext, setSignInNext] = useState("intake"); // "intake" → create; "app" → returning
   const [tab, setTab] = useState("today");
   const [step, setStep] = useState(0);
-  const [declineReason, setDeclineReason] = useState("");
   const [profile, setProfile] = useState(() => ({ ...EMPTY_PROFILE }));
   const [macros, setMacros] = useState(null);
   const [approved, setApproved] = useState(false);
   const [paid, setPaid] = useState(false);
   const [refunded, setRefunded] = useState(false);
-  const [refundIssued, setRefundIssued] = useState(false);
-  const refundOnce = useRef(false);
   const curWk = wkStartOf();
   const [checksByWeek, setChecksByWeek] = useState({});
   const [viewWk, setViewWk] = useState(curWk);
@@ -114,8 +109,6 @@ export default function App() {
           setApproved(false);
           setPaid(false);
           setRefunded(false);
-          setRefundIssued(false);
-          refundOnce.current = false;
         }
         if (isAdmin) {
           try {
@@ -190,24 +183,7 @@ export default function App() {
 
   const set = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
 
-  const flagEligibilityHold = async (reason) => {
-    if (refundOnce.current) return;
-    refundOnce.current = true;
-    const normalized = reason === "early" || reason === "early_nursing" ? "early_nursing" : reason;
-    setDeclineReason(normalized === "early_nursing" ? "early" : normalized);
-    try {
-      await requestEligibilityHold(normalized, {
-        monthsPP: profile.monthsPP,
-        name: profile.name,
-      });
-      // Stay paid — Callie decides refund 1:1. Do not set refunded/refundIssued.
-    } catch (e) {
-      console.error("eligibility hold failed", e);
-      refundOnce.current = false;
-    }
-  };
-
-  /* No auto-refunds. Pregnant / early nursing / diet all stay for Callie to review. */
+  /* No auto-deny / auto-refund. Pregnant & early postpartum flag in admin for Callie. */
   const submitIntake = async () => {
     const forEngine = {
       ...profile,
@@ -561,8 +537,6 @@ export default function App() {
   };
 
   const backToStart = () => {
-    setDeclineReason("");
-    setRefundIssued(false);
     setStep(0);
     setProfile({ ...EMPTY_PROFILE });
     setMacros(null);
@@ -687,7 +661,7 @@ export default function App() {
         element={
           !user
             ? <Navigate to={PATHS.signin} replace />
-            : refunded || refundIssued
+            : refunded
               ? <GoodbyePage onBack={backToStart} />
               : <Navigate to={homePathFor({ isAdmin, approved, paid, macros, refunded })} replace />
         }
@@ -704,11 +678,11 @@ export default function App() {
                 onBack={() => navigate(PATHS.home)}
               />
             )
-            : refunded && !refundIssued
+            : refunded
               ? <Navigate to={PATHS.goodbye} replace />
-              : !paid && !isAdmin && !refundIssued
+              : !paid && !isAdmin
                 ? <Navigate to={PATHS.join} replace />
-                : macros && !declineReason && !refundIssued
+                : macros
                   ? <Navigate to={PATHS.pending} replace />
                   : (
                     <IntakeFlow
@@ -717,7 +691,6 @@ export default function App() {
                       setStep={setStep}
                       set={set}
                       onSubmit={submitIntake}
-                      onEligibilityDecline={flagEligibilityHold}
                     />
                   )
         }
@@ -725,13 +698,7 @@ export default function App() {
 
       <Route
         path={PATHS.declined}
-        element={(
-          <DeclinedPage
-            declineReason={declineReason}
-            onBack={backToStart}
-            refundIssued={refundIssued || refunded}
-          />
-        )}
+        element={<Navigate to={PATHS.onboarding} replace />}
       />
 
       <Route

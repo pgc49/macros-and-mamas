@@ -45,10 +45,10 @@ serve(async (req) => {
           ? `Breastfeeding: ${s.breastfeeding ? "yes" : "no"}${s.monthsPP != null ? ` (${s.monthsPP} mo pp)` : ""}`
           : "",
         s.pregnant
-          ? `⚠️ Pregnant — connect 1:1 before approving or refunding (no auto-refund)`
+          ? `⚠️ Pregnant — review 1:1 before approving or refunding (no auto-deny)`
           : "",
-        s.breastfeeding && s.monthsPP != null && Number(s.monthsPP) < 3
-          ? `⚠️ Early nursing (<3 mo) — connect 1:1 before approving or refunding (no auto-refund)`
+        s.breastfeeding
+          ? `⚠️ Postpartum / nursing${s.monthsPP != null ? ` (${s.monthsPP} mo pp)` : ""} — review 1:1 (no auto-deny)`
           : "",
         s.diet && s.diet !== "none"
           ? `⚠️ Diet: ${s.diet} — connect before approving (no auto-refund)`

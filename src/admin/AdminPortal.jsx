@@ -207,9 +207,16 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   const needsAttention = (c) => {
     const r = rateOf(c.weighins);
     const flags = [];
-    if (c.pregnant) flags.push("pregnant — connect 1:1");
-    if (c.breastfeeding && c.monthsPP != null && c.monthsPP !== "" && Number(c.monthsPP) < 3) {
-      flags.push("early nursing — connect 1:1");
+    if (c.pregnant) flags.push("pregnant — review 1:1 before approving");
+    if (c.breastfeeding) {
+      const mo = c.monthsPP != null && c.monthsPP !== "" ? Number(c.monthsPP) : null;
+      if (mo != null && !Number.isNaN(mo) && mo < 3) {
+        flags.push("early postpartum / nursing (<3 mo) — review 1:1");
+      } else if (mo != null && !Number.isNaN(mo)) {
+        flags.push(`postpartum / nursing (${mo} mo) — review 1:1`);
+      } else {
+        flags.push("postpartum / nursing — review 1:1");
+      }
     }
     if (c.diet && c.diet !== "none") flags.push(`diet: ${c.diet} — connect before approving`);
     if (r !== null && r > 1.5) flags.push("losing too fast");
@@ -304,8 +311,15 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 {sel.email ? <><br />✉️ {sel.email}</> : null}
                 {sel.age ? <><br />{sel.age} yrs</> : null}
                 {sel.currentWeight != null && sel.goalWeight != null ? <> · {sel.currentWeight} → {sel.goalWeight} lbs</> : null}
-                {sel.pregnant ? <><br />⚠️ Currently pregnant — connect 1:1 before approving or refunding</> : null}
-                {sel.breastfeeding ? ` · breastfeeding${sel.monthsPP != null && sel.monthsPP !== "" ? ` · ${sel.monthsPP} mo pp` : ""}` : ""}
+                {sel.pregnant ? <><br />⚠️ Pregnant — review 1:1 before approving or refunding</> : null}
+                {sel.breastfeeding ? (
+                  <>
+                    <br />
+                    ⚠️ Postpartum / nursing
+                    {sel.monthsPP != null && sel.monthsPP !== "" ? ` · ${sel.monthsPP} mo pp` : ""}
+                    {" — review 1:1"}
+                  </>
+                ) : null}
                 {sel.diet && sel.diet !== "none" ? <><br />⚠️ Diet: {sel.diet} — connect before approving</> : null}
                 {sel.phone ? <><br />📱 {sel.phone}{stage === "awaiting_approval" ? " — send WhatsApp invite on approval" : ""}</> : null}
                 {(sel.prefB || sel.prefL || sel.prefD) ? <><br />🍽 Loves: {[sel.prefB, sel.prefL, sel.prefD].filter(Boolean).join(" · ")}</> : null}
