@@ -495,15 +495,21 @@ export default function App() {
     }
   };
 
-  const confirmEstimate = async () => {
+  const confirmEstimate = async (overrides = null, opts = {}) => {
     if (!estimate || estimate.error) return;
+    const name = overrides?.name ?? estimate.meal;
+    const cal = overrides?.cal ?? estimate.calories;
+    const p = overrides?.p ?? estimate.protein_g;
+    const c = overrides?.c ?? estimate.carbs_g;
+    const f = overrides?.f ?? estimate.fat_g;
+    const baseVia = estimateSource === "text" ? "describe" : estimateSource;
     await appendMealEntry({
-      name: estimate.meal,
-      cal: estimate.calories,
-      p: estimate.protein_g,
-      c: estimate.carbs_g,
-      f: estimate.fat_g,
-      via: estimateSource === "text" ? "describe" : estimateSource,
+      name,
+      cal,
+      p,
+      c,
+      f,
+      via: opts.adjusted ? "adjusted" : baseVia,
       logged_date: mealLogDate,
     });
     setEstimate(null);

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "./ui";
 import { RECIPES } from "../content/data";
@@ -105,8 +105,34 @@ export function MealLogCard({
   const [manual, setManual] = useState({ name: "", cal: "", p: "", c: "", f: "" });
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [estimateDraft, setEstimateDraft] = useState(null);
   const camRef = useRef(null);
   const libRef = useRef(null);
+
+  // AI result lands as an editable draft — she tweaks, then saves.
+  useEffect(() => {
+    if (!estimate || estimate.error) {
+      setEstimateDraft(null);
+      return;
+    }
+    setEstimateDraft({
+      name: estimate.meal || "",
+      cal: estimate.calories ?? "",
+      p: estimate.protein_g ?? "",
+      c: estimate.carbs_g ?? "",
+      f: estimate.fat_g ?? "",
+      items: estimate.items || [],
+      tip: estimate.tip || "",
+      confidence: estimate.confidence || "medium",
+      baseline: {
+        name: estimate.meal || "",
+        cal: Number(estimate.calories) || 0,
+        p: Number(estimate.protein_g) || 0,
+        c: Number(estimate.carbs_g) || 0,
+        f: Number(estimate.fat_g) || 0,
+      },
+    });
+  }, [estimate]);
 
   const today = localDateIso();
   const date = mealLogDate || todayLog?.date || today;
@@ -245,6 +271,45 @@ export function MealLogCard({
       }}
     />
   );
+
+  const estNumIn = (k, w = 58) => (
+    <input
+      inputMode="numeric"
+      value={estimateDraft?.[k] ?? ""}
+      onChange={(ev) => setEstimateDraft((d) => ({ ...d, [k]: ev.target.value }))}
+      style={{
+        width: w,
+        padding: "8px 8px",
+        fontSize: 15,
+        textAlign: "center",
+        border: `1.5px solid ${T.border}`,
+        borderRadius: 10,
+        fontFamily: F,
+        background: "#fff",
+      }}
+    />
+  );
+
+  const saveEstimateDraft = async () => {
+    if (!estimateDraft) return;
+    const payload = {
+      name: String(estimateDraft.name || "").trim() || "Meal",
+      cal: Number(estimateDraft.cal) || 0,
+      p: Number(estimateDraft.p) || 0,
+      c: Number(estimateDraft.c) || 0,
+      f: Number(estimateDraft.f) || 0,
+    };
+    const b = estimateDraft.baseline || {};
+    const changed =
+      payload.name !== (b.name || "")
+      || payload.cal !== (Number(b.cal) || 0)
+      || payload.p !== (Number(b.p) || 0)
+      || payload.c !== (Number(b.c) || 0)
+      || payload.f !== (Number(b.f) || 0);
+    await onConfirmEstimate?.(payload, { adjusted: changed });
+    setEstimateDraft(null);
+    setMethod(null);
+  };
 
   return (
     <div style={{ marginTop: 4 }}>
@@ -514,34 +579,58 @@ export function MealLogCard({
           </div>
         )}
 
-        {estimate && !estimate.error && (
+        {estimate && !estimate.error && estimateDraft && (
           <div style={{ marginTop: 12, background: T.accentSoft, borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ fontFamily: FD, fontSize: 17 }}>{estimate.meal}</div>
-            <div style={{ fontSize: 12.5, color: T.inkSoft, margin: "2px 0 8px" }}>
-              {(estimate.items || []).join(" · ")}
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.accentDeep, marginBottom: 8 }}>
+              Review &amp; edit, then save
             </div>
-            <div style={{ display: "flex", gap: 14, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>
-              <span>{estimate.calories} cal</span>
-              <span style={{ color: T.accentDeep }}>P {estimate.protein_g}g</span>
-              <span style={{ color: T.inkSoft }}>C {estimate.carbs_g}g</span>
-              <span style={{ color: T.inkSoft }}>F {estimate.fat_g}g</span>
-            </div>
-            {estimate.tip && (
-              <div style={{ fontSize: 13, color: T.accentDeep, lineHeight: 1.5, marginBottom: 10 }}>💬 {estimate.tip}</div>
+            <input
+              value={estimateDraft.name}
+              onChange={(ev) => setEstimateDraft((d) => ({ ...d, name: ev.target.value }))}
+              placeholder="Meal name"
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                fontSize: 15,
+                fontWeight: 600,
+                border: `1.5px solid ${T.border}`,
+                borderRadius: 10,
+                fontFamily: F,
+                background: "#fff",
+                marginBottom: 6,
+                boxSizing: "border-box",
+              }}
+            />
+            {(estimateDraft.items || []).length > 0 && (
+              <div style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 8px", lineHeight: 1.45 }}>
+                {estimateDraft.items.join(" · ")}
+              </div>
             )}
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <Btn
-                small
-                onClick={async () => {
-                  await onConfirmEstimate?.();
-                  setMethod(null);
-                }}
-              >
-                {onToday ? "Add to today" : `Add to ${formatLongDay(date)}`}
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+              {["cal", "p", "c", "f"].map((k) => (
+                <div key={k} style={{ textAlign: "center" }}>
+                  {estNumIn(k, 58)}
+                  <div style={{ fontSize: 10, fontWeight: 700, color: T.inkSoft, marginTop: 2 }}>
+                    {k.toUpperCase()}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {estimateDraft.tip && (
+              <div style={{ fontSize: 13, color: T.accentDeep, lineHeight: 1.5, marginBottom: 10 }}>
+                💬 {estimateDraft.tip}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <Btn small onClick={saveEstimateDraft}>
+                {onToday ? "Save to today" : `Save to ${formatLongDay(date)}`}
               </Btn>
               <button
                 type="button"
-                onClick={onDiscardEstimate}
+                onClick={() => {
+                  setEstimateDraft(null);
+                  onDiscardEstimate?.();
+                }}
                 style={{
                   background: "none",
                   border: "none",
@@ -554,7 +643,7 @@ export function MealLogCard({
                 discard
               </button>
               <span style={{ fontSize: 11.5, color: T.inkSoft, marginLeft: "auto" }}>
-                AI estimate · {estimate.confidence} confidence
+                AI draft · {estimateDraft.confidence} confidence
               </span>
             </div>
           </div>
