@@ -57,9 +57,8 @@ export function AdminClientTracking({ client }) {
 
   // Reset to today when switching clients
   useEffect(() => {
-    const t = localDateIso();
-    setWeekStart(wkStartOf(t));
-    setDate(t);
+    setWeekStart(wkStartOf());
+    setDate(localDateIso());
   }, [client?.id]);
 
   const entries = mealByDate[date] || [];
