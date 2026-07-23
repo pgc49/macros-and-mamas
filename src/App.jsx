@@ -290,16 +290,32 @@ export default function App() {
 
   const downscaleImage = (file, max = 1024) => new Promise((resolve) => {
     const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
-      const scale = Math.min(1, max / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.8).split(",")[1]);
+      try {
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.8).split(",")[1] || null);
+      } catch (e) {
+        console.error("downscaleImage failed", e);
+        resolve(null);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
     };
-    img.onerror = () => resolve(null);
-    img.src = URL.createObjectURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(null);
+    };
+    img.src = objectUrl;
   });
 
   const runEstimate = async (payload, source) => {
@@ -324,16 +340,28 @@ export default function App() {
           message: parsed.message || "Too many AI estimates — try again later or log manually.",
         });
       } else if (!resp.ok || parsed.error) {
-        setEstimate({
-          error: true,
-          message: parsed.error === "not food"
-            ? "That didn't look like a meal — try another photo or describe what you ate."
-            : undefined,
-        });
+        const code = parsed.error;
+        let message;
+        if (code === "not food") {
+          message = "That didn't look like a meal — try another photo or describe what you ate.";
+        } else if (resp.status === 404 || resp.status === 405) {
+          // Plain Vite has no /api/* — need wrangler pages dev (or test on production).
+          message = "Meal estimator isn’t available on this local server. Use wrangler pages dev, or try on macrosandmamas.com.";
+        } else if (code === "estimate unavailable" || code === "estimate failed") {
+          message = "Couldn't reach the meal estimator right now. Try again, or use Describe.";
+        } else if (parsed.message) {
+          message = parsed.message;
+        } else {
+          message = `Couldn't estimate that meal (${resp.status}). Try Describe, or try again.`;
+        }
+        setEstimate({ error: true, message });
       } else setEstimate(parsed);
     } catch (e) {
       console.error("estimate failed", e);
-      setEstimate({ error: true });
+      setEstimate({
+        error: true,
+        message: "Couldn't reach the meal estimator. Check your connection, or try Describe.",
+      });
     }
     setEstimateBusy(false);
   };
@@ -341,7 +369,13 @@ export default function App() {
   const analyzePhoto = async (file) => {
     if (!file) return;
     const b64 = await downscaleImage(file);
-    if (!b64) { setEstimate({ error: true }); return; }
+    if (!b64) {
+      setEstimate({
+        error: true,
+        message: "Couldn't process that image file. Try a JPG/PNG from Photo library, or use Describe.",
+      });
+      return;
+    }
     await runEstimate({ type: "photo", image_b64: b64, media_type: "image/jpeg" }, "photo");
   };
 
