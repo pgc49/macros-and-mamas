@@ -307,6 +307,9 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
     return flags;
   };
 
+  /** Roster table: action flags only. Postpartum/nursing lives on client detail. */
+  const rosterFlags = (c) => needsAttention(c).filter((f) => !/postpartum|nursing/i.test(f));
+
   const filtered = useMemo(() => {
     // Funnel filters for real clients. Admins pin to the top of All / Active
     // so Patrick & Callie can test meal plans on themselves.
@@ -748,7 +751,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 <div style={{ textAlign: "right" }}>Status</div>
               </div>
               {filtered.map((c, i) => {
-                const flags = needsAttention(c);
+                const flags = rosterFlags(c);
                 const short = stageShort(c);
                 return (
                   <div
