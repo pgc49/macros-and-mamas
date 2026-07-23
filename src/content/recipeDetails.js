@@ -258,7 +258,7 @@ export const RECIPE_DETAILS = {
     batch: [
       { amount: "1½ lbs", item: "boneless skinless chicken thighs" },
       { amount: "3 tbsp", item: "honey" },
-      { amount: "¼ cup", item: "tamari (or low-sodium soy sauce)" },
+      { amount: "¼ cup", item: "coconut aminos" },
       { amount: "2–3 cloves", item: "garlic, minced" },
       { amount: "1 tbsp", item: "fresh ginger, grated (or 1 tsp ground)" },
       { amount: "about 4 cups", item: "cooked rice (1 cup per plate)" },
@@ -270,7 +270,7 @@ export const RECIPE_DETAILS = {
       { amount: "1 cup", item: "steamed broccoli" },
     ],
     steps: [
-      "Whisk the honey, tamari, minced garlic, and ginger in a bowl until the honey dissolves — that’s the full glaze for the batch.",
+      "Whisk the honey, coconut aminos, minced garlic, and ginger in a bowl until the honey dissolves — that’s the full glaze for the batch.",
       "Pat the thighs dry and season lightly with salt and pepper. Heat a large skillet over medium-high with a light film of oil.",
       "Sear thighs 4–5 minutes per side until browned. Pour in the glaze, lower heat to medium, and simmer 8–12 minutes, turning and basting, until chicken hits 165°F and the glaze is sticky and glossy. Rest 5 minutes, then slice or portion.",
       "Meanwhile steam broccoli until bright green and tender-crisp, 4–6 minutes. Cook rice if you haven’t already.",
