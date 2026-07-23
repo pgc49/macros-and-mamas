@@ -1,3 +1,13 @@
+/**
+ * Coach / admin portal (Callie).
+ *
+ * SEGREGATION RULES — do not break these:
+ * 1. Lazy-loaded from App.jsx — never eagerly imported into the customer bundle.
+ * 2. Do not edit client Today cards (MealLogCard, WaterLogCard, WeighInCard) for
+ *    admin needs. Build admin-only UI under src/admin/ instead.
+ * 3. Wrap new admin surfaces in ErrorBoundary so a coach-UI bug cannot blank
+ *    the customer SPA.
+ */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {

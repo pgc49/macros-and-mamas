@@ -1,3 +1,9 @@
+/**
+ * Admin-only read-only day mirror for Callie.
+ * Intentionally self-contained — do NOT import MealLogCard / WaterLogCard /
+ * WeighInCard here. Those are customer Today UI; editing them for admin
+ * previously blanked production (PR #54).
+ */
 import { useEffect, useMemo, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card, RangeBand, rangeState } from "../components/ui";
@@ -38,10 +44,6 @@ const navBtn = (disabled) => ({
   cursor: disabled ? "default" : "pointer",
 });
 
-/**
- * Self-contained read-only day mirror for admin.
- * Does NOT reuse MealLogCard / WaterLogCard / WeighInCard — those stay client-only.
- */
 export function AdminClientTracking({ client }) {
   const today = localDateIso();
   const curWk = wkStartOf();

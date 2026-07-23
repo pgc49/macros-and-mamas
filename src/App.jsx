@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { CONFIG } from "./config";
 import { useAuth } from "./auth/useAuth.jsx";
@@ -27,9 +27,14 @@ import { ResetPasswordPage } from "./views/ResetPasswordPage";
 import { TermsPage } from "./views/TermsPage";
 import { PrivacyPage } from "./views/PrivacyPage";
 import { ClientApp } from "./views/ClientApp";
-import { AdminPortal } from "./admin/AdminPortal";
 import { Shell } from "./components/ui";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
+
+/* Admin is a separate chunk — never loaded on customer marketing/dashboard paths. */
+const AdminPortal = lazy(() =>
+  import("./admin/AdminPortal").then((m) => ({ default: m.AdminPortal })),
+);
 
 const EMPTY_PROFILE = {
   name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
@@ -986,13 +991,29 @@ export default function App() {
             : !isAdmin
               ? <Navigate to={dashboardUnlocked ? PATHS.dashboard : PATHS.home} replace />
               : (
-                <AdminPortal
-                  roster={roster}
-                  setRoster={setRoster}
-                  stats={adminStats}
-                  adminSel={adminSel}
-                  setAdminSel={setAdminSel}
-                />
+                <ErrorBoundary
+                  name="AdminPortal"
+                  title="Admin couldn’t load"
+                  message="The coach portal hit an error. Clients are unaffected — refresh or open My dashboard."
+                >
+                  <Suspense
+                    fallback={(
+                      <Shell>
+                        <div style={{ fontFamily: FD, fontSize: 18, color: T.inkSoft, padding: "24px 0" }}>
+                          Loading admin…
+                        </div>
+                      </Shell>
+                    )}
+                  >
+                    <AdminPortal
+                      roster={roster}
+                      setRoster={setRoster}
+                      stats={adminStats}
+                      adminSel={adminSel}
+                      setAdminSel={setAdminSel}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               )
         }
       />
