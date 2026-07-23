@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { withRecipeDetail } from "../content/recipeDetails";
+import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 
 function Section({ title, hint, children }) {
   return (
@@ -33,21 +34,29 @@ function IngList({ items }) {
 
 /**
  * Expandable meal/recipe card — shared by default Meals bank and personalized plans.
- * Open layout: Recipe (batch) → Steps → Serving size (plate that matches macros).
+ * Collapsed: title + macros. Open: Recipe → Steps → Serving size.
+ * + Log uses a 0.25 serving stepper (scales macros).
  */
 export function MealRecipeCard({ meal, onLog, showLog = true }) {
   const [open, setOpen] = useState(false);
+  const [qty, setQty] = useState(1);
   const r = withRecipeDetail(meal);
   const cat = r.cat || r.slot || "Meal";
   const serves = Number(r.serves) || 1;
   const batch = r.batch?.length ? r.batch : null;
   const serving = r.serving?.length ? r.serving : (r.ingredients || []);
   const steps = r.steps || [];
+  const servings = snapServings(qty);
+  const scaled = scaleMealForLog(r, servings);
 
   const logBtn = (
     <button
       type="button"
-      onClick={() => onLog?.(r)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onLog?.(scaleMealForLog(r, servings));
+        setQty(1);
+      }}
       style={{
         fontFamily: F,
         fontSize: 12,
@@ -94,10 +103,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
             {cat}{serves > 1 ? ` · recipe serves ${serves}` : ""}
           </div>
           <div style={{ fontFamily: FD, fontSize: 18, margin: "2px 0 4px", color: T.ink }}>{r.name}</div>
-          {r.desc ? (
-            <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>{r.desc}</div>
-          ) : null}
-          <div style={{ fontSize: 12, color: T.accent, fontWeight: 700, marginTop: 6 }}>
+          <div style={{ fontSize: 12, color: T.accent, fontWeight: 700, marginTop: 2 }}>
             {open ? "Hide ▴" : "Open recipe ▾"}
           </div>
         </button>
@@ -116,15 +122,32 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
               textAlign: "right",
             }}
           >
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft, marginBottom: 2 }}>per serving</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{Math.round(r.cal || 0)} cal</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft, marginBottom: 2 }}>
+              {servings === 1 ? "per serving" : `${servings}× serving`}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{scaled.cal} cal</div>
             <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
-              <span style={{ color: T.accentDeep, fontWeight: 700 }}>P {Math.round(r.p || 0)}g</span>
-              {" · "}C {Math.round(r.c || 0)}g · F {Math.round(r.f || 0)}g
+              <span style={{ color: T.accentDeep, fontWeight: 700 }}>P {scaled.p}g</span>
+              {" · "}C {scaled.c}g · F {scaled.f}g
             </div>
           </button>
         </div>
       </div>
+
+      {showLog && (
+        <div style={{
+          padding: "0 16px 12px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+        >
+          <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600 }}>Servings to log</div>
+          <ServingStepper value={servings} onChange={setQty} compact />
+        </div>
+      )}
 
       {open && (
         <div style={{ padding: "0 16px 16px", borderTop: `1px dashed ${T.border}` }}>
@@ -161,7 +184,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
 
           <Section
             title="Serving size"
-            hint="Plate this much to match the macros shown (what + Log adds to your day)."
+            hint="One serving matches the base macros. Use the stepper above if you ate more or less."
           >
             <IngList items={serving} />
           </Section>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "./ui";
+import { LoggableMealRow } from "./LoggableMealRow";
 import { RECIPES } from "../content/data";
 import {
   addDaysIso,
@@ -619,39 +620,23 @@ export function MealLogCard({
         )}
 
         {method === "recipes" && (
-          <div style={{ marginTop: 12, maxHeight: 280, overflowY: "auto" }}>
+          <div style={{ marginTop: 12, maxHeight: 320, overflowY: "auto" }}>
             {(customMeals || []).length > 0 && (
               <>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: T.accentDeep, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 }}>
                   My meals
                 </div>
                 {customMeals.map((r) => (
-                  <button
+                  <LoggableMealRow
                     key={r.id || r.name}
-                    type="button"
-                    onClick={() => {
-                      onLogRecipe?.({ ...r, via: "custom" });
+                    meal={r}
+                    via="custom"
+                    accent
+                    onLog={(scaled) => {
+                      onLogRecipe?.(scaled);
                       setMethod(null);
                     }}
-                    style={{
-                      display: "flex",
-                      width: "100%",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "10px 12px",
-                      marginBottom: 6,
-                      borderRadius: 12,
-                      border: `1.5px solid ${T.accent}`,
-                      background: T.accentSoft,
-                      cursor: "pointer",
-                      fontFamily: F,
-                    }}
-                  >
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: T.ink, textAlign: "left" }}>{r.name}</span>
-                    <span style={{ fontSize: 12, color: T.inkSoft, whiteSpace: "nowrap", marginLeft: 8 }}>
-                      {Math.round(r.cal)} cal · tap to log
-                    </span>
-                  </button>
+                  />
                 ))}
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, letterSpacing: 0.4, textTransform: "uppercase", margin: "12px 0 6px" }}>
                   From your plan
@@ -659,32 +644,15 @@ export function MealLogCard({
               </>
             )}
             {recipes.map((r) => (
-              <button
+              <LoggableMealRow
                 key={r.name}
-                type="button"
-                onClick={() => {
-                  onLogRecipe?.(r);
+                meal={r}
+                via="recipe"
+                onLog={(scaled) => {
+                  onLogRecipe?.(scaled);
                   setMethod(null);
                 }}
-                style={{
-                  display: "flex",
-                  width: "100%",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "10px 12px",
-                  marginBottom: 6,
-                  borderRadius: 12,
-                  border: `1.5px solid ${T.border}`,
-                  background: "#fff",
-                  cursor: "pointer",
-                  fontFamily: F,
-                }}
-              >
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: T.ink, textAlign: "left" }}>{r.name}</span>
-                <span style={{ fontSize: 12, color: T.inkSoft, whiteSpace: "nowrap", marginLeft: 8 }}>
-                  {r.cal} cal · tap to log
-                </span>
-              </button>
+              />
             ))}
           </div>
         )}

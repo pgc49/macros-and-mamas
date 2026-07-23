@@ -10,6 +10,7 @@ import { WaterLogCard } from "../components/WaterLogCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
+import { LoggableMealRow } from "../components/LoggableMealRow";
 import { mealToCard } from "../content/recipeDetails";
 
 export function ClientApp({
@@ -311,7 +312,7 @@ export function ClientApp({
           {mealFilter === "My meals" && (
             <div style={{ marginBottom: 12 }}>
               <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
-                Meals you saved for one-tap logging — same serving size every time. Add new ones from Today (Macros, or check “Save to My meals” on an estimate).
+                Meals you saved for one-tap logging. Use the servings stepper if you ate a bit more or less than usual (0.25 steps).
               </p>
               {!customMeals.length ? (
                 <Card>
@@ -321,61 +322,14 @@ export function ClientApp({
                 </Card>
               ) : (
                 customMeals.map((m) => (
-                  <div
+                  <LoggableMealRow
                     key={m.id}
-                    style={{
-                      border: `1px solid ${T.border}`,
-                      borderRadius: 12,
-                      background: T.card,
-                      padding: "12px 14px",
-                      marginBottom: 8,
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontFamily: FD, fontSize: 17, color: T.ink }}>{m.name}</div>
-                      <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
-                        {Math.round(m.cal)} cal · P {Math.round(m.p)}g · C {Math.round(m.c)}g · F {Math.round(m.f)}g
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                      <button
-                        type="button"
-                        onClick={() => logRecipe({ ...m, via: "custom" })}
-                        style={{
-                          fontFamily: F,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          padding: "6px 12px",
-                          borderRadius: 999,
-                          border: `1.5px solid ${T.accent}`,
-                          background: T.accentSoft,
-                          color: T.accentDeep,
-                          cursor: "pointer",
-                        }}
-                      >
-                        + Log
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteCustomMeal?.(m.id)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          fontSize: 12,
-                          color: T.inkSoft,
-                          cursor: "pointer",
-                          textDecoration: "underline",
-                          fontFamily: F,
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
+                    meal={m}
+                    via="custom"
+                    accent
+                    onLog={logRecipe}
+                    onRemove={() => onDeleteCustomMeal?.(m.id)}
+                  />
                 ))
               )}
             </div>
