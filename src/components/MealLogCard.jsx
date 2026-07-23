@@ -17,6 +17,7 @@ const VIA_LABEL = {
   photo: "AI estimate from photo",
   describe: "AI estimate from description",
   recipe: "from your plan · exact",
+  custom: "from My meals",
   manual: "entered by you",
   adjusted: "adjusted by you",
 };
@@ -82,6 +83,7 @@ function totalsCaption(totals, ranges) {
 export function MealLogCard({
   macros,
   recipes = RECIPES,
+  customMeals = [],
   busy,
   estimate,
   onAnalyzePhoto,
@@ -90,6 +92,7 @@ export function MealLogCard({
   onDiscardEstimate,
   onManualLog,
   onLogRecipe,
+  onSaveCustomMeal,
   todayLog,
   onUpdateEntry,
   onDeleteEntry,
@@ -106,6 +109,8 @@ export function MealLogCard({
   const [snapFile, setSnapFile] = useState(null);
   const [snapPreview, setSnapPreview] = useState(null);
   const [manual, setManual] = useState({ name: "", cal: "", p: "", c: "", f: "" });
+  const [saveManualCustom, setSaveManualCustom] = useState(true);
+  const [saveEstimateCustom, setSaveEstimateCustom] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
   const [estimateDraft, setEstimateDraft] = useState(null);
@@ -265,6 +270,7 @@ export function MealLogCard({
       f: Number(manual.f) || 0,
       via: "manual",
       logged_date: date,
+      saveCustom: saveManualCustom,
     });
     setManual({ name: "", cal: "", p: "", c: "", f: "" });
     setMethod(null);
@@ -272,7 +278,7 @@ export function MealLogCard({
 
   const startEdit = (e) => {
     setEditingId(e.id);
-    setDraft({ name: e.name, cal: e.cal, p: e.p, c: e.c, f: e.f, via: e.via });
+    setDraft({ name: e.name, cal: e.cal, p: e.p, c: e.c, f: e.f, via: e.via, saveCustom: false });
   };
 
   const saveEdit = async () => {
@@ -287,6 +293,15 @@ export function MealLogCard({
       f: Number(draft.f) || 0,
       via: nextVia || "manual",
     });
+    if (draft.saveCustom) {
+      await onSaveCustomMeal?.({
+        name: draft.name,
+        cal: Number(draft.cal) || 0,
+        p: Number(draft.p) || 0,
+        c: Number(draft.c) || 0,
+        f: Number(draft.f) || 0,
+      });
+    }
     setEditingId(null);
     setDraft(null);
   };
@@ -348,8 +363,9 @@ export function MealLogCard({
       || payload.p !== (Number(b.p) || 0)
       || payload.c !== (Number(b.c) || 0)
       || payload.f !== (Number(b.f) || 0);
-    await onConfirmEstimate?.(payload, { adjusted: changed });
+    await onConfirmEstimate?.(payload, { adjusted: changed, saveCustom: saveEstimateCustom });
     setEstimateDraft(null);
+    setSaveEstimateCustom(false);
     setMethod(null);
   };
 
@@ -604,6 +620,44 @@ export function MealLogCard({
 
         {method === "recipes" && (
           <div style={{ marginTop: 12, maxHeight: 280, overflowY: "auto" }}>
+            {(customMeals || []).length > 0 && (
+              <>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: T.accentDeep, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 }}>
+                  My meals
+                </div>
+                {customMeals.map((r) => (
+                  <button
+                    key={r.id || r.name}
+                    type="button"
+                    onClick={() => {
+                      onLogRecipe?.({ ...r, via: "custom" });
+                      setMethod(null);
+                    }}
+                    style={{
+                      display: "flex",
+                      width: "100%",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "10px 12px",
+                      marginBottom: 6,
+                      borderRadius: 12,
+                      border: `1.5px solid ${T.accent}`,
+                      background: T.accentSoft,
+                      cursor: "pointer",
+                      fontFamily: F,
+                    }}
+                  >
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: T.ink, textAlign: "left" }}>{r.name}</span>
+                    <span style={{ fontSize: 12, color: T.inkSoft, whiteSpace: "nowrap", marginLeft: 8 }}>
+                      {Math.round(r.cal)} cal · tap to log
+                    </span>
+                  </button>
+                ))}
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, letterSpacing: 0.4, textTransform: "uppercase", margin: "12px 0 6px" }}>
+                  From your plan
+                </div>
+              </>
+            )}
             {recipes.map((r) => (
               <button
                 key={r.name}
@@ -675,6 +729,15 @@ export function MealLogCard({
                 Add
               </button>
             </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={saveManualCustom}
+                onChange={(e) => setSaveManualCustom(e.target.checked)}
+                style={{ width: 16, height: 16 }}
+              />
+              <span style={{ fontSize: 13, color: T.inkSoft }}>Save to My meals for next time</span>
+            </label>
           </div>
         )}
 
@@ -768,6 +831,15 @@ export function MealLogCard({
                 AI draft · {estimateDraft.confidence} confidence
               </span>
             </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={saveEstimateCustom}
+                onChange={(e) => setSaveEstimateCustom(e.target.checked)}
+                style={{ width: 16, height: 16 }}
+              />
+              <span style={{ fontSize: 13, color: T.inkSoft }}>Also save to My meals</span>
+            </label>
           </div>
         )}
       </div>
@@ -840,6 +912,15 @@ export function MealLogCard({
                       </button>
                     </div>
                   </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={!!draft.saveCustom}
+                      onChange={(ev) => setDraft((d) => ({ ...d, saveCustom: ev.target.checked }))}
+                      style={{ width: 16, height: 16 }}
+                    />
+                    <span style={{ fontSize: 12.5, color: T.inkSoft }}>Save to My meals</span>
+                  </label>
                 </div>
               ) : (
                 <button

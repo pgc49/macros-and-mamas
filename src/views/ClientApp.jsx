@@ -28,6 +28,9 @@ export function ClientApp({
   mealFilter, setMealFilter,
   mealPlanMode = "default",
   publishedPlan = null,
+  customMeals = [],
+  onSaveCustomMeal,
+  onDeleteCustomMeal,
 }) {
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
@@ -138,7 +141,18 @@ export function ClientApp({
 
           <MealLogCard
             macros={macros}
-            recipes={RECIPES}
+            recipes={
+              personalized
+                ? flatPersonalized.map((m) => ({
+                  name: m.name,
+                  cal: m.cal,
+                  p: m.p,
+                  c: m.c,
+                  f: m.f,
+                }))
+                : RECIPES
+            }
+            customMeals={customMeals}
             busy={estimateBusy}
             estimate={estimate}
             onAnalyzePhoto={analyzePhoto}
@@ -147,6 +161,7 @@ export function ClientApp({
             onDiscardEstimate={discardEstimate}
             onManualLog={logManualMeal}
             onLogRecipe={logRecipe}
+            onSaveCustomMeal={onSaveCustomMeal}
             todayLog={todayLog}
             onUpdateEntry={updateMealEntry}
             onDeleteEntry={deleteMealEntry}
@@ -288,10 +303,83 @@ export function ClientApp({
           )}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {["By Day", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
+            {["By Day", "My meals", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
               <Chip key={c} active={mealFilter === c} onClick={() => setMealFilter(c)}>{c}</Chip>
             ))}
           </div>
+
+          {mealFilter === "My meals" && (
+            <div style={{ marginBottom: 12 }}>
+              <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
+                Meals you saved for one-tap logging — same serving size every time. Add new ones from Today (Macros, or check “Save to My meals” on an estimate).
+              </p>
+              {!customMeals.length ? (
+                <Card>
+                  <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
+                    Nothing saved yet. On Today, enter Macros for a lunch you repeat and leave <b style={{ color: T.ink }}>Save to My meals</b> checked — or save an AI estimate the same way.
+                  </div>
+                </Card>
+              ) : (
+                customMeals.map((m) => (
+                  <div
+                    key={m.id}
+                    style={{
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 12,
+                      background: T.card,
+                      padding: "12px 14px",
+                      marginBottom: 8,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: FD, fontSize: 17, color: T.ink }}>{m.name}</div>
+                      <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
+                        {Math.round(m.cal)} cal · P {Math.round(m.p)}g · C {Math.round(m.c)}g · F {Math.round(m.f)}g
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => logRecipe({ ...m, via: "custom" })}
+                        style={{
+                          fontFamily: F,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          padding: "6px 12px",
+                          borderRadius: 999,
+                          border: `1.5px solid ${T.accent}`,
+                          background: T.accentSoft,
+                          color: T.accentDeep,
+                          cursor: "pointer",
+                        }}
+                      >
+                        + Log
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteCustomMeal?.(m.id)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          fontSize: 12,
+                          color: T.inkSoft,
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          fontFamily: F,
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
 
           {mealFilter === "By Day" && personalized && (publishedPlan?.days || []).map((day) => (
             <div key={day.day} style={{ marginBottom: 18 }}>
@@ -341,13 +429,13 @@ export function ClientApp({
             );
           })}
 
-          {mealFilter !== "By Day" && personalized && flatPersonalized
+          {mealFilter !== "By Day" && mealFilter !== "My meals" && personalized && flatPersonalized
             .filter((m) => (m.cat || "").toLowerCase() === mealFilter.toLowerCase())
             .map((m, idx) => (
               <MealRecipeCard key={`${m.name}-${idx}`} meal={m} onLog={logRecipe} />
             ))}
 
-          {mealFilter !== "By Day" && !personalized && RECIPES
+          {mealFilter !== "By Day" && mealFilter !== "My meals" && !personalized && RECIPES
             .filter((r) => r.cat === mealFilter)
             .map((r) => (
               <MealRecipeCard key={r.name} meal={r} onLog={logRecipe} />

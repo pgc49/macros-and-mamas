@@ -72,6 +72,7 @@ export default function App() {
   const [mealHistoryByDate, setMealHistoryByDate] = useState({});
   const [waterLogsByDate, setWaterLogsByDate] = useState({});
   const [waterBusy, setWaterBusy] = useState(false);
+  const [customMeals, setCustomMeals] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const routedAfterLoad = useRef(false);
 
@@ -138,6 +139,13 @@ export default function App() {
                 console.warn("loadWaterLogsWeek failed", wErr);
               }
             }
+            try {
+              const customs = await db.loadCustomMeals();
+              if (!cancelled) setCustomMeals(customs);
+            } catch (cErr) {
+              console.warn("loadCustomMeals failed", cErr);
+              if (!cancelled) setCustomMeals([]);
+            }
             if (!cancelled) await refreshMealPlan(user.id);
           }
         } else {
@@ -147,6 +155,7 @@ export default function App() {
           setRefunded(false);
           setMealPlanMode("default");
           setPublishedPlan(null);
+          setCustomMeals([]);
         }
         if (isAdmin) {
           try {
@@ -555,6 +564,17 @@ export default function App() {
       via: opts.adjusted ? "adjusted" : baseVia,
       logged_date: mealLogDate,
     });
+    if (opts.saveCustom) {
+      try {
+        const saved = await db.saveCustomMeal({ name, cal, p, c, f });
+        setCustomMeals((list) => {
+          const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
+          return [saved, ...without];
+        });
+      } catch (e) {
+        console.error("saveCustomMeal failed", e);
+      }
+    }
     setEstimate(null);
   };
 
@@ -567,7 +587,7 @@ export default function App() {
       p: recipe.p,
       c: recipe.c,
       f: recipe.f,
-      via: "recipe",
+      via: recipe.via || "recipe",
       logged_date: mealLogDate,
     });
     if (ok) setTab("today");
@@ -579,6 +599,46 @@ export default function App() {
       via: entry.via || "manual",
       logged_date: entry.logged_date || mealLogDate,
     });
+    if (entry.saveCustom) {
+      try {
+        const saved = await db.saveCustomMeal({
+          name: entry.name,
+          cal: entry.cal,
+          p: entry.p,
+          c: entry.c,
+          f: entry.f,
+        });
+        setCustomMeals((list) => {
+          const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
+          return [saved, ...without];
+        });
+      } catch (e) {
+        console.error("saveCustomMeal failed", e);
+      }
+    }
+  };
+
+  const saveCustomMeal = async (meal) => {
+    try {
+      const saved = await db.saveCustomMeal(meal);
+      setCustomMeals((list) => {
+        const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
+        return [saved, ...without];
+      });
+      return saved;
+    } catch (e) {
+      console.error("saveCustomMeal failed", e);
+      return null;
+    }
+  };
+
+  const deleteCustomMeal = async (id) => {
+    try {
+      await db.deleteCustomMeal(id);
+      setCustomMeals((list) => list.filter((m) => m.id !== id));
+    } catch (e) {
+      console.error("deleteCustomMeal failed", e);
+    }
   };
 
   const updateMealEntry = async (id, patch) => {
@@ -775,6 +835,9 @@ export default function App() {
       setMealFilter={setMealFilter}
       mealPlanMode={mealPlanMode}
       publishedPlan={publishedPlan}
+      customMeals={customMeals}
+      onSaveCustomMeal={saveCustomMeal}
+      onDeleteCustomMeal={deleteCustomMeal}
     />
   );
 

@@ -906,4 +906,69 @@ export const db = {
       .eq("profile_id", clientId);
     if (error) throw error;
   },
+
+  /** Saved My meals (name + macros) for one-tap re-logging. */
+  async loadCustomMeals() {
+    const uid = await requireUserId();
+    const { data, error } = await supabase
+      .from("custom_meals")
+      .select("id, name, cal, p, c, f, updated_at")
+      .eq("profile_id", uid)
+      .order("updated_at", { ascending: false });
+    if (error) {
+      console.warn("loadCustomMeals failed", error);
+      return [];
+    }
+    return (data || []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      cal: Number(r.cal) || 0,
+      p: Number(r.p) || 0,
+      c: Number(r.c) || 0,
+      f: Number(r.f) || 0,
+      updated_at: r.updated_at,
+    }));
+  },
+
+  /** Upsert by name for this user (re-saving the same lunch updates macros). */
+  async saveCustomMeal({ name, cal, p, c, f }) {
+    const uid = await requireUserId();
+    const trimmed = String(name || "").trim().slice(0, 80);
+    if (!trimmed) throw new Error("Meal needs a name");
+    const row = {
+      profile_id: uid,
+      name: trimmed,
+      cal: Number(cal) || 0,
+      p: Number(p) || 0,
+      c: Number(c) || 0,
+      f: Number(f) || 0,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabase
+      .from("custom_meals")
+      .upsert(row, { onConflict: "profile_id,name" })
+      .select("id, name, cal, p, c, f, updated_at")
+      .single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      name: data.name,
+      cal: Number(data.cal) || 0,
+      p: Number(data.p) || 0,
+      c: Number(data.c) || 0,
+      f: Number(data.f) || 0,
+      updated_at: data.updated_at,
+    };
+  },
+
+  async deleteCustomMeal(id) {
+    const uid = await requireUserId();
+    if (!id) return;
+    const { error } = await supabase
+      .from("custom_meals")
+      .delete()
+      .eq("profile_id", uid)
+      .eq("id", id);
+    if (error) throw error;
+  },
 };
