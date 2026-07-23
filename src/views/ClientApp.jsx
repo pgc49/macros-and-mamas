@@ -1,6 +1,7 @@
 import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/data";
+import { DEFAULT_WEEK } from "../content/defaultWeek";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
 import { Shell, Card, Btn, Chip, RangeBand, rangeState } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
@@ -268,8 +269,8 @@ export function ClientApp({
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Automate your plate</h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
             {personalized
-              ? "Your personalized week — built from your preferences, inside your program ranges. Take what works; open a meal for ingredients, step by step instructions and then add to your log for the day."
-              : "Same breakfasts, similar lunches, dinner gets to be fun. Repetition is the secret — decide once, win all week."}
+              ? "Your personalized week — built from your preferences, inside your program ranges. Take what works; open a meal for Recipe, Steps, and Serving size, then + Log."
+              : "Same breakfasts, similar lunches, dinner gets to be fun. Open any card for the full cook (Recipe), Steps, and your Serving size — then + Log."}
           </p>
 
           {!personalized && (
@@ -311,15 +312,34 @@ export function ClientApp({
             </div>
           ))}
 
-          {mealFilter === "By Day" && !personalized && (
-            <Card style={{ marginBottom: 12, background: T.accentSoft, border: "none" }}>
-              <div style={{ fontFamily: FD, fontSize: 17, color: T.accentDeep, marginBottom: 4 }}>Your week by day</div>
-              <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.55 }}>
-                Callie will publish your personalized Mon–Sun here when it&apos;s ready.
-                Until then, browse Breakfast / Lunch / Dinner / Snack — open any card for the full recipe, then + Log.
+          {mealFilter === "By Day" && !personalized && DEFAULT_WEEK.map((day) => {
+            const dayMeals = day.meals || [];
+            const totals = dayMeals.reduce(
+              (a, m) => ({
+                cal: a.cal + (Number(m.cal) || 0),
+                p: a.p + (Number(m.p) || 0),
+                c: a.c + (Number(m.c) || 0),
+                f: a.f + (Number(m.f) || 0),
+              }),
+              { cal: 0, p: 0, c: 0, f: 0 },
+            );
+            return (
+              <div key={day.day} style={{ marginBottom: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                  <div>
+                    <span style={{ fontFamily: FD, fontSize: 20 }}>{day.day}</span>
+                    {day.theme && <span style={{ fontSize: 13, color: T.inkSoft, marginLeft: 8 }}>{day.theme}</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 700 }}>
+                    {Math.round(totals.cal)} cal · {Math.round(totals.p)}P · {Math.round(totals.c)}C · {Math.round(totals.f)}F
+                  </div>
+                </div>
+                {dayMeals.map((m) => (
+                  <MealRecipeCard key={`${day.day}-${m.name}`} meal={m} onLog={logRecipe} />
+                ))}
               </div>
-            </Card>
-          )}
+            );
+          })}
 
           {mealFilter !== "By Day" && personalized && flatPersonalized
             .filter((m) => (m.cat || "").toLowerCase() === mealFilter.toLowerCase())

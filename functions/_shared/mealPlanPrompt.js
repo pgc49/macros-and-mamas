@@ -153,8 +153,9 @@ ${recipesBlock}
           "cal": 0, "p": 0, "c": 0, "f": 0,
           "servings": 1,
           "why": "private one-liner for Callie only (prefs/macros fit) — never '[Name] loves…' and never client-facing marketing",
+          "batch": [{ "item": "chicken thighs", "amount": "1½ lbs" }],
           "ingredients": [{ "item": "chicken breast", "amount": "6 oz (170g) raw" }],
-          "steps": ["Step one…", "Step two…"]
+          "steps": ["Detailed step one with heat/time…", "Step two…", "Step three…", "Plate the serving amounts in ingredients"]
         }
       ],
       "dayTotals": { "cal": 0, "p": 0, "c": 0, "f": 0 },
@@ -162,6 +163,12 @@ ${recipesBlock}
     }
   ]
 }
+
+Rules for recipe clarity:
+- ingredients = SERVING SIZE on her plate (must match the cal/P/C/F you report).
+- batch = full cook quantities when servings > 1 (family batch); use null or omit when servings is 1.
+- steps = 4–7 detailed cooking steps (temps, times, technique) — not thin one-liners.
+- When naming sausage or yogurt, prefer no-added-sugar chicken/turkey sausage and nonfat Greek/European-style yogurt when it fits her tastes.
 
 Return exactly 7 days: Mon, Tue, Wed, Thu, Fri, Sat, Sun.
 Final gate: every day's inRange.cal/p/c/f must be true after honest re-sum. If a day fails, fix portions and recompute before returning.`;
