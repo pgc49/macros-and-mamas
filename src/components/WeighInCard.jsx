@@ -44,6 +44,7 @@ export function WeighInCard({
   onSave,
   onDelete,
   earliestWeekStart,
+  readOnly = false,
 }) {
   const today = localDateIso();
   const curWk = wkStartOf();
@@ -207,7 +208,12 @@ export function WeighInCard({
       <Card>
         <div style={{ fontFamily: FD, fontSize: 17, marginBottom: 2 }}>Weigh-in</div>
         <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
-          {onToday ? (
+          {readOnly ? (
+            <>
+              Read-only · <b style={{ color: T.accentDeep }}>{formatLongDay(selected)}</b>
+              {onToday ? " · today" : ""}. She logs weight from her app.
+            </>
+          ) : onToday ? (
             <>Logging for today. Morning, before coffee is ideal — the trend matters more than any one number.</>
           ) : (
             <>
@@ -216,7 +222,7 @@ export function WeighInCard({
           )}
         </div>
 
-        {existing && (
+        {existing ? (
           <div
             style={{
               background: T.sageSoft,
@@ -231,44 +237,52 @@ export function WeighInCard({
             <span style={{ fontSize: 13.5, color: "#3E5A46" }}>Logged for this day</span>
             <span style={{ fontFamily: FD, fontSize: 22, color: "#3E5A46" }}>{existing.w} lb</span>
           </div>
-        )}
+        ) : readOnly ? (
+          <div style={{ fontSize: 13.5, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
+            No weigh-in on this day.
+          </div>
+        ) : null}
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            style={{ ...inputStyle, flex: 1 }}
-            inputMode="decimal"
-            placeholder={existing ? "Update weight (lbs)" : "Weight (lbs)"}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={busy}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") save();
-            }}
-          />
-          <Btn small disabled={busy || !parseFloat(input)} onClick={save}>
-            {busy ? "…" : existing ? "Save" : "Log it"}
-          </Btn>
-        </div>
+        {!readOnly && (
+          <>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                style={{ ...inputStyle, flex: 1 }}
+                inputMode="decimal"
+                placeholder={existing ? "Update weight (lbs)" : "Weight (lbs)"}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                disabled={busy}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") save();
+                }}
+              />
+              <Btn small disabled={busy || !parseFloat(input)} onClick={save}>
+                {busy ? "…" : existing ? "Save" : "Log it"}
+              </Btn>
+            </div>
 
-        {existing && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={remove}
-            style={{
-              marginTop: 10,
-              background: "none",
-              border: "none",
-              padding: 0,
-              fontFamily: F,
-              fontSize: 12.5,
-              color: T.inkSoft,
-              cursor: "pointer",
-              textDecoration: "underline",
-            }}
-          >
-            Remove this weigh-in
-          </button>
+            {existing && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={remove}
+                style={{
+                  marginTop: 10,
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  fontFamily: F,
+                  fontSize: 12.5,
+                  color: T.inkSoft,
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+              >
+                Remove this weigh-in
+              </button>
+            )}
+          </>
         )}
 
         {showChart ? (
@@ -298,8 +312,12 @@ export function WeighInCard({
         ) : (
           <div style={{ marginTop: 14, fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
             {chartData.length === 0
-              ? "Pick a day and log your first weigh-in. A few points on different days and your trend line shows up here."
-              : "One weigh-in logged — add another on a different day and the trend chart appears."}
+              ? (readOnly
+                ? "No weigh-ins yet."
+                : "Pick a day and log your first weigh-in. A few points on different days and your trend line shows up here.")
+              : (readOnly
+                ? "One weigh-in so far — the trend chart appears after a second day."
+                : "One weigh-in logged — add another on a different day and the trend chart appears.")}
           </div>
         )}
 
@@ -310,8 +328,12 @@ export function WeighInCard({
             </div>
             <div style={{ fontSize: 13.5, lineHeight: 1.55, color: weeklyRate > 1.5 ? T.amber : "#3E5A46" }}>
               {weeklyRate > 1.5
-                ? "That's faster than 1.5 lbs a week, which means you're likely losing muscle, not just fat. Eat the top of your ranges this week — more food, not less. This is the rule of the whole program."
-                : "Right in the healthy zone. Fat is leaving, muscle is staying. Keep doing exactly this."}
+                ? (readOnly
+                  ? "Faster than 1.5 lb/wk — nudge her to eat the top of her ranges."
+                  : "That's faster than 1.5 lbs a week, which means you're likely losing muscle, not just fat. Eat the top of your ranges this week — more food, not less. This is the rule of the whole program.")
+                : (readOnly
+                  ? "Healthy pace — fat leaving, muscle staying."
+                  : "Right in the healthy zone. Fat is leaving, muscle is staying. Keep doing exactly this.")}
             </div>
           </div>
         )}

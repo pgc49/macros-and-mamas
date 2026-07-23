@@ -169,6 +169,32 @@ async function loadMealLogsForDate(uid, date) {
   return loadMealLogsRange(uid, date, date);
 }
 
+/** Water logs for any profile_id in a date range → { [iso]: [{id,oz,created_at}] }. */
+async function loadWaterLogsRange(uid, startDate, endDate) {
+  const { data, error } = await supabase
+    .from("water_logs")
+    .select("id, date, oz, created_at")
+    .eq("profile_id", uid)
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.warn("loadWaterLogsRange failed", error);
+    return {};
+  }
+  const byDate = {};
+  (data || []).forEach((r) => {
+    const d = r.date;
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push({
+      id: r.id,
+      oz: Number(r.oz),
+      created_at: r.created_at,
+    });
+  });
+  return byDate;
+}
+
 function mapMealRows(mealRows) {
   return (mealRows || []).map((r) => {
     const via = normalizeVia(r);
@@ -322,7 +348,7 @@ export const db = {
   },
 
   /**
-   * Admin: progress payload for one client (meal history + all checkins).
+   * Admin: progress payload for one client (meals + water + all checkins).
    * Relies on RLS own-or-admin SELECT policies.
    */
   async loadClientProgress(clientId, days = 28) {
@@ -330,12 +356,13 @@ export const db = {
     const today = localDateIso();
     const start = addDaysIso(today, -(Math.max(1, days) - 1));
 
-    const [{ data: checkRows, error: cErr }, mealRows] = await Promise.all([
+    const [{ data: checkRows, error: cErr }, mealRows, waterByDate] = await Promise.all([
       supabase
         .from("checkins")
         .select("week_start, item_id, day")
         .eq("profile_id", clientId),
       loadMealLogsRange(clientId, start, today),
+      loadWaterLogsRange(clientId, start, today),
     ]);
     if (cErr) throw cErr;
 
@@ -348,9 +375,29 @@ export const db = {
 
     return {
       mealHistoryByDate: groupMealRowsByDate(mealRows),
+      waterLogsByDate: waterByDate,
       checksByWeek,
       start,
       end: today,
+    };
+  },
+
+  /**
+   * Admin: one Mon–Sun week of meal + water logs for any client.
+   * Read-only UI uses this; writes stay client-scoped via requireUserId().
+   */
+  async loadClientLogsWeek(clientId, weekStart = wkStartOf()) {
+    if (!clientId) throw new Error("clientId required");
+    const end = addDaysIso(weekStart, 6);
+    const [mealRows, waterByDate] = await Promise.all([
+      loadMealLogsRange(clientId, weekStart, end),
+      loadWaterLogsRange(clientId, weekStart, end),
+    ]);
+    return {
+      weekStart,
+      end,
+      mealByDate: groupMealRowsByDate(mealRows),
+      waterByDate,
     };
   },
 
@@ -572,28 +619,7 @@ export const db = {
   async loadWaterLogsWeek(weekStart = wkStartOf()) {
     const uid = await requireUserId();
     const end = addDaysIso(weekStart, 6);
-    const { data, error } = await supabase
-      .from("water_logs")
-      .select("id, date, oz, created_at")
-      .eq("profile_id", uid)
-      .gte("date", weekStart)
-      .lte("date", end)
-      .order("created_at", { ascending: true });
-    if (error) {
-      console.warn("loadWaterLogsWeek failed", error);
-      return { byDate: {} };
-    }
-    const byDate = {};
-    (data || []).forEach((r) => {
-      const d = r.date;
-      if (!byDate[d]) byDate[d] = [];
-      byDate[d].push({
-        id: r.id,
-        oz: Number(r.oz),
-        created_at: r.created_at,
-      });
-    });
-    return { byDate };
+    return { byDate: await loadWaterLogsRange(uid, weekStart, end) };
   },
 
   async addWaterLog(oz, date = localDateIso()) {
@@ -715,6 +741,7 @@ export const db = {
         prefL: p.pref_l,
         prefD: p.pref_d,
         seasonNote: p.season_note || "",
+        bottleOz: p.bottle_oz != null ? Number(p.bottle_oz) : 24,
         status: p.status,
         week: p.week,
         paid,

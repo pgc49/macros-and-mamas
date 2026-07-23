@@ -5,12 +5,13 @@ import {
 } from "recharts";
 import { T, F, FD } from "../theme/tokens";
 import { rateOf } from "../utils/dates";
-import { buildHabitHistory, buildMacroHistory, buildTrends } from "../utils/progressSeries";
+import { buildHabitHistory, buildMacroHistory, buildTrends, buildWaterHistory } from "../utils/progressSeries";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
 import { Shell, Card, Btn, inputStyle } from "../components/ui";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { MealPlanDraft } from "./MealPlanDraft";
+import { AdminClientTracking } from "./AdminClientTracking";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 
@@ -247,9 +248,13 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
     db.loadClientProgress(adminSel)
       .then((payload) => {
         if (cancelled) return;
+        const client = (roster || []).find((c) => c.id === adminSel);
+        const waterGoal = client?.goalWeight != null ? Math.round(Number(client.goalWeight) / 2) : 0;
         setClientProgress({
           macroHistory: buildMacroHistory(payload.mealHistoryByDate),
           habitHistory: buildHabitHistory(payload.checksByWeek),
+          waterHistory: buildWaterHistory(payload.waterLogsByDate, waterGoal),
+          waterGoalOz: waterGoal,
           trends: buildTrends(payload.checksByWeek),
         });
       })
@@ -261,7 +266,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
         if (!cancelled) setProgressLoading(false);
       });
     return () => { cancelled = true; };
-  }, [adminSel]);
+  }, [adminSel, roster]);
 
   const needsAttention = (c) => {
     const r = rateOf(c.weighins);
@@ -463,6 +468,10 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           <EmailTimeline profileId={sel.id} />
         </Card>
 
+        {sel.macros && (sel.status === "active" || sel.stage === "active" || sel.role === "admin") && (
+          <AdminClientTracking client={sel} />
+        )}
+
         {sel.status === "active" && sel.macros && (
           <>
           <Card style={{ marginTop: 12 }}>
@@ -522,6 +531,8 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 macros={sel.macros}
                 macroHistory={clientProgress.macroHistory}
                 habitHistory={clientProgress.habitHistory}
+                waterHistory={clientProgress.waterHistory}
+                waterGoalOz={clientProgress.waterGoalOz}
               />
               <Card style={{ marginTop: 12 }}>
                 <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Her 4-week trends</div>
