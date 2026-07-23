@@ -485,16 +485,11 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           <MealPlanDraft client={sel} />
         )}
 
-        <Card style={{ marginTop: 12 }}>
-          <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>Emails sent</div>
-          <EmailTimeline profileId={sel.id} />
-        </Card>
-
         {sel.macros && (sel.status === "active" || sel.stage === "active" || sel.role === "admin") && (
           <ErrorBoundary
             name="AdminClientTracking"
             title="Her day couldn’t load"
-            message="Meal / water / weigh-in mirror failed. Ranges and emails above still work — refresh to try again."
+            message="Meal / water / weigh-in mirror failed. Ranges and progress above still work — refresh to try again."
           >
             <AdminClientTracking client={sel} />
           </ErrorBoundary>
@@ -604,6 +599,11 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           )}
         </>
         )}
+
+        <Card style={{ marginTop: 12 }}>
+          <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>Emails sent</div>
+          <EmailTimeline profileId={sel.id} />
+        </Card>
       </Shell>
     );
   }
