@@ -684,18 +684,28 @@ export const db = {
     if (!ids.length) return { clients: [], stats: emptyAdminStats() };
 
     const curWk = wkStartOf();
+    const today = localDateIso();
+    // Enough history to know if she has logged within ~48h (yesterday or today).
+    const mealSince = addDaysIso(today, -14);
     const [
       { data: macrosRows, error: mErr },
       { data: weighRows, error: wErr },
       { data: checkRows, error: cErr },
+      { data: mealRows, error: mealErr },
     ] = await Promise.all([
       supabase.from("macros").select("*").in("profile_id", ids),
       supabase.from("weighins").select("profile_id, date, weight").in("profile_id", ids).order("date", { ascending: true }),
       supabase.from("checkins").select("profile_id, week_start, item_id, day").in("profile_id", ids).eq("week_start", curWk),
+      supabase
+        .from("meal_logs")
+        .select("profile_id, date")
+        .in("profile_id", ids)
+        .gte("date", mealSince),
     ]);
     if (mErr) throw mErr;
     if (wErr) throw wErr;
     if (cErr) throw cErr;
+    if (mealErr) console.warn("roster meal_logs lookup failed", mealErr);
 
     const macrosBy = Object.fromEntries((macrosRows || []).map((m) => [m.profile_id, m]));
     const weighBy = {};
@@ -707,6 +717,12 @@ export const db = {
     (checkRows || []).forEach((c) => {
       if (!checksBy[c.profile_id]) checksBy[c.profile_id] = [];
       checksBy[c.profile_id].push(c);
+    });
+    const lastMealBy = {};
+    (mealRows || []).forEach((r) => {
+      if (!lastMealBy[r.profile_id] || r.date > lastMealBy[r.profile_id]) {
+        lastMealBy[r.profile_id] = r.date;
+      }
     });
 
     const clients = allProfiles.map((p) => {
@@ -763,6 +779,8 @@ export const db = {
           : null,
         weighins: weighBy[p.id] || [],
         adherence: adherenceFromChecks(checksBy[p.id] || [], curWk),
+        /** YYYY-MM-DD of most recent meal log in the last 14 days, or null. */
+        lastMealDate: lastMealBy[p.id] || null,
       };
     });
 
