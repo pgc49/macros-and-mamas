@@ -514,9 +514,17 @@ export function MealLogCard({
                     type="button"
                     disabled={busy}
                     style={pill(true, busy)}
+                    onClick={() => camRef.current?.click()}
+                  >
+                    Retake
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    style={pill(true, busy)}
                     onClick={() => libRef.current?.click()}
                   >
-                    Change photo
+                    Library
                   </button>
                   <button
                     type="button"
