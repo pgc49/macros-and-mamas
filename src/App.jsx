@@ -366,7 +366,7 @@ export default function App() {
     setEstimateBusy(false);
   };
 
-  const analyzePhoto = async (file) => {
+  const analyzePhoto = async (file, note = "") => {
     if (!file) return;
     const b64 = await downscaleImage(file);
     if (!b64) {
@@ -376,7 +376,16 @@ export default function App() {
       });
       return;
     }
-    await runEstimate({ type: "photo", image_b64: b64, media_type: "image/jpeg" }, "photo");
+    const description = String(note || "").trim().slice(0, 400);
+    await runEstimate(
+      {
+        type: "photo",
+        image_b64: b64,
+        media_type: "image/jpeg",
+        ...(description ? { description } : {}),
+      },
+      "photo",
+    );
   };
 
   const analyzeText = async (description) => {

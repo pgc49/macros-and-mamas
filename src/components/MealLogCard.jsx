@@ -102,6 +102,7 @@ export function MealLogCard({
 }) {
   const [method, setMethod] = useState(null); // snap | describe | recipes | manual
   const [desc, setDesc] = useState("");
+  const [photoNote, setPhotoNote] = useState("");
   const [manual, setManual] = useState({ name: "", cal: "", p: "", c: "", f: "" });
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -414,6 +415,19 @@ export function MealLogCard({
 
         {method === "snap" && (
           <div style={{ marginTop: 12 }}>
+            <label style={{ display: "block", marginBottom: 10 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>
+                Optional note <span style={{ fontWeight: 500 }}>(portions, oil, leftovers…)</span>
+              </div>
+              <input
+                value={photoNote}
+                onChange={(e) => setPhotoNote(e.target.value)}
+                placeholder="e.g. about 6 oz chicken, cooked in 1 tsp olive oil"
+                disabled={busy}
+                maxLength={400}
+                style={{ ...inputStyle, padding: "11px 13px", fontSize: 15 }}
+              />
+            </label>
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <button type="button" disabled={busy} style={pill(false, busy)} onClick={() => camRef.current?.click()}>
                 {busy ? "Reading…" : "Open camera"}
@@ -421,7 +435,9 @@ export function MealLogCard({
               <button type="button" disabled={busy} style={pill(true, busy)} onClick={() => libRef.current?.click()}>
                 Photo library
               </button>
-              <span style={{ fontSize: 11.5, color: T.inkSoft }}>estimate comes back in seconds</span>
+              <span style={{ fontSize: 11.5, color: T.inkSoft }}>
+                {photoNote.trim() ? "photo + your note" : "photo alone is fine"}
+              </span>
             </div>
             <input
               ref={camRef}
@@ -431,7 +447,10 @@ export function MealLogCard({
               disabled={busy}
               style={{ display: "none" }}
               onChange={(e) => {
-                onAnalyzePhoto?.(e.target.files?.[0]);
+                const file = e.target.files?.[0];
+                const note = photoNote.trim();
+                onAnalyzePhoto?.(file, note);
+                setPhotoNote("");
                 e.target.value = "";
               }}
             />
@@ -442,7 +461,10 @@ export function MealLogCard({
               disabled={busy}
               style={{ display: "none" }}
               onChange={(e) => {
-                onAnalyzePhoto?.(e.target.files?.[0]);
+                const file = e.target.files?.[0];
+                const note = photoNote.trim();
+                onAnalyzePhoto?.(file, note);
+                setPhotoNote("");
                 e.target.value = "";
               }}
             />
