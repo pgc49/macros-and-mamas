@@ -103,8 +103,6 @@ export function MealLogCard({
   onSelectMealDate,
   onChangeMealWeek,
   earliestWeekStart,
-  /** Admin / coach mirror — browse days and entries, no logging or edits. */
-  readOnly = false,
 }) {
   const [method, setMethod] = useState(null); // snap | describe | recipes | manual
   const [desc, setDesc] = useState("");
@@ -454,8 +452,7 @@ export function MealLogCard({
         })}
       </div>
 
-      {/* Entry methods — hidden in admin read-only mirror */}
-      {!readOnly && (
+      {/* Entry methods */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 14, marginBottom: 12 }}>
         <div style={{ fontFamily: FD, fontSize: 17, marginBottom: 2 }}>Log a meal</div>
         <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10 }}>
@@ -814,29 +811,21 @@ export function MealLogCard({
           </div>
         )}
       </div>
-      )}
 
       {/* Day's log */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16 }}>
         <div style={{ fontFamily: FD, fontSize: 17, marginBottom: 8 }}>
           {onToday ? "Today's log" : `${formatLongDay(date)} log`}
         </div>
-        {readOnly && (
-          <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 8, lineHeight: 1.45 }}>
-            Read-only — she logs from her app. Tap a day above to browse.
-          </div>
-        )}
 
         {entries.length === 0 ? (
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6, padding: "6px 0 10px" }}>
-            {readOnly
-              ? "Nothing logged this day."
-              : "Nothing logged this day. Snap, describe, or tap a recipe to add it here."}
+            Nothing logged this day. Snap, describe, or tap a recipe to add it here.
           </div>
         ) : (
           <>
             {entries.map((e) =>
-              !readOnly && editingId === e.id && draft ? (
+              editingId === e.id && draft ? (
                 <div
                   key={e.id}
                   style={{
@@ -902,17 +891,10 @@ export function MealLogCard({
                   </label>
                 </div>
               ) : (
-                <div
+                <button
                   key={e.id}
-                  role={readOnly ? undefined : "button"}
-                  tabIndex={readOnly ? undefined : 0}
-                  onClick={readOnly ? undefined : () => startEdit(e)}
-                  onKeyDown={readOnly ? undefined : (ev) => {
-                    if (ev.key === "Enter" || ev.key === " ") {
-                      ev.preventDefault();
-                      startEdit(e);
-                    }
-                  }}
+                  type="button"
+                  onClick={() => startEdit(e)}
                   style={{
                     display: "flex",
                     width: "100%",
@@ -922,10 +904,9 @@ export function MealLogCard({
                     border: "none",
                     borderBottom: `1px solid ${T.border}`,
                     background: "none",
-                    cursor: readOnly ? "default" : "pointer",
+                    cursor: "pointer",
                     textAlign: "left",
                     fontFamily: F,
-                    boxSizing: "border-box",
                   }}
                 >
                   <div style={{ flex: 1 }}>
@@ -937,14 +918,14 @@ export function MealLogCard({
                       }}
                     >
                       {VIA_LABEL[e.via] || "adjusted by you"}
-                      {!readOnly && (e.via === "photo" || e.via === "describe") ? " · tap to adjust" : ""}
+                      {e.via === "photo" || e.via === "describe" ? " · tap to adjust" : ""}
                     </div>
                   </div>
                   <div style={{ fontSize: 12.5, color: T.inkSoft, whiteSpace: "nowrap" }}>
                     {Math.round(e.cal)} cal · P{Math.round(e.p)} C{Math.round(e.c)} F{Math.round(e.f)}
                   </div>
-                  {!readOnly && <span style={{ color: T.inkSoft, fontSize: 15 }}>›</span>}
-                </div>
+                  <span style={{ color: T.inkSoft, fontSize: 15 }}>›</span>
+                </button>
               ),
             )}
 

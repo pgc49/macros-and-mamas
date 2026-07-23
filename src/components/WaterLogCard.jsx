@@ -22,7 +22,6 @@ export function WaterLogCard({
   onUndo,
   onChangeBottle,
   electrolytesUrl,
-  readOnly = false,
 }) {
   const [customOpen, setCustomOpen] = useState(false);
   const [customOz, setCustomOz] = useState("");
@@ -82,203 +81,191 @@ export function WaterLogCard({
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: T.inkSoft, marginBottom: 14 }}>
-        <span>half {readOnly ? "her" : "your"} goal weight, plus electrolytes</span>
+        <span>half your goal weight, plus electrolytes</span>
         <span style={{ fontWeight: 700, color: hit ? T.sage : T.inkSoft, whiteSpace: "nowrap" }}>
-          {total > 0
-            ? `${bottleLabel} × ${readOnly ? "her" : "your"} bottle`
-            : readOnly
-              ? "none logged"
-              : "tap to log"}
+          {total > 0 ? `${bottleLabel} × your bottle` : "tap to log"}
         </span>
       </div>
 
       {hit && (
         <div style={{ fontSize: 12.5, color: T.sage, fontWeight: 700, marginBottom: 12, lineHeight: 1.4 }}>
-          Goal hit — checked off on {readOnly ? "her" : "your"} week
+          Goal hit — checked off on your week
         </div>
       )}
 
-      {readOnly ? (
-        <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.5 }}>
-          Bottle size: {bottle} oz · read-only
-        </div>
-      ) : (
-        <>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onAdd?.(bottle)}
-              style={{
-                flex: "1 1 140px",
-                fontFamily: F,
-                fontSize: 13,
-                fontWeight: 700,
-                padding: "11px 14px",
-                borderRadius: 999,
-                border: "none",
-                background: WATER,
-                color: "#fff",
-                cursor: busy ? "default" : "pointer",
-              }}
-            >
-              + My bottle · {bottle} oz
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onAdd?.(8)}
-              style={{
-                flex: "0 0 auto",
-                fontFamily: F,
-                fontSize: 13,
-                fontWeight: 700,
-                padding: "11px 14px",
-                borderRadius: 999,
-                border: `1.5px solid ${WATER_BORDER}`,
-                background: WATER_SOFT,
-                color: WATER,
-                cursor: busy ? "default" : "pointer",
-              }}
-            >
-              + Glass · 8 oz
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setCustomOpen((o) => !o)}
-              style={{
-                flex: "0 0 auto",
-                fontFamily: F,
-                fontSize: 13,
-                fontWeight: 700,
-                padding: "11px 14px",
-                borderRadius: 999,
-                border: `1.5px solid ${T.border}`,
-                background: "#fff",
-                color: T.ink,
-                cursor: busy ? "default" : "pointer",
-              }}
-            >
-              + oz
-            </button>
-          </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onAdd?.(bottle)}
+          style={{
+            flex: "1 1 140px",
+            fontFamily: F,
+            fontSize: 13,
+            fontWeight: 700,
+            padding: "11px 14px",
+            borderRadius: 999,
+            border: "none",
+            background: WATER,
+            color: "#fff",
+            cursor: busy ? "default" : "pointer",
+          }}
+        >
+          + My bottle · {bottle} oz
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onAdd?.(8)}
+          style={{
+            flex: "0 0 auto",
+            fontFamily: F,
+            fontSize: 13,
+            fontWeight: 700,
+            padding: "11px 14px",
+            borderRadius: 999,
+            border: `1.5px solid ${WATER_BORDER}`,
+            background: WATER_SOFT,
+            color: WATER,
+            cursor: busy ? "default" : "pointer",
+          }}
+        >
+          + Glass · 8 oz
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setCustomOpen((o) => !o)}
+          style={{
+            flex: "0 0 auto",
+            fontFamily: F,
+            fontSize: 13,
+            fontWeight: 700,
+            padding: "11px 14px",
+            borderRadius: 999,
+            border: `1.5px solid ${T.border}`,
+            background: "#fff",
+            color: T.ink,
+            cursor: busy ? "default" : "pointer",
+          }}
+        >
+          + oz
+        </button>
+      </div>
 
-          {customOpen && (
-            <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="1"
-                step="1"
-                placeholder="oz"
-                value={customOz}
-                onChange={(e) => setCustomOz(e.target.value)}
-                style={{
-                  width: 88,
-                  padding: "10px 12px",
-                  fontSize: 15,
-                  border: `1.5px solid ${T.border}`,
-                  borderRadius: 12,
-                  fontFamily: F,
-                }}
-              />
-              <button
-                type="button"
-                disabled={busy || !Number(customOz)}
-                onClick={addCustom}
-                style={{
-                  fontFamily: F,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  padding: "10px 16px",
-                  borderRadius: 999,
-                  border: "none",
-                  background: WATER,
-                  color: "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                Add
-              </button>
-            </div>
-          )}
-
-          <div
+      {customOpen && (
+        <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+          <input
+            type="number"
+            inputMode="decimal"
+            min="1"
+            step="1"
+            placeholder="oz"
+            value={customOz}
+            onChange={(e) => setCustomOz(e.target.value)}
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 10,
-              marginTop: 14,
-              paddingTop: 12,
-              borderTop: `1px dashed ${T.border}`,
-              flexWrap: "wrap",
+              width: 88,
+              padding: "10px 12px",
+              fontSize: 15,
+              border: `1.5px solid ${T.border}`,
+              borderRadius: 12,
+              fontFamily: F,
+            }}
+          />
+          <button
+            type="button"
+            disabled={busy || !Number(customOz)}
+            onClick={addCustom}
+            style={{
+              fontFamily: F,
+              fontSize: 13,
+              fontWeight: 700,
+              padding: "10px 16px",
+              borderRadius: 999,
+              border: "none",
+              background: WATER,
+              color: "#fff",
+              cursor: "pointer",
             }}
           >
-            {editingBottle ? (
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  type="number"
-                  min="4"
-                  max="64"
-                  value={bottleDraft}
-                  onChange={(e) => setBottleDraft(e.target.value)}
-                  style={{
-                    width: 72,
-                    padding: "8px 10px",
-                    fontSize: 14,
-                    border: `1.5px solid ${T.border}`,
-                    borderRadius: 10,
-                    fontFamily: F,
-                  }}
-                />
-                <button type="button" onClick={saveBottle} style={{ fontFamily: F, fontSize: 12, fontWeight: 700, color: WATER, background: "none", border: "none", cursor: "pointer" }}>
-                  Save
-                </button>
-                <button type="button" onClick={() => setEditingBottle(false)} style={{ fontFamily: F, fontSize: 12, fontWeight: 700, color: T.inkSoft, background: "none", border: "none", cursor: "pointer" }}>
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setBottleDraft(String(bottle));
-                  setEditingBottle(true);
-                }}
-                style={{ fontFamily: F, fontSize: 12.5, color: T.inkSoft, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
-              >
-                my bottle is {bottle} oz — change
-              </button>
-            )}
-            <button
-              type="button"
-              disabled={busy || !(entries || []).length}
-              onClick={() => onUndo?.()}
+            Add
+          </button>
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+          marginTop: 14,
+          paddingTop: 12,
+          borderTop: `1px dashed ${T.border}`,
+          flexWrap: "wrap",
+        }}
+      >
+        {editingBottle ? (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              type="number"
+              min="4"
+              max="64"
+              value={bottleDraft}
+              onChange={(e) => setBottleDraft(e.target.value)}
               style={{
+                width: 72,
+                padding: "8px 10px",
+                fontSize: 14,
+                border: `1.5px solid ${T.border}`,
+                borderRadius: 10,
                 fontFamily: F,
-                fontSize: 12.5,
-                fontWeight: 700,
-                color: (entries || []).length ? T.accent : T.inkSoft,
-                background: "none",
-                border: "none",
-                padding: 0,
-                cursor: (entries || []).length ? "pointer" : "default",
               }}
-            >
-              undo last
+            />
+            <button type="button" onClick={saveBottle} style={{ fontFamily: F, fontSize: 12, fontWeight: 700, color: WATER, background: "none", border: "none", cursor: "pointer" }}>
+              Save
+            </button>
+            <button type="button" onClick={() => setEditingBottle(false)} style={{ fontFamily: F, fontSize: 12, fontWeight: 700, color: T.inkSoft, background: "none", border: "none", cursor: "pointer" }}>
+              Cancel
             </button>
           </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setBottleDraft(String(bottle));
+              setEditingBottle(true);
+            }}
+            style={{ fontFamily: F, fontSize: 12.5, color: T.inkSoft, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+          >
+            my bottle is {bottle} oz — change
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={busy || !(entries || []).length}
+          onClick={() => onUndo?.()}
+          style={{
+            fontFamily: F,
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: (entries || []).length ? T.accent : T.inkSoft,
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: (entries || []).length ? "pointer" : "default",
+          }}
+        >
+          undo last
+        </button>
+      </div>
 
-          {electrolytesUrl && (
-            <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.45 }}>
-              <a href={electrolytesUrl} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}>
-                Callie&apos;s electrolytes on Fullscript →
-              </a>
-            </div>
-          )}
-        </>
+      {electrolytesUrl && (
+        <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.45 }}>
+          <a href={electrolytesUrl} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, textDecoration: "none" }}>
+            Callie&apos;s electrolytes on Fullscript →
+          </a>
+        </div>
       )}
     </Card>
   );
