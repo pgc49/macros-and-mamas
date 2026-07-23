@@ -103,6 +103,8 @@ export function MealLogCard({
   const [method, setMethod] = useState(null); // snap | describe | recipes | manual
   const [desc, setDesc] = useState("");
   const [photoNote, setPhotoNote] = useState("");
+  const [snapFile, setSnapFile] = useState(null);
+  const [snapPreview, setSnapPreview] = useState(null);
   const [manual, setManual] = useState({ name: "", cal: "", p: "", c: "", f: "" });
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -110,12 +112,45 @@ export function MealLogCard({
   const camRef = useRef(null);
   const libRef = useRef(null);
 
+  const clearSnap = () => {
+    setSnapPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setSnapFile(null);
+    setPhotoNote("");
+  };
+
+  const stageSnap = (file) => {
+    if (!file) return;
+    setSnapPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setSnapFile(file);
+  };
+
+  useEffect(() => () => {
+    // revoke on unmount
+    setSnapPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
+
   // AI result lands as an editable draft — she tweaks, then saves.
   useEffect(() => {
     if (!estimate || estimate.error) {
       setEstimateDraft(null);
       return;
     }
+    // Analysis succeeded — drop the staged photo so the draft is the focus
+    setSnapPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setSnapFile(null);
+    setPhotoNote("");
     setEstimateDraft({
       name: estimate.meal || "",
       cal: estimate.calories ?? "",
@@ -165,7 +200,13 @@ export function MealLogCard({
     { cal: 0, p: 0, c: 0, f: 0 },
   );
 
-  const toggleMethod = (key) => setMethod((m) => (m === key ? null : key));
+  const toggleMethod = (key) => {
+    setMethod((m) => {
+      const next = m === key ? null : key;
+      if (m === "snap" && next !== "snap") clearSnap();
+      return next;
+    });
+  };
 
   const selectDay = (d) => {
     if (d > today) return;
@@ -415,30 +456,87 @@ export function MealLogCard({
 
         {method === "snap" && (
           <div style={{ marginTop: 12 }}>
-            <label style={{ display: "block", marginBottom: 10 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>
-                Optional note <span style={{ fontWeight: 500 }}>(portions, oil, leftovers…)</span>
+            {!snapFile ? (
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <button type="button" disabled={busy} style={pill(false, busy)} onClick={() => camRef.current?.click()}>
+                  Open camera
+                </button>
+                <button type="button" disabled={busy} style={pill(true, busy)} onClick={() => libRef.current?.click()}>
+                  Photo library
+                </button>
+                <span style={{ fontSize: 11.5, color: T.inkSoft }}>snap first, then add a note if you want</span>
               </div>
-              <input
-                value={photoNote}
-                onChange={(e) => setPhotoNote(e.target.value)}
-                placeholder="e.g. about 6 oz chicken, cooked in 1 tsp olive oil"
-                disabled={busy}
-                maxLength={400}
-                style={{ ...inputStyle, padding: "11px 13px", fontSize: 15 }}
-              />
-            </label>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <button type="button" disabled={busy} style={pill(false, busy)} onClick={() => camRef.current?.click()}>
-                {busy ? "Reading…" : "Open camera"}
-              </button>
-              <button type="button" disabled={busy} style={pill(true, busy)} onClick={() => libRef.current?.click()}>
-                Photo library
-              </button>
-              <span style={{ fontSize: 11.5, color: T.inkSoft }}>
-                {photoNote.trim() ? "photo + your note" : "photo alone is fine"}
-              </span>
-            </div>
+            ) : (
+              <>
+                {snapPreview && (
+                  <div style={{
+                    marginBottom: 10,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    border: `1px solid ${T.border}`,
+                    background: "#fff",
+                    maxHeight: 200,
+                  }}
+                  >
+                    <img
+                      src={snapPreview}
+                      alt="Meal to estimate"
+                      style={{ display: "block", width: "100%", maxHeight: 200, objectFit: "cover" }}
+                    />
+                  </div>
+                )}
+                <label style={{ display: "block", marginBottom: 10 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>
+                    Optional note <span style={{ fontWeight: 500 }}>(portions, oil, leftovers…)</span>
+                  </div>
+                  <input
+                    value={photoNote}
+                    onChange={(e) => setPhotoNote(e.target.value)}
+                    placeholder="e.g. about 6 oz chicken, cooked in 1 tsp olive oil"
+                    disabled={busy}
+                    maxLength={400}
+                    style={{ ...inputStyle, padding: "11px 13px", fontSize: 15 }}
+                  />
+                </label>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    disabled={busy || !snapFile}
+                    style={pill(false, busy || !snapFile)}
+                    onClick={() => {
+                      if (!snapFile || busy) return;
+                      onAnalyzePhoto?.(snapFile, photoNote.trim());
+                    }}
+                  >
+                    {busy ? "Reading…" : "Estimate"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    style={pill(true, busy)}
+                    onClick={() => libRef.current?.click()}
+                  >
+                    Change photo
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={clearSnap}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      fontSize: 13,
+                      color: T.inkSoft,
+                      cursor: busy ? "default" : "pointer",
+                      textDecoration: "underline",
+                      fontFamily: F,
+                    }}
+                  >
+                    clear
+                  </button>
+                </div>
+              </>
+            )}
             <input
               ref={camRef}
               type="file"
@@ -447,10 +545,7 @@ export function MealLogCard({
               disabled={busy}
               style={{ display: "none" }}
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                const note = photoNote.trim();
-                onAnalyzePhoto?.(file, note);
-                setPhotoNote("");
+                stageSnap(e.target.files?.[0]);
                 e.target.value = "";
               }}
             />
@@ -461,10 +556,7 @@ export function MealLogCard({
               disabled={busy}
               style={{ display: "none" }}
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                const note = photoNote.trim();
-                onAnalyzePhoto?.(file, note);
-                setPhotoNote("");
+                stageSnap(e.target.files?.[0]);
                 e.target.value = "";
               }}
             />
