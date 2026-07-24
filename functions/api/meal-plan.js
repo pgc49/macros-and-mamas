@@ -14,8 +14,8 @@ import {
   MEAL_PLAN_JSON_HINT,
 } from "../_shared/mealPlanPrompt.js";
 
-/** Stronger model for multi-day planning; override with MEAL_PLAN_MODEL. */
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4";
+/** Default matches meal estimates (cheap + strong enough for JSON meal fills). Override with MEAL_PLAN_MODEL. */
+const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
 
 export async function onRequestPost({ request, env }) {
   try {

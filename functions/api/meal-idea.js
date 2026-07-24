@@ -6,6 +6,7 @@
      { mode: "options", slot }  → 2–3 meals for that slot from prefs
    Soft rate limit: 20 / day via estimate_calls type='meal_idea'.
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
+   Default model: google/gemini-3.1-flash-lite (OpenRouter).
    ================================================================== */
 
 import {

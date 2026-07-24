@@ -5,6 +5,7 @@
    + Callie recipe bank + approved ranges. Client accepts into planner.
    Soft rate limit: 5 / day via estimate_calls type='meal_suggest'.
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
+   Default model: google/gemini-3.1-flash-lite (same family as meal estimates).
    ================================================================== */
 
 import {
