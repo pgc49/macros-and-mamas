@@ -976,7 +976,7 @@ export function MealLogCard({
                     </div>
                   </div>
                   <div style={{ fontSize: 12.5, color: T.inkSoft, whiteSpace: "nowrap" }}>
-                    {Math.round(e.cal)} cal · P{Math.round(e.p)} C{Math.round(e.c)} F{Math.round(e.f)}
+                    {Math.round(e.cal)} cal · P {Math.round(e.p)}g · C {Math.round(e.c)}g · F {Math.round(e.f)}g
                   </div>
                   <span style={{ color: T.inkSoft, fontSize: 15 }}>›</span>
                 </button>

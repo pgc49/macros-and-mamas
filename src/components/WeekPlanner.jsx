@@ -638,7 +638,7 @@ function DayColumn({
         )}
         {bands && mealCount > 0 && (
           <div style={{ fontSize: 10.5, color: T.inkSoft, marginTop: 4 }}>
-            Target {bands.calLo}–{bands.calHi} cal · {bands.pLo}–{bands.pHi}P · {bands.cLo}–{bands.cHi}C · {bands.fLo}–{bands.fHi}F
+            Target {bands.calLo}–{bands.calHi} cal · P {bands.pLo}–{bands.pHi} · C {bands.cLo}–{bands.cHi} · F {bands.fLo}–{bands.fHi}
           </div>
         )}
         {coach && coach.phase !== "empty" && (
@@ -683,9 +683,9 @@ function RangeCoachCard({ coach, bands, totals }) {
   const roomLine = rem && coach.phase === "building"
     ? [
         rem.cal > 0 ? `~${Math.round(rem.cal)} cal` : null,
-        rem.p > 0 ? `~${Math.round(rem.p)}P` : null,
-        rem.c > 0 ? `~${Math.round(rem.c)}C` : null,
-        rem.f > 0 ? `~${Math.round(rem.f)}F` : null,
+        rem.p > 0 ? `P ~${Math.round(rem.p)}` : null,
+        rem.c > 0 ? `C ~${Math.round(rem.c)}` : null,
+        rem.f > 0 ? `F ~${Math.round(rem.f)}` : null,
       ].filter(Boolean).join(" · ")
     : null;
 
@@ -709,7 +709,7 @@ function RangeCoachCard({ coach, bands, totals }) {
       ))}
       {coach.phase === "adjust" && bands && (
         <div style={{ fontSize: 10.5, color: T.inkSoft, marginTop: 4 }}>
-          Now {totals.cal} / {totals.p}P / {totals.c}C / {totals.f}F
+          Now {totals.cal} cal · P {totals.p}g · C {totals.c}g · F {totals.f}g
         </div>
       )}
     </div>
@@ -819,7 +819,7 @@ function PlanMealTile({
           {meal.name}
         </div>
         <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 2 }}>
-          {scaled.cal} · {scaled.p}P/{scaled.c}C/{scaled.f}F
+          {scaled.cal} cal · P {scaled.p}g · C {scaled.c}g · F {scaled.f}g
           {qty !== 1 ? ` · ${qty}× logged` : " · per plate"}
         </div>
       </button>
@@ -1240,7 +1240,7 @@ function MealPickerModal({
                 >
                   <div style={{ fontWeight: 700, fontSize: 14, color: T.ink }}>{m.name}</div>
                   <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
-                    {m.cal} cal · {m.p}P · {m.c}C · {m.f}F · macros only
+                    {m.cal} cal · P {m.p}g · C {m.c}g · F {m.f}g · macros only
                   </div>
                 </button>
               ))
@@ -1386,7 +1386,7 @@ function AiMealPreview({ meal, onAdd }) {
       </div>
       <div style={{ fontWeight: 700, fontSize: 15, color: T.ink, marginTop: 2 }}>{meal.name}</div>
       <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
-        {meal.cal} cal · {meal.p}P · {meal.c}C · {meal.f}F
+        {meal.cal} cal · P {meal.p}g · C {meal.c}g · F {meal.f}g
       </div>
       {meal.desc && (
         <div style={{ fontSize: 12.5, color: T.ink, marginTop: 6, lineHeight: 1.4 }}>{meal.desc}</div>
@@ -1446,7 +1446,7 @@ function PickerRow({ recipe, reason, onPick, accent }) {
       </div>
       <div style={{ fontWeight: 700, fontSize: 14, color: T.ink }}>{recipe.name}</div>
       <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
-        {recipe.cal} cal · {recipe.p}P · {recipe.c}C · {recipe.f}F
+        {recipe.cal} cal · P {recipe.p}g · C {recipe.c}g · F {recipe.f}g
         {reason ? ` · ${reason}` : ""}
         {isDinner && serves > 1 ? " · per plate" : ""}
       </div>
