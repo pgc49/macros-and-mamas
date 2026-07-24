@@ -294,35 +294,42 @@ export function ClientApp({
 
       {tab === "meals" && (
         <>
-          <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Automate your plate</h2>
-          <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-            Open <b style={{ color: T.ink }}>This week</b> to plan Mon–Sun (flip weeks like Today), then shop from that week’s plan.
-            Breakfast–Snack chips are the recipe bank to browse anytime.
-          </p>
+          {mealFilter === "Plan" ? null : (
+            <>
+              <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
+                {mealFilter === "My meals" ? "My meals" : "Recipe bank"}
+              </h2>
+              <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
+                {mealFilter === "My meals"
+                  ? "Saved meals for one-tap logging — or jump back to Plan to build your week."
+                  : "Browse Callie’s recipes by slot. Add them to your week from Plan."}
+              </p>
+            </>
+          )}
 
-          {mealFilter !== "This week" && mealFilter !== "My meals" && (
+          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Snack" && (
             <Card style={{ background: T.accentSoft, border: "none", marginBottom: 14 }}>
-              {SKELETONS.map((s) => (
-                <div key={s.meal} style={{ marginBottom: 12 }}>
+              {SKELETONS.filter((s) => s.meal === mealFilter).map((s) => (
+                <div key={s.meal} style={{ marginBottom: 0 }}>
                   <div style={{ fontFamily: FD, fontSize: 17, color: T.accentDeep }}>{s.meal} <span style={{ fontFamily: F, fontSize: 13, color: T.inkSoft }}>— {s.formula}</span></div>
                   <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.6 }}>{s.lines.join(" · ")}</div>
                 </div>
               ))}
-              <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.5, marginTop: 10 }}>
                 House rules: max 2 whole eggs per meal (egg whites are free game) · sweeten with honey, maple, or applesauce · organic where you can.
               </div>
             </Card>
           )}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {["This week", "My meals", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
+            {["Plan", "My meals", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
               <Chip key={c} active={mealFilter === c} onClick={() => setMealFilter(c)}>
-                {c === "This week" && plannedCount ? `${c} · ${plannedCount}` : c}
+                {c === "Plan" && plannedCount ? `${c} · ${plannedCount}` : c}
               </Chip>
             ))}
           </div>
 
-          {mealFilter === "This week" && (
+          {mealFilter === "Plan" && (
             <WeekPlanner
               profile={profile}
               macros={macros}
@@ -344,13 +351,10 @@ export function ClientApp({
 
           {mealFilter === "My meals" && (
             <div style={{ marginBottom: 12 }}>
-              <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
-                Meals you saved for one-tap logging. Use the servings stepper if you ate a bit more or less than usual (0.25 steps).
-              </p>
               {!customMeals.length ? (
                 <Card>
                   <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
-                    Nothing saved yet. Save from Today logging, or when you add an AI meal on This week, choose <b style={{ color: T.ink }}>Save to My meals</b>.
+                    Nothing saved yet. Save from Today logging, or when you add an AI meal on Plan, choose <b style={{ color: T.ink }}>Save to My meals</b>.
                   </div>
                 </Card>
               ) : (
@@ -368,13 +372,13 @@ export function ClientApp({
             </div>
           )}
 
-          {mealFilter !== "This week" && mealFilter !== "My meals" && personalized && flatPersonalized
+          {mealFilter !== "Plan" && mealFilter !== "My meals" && personalized && flatPersonalized
             .filter((m) => (m.cat || "").toLowerCase() === mealFilter.toLowerCase())
             .map((m, idx) => (
               <MealRecipeCard key={`${m.name}-${idx}`} meal={m} onLog={logRecipe} />
             ))}
 
-          {mealFilter !== "This week" && mealFilter !== "My meals" && !personalized && RECIPES
+          {mealFilter !== "Plan" && mealFilter !== "My meals" && !personalized && RECIPES
             .filter((r) => r.cat === mealFilter)
             .map((r) => (
               <MealRecipeCard key={r.name} meal={r} onLog={logRecipe} />

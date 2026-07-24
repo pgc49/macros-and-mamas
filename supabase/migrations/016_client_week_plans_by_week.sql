@@ -8,19 +8,17 @@
 -- Ensure table exists (014 may not have been applied yet)
 create table if not exists public.client_week_plans (
   profile_id uuid not null references public.profiles (id) on delete cascade,
-  week_start date not null,
+  week_start date not null default (date_trunc('week', now())::date),
   days jsonb not null default '[]'::jsonb,
   source text not null default 'manual'
     check (source in ('manual', 'ai', 'coach_seed')),
-  updated_at timestamptz not null default now(),
-  primary key (profile_id, week_start)
+  updated_at timestamptz not null default now()
 );
 
 -- Migrate 014 shape (profile_id PK, no week_start) → week-scoped
 alter table public.client_week_plans
   add column if not exists week_start date;
 
--- Backfill: map legacy single-row plans to the Monday of their last update
 update public.client_week_plans
 set week_start = (date_trunc('week', coalesce(updated_at, now()))::date)
 where week_start is null;
@@ -32,34 +30,37 @@ where week_start is null;
 alter table public.client_week_plans
   alter column week_start set not null;
 
--- Drop old single-profile primary key if present
+-- Drop legacy single-column PK (profile_id only)
 do $$
+declare
+  pk_cols text;
 begin
-  if exists (
-    select 1 from pg_constraint
-    where conname = 'client_week_plans_pkey'
-      and conrelid = 'public.client_week_plans'::regclass
-  ) then
-    -- Only drop if PK is profile_id alone (014). Recreate composite below.
+  select string_agg(a.attname, ',' order by x.ord)
+  into pk_cols
+  from pg_constraint c
+  cross join lateral unnest(c.conkey) with ordinality as x(attnum, ord)
+  join pg_attribute a on a.attrelid = c.conrelid and a.attnum = x.attnum
+  where c.conrelid = 'public.client_week_plans'::regclass
+    and c.contype = 'p';
+
+  if pk_cols = 'profile_id' then
     alter table public.client_week_plans drop constraint client_week_plans_pkey;
   end if;
-exception
-  when undefined_table then null;
 end $$;
 
+-- Composite PK (skip if already present)
 do $$
 begin
-  alter table public.client_week_plans
-    add primary key (profile_id, week_start);
-exception
-  when invalid_table_definition then null; -- already composite PK
-  when duplicate_table then null;
-  when others then
-    -- unique_violation / already exists
-    null;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.client_week_plans'::regclass
+      and contype = 'p'
+  ) then
+    alter table public.client_week_plans
+      add primary key (profile_id, week_start);
+  end if;
 end $$;
 
--- If PK add failed because of duplicate (profile, week), keep unique index
 create unique index if not exists client_week_plans_profile_week_uidx
   on public.client_week_plans (profile_id, week_start);
 

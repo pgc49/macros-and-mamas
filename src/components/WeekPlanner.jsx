@@ -231,8 +231,8 @@ export function WeekPlanner({
     <div style={{ marginBottom: 18 }}>
       <Card style={{ marginBottom: 12, padding: 14, background: T.accentSoft, border: "none" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: T.accentDeep }}>
-            Meals → This week
+          <div style={{ fontFamily: FD, fontSize: 22, color: T.ink, lineHeight: 1.2 }}>
+            {isThisWeek ? "This week" : ws > curWk ? "Upcoming week" : "Past week"}
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             <button type="button" disabled={!canPrev} onClick={() => shiftWeek(-1)} style={navBtnStyle(!canPrev)} aria-label="Previous week">
@@ -243,17 +243,11 @@ export function WeekPlanner({
             </button>
           </div>
         </div>
-        <div style={{ fontFamily: FD, fontSize: 22, marginBottom: 2, color: T.ink }}>
-          {isThisWeek ? "This week" : ws > curWk ? "Upcoming week" : "Past week"}
-        </div>
-        <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 6 }}>
+        <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 0 }}>
           {fmtRange(ws)}
-          {isThisWeek ? " · this week" : ws > curWk ? " · starts empty until you add meals" : ""}
+          {isThisWeek ? " · plan · shop from this board" : ws > curWk ? " · blank until you add meals" : " · saved plan"}
+          {saving ? " · Saving…" : ""}
         </div>
-        <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: 0 }}>
-          Plan Mon–Sun for this week, nudge servings into your ranges, then shop.
-          Changes autosave. Flip weeks anytime — future weeks stay blank until you fill them.
-        </p>
       </Card>
 
       <FoodPrefsEditor profile={profile} onSave={onSaveFoodPrefs} />
@@ -286,18 +280,12 @@ export function WeekPlanner({
             {suggestBusy ? "Suggesting…" : "Suggest my week (AI)"}
           </PillBtn>
           <PillBtn onClick={clearWeek}>Clear all</PillBtn>
-          <span style={{ fontSize: 12, color: T.inkSoft, marginLeft: 4 }}>
-            {saving ? "Saving…" : "Autosaved"}
-          </span>
         </div>
         <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.45 }}>
-          {mealCount} meal{mealCount === 1 ? "" : "s"} on this week’s plan
+          {mealCount} meal{mealCount === 1 ? "" : "s"}
           {bands ? ` · ${daysInRangeCount}/7 days in range` : ""}
-          {wide ? " · drag cards between days" : " · use Move on a meal"}
-        </div>
-        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
-          <b style={{ color: T.ink }}>+ Add meal</b> opens Callie’s bank, My meals, or AI for that slot.
-          <b style={{ color: T.ink }}> Suggest my week</b> fills this week from Foods I love + your ranges.
+          {wide ? " · drag between days" : " · Move on a meal"}
+          {saving ? "" : " · autosaved"}
         </div>
         {!macros && (
           <div style={{ fontSize: 12.5, color: T.amber, marginTop: 10, lineHeight: 1.45 }}>
@@ -306,7 +294,7 @@ export function WeekPlanner({
         )}
         {!hasPrefs && macros && (
           <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 10, lineHeight: 1.45 }}>
-            Tip: fill <b style={{ color: T.ink }}>Foods I love</b> above so AI options match what you actually eat.
+            Tip: fill <b style={{ color: T.ink }}>Foods I love</b> so AI options match what you eat.
           </div>
         )}
         {message && (

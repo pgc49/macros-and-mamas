@@ -61,7 +61,7 @@ export default function App() {
   const [viewWk, setViewWk] = useState(curWk);
   const [editPast, setEditPast] = useState(false);
   const [weighins, setWeighins] = useState([]);
-  const [mealFilter, setMealFilter] = useState("This week");
+  const [mealFilter, setMealFilter] = useState("Plan");
   const [mealPlanMode, setMealPlanMode] = useState("default");
   const [publishedPlan, setPublishedPlan] = useState(null);
   const [weekPlanDays, setWeekPlanDays] = useState([]);
@@ -100,7 +100,7 @@ export default function App() {
       const personalized = mp.mode === "personalized" && Array.isArray(mp.published?.days) && mp.published.days.length > 0;
       setMealPlanMode(personalized ? "personalized" : "default");
       setPublishedPlan(personalized ? mp.published : null);
-      setMealFilter("This week");
+      setMealFilter("Plan");
       return mp;
     } catch (mpErr) {
       console.warn("loadClientMealPlan failed", mpErr);
