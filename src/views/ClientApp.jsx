@@ -40,6 +40,7 @@ export function ClientApp({
   onWeekPlanChange,
   onWeekPlanSave,
   onSuggestAiWeek,
+  onSaveFoodPrefs,
 }) {
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
@@ -330,6 +331,7 @@ export function ClientApp({
               onChangeDays={onWeekPlanChange}
               onSave={onWeekPlanSave}
               onSuggestAiWeek={onSuggestAiWeek}
+              onSaveFoodPrefs={onSaveFoodPrefs}
               coachPlan={personalized ? publishedPlan : null}
               onLog={logRecipe}
             />

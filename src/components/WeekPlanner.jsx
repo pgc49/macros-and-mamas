@@ -42,6 +42,7 @@ export function WeekPlanner({
   onChangeDays,
   onSuggestAiWeek,
   onSave,
+  onSaveFoodPrefs,
   coachPlan = null,
   onLog,
 }) {
@@ -228,6 +229,8 @@ export function WeekPlanner({
         </p>
       </Card>
 
+      <FoodPrefsEditor profile={profile} onSave={onSaveFoodPrefs} />
+
       {!showBoard ? (
         <Card style={{ marginBottom: 14, padding: 16 }}>
           <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 6 }}>How do you want to start?</div>
@@ -242,10 +245,10 @@ export function WeekPlanner({
               Start blank — add from the bank
             </Btn>
             <Btn ghost onClick={fillFromBankPrefs} style={{ width: "100%" }}>
-              {hasPrefs ? "Build from foods I love" : "Fill from Callie’s bank"}
+              {hasPrefs ? "Build from foods I love (bank match)" : "Fill from Callie’s bank"}
             </Btn>
             <Btn ghost onClick={onAiSuggest} disabled={suggestBusy || !macros} style={{ width: "100%" }}>
-              {suggestBusy ? "Suggesting…" : "AI: suggest my week"}
+              {suggestBusy ? "Suggesting…" : "AI: suggest my week (uses foods I love + ranges)"}
             </Btn>
             {hasCoach && (
               <Btn ghost onClick={fillFromCoach} style={{ width: "100%" }}>
@@ -265,11 +268,11 @@ export function WeekPlanner({
           <Card style={{ marginBottom: 12, padding: 14 }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
               <PillBtn accent onClick={() => openAdd(activeDay, "any")}>+ Add meal</PillBtn>
-              <PillBtn onClick={onAiSuggest} disabled={suggestBusy || !macros}>
-                {suggestBusy ? "Suggesting…" : "AI re-suggest"}
-              </PillBtn>
               <PillBtn onClick={fillFromBankPrefs}>
                 {hasPrefs ? "Build from foods I love" : "Fill from bank"}
+              </PillBtn>
+              <PillBtn onClick={onAiSuggest} disabled={suggestBusy || !macros}>
+                {suggestBusy ? "Suggesting…" : "AI re-suggest"}
               </PillBtn>
               <PillBtn onClick={startDefault}>Reset to default week</PillBtn>
               {hasCoach && <PillBtn onClick={fillFromCoach}>Callie’s plan</PillBtn>}
@@ -285,15 +288,11 @@ export function WeekPlanner({
                 Daily target {bands.calLo}–{bands.calHi} cal · {bands.pLo}–{bands.pHi}P · {bands.cLo}–{bands.cHi}C · {bands.fLo}–{bands.fHi}F
               </div>
             )}
-            {hasPrefs && (
-              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6, lineHeight: 1.45 }}>
-                <b style={{ color: T.ink }}>Build from foods I love</b> rebuilds the week from your intake notes
-                {profile.prefB ? ` (breakfast: ${profile.prefB}` : ""}
-                {profile.prefL ? `${profile.prefB ? ";" : " ("} lunch: ${profile.prefL}` : ""}
-                {profile.prefD ? `${profile.prefB || profile.prefL ? ";" : " ("} dinner: ${profile.prefD}` : ""}
-                {profile.prefB || profile.prefL || profile.prefD ? ")" : ""}.
-              </div>
-            )}
+            <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
+              <b style={{ color: T.ink }}>Build from foods I love</b> instantly matches Callie’s recipe bank to the notes above (no AI).
+              {" "}
+              <b style={{ color: T.ink }}>AI re-suggest</b> runs the full planner prompt (ranges + tastes + Callie’s bank).
+            </div>
             {message && (
               <div style={{ fontSize: 12.5, color: "#3E5A46", background: T.sageSoft, borderRadius: 10, padding: "8px 10px", marginTop: 10 }}>
                 {message}
@@ -429,6 +428,155 @@ export function WeekPlanner({
     </div>
   );
 }
+
+function FoodPrefsEditor({ profile, onSave }) {
+  const [open, setOpen] = useState(false);
+  const [prefB, setPrefB] = useState(profile?.prefB || "");
+  const [prefL, setPrefL] = useState(profile?.prefL || "");
+  const [prefD, setPrefD] = useState(profile?.prefD || "");
+  const [busy, setBusy] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    setPrefB(profile?.prefB || "");
+    setPrefL(profile?.prefL || "");
+    setPrefD(profile?.prefD || "");
+  }, [profile?.prefB, profile?.prefL, profile?.prefD]);
+
+  const dirty =
+    (prefB || "") !== (profile?.prefB || "")
+    || (prefL || "") !== (profile?.prefL || "")
+    || (prefD || "") !== (profile?.prefD || "");
+
+  const hasAny = !!(profile?.prefB || profile?.prefL || profile?.prefD || prefB || prefL || prefD);
+
+  const save = async () => {
+    if (!onSave) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await onSave({ prefB, prefL, prefD });
+      setSavedMsg("Saved — Build from foods I love and AI will use these.");
+      window.setTimeout(() => setSavedMsg(""), 3500);
+    } catch (e) {
+      console.error(e);
+      setErr(e.message || "Couldn’t save preferences.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card style={{ marginBottom: 12, padding: 14 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: "100%",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+          border: "none",
+          background: "transparent",
+          padding: 0,
+          cursor: "pointer",
+          fontFamily: F,
+          textAlign: "left",
+        }}
+      >
+        <div>
+          <div style={{ fontFamily: FD, fontSize: 18, color: T.ink }}>Foods I love</div>
+          <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2, lineHeight: 1.4 }}>
+            {hasAny
+              ? "Pre-filled from your intake — edit anytime so bank match + AI stay accurate."
+              : "Add what you actually like to eat. Starts from intake when you filled those fields."}
+          </div>
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 700, color: T.accentDeep, flexShrink: 0 }}>
+          {open ? "Hide ▴" : "Edit ▾"}
+        </span>
+      </button>
+
+      {!open && hasAny && (
+        <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 10, lineHeight: 1.45 }}>
+          {[
+            profile?.prefB && `B: ${profile.prefB}`,
+            profile?.prefL && `L: ${profile.prefL}`,
+            profile?.prefD && `D: ${profile.prefD}`,
+          ].filter(Boolean).join(" · ")}
+        </div>
+      )}
+
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <label style={labelStyle}>
+            Breakfast
+            <input
+              style={inputStyle}
+              value={prefB}
+              onChange={(e) => setPrefB(e.target.value)}
+              placeholder="smoothies, oatmeal, eggs…"
+            />
+          </label>
+          <label style={labelStyle}>
+            Lunch
+            <input
+              style={inputStyle}
+              value={prefL}
+              onChange={(e) => setPrefL(e.target.value)}
+              placeholder="big salads, leftovers, wraps…"
+            />
+          </label>
+          <label style={labelStyle}>
+            Dinner
+            <input
+              style={inputStyle}
+              value={prefD}
+              onChange={(e) => setPrefD(e.target.value)}
+              placeholder="tacos, salmon, asian flavors…"
+            />
+          </label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 4 }}>
+            <Btn small onClick={save} disabled={busy || !dirty}>
+              {busy ? "Saving…" : "Save foods I love"}
+            </Btn>
+            {savedMsg && !dirty && (
+              <span style={{ fontSize: 12.5, color: "#3E5A46" }}>{savedMsg}</span>
+            )}
+            {dirty && (
+              <span style={{ fontSize: 12.5, color: T.inkSoft }}>Unsaved changes</span>
+            )}
+          </div>
+          {err && <div style={{ fontSize: 12.5, color: T.amber, marginTop: 8 }}>{err}</div>}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+const labelStyle = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 700,
+  color: T.inkSoft,
+  marginBottom: 10,
+};
+
+const inputStyle = {
+  display: "block",
+  width: "100%",
+  marginTop: 6,
+  padding: "10px 12px",
+  fontSize: 15,
+  fontFamily: F,
+  border: `1.5px solid ${T.border}`,
+  borderRadius: 12,
+  background: "#fff",
+  color: T.ink,
+  boxSizing: "border-box",
+};
 
 function PillBtn({ children, onClick, disabled, accent }) {
   return (

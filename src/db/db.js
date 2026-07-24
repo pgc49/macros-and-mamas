@@ -669,6 +669,27 @@ export const db = {
     return n;
   },
 
+  /** Update intake food loves (pref_b / pref_l / pref_d) — used by planner + AI suggest. */
+  async updateFoodPrefs({ prefB, prefL, prefD, seasonNote } = {}) {
+    const uid = await requireUserId();
+    const row = {
+      pref_b: String(prefB || "").trim().slice(0, 500) || null,
+      pref_l: String(prefL || "").trim().slice(0, 500) || null,
+      pref_d: String(prefD || "").trim().slice(0, 500) || null,
+    };
+    if (seasonNote !== undefined) {
+      row.season_note = String(seasonNote || "").trim().slice(0, 1000) || null;
+    }
+    const { error } = await supabase.from("profiles").update(row).eq("id", uid);
+    if (error) throw error;
+    return {
+      prefB: row.pref_b || "",
+      prefL: row.pref_l || "",
+      prefD: row.pref_d || "",
+      ...(seasonNote !== undefined ? { seasonNote: row.season_note || "" } : {}),
+    };
+  },
+
   async loadRoster() {
     // Full admin directory: every profile including admins (so Callie/Patrick
     // can open their own row and test meal plans). Funnel stats still exclude admins.

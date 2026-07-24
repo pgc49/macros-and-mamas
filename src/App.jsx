@@ -732,6 +732,17 @@ export default function App() {
     }
   };
 
+  const onSaveFoodPrefs = async ({ prefB, prefL, prefD }) => {
+    const saved = await db.updateFoodPrefs({ prefB, prefL, prefD });
+    setProfile((p) => ({
+      ...p,
+      prefB: saved.prefB,
+      prefL: saved.prefL,
+      prefD: saved.prefD,
+    }));
+    return saved;
+  };
+
   const updateMealEntry = async (id, patch) => {
     if (!id) return;
     try {
@@ -936,6 +947,7 @@ export default function App() {
       onWeekPlanChange={onWeekPlanChange}
       onWeekPlanSave={onWeekPlanSave}
       onSuggestAiWeek={onSuggestAiWeek}
+      onSaveFoodPrefs={onSaveFoodPrefs}
     />
   );
 
