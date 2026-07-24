@@ -35,10 +35,11 @@ export function ClientApp({
   onDeleteCustomMeal,
   weekPlanDays = [],
   weekPlanSource = "manual",
+  weekPlanWeekStart,
   weekPlanSaving = false,
   weekPlanSuggestBusy = false,
   onWeekPlanChange,
-  onWeekPlanSave,
+  onChangeWeekPlanWeek,
   onSuggestAiWeek,
   onMealIdea,
   onSaveFoodPrefs,
@@ -295,7 +296,7 @@ export function ClientApp({
         <>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Automate your plate</h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-            Open <b style={{ color: T.ink }}>This week</b> to build Mon–Sun from an empty board, then shop from that plan.
+            Open <b style={{ color: T.ink }}>This week</b> to plan Mon–Sun (flip weeks like Today), then shop from that week’s plan.
             Breakfast–Snack chips are the recipe bank to browse anytime.
           </p>
 
@@ -327,11 +328,12 @@ export function ClientApp({
               macros={macros}
               days={weekPlanDays}
               source={weekPlanSource}
+              weekStart={weekPlanWeekStart || wkStartOf()}
               saving={weekPlanSaving}
               suggestBusy={weekPlanSuggestBusy}
               customMeals={customMeals}
               onChangeDays={onWeekPlanChange}
-              onSave={onWeekPlanSave}
+              onChangeWeek={onChangeWeekPlanWeek}
               onSuggestAiWeek={onSuggestAiWeek}
               onMealIdea={onMealIdea}
               onSaveCustomMeal={onSaveCustomMeal}

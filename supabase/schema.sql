@@ -538,14 +538,19 @@ create policy "water_logs_delete_own"
   to authenticated
   using (profile_id = auth.uid());
 
--- Client-owned weekly meal planner (grocery source of truth)
+-- Client-owned weekly meal planner (one row per Mon–Sun week)
 create table if not exists public.client_week_plans (
-  profile_id uuid primary key references public.profiles (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  week_start date not null,
   days jsonb not null default '[]'::jsonb,
   source text not null default 'manual'
     check (source in ('manual', 'ai', 'coach_seed')),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  primary key (profile_id, week_start)
 );
+
+create index if not exists client_week_plans_profile_week_idx
+  on public.client_week_plans (profile_id, week_start desc);
 
 alter table public.client_week_plans enable row level security;
 

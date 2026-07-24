@@ -4,6 +4,7 @@ import { Card, Btn } from "./ui";
 import { GroceryListPanel } from "./GroceryListPanel";
 import { withRecipeDetail, mealToCard } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
+import { addDaysIso, fmtRange, wkStartOf } from "../utils/dates";
 import {
   PLAN_DAYS,
   PLAN_SLOTS,
@@ -28,23 +29,28 @@ import {
   dayAllInRange,
 } from "../utils/weekPlan";
 
+/** How far ahead she can plan (blank weeks until she adds meals). */
+const FUTURE_WEEKS = 4;
+/** How far back she can flip (same ballpark as meal log). */
+const PAST_WEEKS = 52;
+
 /**
- * Flexible week planner — empty board by default.
+ * Flexible week planner — one board per Mon–Sun week (autosaved).
  * Add from Callie's bank, My meals, AI describe, or AI slot options.
- * Suggest my week (full AI fill) stays available to evaluate.
  */
 export function WeekPlanner({
   profile,
   macros,
   days,
   source,
+  weekStart,
   saving = false,
   suggestBusy = false,
   customMeals = [],
   onChangeDays,
+  onChangeWeek,
   onSuggestAiWeek,
   onMealIdea,
-  onSave,
   onSaveCustomMeal,
   onSaveFoodPrefs,
   onLog,
@@ -52,6 +58,14 @@ export function WeekPlanner({
   const planned = normalizeWeekDays(days);
   const mealCount = countPlannedMeals(planned);
   const bands = targetBands(macros);
+  const curWk = wkStartOf();
+  const ws = weekStart || curWk;
+  const earliest = addDaysIso(curWk, -7 * PAST_WEEKS);
+  const latest = addDaysIso(curWk, 7 * FUTURE_WEEKS);
+  const canPrev = ws > earliest;
+  const canNext = ws < latest;
+  const isThisWeek = ws === curWk;
+
   const [activeDay, setActiveDay] = useState(PLAN_DAYS[0]);
   const [picker, setPicker] = useState(null);
   const [message, setMessage] = useState("");
@@ -89,6 +103,13 @@ export function WeekPlanner({
     setError("");
     applyDays(emptyWeekPlan(), "blank");
     setMessage("Cleared — board is empty so you can rebuild.");
+  };
+
+  const shiftWeek = (dir) => {
+    const next = addDaysIso(ws, 7 * dir);
+    if (dir < 0 && next < earliest) return;
+    if (dir > 0 && next > latest) return;
+    onChangeWeek?.(next);
   };
 
   const onAiSuggest = async () => {
@@ -172,16 +193,6 @@ export function WeekPlanner({
     }, 50);
   };
 
-  const saveWeek = async () => {
-    await onSave?.();
-    setMessage(
-      mealCount > 0
-        ? "Week saved. Grocery list below updates live as you edit — open it anytime."
-        : "Week saved (still empty).",
-    );
-    if (mealCount > 0) scrollToGrocery();
-  };
-
   const onDragStart = (e, mealId) => {
     setDragId(mealId);
     e.dataTransfer.setData("text/plain", mealId);
@@ -205,16 +216,43 @@ export function WeekPlanner({
     ? planned.filter((d) => d.meals?.length && dayAllInRange(dayInRange(sumDayTotals(d.meals), bands))).length
     : 0;
 
+  const navBtnStyle = (disabled) => ({
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    border: `1.5px solid ${disabled ? T.track : T.border}`,
+    background: "#fff",
+    color: disabled ? "#D8CCD1" : T.ink,
+    fontSize: 16,
+    cursor: disabled ? "default" : "pointer",
+  });
+
   return (
     <div style={{ marginBottom: 18 }}>
       <Card style={{ marginBottom: 12, padding: 14, background: T.accentSoft, border: "none" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: T.accentDeep, marginBottom: 4 }}>
-          Meals → This week
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: T.accentDeep }}>
+            Meals → This week
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button type="button" disabled={!canPrev} onClick={() => shiftWeek(-1)} style={navBtnStyle(!canPrev)} aria-label="Previous week">
+              ‹
+            </button>
+            <button type="button" disabled={!canNext} onClick={() => shiftWeek(1)} style={navBtnStyle(!canNext)} aria-label="Next week">
+              ›
+            </button>
+          </div>
         </div>
-        <div style={{ fontFamily: FD, fontSize: 22, marginBottom: 4, color: T.ink }}>Your week planner</div>
+        <div style={{ fontFamily: FD, fontSize: 22, marginBottom: 2, color: T.ink }}>
+          {isThisWeek ? "This week" : ws > curWk ? "Upcoming week" : "Past week"}
+        </div>
+        <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 6 }}>
+          {fmtRange(ws)}
+          {isThisWeek ? " · this week" : ws > curWk ? " · starts empty until you add meals" : ""}
+        </div>
         <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: 0 }}>
-          Start empty, add meals day by day, nudge servings until each day lands in your ranges, then shop.
-          Grocery updates automatically as you add or remove meals.
+          Plan Mon–Sun for this week, nudge servings into your ranges, then shop.
+          Changes autosave. Flip weeks anytime — future weeks stay blank until you fill them.
         </p>
       </Card>
 
@@ -242,21 +280,24 @@ export function WeekPlanner({
       )}
 
       <Card style={{ marginBottom: 12, padding: 14 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10, alignItems: "center" }}>
           <PillBtn accent onClick={() => openAdd(activeDay, "any")}>+ Add meal</PillBtn>
           <PillBtn onClick={onAiSuggest} disabled={suggestBusy || !macros}>
             {suggestBusy ? "Suggesting…" : "Suggest my week (AI)"}
           </PillBtn>
           <PillBtn onClick={clearWeek}>Clear all</PillBtn>
+          <span style={{ fontSize: 12, color: T.inkSoft, marginLeft: 4 }}>
+            {saving ? "Saving…" : "Autosaved"}
+          </span>
         </div>
         <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.45 }}>
-          {mealCount} meal{mealCount === 1 ? "" : "s"} on your plan
+          {mealCount} meal{mealCount === 1 ? "" : "s"} on this week’s plan
           {bands ? ` · ${daysInRangeCount}/7 days in range` : ""}
           {wide ? " · drag cards between days" : " · use Move on a meal"}
         </div>
         <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
           <b style={{ color: T.ink }}>+ Add meal</b> opens Callie’s bank, My meals, or AI for that slot.
-          <b style={{ color: T.ink }}> Suggest my week</b> fills the whole board from Foods I love + your ranges (optional — try it when you want).
+          <b style={{ color: T.ink }}> Suggest my week</b> fills this week from Foods I love + your ranges.
         </div>
         {!macros && (
           <div style={{ fontSize: 12.5, color: T.amber, marginTop: 10, lineHeight: 1.45 }}>
@@ -281,7 +322,7 @@ export function WeekPlanner({
           weekDays={planned}
           open={groceryOpen}
           onOpenChange={setGroceryOpen}
-          emptyHint="Add meals to your plan — grocery updates live as you go."
+          emptyHint="Add meals to this week’s plan — grocery updates live as you go."
           ctaLabel="View grocery list"
         />
       </div>
@@ -374,18 +415,13 @@ export function WeekPlanner({
       )}
 
       <Card style={{ marginTop: 14, padding: 14 }}>
-        <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Done planning?</div>
+        <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Ready to shop?</div>
         <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, margin: "0 0 12px" }}>
-          Grocery already recalculates as you edit. Save locks this week in; then open the list to copy for shopping.
+          This week’s plan autosaves as you edit. Grocery recalculates from the meals on this board only.
         </p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          <Btn onClick={saveWeek} disabled={saving}>
-            {saving ? "Saving…" : "Save week"}
-          </Btn>
-          <Btn ghost onClick={scrollToGrocery} disabled={!mealCount}>
-            View grocery list
-          </Btn>
-        </div>
+        <Btn onClick={scrollToGrocery} disabled={!mealCount}>
+          View grocery list
+        </Btn>
       </Card>
 
       {picker && (

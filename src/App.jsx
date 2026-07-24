@@ -66,9 +66,12 @@ export default function App() {
   const [publishedPlan, setPublishedPlan] = useState(null);
   const [weekPlanDays, setWeekPlanDays] = useState([]);
   const [weekPlanSource, setWeekPlanSource] = useState("manual");
+  const [weekPlanWeekStart, setWeekPlanWeekStart] = useState(() => wkStartOf());
   const [weekPlanSaving, setWeekPlanSaving] = useState(false);
   const [weekPlanSuggestBusy, setWeekPlanSuggestBusy] = useState(false);
   const weekPlanSaveTimer = useRef(null);
+  const weekPlanWeekRef = useRef(weekPlanWeekStart);
+  weekPlanWeekRef.current = weekPlanWeekStart;
   const [roster, setRoster] = useState([]);
   const [adminStats, setAdminStats] = useState(null);
   const [adminSel, setAdminSel] = useState(null);
@@ -105,14 +108,17 @@ export default function App() {
     }
   };
 
-  const refreshWeekPlan = async () => {
+  const refreshWeekPlan = async (weekStart = weekPlanWeekRef.current) => {
+    const ws = weekStart || wkStartOf();
     try {
-      const wp = await db.loadWeekPlan();
+      const wp = await db.loadWeekPlan(ws);
+      setWeekPlanWeekStart(ws);
       setWeekPlanDays(Array.isArray(wp.days) ? wp.days : []);
       setWeekPlanSource(wp.source || "manual");
       return wp;
     } catch (e) {
       console.warn("loadWeekPlan failed", e);
+      setWeekPlanWeekStart(ws);
       setWeekPlanDays([]);
       setWeekPlanSource("manual");
       return null;
@@ -184,6 +190,7 @@ export default function App() {
           setPublishedPlan(null);
           setWeekPlanDays([]);
           setWeekPlanSource("manual");
+          setWeekPlanWeekStart(wkStartOf());
           setCustomMeals([]);
         }
         if (isAdmin) {
@@ -671,12 +678,16 @@ export default function App() {
     }
   };
 
-  const persistWeekPlan = async (days, source) => {
+  const persistWeekPlan = async (days, source, weekStart = weekPlanWeekRef.current) => {
+    const ws = weekStart || wkStartOf();
     setWeekPlanSaving(true);
     try {
-      const saved = await db.saveWeekPlan(days, source);
-      setWeekPlanDays(saved.days || days);
-      setWeekPlanSource(saved.source || source || "manual");
+      const saved = await db.saveWeekPlan(days, source, ws);
+      // Only apply echo if still viewing that week
+      if (weekPlanWeekRef.current === ws) {
+        setWeekPlanDays(saved.days || days);
+        setWeekPlanSource(saved.source || source || "manual");
+      }
     } catch (e) {
       console.error("saveWeekPlan failed", e);
     } finally {
@@ -684,21 +695,32 @@ export default function App() {
     }
   };
 
-  const onWeekPlanChange = (days, source = "manual") => {
-    setWeekPlanDays(days);
-    setWeekPlanSource(source);
-    if (weekPlanSaveTimer.current) window.clearTimeout(weekPlanSaveTimer.current);
-    weekPlanSaveTimer.current = window.setTimeout(() => {
-      persistWeekPlan(days, source);
-    }, 600);
-  };
-
-  const onWeekPlanSave = async () => {
+  const flushWeekPlanSave = async () => {
     if (weekPlanSaveTimer.current) {
       window.clearTimeout(weekPlanSaveTimer.current);
       weekPlanSaveTimer.current = null;
+      await persistWeekPlan(weekPlanDays, weekPlanSource, weekPlanWeekRef.current);
     }
-    await persistWeekPlan(weekPlanDays, weekPlanSource);
+  };
+
+  const onWeekPlanChange = (days, source = "manual") => {
+    setWeekPlanDays(days);
+    setWeekPlanSource(source);
+    const ws = weekPlanWeekRef.current;
+    if (weekPlanSaveTimer.current) window.clearTimeout(weekPlanSaveTimer.current);
+    weekPlanSaveTimer.current = window.setTimeout(() => {
+      persistWeekPlan(days, source, ws);
+    }, 600);
+  };
+
+  /** Flip planner week (like Today log). Future weeks start blank. */
+  const changeWeekPlanWeek = async (weekStart) => {
+    if (!weekStart || weekStart === weekPlanWeekRef.current) return;
+    await flushWeekPlanSave();
+    setWeekPlanDays([]);
+    setWeekPlanSource("manual");
+    setWeekPlanWeekStart(weekStart);
+    await refreshWeekPlan(weekStart);
   };
 
   const onSuggestAiWeek = async () => {
@@ -970,10 +992,11 @@ export default function App() {
       onDeleteCustomMeal={deleteCustomMeal}
       weekPlanDays={weekPlanDays}
       weekPlanSource={weekPlanSource}
+      weekPlanWeekStart={weekPlanWeekStart}
       weekPlanSaving={weekPlanSaving}
       weekPlanSuggestBusy={weekPlanSuggestBusy}
       onWeekPlanChange={onWeekPlanChange}
-      onWeekPlanSave={onWeekPlanSave}
+      onChangeWeekPlanWeek={changeWeekPlanWeek}
       onSuggestAiWeek={onSuggestAiWeek}
       onMealIdea={onMealIdea}
       onSaveFoodPrefs={onSaveFoodPrefs}

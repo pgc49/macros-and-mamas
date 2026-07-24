@@ -1043,39 +1043,51 @@ export const db = {
     if (error) throw error;
   },
 
-  /** Client-owned week planner (localStorage fallback until migration 014). */
-  async loadWeekPlan() {
+  /**
+   * Client week planner — one plan per Mon–Sun (week_start).
+   * localStorage fallback until migrations 014 + 016 land.
+   */
+  async loadWeekPlan(weekStart = null) {
     const uid = await requireUserId();
-    const lsKey = `mm_week_plan_${uid}`;
+    const ws = weekStart || wkStartOf();
+    const lsKey = weekPlanLocalKey(uid, ws);
     try {
       const { data, error } = await supabase
         .from("client_week_plans")
-        .select("days, source, updated_at")
+        .select("days, source, updated_at, week_start")
         .eq("profile_id", uid)
+        .eq("week_start", ws)
         .maybeSingle();
       if (error) {
-        console.warn("loadWeekPlan failed (migration 014?)", error);
-        return readWeekPlanLocal(lsKey);
+        console.warn("loadWeekPlan failed (migration 014/016?)", error);
+        return migrateLegacyWeekPlanLocal(uid, ws) || readWeekPlanLocal(lsKey, ws);
       }
-      if (!data) return readWeekPlanLocal(lsKey);
+      if (!data) {
+        // First load after 016: try legacy unscoped local key once for current week
+        const legacy = ws === wkStartOf() ? migrateLegacyWeekPlanLocal(uid, ws) : null;
+        return legacy || { days: [], source: "manual", week_start: ws, updated_at: null };
+      }
       const days = Array.isArray(data.days) ? data.days : [];
       return {
         days,
         source: data.source || "manual",
+        week_start: data.week_start || ws,
         updated_at: data.updated_at || null,
       };
     } catch (e) {
       console.warn("loadWeekPlan exception", e);
-      return readWeekPlanLocal(lsKey);
+      return migrateLegacyWeekPlanLocal(uid, ws) || readWeekPlanLocal(lsKey, ws);
     }
   },
 
-  async saveWeekPlan(days, source = "manual") {
+  async saveWeekPlan(days, source = "manual", weekStart = null) {
     const uid = await requireUserId();
-    const lsKey = `mm_week_plan_${uid}`;
+    const ws = weekStart || wkStartOf();
+    const lsKey = weekPlanLocalKey(uid, ws);
     const payload = {
       days: Array.isArray(days) ? days : [],
       source: ["manual", "ai", "coach_seed"].includes(source) ? source : "manual",
+      week_start: ws,
       updated_at: new Date().toISOString(),
     };
     try {
@@ -1086,32 +1098,64 @@ export const db = {
     const { error } = await supabase.from("client_week_plans").upsert(
       {
         profile_id: uid,
+        week_start: ws,
         days: payload.days,
         source: payload.source,
         updated_at: payload.updated_at,
       },
-      { onConflict: "profile_id" },
+      { onConflict: "profile_id,week_start" },
     );
     if (error) {
       console.warn("saveWeekPlan supabase failed — kept local copy", error);
-      // Still succeed locally so planner works before migration lands
       return payload;
     }
     return payload;
   },
 };
 
-function readWeekPlanLocal(lsKey) {
+function weekPlanLocalKey(uid, weekStart) {
+  return `mm_week_plan_${uid}_${weekStart}`;
+}
+
+/** Move pre-016 single local plan onto the current week once. */
+function migrateLegacyWeekPlanLocal(uid, weekStart) {
+  if (weekStart !== wkStartOf()) return null;
+  const legacyKey = `mm_week_plan_${uid}`;
+  try {
+    const raw = localStorage.getItem(legacyKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const days = Array.isArray(parsed?.days) ? parsed.days : [];
+    if (!days.length) {
+      localStorage.removeItem(legacyKey);
+      return null;
+    }
+    const payload = {
+      days,
+      source: parsed?.source || "manual",
+      week_start: weekStart,
+      updated_at: parsed?.updated_at || null,
+    };
+    localStorage.setItem(weekPlanLocalKey(uid, weekStart), JSON.stringify(payload));
+    localStorage.removeItem(legacyKey);
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function readWeekPlanLocal(lsKey, weekStart) {
   try {
     const raw = localStorage.getItem(lsKey);
-    if (!raw) return { days: [], source: "manual", updated_at: null };
+    if (!raw) return { days: [], source: "manual", week_start: weekStart, updated_at: null };
     const parsed = JSON.parse(raw);
     return {
       days: Array.isArray(parsed?.days) ? parsed.days : [],
       source: parsed?.source || "manual",
+      week_start: parsed?.week_start || weekStart,
       updated_at: parsed?.updated_at || null,
     };
   } catch {
-    return { days: [], source: "manual", updated_at: null };
+    return { days: [], source: "manual", week_start: weekStart, updated_at: null };
   }
 }
