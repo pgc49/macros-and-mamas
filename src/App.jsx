@@ -5,7 +5,7 @@ import { useAuth } from "./auth/useAuth.jsx";
 import { db } from "./db/db";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
-import { addDaysIso, localDateIso, weekdayKey, wkStartOf } from "./utils/dates";
+import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
 import {
   adherenceForWeek,
   buildHabitHistory,
@@ -69,6 +69,8 @@ export default function App() {
   const [weekPlanWeekStart, setWeekPlanWeekStart] = useState(() => wkStartOf());
   const [weekPlanSaving, setWeekPlanSaving] = useState(false);
   const [weekPlanSuggestBusy, setWeekPlanSuggestBusy] = useState(false);
+  const [planMealsForLogDate, setPlanMealsForLogDate] = useState([]);
+  const [logFlash, setLogFlash] = useState("");
   const weekPlanSaveTimer = useRef(null);
   const weekPlanWeekRef = useRef(weekPlanWeekStart);
   weekPlanWeekRef.current = weekPlanWeekStart;
@@ -618,6 +620,10 @@ export default function App() {
   const discardEstimate = () => setEstimate(null);
 
   const logRecipe = async (recipe) => {
+    // Planner "Add to Today" always lands on calendar today; Today→My plan uses the selected log date.
+    const date = recipe.fromPlanner
+      ? localDateIso()
+      : (recipe.logged_date || mealLogDate || localDateIso());
     const ok = await appendMealEntry({
       name: recipe.name,
       cal: recipe.cal,
@@ -625,9 +631,17 @@ export default function App() {
       c: recipe.c,
       f: recipe.f,
       via: recipe.via || "recipe",
-      logged_date: mealLogDate,
+      logged_date: date,
     });
-    if (ok) setTab("today");
+    if (ok) {
+      if (date !== mealLogDate) {
+        selectMealLogDate(date);
+      }
+      setLogFlash(`Added ${recipe.name} to Today`);
+      window.setTimeout(() => setLogFlash(""), 3500);
+      setTab("today");
+    }
+    return ok;
   };
 
   const logManualMeal = async (entry) => {
@@ -722,6 +736,30 @@ export default function App() {
     setWeekPlanWeekStart(weekStart);
     await refreshWeekPlan(weekStart);
   };
+
+  /** Meals from her week planner for the day she's viewing on Today. */
+  useEffect(() => {
+    let cancelled = false;
+    const date = mealLogDate || localDateIso();
+    const ws = wkStartOf(date);
+    const dayKey = planDayLabel(date);
+    (async () => {
+      try {
+        let days = weekPlanDays;
+        if (ws !== weekPlanWeekStart) {
+          const wp = await db.loadWeekPlan(ws);
+          days = Array.isArray(wp?.days) ? wp.days : [];
+        }
+        if (cancelled) return;
+        const row = (days || []).find((d) => d.day === dayKey);
+        setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
+      } catch (e) {
+        console.warn("plan meals for log date failed", e);
+        if (!cancelled) setPlanMealsForLogDate([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mealLogDate, weekPlanDays, weekPlanWeekStart]);
 
   const onSuggestAiWeek = async () => {
     setWeekPlanSuggestBusy(true);
@@ -995,6 +1033,8 @@ export default function App() {
       weekPlanWeekStart={weekPlanWeekStart}
       weekPlanSaving={weekPlanSaving}
       weekPlanSuggestBusy={weekPlanSuggestBusy}
+      planMealsForLogDate={planMealsForLogDate}
+      logFlash={logFlash}
       onWeekPlanChange={onWeekPlanChange}
       onChangeWeekPlanWeek={changeWeekPlanWeek}
       onSuggestAiWeek={onSuggestAiWeek}

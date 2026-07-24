@@ -84,6 +84,7 @@ function totalsCaption(totals, ranges) {
 export function MealLogCard({
   macros,
   recipes = RECIPES,
+  plannedMeals = [],
   customMeals = [],
   busy,
   estimate,
@@ -620,10 +621,46 @@ export function MealLogCard({
         )}
 
         {method === "recipes" && (
-          <div style={{ marginTop: 12, maxHeight: 320, overflowY: "auto" }}>
-            {(customMeals || []).length > 0 && (
+          <div style={{ marginTop: 12, maxHeight: 360, overflowY: "auto" }}>
+            {(plannedMeals || []).length > 0 && (
               <>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: T.accentDeep, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 }}>
+                  Your plan · {onToday ? "today" : formatLongDay(date)}
+                </div>
+                {plannedMeals.map((r) => (
+                  <LoggableMealRow
+                    key={r.id || `${r.slot}-${r.name}`}
+                    meal={{
+                      name: r.name,
+                      cal: r.cal,
+                      p: r.p,
+                      c: r.c,
+                      f: r.f,
+                      slot: r.slot,
+                    }}
+                    via="recipe"
+                    accent
+                    confirmLog
+                    onLog={async (scaled) => {
+                      const ok = await onLogRecipe?.(scaled);
+                      if (ok !== false) setMethod(null);
+                      return ok;
+                    }}
+                  />
+                ))}
+              </>
+            )}
+            {(customMeals || []).length > 0 && (
+              <>
+                <div style={{
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  color: (plannedMeals || []).length ? T.inkSoft : T.accentDeep,
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
+                  margin: (plannedMeals || []).length ? "12px 0 6px" : "0 0 6px",
+                }}
+                >
                   My meals
                 </div>
                 {customMeals.map((r) => (
@@ -631,26 +668,43 @@ export function MealLogCard({
                     key={r.id || r.name}
                     meal={r}
                     via="custom"
-                    accent
-                    onLog={(scaled) => {
-                      onLogRecipe?.(scaled);
-                      setMethod(null);
+                    accent={!(plannedMeals || []).length}
+                    confirmLog
+                    onLog={async (scaled) => {
+                      const ok = await onLogRecipe?.(scaled);
+                      if (ok !== false) setMethod(null);
+                      return ok;
                     }}
                   />
                 ))}
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, letterSpacing: 0.4, textTransform: "uppercase", margin: "12px 0 6px" }}>
-                  From your plan
-                </div>
               </>
+            )}
+            <div style={{
+              fontSize: 11.5,
+              fontWeight: 700,
+              color: T.inkSoft,
+              letterSpacing: 0.4,
+              textTransform: "uppercase",
+              margin: ((plannedMeals || []).length || (customMeals || []).length) ? "12px 0 6px" : "0 0 6px",
+            }}
+            >
+              {(plannedMeals || []).length ? "Also in the bank" : "From the bank"}
+            </div>
+            {(plannedMeals || []).length === 0 && (customMeals || []).length === 0 && (
+              <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 8, lineHeight: 1.45 }}>
+                Nothing on your Plan for this day yet — add meals under Meals → Plan, or pick from the bank below.
+              </div>
             )}
             {recipes.map((r) => (
               <LoggableMealRow
                 key={r.name}
                 meal={r}
                 via="recipe"
-                onLog={(scaled) => {
-                  onLogRecipe?.(scaled);
-                  setMethod(null);
+                confirmLog
+                onLog={async (scaled) => {
+                  const ok = await onLogRecipe?.(scaled);
+                  if (ok !== false) setMethod(null);
+                  return ok;
                 }}
               />
             ))}

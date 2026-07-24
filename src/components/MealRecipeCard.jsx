@@ -39,13 +39,31 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
     ? (isDinner ? ` · batch · serves ${serves}` : ` · batch serves ${serves}`)
     : "";
 
+  const [logPhase, setLogPhase] = useState("idle");
   const logBtn = (
     <button
       type="button"
-      onClick={(e) => {
+      disabled={logPhase === "busy" || logPhase === "done"}
+      onClick={async (e) => {
         e.stopPropagation();
-        onLog?.(scaleMealForLog(r, servings));
-        setQty(1);
+        if (logPhase === "idle") {
+          setLogPhase("confirm");
+          return;
+        }
+        if (logPhase !== "confirm") return;
+        setLogPhase("busy");
+        try {
+          const ok = await onLog?.(scaleMealForLog({ ...r, via: "recipe", fromPlanner: true }, servings));
+          if (ok === false) {
+            setLogPhase("idle");
+            return;
+          }
+          setQty(1);
+          setLogPhase("done");
+          window.setTimeout(() => setLogPhase("idle"), 2000);
+        } catch {
+          setLogPhase("idle");
+        }
       }}
       style={{
         fontFamily: F,
@@ -56,10 +74,14 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
         border: `1.5px solid ${T.accent}`,
         background: T.accentSoft,
         color: T.accentDeep,
-        cursor: "pointer",
+        cursor: logPhase === "busy" || logPhase === "done" ? "default" : "pointer",
+        opacity: logPhase === "busy" ? 0.7 : 1,
       }}
     >
-      + Log
+      {logPhase === "idle" && "Add to Today"}
+      {logPhase === "confirm" && "Confirm?"}
+      {logPhase === "busy" && "Adding…"}
+      {logPhase === "done" && "Added ✓"}
     </button>
   );
 

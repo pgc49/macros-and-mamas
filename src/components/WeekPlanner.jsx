@@ -628,6 +628,11 @@ function DayColumn({
             <MacroChip label="F" value={`${totals.f}g`} ok={null} />
           </div>
         )}
+        {bands && (day.meals || []).length > 0 && (
+          <div style={{ fontSize: 10.5, color: T.inkSoft, marginTop: 4 }}>
+            Target {bands.calLo}–{bands.calHi} cal · {bands.pLo}–{bands.pHi}P · {bands.cLo}–{bands.cHi}C · {bands.fLo}–{bands.fHi}F
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -698,6 +703,7 @@ function PlanMealTile({
 }) {
   const [open, setOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [logPhase, setLogPhase] = useState("idle"); // idle | confirm | busy | done
   const slot = SLOT_LABEL[String(meal.slot || "").toLowerCase()] || "Meal";
   const qty = snapServings(meal.qty ?? 1);
   const scaled = scaledMealMacros(meal);
@@ -788,17 +794,43 @@ function PlanMealTile({
         {onLog && (
           <ActionPill
             accent
-            onClick={() => onLog(scaleMealForLog({
-              name: meal.name,
-              cal: meal.cal,
-              p: meal.p,
-              c: meal.c,
-              f: meal.f,
-              via: "recipe",
-            }, qty))}
+            disabled={logPhase === "busy" || logPhase === "done"}
+            onClick={async () => {
+              if (logPhase === "idle") {
+                setLogPhase("confirm");
+                return;
+              }
+              if (logPhase !== "confirm") return;
+              setLogPhase("busy");
+              try {
+                const ok = await onLog(scaleMealForLog({
+                  name: meal.name,
+                  cal: meal.cal,
+                  p: meal.p,
+                  c: meal.c,
+                  f: meal.f,
+                  via: "recipe",
+                  logged_date: undefined, // App forces today for planner adds
+                  fromPlanner: true,
+                }, qty));
+                if (ok === false) {
+                  setLogPhase("idle");
+                  return;
+                }
+                setLogPhase("done");
+              } catch {
+                setLogPhase("idle");
+              }
+            }}
           >
-            + Log
+            {logPhase === "idle" && "Add to Today"}
+            {logPhase === "confirm" && "Confirm add?"}
+            {logPhase === "busy" && "Adding…"}
+            {logPhase === "done" && "Added ✓"}
           </ActionPill>
+        )}
+        {logPhase === "confirm" && (
+          <ActionPill onClick={() => setLogPhase("idle")}>Cancel</ActionPill>
         )}
       </div>
 
@@ -873,11 +905,12 @@ function IngList({ items }) {
   );
 }
 
-function ActionPill({ children, onClick, accent }) {
+function ActionPill({ children, onClick, accent, disabled }) {
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
+      disabled={disabled}
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onClick?.(e); }}
       style={{
         fontFamily: F,
         fontSize: 12,
@@ -887,7 +920,8 @@ function ActionPill({ children, onClick, accent }) {
         border: `1.5px solid ${accent ? T.accent : T.border}`,
         background: accent ? T.accentSoft : "#fff",
         color: T.accentDeep,
-        cursor: "pointer",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.55 : 1,
       }}
     >
       {children}

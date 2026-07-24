@@ -38,6 +38,8 @@ export function ClientApp({
   weekPlanWeekStart,
   weekPlanSaving = false,
   weekPlanSuggestBusy = false,
+  planMealsForLogDate = [],
+  logFlash = "",
   onWeekPlanChange,
   onChangeWeekPlanWeek,
   onSuggestAiWeek,
@@ -127,6 +129,12 @@ export function ClientApp({
 
           <HomeScreenTip />
 
+          {logFlash ? (
+            <Card style={{ marginBottom: 10, padding: 12, background: T.sageSoft, border: "none" }}>
+              <div style={{ fontSize: 13.5, color: "#3E5A46", fontWeight: 700 }}>{logFlash}</div>
+            </Card>
+          ) : null}
+
           <Card style={{ marginBottom: 4 }}>
             <RangeBand label="Protein" lo={pLo} hi={pHi} eaten={totals.p} />
             <RangeBand label="Carbs" lo={cLo} hi={cHi} eaten={totals.c} />
@@ -165,6 +173,7 @@ export function ClientApp({
                 }))
                 : RECIPES
             }
+            plannedMeals={planMealsForLogDate}
             customMeals={customMeals}
             busy={estimateBusy}
             estimate={estimate}

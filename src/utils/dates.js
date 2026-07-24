@@ -61,6 +61,12 @@ export function dayRelationLabel(iso) {
   return null;
 }
 
+/** Weekday label matching planner days: Mon … Sun. */
+export function planDayLabel(iso = localDateIso()) {
+  const keys = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  return keys[(parseLocalDate(iso).getDay() + 6) % 7];
+}
+
 /** Weekday key matching DAYS in content/data (Mon-start). */
 export function weekdayKey(iso = localDateIso()) {
   const keys = ["M", "T", "W", "T2", "F", "S", "S2"];
