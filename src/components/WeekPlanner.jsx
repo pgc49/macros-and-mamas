@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card, Btn } from "./ui";
 import { GroceryListPanel } from "./GroceryListPanel";
-import { withRecipeDetail } from "../content/recipeDetails";
+import { withRecipeDetail, mealToCard } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
-import { suggestRecipesForSlot, suggestWeekFromBank } from "../utils/suggestFromPrefs";
+import { suggestRecipesForSlot } from "../utils/suggestFromPrefs";
 import {
   PLAN_DAYS,
   PLAN_SLOTS,
@@ -109,16 +109,6 @@ export function WeekPlanner({
       emptyWeekPlan(),
       "blank",
       "Blank week open — tap + Meal on any day to add from the bank.",
-    );
-  };
-
-  const fillFromBankPrefs = () => {
-    openBoard(
-      suggestWeekFromBank(profile || {}),
-      "manual",
-      hasPrefs
-        ? "Rebuilt from foods you told Callie you love at intake — edit freely."
-        : "Filled from Callie’s bank — edit freely.",
     );
   };
 
@@ -231,24 +221,42 @@ export function WeekPlanner({
 
       <FoodPrefsEditor profile={profile} onSave={onSaveFoodPrefs} />
 
+      {bands && (
+        <Card style={{ marginBottom: 12, padding: 14, background: T.sageSoft, border: "none" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.35, textTransform: "uppercase", color: "#3E5A46", marginBottom: 6 }}>
+            Your daily ranges
+          </div>
+          <div style={{ fontFamily: FD, fontSize: 18, color: T.ink, lineHeight: 1.35 }}>
+            {bands.calLo}–{bands.calHi} cal
+            <span style={{ color: T.inkSoft, fontFamily: F, fontSize: 14 }}> · </span>
+            {bands.pLo}–{bands.pHi}P
+            <span style={{ color: T.inkSoft, fontFamily: F, fontSize: 14 }}> · </span>
+            {bands.cLo}–{bands.cHi}C
+            <span style={{ color: T.inkSoft, fontFamily: F, fontSize: 14 }}> · </span>
+            {bands.fLo}–{bands.fHi}F
+          </div>
+          <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "8px 0 0", lineHeight: 1.45 }}>
+            Each day on the board shows whether you’re in range. Bump servings or swap meals until the chips go green — same idea as Callie’s custom meal-plan review.
+            {showBoard ? ` · ${daysInRangeCount}/7 days in range right now` : ""}
+          </p>
+        </Card>
+      )}
+
       {!showBoard ? (
         <Card style={{ marginBottom: 14, padding: 16 }}>
           <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 6 }}>How do you want to start?</div>
           <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 14px" }}>
-            Grocery only builds after meals are on the plan.
+            One smart fill option: AI uses your <b style={{ color: T.ink }}>Foods I love</b> notes plus your ranges and Callie’s bank. Or start default / blank and build by hand.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <Btn onClick={startDefault} style={{ width: "100%" }}>
+            <Btn onClick={onAiSuggest} disabled={suggestBusy || !macros} style={{ width: "100%" }}>
+              {suggestBusy ? "Suggesting…" : "Suggest my week (AI + foods I love)"}
+            </Btn>
+            <Btn ghost onClick={startDefault} style={{ width: "100%" }}>
               Start with default Mon–Sun
             </Btn>
             <Btn ghost onClick={startBlank} style={{ width: "100%" }}>
               Start blank — add from the bank
-            </Btn>
-            <Btn ghost onClick={fillFromBankPrefs} style={{ width: "100%" }}>
-              {hasPrefs ? "Build from foods I love (bank match)" : "Fill from Callie’s bank"}
-            </Btn>
-            <Btn ghost onClick={onAiSuggest} disabled={suggestBusy || !macros} style={{ width: "100%" }}>
-              {suggestBusy ? "Suggesting…" : "AI: suggest my week (uses foods I love + ranges)"}
             </Btn>
             {hasCoach && (
               <Btn ghost onClick={fillFromCoach} style={{ width: "100%" }}>
@@ -258,7 +266,12 @@ export function WeekPlanner({
           </div>
           {!macros && (
             <div style={{ fontSize: 12.5, color: T.amber, marginTop: 12, lineHeight: 1.45 }}>
-              Range chips + AI unlock after Callie approves your macros. You can still plan from the bank.
+              AI unlocks after Callie approves your macros. Default / blank work now.
+            </div>
+          )}
+          {!hasPrefs && macros && (
+            <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 10, lineHeight: 1.45 }}>
+              Tip: fill <b style={{ color: T.ink }}>Foods I love</b> above before AI suggest so the week matches what you actually eat.
             </div>
           )}
           {error && <div style={{ fontSize: 12.5, color: T.amber, marginTop: 10 }}>{error}</div>}
@@ -268,11 +281,8 @@ export function WeekPlanner({
           <Card style={{ marginBottom: 12, padding: 14 }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
               <PillBtn accent onClick={() => openAdd(activeDay, "any")}>+ Add meal</PillBtn>
-              <PillBtn onClick={fillFromBankPrefs}>
-                {hasPrefs ? "Build from foods I love" : "Fill from bank"}
-              </PillBtn>
               <PillBtn onClick={onAiSuggest} disabled={suggestBusy || !macros}>
-                {suggestBusy ? "Suggesting…" : "AI re-suggest"}
+                {suggestBusy ? "Suggesting…" : "Suggest my week (AI)"}
               </PillBtn>
               <PillBtn onClick={startDefault}>Reset to default week</PillBtn>
               {hasCoach && <PillBtn onClick={fillFromCoach}>Callie’s plan</PillBtn>}
@@ -283,15 +293,9 @@ export function WeekPlanner({
               {bands ? ` · ${daysInRangeCount}/7 days in range` : ""}
               {wide ? " · drag cards between days" : " · use Move on a meal"}
             </div>
-            {bands && (
-              <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 6 }}>
-                Daily target {bands.calLo}–{bands.calHi} cal · {bands.pLo}–{bands.pHi}P · {bands.cLo}–{bands.cHi}C · {bands.fLo}–{bands.fHi}F
-              </div>
-            )}
             <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
-              <b style={{ color: T.ink }}>Build from foods I love</b> instantly matches Callie’s recipe bank to the notes above (no AI).
-              {" "}
-              <b style={{ color: T.ink }}>AI re-suggest</b> runs the full planner prompt (ranges + tastes + Callie’s bank).
+              <b style={{ color: T.ink }}>Suggest my week</b> is the only AI fill — it reads Foods I love + your ranges + Callie’s recipes.
+              When you + Add a meal, “Suggested for you” is a simple keyword match from the bank (no AI).
             </div>
             {message && (
               <div style={{ fontSize: 12.5, color: "#3E5A46", background: T.sageSoft, borderRadius: 10, padding: "8px 10px", marginTop: 10 }}>
@@ -457,7 +461,7 @@ function FoodPrefsEditor({ profile, onSave }) {
     setErr("");
     try {
       await onSave({ prefB, prefL, prefD });
-      setSavedMsg("Saved — Build from foods I love and AI will use these.");
+      setSavedMsg("Saved — AI suggest and meal-picker suggestions will use these.");
       window.setTimeout(() => setSavedMsg(""), 3500);
     } catch (e) {
       console.error(e);
@@ -490,8 +494,8 @@ function FoodPrefsEditor({ profile, onSave }) {
           <div style={{ fontFamily: FD, fontSize: 18, color: T.ink }}>Foods I love</div>
           <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2, lineHeight: 1.4 }}>
             {hasAny
-              ? "Pre-filled from your intake — edit anytime so bank match + AI stay accurate."
-              : "Add what you actually like to eat. Starts from intake when you filled those fields."}
+              ? "Pre-filled from intake. AI suggest + “Suggested for you” in the meal picker both use these notes."
+              : "Add what you actually like. AI suggest reads these (plus your ranges) when it builds a week."}
           </div>
         </div>
         <span style={{ fontSize: 13, fontWeight: 700, color: T.accentDeep, flexShrink: 0 }}>
@@ -661,25 +665,25 @@ function DayColumn({
             <span style={{ fontSize: 11, fontWeight: 700, color: T.sage }}>in range</span>
           )}
           {ok === false && (
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.amber }}>adjust</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.amber }}>out of range</span>
           )}
         </div>
+        {day.theme ? (
+          <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2, lineHeight: 1.3 }}>{day.theme}</div>
+        ) : null}
         {(day.meals || []).length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
             <MacroChip label="cal" value={totals.cal} ok={ir?.cal} />
-            <MacroChip label="P" value={totals.p} ok={ir?.p} />
-            <MacroChip label="C" value={totals.c} ok={ir?.c} />
-            <MacroChip label="F" value={totals.f} ok={ir?.f} />
+            <MacroChip label="P" value={`${totals.p}g`} ok={ir?.p} />
+            <MacroChip label="C" value={`${totals.c}g`} ok={ir?.c} />
+            <MacroChip label="F" value={`${totals.f}g`} ok={ir?.f} />
           </div>
         )}
         {bands && (day.meals || []).length > 0 && (
           <div style={{ fontSize: 10.5, color: T.inkSoft, marginTop: 4 }}>
-            aim {bands.calLo}–{bands.calHi} · {bands.pLo}–{bands.pHi}P
+            Target {bands.calLo}–{bands.calHi} cal · {bands.pLo}–{bands.pHi}P · {bands.cLo}–{bands.cHi}C · {bands.fLo}–{bands.fHi}F
           </div>
         )}
-        {day.theme ? (
-          <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 4, lineHeight: 1.3 }}>{day.theme}</div>
-        ) : null}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -753,11 +757,27 @@ function PlanMealTile({
   const slot = SLOT_LABEL[String(meal.slot || "").toLowerCase()] || "Meal";
   const qty = snapServings(meal.qty ?? 1);
   const scaled = scaledMealMacros(meal);
-  const detail = withRecipeDetail(mealToDetailShape(meal));
-  const serving = detail.serving?.length ? detail.serving : (detail.ingredients || []);
-  const steps = detail.steps || [];
-  const batch = detail.batch?.length ? detail.batch : null;
-  const hasRecipe = serving.length > 0 || steps.length > 0;
+  // Hydrate from bank by name/basedOn — don't let empty plan arrays block ingredients
+  const card = mealToCard({
+    ...meal,
+    basedOn: meal.basedOn || meal.name,
+    ingredients: meal.ingredients?.length ? meal.ingredients : undefined,
+    serving: meal.serving?.length ? meal.serving : undefined,
+    steps: meal.steps?.length >= 4 ? meal.steps : undefined,
+    batch: meal.batch?.length ? meal.batch : undefined,
+  });
+  const detail = withRecipeDetail({
+    name: meal.basedOn || meal.name,
+    basedOn: meal.basedOn || meal.name,
+    cat: card.cat,
+  });
+  const serving = (card.serving?.length ? card.serving : null)
+    || (detail.serving?.length ? detail.serving : null)
+    || (card.ingredients?.length ? card.ingredients : null)
+    || [];
+  const steps = (card.steps?.length ? card.steps : null) || detail.steps || [];
+  const batch = (card.batch?.length ? card.batch : null) || (detail.batch?.length ? detail.batch : null);
+  const hasRecipe = serving.length > 0 || steps.length > 0 || !!meal.desc;
 
   return (
     <div
@@ -838,16 +858,21 @@ function PlanMealTile({
         </div>
       )}
 
-      {open && hasRecipe && (
+      {open && (
         <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+          {(meal.desc || card.desc) && (
+            <p style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.45, margin: "0 0 10px" }}>
+              {meal.desc || card.desc}
+            </p>
+          )}
           {batch && (
             <>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Batch cook</div>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Ingredients · batch cook</div>
               <IngList items={batch} />
             </>
           )}
-          <div style={{ fontSize: 12, fontWeight: 700, margin: "10px 0 4px" }}>
-            {qty === 1 ? "Serving" : `Serving × ${qty}`}
+          <div style={{ fontSize: 12, fontWeight: 700, margin: batch ? "10px 0 4px" : "0 0 4px" }}>
+            Ingredients · {qty === 1 ? "one serving" : `${qty}× serving`}
           </div>
           <IngList items={serving} />
           {steps.length > 0 && (
@@ -866,17 +891,14 @@ function PlanMealTile({
   );
 }
 
-function mealToDetailShape(meal) {
-  return {
-    ...meal,
-    cat: SLOT_LABEL[String(meal.slot || "").toLowerCase()] || meal.cat,
-    serves: meal.servings || meal.serves || 1,
-    serving: meal.serving || meal.ingredients,
-  };
-}
-
 function IngList({ items }) {
-  if (!items?.length) return <div style={{ fontSize: 12.5, color: T.inkSoft }}>See macros above.</div>;
+  if (!items?.length) {
+    return (
+      <div style={{ fontSize: 12.5, color: T.inkSoft }}>
+        No structured ingredient list for this meal yet — macros above still apply.
+      </div>
+    );
+  }
   return (
     <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, lineHeight: 1.5, color: T.ink }}>
       {items.map((ing, i) => (
