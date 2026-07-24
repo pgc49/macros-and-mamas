@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { T, F } from "../theme/tokens";
 import { Card, Btn } from "./ui";
 import { buildGroceryList, formatGroceryListText } from "../utils/groceryList";
@@ -6,13 +6,24 @@ import { copyText } from "../utils/clipboard";
 
 /**
  * Grocery list from a committed week plan only.
- * Pure client-side from planned meal ingredients — no network.
+ * Recalculates live as the plan changes. Supports controlled open.
  */
 export function GroceryListPanel({
   weekDays,
   emptyHint = "Add meals to your plan — grocery builds from what you commit.",
+  open: openControlled,
+  onOpenChange,
+  ctaLabel = "View grocery list",
 }) {
-  const [open, setOpen] = useState(false);
+  const [openLocal, setOpenLocal] = useState(false);
+  const controlled = typeof openControlled === "boolean";
+  const open = controlled ? openControlled : openLocal;
+  const setOpen = (next) => {
+    const value = typeof next === "function" ? next(open) : next;
+    if (!controlled) setOpenLocal(value);
+    onOpenChange?.(value);
+  };
+
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,6 +32,11 @@ export function GroceryListPanel({
     [weekDays],
   );
   const list = useMemo(() => buildGroceryList(weekDays || []), [weekDays]);
+
+  useEffect(() => {
+    if (plannedMeals === 0 && open) setOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only collapse when plan empties
+  }, [plannedMeals]);
 
   const onCopy = async () => {
     setError("");
@@ -43,7 +59,8 @@ export function GroceryListPanel({
     <div style={{ marginBottom: 14 }}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => plannedMeals > 0 && setOpen(!open)}
+        disabled={plannedMeals === 0}
         style={{
           width: "100%",
           display: "flex",
@@ -59,16 +76,15 @@ export function GroceryListPanel({
           textAlign: "left",
           opacity: plannedMeals ? 1 : 0.85,
         }}
-        disabled={!plannedMeals && !open}
       >
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: open ? T.accentDeep : T.ink }}>
-            Grocery list
+            {ctaLabel}
           </div>
           <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
             {plannedMeals === 0
-              ? "From your plan · nothing planned yet"
-              : `From your plan · ${list.lineCount} items`}
+              ? "Updates live from your plan · nothing planned yet"
+              : `Live from your plan · ${list.lineCount} items · ${plannedMeals} meals`}
           </div>
         </div>
         <span style={{ fontSize: 13, fontWeight: 700, color: T.accentDeep }}>
@@ -85,7 +101,7 @@ export function GroceryListPanel({
       {open && plannedMeals > 0 && (
         <Card style={{ marginTop: 8, padding: 14 }}>
           <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
-            Shop-ready list from the meals on your plan. Amounts stay as written — we don’t guess package sizes.
+            Recalculates whenever you add, remove, or change servings. Amounts stay as written in the recipes.
           </p>
 
           {list.sections.length === 0 ? (

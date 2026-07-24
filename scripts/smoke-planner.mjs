@@ -12,6 +12,8 @@ import {
   addMealToDay,
   removeMealById,
   moveMeal,
+  setMealQty,
+  sumDayTotals,
   recipeToPlanMeal,
   cloneDaysToPlan,
 } from "../src/utils/weekPlan.js";
@@ -45,6 +47,11 @@ assert(week[1].meals.some((m) => m.id === snackId), "snack moved to Tue");
 
 week = removeMealById(week, snackId);
 assert(!week[1].meals.some((m) => m.id === snackId), "removed by id");
+
+const fri = addMealToDay(empty, "Fri", recipeToPlanMeal(oats, "breakfast"));
+const oatsId = fri[4].meals[0].id;
+const withQty = setMealQty(fri, oatsId, 2);
+assert(sumDayTotals(withQty[4].meals).cal === oats.cal * 2, "qty scales day totals");
 
 const profile = {
   prefB: "smoothies and oatmeal",

@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card, Btn } from "./ui";
 import { GroceryListPanel } from "./GroceryListPanel";
+import { withRecipeDetail } from "../content/recipeDetails";
+import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 import { suggestRecipesForSlot, suggestWeekFromBank } from "../utils/suggestFromPrefs";
 import {
   PLAN_DAYS,
@@ -15,15 +17,20 @@ import {
   removeMealById,
   replaceMealById,
   moveMeal,
+  setMealQty,
   recipeToPlanMeal,
   cloneDaysToPlan,
   bankRecipesForSlot,
   sumDayTotals,
+  scaledMealMacros,
+  targetBands,
+  dayInRange,
+  dayAllInRange,
 } from "../utils/weekPlan";
 
 /**
  * Flexible week planner — start from default / blank / AI / tastes,
- * then add·remove·swap freely (multiple snacks ok). Desktop: drag between days.
+ * then add·remove·swap·scale servings. Desktop: drag between days.
  */
 export function WeekPlanner({
   profile,
@@ -40,19 +47,27 @@ export function WeekPlanner({
 }) {
   const planned = normalizeWeekDays(days);
   const mealCount = countPlannedMeals(planned);
-  const isEmpty = mealCount === 0;
+  const bands = targetBands(macros);
+  const [boardOpen, setBoardOpen] = useState(() => mealCount > 0 || source === "blank");
   const [activeDay, setActiveDay] = useState(PLAN_DAYS[0]);
-  const [picker, setPicker] = useState(null); // { day, slot, replaceId? }
+  const [picker, setPicker] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [dragId, setDragId] = useState(null);
   const [dropDay, setDropDay] = useState(null);
+  const [groceryOpen, setGroceryOpen] = useState(false);
+  const groceryRef = useRef(null);
   const [wide, setWide] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(min-width: 900px)").matches : false,
   );
 
+  const showBoard = boardOpen || mealCount > 0;
   const hasCoach = Array.isArray(coachPlan?.days) && coachPlan.days.length > 0;
   const hasPrefs = !!(profile?.prefB || profile?.prefL || profile?.prefD);
+
+  useEffect(() => {
+    if (mealCount > 0 || source === "blank") setBoardOpen(true);
+  }, [mealCount, source]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -65,7 +80,7 @@ export function WeekPlanner({
 
   useEffect(() => {
     if (!message) return undefined;
-    const t = window.setTimeout(() => setMessage(""), 4000);
+    const t = window.setTimeout(() => setMessage(""), 4500);
     return () => window.clearTimeout(t);
   }, [message]);
 
@@ -73,37 +88,46 @@ export function WeekPlanner({
     onChangeDays?.(normalizeWeekDays(next), nextSource);
   };
 
-  const startDefault = () => {
+  const openBoard = (next, nextSource, msg) => {
     setError("");
-    applyDays(defaultSampleWeek(), "manual");
-    setMessage("Started with Callie’s sample Mon–Sun — remove, swap, or add anything.");
+    setBoardOpen(true);
+    applyDays(next, nextSource);
+    if (msg) setMessage(msg);
+  };
+
+  const startDefault = () => {
+    openBoard(
+      defaultSampleWeek(),
+      "manual",
+      "Started with Callie’s sample Mon–Sun — remove, swap, or bump servings to hit your ranges.",
+    );
   };
 
   const startBlank = () => {
-    setError("");
-    applyDays(emptyWeekPlan(), "manual");
-    setMessage("Clean sheet — add meals from the bank day by day.");
+    openBoard(
+      emptyWeekPlan(),
+      "blank",
+      "Blank week open — tap + Meal on any day to add from the bank.",
+    );
   };
 
   const fillFromBankPrefs = () => {
-    setError("");
-    applyDays(suggestWeekFromBank(profile || {}), "manual");
-    setMessage(hasPrefs
-      ? "Filled from the bank using your taste notes — edit freely."
-      : "Filled a week from Callie’s bank — edit freely.");
+    openBoard(
+      suggestWeekFromBank(profile || {}),
+      "manual",
+      hasPrefs
+        ? "Rebuilt from foods you told Callie you love at intake — edit freely."
+        : "Filled from Callie’s bank — edit freely.",
+    );
   };
 
   const fillFromCoach = () => {
     if (!hasCoach) return;
-    setError("");
-    applyDays(cloneDaysToPlan(coachPlan.days), "coach_seed");
-    setMessage("Started from Callie’s plan — tweak freely.");
+    openBoard(cloneDaysToPlan(coachPlan.days), "coach_seed", "Started from Callie’s plan — tweak freely.");
   };
 
   const clearWeek = () => {
-    setError("");
-    applyDays(emptyWeekPlan(), "manual");
-    setMessage("Week cleared — blank slate.");
+    openBoard(emptyWeekPlan(), "blank", "Cleared — still on the board so you can rebuild.");
   };
 
   const onAiSuggest = async () => {
@@ -115,8 +139,11 @@ export function WeekPlanner({
         return;
       }
       if (result?.days) {
-        applyDays(cloneDaysToPlan(result.days), "ai");
-        setMessage(result.summary || "AI week ready — add, remove, or move meals before you shop.");
+        openBoard(
+          cloneDaysToPlan(result.days),
+          "ai",
+          result.summary || "AI week ready — tweak servings until the day chips go green.",
+        );
       }
     } catch (e) {
       console.error(e);
@@ -144,12 +171,25 @@ export function WeekPlanner({
     closePicker();
   };
 
-  const removeMeal = (mealId) => {
-    applyDays(removeMealById(planned, mealId), "manual");
+  const removeMeal = (mealId) => applyDays(removeMealById(planned, mealId), "manual");
+  const moveToDay = (mealId, toDay) => applyDays(moveMeal(planned, mealId, toDay), "manual");
+  const changeQty = (mealId, qty) => applyDays(setMealQty(planned, mealId, qty), "manual");
+
+  const scrollToGrocery = () => {
+    setGroceryOpen(true);
+    window.setTimeout(() => {
+      groceryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   };
 
-  const moveToDay = (mealId, toDay) => {
-    applyDays(moveMeal(planned, mealId, toDay), "manual");
+  const saveWeek = async () => {
+    await onSave?.();
+    setMessage(
+      mealCount > 0
+        ? "Week saved. Grocery list below updates live as you edit — open it anytime."
+        : "Week saved (still empty).",
+    );
+    if (mealCount > 0) scrollToGrocery();
   };
 
   const onDragStart = (e, mealId) => {
@@ -157,18 +197,12 @@ export function WeekPlanner({
     e.dataTransfer.setData("text/plain", mealId);
     e.dataTransfer.effectAllowed = "move";
   };
-
-  const onDragEnd = () => {
-    setDragId(null);
-    setDropDay(null);
-  };
-
+  const onDragEnd = () => { setDragId(null); setDropDay(null); };
   const onDayDragOver = (e, dayKey) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     setDropDay(dayKey);
   };
-
   const onDayDrop = (e, dayKey) => {
     e.preventDefault();
     const id = e.dataTransfer.getData("text/plain") || dragId;
@@ -176,6 +210,10 @@ export function WeekPlanner({
     setDragId(null);
     if (id) moveToDay(id, dayKey);
   };
+
+  const daysInRangeCount = bands
+    ? planned.filter((d) => d.meals?.length && dayAllInRange(dayInRange(sumDayTotals(d.meals), bands))).length
+    : 0;
 
   return (
     <div style={{ marginBottom: 18 }}>
@@ -185,17 +223,16 @@ export function WeekPlanner({
         </div>
         <div style={{ fontFamily: FD, fontSize: 22, marginBottom: 4, color: T.ink }}>Your week planner</div>
         <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: 0 }}>
-          Customize Mon–Sun like a board: start from the sample week or a blank sheet, then add /
-          remove / swap meals (extra snacks are fine). On a bigger screen, drag meals between days;
-          on phone, use Move and Remove.
+          Build Mon–Sun, nudge servings until each day lands in your ranges, then shop.
+          Grocery updates automatically as you add or remove meals.
         </p>
       </Card>
 
-      {isEmpty ? (
+      {!showBoard ? (
         <Card style={{ marginBottom: 14, padding: 16 }}>
           <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 6 }}>How do you want to start?</div>
           <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 14px" }}>
-            Grocery only builds after you put meals on the plan — nothing is assumed until you choose.
+            Grocery only builds after meals are on the plan.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <Btn onClick={startDefault} style={{ width: "100%" }}>
@@ -205,7 +242,7 @@ export function WeekPlanner({
               Start blank — add from the bank
             </Btn>
             <Btn ghost onClick={fillFromBankPrefs} style={{ width: "100%" }}>
-              {hasPrefs ? "Fill from my tastes" : "Fill from Callie’s bank"}
+              {hasPrefs ? "Build from foods I love" : "Fill from Callie’s bank"}
             </Btn>
             <Btn ghost onClick={onAiSuggest} disabled={suggestBusy || !macros} style={{ width: "100%" }}>
               {suggestBusy ? "Suggesting…" : "AI: suggest my week"}
@@ -218,64 +255,68 @@ export function WeekPlanner({
           </div>
           {!macros && (
             <div style={{ fontSize: 12.5, color: T.amber, marginTop: 12, lineHeight: 1.45 }}>
-              AI unlocks after Callie approves your ranges. Default / blank / bank work now.
+              Range chips + AI unlock after Callie approves your macros. You can still plan from the bank.
             </div>
           )}
           {error && <div style={{ fontSize: 12.5, color: T.amber, marginTop: 10 }}>{error}</div>}
         </Card>
       ) : (
-        <Card style={{ marginBottom: 12, padding: 14 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-            <Btn small onClick={() => openAdd(activeDay, "any")}>
-              + Add meal
-            </Btn>
-            <Btn small ghost onClick={onAiSuggest} disabled={suggestBusy || !macros}>
-              {suggestBusy ? "Suggesting…" : "AI re-suggest"}
-            </Btn>
-            <Btn small ghost onClick={fillFromBankPrefs}>
-              {hasPrefs ? "Refill from tastes" : "Refill from bank"}
-            </Btn>
-            <Btn small ghost onClick={startDefault}>
-              Reset to default week
-            </Btn>
-            {hasCoach && (
-              <Btn small ghost onClick={fillFromCoach}>
-                Callie’s plan
-              </Btn>
-            )}
-            <Btn small ghost onClick={clearWeek}>
-              Clear all
-            </Btn>
-            <Btn small ghost onClick={() => onSave?.()} disabled={saving}>
-              {saving ? "Saving…" : "Save"}
-            </Btn>
-          </div>
-          <div style={{ fontSize: 12.5, color: T.inkSoft }}>
-            {mealCount} meal{mealCount === 1 ? "" : "s"} on your plan
-            {source === "ai" ? " · from AI" : source === "coach_seed" ? " · from Callie" : ""}
-            {wide ? " · drag a card onto another day to move it" : " · tap Move to shift a meal to another day"}
-          </div>
-          {message && (
-            <div style={{ fontSize: 12.5, color: "#3E5A46", background: T.sageSoft, borderRadius: 10, padding: "8px 10px", marginTop: 10 }}>
-              {message}
-            </div>
-          )}
-          {error && <div style={{ fontSize: 12.5, color: T.amber, marginTop: 8 }}>{error}</div>}
-        </Card>
-      )}
-
-      {!isEmpty && (
         <>
-          <GroceryListPanel
-            weekDays={planned}
-            emptyHint="Add meals to your plan first — then your grocery list shows up here."
-          />
+          <Card style={{ marginBottom: 12, padding: 14 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+              <PillBtn accent onClick={() => openAdd(activeDay, "any")}>+ Add meal</PillBtn>
+              <PillBtn onClick={onAiSuggest} disabled={suggestBusy || !macros}>
+                {suggestBusy ? "Suggesting…" : "AI re-suggest"}
+              </PillBtn>
+              <PillBtn onClick={fillFromBankPrefs}>
+                {hasPrefs ? "Build from foods I love" : "Fill from bank"}
+              </PillBtn>
+              <PillBtn onClick={startDefault}>Reset to default week</PillBtn>
+              {hasCoach && <PillBtn onClick={fillFromCoach}>Callie’s plan</PillBtn>}
+              <PillBtn onClick={clearWeek}>Clear all</PillBtn>
+            </div>
+            <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.45 }}>
+              {mealCount} meal{mealCount === 1 ? "" : "s"} on your plan
+              {bands ? ` · ${daysInRangeCount}/7 days in range` : ""}
+              {wide ? " · drag cards between days" : " · use Move on a meal"}
+            </div>
+            {bands && (
+              <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 6 }}>
+                Daily target {bands.calLo}–{bands.calHi} cal · {bands.pLo}–{bands.pHi}P · {bands.cLo}–{bands.cHi}C · {bands.fLo}–{bands.fHi}F
+              </div>
+            )}
+            {hasPrefs && (
+              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6, lineHeight: 1.45 }}>
+                <b style={{ color: T.ink }}>Build from foods I love</b> rebuilds the week from your intake notes
+                {profile.prefB ? ` (breakfast: ${profile.prefB}` : ""}
+                {profile.prefL ? `${profile.prefB ? ";" : " ("} lunch: ${profile.prefL}` : ""}
+                {profile.prefD ? `${profile.prefB || profile.prefL ? ";" : " ("} dinner: ${profile.prefD}` : ""}
+                {profile.prefB || profile.prefL || profile.prefD ? ")" : ""}.
+              </div>
+            )}
+            {message && (
+              <div style={{ fontSize: 12.5, color: "#3E5A46", background: T.sageSoft, borderRadius: 10, padding: "8px 10px", marginTop: 10 }}>
+                {message}
+              </div>
+            )}
+            {error && <div style={{ fontSize: 12.5, color: T.amber, marginTop: 8 }}>{error}</div>}
+          </Card>
+
+          <div ref={groceryRef}>
+            <GroceryListPanel
+              weekDays={planned}
+              open={groceryOpen}
+              onOpenChange={setGroceryOpen}
+              emptyHint="Add meals to your plan — grocery updates live as you go."
+              ctaLabel="View grocery list"
+            />
+          </div>
 
           {wide ? (
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(7, minmax(140px, 1fr))",
+                gridTemplateColumns: "repeat(7, minmax(150px, 1fr))",
                 gap: 8,
                 overflowX: "auto",
                 paddingBottom: 8,
@@ -285,6 +326,7 @@ export function WeekPlanner({
                 <DayColumn
                   key={day.day}
                   day={day}
+                  bands={bands}
                   highlight={dropDay === day.day}
                   dragId={dragId}
                   onDragOver={onDayDragOver}
@@ -294,6 +336,7 @@ export function WeekPlanner({
                   onAdd={(slot) => openAdd(day.day, slot)}
                   onReplace={(meal) => openReplace(day.day, meal)}
                   onRemove={removeMeal}
+                  onQty={changeQty}
                   onLog={onLog}
                   showMove={false}
                 />
@@ -303,7 +346,11 @@ export function WeekPlanner({
             <>
               <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
                 {PLAN_DAYS.map((d) => {
-                  const count = countPlannedMeals([planned.find((x) => x.day === d) || { meals: [] }]);
+                  const dayRow = planned.find((x) => x.day === d) || { meals: [] };
+                  const count = dayRow.meals?.length || 0;
+                  const totals = sumDayTotals(dayRow.meals || []);
+                  const ir = bands && count ? dayInRange(totals, bands) : null;
+                  const ok = dayAllInRange(ir);
                   const active = d === activeDay;
                   return (
                     <button
@@ -314,16 +361,16 @@ export function WeekPlanner({
                         flex: "0 0 auto",
                         padding: "8px 12px",
                         borderRadius: 999,
-                        border: `1.5px solid ${active ? T.accent : T.border}`,
-                        background: active ? T.accentSoft : "#fff",
-                        color: active ? T.accentDeep : T.ink,
+                        border: `1.5px solid ${active ? T.accent : ok ? T.sage : T.border}`,
+                        background: active ? T.accentSoft : ok ? T.sageSoft : "#fff",
+                        color: active ? T.accentDeep : ok ? "#3E5A46" : T.ink,
                         fontFamily: F,
                         fontWeight: 700,
                         fontSize: 13,
                         cursor: "pointer",
                       }}
                     >
-                      {d}{count ? ` · ${count}` : ""}
+                      {d}{count ? ` · ${count}` : ""}{ok ? " ✓" : ir && count ? " !" : ""}
                     </button>
                   );
                 })}
@@ -332,6 +379,7 @@ export function WeekPlanner({
                 <DayColumn
                   key={day.day}
                   day={day}
+                  bands={bands}
                   highlight={false}
                   dragId={null}
                   onDragOver={() => {}}
@@ -342,6 +390,7 @@ export function WeekPlanner({
                   onReplace={(meal) => openReplace(day.day, meal)}
                   onRemove={removeMeal}
                   onMove={moveToDay}
+                  onQty={changeQty}
                   onLog={onLog}
                   showMove
                   mobile
@@ -349,13 +398,22 @@ export function WeekPlanner({
               ))}
             </>
           )}
-        </>
-      )}
 
-      {isEmpty && (
-        <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 2px", lineHeight: 1.45 }}>
-          Tip: after you start a plan, grocery opens above the board. Only meals you keep are shopped.
-        </p>
+          <Card style={{ marginTop: 14, padding: 14 }}>
+            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Done planning?</div>
+            <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, margin: "0 0 12px" }}>
+              Grocery already recalculates as you edit. Save locks this week in; then open the list to copy for shopping.
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <Btn onClick={saveWeek} disabled={saving}>
+                {saving ? "Saving…" : "Save week"}
+              </Btn>
+              <Btn ghost onClick={scrollToGrocery} disabled={!mealCount}>
+                View grocery list
+              </Btn>
+            </div>
+          </Card>
+        </>
       )}
 
       {picker && (
@@ -372,8 +430,50 @@ export function WeekPlanner({
   );
 }
 
+function PillBtn({ children, onClick, disabled, accent }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        fontFamily: F,
+        fontSize: 12.5,
+        fontWeight: 700,
+        padding: "8px 14px",
+        borderRadius: 999,
+        border: `1.5px solid ${accent ? T.accent : T.border}`,
+        background: accent ? T.accent : "#fff",
+        color: accent ? "#fff" : T.accentDeep,
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MacroChip({ label, value, ok }) {
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 700,
+        padding: "3px 8px",
+        borderRadius: 999,
+        background: ok === true ? T.sageSoft : ok === false ? T.amberSoft : T.track,
+        color: ok === true ? "#3E5A46" : ok === false ? T.amber : T.inkSoft,
+      }}
+    >
+      {label} {value}{ok === true ? " ✓" : ok === false ? " ✗" : ""}
+    </span>
+  );
+}
+
 function DayColumn({
   day,
+  bands,
   highlight,
   dragId,
   onDragOver,
@@ -384,18 +484,22 @@ function DayColumn({
   onReplace,
   onRemove,
   onMove,
+  onQty,
   onLog,
   showMove,
   mobile = false,
 }) {
   const totals = sumDayTotals(day.meals || []);
+  const ir = bands && (day.meals || []).length ? dayInRange(totals, bands) : null;
+  const ok = dayAllInRange(ir);
+
   return (
     <div
       onDragOver={(e) => onDragOver(e, day.day)}
       onDrop={(e) => onDrop(e, day.day)}
       style={{
         background: highlight ? T.sageSoft : T.card,
-        border: `1.5px solid ${highlight ? T.sage : T.border}`,
+        border: `1.5px solid ${highlight ? T.sage : ok ? T.sage : T.border}`,
         borderRadius: 14,
         padding: mobile ? 12 : 8,
         minHeight: mobile ? undefined : 280,
@@ -403,18 +507,34 @@ function DayColumn({
       }}
     >
       <div style={{ marginBottom: 8 }}>
-        <div style={{ fontFamily: FD, fontSize: mobile ? 22 : 16 }}>{day.day}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
+          <span style={{ fontFamily: FD, fontSize: mobile ? 22 : 16 }}>{day.day}</span>
+          {ok === true && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.sage }}>in range</span>
+          )}
+          {ok === false && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.amber }}>adjust</span>
+          )}
+        </div>
         {(day.meals || []).length > 0 && (
-          <div style={{ fontSize: 11, color: T.inkSoft, fontWeight: 700, marginTop: 2 }}>
-            {totals.cal} · {totals.p}P/{totals.c}C/{totals.f}F
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+            <MacroChip label="cal" value={totals.cal} ok={ir?.cal} />
+            <MacroChip label="P" value={totals.p} ok={ir?.p} />
+            <MacroChip label="C" value={totals.c} ok={ir?.c} />
+            <MacroChip label="F" value={totals.f} ok={ir?.f} />
+          </div>
+        )}
+        {bands && (day.meals || []).length > 0 && (
+          <div style={{ fontSize: 10.5, color: T.inkSoft, marginTop: 4 }}>
+            aim {bands.calLo}–{bands.calHi} · {bands.pLo}–{bands.pHi}P
           </div>
         )}
         {day.theme ? (
-          <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2, lineHeight: 1.3 }}>{day.theme}</div>
+          <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 4, lineHeight: 1.3 }}>{day.theme}</div>
         ) : null}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {(day.meals || []).map((meal) => (
           <PlanMealTile
             key={meal.id}
@@ -425,6 +545,7 @@ function DayColumn({
             onDragEnd={onDragEnd}
             onReplace={() => onReplace(meal)}
             onRemove={() => onRemove(meal.id)}
+            onQty={(q) => onQty(meal.id, q)}
             onMove={showMove ? (to) => onMove(meal.id, to) : null}
             currentDay={day.day}
             onLog={onLog}
@@ -433,29 +554,28 @@ function DayColumn({
         ))}
       </div>
 
-      <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
+      <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
         <AddChip label="+ Meal" onClick={() => onAdd("any")} />
         {PLAN_SLOTS.map((slot) => (
-          <AddChip key={slot} label={`+ ${SLOT_LABEL[slot].slice(0, 1)}`} title={`Add ${SLOT_LABEL[slot]}`} onClick={() => onAdd(slot)} />
+          <AddChip key={slot} label={`+ ${SLOT_LABEL[slot]}`} onClick={() => onAdd(slot)} />
         ))}
       </div>
     </div>
   );
 }
 
-function AddChip({ label, title, onClick }) {
+function AddChip({ label, onClick }) {
   return (
     <button
       type="button"
-      title={title || label}
       onClick={onClick}
       style={{
         fontFamily: F,
-        fontSize: 11,
+        fontSize: 11.5,
         fontWeight: 700,
-        padding: "5px 8px",
-        borderRadius: 8,
-        border: `1px dashed ${T.border}`,
+        padding: "7px 10px",
+        borderRadius: 999,
+        border: `1.5px dashed ${T.border}`,
         background: "#fff",
         color: T.inkSoft,
         cursor: "pointer",
@@ -474,13 +594,22 @@ function PlanMealTile({
   onDragEnd,
   onReplace,
   onRemove,
+  onQty,
   onMove,
   currentDay,
   onLog,
   compact,
 }) {
-  const slot = SLOT_LABEL[String(meal.slot || "").toLowerCase()] || "Meal";
+  const [open, setOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const slot = SLOT_LABEL[String(meal.slot || "").toLowerCase()] || "Meal";
+  const qty = snapServings(meal.qty ?? 1);
+  const scaled = scaledMealMacros(meal);
+  const detail = withRecipeDetail(mealToDetailShape(meal));
+  const serving = detail.serving?.length ? detail.serving : (detail.ingredients || []);
+  const steps = detail.steps || [];
+  const batch = detail.batch?.length ? detail.batch : null;
+  const hasRecipe = serving.length > 0 || steps.length > 0;
 
   return (
     <div
@@ -490,84 +619,148 @@ function PlanMealTile({
       style={{
         background: dragging ? T.accentSoft : "#fff",
         border: `1px solid ${T.border}`,
-        borderRadius: 10,
-        padding: compact ? "8px 8px" : "10px 10px",
+        borderRadius: 12,
+        padding: compact ? "10px 10px" : "12px 12px",
         cursor: draggable ? "grab" : "default",
         opacity: dragging ? 0.7 : 1,
       }}
     >
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: T.accentDeep }}>
-        {slot}
+      <button
+        type="button"
+        onClick={() => hasRecipe && setOpen((o) => !o)}
+        style={{
+          width: "100%",
+          textAlign: "left",
+          border: "none",
+          background: "transparent",
+          padding: 0,
+          cursor: hasRecipe ? "pointer" : "default",
+          fontFamily: F,
+        }}
+      >
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: T.accentDeep }}>
+          {slot}{hasRecipe ? (open ? " · hide recipe" : " · tap for recipe") : ""}
+        </div>
+        <div style={{ fontSize: compact ? 13 : 14.5, fontWeight: 700, color: T.ink, lineHeight: 1.3, marginTop: 2 }}>
+          {meal.name}
+        </div>
+        <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 2 }}>
+          {scaled.cal} · {scaled.p}P/{scaled.c}C/{scaled.f}F
+          {qty !== 1 ? ` · ${qty}×` : ""}
+        </div>
+      </button>
+
+      <div
+        style={{ marginTop: 8 }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft, marginBottom: 4 }}>Servings</div>
+        <ServingStepper value={qty} onChange={onQty} compact />
       </div>
-      <div style={{ fontSize: compact ? 12.5 : 14, fontWeight: 700, color: T.ink, lineHeight: 1.3, marginTop: 2 }}>
-        {meal.name}
-      </div>
-      <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>
-        {Math.round(meal.cal || 0)} · {Math.round(meal.p || 0)}P/{Math.round(meal.c || 0)}C/{Math.round(meal.f || 0)}F
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-        <button type="button" onClick={onReplace} style={linkBtn}>Swap</button>
-        <button type="button" onClick={onRemove} style={linkBtn}>Remove</button>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+        <ActionPill onClick={onReplace}>Swap</ActionPill>
+        <ActionPill onClick={onRemove}>Remove</ActionPill>
         {onMove && (
-          <button type="button" onClick={() => setMoveOpen((o) => !o)} style={linkBtn}>
-            Move
-          </button>
+          <ActionPill onClick={() => setMoveOpen((o) => !o)}>Move</ActionPill>
         )}
-        {onLog && !compact && (
-          <button
-            type="button"
-            onClick={() => onLog({
+        {onLog && (
+          <ActionPill
+            accent
+            onClick={() => onLog(scaleMealForLog({
               name: meal.name,
               cal: meal.cal,
               p: meal.p,
               c: meal.c,
               f: meal.f,
               via: "recipe",
-            })}
-            style={linkBtn}
+            }, qty))}
           >
             + Log
-          </button>
+          </ActionPill>
         )}
       </div>
+
       {moveOpen && onMove && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
           {PLAN_DAYS.filter((d) => d !== currentDay).map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => { onMove(d); setMoveOpen(false); }}
-              style={{
-                fontFamily: F,
-                fontSize: 11,
-                fontWeight: 700,
-                padding: "4px 8px",
-                borderRadius: 8,
-                border: `1px solid ${T.border}`,
-                background: T.accentSoft,
-                color: T.accentDeep,
-                cursor: "pointer",
-              }}
-            >
-              {d}
-            </button>
+            <ActionPill key={d} onClick={() => { onMove(d); setMoveOpen(false); }}>{d}</ActionPill>
           ))}
+        </div>
+      )}
+
+      {open && hasRecipe && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+          {batch && (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Batch cook</div>
+              <IngList items={batch} />
+            </>
+          )}
+          <div style={{ fontSize: 12, fontWeight: 700, margin: "10px 0 4px" }}>
+            {qty === 1 ? "Serving" : `Serving × ${qty}`}
+          </div>
+          <IngList items={serving} />
+          {steps.length > 0 && (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 700, margin: "10px 0 4px" }}>Steps</div>
+              <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.5, color: T.ink }}>
+                {steps.map((s, i) => (
+                  <li key={i} style={{ marginBottom: 4 }}>{s}</li>
+                ))}
+              </ol>
+            </>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-const linkBtn = {
-  fontFamily: F,
-  fontSize: 11.5,
-  fontWeight: 700,
-  color: T.accentDeep,
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  padding: "2px 0",
-};
+function mealToDetailShape(meal) {
+  return {
+    ...meal,
+    cat: SLOT_LABEL[String(meal.slot || "").toLowerCase()] || meal.cat,
+    serves: meal.servings || meal.serves || 1,
+    serving: meal.serving || meal.ingredients,
+  };
+}
+
+function IngList({ items }) {
+  if (!items?.length) return <div style={{ fontSize: 12.5, color: T.inkSoft }}>See macros above.</div>;
+  return (
+    <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, lineHeight: 1.5, color: T.ink }}>
+      {items.map((ing, i) => (
+        <li key={i} style={{ marginBottom: 2 }}>
+          <b>{ing.amount}</b> {ing.item}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ActionPill({ children, onClick, accent }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
+      style={{
+        fontFamily: F,
+        fontSize: 12,
+        fontWeight: 700,
+        padding: "7px 12px",
+        borderRadius: 999,
+        border: `1.5px solid ${accent ? T.accent : T.border}`,
+        background: accent ? T.accentSoft : "#fff",
+        color: T.accentDeep,
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 function MealPickerModal({ profile, day, slot, replacing, onClose, onPick }) {
   const slotKey = slot === "any" ? "any" : slot;
@@ -583,7 +776,6 @@ function MealPickerModal({ profile, day, slot, replacing, onClose, onPick }) {
       ? `${replacing ? "Swap meal" : "Add meal"} · ${day}`
       : `${replacing ? "Swap" : "Add"} ${SLOT_LABEL[slotKey] || "meal"} · ${day}`;
 
-  // When "any", also show top taste matches across categories
   const crossSuggest = useMemo(() => {
     if (slotKey !== "any") return [];
     const seen = new Set();
@@ -634,11 +826,9 @@ function MealPickerModal({ profile, day, slot, replacing, onClose, onPick }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div>
             <div style={{ fontFamily: FD, fontSize: 20 }}>{title}</div>
-            <div style={{ fontSize: 12.5, color: T.inkSoft }}>
-              Suggested from your tastes, then Callie’s bank
-            </div>
+            <div style={{ fontSize: 12.5, color: T.inkSoft }}>Suggested from your tastes, then Callie’s bank</div>
           </div>
-          <button type="button" onClick={onClose} style={{ ...linkBtn, fontSize: 14 }}>Close</button>
+          <ActionPill onClick={onClose}>Close</ActionPill>
         </div>
 
         {showSuggest.length > 0 && (

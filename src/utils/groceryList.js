@@ -83,8 +83,10 @@ function linesFromMeal(meal) {
     : mealToCard(meal);
   const preferBatch = card.batch?.length ? card.batch : null;
   const lines = preferBatch || card.serving || card.ingredients || [];
+  const qty = Number(meal.qty) > 0 ? Number(meal.qty) : 1;
   return {
     name: card.name || meal.name || "Meal",
+    qty,
     usedBatch: !!preferBatch,
     lines: lines.filter((l) => l && (l.item || l.name)),
   };
@@ -104,27 +106,37 @@ export function buildGroceryList(weekDays) {
     const dayLabel = day.day || "";
     (day.meals || []).forEach((meal) => {
       mealCount += 1;
-      const { name, usedBatch, lines } = linesFromMeal(meal);
+      const { name, qty, usedBatch, lines } = linesFromMeal(meal);
+      const qtyLabel = qty !== 1 ? ` · ${qty}×` : "";
+      const displayName = `${name}${qtyLabel}`;
       if (usedBatch) {
         const prev = batchNames.get(name) || [];
         prev.push(dayLabel);
         batchNames.set(name, prev);
       }
+      if (qty !== 1 && usedBatch) {
+        notes.push(
+          `${name} is planned at ${qty}× serving — family batch amounts are listed once; scale your shop if you’re cooking more plates.`,
+        );
+      }
       lines.forEach((line) => {
         const rawItem = line.item || line.name || "";
-        const amount = String(line.amount || "").trim();
+        let amount = String(line.amount || "").trim();
+        if (amount && qty !== 1 && !usedBatch) {
+          amount = `${amount} ×${qty}`;
+        }
         const key = normalizeItemKey(rawItem);
         if (!key) return;
         const existing = byKey.get(key);
         if (existing) {
           if (amount && !existing.amounts.includes(amount)) existing.amounts.push(amount);
-          if (name && !existing.meals.includes(name)) existing.meals.push(name);
+          if (displayName && !existing.meals.includes(displayName)) existing.meals.push(displayName);
         } else {
           byKey.set(key, {
             key,
             item: displayItem(rawItem),
             amounts: amount ? [amount] : [],
-            meals: name ? [name] : [],
+            meals: displayName ? [displayName] : [],
             aisle: aisleFor(rawItem),
             staple: STAPLE_RE.test(rawItem),
           });

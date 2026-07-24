@@ -2,11 +2,13 @@
  * Client week planner helpers.
  * Flexible days: any number of meals per day (multiple snacks, no dinner, etc.).
  * Grocery only counts meals that are on the plan.
+ * `qty` = serving multiplier (0.25–4) for range tuning + grocery notes.
  */
 
 import { RECIPES } from "../content/data.js";
 import { DEFAULT_WEEK } from "../content/defaultWeek.js";
 import { withRecipeDetail } from "../content/recipeDetails.js";
+import { snapServings } from "./servings.jsx";
 
 export const PLAN_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export const PLAN_SLOTS = ["breakfast", "lunch", "dinner", "snack"];
@@ -23,7 +25,8 @@ function newMealId() {
 
 export function withMealId(meal) {
   if (!meal) return meal;
-  return meal.id ? meal : { ...meal, id: newMealId() };
+  const qty = snapServings(meal.qty ?? 1);
+  return meal.id ? { ...meal, qty } : { ...meal, id: newMealId(), qty };
 }
 
 export function emptyWeekPlan() {
@@ -54,14 +57,30 @@ export function normalizeWeekDays(days) {
   });
 }
 
+/** Macros for one planned meal after serving multiplier. */
+export function scaledMealMacros(meal) {
+  const qty = snapServings(meal?.qty ?? 1);
+  const mul = (v) => Math.round((Number(v) || 0) * qty);
+  return {
+    cal: mul(meal?.cal),
+    p: mul(meal?.p),
+    c: mul(meal?.c),
+    f: mul(meal?.f),
+    qty,
+  };
+}
+
 export function sumDayTotals(meals) {
   const t = (meals || []).reduce(
-    (a, m) => ({
-      cal: a.cal + (Number(m.cal) || 0),
-      p: a.p + (Number(m.p) || 0),
-      c: a.c + (Number(m.c) || 0),
-      f: a.f + (Number(m.f) || 0),
-    }),
+    (a, m) => {
+      const s = scaledMealMacros(m);
+      return {
+        cal: a.cal + s.cal,
+        p: a.p + s.p,
+        c: a.c + s.c,
+        f: a.f + s.f,
+      };
+    },
     { cal: 0, p: 0, c: 0, f: 0 },
   );
   return {
@@ -70,6 +89,40 @@ export function sumDayTotals(meals) {
     c: Math.round(t.c),
     f: Math.round(t.f),
   };
+}
+
+/** Daily bands from approved macros (same walls as AI meal plan). */
+export function targetBands(macros) {
+  if (!macros) return null;
+  const pLo = Number(macros.protein) || 0;
+  const cLo = Number(macros.carbs) || 0;
+  const fLo = Number(macros.fat) || 0;
+  const calLo = Number(macros.cal) || 0;
+  return {
+    calLo,
+    calHi: calLo + 150,
+    pLo,
+    pHi: pLo + 10,
+    cLo,
+    cHi: cLo + 10,
+    fLo,
+    fHi: fLo + 10,
+  };
+}
+
+export function dayInRange(totals, bands) {
+  if (!bands || !totals) return null;
+  return {
+    cal: totals.cal >= bands.calLo && totals.cal <= bands.calHi,
+    p: totals.p >= bands.pLo && totals.p <= bands.pHi,
+    c: totals.c >= bands.cLo && totals.c <= bands.cHi,
+    f: totals.f >= bands.fLo && totals.f <= bands.fHi,
+  };
+}
+
+export function dayAllInRange(inRange) {
+  if (!inRange) return null;
+  return inRange.cal && inRange.p && inRange.c && inRange.f;
 }
 
 export function countPlannedMeals(days) {
@@ -90,6 +143,7 @@ export function recipeToPlanMeal(recipe, slotOverride = null) {
     c: Number(recipe.c) || 0,
     f: Number(recipe.f) || 0,
     servings: Number(recipe.serves) || 1,
+    qty: 1,
     ingredients: detail.serving || [],
     batch: detail.batch || null,
     steps: detail.steps || [],
@@ -124,15 +178,28 @@ export function removeMealById(days, mealId) {
   });
 }
 
-/** Replace a meal in place (swap recipe, keep id/position). */
+/** Replace a meal in place (swap recipe, keep id/position/qty). */
 export function replaceMealById(days, mealId, meal) {
   if (!mealId || !meal) return normalizeWeekDays(days);
   return normalizeWeekDays(days).map((d) => {
     const idx = (d.meals || []).findIndex((m) => m.id === mealId);
     if (idx < 0) return d;
+    const prev = d.meals[idx];
     const meals = [...d.meals];
-    meals[idx] = withMealId({ ...meal, id: mealId });
+    meals[idx] = withMealId({ ...meal, id: mealId, qty: prev.qty ?? meal.qty ?? 1 });
     return { ...d, meals: sortMeals(meals), dayTotals: sumDayTotals(meals) };
+  });
+}
+
+export function setMealQty(days, mealId, qty) {
+  if (!mealId) return normalizeWeekDays(days);
+  const nextQty = snapServings(qty);
+  return normalizeWeekDays(days).map((d) => {
+    const idx = (d.meals || []).findIndex((m) => m.id === mealId);
+    if (idx < 0) return d;
+    const meals = [...d.meals];
+    meals[idx] = { ...meals[idx], qty: nextQty };
+    return { ...d, meals, dayTotals: sumDayTotals(meals) };
   });
 }
 
@@ -165,27 +232,6 @@ export function moveMeal(days, mealId, toDay, toIndex = null) {
   });
 }
 
-/** @deprecated one-meal-per-slot — prefer addMealToDay / removeMealById */
-export function mealForSlot(day, slot) {
-  const want = String(slot || "").toLowerCase();
-  return (day?.meals || []).find((m) => String(m.slot || m.cat || "").toLowerCase() === want) || null;
-}
-
-/** @deprecated prefer addMealToDay / replaceMealById */
-export function setSlotMeal(days, dayKey, slot, meal) {
-  const wantSlot = String(slot).toLowerCase();
-  return normalizeWeekDays(days).map((d) => {
-    if (d.day !== dayKey) return d;
-    const others = (d.meals || []).filter(
-      (m) => String(m.slot || m.cat || "").toLowerCase() !== wantSlot,
-    );
-    const meals = meal
-      ? sortMeals([...others, withMealId({ ...meal, slot: wantSlot })])
-      : others;
-    return { ...d, meals, dayTotals: sumDayTotals(meals) };
-  });
-}
-
 /** Seed planner from coach-published plan, AI, or DEFAULT_WEEK. */
 export function cloneDaysToPlan(sourceDays) {
   return normalizeWeekDays(sourceDays).map((d) => ({
@@ -202,12 +248,15 @@ export function cloneDaysToPlan(sourceDays) {
         c: Number(m.c) || 0,
         f: Number(m.f) || 0,
         servings: Number(m.servings || m.serves) || 1,
+        qty: m.qty ?? 1,
         ingredients: m.ingredients || m.serving || [],
         batch: m.batch ?? null,
         steps: m.steps || [],
       }),
     ),
-    dayTotals: sumDayTotals(d.meals || []),
+    dayTotals: sumDayTotals(
+      (d.meals || []).map((m) => ({ ...m, qty: m.qty ?? 1 })),
+    ),
   }));
 }
 
