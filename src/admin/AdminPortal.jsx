@@ -433,7 +433,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                     )}
                   </div>
                 ) : null}
-                {(sel.prefB || sel.prefL || sel.prefD) ? <><br />🍽 Loves: {[sel.prefB, sel.prefL, sel.prefD].filter(Boolean).join(" · ")}</> : null}
+                {(sel.prefB || sel.prefL || sel.prefD || sel.prefS) ? <><br />🍽 Loves: {[sel.prefB && `B: ${sel.prefB}`, sel.prefL && `L: ${sel.prefL}`, sel.prefD && `D: ${sel.prefD}`, sel.prefS && `S: ${sel.prefS}`].filter(Boolean).join(" · ")}</> : null}
                 {sel.seasonNote ? <><br />💬 {sel.seasonNote}</> : null}
               </div>
             </div>

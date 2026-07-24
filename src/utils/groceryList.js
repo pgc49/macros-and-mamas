@@ -1,11 +1,9 @@
 /**
- * Build a shoppable grocery list from a By Day week (default or personalized).
+ * Build a shoppable grocery list from a committed week plan.
  *
- * Design notes (from competitor research):
- * - Industry pipeline: plan → extract → soft-merge → aisle sort → copy/export
- * - Hard unit math (cup↔g) is where apps fail; MVP keeps amounts as written
- * - Prefer batch (family cook) over plate serving when present
- * - Surface source meal names so she can sanity-check merges
+ * MVP pipeline: plan meals → expand compounds → clean prep words → soft-merge
+ * by normalized key → aisle sort → attach source meal names.
+ * Amounts stay as written (no cup↔g math). Prefer family batch when present.
  */
 
 import { withRecipeDetail, mealToCard } from "../content/recipeDetails.js";
@@ -24,7 +22,7 @@ export const AISLE_ORDER = [
 const AISLE_RULES = [
   {
     aisle: "Produce",
-    re: /\b(berry|berries|banana|apple|orange|peach|spinach|lettuce|romaine|greens|cucumber|tomato|pepper|zucchini|broccoli|asparagus|cabbage|brussels|onion|garlic|lemon|lime|avocado|potato|sweet potato|fruit)\b/i,
+    re: /\b(berry|berries|banana|apple|orange|peach|spinach|lettuce|romaine|greens|cucumber|tomato|pepper|zucchini|broccoli|asparagus|cabbage|brussels|onion|garlic|lemon|lime|avocado|potato|sweet potato|fruit|herb|dill)\b/i,
   },
   {
     aisle: "Protein",
@@ -48,8 +46,45 @@ const AISLE_RULES = [
   },
 ];
 
-/** Soft pantry staples often already at home — still listed, tagged for her eye. */
-const STAPLE_RE = /\b(kosher salt|sea salt|\bsalt\b|black pepper|cracked pepper|cooking spray|\bwater\b)\b/i;
+const STAPLE_RE = /\b(kosher salt|sea salt|\bsalt\b|black pepper|cracked pepper|cooking spray|\bwater\b|pinch of salt)\b/i;
+
+/** Recipe phrases → separate shoppable staples (MVP heuristics). */
+const COMPOUND_SPLITS = [
+  {
+    test: (item) => /\bgarlic butter\b/i.test(item),
+    parts: (amount) => [
+      { item: "garlic cloves", amount: amount ? `${amount} (for garlic butter)` : "for garlic butter" },
+      { item: "butter", amount: amount || "" },
+    ],
+  },
+  {
+    test: (item) => /\bdill\b/i.test(item) && /\blemon\b/i.test(item),
+    parts: (amount) => [
+      { item: "fresh dill", amount: amount || "to taste" },
+      { item: "lemon", amount: amount || "to taste" },
+    ],
+  },
+  {
+    test: (item) => /\blime\b/i.test(item) && /\bsalt\b/i.test(item),
+    parts: (amount) => [
+      { item: "lime", amount: amount || "to taste" },
+      { item: "salt", amount: "pinch (likely on hand)" },
+    ],
+  },
+  {
+    test: (item) => /\boil-spray\b|\bolive oil spray\b|cooking spray/i.test(item),
+    parts: (amount) => [
+      { item: "olive oil or cooking spray", amount: amount || "for cooking" },
+    ],
+  },
+  {
+    test: (item) => /\bcabbage slaw\b/i.test(item),
+    parts: (amount) => [
+      { item: "cabbage (for slaw)", amount: amount || "" },
+      { item: "lime", amount: "for slaw" },
+    ],
+  },
+];
 
 export function aisleFor(item) {
   const text = String(item || "");
@@ -59,22 +94,57 @@ export function aisleFor(item) {
   return "Other";
 }
 
-/** Normalize for merge keys — strip brand asides, prep notes, punctuation noise. */
+/**
+ * Soft-merge key: strip prep methods so "cucumber, sliced" ≈ "cucumber slices"
+ * and "fresh or frozen berries" ≈ "berries".
+ */
 export function normalizeItemKey(item) {
   return String(item || "")
     .toLowerCase()
     .replace(/\([^)]*\)/g, " ")
-    .replace(/\b(fresh|frozen|cooked|raw|diced|sliced|chopped|shredded|grilled|leftover|optional)\b/g, " ")
+    .replace(/\b(fresh or frozen|fresh|frozen|cooked|raw|diced|sliced|chopped|shredded|grilled|roasted|steamed|leftover|optional|medium|small|large)\b/g, " ")
+    .replace(/\b(oil-spray sautéed|sautéed|with lime|with lemon|big squeeze)\b/g, " ")
+    .replace(/\bslices?\b/g, " ")
+    .replace(/\bflorets?\b/g, " ")
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
+/** Cleaner grocery-aisle label (less recipe-prep wording). */
+export function shoppableLabel(item) {
+  let s = String(item || "").replace(/\s+/g, " ").trim();
+  s = s.replace(/,?\s*(sliced|diced|chopped|shredded|roasted|steamed|grilled|oil-spray sautéed|sautéed)\b.*$/i, "");
+  s = s.replace(/\b(fresh or frozen|fresh|frozen)\s+/gi, "");
+  s = s.replace(/\bmedium\s+/gi, "");
+  s = s.replace(/\bsmall\s+/gi, "");
+  s = s.replace(/\blarge\s+/gi, "");
+  s = s.replace(/,?\s*big squeeze\b/gi, "");
+  s = s.replace(/\s+/g, " ").trim();
+  // Capitalize first letter for display consistency
+  if (!s) return String(item || "").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function displayItem(item) {
-  // Keep readable name; trim trailing prep clauses after em dash / comma-heavy brand notes lightly
-  return String(item || "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return shoppableLabel(item);
+}
+
+/** Expand compound recipe lines into shoppable rows. */
+export function expandGroceryLine(rawItem, amount) {
+  const item = String(rawItem || "").trim();
+  const amt = String(amount || "").trim();
+  if (!item) return [];
+  for (const rule of COMPOUND_SPLITS) {
+    if (rule.test(item)) {
+      return rule.parts(amt).map((p) => ({
+        item: p.item,
+        amount: p.amount || "",
+        expandedFrom: item,
+      }));
+    }
+  }
+  return [{ item, amount: amt, expandedFrom: null }];
 }
 
 function linesFromMeal(meal) {
@@ -94,13 +164,12 @@ function linesFromMeal(meal) {
 
 /**
  * @param {Array<{ day?: string, meals?: any[] }>} weekDays
- * @returns {{ sections: Array<{ aisle: string, items: Array }>, mealCount: number, lineCount: number, notes: string[] }}
  */
 export function buildGroceryList(weekDays) {
   const byKey = new Map();
   const notes = [];
   let mealCount = 0;
-  const batchNames = new Map(); // recipe name → days seen (for leftover hint)
+  const batchNames = new Map();
 
   (weekDays || []).forEach((day) => {
     const dayLabel = day.day || "";
@@ -108,7 +177,7 @@ export function buildGroceryList(weekDays) {
       mealCount += 1;
       const { name, qty, usedBatch, lines } = linesFromMeal(meal);
       const qtyLabel = qty !== 1 ? ` · ${qty}×` : "";
-      const displayName = `${name}${qtyLabel}`;
+      const dayMeal = dayLabel ? `${dayLabel}: ${name}${qtyLabel}` : `${name}${qtyLabel}`;
       if (usedBatch) {
         const prev = batchNames.get(name) || [];
         prev.push(dayLabel);
@@ -125,22 +194,34 @@ export function buildGroceryList(weekDays) {
         if (amount && qty !== 1 && !usedBatch) {
           amount = `${amount} ×${qty}`;
         }
-        const key = normalizeItemKey(rawItem);
-        if (!key) return;
-        const existing = byKey.get(key);
-        if (existing) {
-          if (amount && !existing.amounts.includes(amount)) existing.amounts.push(amount);
-          if (displayName && !existing.meals.includes(displayName)) existing.meals.push(displayName);
-        } else {
-          byKey.set(key, {
-            key,
-            item: displayItem(rawItem),
-            amounts: amount ? [amount] : [],
-            meals: displayName ? [displayName] : [],
-            aisle: aisleFor(rawItem),
-            staple: STAPLE_RE.test(rawItem),
-          });
-        }
+        const expanded = expandGroceryLine(rawItem, amount);
+        expanded.forEach((part) => {
+          if (part.expandedFrom) {
+            const note = `Split “${part.expandedFrom}” into shoppable items.`;
+            if (!notes.includes(note)) notes.push(note);
+          }
+          const key = normalizeItemKey(part.item);
+          if (!key) return;
+          const existing = byKey.get(key);
+          const amt = String(part.amount || "").trim();
+          if (existing) {
+            if (amt && !existing.amounts.includes(amt)) existing.amounts.push(amt);
+            if (dayMeal && !existing.meals.includes(dayMeal)) existing.meals.push(dayMeal);
+            // Prefer shorter shoppable label
+            if (shoppableLabel(part.item).length < existing.item.length) {
+              existing.item = shoppableLabel(part.item);
+            }
+          } else {
+            byKey.set(key, {
+              key,
+              item: shoppableLabel(part.item),
+              amounts: amt ? [amt] : [],
+              meals: dayMeal ? [dayMeal] : [],
+              aisle: aisleFor(part.item),
+              staple: STAPLE_RE.test(part.item),
+            });
+          }
+        });
       });
     });
   });
@@ -181,6 +262,9 @@ export function formatGroceryListText(list, { title = "Macros and Mamas — groc
       const amt = row.amounts.length ? ` — ${row.amounts.join("; ")}` : "";
       const staple = row.staple ? " (likely on hand)" : "";
       parts.push(`• ${row.item}${amt}${staple}`);
+      if (row.meals?.length) {
+        parts.push(`    ← ${row.meals.join(" · ")}`);
+      }
     });
     parts.push("");
   });
@@ -189,6 +273,6 @@ export function formatGroceryListText(list, { title = "Macros and Mamas — groc
     list.notes.forEach((n) => parts.push(`• ${n}`));
     parts.push("");
   }
-  parts.push("Amounts follow the recipes as written — adjust if you skip a day or cook for the family.");
+  parts.push("Built from your planned meals. Amounts follow recipes as written — adjust for your household.");
   return parts.join("\n").trim() + "\n";
 }

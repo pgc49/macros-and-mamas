@@ -55,6 +55,7 @@ Build the week around what she said she loves (intake). Do not invent a generic 
 - Breakfast loves: ${profile.prefB || "(not specified — use Callie's breakfast bank)"}
 - Lunch loves: ${profile.prefL || "(not specified)"}
 - Dinner loves: ${profile.prefD || "(not specified)"}
+- Snack loves: ${profile.prefS || "(not specified)"}
 - Season note: ${profile.seasonNote || "(none)"}
 - Diet: ${diet}
 - Breastfeeding: ${bf}

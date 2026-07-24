@@ -101,7 +101,8 @@ export function GroceryListPanel({
       {open && plannedMeals > 0 && (
         <Card style={{ marginTop: 8, padding: 14 }}>
           <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
-            Recalculates whenever you add, remove, or change servings. Amounts stay as written in the recipes.
+            Shop-style list from your plan — we clean prep words, merge near-duplicates, and split a few compounds (like garlic butter → garlic + butter).
+            Each line shows which meal it came from. Amounts stay as written in the recipes.
           </p>
 
           {list.sections.length === 0 ? (
@@ -127,32 +128,36 @@ export function GroceryListPanel({
                   <div
                     key={row.key}
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      padding: "6px 0",
+                      padding: "8px 0",
                       borderBottom: `1px solid ${T.border}`,
                       fontSize: 13.5,
                       lineHeight: 1.4,
                     }}
                   >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ color: T.ink, fontWeight: 600 }}>{row.item}</div>
-                      {row.staple && (
-                        <div style={{ fontSize: 11.5, color: T.inkSoft }}>Likely already on hand</div>
-                      )}
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ color: T.ink, fontWeight: 600 }}>{row.item}</div>
+                        {row.staple && (
+                          <div style={{ fontSize: 11.5, color: T.inkSoft }}>Likely already on hand</div>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          color: T.inkSoft,
+                          textAlign: "right",
+                          flexShrink: 0,
+                          maxWidth: "42%",
+                          fontSize: 12.5,
+                        }}
+                      >
+                        {row.amounts.join("; ") || "—"}
+                      </div>
                     </div>
-                    <div
-                      style={{
-                        color: T.inkSoft,
-                        textAlign: "right",
-                        flexShrink: 0,
-                        maxWidth: "46%",
-                        fontSize: 12.5,
-                      }}
-                    >
-                      {row.amounts.join("; ") || "—"}
-                    </div>
+                    {row.meals?.length > 0 && (
+                      <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 4, lineHeight: 1.4 }}>
+                        For: {row.meals.join(" · ")}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

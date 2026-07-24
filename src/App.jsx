@@ -41,7 +41,7 @@ const EMPTY_PROFILE = {
   bottleOz: 24,
   breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
   stress: "medium", insulinResistance: false, diet: "none",
-  prefB: "", prefL: "", prefD: "", seasonNote: "",
+  prefB: "", prefL: "", prefD: "", prefS: "", seasonNote: "",
 };
 
 export default function App() {
@@ -307,7 +307,7 @@ export default function App() {
               pregnant: forEngine.pregnant,
               phone: forEngine.phone,
               diet: forEngine.diet,
-              tastes: [forEngine.prefB, forEngine.prefL, forEngine.prefD].filter(Boolean).join(" · "),
+              tastes: [forEngine.prefB, forEngine.prefL, forEngine.prefD, forEngine.prefS].filter(Boolean).join(" · "),
               seasonNote: forEngine.seasonNote,
             }),
           });
@@ -732,13 +732,14 @@ export default function App() {
     }
   };
 
-  const onSaveFoodPrefs = async ({ prefB, prefL, prefD }) => {
-    const saved = await db.updateFoodPrefs({ prefB, prefL, prefD });
+  const onSaveFoodPrefs = async ({ prefB, prefL, prefD, prefS }) => {
+    const saved = await db.updateFoodPrefs({ prefB, prefL, prefD, prefS });
     setProfile((p) => ({
       ...p,
       prefB: saved.prefB,
       prefL: saved.prefL,
       prefD: saved.prefD,
+      prefS: saved.prefS,
     }));
     return saved;
   };

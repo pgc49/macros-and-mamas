@@ -132,6 +132,7 @@ ${feedbackBlock}
 - Breakfast loves: ${profile.prefB || "(not specified)"}
 - Lunch loves: ${profile.prefL || "(not specified)"}
 - Dinner loves: ${profile.prefD || "(not specified)"}
+- Snack loves: ${profile.prefS || "(not specified)"}
 - Season note: ${profile.seasonNote || "(none)"}
 
 ## Callie's recipe bank (ground-truth macros when you adapt; cite basedOn)

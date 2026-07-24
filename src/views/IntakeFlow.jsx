@@ -163,6 +163,9 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
           <Field label="Dinner foods you love">
             <input style={inputStyle} value={profile.prefD} onChange={(e) => set("prefD", e.target.value)} placeholder="tacos, pasta night, asian flavors" />
           </Field>
+          <Field label="Snack foods you love">
+            <input style={inputStyle} value={profile.prefS || ""} onChange={(e) => set("prefS", e.target.value)} placeholder="yogurt, apple + peanut butter, protein shake" />
+          </Field>
           <Field label="Anything about your season of life Callie should know?">
             <textarea
               style={{ ...inputStyle, minHeight: 88, resize: "vertical", fontFamily: F }}

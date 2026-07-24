@@ -26,6 +26,7 @@ function profileToRow(p) {
     pref_b: p.prefB || null,
     pref_l: p.prefL || null,
     pref_d: p.prefD || null,
+    pref_s: p.prefS || null,
     season_note: p.seasonNote?.trim() ? p.seasonNote.trim() : null,
     bottle_oz: p.bottleOz != null && p.bottleOz !== "" ? Math.round(Number(p.bottleOz)) : 24,
   };
@@ -50,6 +51,7 @@ function rowToProfile(row) {
     prefB: row.pref_b || "",
     prefL: row.pref_l || "",
     prefD: row.pref_d || "",
+    prefS: row.pref_s || "",
     seasonNote: row.season_note || "",
     bottleOz: row.bottle_oz != null ? Number(row.bottle_oz) : 24,
     status: row.status,
@@ -669,13 +671,14 @@ export const db = {
     return n;
   },
 
-  /** Update intake food loves (pref_b / pref_l / pref_d) — used by planner + AI suggest. */
-  async updateFoodPrefs({ prefB, prefL, prefD, seasonNote } = {}) {
+  /** Update intake food loves — used by planner + AI suggest. */
+  async updateFoodPrefs({ prefB, prefL, prefD, prefS, seasonNote } = {}) {
     const uid = await requireUserId();
     const row = {
       pref_b: String(prefB || "").trim().slice(0, 500) || null,
       pref_l: String(prefL || "").trim().slice(0, 500) || null,
       pref_d: String(prefD || "").trim().slice(0, 500) || null,
+      pref_s: String(prefS || "").trim().slice(0, 500) || null,
     };
     if (seasonNote !== undefined) {
       row.season_note = String(seasonNote || "").trim().slice(0, 1000) || null;
@@ -686,6 +689,7 @@ export const db = {
       prefB: row.pref_b || "",
       prefL: row.pref_l || "",
       prefD: row.pref_d || "",
+      prefS: row.pref_s || "",
       ...(seasonNote !== undefined ? { seasonNote: row.season_note || "" } : {}),
     };
   },
@@ -777,6 +781,7 @@ export const db = {
         prefB: p.pref_b,
         prefL: p.pref_l,
         prefD: p.pref_d,
+        prefS: p.pref_s,
         seasonNote: p.season_note || "",
         bottleOz: p.bottle_oz != null ? Number(p.bottle_oz) : 24,
         status: p.status,

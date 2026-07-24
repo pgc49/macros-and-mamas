@@ -64,7 +64,7 @@ export function WeekPlanner({
 
   const showBoard = boardOpen || mealCount > 0;
   const hasCoach = Array.isArray(coachPlan?.days) && coachPlan.days.length > 0;
-  const hasPrefs = !!(profile?.prefB || profile?.prefL || profile?.prefD);
+  const hasPrefs = !!(profile?.prefB || profile?.prefL || profile?.prefD || profile?.prefS);
 
   useEffect(() => {
     if (mealCount > 0 || source === "blank") setBoardOpen(true);
@@ -438,6 +438,7 @@ function FoodPrefsEditor({ profile, onSave }) {
   const [prefB, setPrefB] = useState(profile?.prefB || "");
   const [prefL, setPrefL] = useState(profile?.prefL || "");
   const [prefD, setPrefD] = useState(profile?.prefD || "");
+  const [prefS, setPrefS] = useState(profile?.prefS || "");
   const [busy, setBusy] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
   const [err, setErr] = useState("");
@@ -446,21 +447,24 @@ function FoodPrefsEditor({ profile, onSave }) {
     setPrefB(profile?.prefB || "");
     setPrefL(profile?.prefL || "");
     setPrefD(profile?.prefD || "");
-  }, [profile?.prefB, profile?.prefL, profile?.prefD]);
+    setPrefS(profile?.prefS || "");
+  }, [profile?.prefB, profile?.prefL, profile?.prefD, profile?.prefS]);
 
   const dirty =
     (prefB || "") !== (profile?.prefB || "")
     || (prefL || "") !== (profile?.prefL || "")
-    || (prefD || "") !== (profile?.prefD || "");
+    || (prefD || "") !== (profile?.prefD || "")
+    || (prefS || "") !== (profile?.prefS || "");
 
-  const hasAny = !!(profile?.prefB || profile?.prefL || profile?.prefD || prefB || prefL || prefD);
+  const hasAny = !!(profile?.prefB || profile?.prefL || profile?.prefD || profile?.prefS
+    || prefB || prefL || prefD || prefS);
 
   const save = async () => {
     if (!onSave) return;
     setBusy(true);
     setErr("");
     try {
-      await onSave({ prefB, prefL, prefD });
+      await onSave({ prefB, prefL, prefD, prefS });
       setSavedMsg("Saved — AI suggest and meal-picker suggestions will use these.");
       window.setTimeout(() => setSavedMsg(""), 3500);
     } catch (e) {
@@ -509,6 +513,7 @@ function FoodPrefsEditor({ profile, onSave }) {
             profile?.prefB && `B: ${profile.prefB}`,
             profile?.prefL && `L: ${profile.prefL}`,
             profile?.prefD && `D: ${profile.prefD}`,
+            profile?.prefS && `S: ${profile.prefS}`,
           ].filter(Boolean).join(" · ")}
         </div>
       )}
@@ -540,6 +545,15 @@ function FoodPrefsEditor({ profile, onSave }) {
               value={prefD}
               onChange={(e) => setPrefD(e.target.value)}
               placeholder="tacos, salmon, asian flavors…"
+            />
+          </label>
+          <label style={labelStyle}>
+            Snacks
+            <input
+              style={inputStyle}
+              value={prefS}
+              onChange={(e) => setPrefS(e.target.value)}
+              placeholder="yogurt, apple + PB, protein shake…"
             />
           </label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 4 }}>

@@ -26,8 +26,8 @@ function prefForSlot(profile, slot) {
   if (s === "breakfast") return profile?.prefB || "";
   if (s === "lunch") return profile?.prefL || "";
   if (s === "dinner") return profile?.prefD || "";
-  // Snacks: blend all tastes lightly
-  return [profile?.prefB, profile?.prefL, profile?.prefD].filter(Boolean).join(" ");
+  if (s === "snack") return profile?.prefS || [profile?.prefB, profile?.prefL, profile?.prefD].filter(Boolean).join(" ");
+  return [profile?.prefB, profile?.prefL, profile?.prefD, profile?.prefS].filter(Boolean).join(" ");
 }
 
 function scoreRecipe(recipe, prefTokens) {

@@ -227,6 +227,7 @@ async function loadClientForPlan(env, clientId) {
     prefB: row.pref_b || "",
     prefL: row.pref_l || "",
     prefD: row.pref_d || "",
+    prefS: row.pref_s || "",
     seasonNote: row.season_note || "",
   };
 

@@ -25,6 +25,7 @@ create table if not exists public.profiles (
   pref_b text,
   pref_l text,
   pref_d text,
+  pref_s text,
   season_note text,
   role text not null default 'client',
   status text not null default 'pending',
