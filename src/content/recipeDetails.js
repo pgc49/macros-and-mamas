@@ -274,7 +274,7 @@ export const RECIPE_DETAILS = {
       "Pat the thighs dry and season lightly with salt and pepper. Heat a large skillet over medium-high with a light film of oil.",
       "Sear thighs 4–5 minutes per side until browned. Pour in the glaze, lower heat to medium, and simmer 8–12 minutes, turning and basting, until chicken hits 165°F and the glaze is sticky and glossy. Rest 5 minutes, then slice or portion.",
       "Meanwhile steam broccoli until bright green and tender-crisp, 4–6 minutes. Cook rice if you haven’t already.",
-      "For her logged plate: portion about 6 oz raw-weight thighs (roughly ¼ of the batch) with ¼ of the glaze, 1 cup rice, and 1 cup broccoli. Leftovers cover the other three servings.",
+      "For the logged plate: portion about 6 oz raw-weight thighs (roughly ¼ of the batch) with ¼ of the glaze, 1 cup rice, and 1 cup broccoli. Leftovers cover the other three servings.",
     ],
   },
 
@@ -344,7 +344,7 @@ export const RECIPE_DETAILS = {
       "Place chicken breasts in a slow cooker (or Instant Pot) with 1 cup salsa. Slow-cook on low 4–6 hours (or high ~2–3 hours) until chicken shreds easily; Instant Pot: high pressure ~12 minutes + natural release 10 minutes.",
       "Shred chicken with two forks right in the salsa juices and keep warm. Toss shredded cabbage with lime juice and a pinch of salt for a quick slaw.",
       "Warm corn tortillas in a dry skillet 20–30 seconds per side, or wrap in a damp towel and microwave 30–45 seconds until pliable.",
-      "For her logged plate: 5 oz (140g) pulled chicken across 3 tortillas, top with ¾ cup slaw and ¼ cup salsa. Batch makes about 4 plates.",
+      "For the logged plate: 5 oz (140g) pulled chicken across 3 tortillas, top with ¾ cup slaw and ¼ cup salsa. Batch makes about 4 plates.",
     ],
   },
 
@@ -369,7 +369,7 @@ export const RECIPE_DETAILS = {
       "Heat oven to 400°F. In a bowl, mix turkey, egg, breadcrumbs, salt, pepper, garlic powder, and Italian herbs until just combined — don’t overwork.",
       "Roll into 12 even meatballs (about 1½ oz each) and place on a parchment-lined sheet. Bake 18–22 minutes until browned and 165°F in the center.",
       "Warm marinara in a saucepan. Add meatballs and simmer gently 5 minutes so they soak up sauce. Steam or boil green beans until tender-crisp, 4–6 minutes. Cook rice if needed.",
-      "For her logged plate: 3 meatballs with ½ cup marinara over 1 cup rice, plus 1 cup green beans. Freeze leftover meatballs in sauce for quick dinners.",
+      "For the logged plate: 3 meatballs with ½ cup marinara over 1 cup rice, plus 1 cup green beans. Freeze leftover meatballs in sauce for quick dinners.",
     ],
   },
 
@@ -413,7 +413,7 @@ export const RECIPE_DETAILS = {
       "Heat a large skillet or wok over medium-high. Add the ground turkey and break it up; cook 5–7 minutes until no pink remains and it starts to brown.",
       "Add the frozen vegetables straight to the pan. Stir-fry 5–8 minutes until hot and tender-crisp — don’t let them go mushy.",
       "Pour in the sauce, toss 1–2 minutes until everything is glossy and coated. Taste and add a splash more aminos if needed.",
-      "For her logged plate: scoop ¼ of the skillet over 1 cup cooked rice. Leftovers reheat well for next-day lunches.",
+      "For the logged plate: scoop ¼ of the skillet over 1 cup cooked rice. Leftovers reheat well for next-day lunches.",
     ],
   },
 

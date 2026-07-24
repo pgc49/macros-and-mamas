@@ -3,23 +3,9 @@ import { T, F, FD } from "../theme/tokens";
 import { withRecipeDetail } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 
-function Section({ title, hint, children }) {
-  return (
-    <div style={{ marginTop: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 2 }}>{title}</div>
-      {hint ? (
-        <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.4, marginBottom: 6 }}>{hint}</div>
-      ) : (
-        <div style={{ marginBottom: 6 }} />
-      )}
-      {children}
-    </div>
-  );
-}
-
 function IngList({ items }) {
   if (!items?.length) {
-    return <div style={{ fontSize: 13.5, color: T.inkSoft }}>See macros above.</div>;
+    return <div style={{ fontSize: 13.5, color: T.inkSoft }}>No structured ingredient list yet.</div>;
   }
   return (
     <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.55, color: T.ink }}>
@@ -33,9 +19,9 @@ function IngList({ items }) {
 }
 
 /**
- * Expandable meal/recipe card — shared by default Meals bank and personalized plans.
- * Collapsed: title + macros. Open: Recipe → Steps → Serving size.
- * + Log uses a 0.25 serving stepper (scales macros).
+ * Expandable meal/recipe card — Meals bank + personalized plans.
+ * Open: batch cook (if any) → one-serving ingredients → steps.
+ * Serving stepper scales macros for logging only — ingredient list stays base recipe.
  */
 export function MealRecipeCard({ meal, onLog, showLog = true }) {
   const [open, setOpen] = useState(false);
@@ -100,12 +86,9 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
           }}
         >
           <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}>
-            {cat}{serves > 1 ? ` · recipe serves ${serves}` : ""}
+            {cat}{serves > 1 ? ` · batch serves ${serves}` : ""}{open ? " · hide recipe" : " · open recipe"}
           </div>
           <div style={{ fontFamily: FD, fontSize: 18, margin: "2px 0 4px", color: T.ink }}>{r.name}</div>
-          <div style={{ fontSize: 12, color: T.accent, fontWeight: 700, marginTop: 2 }}>
-            {open ? "Hide ▴" : "Open recipe ▾"}
-          </div>
         </button>
         <div style={{ flexShrink: 0, textAlign: "right" }}>
           {showLog && <div style={{ marginBottom: 8 }}>{logBtn}</div>}
@@ -123,7 +106,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
             }}
           >
             <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft, marginBottom: 2 }}>
-              {servings === 1 ? "per serving" : `${servings}× serving`}
+              {servings === 1 ? "per serving" : `${servings}× to log`}
             </div>
             <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{scaled.cal} cal</div>
             <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
@@ -135,42 +118,63 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
       </div>
 
       {showLog && (
-        <div style={{
-          padding: "0 16px 12px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-          flexWrap: "wrap",
-        }}
+        <div
+          style={{
+            padding: "0 16px 12px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
         >
-          <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600 }}>Servings to log</div>
+          <div>
+            <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600 }}>Servings to log</div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2, maxWidth: 220, lineHeight: 1.35 }}>
+              Scales macros only — recipe amounts stay at one serving
+            </div>
+          </div>
           <ServingStepper value={servings} onChange={setQty} compact />
         </div>
       )}
 
       {open && (
-        <div style={{ padding: "0 16px 16px", borderTop: `1px dashed ${T.border}` }}>
+        <div style={{ padding: "12px 16px 16px", borderTop: `1px dashed ${T.border}` }}>
           {r.basedOn && (
-            <div style={{ fontSize: 12.5, color: T.inkSoft, margin: "10px 0 0" }}>
+            <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10 }}>
               Based on Callie&apos;s <b style={{ color: T.ink }}>{r.basedOn}</b>
             </div>
           )}
 
-          <Section
-            title="Recipe"
-            hint={
-              batch
-                ? `Full cook — quantities for ${serves} servings (family batch).`
-                : serves > 1
-                  ? `Makes about ${serves} servings.`
-                  : "What to cook / assemble for this meal."
-            }
-          >
-            <IngList items={batch || serving} />
-          </Section>
+          {batch && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 2 }}>
+                Ingredients · batch cook
+              </div>
+              <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.4, marginBottom: 6 }}>
+                Full cook for about {serves} servings (family batch).
+              </div>
+              <IngList items={batch} />
+            </div>
+          )}
 
-          <Section title="Steps" hint="Cook it through, then plate your serving below.">
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 2 }}>
+              Ingredients · one serving
+            </div>
+            <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.4, marginBottom: 6 }}>
+              {batch
+                ? "What goes on the logged plate from that batch."
+                : "Base recipe amounts. If you ate more, bump Servings to log — macros update; this list stays the recipe."}
+            </div>
+            <IngList items={serving} />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 2 }}>Steps</div>
+            <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.4, marginBottom: 6 }}>
+              Cook it through, then plate the logged serving.
+            </div>
             {steps.length ? (
               <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.55, color: T.ink }}>
                 {steps.map((s, i) => (
@@ -178,16 +182,9 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
                 ))}
               </ol>
             ) : (
-              <div style={{ fontSize: 13.5, color: T.inkSoft }}>Follow the amounts in Recipe, then plate your Serving size.</div>
+              <div style={{ fontSize: 13.5, color: T.inkSoft }}>Follow the amounts above, then plate your serving.</div>
             )}
-          </Section>
-
-          <Section
-            title="Serving size"
-            hint="One serving matches the base macros. Use the stepper above if you ate more or less."
-          >
-            <IngList items={serving} />
-          </Section>
+          </div>
 
           {showLog && (
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>{logBtn}</div>

@@ -837,7 +837,10 @@ function PlanMealTile({
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft, marginBottom: 4 }}>Servings</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft, marginBottom: 2 }}>Servings to log</div>
+        <div style={{ fontSize: 10.5, color: T.inkSoft, marginBottom: 4, lineHeight: 1.35 }}>
+          Scales macros only — ingredients stay at one serving
+        </div>
         <ServingStepper value={qty} onChange={onQty} compact />
       </div>
 
@@ -874,30 +877,37 @@ function PlanMealTile({
 
       {open && (
         <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
-          {(meal.desc || card.desc) && (
-            <p style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.45, margin: "0 0 10px" }}>
-              {meal.desc || card.desc}
-            </p>
-          )}
           {batch && (
-            <>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Ingredients · batch cook</div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>Ingredients · batch cook</div>
+              <div style={{ fontSize: 11.5, color: T.inkSoft, marginBottom: 6, lineHeight: 1.4 }}>
+                Full cook for the family batch.
+              </div>
               <IngList items={batch} />
-            </>
+            </div>
           )}
-          <div style={{ fontSize: 12, fontWeight: 700, margin: batch ? "10px 0 4px" : "0 0 4px" }}>
-            Ingredients · {qty === 1 ? "one serving" : `${qty}× serving`}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>
+              Ingredients · one serving
+            </div>
+            <div style={{ fontSize: 11.5, color: T.inkSoft, marginBottom: 6, lineHeight: 1.4 }}>
+              {qty !== 1
+                ? `Base recipe. Macros above are for ${qty}× to log — this list stays the written serving.`
+                : batch
+                  ? "What goes on the logged plate from that batch."
+                  : "Base recipe amounts for one serving."}
+            </div>
+            <IngList items={serving} />
           </div>
-          <IngList items={serving} />
           {steps.length > 0 && (
-            <>
-              <div style={{ fontSize: 12, fontWeight: 700, margin: "10px 0 4px" }}>Steps</div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Steps</div>
               <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.5, color: T.ink }}>
                 {steps.map((s, i) => (
                   <li key={i} style={{ marginBottom: 4 }}>{s}</li>
                 ))}
               </ol>
-            </>
+            </div>
           )}
         </div>
       )}
