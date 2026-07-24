@@ -11,6 +11,7 @@ import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
 import { LoggableMealRow } from "../components/LoggableMealRow";
+import { GroceryListPanel } from "../components/GroceryListPanel";
 import { mealToCard } from "../content/recipeDetails";
 
 export function ClientApp({
@@ -308,6 +309,13 @@ export function ClientApp({
               <Chip key={c} active={mealFilter === c} onClick={() => setMealFilter(c)}>{c}</Chip>
             ))}
           </div>
+
+          {mealFilter === "By Day" && (
+            <GroceryListPanel
+              personalized={!!personalized}
+              weekDays={personalized ? (publishedPlan?.days || []) : DEFAULT_WEEK}
+            />
+          )}
 
           {mealFilter === "My meals" && (
             <div style={{ marginBottom: 12 }}>
