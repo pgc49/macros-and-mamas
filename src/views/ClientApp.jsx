@@ -10,7 +10,7 @@ import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
 import { LoggableMealRow } from "../components/LoggableMealRow";
-import { WeekPlanner } from "../components/WeekPlanner";
+import { WeekPlanner, FoodPrefsEditor } from "../components/WeekPlanner";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
 
@@ -294,7 +294,7 @@ export function ClientApp({
 
       {tab === "meals" && (
         <>
-          {mealFilter === "Plan" ? null : (
+          {mealFilter !== "Plan" && mealFilter !== "Food prefs" && (
             <>
               <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
                 {mealFilter === "My meals" ? "My meals" : "Recipe bank"}
@@ -307,7 +307,7 @@ export function ClientApp({
             </>
           )}
 
-          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Snack" && (
+          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && mealFilter !== "Snack" && (
             <Card style={{ background: T.accentSoft, border: "none", marginBottom: 14 }}>
               {SKELETONS.filter((s) => s.meal === mealFilter).map((s) => (
                 <div key={s.meal} style={{ marginBottom: 0 }}>
@@ -322,7 +322,7 @@ export function ClientApp({
           )}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {["Plan", "My meals", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
+            {["Plan", "Food prefs", "My meals", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
               <Chip key={c} active={mealFilter === c} onClick={() => setMealFilter(c)}>
                 {c === "Plan" && plannedCount ? `${c} · ${plannedCount}` : c}
               </Chip>
@@ -344,9 +344,12 @@ export function ClientApp({
               onSuggestAiWeek={onSuggestAiWeek}
               onMealIdea={onMealIdea}
               onSaveCustomMeal={onSaveCustomMeal}
-              onSaveFoodPrefs={onSaveFoodPrefs}
               onLog={logRecipe}
             />
+          )}
+
+          {mealFilter === "Food prefs" && (
+            <FoodPrefsEditor profile={profile} onSave={onSaveFoodPrefs} />
           )}
 
           {mealFilter === "My meals" && (
@@ -372,13 +375,13 @@ export function ClientApp({
             </div>
           )}
 
-          {mealFilter !== "Plan" && mealFilter !== "My meals" && personalized && flatPersonalized
+          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && personalized && flatPersonalized
             .filter((m) => (m.cat || "").toLowerCase() === mealFilter.toLowerCase())
             .map((m, idx) => (
               <MealRecipeCard key={`${m.name}-${idx}`} meal={m} onLog={logRecipe} />
             ))}
 
-          {mealFilter !== "Plan" && mealFilter !== "My meals" && !personalized && RECIPES
+          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && !personalized && RECIPES
             .filter((r) => r.cat === mealFilter)
             .map((r) => (
               <MealRecipeCard key={r.name} meal={r} onLog={logRecipe} />

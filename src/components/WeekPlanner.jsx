@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card, Btn } from "./ui";
-import { GroceryListPanel } from "./GroceryListPanel";
+import { GroceryListBody } from "./GroceryListPanel";
 import { withRecipeDetail, mealToCard } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 import { addDaysIso, fmtRange, wkStartOf } from "../utils/dates";
+import { buildGroceryList } from "../utils/groceryList";
 import {
   PLAN_DAYS,
   PLAN_SLOTS,
@@ -52,12 +53,12 @@ export function WeekPlanner({
   onSuggestAiWeek,
   onMealIdea,
   onSaveCustomMeal,
-  onSaveFoodPrefs,
   onLog,
 }) {
   const planned = normalizeWeekDays(days);
   const mealCount = countPlannedMeals(planned);
   const bands = targetBands(macros);
+  const groceryStats = useMemo(() => buildGroceryList(planned), [planned]);
   const curWk = wkStartOf();
   const ws = weekStart || curWk;
   const earliest = addDaysIso(curWk, -7 * PAST_WEEKS);
@@ -78,8 +79,6 @@ export function WeekPlanner({
     typeof window !== "undefined" ? window.matchMedia("(min-width: 900px)").matches : false,
   );
 
-  const hasPrefs = !!(profile?.prefB || profile?.prefL || profile?.prefD || profile?.prefS);
-
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const mq = window.matchMedia("(min-width: 900px)");
@@ -94,6 +93,10 @@ export function WeekPlanner({
     const t = window.setTimeout(() => setMessage(""), 4500);
     return () => window.clearTimeout(t);
   }, [message]);
+
+  useEffect(() => {
+    if (mealCount === 0 && groceryOpen) setGroceryOpen(false);
+  }, [mealCount, groceryOpen]);
 
   const applyDays = (next, nextSource = "manual") => {
     onChangeDays?.(normalizeWeekDays(next), nextSource);
@@ -186,11 +189,15 @@ export function WeekPlanner({
   const moveToDay = (mealId, toDay) => applyDays(moveMeal(planned, mealId, toDay), "manual");
   const changeQty = (mealId, qty) => applyDays(setMealQty(planned, mealId, qty), "manual");
 
-  const scrollToGrocery = () => {
-    setGroceryOpen(true);
-    window.setTimeout(() => {
-      groceryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 50);
+  const toggleGrocery = () => {
+    if (!mealCount) return;
+    const next = !groceryOpen;
+    setGroceryOpen(next);
+    if (next) {
+      window.setTimeout(() => {
+        groceryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
   };
 
   const onDragStart = (e, mealId) => {
@@ -229,91 +236,47 @@ export function WeekPlanner({
 
   return (
     <div style={{ marginBottom: 18 }}>
-      <Card style={{ marginBottom: 12, padding: 14, background: T.accentSoft, border: "none" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+      {/* Week chrome — compact */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+        <div>
           <div style={{ fontFamily: FD, fontSize: 22, color: T.ink, lineHeight: 1.2 }}>
             {isThisWeek ? "This week" : ws > curWk ? "Upcoming week" : "Past week"}
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button type="button" disabled={!canPrev} onClick={() => shiftWeek(-1)} style={navBtnStyle(!canPrev)} aria-label="Previous week">
-              ‹
-            </button>
-            <button type="button" disabled={!canNext} onClick={() => shiftWeek(1)} style={navBtnStyle(!canNext)} aria-label="Next week">
-              ›
-            </button>
+          <div style={{ fontSize: 13, color: T.inkSoft }}>
+            {fmtRange(ws)}
+            {saving ? " · Saving…" : mealCount ? ` · ${mealCount} meal${mealCount === 1 ? "" : "s"}` : ""}
+            {bands && mealCount ? ` · ${daysInRangeCount}/7 in range` : ""}
           </div>
         </div>
-        <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 0 }}>
-          {fmtRange(ws)}
-          {isThisWeek ? " · plan · shop from this board" : ws > curWk ? " · blank until you add meals" : " · saved plan"}
-          {saving ? " · Saving…" : ""}
+        <div style={{ display: "flex", gap: 6 }}>
+          <button type="button" disabled={!canPrev} onClick={() => shiftWeek(-1)} style={navBtnStyle(!canPrev)} aria-label="Previous week">
+            ‹
+          </button>
+          <button type="button" disabled={!canNext} onClick={() => shiftWeek(1)} style={navBtnStyle(!canNext)} aria-label="Next week">
+            ›
+          </button>
         </div>
-      </Card>
-
-      <FoodPrefsEditor profile={profile} onSave={onSaveFoodPrefs} />
-
-      {bands && (
-        <Card style={{ marginBottom: 12, padding: 14, background: T.sageSoft, border: "none" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.35, textTransform: "uppercase", color: "#3E5A46", marginBottom: 6 }}>
-            Your daily ranges
-          </div>
-          <div style={{ fontFamily: FD, fontSize: 18, color: T.ink, lineHeight: 1.35 }}>
-            {bands.calLo}–{bands.calHi} cal
-            <span style={{ color: T.inkSoft, fontFamily: F, fontSize: 14 }}> · </span>
-            {bands.pLo}–{bands.pHi}P
-            <span style={{ color: T.inkSoft, fontFamily: F, fontSize: 14 }}> · </span>
-            {bands.cLo}–{bands.cHi}C
-            <span style={{ color: T.inkSoft, fontFamily: F, fontSize: 14 }}> · </span>
-            {bands.fLo}–{bands.fHi}F
-          </div>
-          <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "8px 0 0", lineHeight: 1.45 }}>
-            Each day on the board shows whether you’re in range. Bump servings or swap meals until the chips go green.
-            {` · ${daysInRangeCount}/7 days in range right now`}
-          </p>
-        </Card>
-      )}
-
-      <Card style={{ marginBottom: 12, padding: 14 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10, alignItems: "center" }}>
-          <PillBtn accent onClick={() => openAdd(activeDay, "any")}>+ Add meal</PillBtn>
-          <PillBtn onClick={onAiSuggest} disabled={suggestBusy || !macros}>
-            {suggestBusy ? "Suggesting…" : "Suggest my week (AI)"}
-          </PillBtn>
-          <PillBtn onClick={clearWeek}>Clear all</PillBtn>
-        </div>
-        <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.45 }}>
-          {mealCount} meal{mealCount === 1 ? "" : "s"}
-          {bands ? ` · ${daysInRangeCount}/7 days in range` : ""}
-          {wide ? " · drag between days" : " · Move on a meal"}
-          {saving ? "" : " · autosaved"}
-        </div>
-        {!macros && (
-          <div style={{ fontSize: 12.5, color: T.amber, marginTop: 10, lineHeight: 1.45 }}>
-            AI unlocks after Callie approves your macros. Bank and My meals work now.
-          </div>
-        )}
-        {!hasPrefs && macros && (
-          <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 10, lineHeight: 1.45 }}>
-            Tip: fill <b style={{ color: T.ink }}>Foods I love</b> so AI options match what you eat.
-          </div>
-        )}
-        {message && (
-          <div style={{ fontSize: 12.5, color: "#3E5A46", background: T.sageSoft, borderRadius: 10, padding: "8px 10px", marginTop: 10 }}>
-            {message}
-          </div>
-        )}
-        {error && <div style={{ fontSize: 12.5, color: T.amber, marginTop: 8 }}>{error}</div>}
-      </Card>
-
-      <div ref={groceryRef}>
-        <GroceryListPanel
-          weekDays={planned}
-          open={groceryOpen}
-          onOpenChange={setGroceryOpen}
-          emptyHint="Add meals to this week’s plan — grocery updates live as you go."
-          ctaLabel="View grocery list"
-        />
       </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
+        <PillBtn accent onClick={() => openAdd(activeDay, "any")}>+ Add meal</PillBtn>
+        <PillBtn onClick={onAiSuggest} disabled={suggestBusy || !macros}>
+          {suggestBusy ? "Suggesting…" : "Suggest my week"}
+        </PillBtn>
+        <PillBtn onClick={clearWeek}>Clear</PillBtn>
+      </div>
+
+      {!macros && (
+        <div style={{ fontSize: 12.5, color: T.amber, marginBottom: 10, lineHeight: 1.45 }}>
+          AI unlocks after Callie approves your macros. Bank and My meals work now.
+        </div>
+      )}
+      {message && (
+        <div style={{ fontSize: 12.5, color: "#3E5A46", background: T.sageSoft, borderRadius: 10, padding: "8px 10px", marginBottom: 10 }}>
+          {message}
+        </div>
+      )}
+      {error && <div style={{ fontSize: 12.5, color: T.amber, marginBottom: 10 }}>{error}</div>}
 
       {wide ? (
         <div
@@ -403,13 +366,22 @@ export function WeekPlanner({
       )}
 
       <Card style={{ marginTop: 14, padding: 14 }}>
-        <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Ready to shop?</div>
-        <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, margin: "0 0 12px" }}>
-          This week’s plan autosaves as you edit. Grocery recalculates from the meals on this board only.
-        </p>
-        <Btn onClick={scrollToGrocery} disabled={!mealCount}>
-          View grocery list
-        </Btn>
+        <div ref={groceryRef}>
+          <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>Ready to shop?</div>
+          <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, margin: "0 0 12px" }}>
+            {mealCount
+              ? `${groceryStats.lineCount} items from this week’s plan`
+              : "Add meals above — grocery builds from what you put on the board."}
+          </p>
+          <Btn onClick={toggleGrocery} disabled={!mealCount}>
+            {groceryOpen ? "Hide grocery list" : "View grocery list"}
+          </Btn>
+          {groceryOpen && mealCount > 0 && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
+              <GroceryListBody weekDays={planned} />
+            </div>
+          )}
+        </div>
       </Card>
 
       {picker && (
@@ -430,8 +402,8 @@ export function WeekPlanner({
   );
 }
 
-function FoodPrefsEditor({ profile, onSave }) {
-  const [open, setOpen] = useState(false);
+/** Preferences editor — used from Meals → Food prefs chip (not on the plan board). */
+export function FoodPrefsEditor({ profile, onSave }) {
   const [prefB, setPrefB] = useState(profile?.prefB || "");
   const [prefL, setPrefL] = useState(profile?.prefL || "");
   const [prefD, setPrefD] = useState(profile?.prefD || "");
@@ -453,16 +425,13 @@ function FoodPrefsEditor({ profile, onSave }) {
     || (prefD || "") !== (profile?.prefD || "")
     || (prefS || "") !== (profile?.prefS || "");
 
-  const hasAny = !!(profile?.prefB || profile?.prefL || profile?.prefD || profile?.prefS
-    || prefB || prefL || prefD || prefS);
-
   const save = async () => {
     if (!onSave) return;
     setBusy(true);
     setErr("");
     try {
       await onSave({ prefB, prefL, prefD, prefS });
-      setSavedMsg("Saved — Suggest my week and AI meal options will use these.");
+      setSavedMsg("Saved — AI meal ideas will use these.");
       window.setTimeout(() => setSavedMsg(""), 3500);
     } catch (e) {
       console.error(e);
@@ -473,101 +442,62 @@ function FoodPrefsEditor({ profile, onSave }) {
   };
 
   return (
-    <Card style={{ marginBottom: 12, padding: 14 }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          width: "100%",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 10,
-          border: "none",
-          background: "transparent",
-          padding: 0,
-          cursor: "pointer",
-          fontFamily: F,
-          textAlign: "left",
-        }}
-      >
-        <div>
-          <div style={{ fontFamily: FD, fontSize: 18, color: T.ink }}>Foods I love</div>
-          <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2, lineHeight: 1.4 }}>
-            {hasAny
-              ? "Pre-filled from intake. Suggest my week and AI slot options use these notes."
-              : "Add what you actually like. AI uses these (plus your ranges) when it builds meals."}
-          </div>
+    <div style={{ marginBottom: 12 }}>
+      <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>My food preferences</h2>
+      <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px", lineHeight: 1.5 }}>
+        What you actually like to eat. Suggest my week and AI meal options lean on these notes.
+      </p>
+      <Card style={{ padding: 14 }}>
+        <label style={labelStyle}>
+          Breakfast
+          <input
+            style={inputStyle}
+            value={prefB}
+            onChange={(e) => setPrefB(e.target.value)}
+            placeholder="smoothies, oatmeal, eggs…"
+          />
+        </label>
+        <label style={labelStyle}>
+          Lunch
+          <input
+            style={inputStyle}
+            value={prefL}
+            onChange={(e) => setPrefL(e.target.value)}
+            placeholder="big salads, leftovers, wraps…"
+          />
+        </label>
+        <label style={labelStyle}>
+          Dinner
+          <input
+            style={inputStyle}
+            value={prefD}
+            onChange={(e) => setPrefD(e.target.value)}
+            placeholder="tacos, salmon, asian flavors…"
+          />
+        </label>
+        <label style={labelStyle}>
+          Snacks
+          <input
+            style={inputStyle}
+            value={prefS}
+            onChange={(e) => setPrefS(e.target.value)}
+            placeholder="yogurt, apple + PB, protein shake…"
+          />
+        </label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 4 }}>
+          <Btn small onClick={save} disabled={busy || !dirty}>
+            {busy ? "Saving…" : "Save preferences"}
+          </Btn>
+          {savedMsg && !dirty && (
+            <span style={{ fontSize: 12.5, color: "#3E5A46" }}>{savedMsg}</span>
+          )}
+          {dirty && (
+            <span style={{ fontSize: 12.5, color: T.inkSoft }}>Unsaved changes</span>
+          )}
         </div>
-        <span style={{ fontSize: 13, fontWeight: 700, color: T.accentDeep, flexShrink: 0 }}>
-          {open ? "Hide ▴" : "Edit ▾"}
-        </span>
-      </button>
-
-      {!open && hasAny && (
-        <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 10, lineHeight: 1.45 }}>
-          {[
-            profile?.prefB && `B: ${profile.prefB}`,
-            profile?.prefL && `L: ${profile.prefL}`,
-            profile?.prefD && `D: ${profile.prefD}`,
-            profile?.prefS && `S: ${profile.prefS}`,
-          ].filter(Boolean).join(" · ")}
-        </div>
-      )}
-
-      {open && (
-        <div style={{ marginTop: 12 }}>
-          <label style={labelStyle}>
-            Breakfast
-            <input
-              style={inputStyle}
-              value={prefB}
-              onChange={(e) => setPrefB(e.target.value)}
-              placeholder="smoothies, oatmeal, eggs…"
-            />
-          </label>
-          <label style={labelStyle}>
-            Lunch
-            <input
-              style={inputStyle}
-              value={prefL}
-              onChange={(e) => setPrefL(e.target.value)}
-              placeholder="big salads, leftovers, wraps…"
-            />
-          </label>
-          <label style={labelStyle}>
-            Dinner
-            <input
-              style={inputStyle}
-              value={prefD}
-              onChange={(e) => setPrefD(e.target.value)}
-              placeholder="tacos, salmon, asian flavors…"
-            />
-          </label>
-          <label style={labelStyle}>
-            Snacks
-            <input
-              style={inputStyle}
-              value={prefS}
-              onChange={(e) => setPrefS(e.target.value)}
-              placeholder="yogurt, apple + PB, protein shake…"
-            />
-          </label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 4 }}>
-            <Btn small onClick={save} disabled={busy || !dirty}>
-              {busy ? "Saving…" : "Save foods I love"}
-            </Btn>
-            {savedMsg && !dirty && (
-              <span style={{ fontSize: 12.5, color: "#3E5A46" }}>{savedMsg}</span>
-            )}
-            {dirty && (
-              <span style={{ fontSize: 12.5, color: T.inkSoft }}>Unsaved changes</span>
-            )}
-          </div>
-          {err && <div style={{ fontSize: 12.5, color: T.amber, marginTop: 8 }}>{err}</div>}
-        </div>
-      )}
-    </Card>
+        {err && <div style={{ fontSize: 12.5, color: T.amber, marginTop: 8 }}>{err}</div>}
+      </Card>
+    </div>
   );
 }
 
@@ -682,7 +612,7 @@ function DayColumn({
         {day.theme ? (
           <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2, lineHeight: 1.3 }}>{day.theme}</div>
         ) : null}
-        {(day.meals || []).length > 0 && (
+        {bands && (day.meals || []).length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
             <MacroChip label="cal" value={totals.cal} ok={ir?.cal} />
             <MacroChip label="P" value={`${totals.p}g`} ok={ir?.p} />
@@ -690,9 +620,12 @@ function DayColumn({
             <MacroChip label="F" value={`${totals.f}g`} ok={ir?.f} />
           </div>
         )}
-        {bands && (day.meals || []).length > 0 && (
-          <div style={{ fontSize: 10.5, color: T.inkSoft, marginTop: 4 }}>
-            Target {bands.calLo}–{bands.calHi} cal · {bands.pLo}–{bands.pHi}P · {bands.cLo}–{bands.cHi}C · {bands.fLo}–{bands.fHi}F
+        {!bands && (day.meals || []).length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+            <MacroChip label="cal" value={totals.cal} ok={null} />
+            <MacroChip label="P" value={`${totals.p}g`} ok={null} />
+            <MacroChip label="C" value={`${totals.c}g`} ok={null} />
+            <MacroChip label="F" value={`${totals.f}g`} ok={null} />
           </div>
         )}
       </div>

@@ -250,7 +250,7 @@ export function buildGroceryList(weekDays) {
   };
 }
 
-/** Plain text for clipboard / Messages / Notes. */
+/** Plain text for clipboard / Messages / Notes — shop-style, no per-meal citations. */
 export function formatGroceryListText(list, { title = "Macros and Mamas — grocery list" } = {}) {
   if (!list?.sections?.length) {
     return `${title}\n\nNo ingredients found for this week.`;
@@ -262,9 +262,6 @@ export function formatGroceryListText(list, { title = "Macros and Mamas — groc
       const amt = row.amounts.length ? ` — ${row.amounts.join("; ")}` : "";
       const staple = row.staple ? " (likely on hand)" : "";
       parts.push(`• ${row.item}${amt}${staple}`);
-      if (row.meals?.length) {
-        parts.push(`    ← ${row.meals.join(" · ")}`);
-      }
     });
     parts.push("");
   });
@@ -273,6 +270,5 @@ export function formatGroceryListText(list, { title = "Macros and Mamas — groc
     list.notes.forEach((n) => parts.push(`• ${n}`));
     parts.push("");
   }
-  parts.push("Built from your planned meals. Amounts follow recipes as written — adjust for your household.");
   return parts.join("\n").trim() + "\n";
 }

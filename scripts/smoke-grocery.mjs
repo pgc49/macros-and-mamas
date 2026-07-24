@@ -42,10 +42,11 @@ assert(split.length === 2, "garlic butter splits to 2");
 assert(split.some((p) => /garlic/i.test(p.item)), "has garlic");
 assert(split.some((p) => /butter/i.test(p.item)), "has butter");
 
-// Meal source lines present in copy
-assert(text.includes("←"), "copy should cite source meals");
+// Meal sources tracked in data (for merge), but copy stays shop-style
+assert(!text.includes("←"), "copy should not cite source meals");
 const berryRow = list.sections.flatMap((s) => s.items).find((i) => /berr/i.test(i.item));
-assert(berryRow?.meals?.length >= 1, "items should list source meals");
+assert(berryRow, "berries should appear");
+assert(berryRow?.meals?.length >= 1, "items still track source meals internally");
 
 console.log("OK grocery smoke", {
   meals: list.mealCount,
