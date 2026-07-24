@@ -5,23 +5,29 @@ import { buildGroceryList, formatGroceryListText } from "../utils/groceryList";
 import { copyText } from "../utils/clipboard";
 
 /**
- * Grocery list for Meals → By Day.
- * Pure client-side from week meal ingredients — no network.
+ * Grocery list from a committed week plan only.
+ * Pure client-side from planned meal ingredients — no network.
  */
-export function GroceryListPanel({ weekDays, personalized = false }) {
+export function GroceryListPanel({
+  weekDays,
+  personalized = true,
+  emptyHint = "Add meals to your plan — grocery builds from what you commit.",
+}) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
 
+  const plannedMeals = useMemo(
+    () => (weekDays || []).reduce((n, d) => n + (d.meals?.length || 0), 0),
+    [weekDays],
+  );
   const list = useMemo(() => buildGroceryList(weekDays || []), [weekDays]);
 
   const onCopy = async () => {
     setError("");
     try {
       const text = formatGroceryListText(list, {
-        title: personalized
-          ? "Macros and Mamas — my week grocery list"
-          : "Macros and Mamas — sample week grocery list",
+        title: "Macros and Mamas — my week grocery list",
       });
       await copyText(text);
       setCopied(true);
@@ -49,29 +55,38 @@ export function GroceryListPanel({ weekDays, personalized = false }) {
           borderRadius: 14,
           border: `1.5px solid ${open ? T.accent : T.border}`,
           background: open ? T.accentSoft : "#fff",
-          cursor: "pointer",
+          cursor: plannedMeals ? "pointer" : "default",
           fontFamily: F,
           textAlign: "left",
+          opacity: plannedMeals ? 1 : 0.85,
         }}
+        disabled={!plannedMeals && !open}
       >
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: open ? T.accentDeep : T.ink }}>
             Grocery list
           </div>
           <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
-            From this week’s meals · {list.lineCount} items
+            {plannedMeals === 0
+              ? "From your plan · nothing planned yet"
+              : `From your plan · ${list.lineCount} items`}
           </div>
         </div>
         <span style={{ fontSize: 13, fontWeight: 700, color: T.accentDeep }}>
-          {open ? "Hide ▴" : "Open ▾"}
+          {plannedMeals === 0 ? "—" : open ? "Hide ▴" : "Open ▾"}
         </span>
       </button>
 
-      {open && (
+      {plannedMeals === 0 && (
+        <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "8px 2px 0", lineHeight: 1.45 }}>
+          {emptyHint}
+        </p>
+      )}
+
+      {open && plannedMeals > 0 && (
         <Card style={{ marginTop: 8, padding: 14 }}>
           <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
-            Shop-ready list from {personalized ? "your personalized week" : "this sample week"}.
-            Amounts stay as written in the recipes — we don’t guess package sizes.
+            Shop-ready list from the meals on your plan. Amounts stay as written — we don’t guess package sizes.
           </p>
 
           {list.sections.length === 0 ? (

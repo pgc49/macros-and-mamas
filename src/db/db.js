@@ -1016,4 +1016,76 @@ export const db = {
       .eq("id", id);
     if (error) throw error;
   },
+
+  /** Client-owned week planner (localStorage fallback until migration 014). */
+  async loadWeekPlan() {
+    const uid = await requireUserId();
+    const lsKey = `mm_week_plan_${uid}`;
+    try {
+      const { data, error } = await supabase
+        .from("client_week_plans")
+        .select("days, source, updated_at")
+        .eq("profile_id", uid)
+        .maybeSingle();
+      if (error) {
+        console.warn("loadWeekPlan failed (migration 014?)", error);
+        return readWeekPlanLocal(lsKey);
+      }
+      if (!data) return readWeekPlanLocal(lsKey);
+      const days = Array.isArray(data.days) ? data.days : [];
+      return {
+        days,
+        source: data.source || "manual",
+        updated_at: data.updated_at || null,
+      };
+    } catch (e) {
+      console.warn("loadWeekPlan exception", e);
+      return readWeekPlanLocal(lsKey);
+    }
+  },
+
+  async saveWeekPlan(days, source = "manual") {
+    const uid = await requireUserId();
+    const lsKey = `mm_week_plan_${uid}`;
+    const payload = {
+      days: Array.isArray(days) ? days : [],
+      source: ["manual", "ai", "coach_seed"].includes(source) ? source : "manual",
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem(lsKey, JSON.stringify(payload));
+    } catch {
+      /* ignore quota */
+    }
+    const { error } = await supabase.from("client_week_plans").upsert(
+      {
+        profile_id: uid,
+        days: payload.days,
+        source: payload.source,
+        updated_at: payload.updated_at,
+      },
+      { onConflict: "profile_id" },
+    );
+    if (error) {
+      console.warn("saveWeekPlan supabase failed — kept local copy", error);
+      // Still succeed locally so planner works before migration lands
+      return payload;
+    }
+    return payload;
+  },
 };
+
+function readWeekPlanLocal(lsKey) {
+  try {
+    const raw = localStorage.getItem(lsKey);
+    if (!raw) return { days: [], source: "manual", updated_at: null };
+    const parsed = JSON.parse(raw);
+    return {
+      days: Array.isArray(parsed?.days) ? parsed.days : [],
+      source: parsed?.source || "manual",
+      updated_at: parsed?.updated_at || null,
+    };
+  } catch {
+    return { days: [], source: "manual", updated_at: null };
+  }
+}

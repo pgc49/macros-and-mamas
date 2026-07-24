@@ -536,3 +536,39 @@ create policy "water_logs_delete_own"
   on public.water_logs for delete
   to authenticated
   using (profile_id = auth.uid());
+
+-- Client-owned weekly meal planner (grocery source of truth)
+create table if not exists public.client_week_plans (
+  profile_id uuid primary key references public.profiles (id) on delete cascade,
+  days jsonb not null default '[]'::jsonb,
+  source text not null default 'manual'
+    check (source in ('manual', 'ai', 'coach_seed')),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.client_week_plans enable row level security;
+
+drop policy if exists "client_week_plans_select_own_or_admin" on public.client_week_plans;
+create policy "client_week_plans_select_own_or_admin"
+  on public.client_week_plans for select
+  to authenticated
+  using (profile_id = auth.uid() or public.is_admin());
+
+drop policy if exists "client_week_plans_insert_own" on public.client_week_plans;
+create policy "client_week_plans_insert_own"
+  on public.client_week_plans for insert
+  to authenticated
+  with check (profile_id = auth.uid());
+
+drop policy if exists "client_week_plans_update_own" on public.client_week_plans;
+create policy "client_week_plans_update_own"
+  on public.client_week_plans for update
+  to authenticated
+  using (profile_id = auth.uid())
+  with check (profile_id = auth.uid());
+
+drop policy if exists "client_week_plans_delete_own" on public.client_week_plans;
+create policy "client_week_plans_delete_own"
+  on public.client_week_plans for delete
+  to authenticated
+  using (profile_id = auth.uid());

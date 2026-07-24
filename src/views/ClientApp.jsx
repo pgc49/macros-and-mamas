@@ -1,9 +1,8 @@
 import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/data";
-import { DEFAULT_WEEK } from "../content/defaultWeek";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
-import { Shell, Card, Btn, Chip, RangeBand, rangeState } from "../components/ui";
+import { Shell, Card, Chip, RangeBand, rangeState } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
 import { MealRecipeCard } from "../components/MealRecipeCard";
 import { WaterLogCard } from "../components/WaterLogCard";
@@ -11,8 +10,9 @@ import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
 import { LoggableMealRow } from "../components/LoggableMealRow";
-import { GroceryListPanel } from "../components/GroceryListPanel";
+import { WeekPlanner } from "../components/WeekPlanner";
 import { mealToCard } from "../content/recipeDetails";
+import { countPlannedMeals } from "../utils/weekPlan";
 
 export function ClientApp({
   tab, setTab,
@@ -33,11 +33,19 @@ export function ClientApp({
   customMeals = [],
   onSaveCustomMeal,
   onDeleteCustomMeal,
+  weekPlanDays = [],
+  weekPlanSource = "manual",
+  weekPlanSaving = false,
+  weekPlanSuggestBusy = false,
+  onWeekPlanChange,
+  onWeekPlanSave,
+  onSuggestAiWeek,
 }) {
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
     : [];
+  const plannedCount = countPlannedMeals(weekPlanDays);
   const hi = (n, d = 10) => n + d;
   const hasElectrolytes = hasPublicUrl(CONFIG.FULLSCRIPT_ELECTROLYTES);
   const hasSleep = hasPublicUrl(CONFIG.FULLSCRIPT_SLEEP);
@@ -285,12 +293,10 @@ export function ClientApp({
         <>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Automate your plate</h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-            {personalized
-              ? "Your personalized week — built from your preferences, inside your program ranges. Take what works; open a meal for Recipe, Steps, and Serving size, then + Log."
-              : "Same breakfasts, similar lunches, dinner gets to be fun. Open any card for the full cook (Recipe), Steps, and your Serving size — then + Log."}
+            Plan the week you&apos;ll actually cook — then shop from that plan. Browse the bank anytime; AI can suggest a week from what you told Callie you love.
           </p>
 
-          {!personalized && (
+          {mealFilter !== "This week" && mealFilter !== "My meals" && (
             <Card style={{ background: T.accentSoft, border: "none", marginBottom: 14 }}>
               {SKELETONS.map((s) => (
                 <div key={s.meal} style={{ marginBottom: 12 }}>
@@ -305,15 +311,26 @@ export function ClientApp({
           )}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {["By Day", "My meals", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
-              <Chip key={c} active={mealFilter === c} onClick={() => setMealFilter(c)}>{c}</Chip>
+            {["This week", "My meals", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
+              <Chip key={c} active={mealFilter === c} onClick={() => setMealFilter(c)}>
+                {c === "This week" && plannedCount ? `${c} · ${plannedCount}` : c}
+              </Chip>
             ))}
           </div>
 
-          {mealFilter === "By Day" && (
-            <GroceryListPanel
-              personalized={!!personalized}
-              weekDays={personalized ? (publishedPlan?.days || []) : DEFAULT_WEEK}
+          {mealFilter === "This week" && (
+            <WeekPlanner
+              profile={profile}
+              macros={macros}
+              days={weekPlanDays}
+              source={weekPlanSource}
+              saving={weekPlanSaving}
+              suggestBusy={weekPlanSuggestBusy}
+              onChangeDays={onWeekPlanChange}
+              onSave={onWeekPlanSave}
+              onSuggestAiWeek={onSuggestAiWeek}
+              coachPlan={personalized ? publishedPlan : null}
+              onLog={logRecipe}
             />
           )}
 
@@ -343,61 +360,13 @@ export function ClientApp({
             </div>
           )}
 
-          {mealFilter === "By Day" && personalized && (publishedPlan?.days || []).map((day) => (
-            <div key={day.day} style={{ marginBottom: 18 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                <div>
-                  <span style={{ fontFamily: FD, fontSize: 20 }}>{day.day}</span>
-                  {day.theme && <span style={{ fontSize: 13, color: T.inkSoft, marginLeft: 8 }}>{day.theme}</span>}
-                </div>
-                {day.dayTotals && (
-                  <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 700 }}>
-                    {Math.round(day.dayTotals.cal || 0)} cal · {Math.round(day.dayTotals.p || 0)}P · {Math.round(day.dayTotals.c || 0)}C · {Math.round(day.dayTotals.f || 0)}F
-                  </div>
-                )}
-              </div>
-              {(day.meals || []).map((m, idx) => (
-                <MealRecipeCard key={`${day.day}-${idx}`} meal={mealToCard(m)} onLog={logRecipe} />
-              ))}
-            </div>
-          ))}
-
-          {mealFilter === "By Day" && !personalized && DEFAULT_WEEK.map((day) => {
-            const dayMeals = day.meals || [];
-            const totals = dayMeals.reduce(
-              (a, m) => ({
-                cal: a.cal + (Number(m.cal) || 0),
-                p: a.p + (Number(m.p) || 0),
-                c: a.c + (Number(m.c) || 0),
-                f: a.f + (Number(m.f) || 0),
-              }),
-              { cal: 0, p: 0, c: 0, f: 0 },
-            );
-            return (
-              <div key={day.day} style={{ marginBottom: 18 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                  <div>
-                    <span style={{ fontFamily: FD, fontSize: 20 }}>{day.day}</span>
-                    {day.theme && <span style={{ fontSize: 13, color: T.inkSoft, marginLeft: 8 }}>{day.theme}</span>}
-                  </div>
-                  <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 700 }}>
-                    {Math.round(totals.cal)} cal · {Math.round(totals.p)}P · {Math.round(totals.c)}C · {Math.round(totals.f)}F
-                  </div>
-                </div>
-                {dayMeals.map((m) => (
-                  <MealRecipeCard key={`${day.day}-${m.name}`} meal={m} onLog={logRecipe} />
-                ))}
-              </div>
-            );
-          })}
-
-          {mealFilter !== "By Day" && mealFilter !== "My meals" && personalized && flatPersonalized
+          {mealFilter !== "This week" && mealFilter !== "My meals" && personalized && flatPersonalized
             .filter((m) => (m.cat || "").toLowerCase() === mealFilter.toLowerCase())
             .map((m, idx) => (
               <MealRecipeCard key={`${m.name}-${idx}`} meal={m} onLog={logRecipe} />
             ))}
 
-          {mealFilter !== "By Day" && mealFilter !== "My meals" && !personalized && RECIPES
+          {mealFilter !== "This week" && mealFilter !== "My meals" && !personalized && RECIPES
             .filter((r) => r.cat === mealFilter)
             .map((r) => (
               <MealRecipeCard key={r.name} meal={r} onLog={logRecipe} />

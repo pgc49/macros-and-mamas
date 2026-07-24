@@ -61,9 +61,14 @@ export default function App() {
   const [viewWk, setViewWk] = useState(curWk);
   const [editPast, setEditPast] = useState(false);
   const [weighins, setWeighins] = useState([]);
-  const [mealFilter, setMealFilter] = useState("Breakfast");
+  const [mealFilter, setMealFilter] = useState("This week");
   const [mealPlanMode, setMealPlanMode] = useState("default");
   const [publishedPlan, setPublishedPlan] = useState(null);
+  const [weekPlanDays, setWeekPlanDays] = useState([]);
+  const [weekPlanSource, setWeekPlanSource] = useState("manual");
+  const [weekPlanSaving, setWeekPlanSaving] = useState(false);
+  const [weekPlanSuggestBusy, setWeekPlanSuggestBusy] = useState(false);
+  const weekPlanSaveTimer = useRef(null);
   const [roster, setRoster] = useState([]);
   const [adminStats, setAdminStats] = useState(null);
   const [adminSel, setAdminSel] = useState(null);
@@ -92,10 +97,24 @@ export default function App() {
       const personalized = mp.mode === "personalized" && Array.isArray(mp.published?.days) && mp.published.days.length > 0;
       setMealPlanMode(personalized ? "personalized" : "default");
       setPublishedPlan(personalized ? mp.published : null);
-      if (personalized) setMealFilter("By Day");
+      setMealFilter("This week");
       return mp;
     } catch (mpErr) {
       console.warn("loadClientMealPlan failed", mpErr);
+      return null;
+    }
+  };
+
+  const refreshWeekPlan = async () => {
+    try {
+      const wp = await db.loadWeekPlan();
+      setWeekPlanDays(Array.isArray(wp.days) ? wp.days : []);
+      setWeekPlanSource(wp.source || "manual");
+      return wp;
+    } catch (e) {
+      console.warn("loadWeekPlan failed", e);
+      setWeekPlanDays([]);
+      setWeekPlanSource("manual");
       return null;
     }
   };
@@ -151,7 +170,10 @@ export default function App() {
               console.warn("loadCustomMeals failed", cErr);
               if (!cancelled) setCustomMeals([]);
             }
-            if (!cancelled) await refreshMealPlan(user.id);
+            if (!cancelled) {
+              await refreshMealPlan(user.id);
+              await refreshWeekPlan();
+            }
           }
         } else {
           setMacros(null);
@@ -160,6 +182,8 @@ export default function App() {
           setRefunded(false);
           setMealPlanMode("default");
           setPublishedPlan(null);
+          setWeekPlanDays([]);
+          setWeekPlanSource("manual");
           setCustomMeals([]);
         }
         if (isAdmin) {
@@ -199,6 +223,7 @@ export default function App() {
     if (location.pathname !== PATHS.dashboard) return;
     if (tab !== "meals") return;
     refreshMealPlan(user.id);
+    refreshWeekPlan();
   }, [tab, location.pathname, user?.id, authLoading, loaded]);
 
   /* After load / sign-in: send users from entry paths to the right home. */
@@ -646,6 +671,67 @@ export default function App() {
     }
   };
 
+  const persistWeekPlan = async (days, source) => {
+    setWeekPlanSaving(true);
+    try {
+      const saved = await db.saveWeekPlan(days, source);
+      setWeekPlanDays(saved.days || days);
+      setWeekPlanSource(saved.source || source || "manual");
+    } catch (e) {
+      console.error("saveWeekPlan failed", e);
+    } finally {
+      setWeekPlanSaving(false);
+    }
+  };
+
+  const onWeekPlanChange = (days, source = "manual") => {
+    setWeekPlanDays(days);
+    setWeekPlanSource(source);
+    if (weekPlanSaveTimer.current) window.clearTimeout(weekPlanSaveTimer.current);
+    weekPlanSaveTimer.current = window.setTimeout(() => {
+      persistWeekPlan(days, source);
+    }, 600);
+  };
+
+  const onWeekPlanSave = async () => {
+    if (weekPlanSaveTimer.current) {
+      window.clearTimeout(weekPlanSaveTimer.current);
+      weekPlanSaveTimer.current = null;
+    }
+    await persistWeekPlan(weekPlanDays, weekPlanSource);
+  };
+
+  const onSuggestAiWeek = async () => {
+    setWeekPlanSuggestBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return { error: "Sign in again to get AI suggestions." };
+      const resp = await fetch("/api/meal-suggest", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: "{}",
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        return {
+          error: data.message || data.error || "Couldn’t suggest a week right now.",
+        };
+      }
+      return {
+        days: data.plan?.days || [],
+        summary: data.summary || data.plan?.summaryForClient || "",
+      };
+    } catch (e) {
+      console.error("meal-suggest failed", e);
+      return { error: "Couldn’t reach suggestions — try Fill from my tastes." };
+    } finally {
+      setWeekPlanSuggestBusy(false);
+    }
+  };
+
   const updateMealEntry = async (id, patch) => {
     if (!id) return;
     try {
@@ -843,6 +929,13 @@ export default function App() {
       customMeals={customMeals}
       onSaveCustomMeal={saveCustomMeal}
       onDeleteCustomMeal={deleteCustomMeal}
+      weekPlanDays={weekPlanDays}
+      weekPlanSource={weekPlanSource}
+      weekPlanSaving={weekPlanSaving}
+      weekPlanSuggestBusy={weekPlanSuggestBusy}
+      onWeekPlanChange={onWeekPlanChange}
+      onWeekPlanSave={onWeekPlanSave}
+      onSuggestAiWeek={onSuggestAiWeek}
     />
   );
 
