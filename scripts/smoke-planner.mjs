@@ -18,6 +18,8 @@ import {
   customMealToPlanMeal,
   aiIdeaToPlanMeal,
   cloneDaysToPlan,
+  rangeCoach,
+  targetBands,
 } from "../src/utils/weekPlan.js";
 import { suggestRecipesForSlot, suggestWeekFromBank } from "../src/utils/suggestFromPrefs.js";
 import { RECIPES } from "../src/content/data.js";
@@ -54,6 +56,15 @@ const fri = addMealToDay(empty, "Fri", recipeToPlanMeal(oats, "breakfast"));
 const oatsId = fri[4].meals[0].id;
 const withQty = setMealQty(fri, oatsId, 2);
 assert(sumDayTotals(withQty[4].meals).cal === oats.cal * 2, "qty scales day totals");
+
+const bands = targetBands({ cal: 2000, protein: 150, carbs: 180, fat: 60 });
+const building = rangeCoach({ cal: 400, p: 30, c: 40, f: 10 }, bands, 1);
+assert(building.phase === "building", "one meal is still building");
+assert(building.tips.length >= 1, "building has tips");
+const inRange = rangeCoach({ cal: 2050, p: 155, c: 185, f: 65 }, bands, 4);
+assert(inRange.phase === "in", "full day in range");
+const shortP = rangeCoach({ cal: 2100, p: 120, c: 185, f: 65 }, bands, 4);
+assert(shortP.phase === "adjust" && /protein/i.test(shortP.tips.join(" ")), "short protein tip");
 
 const profile = {
   prefB: "smoothies and oatmeal",

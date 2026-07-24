@@ -125,6 +125,84 @@ export function dayAllInRange(inRange) {
   return inRange.cal && inRange.p && inRange.c && inRange.f;
 }
 
+/**
+ * Coaching while she builds a day — don't yell "out of range" with 1–2 meals.
+ * Returns remaining room + short actionable tips.
+ */
+export function rangeCoach(totals, bands, mealCount = 0) {
+  if (!bands) return null;
+  const n = Number(mealCount) || 0;
+  if (!n) {
+    return {
+      phase: "empty",
+      headline: null,
+      remaining: null,
+      tips: [],
+    };
+  }
+
+  const rem = {
+    cal: bands.calLo - (totals?.cal || 0),
+    p: bands.pLo - (totals?.p || 0),
+    c: bands.cLo - (totals?.c || 0),
+    f: bands.fLo - (totals?.f || 0),
+  };
+  const over = {
+    cal: (totals?.cal || 0) - bands.calHi,
+    p: (totals?.p || 0) - bands.pHi,
+    c: (totals?.c || 0) - bands.cHi,
+    f: (totals?.f || 0) - bands.fHi,
+  };
+  const ir = dayInRange(totals, bands);
+  const allIn = dayAllInRange(ir);
+
+  // Still filling the day — show budget left, not failure
+  const looksComplete = n >= 3 || (totals?.cal || 0) >= bands.calLo * 0.85;
+  if (!looksComplete) {
+    const tips = [];
+    if (rem.p > 8) tips.push(`Still need ~${Math.round(rem.p)}g protein — add a protein-forward meal or bump a serving.`);
+    else if (rem.cal > 200) tips.push(`~${Math.round(rem.cal)} cal left in range — keep adding lunch/dinner/snack.`);
+    else tips.push("Keep building the day — ranges apply to the full plate, not one meal.");
+    return {
+      phase: "building",
+      headline: "Building this day",
+      remaining: rem,
+      tips: tips.slice(0, 2),
+    };
+  }
+
+  if (allIn) {
+    return {
+      phase: "in",
+      headline: "In range",
+      remaining: rem,
+      tips: ["Nice — this day lands in your bands. Tweak servings anytime."],
+    };
+  }
+
+  const tips = [];
+  if (over.p > 0) tips.push(`Protein is ~${Math.round(over.p)}g over — trim a serving on the highest-protein meal.`);
+  else if (rem.p > 0) tips.push(`Need ~${Math.round(rem.p)}g more protein — bump a serving or add yogurt, chicken, or a shake.`);
+
+  if (over.c > 0) tips.push(`Carbs are ~${Math.round(over.c)}g over — ease rice/fruit/tortilla portions (0.75× works).`);
+  else if (rem.c > 0 && tips.length < 2) tips.push(`Need ~${Math.round(rem.c)}g more carbs — fruit, rice, or oats on a meal.`);
+
+  if (over.f > 0 && tips.length < 2) tips.push(`Fat is ~${Math.round(over.f)}g over — watch oils, PB, avocado, cheese.`);
+  else if (rem.f > 0 && tips.length < 2) tips.push(`Need ~${Math.round(rem.f)}g more fat — olive oil, avocado, or nuts.`);
+
+  if (over.cal > 0 && tips.length < 2) tips.push(`~${Math.round(over.cal)} cal over the top of your band — dial a serving down.`);
+  else if (rem.cal > 0 && tips.length < 2) tips.push(`~${Math.round(rem.cal)} cal short of the bottom — add a snack or bump a serving.`);
+
+  if (!tips.length) tips.push("Close — nudge servings until the chips go green.");
+
+  return {
+    phase: "adjust",
+    headline: "Nudge to land in range",
+    remaining: rem,
+    tips: tips.slice(0, 2),
+  };
+}
+
 export function countPlannedMeals(days) {
   return (days || []).reduce((n, d) => n + (d.meals?.length || 0), 0);
 }

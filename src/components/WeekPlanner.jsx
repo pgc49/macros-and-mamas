@@ -27,7 +27,7 @@ import {
   scaledMealMacros,
   targetBands,
   dayInRange,
-  dayAllInRange,
+  rangeCoach,
 } from "../utils/weekPlan";
 
 /** How far ahead she can plan (blank weeks until she adds meals). */
@@ -220,7 +220,11 @@ export function WeekPlanner({
   };
 
   const daysInRangeCount = bands
-    ? planned.filter((d) => d.meals?.length && dayAllInRange(dayInRange(sumDayTotals(d.meals), bands))).length
+    ? planned.filter((d) => {
+      const n = d.meals?.length || 0;
+      if (!n) return false;
+      return rangeCoach(sumDayTotals(d.meals), bands, n)?.phase === "in";
+    }).length
     : 0;
 
   const navBtnStyle = (disabled) => ({
@@ -315,8 +319,8 @@ export function WeekPlanner({
               const dayRow = planned.find((x) => x.day === d) || { meals: [] };
               const count = dayRow.meals?.length || 0;
               const totals = sumDayTotals(dayRow.meals || []);
-              const ir = bands && count ? dayInRange(totals, bands) : null;
-              const ok = dayAllInRange(ir);
+              const coach = bands && count ? rangeCoach(totals, bands, count) : null;
+              const inRange = coach?.phase === "in";
               const active = d === activeDay;
               return (
                 <button
@@ -325,18 +329,18 @@ export function WeekPlanner({
                   onClick={() => setActiveDay(d)}
                   style={{
                     flex: "0 0 auto",
-                    padding: "8px 12px",
+                    padding: "8px 14px",
                     borderRadius: 999,
-                    border: `1.5px solid ${active ? T.accent : ok ? T.sage : T.border}`,
-                    background: active ? T.accentSoft : ok ? T.sageSoft : "#fff",
-                    color: active ? T.accentDeep : ok ? "#3E5A46" : T.ink,
+                    border: `1.5px solid ${active ? T.accent : inRange ? T.sage : T.border}`,
+                    background: active ? T.accentSoft : inRange ? T.sageSoft : "#fff",
+                    color: active ? T.accentDeep : inRange ? "#3E5A46" : T.ink,
                     fontFamily: F,
                     fontWeight: 700,
                     fontSize: 13,
                     cursor: "pointer",
                   }}
                 >
-                  {d}{count ? ` · ${count}` : ""}{ok ? " ✓" : ir && count ? " !" : ""}
+                  {d}
                 </button>
               );
             })}
@@ -583,8 +587,17 @@ function DayColumn({
   mobile = false,
 }) {
   const totals = sumDayTotals(day.meals || []);
-  const ir = bands && (day.meals || []).length ? dayInRange(totals, bands) : null;
-  const ok = dayAllInRange(ir);
+  const mealCount = (day.meals || []).length;
+  const coach = bands && mealCount ? rangeCoach(totals, bands, mealCount) : null;
+  const ir = bands && mealCount ? dayInRange(totals, bands) : null;
+  const inRange = coach?.phase === "in";
+  const borderTone = highlight
+    ? T.sage
+    : inRange
+      ? T.sage
+      : coach?.phase === "adjust"
+        ? T.amber
+        : T.border;
 
   return (
     <div
@@ -592,7 +605,7 @@ function DayColumn({
       onDrop={(e) => onDrop(e, day.day)}
       style={{
         background: highlight ? T.sageSoft : T.card,
-        border: `1.5px solid ${highlight ? T.sage : ok ? T.sage : T.border}`,
+        border: `1.5px solid ${borderTone}`,
         borderRadius: 14,
         padding: mobile ? 12 : 8,
         minHeight: mobile ? undefined : 280,
@@ -602,36 +615,34 @@ function DayColumn({
       <div style={{ marginBottom: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
           <span style={{ fontFamily: FD, fontSize: mobile ? 22 : 16 }}>{day.day}</span>
-          {ok === true && (
+          {coach?.phase === "in" && (
             <span style={{ fontSize: 11, fontWeight: 700, color: T.sage }}>in range</span>
           )}
-          {ok === false && (
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.amber }}>out of range</span>
+          {coach?.phase === "building" && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft }}>building</span>
+          )}
+          {coach?.phase === "adjust" && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.amber }}>nudge servings</span>
           )}
         </div>
         {day.theme ? (
           <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2, lineHeight: 1.3 }}>{day.theme}</div>
         ) : null}
-        {bands && (day.meals || []).length > 0 && (
+        {mealCount > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-            <MacroChip label="cal" value={totals.cal} ok={ir?.cal} />
-            <MacroChip label="P" value={`${totals.p}g`} ok={ir?.p} />
-            <MacroChip label="C" value={`${totals.c}g`} ok={ir?.c} />
-            <MacroChip label="F" value={`${totals.f}g`} ok={ir?.f} />
+            <MacroChip label="cal" value={totals.cal} ok={coach?.phase === "building" ? null : ir?.cal} />
+            <MacroChip label="P" value={`${totals.p}g`} ok={coach?.phase === "building" ? null : ir?.p} />
+            <MacroChip label="C" value={`${totals.c}g`} ok={coach?.phase === "building" ? null : ir?.c} />
+            <MacroChip label="F" value={`${totals.f}g`} ok={coach?.phase === "building" ? null : ir?.f} />
           </div>
         )}
-        {!bands && (day.meals || []).length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-            <MacroChip label="cal" value={totals.cal} ok={null} />
-            <MacroChip label="P" value={`${totals.p}g`} ok={null} />
-            <MacroChip label="C" value={`${totals.c}g`} ok={null} />
-            <MacroChip label="F" value={`${totals.f}g`} ok={null} />
-          </div>
-        )}
-        {bands && (day.meals || []).length > 0 && (
+        {bands && mealCount > 0 && (
           <div style={{ fontSize: 10.5, color: T.inkSoft, marginTop: 4 }}>
             Target {bands.calLo}–{bands.calHi} cal · {bands.pLo}–{bands.pHi}P · {bands.cLo}–{bands.cHi}C · {bands.fLo}–{bands.fHi}F
           </div>
+        )}
+        {coach && coach.phase !== "empty" && (
+          <RangeCoachCard coach={coach} bands={bands} totals={totals} />
         )}
       </div>
 
@@ -661,6 +672,46 @@ function DayColumn({
           <AddChip key={slot} label={`+ ${SLOT_LABEL[slot]}`} onClick={() => onAdd(slot)} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function RangeCoachCard({ coach, bands, totals }) {
+  if (!coach?.headline) return null;
+  const rem = coach.remaining;
+  const soft = coach.phase === "building" || coach.phase === "in";
+  const roomLine = rem && coach.phase === "building"
+    ? [
+        rem.cal > 0 ? `~${Math.round(rem.cal)} cal` : null,
+        rem.p > 0 ? `~${Math.round(rem.p)}P` : null,
+        rem.c > 0 ? `~${Math.round(rem.c)}C` : null,
+        rem.f > 0 ? `~${Math.round(rem.f)}F` : null,
+      ].filter(Boolean).join(" · ")
+    : null;
+
+  return (
+    <div
+      style={{
+        marginTop: 8,
+        padding: "8px 10px",
+        borderRadius: 10,
+        background: soft ? T.sageSoft : T.amberSoft,
+      }}
+    >
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: soft ? "#3E5A46" : T.amber, marginBottom: 2 }}>
+        {coach.headline}
+        {roomLine ? ` · room left ${roomLine}` : ""}
+      </div>
+      {coach.tips?.map((t) => (
+        <div key={t} style={{ fontSize: 11.5, color: soft ? "#3E5A46" : T.ink, lineHeight: 1.4, marginTop: 3 }}>
+          {t}
+        </div>
+      ))}
+      {coach.phase === "adjust" && bands && (
+        <div style={{ fontSize: 10.5, color: T.inkSoft, marginTop: 4 }}>
+          Now {totals.cal} / {totals.p}P / {totals.c}C / {totals.f}F
+        </div>
+      )}
     </div>
   );
 }
