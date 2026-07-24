@@ -34,6 +34,10 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
   const steps = r.steps || [];
   const servings = snapServings(qty);
   const scaled = scaleMealForLog(r, servings);
+  const isDinner = String(cat).toLowerCase() === "dinner";
+  const batchLabel = serves > 1
+    ? (isDinner ? ` · batch · serves ${serves}` : ` · batch serves ${serves}`)
+    : "";
 
   const logBtn = (
     <button
@@ -86,7 +90,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
           }}
         >
           <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}>
-            {cat}{serves > 1 ? ` · batch serves ${serves}` : ""}{open ? " · hide recipe" : " · open recipe"}
+            {cat}{batchLabel}{open ? " · hide recipe" : " · open recipe"}
           </div>
           <div style={{ fontFamily: FD, fontSize: 18, margin: "2px 0 4px", color: T.ink }}>{r.name}</div>
         </button>
@@ -152,7 +156,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
                 Ingredients · batch cook
               </div>
               <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.4, marginBottom: 6 }}>
-                Full cook for about {serves} servings (family batch).
+                Full cook for about {serves} plates (family batch). Macros below are one logged plate.
               </div>
               <IngList items={batch} />
             </div>

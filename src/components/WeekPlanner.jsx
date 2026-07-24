@@ -721,6 +721,9 @@ function PlanMealTile({
     || [];
   const steps = (card.steps?.length ? card.steps : null) || detail.steps || [];
   const batch = (card.batch?.length ? card.batch : null) || (detail.batch?.length ? detail.batch : null);
+  const serves = Number(meal.servings || meal.serves || card.serves || detail.serves) || 1;
+  const slotKey = String(meal.slot || "").toLowerCase();
+  const showBatchServes = serves > 1 && (slotKey === "dinner" || !!batch);
   const hasRecipe = serving.length > 0 || steps.length > 0 || !!meal.desc;
 
   return (
@@ -751,14 +754,16 @@ function PlanMealTile({
         }}
       >
         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: T.accentDeep }}>
-          {slot}{hasRecipe ? (open ? " · hide recipe" : " · tap for recipe") : ""}
+          {slot}
+          {showBatchServes ? ` · batch · serves ${serves}` : ""}
+          {hasRecipe ? (open ? " · hide recipe" : " · tap for recipe") : ""}
         </div>
         <div style={{ fontSize: compact ? 13 : 14.5, fontWeight: 700, color: T.ink, lineHeight: 1.3, marginTop: 2 }}>
           {meal.name}
         </div>
         <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 2 }}>
           {scaled.cal} · {scaled.p}P/{scaled.c}C/{scaled.f}F
-          {qty !== 1 ? ` · ${qty}×` : ""}
+          {qty !== 1 ? ` · ${qty}× logged` : " · per plate"}
         </div>
       </button>
 
@@ -809,9 +814,13 @@ function PlanMealTile({
         <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
           {batch && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>Ingredients · batch cook</div>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>
+                Ingredients · batch cook{serves > 1 ? ` · serves ${serves}` : ""}
+              </div>
               <div style={{ fontSize: 11.5, color: T.inkSoft, marginBottom: 6, lineHeight: 1.4 }}>
-                Full cook for the family batch.
+                {serves > 1
+                  ? `Full cook for about ${serves} plates (family batch). Macros above are one logged plate.`
+                  : "Full cook for the family batch."}
               </div>
               <IngList items={batch} />
             </div>
@@ -1005,9 +1014,9 @@ function MealPickerModal({
         zIndex: 80,
         background: "rgba(40, 24, 32, 0.45)",
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
         justifyContent: "center",
-        padding: 12,
+        padding: 16,
       }}
       onClick={onClose}
       onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
@@ -1016,11 +1025,12 @@ function MealPickerModal({
         style={{
           width: "100%",
           maxWidth: 480,
-          maxHeight: "85vh",
+          maxHeight: "min(85vh, 720px)",
           overflow: "auto",
           background: "#fff",
           borderRadius: 18,
           padding: 16,
+          boxShadow: "0 12px 40px rgba(40, 24, 32, 0.18)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1287,7 +1297,7 @@ function AiMealPreview({ meal, onAdd }) {
     >
       <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, textTransform: "uppercase" }}>
         {SLOT_LABEL[String(meal.slot || "").toLowerCase()] || "Meal"}
-        {meal.basedOn ? ` · based on ${meal.basedOn}` : " · custom AI"}
+        {Number(meal.servings) > 1 ? ` · batch · serves ${meal.servings}` : meal.basedOn ? ` · based on ${meal.basedOn}` : " · custom AI"}
       </div>
       <div style={{ fontWeight: 700, fontSize: 15, color: T.ink, marginTop: 2 }}>{meal.name}</div>
       <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
@@ -1327,6 +1337,8 @@ function AiMealPreview({ meal, onAdd }) {
 }
 
 function PickerRow({ recipe, reason, onPick, accent }) {
+  const serves = Number(recipe.serves) || 1;
+  const isDinner = String(recipe.cat || "").toLowerCase() === "dinner";
   return (
     <button
       type="button"
@@ -1345,11 +1357,13 @@ function PickerRow({ recipe, reason, onPick, accent }) {
     >
       <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, textTransform: "uppercase" }}>
         {recipe.cat}
+        {isDinner && serves > 1 ? ` · batch · serves ${serves}` : ""}
       </div>
       <div style={{ fontWeight: 700, fontSize: 14, color: T.ink }}>{recipe.name}</div>
       <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
         {recipe.cal} cal · {recipe.p}P · {recipe.c}C · {recipe.f}F
         {reason ? ` · ${reason}` : ""}
+        {isDinner && serves > 1 ? " · per plate" : ""}
       </div>
     </button>
   );
