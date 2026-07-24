@@ -150,6 +150,47 @@ export function recipeToPlanMeal(recipe, slotOverride = null) {
   });
 }
 
+/** My meals are macros-only — fine for ranges; grocery lines will be thin. */
+export function customMealToPlanMeal(custom, slotOverride = "snack") {
+  const slot = String(slotOverride || "snack").toLowerCase();
+  return withMealId({
+    slot: PLAN_SLOTS.includes(slot) ? slot : "snack",
+    name: custom.name,
+    basedOn: null,
+    desc: "From My meals",
+    cal: Number(custom.cal) || 0,
+    p: Number(custom.p) || 0,
+    c: Number(custom.c) || 0,
+    f: Number(custom.f) || 0,
+    servings: 1,
+    qty: 1,
+    ingredients: [],
+    batch: null,
+    steps: [],
+  });
+}
+
+/** AI describe / slot-options meal → planner row (keeps ingredients for grocery). */
+export function aiIdeaToPlanMeal(idea, slotOverride = null) {
+  const raw = String(slotOverride || idea?.slot || "dinner").toLowerCase();
+  const slot = PLAN_SLOTS.includes(raw) ? raw : "dinner";
+  return withMealId({
+    slot,
+    name: idea.name,
+    basedOn: idea.basedOn || null,
+    desc: idea.desc || "",
+    cal: Number(idea.cal) || 0,
+    p: Number(idea.p) || 0,
+    c: Number(idea.c) || 0,
+    f: Number(idea.f) || 0,
+    servings: Number(idea.servings) || 1,
+    qty: 1,
+    ingredients: Array.isArray(idea.ingredients) ? idea.ingredients : [],
+    batch: Array.isArray(idea.batch) && idea.batch.length ? idea.batch : null,
+    steps: Array.isArray(idea.steps) ? idea.steps : [],
+  });
+}
+
 function sortMeals(meals) {
   return [...meals].sort((a, b) => {
     const ia = PLAN_SLOTS.indexOf(String(a.slot || "").toLowerCase());

@@ -40,6 +40,7 @@ export function ClientApp({
   onWeekPlanChange,
   onWeekPlanSave,
   onSuggestAiWeek,
+  onMealIdea,
   onSaveFoodPrefs,
 }) {
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
@@ -294,7 +295,7 @@ export function ClientApp({
         <>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Automate your plate</h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-            Open <b style={{ color: T.ink }}>This week</b> to plan Mon–Sun (or start blank), then shop from that plan.
+            Open <b style={{ color: T.ink }}>This week</b> to build Mon–Sun from an empty board, then shop from that plan.
             Breakfast–Snack chips are the recipe bank to browse anytime.
           </p>
 
@@ -328,11 +329,13 @@ export function ClientApp({
               source={weekPlanSource}
               saving={weekPlanSaving}
               suggestBusy={weekPlanSuggestBusy}
+              customMeals={customMeals}
               onChangeDays={onWeekPlanChange}
               onSave={onWeekPlanSave}
               onSuggestAiWeek={onSuggestAiWeek}
+              onMealIdea={onMealIdea}
+              onSaveCustomMeal={onSaveCustomMeal}
               onSaveFoodPrefs={onSaveFoodPrefs}
-              coachPlan={personalized ? publishedPlan : null}
               onLog={logRecipe}
             />
           )}
@@ -345,7 +348,7 @@ export function ClientApp({
               {!customMeals.length ? (
                 <Card>
                   <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
-                    Nothing saved yet. On Today, enter Macros for a lunch you repeat and leave <b style={{ color: T.ink }}>Save to My meals</b> checked — or save an AI estimate the same way.
+                    Nothing saved yet. Save from Today logging, or when you add an AI meal on This week, choose <b style={{ color: T.ink }}>Save to My meals</b>.
                   </div>
                 </Card>
               ) : (

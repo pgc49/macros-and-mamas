@@ -15,6 +15,8 @@ import {
   setMealQty,
   sumDayTotals,
   recipeToPlanMeal,
+  customMealToPlanMeal,
+  aiIdeaToPlanMeal,
   cloneDaysToPlan,
 } from "../src/utils/weekPlan.js";
 import { suggestRecipesForSlot, suggestWeekFromBank } from "../src/utils/suggestFromPrefs.js";
@@ -73,6 +75,23 @@ assert(groceryEmpty.mealCount === 0 && groceryEmpty.lineCount === 0, "empty plan
 
 const groceryPlanned = buildGroceryList(addMealToDay(empty, "Wed", recipeToPlanMeal(oats, "breakfast")));
 assert(groceryPlanned.mealCount === 1 && groceryPlanned.lineCount > 0, "planned grocery has items");
+
+const customPlan = customMealToPlanMeal({ name: "My turkey wrap", cal: 420, p: 35, c: 30, f: 14 }, "lunch");
+assert(customPlan.slot === "lunch" && customPlan.name === "My turkey wrap", "custom → plan meal");
+assert(!(customPlan.ingredients || []).length, "custom meals are macros-only");
+
+const aiPlan = aiIdeaToPlanMeal({
+  slot: "dinner",
+  name: "AI taco bowl",
+  basedOn: "Turkey taco bowls",
+  cal: 500,
+  p: 40,
+  c: 45,
+  f: 16,
+  ingredients: [{ item: "turkey", amount: "4 oz" }],
+  steps: ["Cook turkey", "Build bowl"],
+}, "dinner");
+assert(aiPlan.ingredients.length === 1 && aiPlan.steps.length === 2, "AI idea keeps recipe");
 
 console.log("OK planner smoke", {
   sampleMeals: countPlannedMeals(sample),

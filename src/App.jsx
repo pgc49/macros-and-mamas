@@ -726,9 +726,36 @@ export default function App() {
       };
     } catch (e) {
       console.error("meal-suggest failed", e);
-      return { error: "Couldn’t reach suggestions — try Fill from my tastes." };
+      return { error: "Couldn’t reach week suggestions — try again or add meals by hand." };
     } finally {
       setWeekPlanSuggestBusy(false);
+    }
+  };
+
+  /** Single-meal AI: describe one meal, or 2–3 options for a slot. */
+  const onMealIdea = async ({ mode, slot, description } = {}) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return { error: "Sign in again for AI meal ideas." };
+      const resp = await fetch("/api/meal-idea", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ mode, slot, description }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        return {
+          error: data.message || data.error || "Couldn’t generate a meal idea right now.",
+        };
+      }
+      if (mode === "describe") return { meal: data.meal };
+      return { meals: data.meals || [] };
+    } catch (e) {
+      console.error("meal-idea failed", e);
+      return { error: "Couldn’t reach meal ideas — try the bank or My meals." };
     }
   };
 
@@ -948,6 +975,7 @@ export default function App() {
       onWeekPlanChange={onWeekPlanChange}
       onWeekPlanSave={onWeekPlanSave}
       onSuggestAiWeek={onSuggestAiWeek}
+      onMealIdea={onMealIdea}
       onSaveFoodPrefs={onSaveFoodPrefs}
     />
   );
