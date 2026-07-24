@@ -267,7 +267,7 @@ export function WeekPlanner({
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
         <PillBtn accent onClick={() => openAdd(activeDay, "any")}>+ Add meal</PillBtn>
         <PillBtn onClick={onAiSuggest} disabled={suggestBusy || !macros}>
-          {suggestBusy ? "Suggesting…" : "Suggest my week"}
+          {suggestBusy ? "Suggesting… (can take a few seconds)" : "Suggest my week"}
         </PillBtn>
         <PillBtn onClick={clearWeek}>Clear</PillBtn>
       </div>

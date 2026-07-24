@@ -56,52 +56,84 @@ export async function onRequestPost({ request, env }) {
     const model = String(env.MEAL_PLAN_MODEL || DEFAULT_MODEL).slice(0, 120);
     const prompt = buildClientSuggestPrompt({ profile, macros });
 
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-        "http-referer": "https://www.macrosandmamas.com",
-        "x-title": "Macros and Mamas Meal Suggest",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 16000,
-        temperature: 0.25,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are Callie's meal-planning assistant helping a postpartum client plan her week. Honor her food loves. Keep every day inside her approved macro bands. Prefer Callie's recipe bank. Output JSON only.",
-          },
-          { role: "user", content: `${prompt}\n\n${CLIENT_SUGGEST_JSON_HINT}` },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
+    // One silent retry — OpenRouter / cold starts often flake on the first try.
+    let plan = null;
+    let lastError = "suggestions unavailable";
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+          "http-referer": "https://www.macrosandmamas.com",
+          "x-title": "Macros and Mamas Meal Suggest",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 16000,
+          temperature: 0.25,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are Callie's meal-planning assistant helping a postpartum client plan her week. Honor her food loves. Keep every day inside her approved macro bands. Prefer Callie's recipe bank. Output JSON only.",
+            },
+            { role: "user", content: `${prompt}\n\n${CLIENT_SUGGEST_JSON_HINT}` },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
 
-    const data = await resp.json().catch(() => null);
-    if (!data) return json({ error: "suggestions unavailable" }, 502);
-    if (data.error) {
-      console.error("openrouter meal-suggest error", data.error);
-      return json({ error: data.error?.message || "suggestions unavailable" }, 502);
+      const data = await resp.json().catch(() => null);
+      if (!data) {
+        lastError = "suggestions unavailable";
+        console.error("meal-suggest empty openrouter body", { attempt });
+        continue;
+      }
+      if (data.error) {
+        lastError = data.error?.message || "suggestions unavailable";
+        console.error("openrouter meal-suggest error", data.error, { attempt });
+        continue;
+      }
+
+      const text = data.choices?.[0]?.message?.content || "";
+      if (!text) {
+        lastError = "empty model response";
+        console.error("meal-suggest empty model response", { attempt });
+        continue;
+      }
+
+      const match = text.match(/\{[\s\S]*\}/);
+      try {
+        plan = JSON.parse(match ? match[0] : text);
+      } catch (e) {
+        lastError = "could not parse plan JSON";
+        console.error("meal-suggest JSON parse failed", e, text.slice(0, 400), { attempt });
+        plan = null;
+        continue;
+      }
+
+      if (!plan?.days || !Array.isArray(plan.days) || plan.days.length < 7) {
+        lastError = "plan missing 7 days";
+        console.error("meal-suggest plan missing 7 days", { attempt, days: plan?.days?.length });
+        plan = null;
+        continue;
+      }
+      break;
     }
 
-    const text = data.choices?.[0]?.message?.content || "";
-    if (!text) return json({ error: "empty model response" }, 502);
-
-    const match = text.match(/\{[\s\S]*\}/);
-    let plan;
-    try {
-      plan = JSON.parse(match ? match[0] : text);
-    } catch (e) {
-      console.error("meal-suggest JSON parse failed", e, text.slice(0, 400));
-      return json({ error: "could not parse plan JSON" }, 502);
+    if (!plan) {
+      return json(
+        {
+          error: lastError,
+          message: "AI was slow starting up — tap Suggest my week once more.",
+        },
+        502,
+      );
     }
 
-    if (!plan?.days || !Array.isArray(plan.days) || plan.days.length < 7) {
-      return json({ error: "plan missing 7 days", plan }, 502);
-    }
+    // Count only successful suggests so a flaky first attempt doesn't burn her daily limit.
+    await logSuggestCall(env, user.id);
 
     const target = plan.dailyTarget || {
       calLo: macros.cal,
@@ -269,6 +301,13 @@ async function checkSuggestLimit(env, userId) {
     };
   }
 
+  return { ok: true };
+}
+
+async function logSuggestCall(env, userId) {
+  const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key || !userId) return;
   await fetch(`${base}/rest/v1/estimate_calls`, {
     method: "POST",
     headers: {
@@ -279,8 +318,6 @@ async function checkSuggestLimit(env, userId) {
     },
     body: JSON.stringify({ profile_id: userId, type: "meal_suggest" }),
   }).catch(() => {});
-
-  return { ok: true };
 }
 
 function json(obj, status = 200) {

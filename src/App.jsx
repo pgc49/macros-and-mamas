@@ -770,27 +770,43 @@ export default function App() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return { error: "Sign in again to get AI suggestions." };
-      const resp = await fetch("/api/meal-suggest", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: "{}",
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        return {
-          error: data.message || data.error || "Couldn’t suggest a week right now.",
-        };
-      }
-      return {
-        days: data.plan?.days || [],
-        summary: data.summary || data.plan?.summaryForClient || "",
+
+      const headers = {
+        "content-type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
       };
-    } catch (e) {
-      console.error("meal-suggest failed", e);
-      return { error: "Couldn’t reach week suggestions — try again or add meals by hand." };
+
+      // One client retry for transient OpenRouter / edge flakes (same pattern as "tap again").
+      let lastError = "Couldn’t suggest a week right now.";
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          const resp = await fetch("/api/meal-suggest", {
+            method: "POST",
+            headers,
+            body: "{}",
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (resp.ok) {
+            return {
+              days: data.plan?.days || [],
+              summary: data.summary || data.plan?.summaryForClient || "",
+            };
+          }
+          // Don't retry auth / payment / rate-limit / macros-required
+          if (resp.status === 401 || resp.status === 403 || resp.status === 409 || resp.status === 429) {
+            return {
+              error: data.message || data.error || "Couldn’t suggest a week right now.",
+            };
+          }
+          lastError = data.message || data.error || lastError;
+          console.warn("meal-suggest attempt failed", { attempt, status: resp.status, lastError });
+        } catch (e) {
+          console.warn("meal-suggest network failed", { attempt, e });
+          lastError = "Couldn’t reach week suggestions — try again or add meals by hand.";
+        }
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 600));
+      }
+      return { error: typeof lastError === "string" ? lastError : "Couldn’t suggest a week right now." };
     } finally {
       setWeekPlanSuggestBusy(false);
     }
