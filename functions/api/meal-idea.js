@@ -14,7 +14,7 @@ import {
   MEAL_IDEA_JSON_HINT,
 } from "../_shared/clientMealIdeaPrompt.js";
 
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4";
+const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
 const MAX_PER_DAY = 20;
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
 

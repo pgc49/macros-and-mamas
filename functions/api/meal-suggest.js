@@ -12,7 +12,7 @@ import {
   CLIENT_SUGGEST_JSON_HINT,
 } from "../_shared/clientMealSuggestPrompt.js";
 
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4";
+const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
 const MAX_PER_DAY = 5;
 
 export async function onRequestPost({ request, env }) {
