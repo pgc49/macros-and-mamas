@@ -1,6 +1,6 @@
 import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
-import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL } from "../content/data";
+import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
 import { Shell, Card, Chip, RangeBand, rangeState } from "../components/ui";
 import { MealLogCard } from "../components/MealLogCard";
@@ -13,6 +13,7 @@ import { LoggableMealRow } from "../components/LoggableMealRow";
 import { WeekPlanner, FoodPrefsEditor } from "../components/WeekPlanner";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
+import { useState } from "react";
 
 export function ClientApp({
   tab, setTab,
@@ -46,10 +47,14 @@ export function ClientApp({
   onMealIdea,
   onSaveFoodPrefs,
 }) {
+  const [pantryGroup, setPantryGroup] = useState("all");
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
     : [];
+  const pantryVisible = pantryGroup === "all"
+    ? PANTRY_ITEMS
+    : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
   const plannedCount = countPlannedMeals(weekPlanDays);
   const hi = (n, d = 10) => n + d;
   const hasElectrolytes = hasPublicUrl(CONFIG.FULLSCRIPT_ELECTROLYTES);
@@ -306,17 +311,23 @@ export function ClientApp({
           {mealFilter !== "Plan" && mealFilter !== "Food prefs" && (
             <>
               <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
-                {mealFilter === "My meals" ? "My meals" : "Recipe bank"}
+                {mealFilter === "My meals"
+                  ? "My meals"
+                  : mealFilter === "Pantry"
+                    ? "Pantry staples"
+                    : "Recipe bank"}
               </h2>
               <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
                 {mealFilter === "My meals"
                   ? "Saved meals for one-tap logging — or jump back to Plan to build your week."
-                  : "Browse Callie’s recipes by slot. Add them to your week from Plan."}
+                  : mealFilter === "Pantry"
+                    ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap to log or add from Plan."
+                    : "Browse Callie’s recipes by slot. Add them to your week from Plan."}
               </p>
             </>
           )}
 
-          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && mealFilter !== "Snack" && (
+          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && mealFilter !== "Snack" && mealFilter !== "Pantry" && (
             <Card style={{ background: T.accentSoft, border: "none", marginBottom: 14 }}>
               {SKELETONS.filter((s) => s.meal === mealFilter).map((s) => (
                 <div key={s.meal} style={{ marginBottom: 0 }}>
@@ -331,8 +342,15 @@ export function ClientApp({
           )}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {["Plan", "Food prefs", "My meals", "Breakfast", "Lunch", "Dinner", "Snack"].map((c) => (
-              <Chip key={c} active={mealFilter === c} onClick={() => setMealFilter(c)}>
+            {["Plan", "Food prefs", "My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Pantry"].map((c) => (
+              <Chip
+                key={c}
+                active={mealFilter === c}
+                onClick={() => {
+                  setMealFilter(c);
+                  if (c === "Pantry") setPantryGroup("all");
+                }}
+              >
                 {c === "Plan" && plannedCount ? `${c} · ${plannedCount}` : c}
               </Chip>
             ))}
@@ -384,13 +402,37 @@ export function ClientApp({
             </div>
           )}
 
-          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && personalized && flatPersonalized
+          {mealFilter === "Pantry" && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <Chip active={pantryGroup === "all"} onClick={() => setPantryGroup("all")}>All</Chip>
+                {PANTRY_GROUPS.map((g) => (
+                  <Chip key={g.id} active={pantryGroup === g.id} onClick={() => setPantryGroup(g.id)}>
+                    {g.label}
+                  </Chip>
+                ))}
+              </div>
+              <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
+                Per-serving estimates from Callie’s brands & pantry cheat sheet. Serving sizes match the sheet.
+              </p>
+              {pantryVisible.map((item) => (
+                <LoggableMealRow
+                  key={item.name}
+                  meal={item}
+                  via="recipe"
+                  onLog={logRecipe}
+                />
+              ))}
+            </div>
+          )}
+
+          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && mealFilter !== "Pantry" && personalized && flatPersonalized
             .filter((m) => (m.cat || "").toLowerCase() === mealFilter.toLowerCase())
             .map((m, idx) => (
               <MealRecipeCard key={`${m.name}-${idx}`} meal={m} onLog={logRecipe} />
             ))}
 
-          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && !personalized && RECIPES
+          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && mealFilter !== "Pantry" && !personalized && RECIPES
             .filter((r) => r.cat === mealFilter)
             .map((r) => (
               <MealRecipeCard key={r.name} meal={r} onLog={logRecipe} />

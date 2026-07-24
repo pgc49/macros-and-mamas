@@ -23,6 +23,7 @@ import {
   aiIdeaToPlanMeal,
   cloneDaysToPlan,
   bankRecipesForSlot,
+  pantryItemsForPicker,
   sumDayTotals,
   scaledMealMacros,
   targetBands,
@@ -150,10 +151,11 @@ export function WeekPlanner({
 
   const chooseRecipe = (recipe) => {
     if (!picker) return;
-    const slot =
+    const raw =
       picker.slot && picker.slot !== "any"
         ? picker.slot
         : String(recipe.cat || "snack").toLowerCase();
+    const slot = raw === "pantry" ? "snack" : raw;
     placeMeal(recipeToPlanMeal(recipe, slot));
   };
 
@@ -994,8 +996,9 @@ function MealPickerModal({
   onMealIdea,
 }) {
   const initialSlot = slot === "any" ? null : slot;
-  const [view, setView] = useState("hub"); // hub | bank | mine | describe | options
+  const [view, setView] = useState("hub"); // hub | bank | pantry | mine | describe | options
   const [slotPick, setSlotPick] = useState(initialSlot);
+  const [pantryGroup, setPantryGroup] = useState("all");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -1008,6 +1011,11 @@ function MealPickerModal({
     () => bankRecipesForSlot(effectiveSlot || "any"),
     [effectiveSlot],
   );
+  const pantryList = useMemo(() => {
+    const all = pantryItemsForPicker();
+    if (!pantryGroup || pantryGroup === "all") return all;
+    return all.filter((item) => item.group === pantryGroup);
+  }, [pantryGroup]);
   const title =
     effectiveSlot
       ? `${replacing ? "Swap" : "Add"} ${SLOT_LABEL[effectiveSlot] || "meal"} · ${day}`
@@ -1124,14 +1132,16 @@ function MealPickerModal({
             <div style={{ fontFamily: FD, fontSize: 20 }}>{title}</div>
             <div style={{ fontSize: 12.5, color: T.inkSoft }}>
               {view === "hub"
-                ? "Bank, My meals, or AI for this slot"
+                ? "Bank, pantry, My meals, or AI for this slot"
                 : view === "bank"
                   ? "Callie’s recipe bank"
-                  : view === "mine"
-                    ? "Your saved macros meals"
-                    : view === "describe"
-                      ? "Describe what you want — AI builds one meal"
-                      : "2–3 options from your tastes + Callie’s guide"}
+                  : view === "pantry"
+                    ? "Cheat-sheet staples · easy one-tap picks"
+                    : view === "mine"
+                      ? "Your saved macros meals"
+                      : view === "describe"
+                        ? "Describe what you want — AI builds one meal"
+                        : "2–3 options from your tastes + Callie’s guide"}
             </div>
           </div>
           <ActionPill onClick={onClose}>Close</ActionPill>
@@ -1157,6 +1167,11 @@ function MealPickerModal({
               title="Callie’s bank"
               sub="Proven recipes with ingredients for grocery"
               onClick={() => setView("bank")}
+            />
+            <HubBtn
+              title="Pantry staples"
+              sub="Bars, yogurt, fruit, proteins — one-tap line items"
+              onClick={() => { setView("pantry"); setPantryGroup("all"); }}
             />
             <HubBtn
               title="My meals"
@@ -1202,6 +1217,45 @@ function MealPickerModal({
             </div>
             {bank.map((recipe) => (
               <PickerRow key={recipe.name} recipe={recipe} onPick={onPickRecipe} />
+            ))}
+          </>
+        )}
+
+        {view === "pantry" && (
+          <>
+            {!initialSlot && (
+              <>
+                <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 6 }}>
+                  Lands as snack unless you pick a slot below.
+                </div>
+                {slotChooser}
+              </>
+            )}
+            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: T.inkSoft, margin: "4px 0 8px" }}>
+              Pantry staples
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+              {[
+                { id: "all", label: "All" },
+                { id: "bars", label: "Bars & shakes" },
+                { id: "dairy", label: "Dairy" },
+                { id: "bread", label: "Bread & grains" },
+                { id: "snacks", label: "Snacks" },
+                { id: "protein", label: "Protein" },
+                { id: "fruit", label: "Fruit" },
+                { id: "fats", label: "Fats" },
+              ].map((g) => (
+                <ActionPill
+                  key={g.id}
+                  accent={pantryGroup === g.id}
+                  onClick={() => setPantryGroup(g.id)}
+                >
+                  {g.label}
+                </ActionPill>
+              ))}
+            </div>
+            {pantryList.map((item) => (
+              <PickerRow key={item.name} recipe={item} onPick={onPickRecipe} />
             ))}
           </>
         )}

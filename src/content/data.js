@@ -31,6 +31,8 @@ export const SKELETONS = [
   },
 ];
 
+export { PANTRY_ITEMS, PANTRY_GROUPS, pantryByGroup, pantryGroupLabel } from "./pantry";
+
 export const RECIPES = [
   { cat: "Breakfast", name: "Protein oatmeal", desc: "½ cup (40g) dry oats cooked in water, 1 scoop (30g) vanilla protein stirred in, ⅔ cup (100g) berries, cinnamon.", cal: 310, p: 30, c: 40, f: 4, serves: 1 },
   { cat: "Breakfast", name: "Berry protein smoothie", desc: "1 scoop (30g) protein, 1 cup (140g) frozen berries, ½ medium banana, 1 cup spinach, 1 cup unsweetened almond milk.", cal: 270, p: 28, c: 34, f: 4, serves: 1 },

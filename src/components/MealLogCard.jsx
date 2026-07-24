@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "./ui";
 import { LoggableMealRow } from "./LoggableMealRow";
-import { RECIPES } from "../content/data";
+import { RECIPES, PANTRY_ITEMS } from "../content/data";
+import { PANTRY_GROUPS } from "../content/pantry";
 import {
   addDaysIso,
   formatLongDay,
@@ -116,8 +117,12 @@ export function MealLogCard({
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
   const [estimateDraft, setEstimateDraft] = useState(null);
+  const [pantryGroup, setPantryGroup] = useState("all");
   const camRef = useRef(null);
   const libRef = useRef(null);
+  const pantryVisible = pantryGroup === "all"
+    ? PANTRY_ITEMS
+    : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
 
   const clearSnap = () => {
     setSnapPreview((prev) => {
@@ -696,6 +701,69 @@ export function MealLogCard({
               </div>
             )}
             {recipes.map((r) => (
+              <LoggableMealRow
+                key={r.name}
+                meal={r}
+                via="recipe"
+                confirmLog
+                onLog={async (scaled) => {
+                  const ok = await onLogRecipe?.(scaled);
+                  if (ok !== false) setMethod(null);
+                  return ok;
+                }}
+              />
+            ))}
+            <div style={{
+              fontSize: 11.5,
+              fontWeight: 700,
+              color: T.inkSoft,
+              letterSpacing: 0.4,
+              textTransform: "uppercase",
+              margin: "12px 0 6px",
+            }}
+            >
+              Pantry staples
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              <button
+                type="button"
+                onClick={() => setPantryGroup("all")}
+                style={{
+                  fontFamily: F,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  padding: "5px 10px",
+                  borderRadius: 999,
+                  border: `1.5px solid ${pantryGroup === "all" ? T.accent : T.border}`,
+                  background: pantryGroup === "all" ? T.accentSoft : "#fff",
+                  color: pantryGroup === "all" ? T.accentDeep : T.inkSoft,
+                  cursor: "pointer",
+                }}
+              >
+                All
+              </button>
+              {PANTRY_GROUPS.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setPantryGroup(g.id)}
+                  style={{
+                    fontFamily: F,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    padding: "5px 10px",
+                    borderRadius: 999,
+                    border: `1.5px solid ${pantryGroup === g.id ? T.accent : T.border}`,
+                    background: pantryGroup === g.id ? T.accentSoft : "#fff",
+                    color: pantryGroup === g.id ? T.accentDeep : T.inkSoft,
+                    cursor: "pointer",
+                  }}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+            {pantryVisible.map((r) => (
               <LoggableMealRow
                 key={r.name}
                 meal={r}

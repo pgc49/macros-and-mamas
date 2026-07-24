@@ -5,7 +5,7 @@
  * `qty` = serving multiplier (0.25–4) for range tuning + grocery notes.
  */
 
-import { RECIPES } from "../content/data.js";
+import { RECIPES, PANTRY_ITEMS } from "../content/data.js";
 import { DEFAULT_WEEK } from "../content/defaultWeek.js";
 import { withRecipeDetail } from "../content/recipeDetails.js";
 import { snapServings } from "./servings.jsx";
@@ -18,6 +18,9 @@ export const SLOT_LABEL = {
   dinner: "Dinner",
   snack: "Snack",
 };
+
+/** Recipe bank + pantry staples for browsing / logging. */
+export const BANK_AND_PANTRY = [...RECIPES, ...PANTRY_ITEMS];
 
 function newMealId() {
   return `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -208,9 +211,16 @@ export function countPlannedMeals(days) {
 }
 
 /** Convert a bank recipe into a planner meal row (with ingredients for grocery). */
+function normalizePlanSlot(raw) {
+  const slot = String(raw || "snack").toLowerCase();
+  if (slot === "pantry") return "snack";
+  return PLAN_SLOTS.includes(slot) ? slot : "snack";
+}
+
 export function recipeToPlanMeal(recipe, slotOverride = null) {
   const detail = withRecipeDetail(recipe);
-  const slot = (slotOverride || recipe.cat || "meal").toString().toLowerCase();
+  const slot = normalizePlanSlot(slotOverride || recipe.cat || "snack");
+  const isPantry = String(recipe.cat || "").toLowerCase() === "pantry";
   return withMealId({
     slot,
     name: recipe.name,
@@ -222,9 +232,12 @@ export function recipeToPlanMeal(recipe, slotOverride = null) {
     f: Number(recipe.f) || 0,
     servings: Number(recipe.serves) || 1,
     qty: 1,
-    ingredients: detail.serving || [],
-    batch: detail.batch || null,
-    steps: detail.steps || [],
+    // Pantry staples are single line items — no recipe ingredients for grocery.
+    ingredients: isPantry
+      ? [{ amount: recipe.desc || "1 serving", item: recipe.name }]
+      : (detail.serving || []),
+    batch: isPantry ? null : (detail.batch || null),
+    steps: isPantry ? [] : (detail.steps || []),
   });
 }
 
@@ -385,4 +398,9 @@ export function bankRecipesForSlot(slot) {
   const label = SLOT_LABEL[key] || "";
   if (!label) return RECIPES;
   return RECIPES.filter((r) => r.cat === label);
+}
+
+/** Pantry staples for planner picker (always land as snack unless slot chosen). */
+export function pantryItemsForPicker() {
+  return PANTRY_ITEMS;
 }
