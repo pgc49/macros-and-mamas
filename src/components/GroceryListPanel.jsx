@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { T, F, FD } from "../theme/tokens";
+import { T, F } from "../theme/tokens";
 import { Card, Btn } from "./ui";
 import { buildGroceryList, formatGroceryListText } from "../utils/groceryList";
 import { copyText } from "../utils/clipboard";
@@ -10,7 +10,6 @@ import { copyText } from "../utils/clipboard";
  */
 export function GroceryListPanel({
   weekDays,
-  personalized = true,
   emptyHint = "Add meals to your plan — grocery builds from what you commit.",
 }) {
   const [open, setOpen] = useState(false);

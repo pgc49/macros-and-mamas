@@ -293,7 +293,8 @@ export function ClientApp({
         <>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Automate your plate</h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-            Plan the week you&apos;ll actually cook — then shop from that plan. Browse the bank anytime; AI can suggest a week from what you told Callie you love.
+            Open <b style={{ color: T.ink }}>This week</b> to plan Mon–Sun (or start blank), then shop from that plan.
+            Breakfast–Snack chips are the recipe bank to browse anytime.
           </p>
 
           {mealFilter !== "This week" && mealFilter !== "My meals" && (
