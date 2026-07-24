@@ -6,6 +6,7 @@ import { db } from "./db/db";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
+import { resolveLogSlot } from "./utils/mealSlots";
 import {
   adherenceForWeek,
   buildHabitHistory,
@@ -576,8 +577,9 @@ export default function App() {
   const appendMealEntry = async (entry) => {
     const date = entry.logged_date || mealLogDate || localDateIso();
     const via = entry.via || (entry.source === "text" ? "describe" : entry.source) || "manual";
+    const slot = resolveLogSlot(entry.slot);
     try {
-      const row = await db.addMealLog({ ...entry, via }, date);
+      const row = await db.addMealLog({ ...entry, via, slot }, date);
       syncEntryIntoWeek(date, (list) => [...list, row]);
       return true;
     } catch (e) {
@@ -601,6 +603,7 @@ export default function App() {
       c,
       f,
       via: opts.adjusted ? "adjusted" : baseVia,
+      slot: overrides?.slot ?? opts.slot ?? null,
       logged_date: mealLogDate,
     });
     if (opts.saveCustom) {
@@ -631,6 +634,7 @@ export default function App() {
       c: recipe.c,
       f: recipe.f,
       via: recipe.via || "recipe",
+      slot: recipe.slot || recipe.cat || null,
       logged_date: date,
     });
     if (ok) {

@@ -12,6 +12,16 @@ import {
   localDateIso,
   wkStartOf,
 } from "../utils/dates";
+import {
+  MEAL_SLOTS,
+  SLOT_CHIP,
+  SLOT_LABEL,
+  SLOT_SECTION_ORDER,
+  guessSlotFromTime,
+  groupEntriesBySlot,
+  normalizeSlot,
+  resolveLogSlot,
+} from "../utils/mealSlots";
 
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -23,6 +33,39 @@ const VIA_LABEL = {
   manual: "entered by you",
   adjusted: "adjusted by you",
 };
+
+function SlotChips({ value, onChange, compact = false }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: compact ? 5 : 6 }}>
+      {MEAL_SLOTS.map((s) => {
+        const active = value === s;
+        return (
+          <button
+            key={s}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange?.(s);
+            }}
+            style={{
+              fontFamily: F,
+              fontSize: compact ? 11 : 12,
+              fontWeight: 700,
+              padding: compact ? "4px 9px" : "5px 11px",
+              borderRadius: 999,
+              border: `1.5px solid ${active ? T.accent : T.border}`,
+              background: active ? T.accentSoft : "#fff",
+              color: active ? T.accentDeep : T.inkSoft,
+              cursor: "pointer",
+            }}
+          >
+            {SLOT_CHIP[s]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 const navBtn = (disabled) => ({
   width: 30,
@@ -118,6 +161,7 @@ export function MealLogCard({
   const [draft, setDraft] = useState(null);
   const [estimateDraft, setEstimateDraft] = useState(null);
   const [pantryGroup, setPantryGroup] = useState("all");
+  const [logSlot, setLogSlot] = useState(() => guessSlotFromTime());
   const camRef = useRef(null);
   const libRef = useRef(null);
   const pantryVisible = pantryGroup === "all"
@@ -216,6 +260,7 @@ export function MealLogCard({
     setMethod((m) => {
       const next = m === key ? null : key;
       if (m === "snap" && next !== "snap") clearSnap();
+      if (next) setLogSlot(guessSlotFromTime());
       return next;
     });
   };
@@ -276,6 +321,7 @@ export function MealLogCard({
       c: Number(manual.c) || 0,
       f: Number(manual.f) || 0,
       via: "manual",
+      slot: resolveLogSlot(logSlot),
       logged_date: date,
       saveCustom: saveManualCustom,
     });
@@ -285,7 +331,16 @@ export function MealLogCard({
 
   const startEdit = (e) => {
     setEditingId(e.id);
-    setDraft({ name: e.name, cal: e.cal, p: e.p, c: e.c, f: e.f, via: e.via, saveCustom: false });
+    setDraft({
+      name: e.name,
+      cal: e.cal,
+      p: e.p,
+      c: e.c,
+      f: e.f,
+      via: e.via,
+      slot: normalizeSlot(e.slot) || (onToday ? guessSlotFromTime() : "lunch"),
+      saveCustom: false,
+    });
   };
 
   const saveEdit = async () => {
@@ -299,6 +354,7 @@ export function MealLogCard({
       c: Number(draft.c) || 0,
       f: Number(draft.f) || 0,
       via: nextVia || "manual",
+      slot: resolveLogSlot(draft.slot),
     });
     if (draft.saveCustom) {
       await onSaveCustomMeal?.({
@@ -370,11 +426,18 @@ export function MealLogCard({
       || payload.p !== (Number(b.p) || 0)
       || payload.c !== (Number(b.c) || 0)
       || payload.f !== (Number(b.f) || 0);
-    await onConfirmEstimate?.(payload, { adjusted: changed, saveCustom: saveEstimateCustom });
+    await onConfirmEstimate?.(payload, {
+      adjusted: changed,
+      saveCustom: saveEstimateCustom,
+      slot: resolveLogSlot(logSlot),
+    });
     setEstimateDraft(null);
     setSaveEstimateCustom(false);
     setMethod(null);
   };
+
+  const slotBuckets = groupEntriesBySlot(entries, { logDate: date, todayIso: today });
+  const hasAnyEntries = entries.length > 0;
 
   return (
     <div style={{ marginTop: 4 }}>
@@ -819,6 +882,12 @@ export function MealLogCard({
                 Add
               </button>
             </div>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6, letterSpacing: 0.3 }}>
+                Meal
+              </div>
+              <SlotChips value={logSlot} onChange={setLogSlot} />
+            </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
               <input
                 type="checkbox"
@@ -891,6 +960,12 @@ export function MealLogCard({
                 </div>
               ))}
             </div>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6, letterSpacing: 0.3 }}>
+                Meal
+              </div>
+              <SlotChips value={logSlot} onChange={setLogSlot} compact />
+            </div>
             {estimateDraft.tip && (
               <div style={{ fontSize: 13, color: T.accentDeep, lineHeight: 1.5, marginBottom: 10 }}>
                 💬 {estimateDraft.tip}
@@ -936,124 +1011,157 @@ export function MealLogCard({
 
       {/* Day's log */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16 }}>
-        <div style={{ fontFamily: FD, fontSize: 17, marginBottom: 8 }}>
+        <div style={{ fontFamily: FD, fontSize: 17, marginBottom: 4 }}>
           {onToday ? "Today's log" : `${formatLongDay(date)} log`}
         </div>
+        {hasAnyEntries && (
+          <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 10 }}>
+            Grouped by meal — tap any item to move or edit.
+          </div>
+        )}
 
-        {entries.length === 0 ? (
+        {!hasAnyEntries ? (
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6, padding: "6px 0 10px" }}>
             Nothing logged this day. Snap, describe, or tap a recipe to add it here.
           </div>
         ) : (
           <>
-            {entries.map((e) =>
-              editingId === e.id && draft ? (
-                <div
-                  key={e.id}
-                  style={{
-                    padding: "10px",
-                    borderBottom: `1px solid ${T.border}`,
-                    background: T.accentSoft,
-                    borderRadius: 12,
-                    marginBottom: 6,
-                  }}
-                >
-                  <input
-                    value={draft.name}
-                    onChange={(ev) => setDraft((d) => ({ ...d, name: ev.target.value }))}
+            {SLOT_SECTION_ORDER.map((slotKey) => {
+              const list = slotBuckets[slotKey] || [];
+              if (!list.length) return null;
+              return (
+                <div key={slotKey} style={{ marginBottom: 12 }}>
+                  <div
                     style={{
-                      width: "100%",
-                      padding: "8px 10px",
-                      fontSize: 14,
-                      fontWeight: 600,
-                      border: `1.5px solid ${T.border}`,
-                      borderRadius: 10,
-                      fontFamily: F,
-                      marginBottom: 8,
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      letterSpacing: 0.4,
+                      textTransform: "uppercase",
+                      color: T.accentDeep,
+                      margin: "4px 0 6px",
                     }}
-                  />
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    {["cal", "p", "c", "f"].map((k) => (
-                      <div key={k} style={{ textAlign: "center" }}>
-                        {numIn(k, 58)}
-                        <div style={{ fontSize: 10, fontWeight: 700, color: T.inkSoft, marginTop: 2 }}>
-                          {k.toUpperCase()}
-                        </div>
-                      </div>
-                    ))}
-                    <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-                      <button type="button" style={pill(false)} onClick={saveEdit}>
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeWhileEditing(e.id)}
+                  >
+                    {SLOT_LABEL[slotKey] || slotKey}
+                  </div>
+                  {list.map((e) =>
+                    editingId === e.id && draft ? (
+                      <div
+                        key={e.id}
                         style={{
-                          background: "none",
+                          padding: "10px",
+                          border: `1px solid ${T.border}`,
+                          background: T.accentSoft,
+                          borderRadius: 12,
+                          marginBottom: 6,
+                        }}
+                      >
+                        <input
+                          value={draft.name}
+                          onChange={(ev) => setDraft((d) => ({ ...d, name: ev.target.value }))}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            fontSize: 14,
+                            fontWeight: 600,
+                            border: `1.5px solid ${T.border}`,
+                            borderRadius: 10,
+                            fontFamily: F,
+                            marginBottom: 8,
+                            boxSizing: "border-box",
+                          }}
+                        />
+                        <div style={{ marginBottom: 8 }}>
+                          <SlotChips
+                            value={draft.slot}
+                            onChange={(s) => setDraft((d) => ({ ...d, slot: s }))}
+                            compact
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                          {["cal", "p", "c", "f"].map((k) => (
+                            <div key={k} style={{ textAlign: "center" }}>
+                              {numIn(k, 58)}
+                              <div style={{ fontSize: 10, fontWeight: 700, color: T.inkSoft, marginTop: 2 }}>
+                                {k.toUpperCase()}
+                              </div>
+                            </div>
+                          ))}
+                          <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+                            <button type="button" style={pill(false)} onClick={saveEdit}>
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeWhileEditing(e.id)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                fontSize: 12.5,
+                                color: T.inkSoft,
+                                cursor: "pointer",
+                                textDecoration: "underline",
+                                fontFamily: F,
+                              }}
+                            >
+                              remove
+                            </button>
+                          </div>
+                        </div>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={!!draft.saveCustom}
+                            onChange={(ev) => setDraft((d) => ({ ...d, saveCustom: ev.target.checked }))}
+                            style={{ width: 16, height: 16 }}
+                          />
+                          <span style={{ fontSize: 12.5, color: T.inkSoft }}>Save to My meals</span>
+                        </label>
+                      </div>
+                    ) : (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => startEdit(e)}
+                        style={{
+                          display: "flex",
+                          width: "100%",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "9px 2px",
                           border: "none",
-                          fontSize: 12.5,
-                          color: T.inkSoft,
+                          borderBottom: `1px solid ${T.border}`,
+                          background: "none",
                           cursor: "pointer",
-                          textDecoration: "underline",
+                          textAlign: "left",
                           fontFamily: F,
                         }}
                       >
-                        remove
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{e.name}</div>
+                          <div
+                            style={{
+                              fontSize: 11.5,
+                              color: e.via === "photo" || e.via === "describe" ? T.accentDeep : T.inkSoft,
+                            }}
+                          >
+                            {VIA_LABEL[e.via] || "adjusted by you"}
+                            {e.via === "photo" || e.via === "describe" ? " · tap to adjust" : ""}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 12.5, color: T.inkSoft, whiteSpace: "nowrap" }}>
+                          {Math.round(e.cal)} cal · P {Math.round(e.p)}g · C {Math.round(e.c)}g · F {Math.round(e.f)}g
+                        </div>
+                        <span style={{ color: T.inkSoft, fontSize: 15 }}>›</span>
                       </button>
-                    </div>
-                  </div>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      checked={!!draft.saveCustom}
-                      onChange={(ev) => setDraft((d) => ({ ...d, saveCustom: ev.target.checked }))}
-                      style={{ width: 16, height: 16 }}
-                    />
-                    <span style={{ fontSize: 12.5, color: T.inkSoft }}>Save to My meals</span>
-                  </label>
+                    ),
+                  )}
                 </div>
-              ) : (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() => startEdit(e)}
-                  style={{
-                    display: "flex",
-                    width: "100%",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "9px 2px",
-                    border: "none",
-                    borderBottom: `1px solid ${T.border}`,
-                    background: "none",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontFamily: F,
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{e.name}</div>
-                    <div
-                      style={{
-                        fontSize: 11.5,
-                        color: e.via === "photo" || e.via === "describe" ? T.accentDeep : T.inkSoft,
-                      }}
-                    >
-                      {VIA_LABEL[e.via] || "adjusted by you"}
-                      {e.via === "photo" || e.via === "describe" ? " · tap to adjust" : ""}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 12.5, color: T.inkSoft, whiteSpace: "nowrap" }}>
-                    {Math.round(e.cal)} cal · P {Math.round(e.p)}g · C {Math.round(e.c)}g · F {Math.round(e.f)}g
-                  </div>
-                  <span style={{ color: T.inkSoft, fontSize: 15 }}>›</span>
-                </button>
-              ),
-            )}
+              );
+            })}
 
             {macros && (
               <>
-                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                   {totCell("CAL", totals.cal, ranges.cal[0], ranges.cal[1], "")}
                   {totCell("P", totals.p, ranges.p[0], ranges.p[1], "g")}
                   {totCell("C", totals.c, ranges.c[0], ranges.c[1], "g")}

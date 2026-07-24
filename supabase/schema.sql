@@ -74,7 +74,8 @@ create table if not exists public.meal_logs (
   cal int,
   p int,
   c int,
-  f int
+  f int,
+  slot text check (slot is null or slot in ('breakfast', 'lunch', 'dinner', 'snack'))
 );
 
 create index if not exists checkins_profile_week_idx

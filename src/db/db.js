@@ -131,7 +131,26 @@ function viaToLegacySource(via) {
   return via || "manual";
 }
 
+function normalizeMealSlot(raw) {
+  if (raw == null || raw === "") return null;
+  const s = String(raw).trim().toLowerCase();
+  if (s === "breakfast" || s === "lunch" || s === "dinner" || s === "snack") return s;
+  if (s === "snacks" || s === "pantry") return "snack";
+  return null;
+}
+
 async function loadMealLogsRange(uid, startDate, endDate) {
+  const withSlot = await supabase
+    .from("meal_logs")
+    .select("id, date, name, cal, p, c, f, source, via, slot")
+    .eq("profile_id", uid)
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .order("id", { ascending: true });
+
+  if (!withSlot.error) return withSlot.data || [];
+
+  console.warn("meal_logs select (with slot) failed; retrying", withSlot.error);
   const withVia = await supabase
     .from("meal_logs")
     .select("id, date, name, cal, p, c, f, source, via")
@@ -209,6 +228,7 @@ function mapMealRows(mealRows) {
       c: r.c,
       f: r.f,
       via,
+      slot: normalizeMealSlot(r.slot),
       source: r.source || viaToLegacySource(via),
     };
   });
@@ -528,6 +548,7 @@ export const db = {
   async addMealLog(entry, date = entry?.logged_date || localDateIso()) {
     const uid = await requireUserId();
     const via = entry.via || normalizeVia({ source: entry.source, via: entry.via });
+    const slot = normalizeMealSlot(entry.slot);
     const base = {
       profile_id: uid,
       date,
@@ -537,12 +558,19 @@ export const db = {
       c: entry.c,
       f: entry.f,
     };
-    // Prefer via + source; degrade gracefully if columns aren't migrated yet.
+    // Prefer slot + via + source; degrade gracefully if columns aren't migrated yet.
     let { data, error } = await supabase
       .from("meal_logs")
-      .insert({ ...base, via, source: viaToLegacySource(via) })
-      .select("id, date, name, cal, p, c, f, source, via")
+      .insert({ ...base, via, source: viaToLegacySource(via), slot })
+      .select("id, date, name, cal, p, c, f, source, via, slot")
       .single();
+    if (error && /slot/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("meal_logs")
+        .insert({ ...base, via, source: viaToLegacySource(via) })
+        .select("id, date, name, cal, p, c, f, source, via")
+        .single());
+    }
     if (error && /via/i.test(error.message || "")) {
       ({ data, error } = await supabase
         .from("meal_logs")
@@ -576,15 +604,28 @@ export const db = {
       fields.via = via;
       fields.source = viaToLegacySource(via);
     }
+    if (Object.prototype.hasOwnProperty.call(patch, "slot")) {
+      fields.slot = normalizeMealSlot(patch.slot);
+    }
     let { data, error } = await supabase
       .from("meal_logs")
       .update(fields)
       .eq("profile_id", uid)
       .eq("id", id)
-      .select("id, date, name, cal, p, c, f, source, via")
+      .select("id, date, name, cal, p, c, f, source, via, slot")
       .single();
+    if (error && /slot/i.test(error.message || "")) {
+      const { slot: _s, ...noSlot } = fields;
+      ({ data, error } = await supabase
+        .from("meal_logs")
+        .update(noSlot)
+        .eq("profile_id", uid)
+        .eq("id", id)
+        .select("id, date, name, cal, p, c, f, source, via")
+        .single());
+    }
     if (error && /via/i.test(error.message || "")) {
-      const { via: _v, ...noVia } = fields;
+      const { via: _v, source: _src, ...noVia } = fields;
       ({ data, error } = await supabase
         .from("meal_logs")
         .update(noVia)
