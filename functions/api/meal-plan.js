@@ -13,9 +13,12 @@ import {
   digestPreviousPlan,
   MEAL_PLAN_JSON_HINT,
 } from "../_shared/mealPlanPrompt.js";
-
-/** Default matches meal estimates (cheap + strong enough for JSON meal fills). Override with MEAL_PLAN_MODEL. */
-const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
+import {
+  callOpenRouter,
+  logAiFailure,
+  parseJsonLoose,
+  resolveModels,
+} from "../_shared/openrouter.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -41,7 +44,7 @@ export async function onRequestPost({ request, env }) {
     if (!profile) return json({ error: "profile not found" }, 404);
     if (!macros) return json({ error: "macros required — approve ranges first" }, 409);
 
-    const model = String(env.MEAL_PLAN_MODEL || DEFAULT_MODEL).slice(0, 120);
+    const models = resolveModels(env);
     const prompt = buildMealPlanPrompt({
       profile,
       macros,
@@ -49,50 +52,63 @@ export async function onRequestPost({ request, env }) {
       previousDigest: previousDigest || undefined,
     });
 
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-        "http-referer": "https://www.macrosandmamas.com",
-        "x-title": "Macros and Mamas Meal Plan Draft",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 16000,
-        temperature: 0.2,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a careful postpartum nutrition meal planner for Callie. #1 job: every day's totals MUST land inside her approved cal/P/C/F bands by adjusting real food quantities — never invent macros and never return out-of-range days. Prefer Callie's recipe bank. Honor her revision notes when provided. Output JSON only.",
-          },
-          { role: "user", content: `${prompt}\n\n${MEAL_PLAN_JSON_HINT}` },
-        ],
-        response_format: { type: "json_object" },
-      }),
+    const result = await callOpenRouter({
+      env,
+      label: "meal_plan",
+      models,
+      maxTokens: 16000,
+      temperature: 0.2,
+      timeoutMs: 50_000,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a careful postpartum nutrition meal planner for Callie. #1 job: every day's totals MUST land inside her approved cal/P/C/F bands by adjusting real food quantities — never invent macros and never return out-of-range days. Prefer Callie's recipe bank. Honor her revision notes when provided. Output JSON only.",
+        },
+        { role: "user", content: `${prompt}\n\n${MEAL_PLAN_JSON_HINT}` },
+      ],
     });
 
-    const data = await resp.json().catch(() => null);
-    if (!data) return json({ error: "meal plan unavailable" }, 502);
-    if (data.error) {
-      console.error("openrouter meal-plan error", data.error);
-      return json({ error: data.error?.message || "meal plan unavailable" }, 502);
+    if (!result.ok) {
+      await logAiFailure(env, {
+        userId: admin.id,
+        label: "meal_plan",
+        kind: result.kind,
+        status: result.status,
+        detail: result.detail,
+      });
+      return json(
+        { error: "meal plan unavailable", message: "AI didn't come back — try Draft again." },
+        502,
+      );
     }
 
-    const text = data.choices?.[0]?.message?.content || "";
-    if (!text) return json({ error: "empty model response" }, 502);
-
-    const match = text.match(/\{[\s\S]*\}/);
-    let plan;
-    try {
-      plan = JSON.parse(match ? match[0] : text);
-    } catch (e) {
-      console.error("meal-plan JSON parse failed", e, text.slice(0, 400));
-      return json({ error: "could not parse plan JSON" }, 502);
+    const model = result.model;
+    const parsedPlan = parseJsonLoose(result.text);
+    if (!parsedPlan.ok) {
+      console.error("meal-plan JSON parse failed", result.text.slice(0, 400));
+      await logAiFailure(env, {
+        userId: admin.id,
+        label: "meal_plan",
+        kind: "parse",
+        model,
+        detail: result.text.slice(0, 300),
+      });
+      return json(
+        { error: "could not parse plan JSON", message: "AI didn't come back cleanly — try Draft again." },
+        502,
+      );
     }
+    const plan = parsedPlan.value;
 
     if (!plan?.days || !Array.isArray(plan.days) || plan.days.length < 7) {
+      await logAiFailure(env, {
+        userId: admin.id,
+        label: "meal_plan",
+        kind: "empty",
+        model,
+        detail: `plan missing 7 days (got ${Array.isArray(plan?.days) ? plan.days.length : 0})`,
+      });
       return json({ error: "plan missing 7 days", plan }, 502);
     }
 

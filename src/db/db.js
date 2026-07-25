@@ -894,6 +894,22 @@ export const db = {
     return data || [];
   },
 
+  /** AI failures in the last 24h, newest first. Empty when migration 018 hasn't run. */
+  async loadAiFailures(hours = 24, limit = 50) {
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from("ai_failures")
+      .select("id, profile_id, label, kind, status, model, detail, created_at")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("loadAiFailures failed", error);
+      return [];
+    }
+    return data || [];
+  },
+
   async updateClientMacros(clientId, macros) {
     const { error } = await supabase
       .from("macros")

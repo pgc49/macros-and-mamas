@@ -34,6 +34,26 @@ const STAGE_LABEL = {
   refunded: "Refunded",
 };
 
+const AI_LABELS = {
+  estimate_photo: "Snap photo",
+  estimate_text: "Describe",
+  meal_suggest: "Suggest my week",
+  meal_idea: "Meal ideas",
+  meal_plan: "Plan draft",
+};
+
+const AI_KINDS = {
+  config: "not configured",
+  auth: "bad API key",
+  credits: "out of credits",
+  rate_limited: "rate limited",
+  timeout: "timed out",
+  network: "network drop",
+  upstream: "provider error",
+  empty: "empty reply",
+  parse: "unreadable reply",
+};
+
 function formatWhen(iso) {
   if (!iso) return "";
   try {
@@ -215,6 +235,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   const [tab, setTab] = useState("overview");
   const [filter, setFilter] = useState("active");
   const [recentEmails, setRecentEmails] = useState([]);
+  const [aiFailures, setAiFailures] = useState([]);
   const [clientProgress, setClientProgress] = useState(null);
   const [progressLoading, setProgressLoading] = useState(false);
   const [progressError, setProgressError] = useState(null);
@@ -241,6 +262,9 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
     let cancelled = false;
     db.loadRecentEmailEvents(12).then((rows) => {
       if (!cancelled) setRecentEmails(rows);
+    });
+    db.loadAiFailures(24, 50).then((rows) => {
+      if (!cancelled) setAiFailures(rows);
     });
     return () => { cancelled = true; };
   }, [tab]);
@@ -664,6 +688,38 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             >
               {computedStats.awaitingApproval > 0 ? "Review approvals" : "Open client list"}
             </Btn>
+          </Card>
+
+          <Card style={{ marginTop: 12 }}>
+            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>AI health · last 24h</div>
+            {!aiFailures.length ? (
+              <div style={{ fontSize: 13.5, color: T.sage, lineHeight: 1.5 }}>
+                No AI failures logged. Snap, Describe, and Suggest my week are all answering.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 13.5, color: T.amber, lineHeight: 1.5, marginBottom: 8 }}>
+                  <b>{aiFailures.length}</b> failed AI call{aiFailures.length === 1 ? "" : "s"} in the last 24h.
+                  {aiFailures.some((f) => f.kind === "credits" || f.kind === "auth")
+                    ? " Check the OpenRouter key + balance."
+                    : " Clients were told to retry — no data lost."}
+                </div>
+                {Object.entries(
+                  aiFailures.reduce((acc, f) => {
+                    const k = `${AI_LABELS[f.label] || f.label} · ${AI_KINDS[f.kind] || f.kind}`;
+                    acc[k] = (acc[k] || 0) + 1;
+                    return acc;
+                  }, {}),
+                ).map(([k, n]) => (
+                  <div key={k} style={{ padding: "6px 0", borderBottom: `1px solid ${T.border}`, fontSize: 13 }}>
+                    <b>{n}×</b> {k}
+                  </div>
+                ))}
+                <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8 }}>
+                  Most recent: {formatWhen(aiFailures[0].created_at)}
+                </div>
+              </>
+            )}
           </Card>
 
           <Card style={{ marginTop: 12 }}>
