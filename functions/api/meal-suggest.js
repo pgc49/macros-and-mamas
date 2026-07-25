@@ -4,6 +4,7 @@
    Auth + paid (or admin). Suggests a full 7-day plan from intake tastes
    + Callie recipe bank + approved ranges. Client accepts into planner.
    Soft rate limit: 5 / day via estimate_calls type='meal_suggest'.
+   Silent client retries log type='meal_suggest_retry' (does not count toward the 5/day).
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
    Default model: google/gemini-3.1-flash-lite (same family as meal estimates).
    ================================================================== */
@@ -51,6 +52,13 @@ export async function onRequestPost({ request, env }) {
         { error: "macros_required", message: "Your ranges need Callie's approval before AI can plan a week." },
         409,
       );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const attempt = Math.max(1, Math.min(2, Number(body?.attempt) || 1));
+    // Track silent retries (attempt 2) — not counted toward the 5/day suggest limit.
+    if (attempt >= 2) {
+      await logEstimateType(env, user.id, "meal_suggest_retry");
     }
 
     const model = String(env.MEAL_PLAN_MODEL || DEFAULT_MODEL).slice(0, 120);
@@ -126,7 +134,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     // Count only successful suggests so a flaky first attempt doesn't burn her daily limit.
-    await logSuggestCall(env, user.id);
+    await logEstimateType(env, user.id, "meal_suggest");
 
     const target = plan.dailyTarget || {
       calLo: macros.cal,
@@ -168,6 +176,7 @@ export async function onRequestPost({ request, env }) {
       ok: true,
       plan,
       summary: plan.summaryForClient || "",
+      retried: attempt >= 2,
     }, 200);
   } catch (e) {
     console.error("meal-suggest failed", e);
@@ -297,10 +306,10 @@ async function checkSuggestLimit(env, userId) {
   return { ok: true };
 }
 
-async function logSuggestCall(env, userId) {
+async function logEstimateType(env, userId, type) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!base || !key || !userId) return;
+  if (!base || !key || !userId || !type) return;
   await fetch(`${base}/rest/v1/estimate_calls`, {
     method: "POST",
     headers: {
@@ -309,7 +318,7 @@ async function logSuggestCall(env, userId) {
       authorization: `Bearer ${key}`,
       prefer: "return=minimal",
     },
-    body: JSON.stringify({ profile_id: userId, type: "meal_suggest" }),
+    body: JSON.stringify({ profile_id: userId, type }),
   }).catch(() => {});
 }
 

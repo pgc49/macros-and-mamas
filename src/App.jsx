@@ -777,19 +777,21 @@ export default function App() {
       };
 
       // One client retry for transient OpenRouter / edge flakes (same pattern as "tap again").
+      // attempt is sent to the API so silent retries are counted in estimate_calls.
       let lastError = "Couldn’t suggest a week right now.";
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
           const resp = await fetch("/api/meal-suggest", {
             method: "POST",
             headers,
-            body: "{}",
+            body: JSON.stringify({ attempt }),
           });
           const data = await resp.json().catch(() => ({}));
           if (resp.ok) {
             return {
               days: data.plan?.days || [],
               summary: data.summary || data.plan?.summaryForClient || "",
+              retried: attempt > 1 || !!data.retried,
             };
           }
           // Don't retry auth / payment / rate-limit / macros-required
