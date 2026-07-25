@@ -174,12 +174,16 @@ export function MealLogCard({
   // What was sent for the estimate on screen, so "I added X" can re-ask
   // about the whole plate instead of throwing the first answer away.
   const [lastInput, setLastInput] = useState(null);
-  const [addFood, setAddFood] = useState("");
   const [rowAdd, setRowAdd] = useState("");
   const [rowAddBusy, setRowAddBusy] = useState(false);
   const [rowAddError, setRowAddError] = useState("");
   const camRef = useRef(null);
   const libRef = useRef(null);
+  // Read at estimate-arrival time only — putting lastInput in the effect
+  // deps would rebuild the draft (and wipe in-progress edits) the moment
+  // she taps Update estimate, before the new result lands.
+  const lastInputRef = useRef(lastInput);
+  lastInputRef.current = lastInput;
   const pantryVisible = pantryGroup === "all"
     ? PANTRY_ITEMS
     : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
@@ -211,15 +215,15 @@ export function MealLogCard({
   }, []);
 
   // AI result lands as an editable draft — she tweaks, then saves.
-  // The photo and note that produced it stay in state: if the coach tip
-  // talks her into adding something, re-estimating the whole plate has to
-  // be possible without shooting it again.
+  // sourceText is a copy of what she wrote so she can edit it in place and
+  // re-run (Describe used to wipe the box, so a light estimate meant
+  // typing the whole meal again).
   useEffect(() => {
     if (!estimate || estimate.error) {
       setEstimateDraft(null);
       return;
     }
-    setAddFood("");
+    const input = lastInputRef.current;
     setEstimateDraft({
       name: estimate.meal || "",
       cal: estimate.calories ?? "",
@@ -229,6 +233,8 @@ export function MealLogCard({
       items: estimate.items || [],
       tip: estimate.tip || "",
       confidence: estimate.confidence || "medium",
+      sourceKind: input?.kind || null,
+      sourceText: input?.text || "",
       baseline: {
         name: estimate.meal || "",
         cal: Number(estimate.calories) || 0,
@@ -472,28 +478,45 @@ export function MealLogCard({
   };
 
   /**
-   * She added a food after seeing the estimate. Re-ask about the whole
-   * plate — the original photo plus everything she has told us since —
-   * rather than pricing the addition alone, because portions interact.
+   * Re-run the estimate using the text in the review panel — either the
+   * Describe box she just edited, or the Snap note with something added.
+   * The photo (if any) stays; only the text changes.
    */
-  const reEstimateWithAddition = () => {
-    const extra = addFood.trim();
-    if (!extra || busy) return;
-    const merged = mergeDescription(lastInput?.text, extra);
-    if (lastInput?.kind === "photo" && snapFile) {
-      setPhotoNote(merged);
-      runSnapEstimate(merged);
-    } else {
-      runTextEstimate(merged);
+  const reEstimateFromSource = () => {
+    if (!estimateDraft || busy) return;
+    const text = String(estimateDraft.sourceText || "").trim();
+    if (estimateDraft.sourceKind === "photo" && snapFile) {
+      setPhotoNote(text);
+      runSnapEstimate(text);
+      return;
     }
+    if (!text) return;
+    setDesc(text);
+    runTextEstimate(text);
+  };
+
+  /** Coach tip suggested a food — drop it into the editable source text. */
+  const applyTipFood = (food) => {
+    if (!food || !estimateDraft) return;
+    setEstimateDraft((d) => ({
+      ...d,
+      sourceText: mergeDescription(d.sourceText, food),
+    }));
   };
 
   const clearEstimateInputs = () => {
     clearSnap();
     setDesc("");
-    setAddFood("");
     setLastInput(null);
   };
+
+  const sourceDirty = estimateDraft
+    && String(estimateDraft.sourceText || "").trim() !== String(lastInput?.text || "").trim();
+  const canReEstimate = !!estimateDraft && !busy && (
+    estimateDraft.sourceKind === "photo"
+      ? !!snapFile && sourceDirty
+      : sourceDirty && String(estimateDraft.sourceText || "").trim().length > 0
+  );
 
   const saveEstimateDraft = async () => {
     if (!estimateDraft) return;
@@ -1116,7 +1139,7 @@ export function MealLogCard({
                 {tipFood && !busy && (
                   <button
                     type="button"
-                    onClick={() => setAddFood(tipFood)}
+                    onClick={() => applyTipFood(tipFood)}
                     style={{
                       display: "block",
                       marginTop: 6,
@@ -1136,20 +1159,69 @@ export function MealLogCard({
                 )}
               </div>
             )}
-            <AddFoodBox
-              value={addFood}
-              onChange={setAddFood}
-              onSubmit={reEstimateWithAddition}
-              busy={busy}
-              label="Added something since?"
-              hint={
-                lastInput?.kind === "photo"
-                  ? "We'll re-read the same photo with this included — no need to shoot it again."
-                  : "We'll redo the estimate with this included."
-              }
-              cta="Update estimate"
-              busyLabel="Re-reading…"
-            />
+            {/* Edit exactly what drove the estimate — Describe text, or the
+                Snap note — then re-run. Fixes the "came back light, but I
+                can't change what I wrote" feedback. */}
+            <div style={{ marginTop: 4, paddingTop: 10, borderTop: `1px dashed ${T.border}` }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6, letterSpacing: 0.3 }}>
+                {estimateDraft.sourceKind === "photo" ? "Your note" : "What you wrote"}
+              </div>
+              <textarea
+                value={estimateDraft.sourceText || ""}
+                onChange={(ev) => setEstimateDraft((d) => ({
+                  ...d,
+                  sourceText: ev.target.value.slice(0, estimateDraft.sourceKind === "photo" ? 400 : DESCRIBE_MAX),
+                }))}
+                placeholder={
+                  estimateDraft.sourceKind === "photo"
+                    ? "e.g. about 6 oz chicken, cooked in 1 tsp olive oil — or anything you added"
+                    : "Add anything you missed — portions, oil, a side…"
+                }
+                disabled={busy}
+                rows={estimateDraft.sourceKind === "photo" ? 2 : 3}
+                maxLength={estimateDraft.sourceKind === "photo" ? 400 : DESCRIBE_MAX}
+                style={{
+                  width: "100%",
+                  padding: "9px 11px",
+                  fontSize: 14,
+                  lineHeight: 1.45,
+                  border: `1.5px solid ${T.border}`,
+                  borderRadius: 10,
+                  fontFamily: F,
+                  background: "#fff",
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                }}
+              />
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+                <button
+                  type="button"
+                  disabled={!canReEstimate}
+                  onClick={reEstimateFromSource}
+                  style={{
+                    fontFamily: F,
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    padding: "8px 14px",
+                    borderRadius: 999,
+                    border: `1.5px solid ${T.accent}`,
+                    background: canReEstimate ? T.accent : "#D9C4CE",
+                    color: "#fff",
+                    cursor: canReEstimate ? "pointer" : "default",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {busy ? "Re-reading…" : "Update estimate"}
+                </button>
+                <span style={{ fontSize: 11.5, color: T.inkSoft, lineHeight: 1.4 }}>
+                  {sourceDirty
+                    ? (estimateDraft.sourceKind === "photo"
+                      ? "We'll re-read the same photo with this note."
+                      : "We'll redo the estimate with your edits.")
+                    : "Edit above if the estimate looks light or you missed something."}
+                </span>
+              </div>
+            </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
               <Btn small onClick={saveEstimateDraft}>
                 {onToday ? "Save to today" : `Save to ${formatLongDay(date)}`}
