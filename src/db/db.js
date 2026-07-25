@@ -443,9 +443,17 @@ export const db = {
   },
 
   /** Homepage cohort waitlist (founding closed → next cohort priority). */
-  async joinCohortWaitlist({ name, email, phone, cohort = "cohort_2", source = "homepage" }) {
+  async joinCohortWaitlist({
+    firstName,
+    lastName,
+    email,
+    phone,
+    cohort = "cohort_2",
+    source = "homepage",
+  }) {
     const { error } = await supabase.from("cohort_waitlist").insert({
-      name: String(name || "").trim().slice(0, 120),
+      first_name: String(firstName || "").trim().slice(0, 80),
+      last_name: String(lastName || "").trim().slice(0, 80),
       email: String(email || "").trim().toLowerCase().slice(0, 200),
       phone: String(phone || "").trim().slice(0, 40),
       cohort: String(cohort || "cohort_2").slice(0, 40),

@@ -10,7 +10,8 @@ import { CONFIG } from "../config";
  */
 export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
   const isHero = variant === "hero";
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,11 +46,16 @@ export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
     e.preventDefault();
     if (busy) return;
     setError("");
-    const n = name.trim();
+    const first = firstName.trim();
+    const last = lastName.trim();
     const em = email.trim().toLowerCase();
     const ph = phone.trim();
-    if (n.length < 2) {
-      setError("Please enter your name.");
+    if (first.length < 1) {
+      setError("Please enter your first name.");
+      return;
+    }
+    if (last.length < 1) {
+      setError("Please enter your last name.");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
@@ -63,7 +69,8 @@ export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
     setBusy(true);
     try {
       await db.joinCohortWaitlist({
-        name: n,
+        firstName: first,
+        lastName: last,
         email: em,
         phone: ph,
         cohort: CONFIG.WAITLIST_COHORT,
@@ -109,19 +116,34 @@ export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
       noValidate
       style={{ display: "grid", gap: 10, maxWidth: 360 }}
     >
-      <label style={{ margin: 0 }}>
-        <span className="mm-waitlist-label" style={labelStyle}>Name</span>
-        <input
-          style={fieldStyle}
-          type="text"
-          name="name"
-          autoComplete="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Your first name"
-          disabled={busy}
-        />
-      </label>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <label style={{ margin: 0 }}>
+          <span className="mm-waitlist-label" style={labelStyle}>First name</span>
+          <input
+            style={fieldStyle}
+            type="text"
+            name="first_name"
+            autoComplete="given-name"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            placeholder="First"
+            disabled={busy}
+          />
+        </label>
+        <label style={{ margin: 0 }}>
+          <span className="mm-waitlist-label" style={labelStyle}>Last name</span>
+          <input
+            style={fieldStyle}
+            type="text"
+            name="last_name"
+            autoComplete="family-name"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            placeholder="Last"
+            disabled={busy}
+          />
+        </label>
+      </div>
       <label style={{ margin: 0 }}>
         <span className="mm-waitlist-label" style={labelStyle}>Email</span>
         <input

@@ -5,7 +5,8 @@
 create table if not exists public.cohort_waitlist (
   id uuid primary key default gen_random_uuid(),
   email text not null,
-  name text not null,
+  first_name text not null,
+  last_name text not null,
   phone text not null,
   cohort text not null default 'cohort_2',
   source text not null default 'homepage',
@@ -19,6 +20,10 @@ create table if not exists public.cohort_waitlist (
 
 comment on table public.cohort_waitlist is
   'Priority waitlist for the next cohort (homepage capture). Track conversion via profile_id / paid_at.';
+comment on column public.cohort_waitlist.first_name is
+  'Given / first name from the waitlist form.';
+comment on column public.cohort_waitlist.last_name is
+  'Family / last name from the waitlist form.';
 comment on column public.cohort_waitlist.cohort is
   'Which cohort she joined the waitlist for (e.g. cohort_2).';
 comment on column public.cohort_waitlist.profile_id is
