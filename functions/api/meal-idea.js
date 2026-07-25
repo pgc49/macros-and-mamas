@@ -14,10 +14,20 @@ import {
   buildSlotOptionsPrompt,
   MEAL_IDEA_JSON_HINT,
 } from "../_shared/clientMealIdeaPrompt.js";
+import {
+  callOpenRouter,
+  logAiFailure,
+  messageForKind,
+  parseJsonLoose,
+  resolveModels,
+} from "../_shared/openrouter.js";
 
-const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
 const MAX_PER_DAY = 20;
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
+const MEAL_IDEA_COPY = {
+  retryLabel: "tap it again",
+  manualLabel: "pick a recipe from the bank",
+};
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -74,57 +84,73 @@ export async function onRequestPost({ request, env }) {
       );
     }
 
-    const model = String(env.MEAL_PLAN_MODEL || DEFAULT_MODEL).slice(0, 120);
+    const models = resolveModels(env);
     const prompt =
       mode === "describe"
         ? buildDescribeMealPrompt({ profile, macros, slot, description })
         : buildSlotOptionsPrompt({ profile, macros, slot });
 
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-        "http-referer": "https://www.macrosandmamas.com",
-        "x-title": "Macros and Mamas Meal Idea",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: mode === "options" ? 8000 : 4000,
-        temperature: 0.3,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are Callie's postpartum meal assistant. Prefer her recipe bank. Honest macros from ingredients. Honor food loves. JSON only.",
-          },
-          { role: "user", content: `${prompt}\n\n${MEAL_IDEA_JSON_HINT}` },
-        ],
-        response_format: { type: "json_object" },
-      }),
+    const result = await callOpenRouter({
+      env,
+      label: "meal_idea",
+      models,
+      maxTokens: mode === "options" ? 8000 : 4000,
+      temperature: 0.3,
+      timeoutMs: 40_000,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are Callie's postpartum meal assistant. Prefer her recipe bank. Honest macros from ingredients. Honor food loves. JSON only.",
+        },
+        { role: "user", content: `${prompt}\n\n${MEAL_IDEA_JSON_HINT}` },
+      ],
     });
 
-    const data = await resp.json().catch(() => null);
-    if (!data) return json({ error: "meal ideas unavailable" }, 502);
-    if (data.error) {
-      console.error("openrouter meal-idea error", data.error);
-      return json({ error: data.error?.message || "meal ideas unavailable" }, 502);
+    if (!result.ok) {
+      await logAiFailure(env, {
+        userId: user.id,
+        label: "meal_idea",
+        kind: result.kind,
+        status: result.status,
+        detail: result.detail,
+      });
+      return json(
+        { error: "meal ideas unavailable", message: messageForKind(result.kind, MEAL_IDEA_COPY) },
+        502,
+      );
     }
 
-    const text = data.choices?.[0]?.message?.content || "";
-    if (!text) return json({ error: "empty model response" }, 502);
-
-    const match = text.match(/\{[\s\S]*\}/);
-    let parsed;
-    try {
-      parsed = JSON.parse(match ? match[0] : text);
-    } catch (e) {
-      console.error("meal-idea JSON parse failed", e, text.slice(0, 400));
-      return json({ error: "could not parse meal JSON" }, 502);
+    const parsedJson = parseJsonLoose(result.text);
+    if (!parsedJson.ok) {
+      console.error("meal-idea JSON parse failed", result.text.slice(0, 400));
+      await logAiFailure(env, {
+        userId: user.id,
+        label: "meal_idea",
+        kind: "parse",
+        model: result.model,
+        detail: result.text.slice(0, 300),
+      });
+      return json(
+        { error: "could not parse meal JSON", message: messageForKind("empty", MEAL_IDEA_COPY) },
+        502,
+      );
     }
 
-    const meals = normalizeMeals(parsed, slot);
-    if (!meals.length) return json({ error: "no meals returned" }, 502);
+    const meals = normalizeMeals(parsedJson.value, slot);
+    if (!meals.length) {
+      await logAiFailure(env, {
+        userId: user.id,
+        label: "meal_idea",
+        kind: "empty",
+        model: result.model,
+        detail: "no meals returned after normalize",
+      });
+      return json(
+        { error: "no meals returned", message: messageForKind("empty", MEAL_IDEA_COPY) },
+        502,
+      );
+    }
     if (mode === "describe") {
       return json({ ok: true, mode, meal: meals[0] }, 200);
     }
