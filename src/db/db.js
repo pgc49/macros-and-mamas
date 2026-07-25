@@ -253,6 +253,27 @@ function groupMealRowsByDate(mealRows) {
   return byDate;
 }
 
+/** Matches the CHECK in migration 019 so a bad yield fails locally, not in Postgres. */
+function normalizeServes(value) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, 24);
+}
+
+function mapCustomMeal(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    cal: Number(r.cal) || 0,
+    p: Number(r.p) || 0,
+    c: Number(r.c) || 0,
+    f: Number(r.f) || 0,
+    serves: normalizeServes(r.serves ?? 1),
+    ingredients: r.ingredients || "",
+    updated_at: r.updated_at,
+  };
+}
+
 export const db = {
   async loadClientState() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -1068,35 +1089,38 @@ export const db = {
     if (error) throw error;
   },
 
-  /** Saved My meals (name + macros) for one-tap re-logging. */
+  /**
+   * Saved My meals for one-tap re-logging. cal/p/c/f are always ONE
+   * SERVING; `serves` only records how big the batch was.
+   */
   async loadCustomMeals() {
     const uid = await requireUserId();
-    const { data, error } = await supabase
+    // Prefer the recipe columns; degrade if migration 019 hasn't run yet.
+    let { data, error } = await supabase
       .from("custom_meals")
-      .select("id, name, cal, p, c, f, updated_at")
+      .select("id, name, cal, p, c, f, serves, ingredients, updated_at")
       .eq("profile_id", uid)
       .order("updated_at", { ascending: false });
+    if (error && /serves|ingredients/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("custom_meals")
+        .select("id, name, cal, p, c, f, updated_at")
+        .eq("profile_id", uid)
+        .order("updated_at", { ascending: false }));
+    }
     if (error) {
       console.warn("loadCustomMeals failed", error);
       return [];
     }
-    return (data || []).map((r) => ({
-      id: r.id,
-      name: r.name,
-      cal: Number(r.cal) || 0,
-      p: Number(r.p) || 0,
-      c: Number(r.c) || 0,
-      f: Number(r.f) || 0,
-      updated_at: r.updated_at,
-    }));
+    return (data || []).map(mapCustomMeal);
   },
 
   /** Upsert by name for this user (re-saving the same lunch updates macros). */
-  async saveCustomMeal({ name, cal, p, c, f }) {
+  async saveCustomMeal({ name, cal, p, c, f, serves, ingredients }) {
     const uid = await requireUserId();
     const trimmed = String(name || "").trim().slice(0, 80);
     if (!trimmed) throw new Error("Meal needs a name");
-    const row = {
+    const base = {
       profile_id: uid,
       name: trimmed,
       cal: Number(cal) || 0,
@@ -1105,21 +1129,25 @@ export const db = {
       f: Number(f) || 0,
       updated_at: new Date().toISOString(),
     };
-    const { data, error } = await supabase
+    const recipeFields = {};
+    if (serves != null) recipeFields.serves = normalizeServes(serves);
+    if (ingredients != null) recipeFields.ingredients = String(ingredients).slice(0, 4000) || null;
+
+    const withRecipe = Object.keys(recipeFields).length > 0;
+    let { data, error } = await supabase
       .from("custom_meals")
-      .upsert(row, { onConflict: "profile_id,name" })
-      .select("id, name, cal, p, c, f, updated_at")
+      .upsert({ ...base, ...recipeFields }, { onConflict: "profile_id,name" })
+      .select(`id, name, cal, p, c, f, updated_at${withRecipe ? ", serves, ingredients" : ""}`)
       .single();
+    if (error && /serves|ingredients/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("custom_meals")
+        .upsert(base, { onConflict: "profile_id,name" })
+        .select("id, name, cal, p, c, f, updated_at")
+        .single());
+    }
     if (error) throw error;
-    return {
-      id: data.id,
-      name: data.name,
-      cal: Number(data.cal) || 0,
-      p: Number(data.p) || 0,
-      c: Number(data.c) || 0,
-      f: Number(data.f) || 0,
-      updated_at: data.updated_at,
-    };
+    return mapCustomMeal(data);
   },
 
   async deleteCustomMeal(id) {
