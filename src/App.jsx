@@ -976,8 +976,13 @@ export default function App() {
     );
   }
 
-  /** Sales CTA: create account (or join/pay / intake if already signed in). */
+  /** Sales CTA: create account (or join/pay / intake if already signed in).
+   *  When enrollment is closed, send visitors to the homepage waitlist. */
   const goJoin = () => {
+    if (!CONFIG.ENROLLMENT_OPEN) {
+      navigate(`${PATHS.home}#waitlist`);
+      return;
+    }
     if (!user) {
       setSignInNext("intake");
       navigate(PATHS.signin);

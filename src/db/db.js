@@ -442,6 +442,19 @@ export const db = {
     if (error) throw error;
   },
 
+  /** Homepage cohort waitlist (founding closed → next cohort priority). */
+  async joinCohortWaitlist({ name, email, phone, cohort = "cohort_2", source = "homepage" }) {
+    const { error } = await supabase.from("cohort_waitlist").insert({
+      name: String(name || "").trim().slice(0, 120),
+      email: String(email || "").trim().toLowerCase().slice(0, 200),
+      phone: String(phone || "").trim().slice(0, 40),
+      cohort: String(cohort || "cohort_2").slice(0, 40),
+      source: String(source || "homepage").slice(0, 40),
+    });
+    if (error) throw error;
+  },
+
+
   async submitIntake(profile, macros) {
     const uid = await requireUserId();
     const { data: prof, error: gateErr } = await supabase

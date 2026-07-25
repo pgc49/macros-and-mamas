@@ -87,6 +87,10 @@ export const FAQS = [
     a: "Moms and women ready to lose fat and gain muscle — whether you have a baby at home, kids in high school, or no kids at all. You don't have to be postpartum or a mom to join. It's not for pregnancy, and not for the first three months postpartum.",
   },
   {
+    q: "Is the founding group still open?",
+    a: "No — the founding group is closed. Join the waitlist on this page for priority access when cohort two opens. We'll email you first.",
+  },
+  {
     q: "I'm breastfeeding. Can I join?",
     a: "Yes — from three months postpartum on. Callie sets your macros gently with supply first. If you're earlier than that, wait and come back when you're ready.",
   },

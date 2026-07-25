@@ -11,8 +11,9 @@ export const Card = ({ children, style }) => (
   <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 18, ...style }}>{children}</div>
 );
 
-export const Btn = ({ children, onClick, ghost, small, style, disabled }) => (
+export const Btn = ({ children, onClick, ghost, small, style, disabled, type = "button" }) => (
   <button
+    type={type}
     onClick={onClick}
     disabled={disabled}
     style={{
