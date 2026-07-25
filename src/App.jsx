@@ -18,6 +18,7 @@ import {
 } from "./utils/progressSeries";
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
 import { SalesPage } from "./views/SalesPage";
+import { WaitlistPage } from "./views/WaitlistPage";
 import { IntakeFlow } from "./views/IntakeFlow";
 import { PendingPage } from "./views/PendingPage";
 import { JoinPage } from "./views/JoinPage";
@@ -977,10 +978,10 @@ export default function App() {
   }
 
   /** Sales CTA: create account (or join/pay / intake if already signed in).
-   *  When enrollment is closed, send visitors to the homepage waitlist. */
+   *  When enrollment is closed, send visitors to the cohort waitlist page. */
   const goJoin = () => {
     if (!CONFIG.ENROLLMENT_OPEN) {
-      navigate(`${PATHS.home}#waitlist`);
+      navigate(PATHS.waitlist);
       return;
     }
     if (!user) {
@@ -1089,6 +1090,7 @@ export default function App() {
       <Route path={PATHS.terms} element={<TermsPage />} />
       <Route path={PATHS.privacy} element={<PrivacyPage />} />
       <Route path={PATHS.resetPassword} element={<ResetPasswordPage />} />
+      <Route path={PATHS.waitlist} element={<WaitlistPage />} />
 
       <Route
         path={PATHS.signin}

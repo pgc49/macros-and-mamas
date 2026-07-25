@@ -1,9 +1,7 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { T, FD, F } from "../theme/tokens";
 import { FEATURES, FAQS } from "../content/data";
 import { Fonts } from "../theme/Fonts";
-import { CohortWaitlistForm } from "../components/CohortWaitlistForm";
 import { PATHS } from "../routing";
 import { CONFIG } from "../config";
 
@@ -11,12 +9,6 @@ const heroImg = "/callie-hero.jpg";
 
 export function SalesPage({ onStartIntake, onSignIn }) {
   const enrollmentOpen = CONFIG.ENROLLMENT_OPEN;
-
-  useEffect(() => {
-    if (window.location.hash !== "#waitlist") return;
-    const el = document.getElementById("waitlist");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
 
   return (
     <div style={{ fontFamily: F, background: T.bg, minHeight: "100vh", color: T.ink }}>
@@ -266,18 +258,6 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           margin: 16px 0 0;
         }
 
-        /* Mobile hero: waitlist labels sit on the dark photo scrim */
-        .mm-hero .mm-waitlist-form--hero .mm-waitlist-label {
-          color: rgba(255, 255, 255, 0.9);
-        }
-        .mm-hero .mm-waitlist-form--hero .mm-waitlist-error {
-          color: #FFD6A8;
-        }
-        .mm-hero .mm-waitlist-done--hero {
-          background: rgba(255, 255, 255, 0.14) !important;
-          color: #fff !important;
-        }
-
         /* Desktop: shorter hero, wider body, real columns */
         @media (min-width: 900px) {
           .mm-hero {
@@ -285,9 +265,8 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             grid-template-columns: minmax(340px, 0.95fr) minmax(380px, 1.05fr);
             align-items: stretch;
             min-height: 0;
-            height: auto;
-            min-height: min(72vh, 620px);
-            max-height: none;
+            height: min(72vh, 620px);
+            max-height: 620px;
             background:
               radial-gradient(120% 80% at 0% 100%, ${T.accentSoft} 0%, transparent 55%),
               linear-gradient(165deg, #FFF9F6 0%, ${T.bg} 48%, #F3E8E4 100%);
@@ -339,20 +318,11 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             margin: 0 0 16px;
             font-size: 15.5px;
           }
+          .mm-hero-cta > a,
           .mm-hero-cta > button {
             background: ${T.accent} !important;
             color: #fff !important;
             max-width: 360px;
-          }
-          .mm-hero .mm-waitlist-form--hero .mm-waitlist-label {
-            color: ${T.inkSoft};
-          }
-          .mm-hero .mm-waitlist-form--hero .mm-waitlist-error {
-            color: ${T.amber};
-          }
-          .mm-hero .mm-waitlist-done--hero {
-            background: ${T.sageSoft} !important;
-            color: ${T.sage} !important;
           }
           .mm-hero-cta-note {
             text-align: left;
@@ -432,9 +402,8 @@ export function SalesPage({ onStartIntake, onSignIn }) {
 
         @media (min-width: 1200px) {
           .mm-hero {
-            height: auto;
-            min-height: min(68vh, 580px);
-            max-height: none;
+            height: min(68vh, 580px);
+            max-height: 580px;
           }
           .mm-body {
             max-width: 1040px;
@@ -492,6 +461,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
                     border: "none",
                     background: "#fff",
                     color: T.accentDeep,
+                    textAlign: "center",
                   }}
                 >
                   Join the founding group — $149
@@ -502,7 +472,28 @@ export function SalesPage({ onStartIntake, onSignIn }) {
               </>
             ) : (
               <>
-                <CohortWaitlistForm variant="hero" source="homepage_hero" />
+                <Link
+                  to={PATHS.waitlist}
+                  className="mm-join-btn"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    fontFamily: F,
+                    fontWeight: 700,
+                    fontSize: 15,
+                    cursor: "pointer",
+                    padding: "13px 22px",
+                    borderRadius: 999,
+                    border: "none",
+                    background: "#fff",
+                    color: T.accentDeep,
+                    textAlign: "center",
+                    textDecoration: "none",
+                  }}
+                >
+                  Register for priority access
+                </Link>
                 <div className="mm-hero-cta-note">
                   Priority access for cohort two — we&apos;ll email you first when spots open.
                 </div>
@@ -572,7 +563,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           </div>
         </section>
 
-        <div className="mm-footer-cta" id="waitlist">
+        <div className="mm-footer-cta">
           {enrollmentOpen ? (
             <>
               <button
@@ -599,11 +590,30 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             </>
           ) : (
             <>
-              <h2 className="mm-section-title" style={{ marginTop: 0 }}>Cohort two waitlist</h2>
-              <p style={{ fontSize: 15, lineHeight: 1.55, color: T.inkSoft, margin: "0 0 14px", maxWidth: 420 }}>
-                Founding is closed. Leave your name, email, and phone for priority access when the next group opens.
-              </p>
-              <CohortWaitlistForm variant="footer" source="homepage_footer" />
+              <Link
+                to={PATHS.waitlist}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  fontFamily: F,
+                  fontWeight: 700,
+                  fontSize: 15,
+                  cursor: "pointer",
+                  padding: "13px 22px",
+                  borderRadius: 999,
+                  border: "none",
+                  background: T.accent,
+                  color: "#fff",
+                  textAlign: "center",
+                  textDecoration: "none",
+                }}
+              >
+                Register for priority access
+              </Link>
+              <div className="mm-footer-cta-note">
+                Founding group closed — join the cohort two waitlist.
+              </div>
             </>
           )}
         </div>

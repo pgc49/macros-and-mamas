@@ -4,12 +4,8 @@ import { Btn } from "./ui";
 import { db } from "../db/db";
 import { CONFIG } from "../config";
 
-/**
- * Homepage waitlist capture for the next cohort.
- * variant: "hero" (on dark scrim) | "footer" (on page body)
- */
-export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
-  const isHero = variant === "hero";
+/** Waitlist capture form — used on /waitlist (first name, last name, email, phone). */
+export function CohortWaitlistForm({ source = "waitlist_page" }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -18,8 +14,6 @@ export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
-  // Hero sits on a dark mobile scrim; desktop hero copy is on light bg
-  // (labels flip via .mm-waitlist-form--hero CSS in SalesPage).
   const fieldStyle = {
     width: "100%",
     boxSizing: "border-box",
@@ -92,10 +86,9 @@ export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
   if (done) {
     return (
       <div
-        className={isHero ? "mm-waitlist-done mm-waitlist-done--hero" : "mm-waitlist-done"}
         role="status"
         style={{
-          padding: isHero ? "14px 16px" : "16px 18px",
+          padding: "16px 18px",
           borderRadius: 12,
           background: T.sageSoft,
           color: T.sage,
@@ -110,15 +103,10 @@ export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
   }
 
   return (
-    <form
-      className={isHero ? "mm-waitlist-form mm-waitlist-form--hero" : "mm-waitlist-form"}
-      onSubmit={submit}
-      noValidate
-      style={{ display: "grid", gap: 10, maxWidth: 360 }}
-    >
+    <form onSubmit={submit} noValidate style={{ display: "grid", gap: 12 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <label style={{ margin: 0 }}>
-          <span className="mm-waitlist-label" style={labelStyle}>First name</span>
+          <span style={labelStyle}>First name</span>
           <input
             style={fieldStyle}
             type="text"
@@ -131,7 +119,7 @@ export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
           />
         </label>
         <label style={{ margin: 0 }}>
-          <span className="mm-waitlist-label" style={labelStyle}>Last name</span>
+          <span style={labelStyle}>Last name</span>
           <input
             style={fieldStyle}
             type="text"
@@ -145,7 +133,7 @@ export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
         </label>
       </div>
       <label style={{ margin: 0 }}>
-        <span className="mm-waitlist-label" style={labelStyle}>Email</span>
+        <span style={labelStyle}>Email</span>
         <input
           style={fieldStyle}
           type="email"
@@ -158,7 +146,7 @@ export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
         />
       </label>
       <label style={{ margin: 0 }}>
-        <span className="mm-waitlist-label" style={labelStyle}>Phone</span>
+        <span style={labelStyle}>Phone</span>
         <input
           style={fieldStyle}
           type="tel"
@@ -170,27 +158,11 @@ export function CohortWaitlistForm({ variant = "hero", source = "homepage" }) {
           disabled={busy}
         />
       </label>
-      <Btn
-        type="submit"
-        disabled={busy}
-        style={{
-          width: "100%",
-          marginTop: 2,
-          ...(isHero ? { background: "#fff", color: T.accentDeep } : {}),
-        }}
-      >
-        {busy ? "Saving…" : "Register for priority access"}
+      <Btn type="submit" disabled={busy} style={{ width: "100%", marginTop: 4 }}>
+        {busy ? "Saving…" : "Join the waitlist"}
       </Btn>
       {error && (
-        <div
-          className="mm-waitlist-error"
-          style={{
-            fontSize: 13.5,
-            lineHeight: 1.45,
-            color: T.amber,
-            fontWeight: 600,
-          }}
-        >
+        <div style={{ fontSize: 13.5, lineHeight: 1.45, color: T.amber, fontWeight: 600 }}>
           {error}
         </div>
       )}

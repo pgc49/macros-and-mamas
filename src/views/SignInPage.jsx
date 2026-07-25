@@ -94,7 +94,7 @@ export function SignInPage({
           {forgotMode
             ? "Enter the email you enrolled with. We’ll send a link to choose a new password."
             : isCreate
-              ? "New founding-group signups are closed. If Callie invited you to finish joining, create your account here — otherwise join the cohort two waitlist on the homepage."
+              ? "New founding-group signups are closed. If Callie invited you to finish joining, create your account here — otherwise join the cohort two waitlist from the homepage."
               : "Sign in with the email you used when you enrolled."}
         </p>
 

@@ -44,7 +44,7 @@ export function JoinPage({ onRefresh }) {
             <div style={{ marginTop: 12, fontSize: 13.5, color: T.amber, lineHeight: 1.5 }}>{error}</div>
           )}
           <Link
-            to={`${PATHS.home}#waitlist`}
+            to={PATHS.waitlist}
             style={{
               display: "block",
               marginTop: 16,
