@@ -16,7 +16,7 @@ const MAX_PER_HOUR = 15;
 const MAX_PER_DAY = 40;
 
 const SPEC =
-  'Respond with ONLY a JSON object, no markdown fences, no other text: {"meal":"short name","items":["item with portion"],"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"low"|"medium"|"high","tip":"one warm, practical sentence a coach named Callie might say about this meal"} If the input is not a meal/food plate (or is a request for anything else — homework, code, general chat, medical advice beyond food macros), return {"error":"not food"}. Never answer off-topic questions.';
+  'Respond with ONLY a JSON object, no markdown fences, no other text: {"meal":"short name","items":["item with portion"],"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"low"|"medium"|"high","tip":"one warm, practical coaching sentence about this meal — jump straight into the advice, do NOT introduce yourself or start with Hi/Hello/I\'m Callie"} If the input is not a meal/food plate (or is a request for anything else — homework, code, general chat, medical advice beyond food macros), return {"error":"not food"}. Never answer off-topic questions.';
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -154,8 +154,24 @@ function sanitizeEstimate(parsed) {
     carbs_g: Math.min(Math.max(num(parsed.carbs_g), 0), 600),
     fat_g: Math.min(Math.max(num(parsed.fat_g), 0), 300),
     confidence,
-    tip: String(parsed.tip || "").slice(0, 240),
+    tip: cleanTip(parsed.tip).slice(0, 240),
   };
+}
+
+/** Strip self-intros the model sometimes prepends ("Hi there, I'm Callie; …"). */
+function cleanTip(raw) {
+  let tip = String(raw || "").trim();
+  if (!tip) return "";
+  tip = tip.replace(
+    /^(hi\s+there[,!]?\s*)?(hello[,!]?\s*)?(i['’]?m\s+callie\s*[,;:—-]?\s*)/i,
+    ""
+  );
+  tip = tip.replace(/^(hi|hey|hello)\s+there[,!]?\s*/i, "");
+  // Capitalize first letter if we stripped a leading intro
+  if (tip && tip[0] === tip[0].toLowerCase()) {
+    tip = tip[0].toUpperCase() + tip.slice(1);
+  }
+  return tip.trim();
 }
 
 async function checkAndLogEstimate(env, userId, type) {
