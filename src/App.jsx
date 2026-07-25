@@ -337,7 +337,9 @@ export default function App() {
 
   const waterOz = profile.goalWeight ? Math.round(Number(profile.goalWeight) / 2) : null;
 
-  const downscaleImage = (file, max = 1024) => new Promise((resolve) => {
+  // Keep Snap payloads small — large phone photos were timing out OpenRouter
+  // and surfacing as a bare Cloudflare 502 in the UI.
+  const downscaleImage = (file, max = 768) => new Promise((resolve) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
@@ -352,7 +354,7 @@ export default function App() {
           return;
         }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.8).split(",")[1] || null);
+        resolve(canvas.toDataURL("image/jpeg", 0.72).split(",")[1] || null);
       } catch (e) {
         console.error("downscaleImage failed", e);
         resolve(null);
@@ -396,10 +398,10 @@ export default function App() {
         } else if (resp.status === 404 || resp.status === 405) {
           // Plain Vite has no /api/* — need wrangler pages dev (or test on production).
           message = "Meal estimator isn’t available on this local server. Use wrangler pages dev, or try on macrosandmamas.com.";
-        } else if (code === "estimate unavailable" || code === "estimate failed") {
-          message = "Couldn't reach the meal estimator right now. Try again, or use Describe.";
         } else if (parsed.message) {
           message = parsed.message;
+        } else if (code === "estimate unavailable" || code === "estimate failed" || resp.status >= 500) {
+          message = "Couldn't reach the meal estimator right now. Try again, or use Describe.";
         } else {
           message = `Couldn't estimate that meal (${resp.status}). Try Describe, or try again.`;
         }
