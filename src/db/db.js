@@ -11,6 +11,7 @@ import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 function profileToRow(p) {
   return {
     name: p.name || null,
+    last_name: p.lastName || null,
     age: p.age === "" || p.age == null ? null : Number(p.age),
     phone: p.phone || null,
     current_weight: p.currentWeight === "" || p.currentWeight == null ? null : Number(p.currentWeight),
@@ -32,10 +33,19 @@ function profileToRow(p) {
   };
 }
 
+/** Display name: "First Last" when last is present, else first / email fallback handled by callers. */
+export function fullName(profileOrRow) {
+  if (!profileOrRow) return "";
+  const first = String(profileOrRow.name || profileOrRow.first_name || "").trim();
+  const last = String(profileOrRow.lastName || profileOrRow.last_name || "").trim();
+  return [first, last].filter(Boolean).join(" ");
+}
+
 function rowToProfile(row) {
   if (!row) return null;
   return {
     name: row.name || "",
+    lastName: row.last_name || "",
     age: row.age != null ? String(row.age) : "",
     phone: row.phone || "",
     currentWeight: row.current_weight != null ? String(row.current_weight) : "",
@@ -830,7 +840,9 @@ export const db = {
 
       return {
         id: p.id,
-        name: p.name || (hasIntake ? "Mama" : "New signup"),
+        name: fullName(p) || (hasIntake ? "Mama" : "New signup"),
+        firstName: p.name || "",
+        lastName: p.last_name || "",
         email: p.email || "",
         age: p.age,
         currentWeight: p.current_weight,

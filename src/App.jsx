@@ -39,7 +39,7 @@ const AdminPortal = lazy(() =>
 );
 
 const EMPTY_PROFILE = {
-  name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
+  name: "", lastName: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
   bottleOz: 24,
   breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
   stress: "medium", insulinResistance: false, diet: "none",
@@ -309,7 +309,7 @@ export default function App() {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              name: forEngine.name,
+              name: [forEngine.name, forEngine.lastName].filter(Boolean).join(" "),
               age: forEngine.age,
               currentWeight: forEngine.currentWeight,
               goalWeight: forEngine.goalWeight,

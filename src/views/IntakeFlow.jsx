@@ -48,7 +48,26 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
 
       {step === 0 && (
         <Card>
-          <Field label="First name"><input style={inputStyle} value={profile.name} onChange={(e) => set("name", e.target.value)} placeholder="Your name" /></Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="First name">
+              <input
+                style={inputStyle}
+                value={profile.name}
+                onChange={(e) => set("name", e.target.value)}
+                placeholder="First"
+                autoComplete="given-name"
+              />
+            </Field>
+            <Field label="Last name">
+              <input
+                style={inputStyle}
+                value={profile.lastName || ""}
+                onChange={(e) => set("lastName", e.target.value)}
+                placeholder="Last"
+                autoComplete="family-name"
+              />
+            </Field>
+          </div>
           <Field label="Age"><input style={inputStyle} inputMode="numeric" value={profile.age} onChange={(e) => set("age", e.target.value)} placeholder="33" /></Field>
           <Field label="Current weight (lbs)"><input style={inputStyle} inputMode="numeric" value={profile.currentWeight} onChange={(e) => set("currentWeight", e.target.value)} placeholder="162" /></Field>
           <Field label="Goal weight (lbs) — where you feel your best"><input style={inputStyle} inputMode="numeric" value={profile.goalWeight} onChange={(e) => set("goalWeight", e.target.value)} placeholder="145" /></Field>
@@ -58,7 +77,19 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
           <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.5, marginBottom: 14 }}>
             Callie personally invites every mama to the group chat. Heads up: members of a WhatsApp group can see each other&apos;s numbers.
           </div>
-          <Btn style={{ width: "100%", marginTop: 4 }} disabled={!profile.goalWeight || !profile.currentWeight || !profile.phone} onClick={() => setStep(1)}>Continue</Btn>
+          <Btn
+            style={{ width: "100%", marginTop: 4 }}
+            disabled={
+              !String(profile.name || "").trim()
+              || !String(profile.lastName || "").trim()
+              || !profile.goalWeight
+              || !profile.currentWeight
+              || !profile.phone
+            }
+            onClick={() => setStep(1)}
+          >
+            Continue
+          </Btn>
         </Card>
       )}
 
