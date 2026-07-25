@@ -4,19 +4,108 @@ import { Btn } from "./ui";
 import { buildGroceryList, formatGroceryListText } from "../utils/groceryList";
 import { copyText } from "../utils/clipboard";
 
+function groceryStateKey(weekStart) {
+  return `mm_grocery_${weekStart || "week"}`;
+}
+
+function loadGroceryState(weekStart) {
+  try {
+    const raw = localStorage.getItem(groceryStateKey(weekStart));
+    if (!raw) return { checked: {}, hidden: {} };
+    const parsed = JSON.parse(raw);
+    return {
+      checked: parsed.checked && typeof parsed.checked === "object" ? parsed.checked : {},
+      hidden: parsed.hidden && typeof parsed.hidden === "object" ? parsed.hidden : {},
+    };
+  } catch {
+    return { checked: {}, hidden: {} };
+  }
+}
+
+function saveGroceryState(weekStart, state) {
+  try {
+    localStorage.setItem(groceryStateKey(weekStart), JSON.stringify(state));
+  } catch {
+    /* ignore quota */
+  }
+}
+
 /**
- * Grocery list body — aisle sections + copy. No meal-source lines (shop-style).
- * Parent owns open/closed chrome (e.g. Ready to shop card).
+ * Grocery list body — buy quantities, recipe names, check off / have-it.
  */
-export function GroceryListBody({ weekDays }) {
+export function GroceryListBody({ weekDays, weekStart }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  const [checked, setChecked] = useState(() => loadGroceryState(weekStart).checked);
+  const [hidden, setHidden] = useState(() => loadGroceryState(weekStart).hidden);
+
   const list = useMemo(() => buildGroceryList(weekDays || []), [weekDays]);
+
+  // Reload persisted state when the planner week changes
+  useEffect(() => {
+    const s = loadGroceryState(weekStart);
+    setChecked(s.checked);
+    setHidden(s.hidden);
+  }, [weekStart]);
+
+  useEffect(() => {
+    saveGroceryState(weekStart, { checked, hidden });
+  }, [weekStart, checked, hidden]);
+
+  const visibleSections = useMemo(() => {
+    return list.sections
+      .map((sec) => ({
+        ...sec,
+        items: sec.items.filter((row) => !hidden[row.key]),
+      }))
+      .filter((sec) => sec.items.length > 0);
+  }, [list.sections, hidden]);
+
+  const hiddenCount = useMemo(
+    () => list.sections.reduce((n, sec) => n + sec.items.filter((r) => hidden[r.key]).length, 0),
+    [list.sections, hidden],
+  );
+
+  const checkedCount = useMemo(
+    () => list.sections.reduce((n, sec) => n + sec.items.filter((r) => checked[r.key] && !hidden[r.key]).length, 0),
+    [list.sections, checked, hidden],
+  );
+
+  const toggleChecked = (key) => {
+    setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const markHaveIt = (key) => {
+    setHidden((prev) => ({ ...prev, [key]: true }));
+    setChecked((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const restoreHidden = () => {
+    setHidden({});
+  };
+
+  const clearChecks = () => {
+    setChecked({});
+  };
 
   const onCopy = async () => {
     setError("");
     try {
-      const text = formatGroceryListText(list, {
+      // Copy only still-needed (not hidden, not checked) items
+      const filtered = {
+        ...list,
+        sections: list.sections
+          .map((sec) => ({
+            ...sec,
+            items: sec.items.filter((row) => !hidden[row.key] && !checked[row.key]),
+          }))
+          .filter((sec) => sec.items.length > 0),
+      };
+      const text = formatGroceryListText(filtered, {
         title: "Macros and Mamas — grocery list",
       });
       await copyText(text);
@@ -38,7 +127,12 @@ export function GroceryListBody({ weekDays }) {
 
   return (
     <div>
-      {list.sections.map((sec) => (
+      <p style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.45, margin: "0 0 12px" }}>
+        Buy sizes for the store — recipes stay exact on the board. Tap to cross off while shopping;
+        use Have it if it’s already in your kitchen.
+      </p>
+
+      {visibleSections.map((sec) => (
         <div key={sec.aisle} style={{ marginBottom: 14 }}>
           <div
             style={{
@@ -52,40 +146,112 @@ export function GroceryListBody({ weekDays }) {
           >
             {sec.aisle}
           </div>
-          {sec.items.map((row) => (
-            <div
-              key={row.key}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 10,
-                padding: "7px 0",
-                borderBottom: `1px solid ${T.border}`,
-                fontSize: 13.5,
-                lineHeight: 1.35,
-              }}
-            >
-              <div style={{ minWidth: 0, color: T.ink, fontWeight: 600 }}>
-                {row.item}
-                {row.staple ? (
-                  <span style={{ fontWeight: 400, color: T.inkSoft, fontSize: 12 }}> · on hand?</span>
-                ) : null}
-              </div>
+          {sec.items.map((row) => {
+            const done = !!checked[row.key];
+            return (
               <div
+                key={row.key}
                 style={{
-                  color: T.inkSoft,
-                  textAlign: "right",
-                  flexShrink: 0,
-                  maxWidth: "45%",
-                  fontSize: 12.5,
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "flex-start",
+                  padding: "8px 0",
+                  borderBottom: `1px solid ${T.border}`,
+                  opacity: done ? 0.55 : 1,
                 }}
               >
-                {row.amounts.join("; ") || "—"}
+                <button
+                  type="button"
+                  aria-label={done ? `Uncheck ${row.item}` : `Check off ${row.item}`}
+                  onClick={() => toggleChecked(row.key)}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    marginTop: 2,
+                    flexShrink: 0,
+                    borderRadius: 6,
+                    border: `1.5px solid ${done ? T.accent : T.border}`,
+                    background: done ? T.accentSoft : "#fff",
+                    cursor: "pointer",
+                    color: T.accentDeep,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    fontFamily: F,
+                    padding: 0,
+                  }}
+                >
+                  {done ? "✓" : ""}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleChecked(row.key)}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    textAlign: "left",
+                    border: "none",
+                    background: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    fontFamily: F,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: T.ink,
+                      textDecoration: done ? "line-through" : "none",
+                    }}
+                  >
+                    {row.item}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: T.accentDeep, fontWeight: 700, marginTop: 2 }}>
+                    Buy {row.buy || "—"}
+                    {row.needNote ? (
+                      <span style={{ fontWeight: 400, color: T.inkSoft }}> · {row.needNote}</span>
+                    ) : null}
+                    {row.staple ? (
+                      <span style={{ fontWeight: 400, color: T.inkSoft }}> · usually on hand</span>
+                    ) : null}
+                  </div>
+                  {(row.recipes || []).length > 0 && (
+                    <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 3, lineHeight: 1.4 }}>
+                      For: {(row.recipes || []).join(" · ")}
+                    </div>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => markHaveIt(row.key)}
+                  style={{
+                    flexShrink: 0,
+                    marginTop: 2,
+                    border: "none",
+                    background: "none",
+                    color: T.inkSoft,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: F,
+                    textDecoration: "underline",
+                    padding: "2px 0",
+                  }}
+                >
+                  Have it
+                </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ))}
+
+      {!visibleSections.length && (
+        <div style={{ fontSize: 13.5, color: T.inkSoft, marginBottom: 12, lineHeight: 1.5 }}>
+          Everything’s crossed off or marked as already at home. Nice shopping.
+        </div>
+      )}
 
       {list.notes?.length > 0 && (
         <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.45, marginBottom: 12 }}>
@@ -99,9 +265,43 @@ export function GroceryListBody({ weekDays }) {
         <Btn small onClick={onCopy}>
           {copied ? "Copied" : "Copy list"}
         </Btn>
-        <span style={{ fontSize: 12.5, color: T.inkSoft }}>
-          Paste into Notes or text your partner
-        </span>
+        {checkedCount > 0 && (
+          <button
+            type="button"
+            onClick={clearChecks}
+            style={{
+              border: "none",
+              background: "none",
+              fontSize: 12.5,
+              color: T.inkSoft,
+              cursor: "pointer",
+              textDecoration: "underline",
+              fontFamily: F,
+            }}
+          >
+            Clear checks
+          </button>
+        )}
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={restoreHidden}
+            style={{
+              border: "none",
+              background: "none",
+              fontSize: 12.5,
+              color: T.inkSoft,
+              cursor: "pointer",
+              textDecoration: "underline",
+              fontFamily: F,
+            }}
+          >
+            Show {hiddenCount} have-it {hiddenCount === 1 ? "item" : "items"}
+          </button>
+        )}
+      </div>
+      <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8 }}>
+        Paste into Notes or text your partner
       </div>
       {error && (
         <div style={{ fontSize: 12.5, color: T.amber, marginTop: 8 }}>{error}</div>
@@ -113,6 +313,7 @@ export function GroceryListBody({ weekDays }) {
 /** @deprecated Prefer Ready-to-shop + GroceryListBody. Kept for any leftover imports. */
 export function GroceryListPanel({
   weekDays,
+  weekStart,
   emptyHint = "Add meals to your plan — grocery builds from what you commit.",
   open: openControlled,
   onOpenChange,
@@ -178,7 +379,7 @@ export function GroceryListPanel({
       </button>
       {open && plannedMeals > 0 && (
         <div style={{ marginTop: 10 }}>
-          <GroceryListBody weekDays={weekDays} />
+          <GroceryListBody weekDays={weekDays} weekStart={weekStart} />
         </div>
       )}
     </div>

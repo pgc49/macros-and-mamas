@@ -376,7 +376,7 @@ export function WeekPlanner({
           <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>Ready to shop?</div>
           <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, margin: "0 0 12px" }}>
             {mealCount
-              ? `${groceryStats.lineCount} items from this week’s plan`
+              ? `${groceryStats.lineCount} buy items from this week’s plan — store sizes, not plate ounces`
               : "Add meals above — grocery builds from what you put on the board."}
           </p>
           <Btn onClick={toggleGrocery} disabled={!mealCount}>
@@ -384,7 +384,7 @@ export function WeekPlanner({
           </Btn>
           {groceryOpen && mealCount > 0 && (
             <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
-              <GroceryListBody weekDays={planned} />
+              <GroceryListBody weekDays={planned} weekStart={ws} />
             </div>
           )}
         </div>
