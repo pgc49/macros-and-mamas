@@ -153,14 +153,14 @@ Callie`,
     name: "Cohort two open (waitlist blast)",
     status: "ready",
     trigger: "Manual one-shot when enrollment reopens — POST /api/cohort-waitlist-blast (CRON_SECRET). Pulls cohort_waitlist; CTA → create account & pay.",
-    subject: "Cohort two is open — your priority spot",
+    subject: "Cohort two is open — your waitlist rate $249",
     audience: "Waitlist",
-    cta: "Create account & join — $149",
+    cta: "Create account & join — $249",
     bodyPreview: `Hi [First name],
 
 You asked to be first in line for the next Macros and Mamas group — and spots are open.
 
-This is your priority access: create your account (or sign in), then secure your spot for $149. Inside: macros I build myself, our moms WhatsApp group Mon–Fri, and a short Monday voice note to keep the week simple.
+Because you joined the waitlist early, your rate is $249 (full price is $299). Create your account (or sign in), then lock in that waitlist price. Inside: macros I build myself, our moms WhatsApp group Mon–Fri, and a short Monday voice note to keep the week simple.
 
 Tap below when you're ready. I'd love to have you.
 
