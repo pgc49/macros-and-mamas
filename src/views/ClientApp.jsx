@@ -12,6 +12,7 @@ import { HomeScreenTip } from "../components/HomeScreenTip";
 import { LoggableMealRow } from "../components/LoggableMealRow";
 import { RecipeCreator } from "../components/RecipeCreator";
 import { WeekPlanner, FoodPrefsEditor } from "../components/WeekPlanner";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
 import { useState } from "react";
@@ -362,22 +363,28 @@ export function ClientApp({
           </div>
 
           {mealFilter === "Plan" && (
-            <WeekPlanner
-              profile={profile}
-              macros={macros}
-              days={weekPlanDays}
-              source={weekPlanSource}
-              weekStart={weekPlanWeekStart || wkStartOf()}
-              saving={weekPlanSaving}
-              suggestBusy={weekPlanSuggestBusy}
-              customMeals={customMeals}
-              onChangeDays={onWeekPlanChange}
-              onChangeWeek={onChangeWeekPlanWeek}
-              onSuggestAiWeek={onSuggestAiWeek}
-              onMealIdea={onMealIdea}
-              onSaveCustomMeal={onSaveCustomMeal}
-              onLog={logRecipe}
-            />
+            <ErrorBoundary
+              name="WeekPlanner"
+              title="Plan my week hit a snag"
+              message="Today, recipes, and Progress still work. Try refreshing — if it keeps happening, force-close the home-screen app and reopen, then ping Callie."
+            >
+              <WeekPlanner
+                profile={profile}
+                macros={macros}
+                days={weekPlanDays}
+                source={weekPlanSource}
+                weekStart={weekPlanWeekStart || wkStartOf()}
+                saving={weekPlanSaving}
+                suggestBusy={weekPlanSuggestBusy}
+                customMeals={customMeals}
+                onChangeDays={onWeekPlanChange}
+                onChangeWeek={onChangeWeekPlanWeek}
+                onSuggestAiWeek={onSuggestAiWeek}
+                onMealIdea={onMealIdea}
+                onSaveCustomMeal={onSaveCustomMeal}
+                onLog={logRecipe}
+              />
+            </ErrorBoundary>
           )}
 
           {mealFilter === "Food prefs" && (

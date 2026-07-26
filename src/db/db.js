@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase";
 import { DEFAULT_ITEMS, DAYS } from "../content/data";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
+import { sanitizeWeekMeals } from "../utils/planMealShape";
 
 /* ------------------------------------------------------------------ */
 /*  DATA LAYER — per-event Supabase writes (not blob persistence)      */
@@ -1185,7 +1186,7 @@ export const db = {
         const legacy = ws === wkStartOf() ? migrateLegacyWeekPlanLocal(uid, ws) : null;
         return legacy || { days: [], source: "manual", week_start: ws, updated_at: null };
       }
-      const days = Array.isArray(data.days) ? data.days : [];
+      const days = sanitizeWeekMeals(Array.isArray(data.days) ? data.days : []);
       return {
         days,
         source: data.source || "manual",
@@ -1203,7 +1204,8 @@ export const db = {
     const ws = weekStart || wkStartOf();
     const lsKey = weekPlanLocalKey(uid, ws);
     const payload = {
-      days: Array.isArray(days) ? days : [],
+      // Heal poisoned AI shapes on every write so Supabase/local stay safe.
+      days: sanitizeWeekMeals(Array.isArray(days) ? days : []),
       source: ["manual", "ai", "coach_seed"].includes(source) ? source : "manual",
       week_start: ws,
       updated_at: new Date().toISOString(),
@@ -1249,7 +1251,7 @@ function migrateLegacyWeekPlanLocal(uid, weekStart) {
       return null;
     }
     const payload = {
-      days,
+      days: sanitizeWeekMeals(days),
       source: parsed?.source || "manual",
       week_start: weekStart,
       updated_at: parsed?.updated_at || null,
@@ -1268,7 +1270,7 @@ function readWeekPlanLocal(lsKey, weekStart) {
     if (!raw) return { days: [], source: "manual", week_start: weekStart, updated_at: null };
     const parsed = JSON.parse(raw);
     return {
-      days: Array.isArray(parsed?.days) ? parsed.days : [],
+      days: sanitizeWeekMeals(Array.isArray(parsed?.days) ? parsed.days : []),
       source: parsed?.source || "manual",
       week_start: parsed?.week_start || weekStart,
       updated_at: parsed?.updated_at || null,

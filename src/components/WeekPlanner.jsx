@@ -5,7 +5,8 @@ import { GroceryListBody } from "./GroceryListPanel";
 import { withRecipeDetail, mealToCard } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 import { addDaysIso, fmtRange, wkStartOf } from "../utils/dates";
-import { buildGroceryList } from "../utils/groceryList";
+import { safeBuildGroceryList } from "../utils/groceryList";
+import { weekPlanHasPoisonShapes } from "../utils/planMealShape";
 import {
   PLAN_DAYS,
   PLAN_SLOTS,
@@ -59,7 +60,7 @@ export function WeekPlanner({
   const planned = normalizeWeekDays(days);
   const mealCount = countPlannedMeals(planned);
   const bands = targetBands(macros);
-  const groceryStats = useMemo(() => buildGroceryList(planned), [planned]);
+  const groceryStats = useMemo(() => safeBuildGroceryList(planned), [planned]);
   const curWk = wkStartOf();
   const ws = weekStart || curWk;
   const earliest = addDaysIso(curWk, -7 * PAST_WEEKS);
@@ -88,6 +89,15 @@ export function WeekPlanner({
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
+
+  // Persist a healed plan when legacy AI poison is still in storage — keeps
+  // Supabase/local clean so the next open never sees batch: "3 servings".
+  useEffect(() => {
+    if (!weekPlanHasPoisonShapes(days)) return;
+    onChangeDays?.(normalizeWeekDays(days), source || "manual");
+    // Only heal when incoming days change (week switch / refresh).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days, weekStart]);
 
   useEffect(() => {
     if (!message) return undefined;
@@ -764,22 +774,24 @@ function PlanMealTile({
   const card = mealToCard({
     ...meal,
     basedOn: meal.basedOn || meal.name,
-    ingredients: meal.ingredients?.length ? meal.ingredients : undefined,
-    serving: meal.serving?.length ? meal.serving : undefined,
-    steps: meal.steps?.length >= 4 ? meal.steps : undefined,
-    batch: meal.batch?.length ? meal.batch : undefined,
+    ingredients: Array.isArray(meal.ingredients) && meal.ingredients.length ? meal.ingredients : undefined,
+    serving: Array.isArray(meal.serving) && meal.serving.length ? meal.serving : undefined,
+    steps: Array.isArray(meal.steps) && meal.steps.length >= 4 ? meal.steps : undefined,
+    batch: Array.isArray(meal.batch) && meal.batch.length ? meal.batch : undefined,
   });
   const detail = withRecipeDetail({
     name: meal.basedOn || meal.name,
     basedOn: meal.basedOn || meal.name,
     cat: card.cat,
   });
-  const serving = (card.serving?.length ? card.serving : null)
-    || (detail.serving?.length ? detail.serving : null)
-    || (card.ingredients?.length ? card.ingredients : null)
+  const serving = (Array.isArray(card.serving) && card.serving.length ? card.serving : null)
+    || (Array.isArray(detail.serving) && detail.serving.length ? detail.serving : null)
+    || (Array.isArray(card.ingredients) && card.ingredients.length ? card.ingredients : null)
     || [];
-  const steps = (card.steps?.length ? card.steps : null) || detail.steps || [];
-  const batch = (card.batch?.length ? card.batch : null) || (detail.batch?.length ? detail.batch : null);
+  const steps = (Array.isArray(card.steps) && card.steps.length ? card.steps : null)
+    || (Array.isArray(detail.steps) ? detail.steps : []);
+  const batch = (Array.isArray(card.batch) && card.batch.length ? card.batch : null)
+    || (Array.isArray(detail.batch) && detail.batch.length ? detail.batch : null);
   const serves = Number(meal.servings || meal.serves || card.serves || detail.serves) || 1;
   const slotKey = String(meal.slot || "").toLowerCase();
   const showBatchServes = serves > 1 && (slotKey === "dinner" || !!batch);
@@ -940,7 +952,8 @@ function PlanMealTile({
 }
 
 function IngList({ items }) {
-  if (!items?.length) {
+  const lines = Array.isArray(items) ? items : [];
+  if (!lines.length) {
     return (
       <div style={{ fontSize: 12.5, color: T.inkSoft }}>
         No structured ingredient list for this meal yet — macros above still apply.
@@ -949,9 +962,9 @@ function IngList({ items }) {
   }
   return (
     <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, lineHeight: 1.5, color: T.ink }}>
-      {items.map((ing, i) => (
+      {lines.map((ing, i) => (
         <li key={i} style={{ marginBottom: 2 }}>
-          <b>{ing.amount}</b> {ing.item}
+          <b>{ing?.amount}</b> {ing?.item}
         </li>
       ))}
     </ul>

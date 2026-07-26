@@ -8,6 +8,7 @@
 import { RECIPES, PANTRY_ITEMS } from "../content/data.js";
 import { DEFAULT_WEEK } from "../content/defaultWeek.js";
 import { withRecipeDetail } from "../content/recipeDetails.js";
+import { sanitizePlanMeal } from "./planMealShape.js";
 import { snapServings } from "./servings.jsx";
 
 export const PLAN_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -48,8 +49,12 @@ export function normalizeWeekDays(days) {
   });
   return PLAN_DAYS.map((day) => {
     const existing = byDay.get(day);
+    // Sanitize on every normalize so poisoned AI/legacy shapes (e.g. batch: "3 servings")
+    // cannot crash grocery/recipe UI — even if they still sit in Supabase.
     const meals = Array.isArray(existing?.meals)
-      ? existing.meals.filter((m) => m && m.name).map(withMealId)
+      ? existing.meals
+        .filter((m) => m && m.name)
+        .map((m) => withMealId(sanitizePlanMeal(m)))
       : [];
     return {
       day,
@@ -366,6 +371,7 @@ export function moveMeal(days, mealId, toDay, toIndex = null) {
 
 /** Seed planner from coach-published plan, AI, or DEFAULT_WEEK. */
 export function cloneDaysToPlan(sourceDays) {
+  // normalizeWeekDays already sanitizes recipe arrays on each meal.
   return normalizeWeekDays(sourceDays).map((d) => ({
     day: d.day,
     theme: d.theme || "",
@@ -381,9 +387,9 @@ export function cloneDaysToPlan(sourceDays) {
         f: Number(m.f) || 0,
         servings: Number(m.servings || m.serves) || 1,
         qty: m.qty ?? 1,
-        ingredients: m.ingredients || m.serving || [],
-        batch: m.batch ?? null,
-        steps: m.steps || [],
+        ingredients: Array.isArray(m.ingredients) ? m.ingredients : [],
+        batch: Array.isArray(m.batch) && m.batch.length ? m.batch : null,
+        steps: Array.isArray(m.steps) ? m.steps : [],
       }),
     ),
     dayTotals: sumDayTotals(

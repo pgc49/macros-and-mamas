@@ -4,14 +4,15 @@ import { withRecipeDetail } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 
 function IngList({ items }) {
-  if (!items?.length) {
+  const lines = Array.isArray(items) ? items : [];
+  if (!lines.length) {
     return <div style={{ fontSize: 13.5, color: T.inkSoft }}>No structured ingredient list yet.</div>;
   }
   return (
     <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.55, color: T.ink }}>
-      {items.map((ing, i) => (
+      {lines.map((ing, i) => (
         <li key={i} style={{ marginBottom: 3 }}>
-          <b>{ing.amount}</b> {ing.item}
+          <b>{ing?.amount}</b> {ing?.item}
         </li>
       ))}
     </ul>
@@ -29,9 +30,11 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
   const r = withRecipeDetail(meal);
   const cat = r.cat || r.slot || "Meal";
   const serves = Number(r.serves) || 1;
-  const batch = r.batch?.length ? r.batch : null;
-  const serving = r.serving?.length ? r.serving : (r.ingredients || []);
-  const steps = r.steps || [];
+  const batch = Array.isArray(r.batch) && r.batch.length ? r.batch : null;
+  const serving = Array.isArray(r.serving) && r.serving.length
+    ? r.serving
+    : (Array.isArray(r.ingredients) ? r.ingredients : []);
+  const steps = Array.isArray(r.steps) ? r.steps : [];
   const servings = snapServings(qty);
   const scaled = scaleMealForLog(r, servings);
   const isDinner = String(cat).toLowerCase() === "dinner";

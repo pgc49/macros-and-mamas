@@ -19,6 +19,7 @@ import {
   parseJsonLoose,
   resolveModels,
 } from "../_shared/openrouter.js";
+import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 
 const MAX_PER_DAY = 5;
 const SUGGEST_RETRY_COPY = "AI was slow starting up — tap Suggest my week once more.";
@@ -139,7 +140,7 @@ export async function onRequestPost({ request, env }) {
     };
 
     plan.days = plan.days.slice(0, 7).map((day) => {
-      const meals = (Array.isArray(day.meals) ? day.meals : []).map(sanitizeSuggestMeal);
+      const meals = (Array.isArray(day.meals) ? day.meals : []).map(sanitizePlanMeal);
       const dayTotals = meals.reduce(
         (a, m) => ({
           cal: a.cal + (Number(m.cal) || 0),
@@ -173,24 +174,6 @@ export async function onRequestPost({ request, env }) {
     console.error("meal-suggest failed", e);
     return json({ error: "suggestions failed" }, 500);
   }
-}
-
-/** Coerce recipe fields so a string label like batch: "3 servings" never lands in week plans. */
-function sanitizeSuggestMeal(m) {
-  if (!m || typeof m !== "object") return m;
-  const ingredients = Array.isArray(m.ingredients) ? m.ingredients.slice(0, 24) : [];
-  const serving = Array.isArray(m.serving) ? m.serving.slice(0, 24) : undefined;
-  const batch = Array.isArray(m.batch) && m.batch.length ? m.batch.slice(0, 30) : null;
-  const steps = Array.isArray(m.steps)
-    ? m.steps.map((s) => String(s).slice(0, 400)).slice(0, 10)
-    : [];
-  return {
-    ...m,
-    ingredients,
-    ...(serving !== undefined ? { serving } : {}),
-    batch,
-    steps,
-  };
 }
 
 async function requireSupabaseUser(request, env) {
