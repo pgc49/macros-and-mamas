@@ -15,7 +15,28 @@ Stripe keys stay on **Cloudflare** — do not add them here.
 | `intake-received` | #4 Intake received | Cloudflare `/api/intake-submitted` |
 | `application-approved` | #5 Macros live | Cloudflare `/api/macros-approved` |
 | `eligibility-refund` | #6 Refund confirm | Cloudflare `/api/refund` |
+| `cohort-open` | Waitlist: cohort open | Manual Cloudflare `/api/cohort-waitlist-blast` |
 | `notify-callie` | Callie A/B/C | Same handlers as above |
+
+### Cohort waitlist blast (when ready to open)
+
+1. Flip `CONFIG.ENROLLMENT_OPEN` to `true` and set Cloudflare `ENROLLMENT_OPEN=true`.
+2. Dry-run, then send:
+
+```bash
+curl -X POST https://www.macrosandmamas.com/api/cohort-waitlist-blast \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun":true}'
+
+curl -X POST https://www.macrosandmamas.com/api/cohort-waitlist-blast \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun":false}'
+```
+
+CTA in the email → `/signin` (create account) → unpaid users land on `/join` to pay.
+Rows come from `public.cohort_waitlist` (already collecting on `/waitlist`).
 
 #7 / #8 / Callie D (quiet check-in, graduation) not wired yet.
 
@@ -49,6 +70,7 @@ supabase functions deploy eligibility-refund --project-ref reangkqbsazwxvrqvsdo
 supabase functions deploy notify-callie --project-ref reangkqbsazwxvrqvsdo
 supabase functions deploy finish-joining --project-ref reangkqbsazwxvrqvsdo
 supabase functions deploy intake-reminder --project-ref reangkqbsazwxvrqvsdo
+supabase functions deploy cohort-open --project-ref reangkqbsazwxvrqvsdo
 ```
 
 Cloudflare already has `SUPABASE_SERVICE_ROLE_KEY` for the webhook; that same key invokes these functions.

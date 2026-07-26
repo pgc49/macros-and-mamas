@@ -46,8 +46,8 @@ export async function onRequestPost({ request, env }) {
       const types = already.get(p.id) || new Set();
 
       try {
-        // #1 — unpaid abandoned checkout
-        if (!p.paid && Number.isFinite(createdMs)) {
+        // #1 — unpaid abandoned checkout (skip new accounts while enrollment is closed)
+        if (!p.paid && Number.isFinite(createdMs) && canNudgeUnpaid(env, createdMs)) {
           const age = now - createdMs;
           if (age >= 24 * HOUR && !types.has("finish_joining_24h")) {
             // Prefer 24h if due; still ok if 1h never sent
@@ -138,6 +138,15 @@ function authorize(request, env) {
   const auth = request.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   return token && token === secret;
+}
+
+/** While closed, only nudge unpaid accounts created before the cutoff. */
+function canNudgeUnpaid(env, createdMs) {
+  const open = String(env.ENROLLMENT_OPEN || "").toLowerCase() === "true";
+  if (open) return true;
+  const closedAt = env.ENROLLMENT_CLOSED_AT || "2026-07-26T02:00:00.000Z";
+  const closed = Date.parse(closedAt);
+  return Number.isFinite(createdMs) && Number.isFinite(closed) && createdMs < closed;
 }
 
 async function fetchAllProfiles(base, key) {

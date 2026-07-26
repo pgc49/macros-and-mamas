@@ -5,6 +5,9 @@
      STRIPE_SECRET_KEY
      STRIPE_PRICE_ID
      SUPABASE_URL          (project URL; public)
+     ENROLLMENT_OPEN       ("true" when cohort checkout is open)
+     ENROLLMENT_CLOSED_AT  (ISO; unpaid accounts created before this
+                            may still finish paying while closed)
    ================================================================== */
 
 export async function onRequestPost({ request, env }) {
@@ -19,6 +22,10 @@ export async function onRequestPost({ request, env }) {
     }
     if (profile?.paid) {
       return json({ error: "already paid" }, 409);
+    }
+
+    if (!canCheckoutWhileClosed(env, profile?.created_at)) {
+      return json({ error: "enrollment closed" }, 403);
     }
 
     const secret = env.STRIPE_SECRET_KEY;
@@ -61,6 +68,17 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
+/** Open when ENROLLMENT_OPEN=true; otherwise only pre-close accounts. */
+function canCheckoutWhileClosed(env, createdAtIso) {
+  const open = String(env.ENROLLMENT_OPEN || "").toLowerCase() === "true";
+  if (open) return true;
+  const closedAt = env.ENROLLMENT_CLOSED_AT || "2026-07-26T02:00:00.000Z";
+  if (!createdAtIso) return false;
+  const closed = Date.parse(closedAt);
+  const created = Date.parse(createdAtIso);
+  return Number.isFinite(created) && Number.isFinite(closed) && created < closed;
+}
+
 async function requireUser(request, env) {
   const auth = request.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
@@ -94,7 +112,7 @@ async function fetchProfile(env, userId, authHeader) {
   if (!apikey || !authorization) return null;
 
   const resp = await fetch(
-    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid,refunded`,
+    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid,refunded,created_at`,
     {
       headers: {
         apikey,

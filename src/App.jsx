@@ -1185,7 +1185,12 @@ export default function App() {
               ? <Navigate to={PATHS.goodbye} replace />
               : paid || isAdmin
                 ? <Navigate to={homePathFor({ isAdmin, approved, paid, macros, refunded })} replace />
-                : <JoinPage onRefresh={refreshClientState} />
+                : (
+                  <JoinPage
+                    onRefresh={refreshClientState}
+                    profileCreatedAt={profile?.createdAt || null}
+                  />
+                )
         }
       />
 

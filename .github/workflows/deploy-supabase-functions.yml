@@ -41,7 +41,7 @@ jobs:
         run: |
           set -e
           REF="${PROJECT_REF:-reangkqbsazwxvrqvsdo}"
-          for fn in welcome-email application-approved intake-received eligibility-refund notify-callie finish-joining intake-reminder; do
+          for fn in welcome-email application-approved intake-received eligibility-refund notify-callie finish-joining intake-reminder cohort-open; do
             echo "Deploying $fn..."
             supabase functions deploy "$fn" --project-ref "$REF"
           done
