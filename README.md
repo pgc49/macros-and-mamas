@@ -176,3 +176,4 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 - [ ] Unauthenticated `curl` to `/api/estimate` returns **401**; unpaid returns **403**
 - [ ] Reload / second browser shows the same persisted data
 - [ ] No secret key material in git (`sk-or-`, `sk_live`, `sk_test` values, etc.)
+
