@@ -184,6 +184,22 @@ export async function sendApprovedEmail(env, { email, name, userId }) {
   });
 }
 
+export async function sendCohortOpenEmail(env, { email, name, waitlistId = null, profileId = null }) {
+  if (!email) return { ok: false };
+  const subject = "Cohort two is open — your priority spot";
+  const result = await invokeEdgeFunction(env, "cohort-open", { email, name });
+  await logEmailEvent(env, {
+    profileId: profileId || null,
+    emailType: "cohort_open",
+    toEmail: email,
+    subject,
+    resendId: resendIdFrom(result),
+    status: result.ok ? "sent" : "failed",
+    meta: { slug: "cohort-open", cohort_waitlist_id: waitlistId || null },
+  });
+  return result;
+}
+
 export async function sendFinishJoiningEmail(env, { email, name, userId, variant }) {
   if (!email) return { ok: false };
   const subject = "Your spot's waiting, mama";

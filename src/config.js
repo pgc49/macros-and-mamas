@@ -46,10 +46,30 @@ export const CONFIG = {
   FULLSCRIPT_DIGESTION: envUrl("VITE_FULLSCRIPT_DIGESTION_URL"),
 
   // Founding group closed — homepage captures waitlist for the next cohort.
-  // Flip enrollmentOpen back to true when cohort two opens for checkout.
+  // Flip ENROLLMENT_OPEN back to true when cohort two opens for checkout.
+  // Mirror ENROLLMENT_OPEN + ENROLLMENT_CLOSED_AT on Cloudflare for /api/checkout.
   ENROLLMENT_OPEN: false,
+  /** ISO cutoff: accounts created before this may still finish paying while closed. */
+  ENROLLMENT_CLOSED_AT: "2026-07-26T02:00:00.000Z",
   WAITLIST_COHORT: "cohort_2",
 };
+
+/** True when public checkout / new signups are open. */
+export function isEnrollmentOpen() {
+  return CONFIG.ENROLLMENT_OPEN === true;
+}
+
+/**
+ * While enrollment is closed, only accounts created before ENROLLMENT_CLOSED_AT
+ * may finish paying (already-started founding checkouts).
+ */
+export function canFinishPaying(createdAtIso) {
+  if (isEnrollmentOpen()) return true;
+  if (!createdAtIso) return false;
+  const closed = Date.parse(CONFIG.ENROLLMENT_CLOSED_AT);
+  const created = Date.parse(createdAtIso);
+  return Number.isFinite(created) && Number.isFinite(closed) && created < closed;
+}
 
 /** True when a config URL is set and safe to render as a link. */
 export function hasPublicUrl(url) {

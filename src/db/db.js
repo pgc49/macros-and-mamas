@@ -70,6 +70,7 @@ function rowToProfile(row) {
     refunded: !!row.refunded,
     week: row.week ?? 0,
     role: row.role,
+    createdAt: row.created_at || null,
   };
 }
 
@@ -931,6 +932,21 @@ export const db = {
     if (error) {
       // Table may not exist until migration 006 is run
       console.warn("loadEmailEvents failed", error);
+      return [];
+    }
+    return data || [];
+  },
+
+  /** Admin: cohort waitlist rows for the next open blast. */
+  async loadCohortWaitlist(cohort = "cohort_2", limit = 200) {
+    const { data, error } = await supabase
+      .from("cohort_waitlist")
+      .select("id, email, first_name, last_name, phone, cohort, converted_at, paid_at, created_at")
+      .eq("cohort", cohort)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("loadCohortWaitlist failed", error);
       return [];
     }
     return data || [];

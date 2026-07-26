@@ -21,6 +21,11 @@ SUPABASE_SERVICE_ROLE_KEY=replace-me
 # Hourly email cron (#1 finish joining, #3 intake reminder) — same value in GitHub Actions
 CRON_SECRET=replace-with-long-random-string
 
+# Enrollment gate (mirror src/config.js). While false, only pre-close unpaid accounts can checkout.
+# Also used by /api/cohort-waitlist-blast (manual) when opening the next cohort.
+ENROLLMENT_OPEN=false
+ENROLLMENT_CLOSED_AT=2026-07-26T02:00:00.000Z
+
 # Support form → private GitHub issues (/api/support)
 # Fine-grained PAT: this repo only, Issues: Read and write. Nothing else.
 GITHUB_TOKEN=replace-me

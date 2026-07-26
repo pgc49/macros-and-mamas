@@ -148,6 +148,27 @@ Take care of yourself, mama.
 Callie`,
   },
   {
+    id: "cohort_open",
+    number: "W",
+    name: "Cohort two open (waitlist blast)",
+    status: "ready",
+    trigger: "Manual one-shot when enrollment reopens — POST /api/cohort-waitlist-blast (CRON_SECRET). Pulls cohort_waitlist; CTA → create account & pay.",
+    subject: "Cohort two is open — your priority spot",
+    audience: "Waitlist",
+    cta: "Create account & join — $149",
+    bodyPreview: `Hi [First name],
+
+You asked to be first in line for the next Macros and Mamas group — and spots are open.
+
+This is your priority access: create your account (or sign in), then secure your spot for $149. Inside: macros I build myself, our moms WhatsApp group Mon–Fri, and a short Monday voice note to keep the week simple.
+
+Tap below when you're ready. I'd love to have you.
+
+Callie
+
+(You're getting this because you joined the cohort two waitlist. Reply to stop anytime.)`,
+  },
+  {
     id: "callie_payment",
     number: "A",
     name: "Callie: new payment",
@@ -202,6 +223,7 @@ export const EMAIL_TYPE_LABELS = {
   intake_received: "Intake received",
   macros_live: "Macros live",
   eligibility_refund: "Refund confirm",
+  cohort_open: "Cohort open (waitlist)",
   callie_payment: "Callie: new payment",
   callie_intake: "Callie: intake ready",
   callie_eligibility_hold: "Callie: eligibility hold",

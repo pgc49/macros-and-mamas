@@ -16,7 +16,9 @@ export async function startCheckout() {
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok || !data.url) {
-    throw new Error(data.error || `checkout failed: ${resp.status}`);
+    const err = new Error(data.error || `checkout failed: ${resp.status}`);
+    err.status = resp.status;
+    throw err;
   }
   window.location.href = data.url;
 }
