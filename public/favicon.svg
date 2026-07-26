@@ -1,17 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Macros and Mamas">
-  <rect width="64" height="64" rx="14" fill="#B4416B"/>
-  <!-- Rounded M -->
-  <path
-    fill="none"
-    stroke="#FFFFFF"
-    stroke-width="7.5"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    d="M16.5 47 V19.5 L32 39 L47.5 19.5 V47"
-  />
-  <!-- Heart in the valley -->
-  <path
-    fill="#FFFFFF"
-    d="M32 52c-.55 0-1.05-.2-1.45-.6l-3.55-3.55a3.4 3.4 0 0 1 0-4.8 3.35 3.35 0 0 1 4.55-.15l.45.4.45-.4a3.35 3.35 0 0 1 4.55.15 3.4 3.4 0 0 1 0 4.8l-3.55 3.55c-.4.4-.9.6-1.45.6z"
-  />
+  <rect width="64" height="64" fill="#B4416B"/>
+  <path fill="none" stroke="#FFFFFF" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round" d="M16.5 47 V19.5 L32 39 L47.5 19.5 V47"/>
+  <path fill="#FFFFFF" d="M32 44.5c-.55 0-1.05-.2-1.45-.6l-3.55-3.55a3.4 3.4 0 0 1 0-4.8 3.35 3.35 0 0 1 4.55-.15l.45.4.45-.4a3.35 3.35 0 0 1 4.55.15 3.4 3.4 0 0 1 0 4.8l-3.55 3.55c-.4.4-.9.6-1.45.6z"/>
 </svg>
