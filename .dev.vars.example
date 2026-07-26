@@ -6,9 +6,13 @@
 # OpenRouter (meal photo AI)
 OPENROUTER_API_KEY=replace-me
 
-# Stripe Checkout ($149 product) — use test mode first
+# Stripe Checkout — three one-time prices on the same (or separate) products
 STRIPE_SECRET_KEY=replace-me
-STRIPE_PRICE_ID=replace-me
+# Legacy alias still works as founding fallback:
+# STRIPE_PRICE_ID=price_...149
+STRIPE_PRICE_ID_FOUNDING=price_...149
+STRIPE_PRICE_ID_WAITLIST=price_...249
+STRIPE_PRICE_ID_FULL=price_...299
 STRIPE_WEBHOOK_SECRET=replace-me
 
 # Supabase — URL is public; the server key is webhook-only (never ship to the client)

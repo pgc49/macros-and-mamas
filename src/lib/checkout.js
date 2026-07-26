@@ -1,18 +1,39 @@
 import { supabase } from "./supabase";
 import { CONFIG } from "../config";
 
-/** Start Stripe Checkout; redirects the browser on success. */
-export async function startCheckout() {
+async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) {
     throw new Error("Please sign in again to complete enrollment.");
   }
+  return {
+    Authorization: `Bearer ${session.access_token}`,
+    "Content-Type": "application/json",
+  };
+}
+
+/** Which tier/amount this unpaid user would pay (founding / waitlist / full). */
+export async function fetchCheckoutQuote() {
+  const headers = await authHeaders();
+  const resp = await fetch(CONFIG.CHECKOUT_QUOTE_ENDPOINT, {
+    method: "GET",
+    headers,
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const err = new Error(data.error || `quote failed: ${resp.status}`);
+    err.status = resp.status;
+    throw err;
+  }
+  return data;
+}
+
+/** Start Stripe Checkout; redirects the browser on success. */
+export async function startCheckout() {
+  const headers = await authHeaders();
   const resp = await fetch(CONFIG.CHECKOUT_ENDPOINT, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      "Content-Type": "application/json",
-    },
+    headers,
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok || !data.url) {

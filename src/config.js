@@ -21,10 +21,19 @@ const SUPABASE_ANON_KEY =
 export const CONFIG = {
   // Stripe Checkout Session is created by /api/checkout after account
   // create (account → pay → intake → approve → unlock). No Payment Link.
+  // Server picks Price ID: founding $149 / waitlist $249 / full $299.
   CHECKOUT_ENDPOINT: "/api/checkout",
+  CHECKOUT_QUOTE_ENDPOINT: "/api/checkout-quote",
   REFUND_ENDPOINT: "/api/refund",
   INTAKE_SUBMITTED_ENDPOINT: "/api/intake-submitted",
   MACROS_APPROVED_ENDPOINT: "/api/macros-approved",
+
+  /** Display amounts only — Stripe Price IDs stay on the server. */
+  PRICE_TIERS: {
+    founding: { amount: 149, label: "Founding" },
+    waitlist: { amount: 249, label: "Waitlist early" },
+    full: { amount: 299, label: "Full" },
+  },
 
   // Meal photo analysis — legacy; prefer ESTIMATE_ENDPOINT.
   ANALYZE_ENDPOINT: "/api/analyze",
