@@ -9,3 +9,12 @@
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Versioned home-screen icons — long cache is fine; filename changes bust iOS
+/apple-touch-icon-v5.png
+  Cache-Control: public, max-age=31536000, immutable
+  Content-Type: image/png
+
+/site.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: public, max-age=3600

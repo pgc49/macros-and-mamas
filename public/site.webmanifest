@@ -1,0 +1,30 @@
+{
+  "name": "Macros and Mamas",
+  "short_name": "Macros & Mamas",
+  "description": "An 8-week macro program for moms — personalized ranges, real food, and Callie in your pocket all week.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#B83D62",
+  "theme_color": "#B4416B",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
