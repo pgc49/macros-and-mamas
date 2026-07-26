@@ -22,6 +22,14 @@ import {
   normalizeSlot,
   resolveLogSlot,
 } from "../utils/mealSlots";
+import { addMacros, foodFromTip, mergeDescription } from "../utils/recipeMacros";
+import { AddFoodBox } from "./AddFoodBox";
+
+/** She pasted a link — the estimator only reads text, so say so plainly. */
+const URL_RE = /(https?:\/\/|www\.)\S+/i;
+
+/** Matches MAX_DESCRIPTION_CHARS in functions/api/estimate.js. */
+const DESCRIBE_MAX = 1000;
 
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -139,6 +147,7 @@ export function MealLogCard({
   onManualLog,
   onLogRecipe,
   onSaveCustomMeal,
+  onEstimateAddition,
   todayLog,
   onUpdateEntry,
   onDeleteEntry,
@@ -162,8 +171,19 @@ export function MealLogCard({
   const [estimateDraft, setEstimateDraft] = useState(null);
   const [pantryGroup, setPantryGroup] = useState("all");
   const [logSlot, setLogSlot] = useState(() => guessSlotFromTime());
+  // What was sent for the estimate on screen, so "I added X" can re-ask
+  // about the whole plate instead of throwing the first answer away.
+  const [lastInput, setLastInput] = useState(null);
+  const [rowAdd, setRowAdd] = useState("");
+  const [rowAddBusy, setRowAddBusy] = useState(false);
+  const [rowAddError, setRowAddError] = useState("");
   const camRef = useRef(null);
   const libRef = useRef(null);
+  // Read at estimate-arrival time only — putting lastInput in the effect
+  // deps would rebuild the draft (and wipe in-progress edits) the moment
+  // she taps Update estimate, before the new result lands.
+  const lastInputRef = useRef(lastInput);
+  lastInputRef.current = lastInput;
   const pantryVisible = pantryGroup === "all"
     ? PANTRY_ITEMS
     : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
@@ -195,18 +215,15 @@ export function MealLogCard({
   }, []);
 
   // AI result lands as an editable draft — she tweaks, then saves.
+  // sourceText is a copy of what she wrote so she can edit it in place and
+  // re-run (Describe used to wipe the box, so a light estimate meant
+  // typing the whole meal again).
   useEffect(() => {
     if (!estimate || estimate.error) {
       setEstimateDraft(null);
       return;
     }
-    // Analysis succeeded — drop the staged photo so the draft is the focus
-    setSnapPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-    setSnapFile(null);
-    setPhotoNote("");
+    const input = lastInputRef.current;
     setEstimateDraft({
       name: estimate.meal || "",
       cal: estimate.calories ?? "",
@@ -216,6 +233,8 @@ export function MealLogCard({
       items: estimate.items || [],
       tip: estimate.tip || "",
       confidence: estimate.confidence || "medium",
+      sourceKind: input?.kind || null,
+      sourceText: input?.text || "",
       baseline: {
         name: estimate.meal || "",
         cal: Number(estimate.calories) || 0,
@@ -331,6 +350,8 @@ export function MealLogCard({
 
   const startEdit = (e) => {
     setEditingId(e.id);
+    setRowAdd("");
+    setRowAddError("");
     setDraft({
       name: e.name,
       cal: e.cal,
@@ -341,6 +362,37 @@ export function MealLogCard({
       slot: normalizeSlot(e.slot) || (onToday ? guessSlotFromTime() : "lunch"),
       saveCustom: false,
     });
+  };
+
+  /**
+   * Add a food to a meal that is already logged. The photo is long gone by
+   * now, so this prices the addition on its own and folds it in — which is
+   * what she'd otherwise do by deleting the entry and logging it again.
+   */
+  const addFoodToRow = async () => {
+    const text = rowAdd.trim();
+    if (!text || !draft || rowAddBusy) return;
+    setRowAddBusy(true);
+    setRowAddError("");
+    const result = await onEstimateAddition?.(text);
+    if (!result || result.error) {
+      setRowAddError(result?.message || "Couldn't price that one — add the macros by hand.");
+      setRowAddBusy(false);
+      return;
+    }
+    const summed = addMacros(
+      { cal: draft.cal, p: draft.p, c: draft.c, f: draft.f },
+      { cal: result.calories, p: result.protein_g, c: result.carbs_g, f: result.fat_g },
+    );
+    const addedName = String(result.meal || text).trim();
+    setDraft((d) => ({
+      ...d,
+      ...summed,
+      name: `${String(d.name || "").trim()} + ${addedName}`.slice(0, 80),
+      via: "adjusted",
+    }));
+    setRowAdd("");
+    setRowAddBusy(false);
   };
 
   const saveEdit = async () => {
@@ -410,6 +462,62 @@ export function MealLogCard({
     />
   );
 
+  /** Fire a photo estimate and remember the note it was based on. */
+  const runSnapEstimate = (note) => {
+    if (!snapFile || busy) return;
+    const text = String(note || "").trim();
+    setLastInput({ kind: "photo", text });
+    onAnalyzePhoto?.(snapFile, text);
+  };
+
+  const runTextEstimate = (text) => {
+    const trimmed = String(text || "").trim();
+    if (!trimmed || busy) return;
+    setLastInput({ kind: "text", text: trimmed });
+    onAnalyzeText?.(trimmed);
+  };
+
+  /**
+   * Re-run the estimate using the text in the review panel — either the
+   * Describe box she just edited, or the Snap note with something added.
+   * The photo (if any) stays; only the text changes.
+   */
+  const reEstimateFromSource = () => {
+    if (!estimateDraft || busy) return;
+    const text = String(estimateDraft.sourceText || "").trim();
+    if (estimateDraft.sourceKind === "photo" && snapFile) {
+      setPhotoNote(text);
+      runSnapEstimate(text);
+      return;
+    }
+    if (!text) return;
+    setDesc(text);
+    runTextEstimate(text);
+  };
+
+  /** Coach tip suggested a food — drop it into the editable source text. */
+  const applyTipFood = (food) => {
+    if (!food || !estimateDraft) return;
+    setEstimateDraft((d) => ({
+      ...d,
+      sourceText: mergeDescription(d.sourceText, food),
+    }));
+  };
+
+  const clearEstimateInputs = () => {
+    clearSnap();
+    setDesc("");
+    setLastInput(null);
+  };
+
+  const sourceDirty = estimateDraft
+    && String(estimateDraft.sourceText || "").trim() !== String(lastInput?.text || "").trim();
+  const canReEstimate = !!estimateDraft && !busy && (
+    estimateDraft.sourceKind === "photo"
+      ? !!snapFile && sourceDirty
+      : sourceDirty && String(estimateDraft.sourceText || "").trim().length > 0
+  );
+
   const saveEstimateDraft = async () => {
     if (!estimateDraft) return;
     const payload = {
@@ -433,11 +541,14 @@ export function MealLogCard({
     });
     setEstimateDraft(null);
     setSaveEstimateCustom(false);
+    clearEstimateInputs();
     setMethod(null);
   };
 
   const slotBuckets = groupEntriesBySlot(entries, { logDate: date, todayIso: today });
   const hasAnyEntries = entries.length > 0;
+  // When the tip suggests a food, offer it as a one-tap amendment.
+  const tipFood = foodFromTip(estimateDraft?.tip);
 
   return (
     <div style={{ marginTop: 4 }}>
@@ -542,7 +653,9 @@ export function MealLogCard({
 
         {method === "snap" && (
           <div style={{ marginTop: 12 }}>
-            {!snapFile ? (
+            {/* While a draft is up the review panel owns the screen —
+                the photo stays in state behind it for re-estimating. */}
+            {estimateDraft ? null : !snapFile ? (
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 <button type="button" disabled={busy} style={pill(false, busy)} onClick={() => camRef.current?.click()}>
                   Open camera
@@ -589,10 +702,7 @@ export function MealLogCard({
                     type="button"
                     disabled={busy || !snapFile}
                     style={pill(false, busy || !snapFile)}
-                    onClick={() => {
-                      if (!snapFile || busy) return;
-                      onAnalyzePhoto?.(snapFile, photoNote.trim());
-                    }}
+                    onClick={() => runSnapEstimate(photoNote)}
                   >
                     {busy ? "Reading…" : "Estimate"}
                   </button>
@@ -657,34 +767,74 @@ export function MealLogCard({
           </div>
         )}
 
-        {method === "describe" && (
-          <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-            <input
+        {method === "describe" && !estimateDraft && (
+          <div style={{ marginTop: 12 }}>
+            <textarea
               value={desc}
-              onChange={(e) => setDesc(e.target.value)}
+              onChange={(e) => setDesc(e.target.value.slice(0, DESCRIBE_MAX))}
               placeholder="2 eggs and sourdough toast"
               disabled={busy}
-              style={{ ...inputStyle, flex: 1, padding: "11px 13px", fontSize: 15 }}
+              rows={2}
+              maxLength={DESCRIBE_MAX}
+              style={{
+                ...inputStyle,
+                width: "100%",
+                padding: "11px 13px",
+                fontSize: 15,
+                resize: "vertical",
+                minHeight: 44,
+                boxSizing: "border-box",
+              }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && desc.trim() && !busy) {
-                  onAnalyzeText?.(desc.trim());
-                  setDesc("");
+                if (e.key === "Enter" && !e.shiftKey && desc.trim() && !busy) {
+                  e.preventDefault();
+                  runTextEstimate(desc);
                 }
               }}
             />
-            <button
-              type="button"
-              disabled={busy || !desc.trim()}
-              style={pill(false, busy || !desc.trim())}
-              onClick={() => {
-                const text = desc.trim();
-                if (!text) return;
-                onAnalyzeText?.(text);
-                setDesc("");
+            {URL_RE.test(desc) && (
+              <div
+                style={{
+                  marginTop: 8,
+                  background: T.amberSoft,
+                  borderRadius: 10,
+                  padding: "9px 12px",
+                  fontSize: 12.5,
+                  color: T.amber,
+                  lineHeight: 1.5,
+                }}
+              >
+                I can’t open links. Paste the ingredients themselves — or for a full
+                recipe, use <b>Create a recipe</b> under Meals → My meals so you can set
+                how many servings it makes.
+              </div>
+            )}
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                flexWrap: "wrap",
+                marginTop: 8,
               }}
             >
-              {busy ? "…" : "Estimate"}
-            </button>
+              <button
+                type="button"
+                disabled={busy || !desc.trim()}
+                style={pill(false, busy || !desc.trim())}
+                onClick={() => runTextEstimate(desc)}
+              >
+                {busy ? "…" : "Estimate"}
+              </button>
+              <span style={{ fontSize: 11.5, color: T.inkSoft }}>
+                {desc.length >= DESCRIBE_MAX
+                  ? "That's the limit for one meal — save longer recipes under My meals."
+                  : "One meal, not a whole recipe."}
+              </span>
+              <span style={{ fontSize: 11, color: T.inkSoft, marginLeft: "auto" }}>
+                {desc.length}/{DESCRIBE_MAX}
+              </span>
+            </div>
           </div>
         )}
 
@@ -928,6 +1078,23 @@ export function MealLogCard({
             <div style={{ fontSize: 12, fontWeight: 700, color: T.accentDeep, marginBottom: 8 }}>
               Review &amp; edit, then save
             </div>
+            {snapPreview && (
+              <div style={{
+                marginBottom: 10,
+                borderRadius: 10,
+                overflow: "hidden",
+                border: `1px solid ${T.border}`,
+                background: "#fff",
+                maxHeight: 120,
+              }}
+              >
+                <img
+                  src={snapPreview}
+                  alt="The meal this estimate came from"
+                  style={{ display: "block", width: "100%", maxHeight: 120, objectFit: "cover" }}
+                />
+              </div>
+            )}
             <input
               value={estimateDraft.name}
               onChange={(ev) => setEstimateDraft((d) => ({ ...d, name: ev.target.value }))}
@@ -969,9 +1136,93 @@ export function MealLogCard({
             {estimateDraft.tip && (
               <div style={{ fontSize: 13, color: T.accentDeep, lineHeight: 1.5, marginBottom: 10 }}>
                 💬 {estimateDraft.tip}
+                {tipFood && !busy && (
+                  <button
+                    type="button"
+                    onClick={() => applyTipFood(tipFood)}
+                    style={{
+                      display: "block",
+                      marginTop: 6,
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      fontFamily: F,
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      color: T.accentDeep,
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    I did add {tipFood} →
+                  </button>
+                )}
               </div>
             )}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {/* Edit exactly what drove the estimate — Describe text, or the
+                Snap note — then re-run. Fixes the "came back light, but I
+                can't change what I wrote" feedback. */}
+            <div style={{ marginTop: 4, paddingTop: 10, borderTop: `1px dashed ${T.border}` }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6, letterSpacing: 0.3 }}>
+                {estimateDraft.sourceKind === "photo" ? "Your note" : "What you wrote"}
+              </div>
+              <textarea
+                value={estimateDraft.sourceText || ""}
+                onChange={(ev) => setEstimateDraft((d) => ({
+                  ...d,
+                  sourceText: ev.target.value.slice(0, estimateDraft.sourceKind === "photo" ? 400 : DESCRIBE_MAX),
+                }))}
+                placeholder={
+                  estimateDraft.sourceKind === "photo"
+                    ? "e.g. about 6 oz chicken, cooked in 1 tsp olive oil — or anything you added"
+                    : "Add anything you missed — portions, oil, a side…"
+                }
+                disabled={busy}
+                rows={estimateDraft.sourceKind === "photo" ? 2 : 3}
+                maxLength={estimateDraft.sourceKind === "photo" ? 400 : DESCRIBE_MAX}
+                style={{
+                  width: "100%",
+                  padding: "9px 11px",
+                  fontSize: 14,
+                  lineHeight: 1.45,
+                  border: `1.5px solid ${T.border}`,
+                  borderRadius: 10,
+                  fontFamily: F,
+                  background: "#fff",
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                }}
+              />
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+                <button
+                  type="button"
+                  disabled={!canReEstimate}
+                  onClick={reEstimateFromSource}
+                  style={{
+                    fontFamily: F,
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    padding: "8px 14px",
+                    borderRadius: 999,
+                    border: `1.5px solid ${T.accent}`,
+                    background: canReEstimate ? T.accent : "#D9C4CE",
+                    color: "#fff",
+                    cursor: canReEstimate ? "pointer" : "default",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {busy ? "Re-reading…" : "Update estimate"}
+                </button>
+                <span style={{ fontSize: 11.5, color: T.inkSoft, lineHeight: 1.4 }}>
+                  {sourceDirty
+                    ? (estimateDraft.sourceKind === "photo"
+                      ? "We'll re-read the same photo with this note."
+                      : "We'll redo the estimate with your edits.")
+                    : "Edit above if the estimate looks light or you missed something."}
+                </span>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
               <Btn small onClick={saveEstimateDraft}>
                 {onToday ? "Save to today" : `Save to ${formatLongDay(date)}`}
               </Btn>
@@ -979,6 +1230,7 @@ export function MealLogCard({
                 type="button"
                 onClick={() => {
                   setEstimateDraft(null);
+                  clearEstimateInputs();
                   onDiscardEstimate?.();
                 }}
                 style={{
@@ -1107,7 +1359,19 @@ export function MealLogCard({
                             </button>
                           </div>
                         </div>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer" }}>
+                        {onEstimateAddition && (
+                          <AddFoodBox
+                            value={rowAdd}
+                            onChange={setRowAdd}
+                            onSubmit={addFoodToRow}
+                            busy={rowAddBusy}
+                            error={rowAddError}
+                            label="Add food to this meal"
+                            hint="We'll work out its macros and add them on — no need to delete and re-log."
+                            cta="Add"
+                          />
+                        )}
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
                           <input
                             type="checkbox"
                             checked={!!draft.saveCustom}

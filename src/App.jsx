@@ -370,10 +370,12 @@ export default function App() {
     img.src = objectUrl;
   });
 
-  const runEstimate = async (payload, source) => {
-    setEstimateBusy(true);
-    setEstimate(null);
-    setEstimateSource(source);
+  /**
+   * One call to /api/estimate. Returns the parsed estimate or a friendly
+   * error — it never touches shared state, so callers that must not disturb
+   * the review panel (adding a food, building a recipe) can use it too.
+   */
+  const postEstimate = async (payload) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("not signed in");
@@ -387,15 +389,18 @@ export default function App() {
       });
       const parsed = await resp.json().catch(() => ({}));
       if (resp.status === 429) {
-        setEstimate({
+        return {
           error: true,
           message: parsed.message || "Too many AI estimates — try again later or log manually.",
-        });
-      } else if (!resp.ok || parsed.error) {
+        };
+      }
+      if (!resp.ok || parsed.error) {
         const code = parsed.error;
         let message;
         if (code === "not food") {
-          message = "That didn't look like a meal — try another photo or describe what you ate.";
+          message = payload.type === "recipe"
+            ? "That didn't read like a recipe — paste the ingredient list and how many it serves."
+            : "That didn't look like a meal — try another photo or describe what you ate.";
         } else if (resp.status === 404 || resp.status === 405) {
           // Plain Vite has no /api/* — need wrangler pages dev (or test on production).
           message = "Meal estimator isn’t available on this local server. Use wrangler pages dev, or try on macrosandmamas.com.";
@@ -406,43 +411,74 @@ export default function App() {
         } else {
           message = `Couldn't estimate that meal (${resp.status}). Try Describe, or try again.`;
         }
-        setEstimate({ error: true, message });
-      } else setEstimate(parsed);
+        return { error: true, message };
+      }
+      return parsed;
     } catch (e) {
       console.error("estimate failed", e);
-      setEstimate({
+      return {
         error: true,
         message: "Couldn't reach the meal estimator. Check your connection, or try Describe.",
-      });
+      };
     }
+  };
+
+  const runEstimate = async (payload, source) => {
+    setEstimateBusy(true);
+    setEstimate(null);
+    setEstimateSource(source);
+    const result = await postEstimate(payload);
+    setEstimate(result);
     setEstimateBusy(false);
+    return result;
+  };
+
+  const photoPayload = async (file, note = "") => {
+    const b64 = await downscaleImage(file);
+    if (!b64) return null;
+    const description = String(note || "").trim().slice(0, 400);
+    return {
+      type: "photo",
+      image_b64: b64,
+      media_type: "image/jpeg",
+      ...(description ? { description } : {}),
+    };
   };
 
   const analyzePhoto = async (file, note = "") => {
     if (!file) return;
-    const b64 = await downscaleImage(file);
-    if (!b64) {
+    const payload = await photoPayload(file, note);
+    if (!payload) {
       setEstimate({
         error: true,
         message: "Couldn't process that image file. Try a JPG/PNG from Photo library, or use Describe.",
       });
       return;
     }
-    const description = String(note || "").trim().slice(0, 400);
-    await runEstimate(
-      {
-        type: "photo",
-        image_b64: b64,
-        media_type: "image/jpeg",
-        ...(description ? { description } : {}),
-      },
-      "photo",
-    );
+    await runEstimate(payload, "photo");
   };
 
   const analyzeText = async (description) => {
     if (!description?.trim()) return;
     await runEstimate({ type: "text", description: description.trim() }, "describe");
+  };
+
+  /**
+   * Price a single food she is adding to a meal that already exists.
+   * Deliberately does not disturb `estimate` — the meal under review (or
+   * already logged) stays on screen while this resolves.
+   */
+  const estimateAddition = async (text) => {
+    const description = String(text || "").trim();
+    if (!description) return { error: true, message: "Type what you added first." };
+    return postEstimate({ type: "text", description });
+  };
+
+  /** Batch macros + detected yield for a pasted recipe. */
+  const estimateRecipe = async (text) => {
+    const description = String(text || "").trim();
+    if (!description) return { error: true, message: "Paste the recipe first." };
+    return postEstimate({ type: "recipe", description });
   };
 
   const applyDayFromCache = (date, byDate) => {
@@ -1058,6 +1094,8 @@ export default function App() {
       customMeals={customMeals}
       onSaveCustomMeal={saveCustomMeal}
       onDeleteCustomMeal={deleteCustomMeal}
+      onEstimateAddition={estimateAddition}
+      onEstimateRecipe={estimateRecipe}
       weekPlanDays={weekPlanDays}
       weekPlanSource={weekPlanSource}
       weekPlanWeekStart={weekPlanWeekStart}

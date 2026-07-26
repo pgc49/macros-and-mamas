@@ -10,6 +10,7 @@ import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
 import { LoggableMealRow } from "../components/LoggableMealRow";
+import { RecipeCreator } from "../components/RecipeCreator";
 import { WeekPlanner, FoodPrefsEditor } from "../components/WeekPlanner";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
@@ -34,6 +35,8 @@ export function ClientApp({
   customMeals = [],
   onSaveCustomMeal,
   onDeleteCustomMeal,
+  onEstimateAddition,
+  onEstimateRecipe,
   weekPlanDays = [],
   weekPlanSource = "manual",
   weekPlanWeekStart,
@@ -189,6 +192,7 @@ export function ClientApp({
             onManualLog={logManualMeal}
             onLogRecipe={logRecipe}
             onSaveCustomMeal={onSaveCustomMeal}
+            onEstimateAddition={onEstimateAddition}
             todayLog={todayLog}
             onUpdateEntry={updateMealEntry}
             onDeleteEntry={deleteMealEntry}
@@ -381,10 +385,14 @@ export function ClientApp({
 
           {mealFilter === "My meals" && (
             <div style={{ marginBottom: 12 }}>
+              <RecipeCreator
+                onEstimateRecipe={onEstimateRecipe}
+                onSaveCustomMeal={onSaveCustomMeal}
+              />
               {!customMeals.length ? (
                 <Card>
                   <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
-                    Nothing saved yet. Save from Today logging, or when you add an AI meal on Plan, choose <b style={{ color: T.ink }}>Save to My meals</b>.
+                    Nothing saved yet. Paste a recipe above, save one from Today logging, or when you add an AI meal on Plan, choose <b style={{ color: T.ink }}>Save to My meals</b>.
                   </div>
                 </Card>
               ) : (
