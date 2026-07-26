@@ -1,5 +1,17 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import * as Sentry from "@sentry/react";
 import { supabase } from "../lib/supabase";
+
+function syncSentryUser(nextUser) {
+  if (nextUser?.id) {
+    Sentry.setUser({
+      id: nextUser.id,
+      email: nextUser.email || undefined,
+    });
+  } else {
+    Sentry.setUser(null);
+  }
+}
 
 const AuthContext = createContext({
   user: null,
@@ -52,6 +64,7 @@ export function AuthProvider({ children }) {
       const next = data.session ?? null;
       setSession(next);
       setUser(next?.user ?? null);
+      syncSentryUser(next?.user ?? null);
       if (next?.user) await refreshProfile(next.user.id);
       else setProfile(null);
       setLoading(false);
@@ -60,6 +73,7 @@ export function AuthProvider({ children }) {
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      syncSentryUser(nextSession?.user ?? null);
       if (nextSession?.user) await refreshProfile(nextSession.user.id);
       else setProfile(null);
       setLoading(false);
@@ -125,6 +139,7 @@ export function AuthProvider({ children }) {
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
+    syncSentryUser(null);
   };
 
   const resetPasswordForEmail = async (email) => {

@@ -1,9 +1,11 @@
 import { Component } from "react";
+import * as Sentry from "@sentry/react";
 import { T, F, FD } from "../theme/tokens";
 
 /**
  * Keeps a render crash from blanking the whole SPA.
  * Use around new/risky surfaces (e.g. admin day mirror).
+ * Reports to Sentry so Callie/Patrick see mama crashes without a screenshot.
  */
 export class ErrorBoundary extends Component {
   constructor(props) {
@@ -17,6 +19,10 @@ export class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error(this.props.name || "ErrorBoundary", error, info?.componentStack);
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: info?.componentStack } },
+      tags: { boundary: this.props.name || "unknown" },
+    });
   }
 
   render() {
