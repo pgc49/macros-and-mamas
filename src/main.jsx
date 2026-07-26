@@ -14,7 +14,7 @@ createRoot(document.getElementById("root")).render(
         <ErrorBoundary
           name="App"
           title="Macros and Mamas hit a snag"
-          message="Try refreshing. If this keeps happening, force-close the home-screen app and reopen."
+          message="Try refreshing. If this keeps happening, force-close the home-screen app and reopen — or tell Tech Guy at macrosandmamas.com/support."
         >
           <App />
         </ErrorBoundary>
