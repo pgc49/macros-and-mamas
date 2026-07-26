@@ -73,15 +73,37 @@ export function mergeDescription(original, addition) {
 /**
  * Pull the food out of a coach tip so tapping it can prefill the add box.
  * Tips are free text, so this is best-effort — she edits before sending.
+ *
+ * Do not treat praise about something already on the plate as a suggestion.
+ * e.g. "adding that cottage cheese is a smart way…" must NOT yield a chip;
+ * "Add Greek yogurt…" / "Consider adding nuts…" should.
  */
 export function foodFromTip(tip) {
   const text = String(tip || "").trim();
   if (!text) return "";
-  const m = text.match(
-    /\b(?:add|adding|toss in|throw in|include|top (?:it )?with|pair (?:it )?with|serve (?:it )?with)\s+(.+?)(?:[.!?]|$)/i,
-  );
-  if (!m) return "";
-  return m[1]
+
+  // Imperative / clear ask — bare "adding" is omitted on purpose (often praise).
+  const patterns = [
+    /\b(?:add|toss in|throw in|include|top (?:it )?with|pair (?:it )?with|serve (?:it )?with)\s+(.+?)(?:[.!?]|$)/i,
+    /\b(?:consider|try|maybe|perhaps|suggest(?:ing)?|recommend(?:ing)?)\s+adding\s+(.+?)(?:[.!?]|$)/i,
+  ];
+
+  let raw = "";
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m?.[1]) {
+      raw = m[1];
+      break;
+    }
+  }
+  if (!raw) return "";
+
+  // Safety net: extracted span still reads like praise, not a food to add.
+  if (/\b(?:is|was)\s+(?:a\s+)?(?:smart|great|good|nice|perfect|clever)\b/i.test(raw)) {
+    return "";
+  }
+
+  return raw
     .replace(/\s+(?:to|for|and you|which|that)\b.*$/i, "")
     .replace(/[,;]\s*$/, "")
     .trim()
