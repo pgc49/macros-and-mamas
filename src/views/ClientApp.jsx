@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
@@ -15,6 +16,7 @@ import { WeekPlanner, FoodPrefsEditor } from "../components/WeekPlanner";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
+import { PATHS } from "../routing";
 import { useState } from "react";
 
 export function ClientApp({
@@ -309,6 +311,20 @@ export function ClientApp({
               <b>Morning sunlight + one or two walks</b> aren't extras — they steady your cortisol and your cravings. Ten minutes outside before scrolling.
             </div>
           </Card>
+          <div style={{ textAlign: "center", marginTop: 16, marginBottom: 4 }}>
+            <Link
+              to={PATHS.support}
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: T.inkSoft,
+                textDecoration: "underline",
+                textUnderlineOffset: 2,
+              }}
+            >
+              Report a problem in the app
+            </Link>
+          </div>
         </>
       )}
 
