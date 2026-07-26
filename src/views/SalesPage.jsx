@@ -428,9 +428,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
         <div className="mm-hero-copy">
           <div>
             <div className="mm-hero-brand">Macros and Mamas</div>
-            <div className="mm-hero-kicker">
-              {enrollmentOpen ? "ranges, not rules" : "founding group closed"}
-            </div>
+            <div className="mm-hero-kicker">ranges, not rules</div>
             <h1 className="mm-hero-headline">
               Lose the weight.<br />
               Keep the muscle.<br />
