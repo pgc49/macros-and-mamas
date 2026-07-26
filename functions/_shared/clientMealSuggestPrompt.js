@@ -102,4 +102,5 @@ Return exactly 7 days: Mon–Sun. Respond with ONLY valid JSON.`;
 }
 
 export const CLIENT_SUGGEST_JSON_HINT =
-  "Return only the JSON object. dayTotals must sum from meals and sit inside her cal/P/C/F bands.";
+  "Return only the JSON object. dayTotals must sum from meals and sit inside her cal/P/C/F bands. "
+  + "ingredients and steps must be arrays. batch must be an array of {item,amount} when servings > 1, otherwise null — never a string like \"3 servings\".";
