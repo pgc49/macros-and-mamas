@@ -227,7 +227,7 @@ export const Shell = ({ children, bottomBar = null }) => {
             flexShrink: 0,
             background: "#fff",
             borderTop: `1px solid ${T.border}`,
-            paddingBottom: "max(10px, env(safe-area-inset-bottom, 0px))",
+            paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
           }}
         >
           {bottomBar}

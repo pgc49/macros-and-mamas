@@ -93,7 +93,7 @@ export function ClientApp({
         display: "flex",
         justifyContent: "center",
         gap: 4,
-        padding: "8px 16px 4px",
+        padding: "10px 16px 8px",
         maxWidth: 560,
         margin: "0 auto",
       }}
@@ -108,7 +108,8 @@ export function ClientApp({
             fontFamily: F,
             fontSize: 14,
             fontWeight: 700,
-            padding: "9px 22px",
+            padding: "14px 22px",
+            minHeight: 48,
             borderRadius: 999,
             border: "none",
             cursor: "pointer",
