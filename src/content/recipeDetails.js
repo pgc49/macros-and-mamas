@@ -492,28 +492,33 @@ export function withRecipeDetail(recipe) {
   if (!recipe) return recipe;
   const detail = lookupDetail(recipe) || {};
 
-  const batch =
+  // batch must be an ingredient-line array (or null). AI Suggest sometimes
+  // wrote a label string like "3 servings" — that is not a batch list.
+  const rawBatch =
     recipe.batch !== undefined
       ? recipe.batch
       : detail.batch !== undefined
         ? detail.batch
         : null;
+  const batch = Array.isArray(rawBatch) && rawBatch.length ? rawBatch : null;
 
-  const serving = recipe.serving?.length
+  const serving = Array.isArray(recipe.serving) && recipe.serving.length
     ? recipe.serving
-    : recipe.ingredients?.length
+    : Array.isArray(recipe.ingredients) && recipe.ingredients.length
       ? recipe.ingredients
-      : detail.serving?.length
+      : Array.isArray(detail.serving) && detail.serving.length
         ? detail.serving
-        : detail.ingredients?.length
+        : Array.isArray(detail.ingredients) && detail.ingredients.length
           ? detail.ingredients
           : [];
 
-  const steps = recipe.steps?.length ? recipe.steps : detail.steps || [];
+  const steps = Array.isArray(recipe.steps) && recipe.steps.length
+    ? recipe.steps
+    : detail.steps || [];
 
   return {
     ...recipe,
-    batch: batch?.length ? batch : null,
+    batch,
     serving,
     // Keep ingredients as a serving alias for older callers.
     ingredients: serving,
@@ -530,15 +535,17 @@ export function mealToCard(meal) {
   const cat = slot ? slot.charAt(0).toUpperCase() + slot.slice(1).toLowerCase() : "Meal";
   const bank = meal.basedOn ? RECIPE_DETAILS[meal.basedOn] : null;
 
-  const serving = meal.serving?.length
+  const serving = Array.isArray(meal.serving) && meal.serving.length
     ? meal.serving
-    : meal.ingredients?.length
+    : Array.isArray(meal.ingredients) && meal.ingredients.length
       ? meal.ingredients
       : [];
 
-  const steps = meal.steps?.length >= 4
+  const steps = Array.isArray(meal.steps) && meal.steps.length >= 4
     ? meal.steps
-    : (bank?.steps?.length ? bank.steps : meal.steps || []);
+    : (Array.isArray(bank?.steps) && bank.steps.length
+      ? bank.steps
+      : (Array.isArray(meal.steps) ? meal.steps : []));
 
   return withRecipeDetail({
     cat,

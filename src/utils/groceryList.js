@@ -401,17 +401,27 @@ function formatRecipes(recipeCounts) {
     .map(([name, count]) => (count > 1 ? `${name} ×${count}` : name));
 }
 
+function asIngredientLines(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function linesFromMeal(meal) {
   const card = meal.serving || meal.batch || meal.ingredients
     ? withRecipeDetail(meal)
     : mealToCard(meal);
-  const preferBatch = card.batch?.length ? card.batch : null;
-  const lines = preferBatch || card.serving || card.ingredients || [];
+  // Only real ingredient arrays — never a string label like "3 servings"
+  // (AI Suggest wrote those; .filter on a string blanked the Meals tab).
+  const preferBatch = asIngredientLines(card.batch);
+  const lines = preferBatch.length
+    ? preferBatch
+    : asIngredientLines(card.serving).length
+      ? asIngredientLines(card.serving)
+      : asIngredientLines(card.ingredients);
   const qty = Number(meal.qty) > 0 ? Number(meal.qty) : 1;
   return {
     name: card.name || meal.name || "Meal",
     qty,
-    usedBatch: !!preferBatch,
+    usedBatch: preferBatch.length > 0,
     lines: lines.filter((l) => l && (l.item || l.name)),
   };
 }
