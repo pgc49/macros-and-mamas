@@ -6,6 +6,7 @@
    Optional Callie feedback regenerates from a prior draft digest.
    Draft for Callie review — not shown to clients.
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
+   Default model: google/gemini-3.6-flash (planning chain).
    ================================================================== */
 
 import {
@@ -17,7 +18,7 @@ import {
   callOpenRouter,
   logAiFailure,
   parseJsonLoose,
-  resolveModels,
+  resolvePlanModels,
 } from "../_shared/openrouter.js";
 
 export async function onRequestPost({ request, env }) {
@@ -44,7 +45,7 @@ export async function onRequestPost({ request, env }) {
     if (!profile) return json({ error: "profile not found" }, 404);
     if (!macros) return json({ error: "macros required — approve ranges first" }, 409);
 
-    const models = resolveModels(env);
+    const models = resolvePlanModels(env);
     const prompt = buildMealPlanPrompt({
       profile,
       macros,

@@ -17,9 +17,11 @@ this repo and they are your complete spec:
 - Cloudflare Pages Functions (the `/functions` directory) for all server code
 - Supabase for auth and data (Postgres with row-level security)
 - Stripe for payment (one product, $149 founding price)
-- OpenRouter for ALL AI API calls. Model: `google/gemini-3.1-flash-lite`,
-  defined as a single constant in analyze.js. Never call any AI provider
-  directly; everything routes through https://openrouter.ai/api/v1.
+- OpenRouter for ALL AI API calls. Never call any AI provider directly;
+  everything routes through https://openrouter.ai/api/v1. Two chains in
+  `functions/_shared/openrouter.js`: lite (`gemini-3.1-flash-lite`) for
+  Snap/Describe; full Flash (`gemini-3.6-flash`) for Suggest my week /
+  meal-plan / meal-idea. Optional `MEAL_PLAN_MODEL` overrides planning only.
 
 ## Hard rules
 

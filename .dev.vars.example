@@ -3,8 +3,11 @@
 # Set the same values in Cloudflare Pages → Settings → Environment variables
 # (Production + Preview). Use encrypted/secret for every key below.
 
-# OpenRouter (meal photo AI)
+# OpenRouter (meal photo AI + week planning)
 OPENROUTER_API_KEY=replace-me
+# Optional: override Suggest my week / meal-plan primary only (Snap stays on lite).
+# Default planning primary is google/gemini-3.6-flash.
+# MEAL_PLAN_MODEL=google/gemini-3.6-flash
 
 # Stripe Checkout ($149 product) — use test mode first
 STRIPE_SECRET_KEY=replace-me

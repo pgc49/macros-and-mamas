@@ -15,31 +15,69 @@
      5. Failure telemetry — logAiFailure writes to public.ai_failures so
         we find out from the dashboard, not from a client texting Callie.
 
+   Two model chains (Gemini 2.5 Flash family retires Oct 2026 — stay on 3.x):
+
+     ESTIMATE_MODEL_CHAIN — Snap / Describe. Cheap lite models; short JSON.
+     PLAN_MODEL_CHAIN     — Suggest my week / meal-plan / meal-idea. Full
+                            Flash for reliable 7-day structured JSON; lite
+                            only as last resort.
+
    Secrets: OPENROUTER_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-   Optional: MEAL_PLAN_MODEL (primary model override for planning calls)
+   Optional: MEAL_PLAN_MODEL — overrides the *planning* primary only
+             (never Snap/Describe — those stay on the lite chain).
    ================================================================== */
 
-/** Vision-capable, cheap, same family. Order = priority. */
-export const MODEL_CHAIN = [
+/** Snap / Describe — short plate JSON. Vision-capable, cheap. */
+export const ESTIMATE_MODEL_CHAIN = [
   "google/gemini-3.1-flash-lite",
   "google/gemini-3.5-flash-lite",
-  "google/gemini-2.5-flash-lite",
 ];
+
+/**
+ * Week planning — big nested JSON (7 days × meals). Full Flash first;
+ * Google's durable successor to 2.5 Flash. Lite only as a last fallback.
+ */
+export const PLAN_MODEL_CHAIN = [
+  "google/gemini-3.6-flash",
+  "google/gemini-3.5-flash",
+  "google/gemini-3.1-flash-lite",
+];
+
+/** @deprecated Use ESTIMATE_MODEL_CHAIN or PLAN_MODEL_CHAIN. */
+export const MODEL_CHAIN = ESTIMATE_MODEL_CHAIN;
 
 const DEFAULT_TIMEOUT_MS = 24_000;
 const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 400;
 
+function withPrimary(chain, primary) {
+  const p = String(primary || "").trim().slice(0, 120);
+  if (!p) return [...chain];
+  return [p, ...chain.filter((m) => m !== p)].slice(0, 4);
+}
+
+/** Snap / Describe model list. Never reads MEAL_PLAN_MODEL. */
+export function resolveEstimateModels(env, override) {
+  return withPrimary(ESTIMATE_MODEL_CHAIN, override);
+}
+
 /**
- * Build the model priority list. An env override becomes the primary and
- * the standard chain stays behind it as fallback.
+ * Suggest / meal-plan / meal-idea model list.
+ * `MEAL_PLAN_MODEL` (or an explicit override) becomes primary; the planning
+ * chain stays behind it as fallback.
+ */
+export function resolvePlanModels(env, override) {
+  const primary = override || env?.MEAL_PLAN_MODEL;
+  return withPrimary(PLAN_MODEL_CHAIN, primary);
+}
+
+/**
+ * @deprecated Prefer resolveEstimateModels / resolvePlanModels so a planning
+ * env override cannot accidentally upgrade Snap. Kept as an alias of the
+ * estimate chain for any leftover callers.
  */
 export function resolveModels(env, override) {
-  const primary = String(override || env?.MEAL_PLAN_MODEL || "").trim().slice(0, 120);
-  const chain = primary
-    ? [primary, ...MODEL_CHAIN.filter((m) => m !== primary)]
-    : [...MODEL_CHAIN];
-  return chain.slice(0, 4);
+  return resolveEstimateModels(env, override);
 }
 
 /**
@@ -66,7 +104,7 @@ export async function callOpenRouter({
     return { ok: false, kind: "config", status: null, detail: "missing OPENROUTER_API_KEY", attempts: 0 };
   }
 
-  const chain = Array.isArray(models) && models.length ? models : MODEL_CHAIN;
+  const chain = Array.isArray(models) && models.length ? models : ESTIMATE_MODEL_CHAIN;
   let last = { ok: false, kind: "network", status: null, detail: "no attempt made", attempts: 0 };
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
