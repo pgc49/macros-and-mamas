@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { FD, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
-import { startCheckout } from "../lib/checkout";
+import { fetchCheckoutQuote, startCheckout } from "../lib/checkout";
 import { canFinishPaying, isEnrollmentOpen } from "../config";
 import { PATHS } from "../routing";
 
@@ -10,8 +10,37 @@ import { PATHS } from "../routing";
 export function JoinPage({ onRefresh, profileCreatedAt = null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [quote, setQuote] = useState(null);
+  const [quoteLoading, setQuoteLoading] = useState(true);
   const enrollmentOpen = isEnrollmentOpen();
   const allowPay = canFinishPaying(profileCreatedAt);
+
+  useEffect(() => {
+    if (!enrollmentOpen && !allowPay) {
+      setQuoteLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setQuoteLoading(true);
+    fetchCheckoutQuote()
+      .then((q) => {
+        if (!cancelled) setQuote(q);
+      })
+      .catch((e) => {
+        console.error("checkout quote failed", e);
+        if (!cancelled && e?.status !== 403) {
+          setError("Couldn't load your price. Try refresh.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setQuoteLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [enrollmentOpen, allowPay]);
+
+  const amount = quote?.amount;
+  const payLabel = amount != null ? `Pay $${amount} — join` : "Pay — join";
+  const finishLabel = amount != null ? `Finish paying $${amount}` : "Finish paying";
 
   const pay = async () => {
     setBusy(true);
@@ -84,10 +113,11 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
             Finish joining
           </h2>
           <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft, margin: "0 0 16px" }}>
-            You started before the founding group closed — you can still finish paying below.
+            You started before the founding group closed — you can still finish paying
+            {amount != null ? ` at the founding rate ($${amount})` : " below"}.
           </p>
-          <Btn style={{ width: "100%", marginTop: 4 }} disabled={busy} onClick={pay}>
-            {busy ? "Redirecting to Stripe…" : "Finish paying $149"}
+          <Btn style={{ width: "100%", marginTop: 4 }} disabled={busy || quoteLoading} onClick={pay}>
+            {busy ? "Redirecting to Stripe…" : quoteLoading ? "Loading price…" : finishLabel}
           </Btn>
           {error && (
             <div style={{ marginTop: 12, fontSize: 13.5, color: T.amber, lineHeight: 1.5 }}>{error}</div>
@@ -122,17 +152,25 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
     );
   }
 
+  const openBlurb = quote?.tier === "waitlist"
+    ? `Your waitlist early rate is $${amount} (full price is $299). After checkout you’ll complete a short intake so Callie can build your macros.`
+    : quote?.tier === "founding"
+      ? `Founding rate $${amount}. After checkout you’ll complete a short intake so Callie can build your macros.`
+      : amount != null
+        ? `Secure your spot for $${amount}. After checkout you’ll complete a short intake so Callie can build your macros.`
+        : "Secure your spot. After checkout you’ll complete a short intake so Callie can build your macros.";
+
   return (
     <Shell>
       <Card style={{ marginTop: 30, textAlign: "center", padding: 30 }}>
         <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "10px 0" }}>
-          Finish joining — $149
+          {amount != null ? `Finish joining — $${amount}` : "Finish joining"}
         </h2>
         <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft }}>
-          Secure your spot. After checkout you&apos;ll complete a short intake so Callie can build your macros.
+          {quoteLoading ? "Loading your price…" : openBlurb}
         </p>
-        <Btn style={{ width: "100%", marginTop: 8 }} disabled={busy} onClick={pay}>
-          {busy ? "Redirecting to Stripe…" : "Pay $149 — join"}
+        <Btn style={{ width: "100%", marginTop: 8 }} disabled={busy || quoteLoading || !amount} onClick={pay}>
+          {busy ? "Redirecting to Stripe…" : quoteLoading ? "Loading price…" : payLabel}
         </Btn>
         {error && (
           <div style={{ marginTop: 12, fontSize: 13.5, color: T.amber, lineHeight: 1.5 }}>{error}</div>

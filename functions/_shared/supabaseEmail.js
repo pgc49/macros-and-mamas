@@ -186,7 +186,7 @@ export async function sendApprovedEmail(env, { email, name, userId }) {
 
 export async function sendCohortOpenEmail(env, { email, name, waitlistId = null, profileId = null }) {
   if (!email) return { ok: false };
-  const subject = "Cohort two is open — your priority spot";
+  const subject = "Cohort two is open — your waitlist rate $249";
   const result = await invokeEdgeFunction(env, "cohort-open", { email, name });
   await logEmailEvent(env, {
     profileId: profileId || null,

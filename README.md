@@ -63,7 +63,9 @@ The app also has project fallbacks for Supabase URL/publishable key in `src/conf
 |------|---------|--------|
 | `OPENROUTER_API_KEY` | Meal photo AI | Cloudflare secret |
 | `STRIPE_SECRET_KEY` | Create Checkout Sessions | Cloudflare secret (`sk_test_…` first) |
-| `STRIPE_PRICE_ID` | $149 Price ID (`price_…`) | Cloudflare env |
+| `STRIPE_PRICE_ID_FOUNDING` | $149 founding Price ID (`price_…`) | Cloudflare env (legacy `STRIPE_PRICE_ID` still works as fallback) |
+| `STRIPE_PRICE_ID_WAITLIST` | $249 waitlist early Price ID | Cloudflare env |
+| `STRIPE_PRICE_ID_FULL` | $299 full Price ID | Cloudflare env |
 | `STRIPE_WEBHOOK_SECRET` | Verify webhook signatures (`whsec_…`) | Cloudflare secret |
 | `SUPABASE_URL` | Used by `/api/checkout`, `/api/analyze`, webhook | Cloudflare env |
 | `SUPABASE_ANON_KEY` | Validate JWTs in functions | Cloudflare env/secret |
@@ -85,11 +87,18 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 
 ## Stripe setup (test mode first)
 
-1. Create a one-time **$149** product → copy **Price ID** (`price_…`).
+1. On your Macros and Mamas product, create three **one-time** prices and copy each **Price ID** (`price_…`):
+   - **$149** founding  
+   - **$249** waitlist early  
+   - **$299** full  
 2. Webhook endpoint: `https://YOUR_DOMAIN/api/stripe-webhook`  
    Event: `checkout.session.completed` → copy signing secret (`whsec_…`).
-3. Set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` in Cloudflare.
-4. Before real charges: switch to live keys, live price, and a live webhook.
+3. Set in Cloudflare: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID_FOUNDING`, `STRIPE_PRICE_ID_WAITLIST`, `STRIPE_PRICE_ID_FULL`, `STRIPE_WEBHOOK_SECRET`.
+4. Checkout picks the tier automatically:
+   - Account created before `ENROLLMENT_CLOSED_AT` → founding $149  
+   - Email on `cohort_waitlist` (when enrollment open) → waitlist $249  
+   - Otherwise when enrollment open → full $299  
+5. Before real charges: switch to live keys, live prices, and a live webhook.
 
 ## App URLs
 
