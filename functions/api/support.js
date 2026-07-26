@@ -49,7 +49,7 @@ export async function onRequestPost({ request, env }) {
     if (!limit.ok) {
       return json({
         error: "rate_limited",
-        message: "You've sent a few reports today — if it's urgent, text Callie and she'll loop Patrick in.",
+        message: "You've sent a few reports today — if it's urgent, text Callie and she'll loop in Tech Guy.",
       }, 429);
     }
 
@@ -140,6 +140,7 @@ export async function onRequestPost({ request, env }) {
         return json({
           error: "could not submit",
           message: "Couldn't send that just now — try again in a minute, or text Callie.",
+          reason: gh.error || "github_and_email_failed",
         }, 502);
       }
     }
@@ -161,7 +162,7 @@ export async function onRequestPost({ request, env }) {
     return json({
       ok: true,
       delivery,
-      message: "Got it — Patrick will take a look. Thanks for flagging it.",
+      message: "Got it — Tech Guy will take a look. Thanks for flagging it.",
     }, 200);
   } catch (e) {
     console.error("support failed", e);

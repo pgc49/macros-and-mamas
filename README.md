@@ -104,7 +104,7 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 | `/pending` | Paid + intake done | Awaiting Callie approval |
 | `/goodbye` | Refunded after eligibility decline | Warm exit; no app access |
 | `/dashboard` | Approved + paid (admins too) | Client app — ranges, meals, progress |
-| `/support` | Signed-in clients | Tech help form → private GitHub issue (Patrick). WhatsApp link prompts sign-in. |
+| `/support` | Signed-in clients | Tech help form → private GitHub issue (Tech Guy). WhatsApp link prompts sign-in. |
 | `/admin` | `profiles.role = admin` only | Overview (signups/paid), clients, email templates + per-mama send log |
 
 Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboard`) to dogfood the product. Non-admins hitting `/admin` are redirected away.
@@ -155,6 +155,8 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
    (They must sign in — reports are tied to their account. Public visitors cannot submit.)
 6. Install GitHub mobile app; watch the repo for Issues. Triage yourself — only `@cursor` on real bugs. Never auto-trigger agents from form text.
 7. Also run `022_support_auth_media.sql` (signed-in uploads + screen recordings up to 50 MB).
+8. After adding `GITHUB_TOKEN`, trigger a new Pages deploy (env secrets only apply on the next build).
+9. Redeploy `notify-callie` from a branch that includes `type: "support"` (`git pull` first).
 
 ## Definition of done (checklist)
 

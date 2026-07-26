@@ -6,6 +6,12 @@
 
 const DEFAULT_REPO = "pgc49/macros-and-mamas";
 
+export function githubToken(env) {
+  return String(
+    env.GITHUB_TOKEN || env.SUPPORT_GITHUB_TOKEN || env.GH_TOKEN || "",
+  ).trim();
+}
+
 export function githubRepo(env) {
   const raw = String(env.GITHUB_REPO || DEFAULT_REPO).trim();
   const [owner, repo] = raw.split("/");
@@ -25,7 +31,7 @@ export function fenceUserText(raw, { max = 4000 } = {}) {
 
 export async function ensureLabels(env, names) {
   const repo = githubRepo(env);
-  const token = env.GITHUB_TOKEN;
+  const token = githubToken(env);
   if (!repo || !token) return { ok: false, error: "missing github config" };
 
   for (const name of names) {
@@ -61,30 +67,30 @@ export async function createSupportIssue(env, {
   labels = ["support", "from-app"],
 }) {
   const repo = githubRepo(env);
-  const token = env.GITHUB_TOKEN;
+  const token = githubToken(env);
   if (!repo || !token) {
-    return { ok: false, error: "missing GITHUB_TOKEN or GITHUB_REPO" };
+    return { ok: false, error: "missing GITHUB_TOKEN (add Preview+Production secret, then redeploy)" };
   }
 
   await ensureLabels(env, labels);
 
-  const resp = await fetch(`https://api.github.com/repos/${repo.full}/issues`, {
-    method: "POST",
-    headers: ghHeaders(token),
-    body: JSON.stringify({
-      title: String(title || "Support report").slice(0, 200),
-      body: String(body || ""),
-      labels,
-    }),
-  });
+  // Fine-grained PATs with Issues write can still fail on unknown labels
+  // (label create needs Administration). Retry without labels if needed.
+  let resp = await postIssue(repo, token, title, body, labels);
+  let data = await resp.json().catch(() => ({}));
+  if (!resp.ok && labels?.length) {
+    console.warn("github issue with labels failed — retrying bare", resp.status, data?.message);
+    resp = await postIssue(repo, token, title, body, []);
+    data = await resp.json().catch(() => ({}));
+  }
 
-  const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     console.error("github issue create failed", resp.status, data);
     return {
       ok: false,
       error: data?.message || `github ${resp.status}`,
       status: resp.status,
+      detail: Array.isArray(data?.errors) ? JSON.stringify(data.errors).slice(0, 300) : undefined,
     };
   }
 
@@ -93,6 +99,19 @@ export async function createSupportIssue(env, {
     url: data.html_url,
     number: data.number,
   };
+}
+
+function postIssue(repo, token, title, body, labels) {
+  const payload = {
+    title: String(title || "Support report").slice(0, 200),
+    body: String(body || ""),
+  };
+  if (Array.isArray(labels) && labels.length) payload.labels = labels;
+  return fetch(`https://api.github.com/repos/${repo.full}/issues`, {
+    method: "POST",
+    headers: ghHeaders(token),
+    body: JSON.stringify(payload),
+  });
 }
 
 function ghHeaders(token) {

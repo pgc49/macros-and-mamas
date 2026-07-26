@@ -108,7 +108,7 @@ export function SupportPage() {
     setError("");
     const msg = message.trim();
     if (msg.length < 10) {
-      setError("A sentence or two about what you saw helps Patrick fix it faster.");
+      setError("A sentence or two about what you saw helps Tech Guy fix it faster.");
       return;
     }
     setBusy(true);
@@ -166,7 +166,8 @@ export function SupportPage() {
         return;
       }
       if (!resp.ok) {
-        setError(data.message || data.error || "Couldn't send that — try again in a moment.");
+        const detail = data.reason ? ` (${data.reason})` : "";
+        setError((data.message || data.error || "Couldn't send that — try again in a moment.") + detail);
         return;
       }
       setDone(true);
@@ -188,7 +189,7 @@ export function SupportPage() {
           Something weird in the app?
         </h1>
         <p style={{ fontSize: 15, lineHeight: 1.55, color: T.inkSoft, margin: "0 0 8px" }}>
-          Tell Patrick here — Callie&apos;s WhatsApp stays for coaching.
+          Tell Tech Guy here — Callie&apos;s WhatsApp stays for coaching.
           Screenshots or a short screen recording help a lot.
         </p>
         <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 20px" }}>
@@ -206,7 +207,7 @@ export function SupportPage() {
           }}
           >
             <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 6 }}>Got it</div>
-            Patrick will take a look. Thanks for flagging it.
+            Tech Guy will take a look. Thanks for flagging it.
           </div>
         ) : (
           <form onSubmit={submit}>
@@ -261,7 +262,7 @@ export function SupportPage() {
             )}
 
             <Btn type="submit" disabled={busy} style={{ width: "100%" }}>
-              {busy ? "Sending…" : "Send to Patrick"}
+              {busy ? "Sending…" : "Send to Tech Guy"}
             </Btn>
           </form>
         )}
