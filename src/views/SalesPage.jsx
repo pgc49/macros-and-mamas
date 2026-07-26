@@ -2,12 +2,14 @@ import { Link } from "react-router-dom";
 import { T, FD, F } from "../theme/tokens";
 import { FEATURES, FAQS } from "../content/data";
 import { Fonts } from "../theme/Fonts";
-import { Btn } from "../components/ui";
 import { PATHS } from "../routing";
+import { CONFIG } from "../config";
 
 const heroImg = "/callie-hero.jpg";
 
 export function SalesPage({ onStartIntake, onSignIn }) {
+  const enrollmentOpen = CONFIG.ENROLLMENT_OPEN;
+
   return (
     <div style={{ fontFamily: F, background: T.bg, minHeight: "100vh", color: T.ink }}>
       <Fonts />
@@ -316,6 +318,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             margin: 0 0 16px;
             font-size: 15.5px;
           }
+          .mm-hero-cta > a,
           .mm-hero-cta > button {
             background: ${T.accent} !important;
             color: #fff !important;
@@ -425,27 +428,77 @@ export function SalesPage({ onStartIntake, onSignIn }) {
         <div className="mm-hero-copy">
           <div>
             <div className="mm-hero-brand">Macros and Mamas</div>
-            <div className="mm-hero-kicker">ranges, not rules</div>
+            <div className="mm-hero-kicker">
+              {enrollmentOpen ? "ranges, not rules" : "founding group closed"}
+            </div>
             <h1 className="mm-hero-headline">
               Lose the weight.<br />
               Keep the muscle.<br />
               <span className="mm-hero-accent">Eat like a mother.</span>
             </h1>
             <p className="mm-hero-lede">
-              An 8-week macro program for moms — personalized ranges, real food, and Callie in your pocket all week.
+              {enrollmentOpen
+                ? "An 8-week macro program for moms — personalized ranges, real food, and Callie in your pocket all week."
+                : "The founding group is now closed. Register for priority access when cohort two opens."}
             </p>
           </div>
 
           <div className="mm-hero-cta">
-            <Btn
-              onClick={onStartIntake}
-              style={{ width: "100%", background: "#fff", color: T.accentDeep }}
-            >
-              Join the founding group — $149
-            </Btn>
-            <div className="mm-hero-cta-note">
-              Founding rate ends July 27. Price goes to $299 after that.
-            </div>
+            {enrollmentOpen ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onStartIntake}
+                  className="mm-join-btn"
+                  style={{
+                    width: "100%",
+                    fontFamily: F,
+                    fontWeight: 700,
+                    fontSize: 15,
+                    cursor: "pointer",
+                    padding: "13px 22px",
+                    borderRadius: 999,
+                    border: "none",
+                    background: "#fff",
+                    color: T.accentDeep,
+                    textAlign: "center",
+                  }}
+                >
+                  Join the founding group — $149
+                </button>
+                <div className="mm-hero-cta-note">
+                  Founding rate ends July 27. Price goes to $299 after that.
+                </div>
+              </>
+            ) : (
+              <>
+                <Link
+                  to={PATHS.waitlist}
+                  className="mm-join-btn"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    fontFamily: F,
+                    fontWeight: 700,
+                    fontSize: 15,
+                    cursor: "pointer",
+                    padding: "13px 22px",
+                    borderRadius: 999,
+                    border: "none",
+                    background: "#fff",
+                    color: T.accentDeep,
+                    textAlign: "center",
+                    textDecoration: "none",
+                  }}
+                >
+                  Register for priority access
+                </Link>
+                <div className="mm-hero-cta-note">
+                  Priority access for cohort two — we&apos;ll email you first when spots open.
+                </div>
+              </>
+            )}
             {onSignIn && (
               <div className="mm-hero-signin-wrap" style={{ textAlign: "center", marginTop: 14 }}>
                 <button type="button" onClick={onSignIn} className="mm-hero-signin">
@@ -511,10 +564,58 @@ export function SalesPage({ onStartIntake, onSignIn }) {
         </section>
 
         <div className="mm-footer-cta">
-          <Btn onClick={onStartIntake} style={{ width: "100%" }}>Join the founding group — $149</Btn>
-          <div className="mm-footer-cta-note">
-            Founding rate ends July 27. Price goes to $299 after that.
-          </div>
+          {enrollmentOpen ? (
+            <>
+              <button
+                type="button"
+                onClick={onStartIntake}
+                style={{
+                  width: "100%",
+                  fontFamily: F,
+                  fontWeight: 700,
+                  fontSize: 15,
+                  cursor: "pointer",
+                  padding: "13px 22px",
+                  borderRadius: 999,
+                  border: "none",
+                  background: T.accent,
+                  color: "#fff",
+                }}
+              >
+                Join the founding group — $149
+              </button>
+              <div className="mm-footer-cta-note">
+                Founding rate ends July 27. Price goes to $299 after that.
+              </div>
+            </>
+          ) : (
+            <>
+              <Link
+                to={PATHS.waitlist}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  fontFamily: F,
+                  fontWeight: 700,
+                  fontSize: 15,
+                  cursor: "pointer",
+                  padding: "13px 22px",
+                  borderRadius: 999,
+                  border: "none",
+                  background: T.accent,
+                  color: "#fff",
+                  textAlign: "center",
+                  textDecoration: "none",
+                }}
+              >
+                Register for priority access
+              </Link>
+              <div className="mm-footer-cta-note">
+                Founding group closed — join the cohort two waitlist.
+              </div>
+            </>
+          )}
         </div>
 
         <div className="mm-social" aria-label="Callie on social">

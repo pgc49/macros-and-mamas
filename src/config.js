@@ -44,6 +44,11 @@ export const CONFIG = {
   FULLSCRIPT_ELECTROLYTES: envUrl("VITE_FULLSCRIPT_ELECTROLYTES_URL"),
   FULLSCRIPT_SLEEP: envUrl("VITE_FULLSCRIPT_SLEEP_URL"),
   FULLSCRIPT_DIGESTION: envUrl("VITE_FULLSCRIPT_DIGESTION_URL"),
+
+  // Founding group closed — homepage captures waitlist for the next cohort.
+  // Flip enrollmentOpen back to true when cohort two opens for checkout.
+  ENROLLMENT_OPEN: false,
+  WAITLIST_COHORT: "cohort_2",
 };
 
 /** True when a config URL is set and safe to render as a link. */

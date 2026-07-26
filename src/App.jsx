@@ -18,6 +18,7 @@ import {
 } from "./utils/progressSeries";
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
 import { SalesPage } from "./views/SalesPage";
+import { WaitlistPage } from "./views/WaitlistPage";
 import { IntakeFlow } from "./views/IntakeFlow";
 import { PendingPage } from "./views/PendingPage";
 import { JoinPage } from "./views/JoinPage";
@@ -38,7 +39,7 @@ const AdminPortal = lazy(() =>
 );
 
 const EMPTY_PROFILE = {
-  name: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
+  name: "", lastName: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
   bottleOz: 24,
   breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
   stress: "medium", insulinResistance: false, diet: "none",
@@ -308,7 +309,7 @@ export default function App() {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              name: forEngine.name,
+              name: [forEngine.name, forEngine.lastName].filter(Boolean).join(" "),
               age: forEngine.age,
               currentWeight: forEngine.currentWeight,
               goalWeight: forEngine.goalWeight,
@@ -976,8 +977,13 @@ export default function App() {
     );
   }
 
-  /** Sales CTA: create account (or join/pay / intake if already signed in). */
+  /** Sales CTA: create account (or join/pay / intake if already signed in).
+   *  When enrollment is closed, send visitors to the cohort waitlist page. */
   const goJoin = () => {
+    if (!CONFIG.ENROLLMENT_OPEN) {
+      navigate(PATHS.waitlist);
+      return;
+    }
     if (!user) {
       setSignInNext("intake");
       navigate(PATHS.signin);
@@ -1084,6 +1090,7 @@ export default function App() {
       <Route path={PATHS.terms} element={<TermsPage />} />
       <Route path={PATHS.privacy} element={<PrivacyPage />} />
       <Route path={PATHS.resetPassword} element={<ResetPasswordPage />} />
+      <Route path={PATHS.waitlist} element={<WaitlistPage />} />
 
       <Route
         path={PATHS.signin}

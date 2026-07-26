@@ -228,7 +228,7 @@ async function loadClientForPlan(env, clientId) {
   if (!row) return { profile: null, macros: null };
 
   const profile = {
-    name: row.name,
+    name: [row.name, row.last_name].filter(Boolean).join(" ") || row.name,
     age: row.age,
     currentWeight: row.current_weight,
     goalWeight: row.goal_weight,

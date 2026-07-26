@@ -2,6 +2,7 @@
 export const PATHS = {
   home: "/",
   join: "/join",
+  waitlist: "/waitlist",
   welcome: "/welcome",
   goodbye: "/goodbye",
   onboarding: "/onboarding",
