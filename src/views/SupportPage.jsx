@@ -1,25 +1,31 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { FD, F, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
 import { PATHS } from "../routing";
 import { useAuth } from "../auth/useAuth.jsx";
 import { supabase } from "../lib/supabase";
 
-const MAX_SHOT_BYTES = 3.5 * 1024 * 1024;
+const MAX_FILES = 4;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const IMAGE_TYPES = new Set([
+  "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/gif",
+]);
+const VIDEO_TYPES = new Set([
+  "video/mp4", "video/quicktime", "video/webm", "video/x-m4v",
+]);
 
 /**
- * Public tech/support form — WhatsApp link: https://www.macrosandmamas.com/support
- * Posts to /api/support → private GitHub issue (Patrick triage). Not Callie's DMs.
+ * Signed-in tech/support form.
+ * WhatsApp link: https://www.macrosandmamas.com/support (prompts sign-in).
+ * Posts to /api/support → private GitHub issue with profile id + media.
  */
 export function SupportPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState(() => user?.email || "");
   const [message, setMessage] = useState("");
-  const [screenshot, setScreenshot] = useState(null);
-  const [shotName, setShotName] = useState("");
+  const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -46,39 +52,61 @@ export function SupportPage() {
     color: T.inkSoft,
   };
 
-  const onFile = async (e) => {
+  if (loading) {
+    return (
+      <Shell>
+        <Card style={{ marginTop: 24, padding: 28 }}>
+          <div style={{ fontFamily: FD, fontSize: 20, color: T.inkSoft }}>Loading…</div>
+        </Card>
+      </Shell>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to={PATHS.signin} replace state={{ from: PATHS.support }} />;
+  }
+
+  const onFiles = (e) => {
     setError("");
-    const file = e.target.files?.[0];
-    if (!file) {
-      setScreenshot(null);
-      setShotName("");
+    const picked = Array.from(e.target.files || []);
+    if (!picked.length) {
+      setFiles([]);
       return;
     }
-    if (!file.type.startsWith("image/")) {
-      setError("Please attach a screenshot image (JPG or PNG).");
+    const next = [];
+    for (const file of picked) {
+      const isImage = IMAGE_TYPES.has(file.type) || file.type.startsWith("image/");
+      const isVideo = VIDEO_TYPES.has(file.type) || file.type.startsWith("video/");
+      if (!isImage && !isVideo) {
+        setError("Attach screenshots (JPG/PNG) or a screen recording (MP4/MOV/WebM).");
+        e.target.value = "";
+        return;
+      }
+      const max = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+      if (file.size > max) {
+        setError(
+          isVideo
+            ? "That recording is over 50 MB — try a shorter clip."
+            : "That image is a bit large — try a smaller crop.",
+        );
+        e.target.value = "";
+        return;
+      }
+      next.push(file);
+    }
+    if (next.length > MAX_FILES) {
+      setError(`You can attach up to ${MAX_FILES} files.`);
       e.target.value = "";
       return;
     }
-    if (file.size > MAX_SHOT_BYTES) {
-      setError("That image is a bit large — try a smaller crop or screenshot.");
-      e.target.value = "";
-      return;
-    }
-    const dataUrl = await readFileAsDataUrl(file);
-    setScreenshot(dataUrl);
-    setShotName(file.name);
+    setFiles(next);
   };
 
   const submit = async (ev) => {
     ev.preventDefault();
     if (busy) return;
     setError("");
-    const em = (email || user?.email || "").trim().toLowerCase();
     const msg = message.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-      setError("Please enter the email you use for Macros and Mamas.");
-      return;
-    }
     if (msg.length < 10) {
       setError("A sentence or two about what you saw helps Patrick fix it faster.");
       return;
@@ -86,24 +114,53 @@ export function SupportPage() {
     setBusy(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const headers = { "content-type": "application/json" };
-      if (session?.access_token) {
-        headers.Authorization = `Bearer ${session.access_token}`;
+      if (!session?.access_token || !session.user?.id) {
+        setError("Please sign in again, then resend.");
+        return;
       }
+
+      const attachments = [];
+      for (const file of files) {
+        const safe = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "clip";
+        const path = `${session.user.id}/${Date.now()}-${safe}`;
+        const { error: upErr } = await supabase.storage
+          .from("support-screenshots")
+          .upload(path, file, {
+            contentType: file.type || undefined,
+            upsert: false,
+          });
+        if (upErr) {
+          console.error("support media upload failed", upErr);
+          setError("Couldn't upload that attachment — try a smaller file, or send without media.");
+          return;
+        }
+        attachments.push({
+          path,
+          name: file.name,
+          mime: file.type,
+          kind: file.type.startsWith("video/") ? "video" : "image",
+        });
+      }
+
       const resp = await fetch("/api/support", {
         method: "POST",
-        headers,
+        headers: {
+          "content-type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
-          name: name.trim() || undefined,
-          email: em,
           message: msg,
           route: `${location.pathname}${location.search || ""}`,
           userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
           appVersion: import.meta.env.MODE || "web",
-          screenshot: screenshot || undefined,
+          attachments,
         }),
       });
       const data = await resp.json().catch(() => ({}));
+      if (resp.status === 401) {
+        setError("Please sign in again, then resend.");
+        return;
+      }
       if (resp.status === 429) {
         setError(data.message || "You've sent a few reports today — try again tomorrow, or text Callie if urgent.");
         return;
@@ -130,9 +187,12 @@ export function SupportPage() {
         <h1 style={{ fontFamily: FD, fontWeight: 400, fontSize: 28, margin: "0 0 10px", lineHeight: 1.2 }}>
           Something weird in the app?
         </h1>
-        <p style={{ fontSize: 15, lineHeight: 1.55, color: T.inkSoft, margin: "0 0 20px" }}>
-          Tell Patrick (our tech guy) here — Callie&apos;s WhatsApp stays for coaching.
-          A screenshot of the error helps a lot.
+        <p style={{ fontSize: 15, lineHeight: 1.55, color: T.inkSoft, margin: "0 0 8px" }}>
+          Tell Patrick here — Callie&apos;s WhatsApp stays for coaching.
+          Screenshots or a short screen recording help a lot.
+        </p>
+        <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 20px" }}>
+          Signed in as <b style={{ color: T.ink }}>{user.email}</b>
         </p>
 
         {done ? (
@@ -146,35 +206,10 @@ export function SupportPage() {
           }}
           >
             <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 6 }}>Got it</div>
-            Patrick will take a look. Thanks for flagging it — you can close this tab.
+            Patrick will take a look. Thanks for flagging it.
           </div>
         ) : (
           <form onSubmit={submit}>
-            {!user?.email && (
-              <>
-                <label style={labelStyle} htmlFor="support-name">Name (optional)</label>
-                <input
-                  id="support-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  style={{ ...fieldStyle, marginBottom: 14 }}
-                  autoComplete="name"
-                />
-              </>
-            )}
-
-            <label style={labelStyle} htmlFor="support-email">Email</label>
-            <input
-              id="support-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{ ...fieldStyle, marginBottom: 14 }}
-              autoComplete="email"
-              required
-              readOnly={!!user?.email}
-            />
-
             <label style={labelStyle} htmlFor="support-message">What happened?</label>
             <textarea
               id="support-message"
@@ -186,20 +221,29 @@ export function SupportPage() {
               required
             />
 
-            <label style={labelStyle} htmlFor="support-shot">Screenshot (optional)</label>
+            <label style={labelStyle} htmlFor="support-files">
+              Screenshots or screen recording (optional, up to {MAX_FILES})
+            </label>
             <input
-              id="support-shot"
+              id="support-files"
               type="file"
-              accept="image/*"
-              onChange={onFile}
+              accept="image/*,video/mp4,video/quicktime,video/webm,.mov,.mp4"
+              multiple
+              onChange={onFiles}
               style={{ marginBottom: 6, fontFamily: F, fontSize: 14 }}
             />
-            {shotName && (
-              <div style={{ fontSize: 12.5, color: T.sage, marginBottom: 14 }}>
-                Attached: {shotName}
-              </div>
+            {files.length > 0 ? (
+              <ul style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 12.5, color: T.sage, lineHeight: 1.45 }}>
+                {files.map((f) => (
+                  <li key={`${f.name}-${f.size}`}>
+                    {f.type.startsWith("video/") ? "Recording" : "Screenshot"}: {f.name}
+                    {" "}({Math.max(1, Math.round(f.size / 1024))} KB)
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div style={{ height: 14 }} />
             )}
-            {!shotName && <div style={{ height: 14 }} />}
 
             {error && (
               <div style={{
@@ -223,24 +267,11 @@ export function SupportPage() {
         )}
 
         <p style={{ margin: "18px 0 0", fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
-          <Link to={PATHS.home} style={{ color: T.accent, fontWeight: 700, textDecoration: "underline" }}>
-            ← Back to home
-          </Link>
-          {" · "}
           <Link to={PATHS.dashboard} style={{ color: T.accent, fontWeight: 700, textDecoration: "underline" }}>
-            Open app
+            ← Back to app
           </Link>
         </p>
       </Card>
     </Shell>
   );
-}
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }

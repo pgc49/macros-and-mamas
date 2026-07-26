@@ -1,27 +1,33 @@
 /* ==================================================================
-   /functions/api/support.js — mama tech help → private GitHub issue
+   /functions/api/support.js — signed-in mama tech help → GitHub issue
    ==================================================================
-   Public form at /support (WhatsApp link). Optional auth JWT.
+   Requires Supabase JWT. Form at /support (WhatsApp → sign in → report).
    Primary: create GitHub issue (Issues-only PAT). Never auto-@cursor.
    Fallback: email OWNER via notify-callie type=support.
-   Rate limit: 5 / email / rolling 24h via support_reports.
+   Media: client uploads to private support-screenshots/{userId}/… then
+   passes paths; we mint 7-day signed URLs into the issue body.
+   Rate limit: 5 / user / rolling 24h via support_reports.
    Secrets: GITHUB_TOKEN, SUPABASE_*, optional GITHUB_REPO
    ================================================================== */
 
-import { invokeEdgeFunction, logEmailEvent } from "../_shared/supabaseEmail.js";
+import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/supabaseEmail.js";
 import { createSupportIssue, fenceUserText } from "../_shared/githubIssues.js";
 
 const MAX_PER_DAY = 5;
 const MAX_MESSAGE = 4000;
-const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024;
+const MAX_ATTACHMENTS = 4;
 
 export async function onRequestPost({ request, env }) {
   try {
-    const user = await optionalUser(request, env);
-    const body = await request.json().catch(() => ({}));
+    const user = await requireUser(request, env);
+    if (!user) return json({ error: "unauthorized", message: "Sign in to send a report." }, 401);
 
-    const name = String(body.name || user?.user_metadata?.name || "").trim().slice(0, 80);
-    const email = String(body.email || user?.email || "").trim().toLowerCase();
+    const body = await request.json().catch(() => ({}));
+    const contact = await loadUserContact(env, user.id);
+    const email = String(user.email || contact.email || "").trim().toLowerCase();
+    const name = String(
+      body.name || contact.name || user.user_metadata?.name || "",
+    ).trim().slice(0, 80);
     const message = String(body.message || "").trim();
     const route = String(body.route || "").trim().slice(0, 200);
     const appVersion = String(body.appVersion || "").trim().slice(0, 40);
@@ -29,8 +35,8 @@ export async function onRequestPost({ request, env }) {
       body.userAgent || request.headers.get("user-agent") || "",
     ).trim().slice(0, 300);
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return json({ error: "valid email required" }, 400);
+    if (!email) {
+      return json({ error: "email required on account" }, 400);
     }
     if (message.length < 10) {
       return json({ error: "Please describe what happened (a sentence or two)." }, 400);
@@ -39,7 +45,7 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "Message is too long — keep it under a few paragraphs." }, 400);
     }
 
-    const limit = await checkSupportLimit(env, email);
+    const limit = await checkSupportLimit(env, user.id, email);
     if (!limit.ok) {
       return json({
         error: "rate_limited",
@@ -47,24 +53,25 @@ export async function onRequestPost({ request, env }) {
       }, 429);
     }
 
-    let screenshotPath = null;
-    let screenshotSignedUrl = null;
-    if (body.screenshot) {
-      const uploaded = await uploadScreenshot(env, body.screenshot, email);
-      if (uploaded.ok) {
-        screenshotPath = uploaded.path;
-        screenshotSignedUrl = uploaded.signedUrl;
-      } else if (uploaded.error === "too_large") {
-        return json({ error: "Screenshot is too large — try a smaller crop (under 4 MB)." }, 400);
-      } else {
-        console.warn("screenshot upload skipped", uploaded.error);
-      }
-    }
+    const attachments = await resolveAttachments(env, user.id, body.attachments);
+    const mediaPaths = attachments.map((a) => a.path).filter(Boolean);
 
     const titleBit = message.replace(/\s+/g, " ").slice(0, 60);
     const title = `Support: ${titleBit}${message.length > 60 ? "…" : ""}`;
 
     const fenced = fenceUserText(message, { max: MAX_MESSAGE });
+    const mediaBlock = attachments.length
+      ? [
+          "## Attachments",
+          "",
+          ...attachments.map((a, i) => {
+            const label = a.kind === "video" ? "Screen recording" : "Screenshot";
+            const link = a.signedUrl || "_(signed link unavailable — check Storage path)_";
+            return `${i + 1}. **${label}** (${a.name || a.path})\n${link}`;
+          }),
+        ].join("\n")
+      : null;
+
     const issueBody = [
       "## Mama report",
       "",
@@ -76,18 +83,16 @@ export async function onRequestPost({ request, env }) {
       "",
       `- **Email:** ${email}`,
       name ? `- **Name:** ${name}` : null,
-      user?.id ? `- **Profile id:** \`${user.id}\`` : `- **Profile id:** _(not signed in)_`,
-      route ? `- **Route:** \`${route}\`` : `- **Route:** _(not provided)_`,
+      `- **Profile id:** \`${user.id}\``,
+      route ? `- **Route / context:** \`${route}\`` : null,
       appVersion ? `- **App version:** ${appVersion}` : null,
       `- **User agent:** ${userAgent || "_unknown_"}`,
       `- **Submitted (UTC):** ${new Date().toISOString()}`,
       "",
-      screenshotSignedUrl
-        ? `## Screenshot\n\nPrivate signed link (expires in ~7 days):\n${screenshotSignedUrl}`
-        : null,
+      mediaBlock,
       "",
       "---",
-      "_Created by `/api/support`. Triage manually — do not auto-run agents from form content._",
+      "_Created by `/api/support` for a signed-in client. Triage manually — do not auto-run agents from form content._",
     ].filter((line) => line != null).join("\n");
 
     let delivery = "failed";
@@ -109,25 +114,25 @@ export async function onRequestPost({ request, env }) {
       const mail = await sendSupportEmailFallback(env, {
         email,
         name,
-        userId: user?.id,
+        userId: user.id,
         message,
         route,
         appVersion,
         userAgent,
-        screenshotSignedUrl,
+        attachmentLinks: attachments.map((a) => a.signedUrl).filter(Boolean),
         githubError: gh.error,
       });
       delivery = mail.ok ? "email_fallback" : "failed";
       if (!mail.ok) {
         await insertReport(env, {
-          profileId: user?.id,
+          profileId: user.id,
           email,
           name,
           message,
           route,
           userAgent,
           appVersion,
-          screenshotPath,
+          screenshotPath: mediaPaths[0] || null,
           githubUrl,
           githubNumber,
           delivery: "failed",
@@ -140,14 +145,14 @@ export async function onRequestPost({ request, env }) {
     }
 
     await insertReport(env, {
-      profileId: user?.id,
+      profileId: user.id,
       email,
       name,
       message,
       route,
       userAgent,
       appVersion,
-      screenshotPath,
+      screenshotPath: mediaPaths.join(",").slice(0, 500) || null,
       githubUrl,
       githubNumber,
       delivery,
@@ -175,7 +180,7 @@ async function sendSupportEmailFallback(env, payload) {
       route: payload.route,
       appVersion: payload.appVersion,
       userAgent: payload.userAgent,
-      screenshotSignedUrl: payload.screenshotSignedUrl,
+      screenshotSignedUrl: (payload.attachmentLinks || [])[0] || null,
       githubError: payload.githubError,
     },
   });
@@ -191,7 +196,7 @@ async function sendSupportEmailFallback(env, payload) {
   return result;
 }
 
-async function optionalUser(request, env) {
+async function requireUser(request, env) {
   const auth = request.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
   if (!token) return null;
@@ -207,19 +212,17 @@ async function optionalUser(request, env) {
   return resp.json();
 }
 
-async function checkSupportLimit(env, email) {
+async function checkSupportLimit(env, profileId, email) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key) {
-    // Fail open if misconfigured — GitHub path still works; don't block mamas.
     console.warn("support rate limit skipped — missing service role");
     return { ok: true };
   }
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  // PostgREST: quote email so @ is safe
   const url =
     `${base}/rest/v1/support_reports`
-    + `?email=eq.${encodeURIComponent(email)}`
+    + `?or=(profile_id.eq.${encodeURIComponent(profileId)},email.eq.${encodeURIComponent(email)})`
     + `&created_at=gte.${encodeURIComponent(since)}`
     + `&select=id`;
   const resp = await fetch(url, {
@@ -275,63 +278,28 @@ async function insertReport(env, row) {
 }
 
 /**
- * Accept data URL or raw base64 + mime. Upload to private bucket; return 7-day signed URL.
+ * Validate client-uploaded storage paths under {userId}/ and mint signed URLs.
  */
-async function uploadScreenshot(env, screenshot, email) {
+async function resolveAttachments(env, userId, rawList) {
+  const list = Array.isArray(rawList) ? rawList.slice(0, MAX_ATTACHMENTS) : [];
+  const out = [];
+  for (const item of list) {
+    const path = String(item?.path || "").replace(/^\/+/, "");
+    if (!path.startsWith(`${userId}/`)) continue;
+    if (path.includes("..")) continue;
+    const mime = String(item?.mime || "").toLowerCase();
+    const kind = mime.startsWith("video/") || item?.kind === "video" ? "video" : "image";
+    const name = String(item?.name || path.split("/").pop() || "attachment").slice(0, 120);
+    const signedUrl = await signObject(env, path);
+    out.push({ path, mime, kind, name, signedUrl });
+  }
+  return out;
+}
+
+async function signObject(env, path) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!base || !key) return { ok: false, error: "no supabase" };
-
-  let mime = "image/jpeg";
-  let b64 = "";
-  if (typeof screenshot === "string" && screenshot.startsWith("data:")) {
-    const m = screenshot.match(/^data:([^;]+);base64,(.+)$/s);
-    if (!m) return { ok: false, error: "bad data url" };
-    mime = m[1].toLowerCase();
-    b64 = m[2];
-  } else if (screenshot && typeof screenshot === "object") {
-    mime = String(screenshot.mime || "image/jpeg").toLowerCase();
-    b64 = String(screenshot.base64 || "");
-  } else if (typeof screenshot === "string") {
-    b64 = screenshot;
-  }
-  if (!b64) return { ok: false, error: "empty" };
-
-  const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
-  if (!allowed.has(mime)) return { ok: false, error: "bad mime" };
-
-  let bytes;
-  try {
-    const bin = atob(b64);
-    if (bin.length > MAX_SCREENSHOT_BYTES) return { ok: false, error: "too_large" };
-    bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-  } catch {
-    return { ok: false, error: "bad base64" };
-  }
-
-  const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : mime.includes("heic") || mime.includes("heif") ? "heic" : "jpg";
-  const safeEmail = email.replace(/[^a-z0-9._-]/g, "_").slice(0, 40);
-  const path = `${safeEmail}/${Date.now()}.${ext}`;
-
-  const up = await fetch(
-    `${base}/storage/v1/object/support-screenshots/${path}`,
-    {
-      method: "POST",
-      headers: {
-        apikey: key,
-        authorization: `Bearer ${key}`,
-        "content-type": mime,
-        "x-upsert": "false",
-      },
-      body: bytes,
-    },
-  );
-  if (!up.ok) {
-    console.error("screenshot upload failed", up.status, await up.text());
-    return { ok: false, error: "upload failed" };
-  }
-
+  if (!base || !key) return null;
   const sign = await fetch(
     `${base}/storage/v1/object/sign/support-screenshots/${path}`,
     {
@@ -346,15 +314,14 @@ async function uploadScreenshot(env, screenshot, email) {
   );
   const signData = await sign.json().catch(() => ({}));
   if (!sign.ok) {
-    console.error("screenshot sign failed", sign.status, signData);
-    return { ok: true, path, signedUrl: null };
+    console.error("attachment sign failed", sign.status, signData);
+    return null;
   }
   const signedPath = signData.signedURL || signData.signedUrl || "";
-  const signedUrl = signedPath.startsWith("http")
+  if (!signedPath) return null;
+  return signedPath.startsWith("http")
     ? signedPath
     : `${base}/storage/v1${signedPath.startsWith("/") ? "" : "/"}${signedPath}`;
-
-  return { ok: true, path, signedUrl };
 }
 
 function json(obj, status = 200) {

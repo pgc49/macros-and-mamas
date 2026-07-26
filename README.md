@@ -104,7 +104,7 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 | `/pending` | Paid + intake done | Awaiting Callie approval |
 | `/goodbye` | Refunded after eligibility decline | Warm exit; no app access |
 | `/dashboard` | Approved + paid (admins too) | Client app — ranges, meals, progress |
-| `/support` | Public | Tech help form → private GitHub issue (Patrick). WhatsApp-safe link. |
+| `/support` | Signed-in clients | Tech help form → private GitHub issue (Patrick). WhatsApp link prompts sign-in. |
 | `/admin` | `profiles.role = admin` only | Overview (signups/paid), clients, email templates + per-mama send log |
 
 Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboard`) to dogfood the product. Non-admins hitting `/admin` are redirected away.
@@ -151,8 +151,10 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 2. Create a **fine-grained GitHub PAT**: Settings → Developer settings → Fine-grained tokens → only `pgc49/macros-and-mamas`, permission **Issues: Read and write**. Nothing else.
 3. Cloudflare Pages → Environment variables (Production + Preview): `GITHUB_TOKEN` = that PAT (secret). Optional `GITHUB_REPO=pgc49/macros-and-mamas`.
 4. Redeploy Supabase Edge Function `notify-callie` (adds `type: support` email fallback to owner only).
-5. WhatsApp link for mamas: `https://www.macrosandmamas.com/support`
+5. WhatsApp link for mamas: `https://www.macrosandmamas.com/support`  
+   (They must sign in — reports are tied to their account. Public visitors cannot submit.)
 6. Install GitHub mobile app; watch the repo for Issues. Triage yourself — only `@cursor` on real bugs. Never auto-trigger agents from form text.
+7. Also run `022_support_auth_media.sql` (signed-in uploads + screen recordings up to 50 MB).
 
 ## Definition of done (checklist)
 

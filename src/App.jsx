@@ -245,6 +245,13 @@ export default function App() {
     if (!entryPaths.includes(location.pathname)) return;
     if (routedAfterLoad.current && location.pathname === PATHS.home) return;
 
+    // Tech help deep-link: after sign-in, return to /support (not dashboard).
+    if (location.pathname === PATHS.signin && location.state?.from === PATHS.support) {
+      routedAfterLoad.current = true;
+      navigate(PATHS.support, { replace: true });
+      return;
+    }
+
     const dest = homePathFor({ isAdmin, approved, paid, macros, refunded });
     // Signed-in visitors may still browse marketing at `/` — only auto-route
     // from `/signin` and legacy `/home`. From `/`, route enrolled clients + admins.
@@ -257,7 +264,7 @@ export default function App() {
     }
     routedAfterLoad.current = true;
     navigate(dest, { replace: true });
-  }, [authLoading, loaded, user, isAdmin, approved, paid, macros, refunded, location.pathname, navigate]);
+  }, [authLoading, loaded, user, isAdmin, approved, paid, macros, refunded, location.pathname, location.state, navigate]);
 
   const authMode = signInNext === "intake" ? "create" : "signin";
   const switchAuthMode = (next) => {
@@ -1130,16 +1137,38 @@ export default function App() {
       <Route path={PATHS.privacy} element={<PrivacyPage />} />
       <Route path={PATHS.resetPassword} element={<ResetPasswordPage />} />
       <Route path={PATHS.waitlist} element={<WaitlistPage />} />
-      <Route path={PATHS.support} element={<SupportPage />} />
+      <Route
+        path={PATHS.support}
+        element={
+          authLoading
+            ? (
+              <Shell>
+                <div style={{ fontFamily: FD, fontSize: 18, color: T.inkSoft, padding: "24px 0" }}>
+                  Loading…
+                </div>
+              </Shell>
+            )
+            : !user
+              ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.support }} />
+              : <SupportPage />
+        }
+      />
 
       <Route
         path={PATHS.signin}
         element={
           user
-            ? <Navigate to={homePathFor({ isAdmin, approved, paid, macros, refunded })} replace />
+            ? (
+              <Navigate
+                to={location.state?.from === PATHS.support
+                  ? PATHS.support
+                  : homePathFor({ isAdmin, approved, paid, macros, refunded })}
+                replace
+              />
+            )
             : (
               <SignInPage
-                mode={authMode}
+                mode={location.state?.from === PATHS.support ? "signin" : authMode}
                 onSwitchMode={switchAuthMode}
                 onBack={() => navigate(PATHS.home)}
               />
