@@ -21,6 +21,7 @@ import {
   parseJsonLoose,
   resolveModels,
 } from "../_shared/openrouter.js";
+import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 
 const MAX_PER_DAY = 20;
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
@@ -169,7 +170,7 @@ function normalizeMeals(parsed, fallbackSlot) {
       : [];
   return raw
     .filter((m) => m && m.name)
-    .map((m) => ({
+    .map((m) => sanitizePlanMeal({
       slot: SLOTS.has(String(m.slot || "").toLowerCase())
         ? String(m.slot).toLowerCase()
         : fallbackSlot,
@@ -181,9 +182,9 @@ function normalizeMeals(parsed, fallbackSlot) {
       c: Math.round(Number(m.c) || 0),
       f: Math.round(Number(m.f) || 0),
       servings: Number(m.servings) > 0 ? Number(m.servings) : 1,
-      ingredients: Array.isArray(m.ingredients) ? m.ingredients.slice(0, 24) : [],
-      batch: Array.isArray(m.batch) && m.batch.length ? m.batch.slice(0, 30) : null,
-      steps: Array.isArray(m.steps) ? m.steps.map((s) => String(s).slice(0, 400)).slice(0, 10) : [],
+      ingredients: m.ingredients,
+      batch: m.batch,
+      steps: m.steps,
     }));
 }
 

@@ -6,6 +6,7 @@
  */
 
 import { withRecipeDetail, mealToCard } from "../content/recipeDetails.js";
+import { asIngredientLines } from "./planMealShape.js";
 
 /** Aisle order matches Callie's pantry cheat sheet spirit + store walk. */
 export const AISLE_ORDER = [
@@ -401,29 +402,52 @@ function formatRecipes(recipeCounts) {
     .map(([name, count]) => (count > 1 ? `${name} ×${count}` : name));
 }
 
-function asIngredientLines(value) {
-  return Array.isArray(value) ? value : [];
-}
-
 function linesFromMeal(meal) {
-  const card = meal.serving || meal.batch || meal.ingredients
-    ? withRecipeDetail(meal)
-    : mealToCard(meal);
+  const hasRecipeFields =
+    Array.isArray(meal.serving)
+    || Array.isArray(meal.batch)
+    || Array.isArray(meal.ingredients);
+  const card = hasRecipeFields ? withRecipeDetail(meal) : mealToCard(meal);
   // Only real ingredient arrays — never a string label like "3 servings"
   // (AI Suggest wrote those; .filter on a string blanked the Meals tab).
   const preferBatch = asIngredientLines(card.batch);
+  const servingLines = asIngredientLines(card.serving);
+  const ingredientLines = asIngredientLines(card.ingredients);
   const lines = preferBatch.length
     ? preferBatch
-    : asIngredientLines(card.serving).length
-      ? asIngredientLines(card.serving)
-      : asIngredientLines(card.ingredients);
+    : servingLines.length
+      ? servingLines
+      : ingredientLines;
   const qty = Number(meal.qty) > 0 ? Number(meal.qty) : 1;
   return {
     name: card.name || meal.name || "Meal",
     qty,
     usedBatch: preferBatch.length > 0,
-    lines: lines.filter((l) => l && (l.item || l.name)),
+    lines,
   };
+}
+
+const EMPTY_GROCERY = {
+  sections: [],
+  mealCount: 0,
+  lineCount: 0,
+  notes: [],
+};
+
+/**
+ * Never throw into React render — Plan my week must stay usable even if
+ * a future recipe shape slips past sanitizers.
+ */
+export function safeBuildGroceryList(weekDays) {
+  try {
+    return buildGroceryList(weekDays);
+  } catch (e) {
+    console.error("buildGroceryList failed", e);
+    return {
+      ...EMPTY_GROCERY,
+      notes: ["Shopping list couldn’t build from this week’s recipes — macros on the plan still work. Try Suggest my week again or ping Callie."],
+    };
+  }
 }
 
 /**
@@ -435,9 +459,10 @@ export function buildGroceryList(weekDays) {
   let mealCount = 0;
   const batchNames = new Map();
 
-  (weekDays || []).forEach((day) => {
-    const dayLabel = day.day || "";
-    (day.meals || []).forEach((meal) => {
+  (Array.isArray(weekDays) ? weekDays : []).forEach((day) => {
+    const dayLabel = day?.day || "";
+    (Array.isArray(day?.meals) ? day.meals : []).forEach((meal) => {
+      if (!meal || !meal.name) return;
       mealCount += 1;
       const { name, qty, usedBatch, lines } = linesFromMeal(meal);
       if (usedBatch) {

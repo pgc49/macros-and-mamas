@@ -98,7 +98,7 @@ function RecipeCard({ meal, open, onToggle }) {
           )}
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Ingredients</div>
           <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13.5, lineHeight: 1.5, color: T.ink }}>
-            {(meal.ingredients || []).map((ing, i) => (
+            {(Array.isArray(meal.ingredients) ? meal.ingredients : []).map((ing, i) => (
               <li key={i}>
                 <b>{ing.amount}</b> {ing.item}
               </li>
@@ -106,7 +106,7 @@ function RecipeCard({ meal, open, onToggle }) {
           </ul>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Steps</div>
           <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.55, color: T.ink }}>
-            {(meal.steps || []).map((s, i) => (
+            {(Array.isArray(meal.steps) ? meal.steps : []).map((s, i) => (
               <li key={i} style={{ marginBottom: 4 }}>{s}</li>
             ))}
           </ol>

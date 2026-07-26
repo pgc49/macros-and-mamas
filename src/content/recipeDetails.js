@@ -514,7 +514,7 @@ export function withRecipeDetail(recipe) {
 
   const steps = Array.isArray(recipe.steps) && recipe.steps.length
     ? recipe.steps
-    : detail.steps || [];
+    : (Array.isArray(detail.steps) ? detail.steps : []);
 
   return {
     ...recipe,

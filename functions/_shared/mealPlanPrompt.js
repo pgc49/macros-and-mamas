@@ -167,7 +167,7 @@ ${recipesBlock}
 
 Rules for recipe clarity:
 - ingredients = SERVING SIZE on her plate (must match the cal/P/C/F you report).
-- batch = full cook quantities when servings > 1 (family batch); use null or omit when servings is 1.
+- batch = full cook quantities when servings > 1 (family batch); use null or omit when servings is 1. Never a string like "3 servings" — only an array of {item,amount} or null.
 - steps = 4–7 detailed cooking steps (temps, times, technique) — not thin one-liners.
 - When naming sausage or yogurt, prefer no-added-sugar chicken/turkey sausage and nonfat Greek/European-style yogurt when it fits her tastes.
 
@@ -176,4 +176,5 @@ Final gate: every day's inRange.cal/p/c/f must be true after honest re-sum. If a
 }
 
 export const MEAL_PLAN_JSON_HINT =
-  "Return only the JSON object. Every dayTotals must honestly sum from meals AND sit inside her cal/P/C/F bands. Out-of-range days are failures — adjust quantities until all seven days pass.";
+  "Return only the JSON object. Every dayTotals must honestly sum from meals AND sit inside her cal/P/C/F bands. Out-of-range days are failures — adjust quantities until all seven days pass. "
+  + "ingredients and steps must be arrays. batch must be an array of {item,amount} or null — never a string label.";

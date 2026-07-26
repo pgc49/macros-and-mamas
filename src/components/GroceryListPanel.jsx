@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { T, F } from "../theme/tokens";
 import { Btn } from "./ui";
-import { buildGroceryList, formatGroceryListText } from "../utils/groceryList";
+import { safeBuildGroceryList, formatGroceryListText } from "../utils/groceryList";
 import { copyText } from "../utils/clipboard";
 
 function groceryStateKey(weekStart) {
@@ -39,7 +39,7 @@ export function GroceryListBody({ weekDays, weekStart }) {
   const [checked, setChecked] = useState(() => loadGroceryState(weekStart).checked);
   const [hidden, setHidden] = useState(() => loadGroceryState(weekStart).hidden);
 
-  const list = useMemo(() => buildGroceryList(weekDays || []), [weekDays]);
+  const list = useMemo(() => safeBuildGroceryList(weekDays || []), [weekDays]);
 
   // Reload persisted state when the planner week changes
   useEffect(() => {
@@ -332,7 +332,7 @@ export function GroceryListPanel({
     () => (weekDays || []).reduce((n, d) => n + (d.meals?.length || 0), 0),
     [weekDays],
   );
-  const list = useMemo(() => buildGroceryList(weekDays || []), [weekDays]);
+  const list = useMemo(() => safeBuildGroceryList(weekDays || []), [weekDays]);
 
   useEffect(() => {
     if (plannedMeals === 0 && open) setOpen(false);

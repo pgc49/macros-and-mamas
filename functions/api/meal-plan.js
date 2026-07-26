@@ -19,6 +19,7 @@ import {
   parseJsonLoose,
   resolveModels,
 } from "../_shared/openrouter.js";
+import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -125,7 +126,7 @@ export async function onRequestPost({ request, env }) {
     };
 
     plan.days = plan.days.slice(0, 7).map((day) => {
-      const meals = Array.isArray(day.meals) ? day.meals : [];
+      const meals = (Array.isArray(day.meals) ? day.meals : []).map(sanitizePlanMeal);
       const dayTotals = meals.reduce(
         (a, m) => ({
           cal: a.cal + (Number(m.cal) || 0),
