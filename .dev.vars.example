@@ -20,3 +20,9 @@ SUPABASE_SERVICE_ROLE_KEY=replace-me
 
 # Hourly email cron (#1 finish joining, #3 intake reminder) — same value in GitHub Actions
 CRON_SECRET=replace-with-long-random-string
+
+# Support form → private GitHub issues (/api/support)
+# Fine-grained PAT: this repo only, Issues: Read and write. Nothing else.
+GITHUB_TOKEN=replace-me
+# Optional override (default pgc49/macros-and-mamas)
+# GITHUB_REPO=pgc49/macros-and-mamas

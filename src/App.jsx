@@ -19,6 +19,7 @@ import {
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
 import { SalesPage } from "./views/SalesPage";
 import { WaitlistPage } from "./views/WaitlistPage";
+import { SupportPage } from "./views/SupportPage";
 import { IntakeFlow } from "./views/IntakeFlow";
 import { PendingPage } from "./views/PendingPage";
 import { JoinPage } from "./views/JoinPage";
@@ -1129,6 +1130,7 @@ export default function App() {
       <Route path={PATHS.privacy} element={<PrivacyPage />} />
       <Route path={PATHS.resetPassword} element={<ResetPasswordPage />} />
       <Route path={PATHS.waitlist} element={<WaitlistPage />} />
+      <Route path={PATHS.support} element={<SupportPage />} />
 
       <Route
         path={PATHS.signin}

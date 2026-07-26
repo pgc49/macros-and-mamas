@@ -14,6 +14,8 @@ export const PATHS = {
   terms: "/terms",
   privacy: "/privacy",
   resetPassword: "/reset-password",
+  /** Public tech/support form — WhatsApp-safe link to Patrick (GitHub issues). */
+  support: "/support",
 };
 
 /**

@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { APP_URL, FROM_CALLIE, notifyRecipients } from "../_shared/emailTemplates.ts";
+import { APP_URL, FROM_CALLIE, notifyRecipients, OWNER_NOTIFY_EMAIL } from "../_shared/emailTemplates.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { assertServiceRole } from "../_shared/assertServiceRole.ts";
 
@@ -86,11 +86,40 @@ serve(async (req) => {
       ]
         .filter(Boolean)
         .join("\n");
+    } else if (type === "support") {
+      // Tech/support fallback when GitHub issue create fails — owner only (not Callie).
+      const s = stats || {};
+      subject = `🛠️ Support (email fallback): ${display}`;
+      text = [
+        `${display} submitted a tech/support report.`,
+        email ? `Email: ${email}` : "",
+        s.route ? `Route: ${s.route}` : "",
+        s.appVersion ? `App version: ${s.appVersion}` : "",
+        s.userAgent ? `UA: ${s.userAgent}` : "",
+        s.githubError ? `GitHub error: ${s.githubError}` : "",
+        "",
+        "Message:",
+        s.message || "(empty)",
+        "",
+        s.screenshotSignedUrl ? `Screenshot (signed, ~7d): ${s.screenshotSignedUrl}` : "",
+        "",
+        "GitHub issue create failed — this is the fallback path. Fix GITHUB_TOKEN if needed.",
+      ]
+        .filter((line) => line !== undefined)
+        .join("\n");
     } else {
       return jsonResponse({ error: "unknown type" }, 400);
     }
 
-    const to = notifyRecipients();
+    // Support fallback goes to owner only so Callie's inbox stays clean.
+    const to = type === "support"
+      ? [...new Set(
+          String(OWNER_NOTIFY_EMAIL || "")
+            .split(",")
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean),
+        )]
+      : notifyRecipients();
     if (!to.length) return jsonResponse({ error: "no notify recipients" }, 500);
 
     const { data, error } = await resend.emails.send({

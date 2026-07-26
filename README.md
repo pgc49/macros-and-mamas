@@ -104,6 +104,7 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 | `/pending` | Paid + intake done | Awaiting Callie approval |
 | `/goodbye` | Refunded after eligibility decline | Warm exit; no app access |
 | `/dashboard` | Approved + paid (admins too) | Client app — ranges, meals, progress |
+| `/support` | Public | Tech help form → private GitHub issue (Patrick). WhatsApp-safe link. |
 | `/admin` | `profiles.role = admin` only | Overview (signups/paid), clients, email templates + per-mama send log |
 
 Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboard`) to dogfood the product. Non-admins hitting `/admin` are redirected away.
@@ -120,7 +121,9 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 | `/functions/api/refund.js` | Full eligibility refund + refund email |
 | `/functions/api/intake-submitted.js` | Intake received email + Callie notify |
 | `/functions/api/macros-approved.js` | Approve + macros-live email |
+| `/functions/api/support.js` | Mama tech report → GitHub issue (email fallback) |
 | `/supabase/functions/` | Resend Edge Functions (deploy via Supabase CLI) |
+| `/supabase/migrations/021_support_reports.sql` | `support_reports` + private `support-screenshots` bucket |
 | `/supabase/schema.sql` | Tables + RLS |
 | `/supabase/migrations/002_meal_logging.sql` | `meal_logs.source` + `estimate_calls` |
 | `/supabase/migrations/003_terms_accepted.sql` | `profiles.terms_accepted_at` + signup trigger |
@@ -140,6 +143,16 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 - `011_client_meal_plans.sql` — **required for publishing personalized meal plans** to client Meals
 - `012_water_log.sql` — **required for water log** (`water_logs` + `bottle_oz`)
 - `013_custom_meals.sql` — **required for My meals** (saved custom meals for one-tap logging)
+- `021_support_reports.sql` — **required for `/support`** (rate limit log + private screenshot bucket)
+
+### Support → GitHub (WhatsApp link)
+
+1. Run `021_support_reports.sql` in the Supabase SQL editor.
+2. Create a **fine-grained GitHub PAT**: Settings → Developer settings → Fine-grained tokens → only `pgc49/macros-and-mamas`, permission **Issues: Read and write**. Nothing else.
+3. Cloudflare Pages → Environment variables (Production + Preview): `GITHUB_TOKEN` = that PAT (secret). Optional `GITHUB_REPO=pgc49/macros-and-mamas`.
+4. Redeploy Supabase Edge Function `notify-callie` (adds `type: support` email fallback to owner only).
+5. WhatsApp link for mamas: `https://www.macrosandmamas.com/support`
+6. Install GitHub mobile app; watch the repo for Issues. Triage yourself — only `@cursor` on real bugs. Never auto-trigger agents from form text.
 
 ## Definition of done (checklist)
 
