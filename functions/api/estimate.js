@@ -12,7 +12,7 @@ import {
   logAiFailure,
   messageForKind,
   parseJsonLoose,
-  resolveModels,
+  resolveEstimateModels,
 } from "../_shared/openrouter.js";
 
 const MAX_BODY_CHARS = 2_500_000; // ~2MB guard on base64 payload
@@ -101,7 +101,7 @@ export async function onRequestPost({ request, env }) {
       env,
       label,
       messages: [{ role: "user", content }],
-      models: resolveModels(env),
+      models: resolveEstimateModels(env),
       maxTokens: 500,
       temperature: 0.2,
     });

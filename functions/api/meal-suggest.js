@@ -6,7 +6,8 @@
    Soft rate limit: 5 / day via estimate_calls type='meal_suggest'.
    Silent client retries log type='meal_suggest_retry' (does not count toward the 5/day).
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
-   Default model: google/gemini-3.1-flash-lite (same family as meal estimates).
+   Default model: google/gemini-3.6-flash (planning chain — full Flash for
+   reliable 7-day JSON; lite only as last fallback). Snap stays on lite.
    ================================================================== */
 
 import {
@@ -17,7 +18,7 @@ import {
   callOpenRouter,
   logAiFailure,
   parseJsonLoose,
-  resolveModels,
+  resolvePlanModels,
 } from "../_shared/openrouter.js";
 
 const MAX_PER_DAY = 5;
@@ -67,7 +68,7 @@ export async function onRequestPost({ request, env }) {
       await logEstimateType(env, user.id, "meal_suggest_retry");
     }
 
-    const models = resolveModels(env);
+    const models = resolvePlanModels(env);
     const model = models[0];
     const prompt = buildClientSuggestPrompt({ profile, macros });
 

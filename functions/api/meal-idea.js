@@ -6,7 +6,7 @@
      { mode: "options", slot }  → 2–3 meals for that slot from prefs
    Soft rate limit: 20 / day via estimate_calls type='meal_idea'.
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
-   Default model: google/gemini-3.1-flash-lite (OpenRouter).
+   Default model: google/gemini-3.6-flash (planning chain).
    ================================================================== */
 
 import {
@@ -19,7 +19,7 @@ import {
   logAiFailure,
   messageForKind,
   parseJsonLoose,
-  resolveModels,
+  resolvePlanModels,
 } from "../_shared/openrouter.js";
 
 const MAX_PER_DAY = 20;
@@ -84,7 +84,7 @@ export async function onRequestPost({ request, env }) {
       );
     }
 
-    const models = resolveModels(env);
+    const models = resolvePlanModels(env);
     const prompt =
       mode === "describe"
         ? buildDescribeMealPrompt({ profile, macros, slot, description })

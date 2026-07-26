@@ -61,7 +61,8 @@ The app also has project fallbacks for Supabase URL/publishable key in `src/conf
 
 | Name | Purpose | Where |
 |------|---------|--------|
-| `OPENROUTER_API_KEY` | Meal photo AI | Cloudflare secret |
+| `OPENROUTER_API_KEY` | Meal AI (Snap + Suggest my week) | Cloudflare secret |
+| `MEAL_PLAN_MODEL` | Optional. Overrides Suggest/meal-plan primary only (default `google/gemini-3.6-flash`). Snap stays on lite. | Cloudflare env |
 | `STRIPE_SECRET_KEY` | Create Checkout Sessions | Cloudflare secret (`sk_test_…` first) |
 | `STRIPE_PRICE_ID` | $149 Price ID (`price_…`) | Cloudflare env |
 | `STRIPE_WEBHOOK_SECRET` | Verify webhook signatures (`whsec_…`) | Cloudflare secret |
