@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { FD, F, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
 import { PATHS } from "../routing";
@@ -16,14 +16,29 @@ const VIDEO_TYPES = new Set([
   "video/mp4", "video/quicktime", "video/webm", "video/x-m4v",
 ]);
 
+const KINDS = [
+  {
+    id: "bug",
+    label: "There’s a bug or problem",
+    hint: "Something broke, looks wrong, or won’t load.",
+  },
+  {
+    id: "feedback",
+    label: "Feedback / idea",
+    hint: "A wish, suggestion, or what’s confusing — not broken.",
+  },
+];
+
 /**
- * Signed-in tech/support form.
- * WhatsApp link: https://www.macrosandmamas.com/support (prompts sign-in).
- * Posts to /api/support → private GitHub issue with profile id + media.
+ * Signed-in tech/support form — bug reports or product feedback.
+ * Posts to /api/support → private GitHub issue (labels: bug|feedback + from-app).
  */
 export function SupportPage() {
   const { user, loading } = useAuth();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const initialKind = searchParams.get("kind") === "feedback" ? "feedback" : "bug";
+  const [kind, setKind] = useState(initialKind);
   const [message, setMessage] = useState("");
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -108,7 +123,11 @@ export function SupportPage() {
     setError("");
     const msg = message.trim();
     if (msg.length < 10) {
-      setError("A sentence or two about what you saw helps Tech Guy fix it faster.");
+      setError(
+        kind === "feedback"
+          ? "A sentence or two about your idea helps Tech Guy understand."
+          : "A sentence or two about what you saw helps Tech Guy fix it faster.",
+      );
       return;
     }
     setBusy(true);
@@ -149,6 +168,7 @@ export function SupportPage() {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
+          kind,
           message: msg,
           route: `${location.pathname}${location.search || ""}`,
           userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
@@ -186,11 +206,11 @@ export function SupportPage() {
           Tech help
         </p>
         <h1 style={{ fontFamily: FD, fontWeight: 400, fontSize: 28, margin: "0 0 10px", lineHeight: 1.2 }}>
-          Something weird in the app?
+          App help & feedback
         </h1>
         <p style={{ fontSize: 15, lineHeight: 1.55, color: T.inkSoft, margin: "0 0 8px" }}>
           Tell Tech Guy here — Callie&apos;s WhatsApp stays for coaching.
-          Screenshots or a short screen recording help a lot.
+          Pick whether it&apos;s a bug or feedback so it lands in the right place.
         </p>
         <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 20px" }}>
           Signed in as <b style={{ color: T.ink }}>{user.email}</b>
@@ -207,17 +227,51 @@ export function SupportPage() {
           }}
           >
             <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 6 }}>Got it</div>
-            Tech Guy will take a look. Thanks for flagging it.
+            {kind === "feedback"
+              ? "Thanks — Tech Guy will read your feedback."
+              : "Tech Guy will take a look. Thanks for flagging it."}
           </div>
         ) : (
           <form onSubmit={submit}>
-            <label style={labelStyle} htmlFor="support-message">What happened?</label>
+            <div style={labelStyle}>What kind of note is this?</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+              {KINDS.map((k) => {
+                const active = kind === k.id;
+                return (
+                  <button
+                    key={k.id}
+                    type="button"
+                    onClick={() => setKind(k.id)}
+                    style={{
+                      textAlign: "left",
+                      fontFamily: F,
+                      border: `1.5px solid ${active ? T.accent : T.border}`,
+                      background: active ? T.accentSoft : "#fff",
+                      borderRadius: 12,
+                      padding: "12px 14px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>{k.label}</div>
+                    <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 3, lineHeight: 1.4 }}>{k.hint}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <label style={labelStyle} htmlFor="support-message">
+              {kind === "feedback" ? "Your feedback" : "What happened?"}
+            </label>
             <textarea
               id="support-message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               rows={5}
-              placeholder="e.g. Plan my week showed a blank screen after I opened shopping list…"
+              placeholder={
+                kind === "feedback"
+                  ? "e.g. I’d love a way to copy last week’s plan…"
+                  : "e.g. Plan my week showed a blank screen after I opened shopping list…"
+              }
               style={{ ...fieldStyle, marginBottom: 14, resize: "vertical", minHeight: 120 }}
               required
             />

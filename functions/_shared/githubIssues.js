@@ -42,10 +42,8 @@ export async function ensureLabels(env, names) {
         headers: ghHeaders(token),
         body: JSON.stringify({
           name,
-          color: name === "support" ? "B4416B" : "6E5D66",
-          description: name === "support"
-            ? "Mama tech/support report from /support"
-            : "Submitted from the Macros and Mamas app",
+          color: labelColor(name),
+          description: labelDescription(name),
         }),
       },
     );
@@ -112,6 +110,21 @@ function postIssue(repo, token, title, body, labels) {
     headers: ghHeaders(token),
     body: JSON.stringify(payload),
   });
+}
+
+function labelColor(name) {
+  if (name === "bug") return "d73a4a";
+  if (name === "feedback") return "0E8A16";
+  if (name === "support") return "B4416B";
+  return "6E5D66";
+}
+
+function labelDescription(name) {
+  if (name === "bug") return "Something broken or wrong in the app";
+  if (name === "feedback") return "Product idea / suggestion (not a break)";
+  if (name === "support") return "Mama report from /support";
+  if (name === "from-app") return "Submitted from the Macros and Mamas app";
+  return name;
 }
 
 function ghHeaders(token) {
