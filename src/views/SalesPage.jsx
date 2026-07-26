@@ -429,16 +429,16 @@ export function SalesPage({ onStartIntake, onSignIn }) {
           <div>
             <div className="mm-hero-brand">Macros and Mamas</div>
             <div className="mm-hero-kicker">ranges, not rules</div>
-            <h1 className="mm-hero-headline">
+            <h1 className="mm-hero-headline" style={enrollmentOpen ? undefined : { marginBottom: 22 }}>
               Lose the weight.<br />
               Keep the muscle.<br />
               <span className="mm-hero-accent">Eat like a mother.</span>
             </h1>
-            <p className="mm-hero-lede">
-              {enrollmentOpen
-                ? "An 8-week macro program for moms — personalized ranges, real food, and Callie in your pocket all week."
-                : "Founding is closed. Join the waitlist for priority pricing — $249 when cohort two opens ($50 off full price)."}
-            </p>
+            {enrollmentOpen && (
+              <p className="mm-hero-lede">
+                An 8-week macro program for moms — personalized ranges, real food, and Callie in your pocket all week.
+              </p>
+            )}
           </div>
 
           <div className="mm-hero-cta">
@@ -490,10 +490,10 @@ export function SalesPage({ onStartIntake, onSignIn }) {
                     textDecoration: "none",
                   }}
                 >
-                  Join waitlist — lock in $249
+                  Join the waitlist
                 </Link>
                 <div className="mm-hero-cta-note">
-                  Priority pricing: $249 ($50 off $299). We&apos;ll email you first when spots open.
+                  Lock in $249 — $50 off $299. We&apos;ll email you first when spots open.
                 </div>
               </>
             )}
@@ -607,10 +607,10 @@ export function SalesPage({ onStartIntake, onSignIn }) {
                   textDecoration: "none",
                 }}
               >
-                Join waitlist — lock in $249
+                Join the waitlist
               </Link>
               <div className="mm-footer-cta-note">
-                Priority pricing $249 when cohort two opens — $50 off full price.
+                Lock in $249 — $50 off $299 when cohort two opens.
               </div>
             </>
           )}
