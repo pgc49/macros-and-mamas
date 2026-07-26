@@ -437,7 +437,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             <p className="mm-hero-lede">
               {enrollmentOpen
                 ? "An 8-week macro program for moms — personalized ranges, real food, and Callie in your pocket all week."
-                : "The founding group is now closed. Register for priority access when cohort two opens."}
+                : "Founding is closed. Join the waitlist for priority pricing — $249 when cohort two opens ($50 off full price)."}
             </p>
           </div>
 
@@ -490,10 +490,10 @@ export function SalesPage({ onStartIntake, onSignIn }) {
                     textDecoration: "none",
                   }}
                 >
-                  Register for priority access
+                  Join waitlist — lock in $249
                 </Link>
                 <div className="mm-hero-cta-note">
-                  Priority access for cohort two — we&apos;ll email you first when spots open.
+                  Priority pricing: $249 ($50 off $299). We&apos;ll email you first when spots open.
                 </div>
               </>
             )}
@@ -607,10 +607,10 @@ export function SalesPage({ onStartIntake, onSignIn }) {
                   textDecoration: "none",
                 }}
               >
-                Register for priority access
+                Join waitlist — lock in $249
               </Link>
               <div className="mm-footer-cta-note">
-                Founding group closed — join the cohort two waitlist.
+                Priority pricing $249 when cohort two opens — $50 off full price.
               </div>
             </>
           )}

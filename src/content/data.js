@@ -88,7 +88,7 @@ export const FAQS = [
   },
   {
     q: "Is the founding group still open?",
-    a: "No — the founding group is closed. Tap Register for priority access to join the cohort two waitlist. We'll email you first when spots open.",
+    a: "No — the founding group is closed. Join the cohort two waitlist to lock in priority pricing at $249 ($50 off the $299 full price). We'll email you first when spots open.",
   },
   {
     q: "I'm breastfeeding. Can I join?",

@@ -97,7 +97,7 @@ export function CohortWaitlistForm({ source = "waitlist_page" }) {
           fontWeight: 600,
         }}
       >
-        You&apos;re on the list. We&apos;ll email you first when cohort two opens.
+        You&apos;re on the list — priority pricing locked at $249. We&apos;ll email you first when cohort two opens.
       </div>
     );
   }
