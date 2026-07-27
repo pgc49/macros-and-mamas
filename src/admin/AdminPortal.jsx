@@ -22,8 +22,10 @@ import { Shell, Card, Btn, inputStyle } from "../components/ui";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { MealPlanDraft } from "./MealPlanDraft";
+import { MacroAudit } from "./MacroAudit";
 import { AdminClientTracking } from "./AdminClientTracking";
 import { supabase } from "../lib/supabase";
+import { auditRoster } from "../engine/auditMacros";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 import { CONFIG } from "../config";
 
@@ -137,6 +139,7 @@ function TabBar({ tab, setTab }) {
   const tabs = [
     ["overview", "Overview"],
     ["clients", "Clients"],
+    ["macro-check", "Macro check"],
     ["emails", "Email templates"],
   ];
   return (
@@ -245,6 +248,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
 
   const all = roster || [];
   const nonAdmin = useMemo(() => all.filter((c) => c.role !== "admin"), [all]);
+  const macroFlags = useMemo(() => auditRoster(all), [all]);
 
   const computedStats = useMemo(() => {
     if (stats) return stats;
@@ -694,7 +698,22 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 <p style={{ margin: "0 0 8px" }}><b style={{ color: T.ink }}>{computedStats.awaitingIntake}</b> paid but haven&apos;t finished intake yet.</p>
               )}
               {computedStats.unpaid > 0 && (
-                <p style={{ margin: 0 }}><b style={{ color: T.ink }}>{computedStats.unpaid}</b> signed up and haven&apos;t paid.</p>
+                <p style={{ margin: "0 0 8px" }}><b style={{ color: T.ink }}>{computedStats.unpaid}</b> signed up and haven&apos;t paid.</p>
+              )}
+              {macroFlags.length > 0 && (
+                <p style={{ margin: 0 }}>
+                  <b style={{ color: T.ink }}>{macroFlags.length}</b> macro set{macroFlags.length === 1 ? "" : "s"} drift from your rules.{" "}
+                  <button
+                    type="button"
+                    onClick={() => setTab("macro-check")}
+                    style={{
+                      background: "none", border: "none", padding: 0, fontFamily: F, fontSize: 14,
+                      fontWeight: 700, color: T.accent, cursor: "pointer", textDecoration: "underline",
+                    }}
+                  >
+                    Macro check
+                  </button>
+                </p>
               )}
             </div>
             <Btn
@@ -920,6 +939,12 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             </div>
           )}
         </>
+      )}
+
+      {tab === "macro-check" && (
+        <ErrorBoundary>
+          <MacroAudit roster={all} onOpenClient={setAdminSel} />
+        </ErrorBoundary>
       )}
 
       {tab === "emails" && (
