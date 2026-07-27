@@ -22,6 +22,7 @@ import {
   resolveModels,
 } from "../_shared/openrouter.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
+import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 
 const MAX_PER_DAY = 20;
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
@@ -85,11 +86,12 @@ export async function onRequestPost({ request, env }) {
       );
     }
 
+    const customMeals = await fetchCustomMeals(env, user.id, { authHeader });
     const models = resolveModels(env);
     const prompt =
       mode === "describe"
-        ? buildDescribeMealPrompt({ profile, macros, slot, description })
-        : buildSlotOptionsPrompt({ profile, macros, slot });
+        ? buildDescribeMealPrompt({ profile, macros, slot, description, customMeals })
+        : buildSlotOptionsPrompt({ profile, macros, slot, customMeals });
 
     const result = await callOpenRouter({
       env,
@@ -102,7 +104,7 @@ export async function onRequestPost({ request, env }) {
         {
           role: "system",
           content:
-            "You are Callie's postpartum meal assistant. Prefer her recipe bank. Honest macros from ingredients. Honor food loves. JSON only.",
+            "You are Callie's postpartum meal assistant. Prefer her saved My meals when they fit, then the recipe bank. Honest macros from ingredients. Honor food loves and diet/allergens. JSON only.",
         },
         { role: "user", content: `${prompt}\n\n${MEAL_IDEA_JSON_HINT}` },
       ],

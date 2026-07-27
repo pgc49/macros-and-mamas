@@ -20,6 +20,7 @@ import {
   resolveModels,
 } from "../_shared/openrouter.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
+import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 
 const MAX_PER_DAY = 5;
 const SUGGEST_RETRY_COPY = "AI was slow starting up — tap Suggest my week once more.";
@@ -68,9 +69,10 @@ export async function onRequestPost({ request, env }) {
       await logEstimateType(env, user.id, "meal_suggest_retry");
     }
 
+    const customMeals = await fetchCustomMeals(env, user.id, { authHeader });
     const models = resolveModels(env);
     const model = models[0];
-    const prompt = buildClientSuggestPrompt({ profile, macros });
+    const prompt = buildClientSuggestPrompt({ profile, macros, customMeals });
 
     const result = await callOpenRouter({
       env,
@@ -83,7 +85,7 @@ export async function onRequestPost({ request, env }) {
         {
           role: "system",
           content:
-            "You are Callie's meal-planning assistant helping a postpartum client plan her week. Honor her food loves. Keep every day inside her approved macro bands. Prefer Callie's recipe bank. Output JSON only.",
+            "You are Callie's meal-planning assistant helping a postpartum client plan her week. Honor her food loves and reuse her saved My meals when they fit. Keep every day inside her approved macro bands. Prefer My meals, then Callie's recipe bank. Output JSON only.",
         },
         { role: "user", content: `${prompt}\n\n${CLIENT_SUGGEST_JSON_HINT}` },
       ],

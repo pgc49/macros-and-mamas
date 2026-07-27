@@ -5,6 +5,7 @@
  */
 
 import { CALLIE_RECIPES } from "./callieRecipes.js";
+import { buildCustomMealsBlock } from "./customMealsPrompt.js";
 import { buildDietSafetyBlock, dietPromptLabel, proteinGapHint } from "./foodPrefs.js";
 
 function rangeBands(macros) {
@@ -24,7 +25,7 @@ function rangeBands(macros) {
   };
 }
 
-export function buildClientSuggestPrompt({ profile, macros }) {
+export function buildClientSuggestPrompt({ profile, macros, customMeals = [] }) {
   const { pLo, cLo, fLo, calLo, pHi, cHi, fHi, calHi } = rangeBands(macros);
 
   const recipesBlock = CALLIE_RECIPES.map(
@@ -40,6 +41,7 @@ export function buildClientSuggestPrompt({ profile, macros }) {
         : "unknown";
   const dietSafety = buildDietSafetyBlock(profile);
   const gapProtein = proteinGapHint(profile.diet);
+  const myMealsBlock = buildCustomMealsBlock(customMeals);
 
   return `You are building a personalized 7-day meal plan suggestion for a Macros and Mamas client to REVIEW and edit in her weekly planner.
 
@@ -50,13 +52,18 @@ Her daily bands (hard walls — dayTotals must sit inside ALL four):
 - Carbs: ${cLo}–${cHi} g
 - Fat: ${fLo}–${fHi} g
 
-Aim mid-band. Prefer adapting Callie's recipe bank; originals only when tastes require them AND macros are certain AND they obey diet/allergens below.
+Aim mid-band. Source order when picking meals (still obey diet/allergens):
+1) Her saved My meals when they fit
+2) Adapt Callie's recipe bank to her tastes
+3) Originals only when needed AND macros are certain
 ${gapProtein}
 
 ${dietSafety}
 
+${myMealsBlock}
+
 ## Taste-first (soft — never overrides diet/allergens)
-Build the week around what she said she loves. Do not invent a generic "healthy" week that ignores her prefs.
+Build the week around what she said she loves AND her saved meals. Do not invent a generic "healthy" week that ignores her prefs.
 - Breakfast loves: ${profile.prefB || "(not specified — use Callie's breakfast bank)"}
 - Lunch loves: ${profile.prefL || "(not specified)"}
 - Dinner loves: ${profile.prefD || "(not specified)"}
@@ -66,7 +73,7 @@ Build the week around what she said she loves. Do not invent a generic "healthy"
 - Breastfeeding: ${bf}
 
 ## Macro accuracy
-Meal cal/P/C/F must equal listed ingredients. Prefer bank macros; scale portions clearly.
+Meal cal/P/C/F must equal listed ingredients. Prefer My meals macros or bank macros; scale portions clearly.
 Every day: breakfast, lunch, dinner, and at least one snack.
 Family dinners ok; report PER-SERVING macros for her plate.
 
@@ -90,7 +97,7 @@ ${recipesBlock}
         {
           "slot": "breakfast" | "lunch" | "dinner" | "snack",
           "name": "recipe title",
-          "basedOn": "Callie recipe name or null",
+          "basedOn": "My meals name, Callie recipe name, or null",
           "cal": 0, "p": 0, "c": 0, "f": 0,
           "servings": 1,
           "ingredients": [{ "item": "...", "amount": "..." }],

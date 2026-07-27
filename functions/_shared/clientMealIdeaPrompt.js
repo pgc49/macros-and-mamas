@@ -4,6 +4,7 @@
  */
 
 import { CALLIE_RECIPES } from "./callieRecipes.js";
+import { buildCustomMealsBlock } from "./customMealsPrompt.js";
 import { buildDietSafetyBlock, dietPromptLabel } from "./foodPrefs.js";
 
 function rangeBands(macros) {
@@ -27,8 +28,10 @@ function recipesBlock() {
   ).join("\n");
 }
 
-function tastesBlock(profile) {
+function tastesBlock(profile, customMeals = []) {
   return `${buildDietSafetyBlock(profile)}
+
+${buildCustomMealsBlock(customMeals)}
 
 ## Tastes (soft — never overrides diet/allergens)
 - Breakfast loves: ${profile.prefB || "(not specified)"}
@@ -42,7 +45,7 @@ function tastesBlock(profile) {
 const MEAL_SCHEMA = `{
   "slot": "breakfast"|"lunch"|"dinner"|"snack",
   "name": "recipe title",
-  "basedOn": "Callie recipe name or null",
+  "basedOn": "My meals name, Callie recipe name, or null",
   "desc": "one short food line (not a full ingredient dump)",
   "cal": 0, "p": 0, "c": 0, "f": 0,
   "servings": 1,
@@ -51,11 +54,11 @@ const MEAL_SCHEMA = `{
   "steps": ["step", "step", "step", "step"]
 }`;
 
-export function buildDescribeMealPrompt({ profile, macros, slot, description }) {
+export function buildDescribeMealPrompt({ profile, macros, slot, description, customMeals = [] }) {
   const bands = rangeBands(macros);
   const slotLabel = slot || "meal";
   return `You are Callie's meal assistant for Macros and Mamas (postpartum macro coaching).
-Build ONE ${slotLabel} the client described. Prefer adapting Callie's recipe bank; originals only when needed with defensible macros.
+Build ONE ${slotLabel} the client described. Prefer her saved My meals when they match; else Callie's bank; originals only when needed with defensible macros.
 
 ## Her daily bands (this meal should be a sensible piece of the day — not the whole day)
 - Calories day: ${bands.calLo}–${bands.calHi}
@@ -64,7 +67,7 @@ Build ONE ${slotLabel} the client described. Prefer adapting Callie's recipe ban
 - Fat day: ${bands.fLo}–${bands.fHi} g
 Typical ${slotLabel} share: roughly 20–35% of daily calories unless she asked for a snack (then smaller, protein-aware).
 
-${tastesBlock(profile)}
+${tastesBlock(profile, customMeals)}
 
 ## What she asked for
 """
@@ -76,18 +79,18 @@ ${recipesBlock()}
 
 ## Rules
 1. No invented macros — meal cal/P/C/F = sum of listed ingredients.
-2. Measurable amounts. Prefer bank macros when basedOn is set.
+2. Measurable amounts. Prefer My meals or bank macros when basedOn is set.
 3. Healthy Callie style: high protein, whole foods, max 2 whole eggs per meal (egg whites ok), sweeten with honey/maple/applesauce when needed.
 4. ingredients = ONE serving on her plate. batch = full cook only if servings > 1; else null.
 5. steps = 4–7 practical cooking steps. Say "For the logged plate…" not "For her…".
 6. Return ONLY JSON: { "meal": ${MEAL_SCHEMA} }`;
 }
 
-export function buildSlotOptionsPrompt({ profile, macros, slot }) {
+export function buildSlotOptionsPrompt({ profile, macros, slot, customMeals = [] }) {
   const bands = rangeBands(macros);
   const slotLabel = slot || "dinner";
   return `You are Callie's meal assistant for Macros and Mamas.
-Propose 3 different ${slotLabel} options for this client to choose from. Prefer Callie's recipe bank adapted to her tastes. Each option needs full ingredients + steps + honest macros.
+Propose 3 different ${slotLabel} options for this client to choose from. Prefer her saved My meals when they fit, then Callie's bank adapted to her tastes. Each option needs full ingredients + steps + honest macros.
 
 ## Her daily bands (each option is one ${slotLabel} in a full day)
 - Calories day: ${bands.calLo}–${bands.calHi}
@@ -95,15 +98,15 @@ Propose 3 different ${slotLabel} options for this client to choose from. Prefer 
 - Carbs day: ${bands.cLo}–${bands.cHi} g
 - Fat day: ${bands.fLo}–${bands.fHi} g
 
-${tastesBlock(profile)}
+${tastesBlock(profile, customMeals)}
 
 ## Callie's recipe bank
 ${recipesBlock()}
 
 ## Rules
-1. Exactly 3 options, meaningfully different (not tiny renames).
-2. Honor her ${slotLabel} loves when specified; otherwise use bank favorites for that slot — never violate diet/allergens for a bank recipe.
-3. No invented macros. Prefer basedOn when adapting the bank.
+1. Exactly 3 options, meaningfully different (not tiny renames). Include at least one My meals option when she has a relevant saved meal.
+2. Honor her ${slotLabel} loves when specified; otherwise use My meals / bank favorites for that slot — never violate diet/allergens for a bank recipe.
+3. No invented macros. Prefer basedOn when adapting My meals or the bank.
 4. Callie house style: high protein, whole foods, max 2 whole eggs per meal (skip eggs if allergen).
 5. ingredients = one serving; batch only if servings > 1.
 6. Return ONLY JSON: { "meals": [ ${MEAL_SCHEMA}, ${MEAL_SCHEMA}, ${MEAL_SCHEMA} ] }`;

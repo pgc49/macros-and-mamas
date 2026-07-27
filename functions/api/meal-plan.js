@@ -13,6 +13,7 @@ import {
   digestPreviousPlan,
   MEAL_PLAN_JSON_HINT,
 } from "../_shared/mealPlanPrompt.js";
+import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 import {
   callOpenRouter,
   logAiFailure,
@@ -45,12 +46,14 @@ export async function onRequestPost({ request, env }) {
     if (!profile) return json({ error: "profile not found" }, 404);
     if (!macros) return json({ error: "macros required — approve ranges first" }, 409);
 
+    const customMeals = await fetchCustomMeals(env, clientId, { useServiceRole: true });
     const models = resolveModels(env);
     const prompt = buildMealPlanPrompt({
       profile,
       macros,
       feedback: feedback || undefined,
       previousDigest: previousDigest || undefined,
+      customMeals,
     });
 
     const result = await callOpenRouter({
@@ -64,7 +67,7 @@ export async function onRequestPost({ request, env }) {
         {
           role: "system",
           content:
-            "You are a careful postpartum nutrition meal planner for Callie. #1 job: every day's totals MUST land inside her approved cal/P/C/F bands by adjusting real food quantities — never invent macros and never return out-of-range days. Prefer Callie's recipe bank. Honor her revision notes when provided. Output JSON only.",
+            "You are a careful postpartum nutrition meal planner for Callie. #1 job: every day's totals MUST land inside her approved cal/P/C/F bands by adjusting real food quantities — never invent macros and never return out-of-range days. Prefer her saved My meals when they fit, then Callie's recipe bank. Honor her revision notes when provided. Output JSON only.",
         },
         { role: "user", content: `${prompt}\n\n${MEAL_PLAN_JSON_HINT}` },
       ],

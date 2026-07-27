@@ -1,4 +1,5 @@
 import { CALLIE_RECIPES } from "./callieRecipes.js";
+import { buildCustomMealsBlock } from "./customMealsPrompt.js";
 import { buildDietSafetyBlock, dietPromptLabel, proteinGapHint } from "./foodPrefs.js";
 
 /**
@@ -43,7 +44,7 @@ export function digestPreviousPlan(plan) {
   return `${summary}${lines.join("\n")}`.slice(0, 6000);
 }
 
-export function buildMealPlanPrompt({ profile, macros, feedback, previousDigest }) {
+export function buildMealPlanPrompt({ profile, macros, feedback, previousDigest, customMeals = [] }) {
   const { pLo, cLo, fLo, calLo, pHi, cHi, fHi, calHi } = rangeBands(macros);
 
   const recipesBlock = CALLIE_RECIPES.map(
@@ -59,6 +60,7 @@ export function buildMealPlanPrompt({ profile, macros, feedback, previousDigest 
         : "unknown";
   const dietSafety = buildDietSafetyBlock(profile);
   const gapProtein = proteinGapHint(profile.diet);
+  const myMealsBlock = buildCustomMealsBlock(customMeals);
 
   const feedbackBlock =
     feedback && String(feedback).trim()
@@ -109,15 +111,15 @@ ${dietSafety}
 ## Macro accuracy — non-negotiable
 1. **No invented macros.** Meal cal/P/C/F = sum of listed ingredient amounts.
 2. Uncertain ingredient macros → don't use it; swap to bank / whole-food items you can ground.
-3. Prefer Callie's recipe bank macros; scale by clear portion math only — skip bank meals that violate diet/allergens; adapt or invent a compliant meal instead.
+3. Prefer her My meals macros or Callie's recipe bank macros; scale by clear portion math only — skip meals that violate diet/allergens; adapt or invent a compliant meal instead.
 4. Meals → dayTotals (≤1g / ≤5 cal rounding). dayTotals must equal the meal sum.
 5. Measurable amounts on calorie-dense items (g / oz / cups / tbsp). No vague "drizzle."
 6. Meal cal ≈ 4*P + 4*C + 9*F (±15 kcal).
 7. Callie will open cards and check — defend every meal ingredient-by-ingredient.
 
 ## Other hard constraints
-1. Prefer adapting Callie's recipe bank; originals only when tastes or diet/allergens require them AND macros are certain.
-2. Diet + allergens above are hard gates — never violate them for a bank recipe.
+1. Prefer her saved My meals when they fit, then Callie's recipe bank; originals only when tastes or diet/allergens require them AND macros are certain.
+2. Diet + allergens above are hard gates — never violate them for a bank or saved meal.
 3. If breastfeeding, keep protein high; avoid extremely low-carb days.
 4. Family dinners ok; report PER-SERVING macros for her plate.
 5. Every day: breakfast, lunch, dinner, and at least one snack (snack is a first-class slot — use it to close protein/fat/cal gaps).
@@ -140,6 +142,8 @@ ${feedbackBlock}
 - Snack loves: ${profile.prefS || "(not specified)"}
 - Season note: ${profile.seasonNote || "(none)"}
 
+${myMealsBlock}
+
 ## Callie's recipe bank (ground-truth macros when you adapt; cite basedOn)
 ${recipesBlock}
 
@@ -155,7 +159,7 @@ ${recipesBlock}
         {
           "slot": "breakfast" | "lunch" | "dinner" | "snack",
           "name": "recipe title",
-          "basedOn": "Callie recipe name or null if original",
+          "basedOn": "My meals name, Callie recipe name, or null if original",
           "cal": 0, "p": 0, "c": 0, "f": 0,
           "servings": 1,
           "why": "private one-liner for Callie only (prefs/macros fit) — never '[Name] loves…' and never client-facing marketing",
