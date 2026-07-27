@@ -45,6 +45,7 @@ const EMPTY_PROFILE = {
   breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
   stress: "medium", insulinResistance: false, diet: "none",
   prefB: "", prefL: "", prefD: "", prefS: "", seasonNote: "",
+  allergens: [], allergenNote: "", foodAvoids: "",
 };
 
 export default function App() {
@@ -888,14 +889,11 @@ export default function App() {
     }
   };
 
-  const onSaveFoodPrefs = async ({ prefB, prefL, prefD, prefS }) => {
-    const saved = await db.updateFoodPrefs({ prefB, prefL, prefD, prefS });
+  const onSaveFoodPrefs = async (prefs) => {
+    const saved = await db.updateFoodPrefs(prefs);
     setProfile((p) => ({
       ...p,
-      prefB: saved.prefB,
-      prefL: saved.prefL,
-      prefD: saved.prefD,
-      prefS: saved.prefS,
+      ...saved,
     }));
     return saved;
   };

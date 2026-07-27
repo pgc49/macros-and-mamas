@@ -30,6 +30,9 @@ function profileToRow(p) {
     pref_d: p.prefD || null,
     pref_s: p.prefS || null,
     season_note: p.seasonNote?.trim() ? p.seasonNote.trim() : null,
+    allergens: Array.isArray(p.allergens) ? p.allergens : [],
+    allergen_note: p.allergenNote?.trim() ? p.allergenNote.trim() : null,
+    food_avoids: p.foodAvoids?.trim() ? p.foodAvoids.trim() : null,
     bottle_oz: p.bottleOz != null && p.bottleOz !== "" ? Math.round(Number(p.bottleOz)) : 24,
   };
 }
@@ -64,6 +67,9 @@ function rowToProfile(row) {
     prefD: row.pref_d || "",
     prefS: row.pref_s || "",
     seasonNote: row.season_note || "",
+    allergens: Array.isArray(row.allergens) ? row.allergens : [],
+    allergenNote: row.allergen_note || "",
+    foodAvoids: row.food_avoids || "",
     bottleOz: row.bottle_oz != null ? Number(row.bottle_oz) : 24,
     status: row.status,
     paid: !!row.paid,
@@ -766,8 +772,10 @@ export const db = {
     return n;
   },
 
-  /** Update intake food loves — used by planner + AI suggest. */
-  async updateFoodPrefs({ prefB, prefL, prefD, prefS, seasonNote } = {}) {
+  /** Update diet + allergens + food loves — used by planner + AI suggest. */
+  async updateFoodPrefs({
+    prefB, prefL, prefD, prefS, seasonNote, diet, allergens, allergenNote, foodAvoids,
+  } = {}) {
     const uid = await requireUserId();
     const row = {
       pref_b: String(prefB || "").trim().slice(0, 500) || null,
@@ -778,6 +786,24 @@ export const db = {
     if (seasonNote !== undefined) {
       row.season_note = String(seasonNote || "").trim().slice(0, 1000) || null;
     }
+    if (diet !== undefined) {
+      const d = String(diet || "none").toLowerCase().trim();
+      row.diet = ["none", "pescatarian", "vegetarian", "vegan"].includes(d) ? d : "none";
+    }
+    if (allergens !== undefined) {
+      const allowed = new Set([
+        "dairy", "eggs", "peanuts", "tree_nuts", "shellfish", "fish", "gluten", "soy", "sesame",
+      ]);
+      row.allergens = (Array.isArray(allergens) ? allergens : [])
+        .map((a) => String(a || "").toLowerCase().trim())
+        .filter((a, i, arr) => allowed.has(a) && arr.indexOf(a) === i);
+    }
+    if (allergenNote !== undefined) {
+      row.allergen_note = String(allergenNote || "").trim().slice(0, 400) || null;
+    }
+    if (foodAvoids !== undefined) {
+      row.food_avoids = String(foodAvoids || "").trim().slice(0, 500) || null;
+    }
     const { error } = await supabase.from("profiles").update(row).eq("id", uid);
     if (error) throw error;
     return {
@@ -786,6 +812,10 @@ export const db = {
       prefD: row.pref_d || "",
       prefS: row.pref_s || "",
       ...(seasonNote !== undefined ? { seasonNote: row.season_note || "" } : {}),
+      ...(diet !== undefined ? { diet: row.diet } : {}),
+      ...(allergens !== undefined ? { allergens: row.allergens || [] } : {}),
+      ...(allergenNote !== undefined ? { allergenNote: row.allergen_note || "" } : {}),
+      ...(foodAvoids !== undefined ? { foodAvoids: row.food_avoids || "" } : {}),
     };
   },
 
@@ -880,6 +910,9 @@ export const db = {
         prefD: p.pref_d,
         prefS: p.pref_s,
         seasonNote: p.season_note || "",
+        allergens: Array.isArray(p.allergens) ? p.allergens : [],
+        allergenNote: p.allergen_note || "",
+        foodAvoids: p.food_avoids || "",
         bottleOz: p.bottle_oz != null ? Number(p.bottle_oz) : 24,
         status: p.status,
         week: p.week,

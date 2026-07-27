@@ -4,6 +4,7 @@
  */
 
 import { CALLIE_RECIPES } from "./callieRecipes.js";
+import { buildDietSafetyBlock, dietPromptLabel } from "./foodPrefs.js";
 
 function rangeBands(macros) {
   const pLo = Number(macros.protein) || 0;
@@ -27,11 +28,14 @@ function recipesBlock() {
 }
 
 function tastesBlock(profile) {
-  return `- Breakfast loves: ${profile.prefB || "(not specified)"}
+  return `${buildDietSafetyBlock(profile)}
+
+## Tastes (soft — never overrides diet/allergens)
+- Breakfast loves: ${profile.prefB || "(not specified)"}
 - Lunch loves: ${profile.prefL || "(not specified)"}
 - Dinner loves: ${profile.prefD || "(not specified)"}
 - Snack loves: ${profile.prefS || "(not specified)"}
-- Diet: ${profile.diet && profile.diet !== "none" ? profile.diet : "omnivore"}
+- Diet: ${dietPromptLabel(profile.diet)}
 - Season note: ${profile.seasonNote || "(none)"}`;
 }
 
@@ -60,7 +64,6 @@ Build ONE ${slotLabel} the client described. Prefer adapting Callie's recipe ban
 - Fat day: ${bands.fLo}–${bands.fHi} g
 Typical ${slotLabel} share: roughly 20–35% of daily calories unless she asked for a snack (then smaller, protein-aware).
 
-## Tastes
 ${tastesBlock(profile)}
 
 ## What she asked for
@@ -92,7 +95,6 @@ Propose 3 different ${slotLabel} options for this client to choose from. Prefer 
 - Carbs day: ${bands.cLo}–${bands.cHi} g
 - Fat day: ${bands.fLo}–${bands.fHi} g
 
-## Tastes — lean into these
 ${tastesBlock(profile)}
 
 ## Callie's recipe bank
@@ -100,9 +102,9 @@ ${recipesBlock()}
 
 ## Rules
 1. Exactly 3 options, meaningfully different (not tiny renames).
-2. Honor her ${slotLabel} loves when specified; otherwise use bank favorites for that slot.
+2. Honor her ${slotLabel} loves when specified; otherwise use bank favorites for that slot — never violate diet/allergens for a bank recipe.
 3. No invented macros. Prefer basedOn when adapting the bank.
-4. Callie house style: high protein, whole foods, max 2 whole eggs per meal.
+4. Callie house style: high protein, whole foods, max 2 whole eggs per meal (skip eggs if allergen).
 5. ingredients = one serving; batch only if servings > 1.
 6. Return ONLY JSON: { "meals": [ ${MEAL_SCHEMA}, ${MEAL_SCHEMA}, ${MEAL_SCHEMA} ] }`;
 }

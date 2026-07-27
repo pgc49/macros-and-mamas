@@ -246,6 +246,9 @@ async function loadSelf(env, userId, authHeader) {
     prefD: row.pref_d,
     prefS: row.pref_s,
     seasonNote: row.season_note,
+    allergens: Array.isArray(row.allergens) ? row.allergens : [],
+    allergenNote: row.allergen_note || "",
+    foodAvoids: row.food_avoids || "",
   };
   const m = macrosRows[0];
   const macros = m

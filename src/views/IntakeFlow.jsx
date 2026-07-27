@@ -169,11 +169,14 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
               <Chip active={!profile.insulinResistance} onClick={() => set("insulinResistance", false)}>No</Chip>
             </div>
           </Field>
-          <Field label="Do you eat animal protein?">
+          <Field label="How do you eat?">
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <Chip active={profile.diet === "none"} onClick={() => set("diet", "none")}>Yes</Chip>
+              <Chip active={profile.diet === "none"} onClick={() => set("diet", "none")}>No restrictions</Chip>
+              <Chip active={profile.diet === "pescatarian"} onClick={() => set("diet", "pescatarian")}>Pescatarian</Chip>
               <Chip active={profile.diet === "vegetarian"} onClick={() => set("diet", "vegetarian")}>Vegetarian</Chip>
-              <Chip active={profile.diet === "vegan"} onClick={() => set("diet", "vegan")}>Vegan</Chip>
+            </div>
+            <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
+              You can change this later in Meals → Food prefs. Eggs &amp; dairy are fine on vegetarian unless you mark allergens.
             </div>
           </Field>
           <Btn style={{ width: "100%", marginTop: 4 }} onClick={() => setStep(3)}>Continue</Btn>

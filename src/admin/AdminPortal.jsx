@@ -459,6 +459,13 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                   </>
                 ) : null}
                 {sel.diet && sel.diet !== "none" ? <><br />⚠️ Diet: {sel.diet} — connect before approving</> : null}
+                {(sel.allergens?.length || sel.allergenNote) ? (
+                  <>
+                    <br />
+                    🚫 Allergens: {[...(sel.allergens || []), sel.allergenNote].filter(Boolean).join(", ")}
+                  </>
+                ) : null}
+                {sel.foodAvoids ? <><br />👎 Avoids: {sel.foodAvoids}</> : null}
                 {sel.phone ? (
                   <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 6 }}>
                     <span style={{ fontSize: 13, color: T.inkSoft }}>📱 Phone</span>

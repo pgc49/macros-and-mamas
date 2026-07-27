@@ -1,4 +1,5 @@
 import { CALLIE_RECIPES } from "./callieRecipes.js";
+import { buildDietSafetyBlock, dietPromptLabel, proteinGapHint } from "./foodPrefs.js";
 
 /**
  * Admin meal-plan draft prompt.
@@ -50,13 +51,14 @@ export function buildMealPlanPrompt({ profile, macros, feedback, previousDigest 
       `- [${r.cat}] ${r.name} (${r.cal} cal · ${r.p}P/${r.c}C/${r.f}F · serves ${r.serves}): ${r.desc}`,
   ).join("\n");
 
-  const diet = profile.diet && profile.diet !== "none" ? profile.diet : "omnivore (eats animal protein)";
   const bf =
     profile.breastfeeding === true
       ? `yes${profile.monthsPP != null && profile.monthsPP !== "" ? ` (${profile.monthsPP} mo postpartum)` : ""}`
       : profile.breastfeeding === false
         ? "no"
         : "unknown";
+  const dietSafety = buildDietSafetyBlock(profile);
+  const gapProtein = proteinGapHint(profile.diet);
 
   const feedbackBlock =
     feedback && String(feedback).trim()
@@ -92,9 +94,9 @@ Aim for mid-band on a typical day (not the floor). Example: if protein is ${pLo}
 2. Sum meal macros → provisional dayTotals.
 3. Gap-check vs bands. If ANY of cal/P/C/F is outside, you are NOT done.
 4. Adjust **quantities** (not fake numbers):
-   - Low protein → more chicken/turkey/fish oz, egg whites, Greek yogurt, cottage cheese, protein powder.
+   - ${gapProtein}
    - Low carbs → more cooked rice/potato/fruit by gram weight, oats, tortillas.
-   - Low fat → measured olive oil (tsp/tbsp), avocado (g), nut butter (g), cheese, fatty fish portion.
+   - Low fat → measured olive oil (tsp/tbsp), avocado (g), nut butter (g), cheese, fatty fish portion (only if diet allows).
    - Low calories → scale the short macros up with the same measured foods (often fat + carb together).
    - High any macro → shrink the offending portion (rice, oil, meat oz) and re-sum.
 5. Re-sum. Repeat until all four are inside. Only then move to the next day.
@@ -102,18 +104,20 @@ Aim for mid-band on a typical day (not the floor). Example: if protein is ${pLo}
 
 A day like 1610 cal vs ${calLo}–${calHi}, or 34g fat vs ${fLo}–${fHi}, is unacceptable — keep adjusting portions until it fits.
 
+${dietSafety}
+
 ## Macro accuracy — non-negotiable
 1. **No invented macros.** Meal cal/P/C/F = sum of listed ingredient amounts.
 2. Uncertain ingredient macros → don't use it; swap to bank / whole-food items you can ground.
-3. Prefer Callie's recipe bank macros; scale by clear portion math only.
+3. Prefer Callie's recipe bank macros; scale by clear portion math only — skip bank meals that violate diet/allergens; adapt or invent a compliant meal instead.
 4. Meals → dayTotals (≤1g / ≤5 cal rounding). dayTotals must equal the meal sum.
 5. Measurable amounts on calorie-dense items (g / oz / cups / tbsp). No vague "drizzle."
 6. Meal cal ≈ 4*P + 4*C + 9*F (±15 kcal).
 7. Callie will open cards and check — defend every meal ingredient-by-ingredient.
 
 ## Other hard constraints
-1. Prefer adapting Callie's recipe bank; originals only when tastes require them AND macros are certain.
-2. Respect diet: ${diet}.
+1. Prefer adapting Callie's recipe bank; originals only when tastes or diet/allergens require them AND macros are certain.
+2. Diet + allergens above are hard gates — never violate them for a bank recipe.
 3. If breastfeeding, keep protein high; avoid extremely low-carb days.
 4. Family dinners ok; report PER-SERVING macros for her plate.
 5. Every day: breakfast, lunch, dinner, and at least one snack (snack is a first-class slot — use it to close protein/fat/cal gaps).
@@ -129,6 +133,7 @@ ${feedbackBlock}
 - Insulin resistance / PCOS noted: ${profile.insulinResistance ? "yes" : "no"}
 - Pregnant: ${profile.pregnant ? "yes" : "no"}
 - Breastfeeding: ${bf}
+- Diet: ${dietPromptLabel(profile.diet)}
 - Breakfast loves: ${profile.prefB || "(not specified)"}
 - Lunch loves: ${profile.prefL || "(not specified)"}
 - Dinner loves: ${profile.prefD || "(not specified)"}

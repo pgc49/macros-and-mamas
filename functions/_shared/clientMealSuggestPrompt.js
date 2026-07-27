@@ -5,6 +5,7 @@
  */
 
 import { CALLIE_RECIPES } from "./callieRecipes.js";
+import { buildDietSafetyBlock, dietPromptLabel, proteinGapHint } from "./foodPrefs.js";
 
 function rangeBands(macros) {
   const pLo = Number(macros.protein) || 0;
@@ -31,13 +32,14 @@ export function buildClientSuggestPrompt({ profile, macros }) {
       `- [${r.cat}] ${r.name} (${r.cal} cal · ${r.p}P/${r.c}C/${r.f}F · serves ${r.serves}): ${r.desc}`,
   ).join("\n");
 
-  const diet = profile.diet && profile.diet !== "none" ? profile.diet : "omnivore (eats animal protein)";
   const bf =
     profile.breastfeeding === true
       ? `yes${profile.monthsPP != null && profile.monthsPP !== "" ? ` (${profile.monthsPP} mo postpartum)` : ""}`
       : profile.breastfeeding === false
         ? "no"
         : "unknown";
+  const dietSafety = buildDietSafetyBlock(profile);
+  const gapProtein = proteinGapHint(profile.diet);
 
   return `You are building a personalized 7-day meal plan suggestion for a Macros and Mamas client to REVIEW and edit in her weekly planner.
 
@@ -48,16 +50,19 @@ Her daily bands (hard walls — dayTotals must sit inside ALL four):
 - Carbs: ${cLo}–${cHi} g
 - Fat: ${fLo}–${fHi} g
 
-Aim mid-band. Prefer adapting Callie's recipe bank; originals only when tastes require them AND macros are certain.
+Aim mid-band. Prefer adapting Callie's recipe bank; originals only when tastes require them AND macros are certain AND they obey diet/allergens below.
+${gapProtein}
 
-## Taste-first
-Build the week around what she said she loves (intake). Do not invent a generic "healthy" week that ignores her prefs.
+${dietSafety}
+
+## Taste-first (soft — never overrides diet/allergens)
+Build the week around what she said she loves. Do not invent a generic "healthy" week that ignores her prefs.
 - Breakfast loves: ${profile.prefB || "(not specified — use Callie's breakfast bank)"}
 - Lunch loves: ${profile.prefL || "(not specified)"}
 - Dinner loves: ${profile.prefD || "(not specified)"}
 - Snack loves: ${profile.prefS || "(not specified)"}
 - Season note: ${profile.seasonNote || "(none)"}
-- Diet: ${diet}
+- Diet: ${dietPromptLabel(profile.diet)}
 - Breastfeeding: ${bf}
 
 ## Macro accuracy
