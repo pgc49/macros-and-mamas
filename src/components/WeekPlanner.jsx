@@ -979,12 +979,15 @@ function PlanMealTile({
               if (logPhase !== "confirm") return;
               setLogPhase("busy");
               try {
+                // Keep the planner slot (breakfast/lunch/dinner/snack) — do not
+                // fall back to time-of-day guess (nighttime was dumping everything under Dinner).
                 const ok = await onLog(scaleMealForLog({
                   name: meal.name,
                   cal: meal.cal,
                   p: meal.p,
                   c: meal.c,
                   f: meal.f,
+                  slot: meal.slot,
                   via: "recipe",
                   logged_date: undefined, // App forces today for planner adds
                   fromPlanner: true,
