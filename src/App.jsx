@@ -46,6 +46,7 @@ const EMPTY_PROFILE = {
   stress: "medium", insulinResistance: false, diet: "none",
   prefB: "", prefL: "", prefD: "", prefS: "", seasonNote: "",
   allergens: [], allergenNote: "", foodAvoids: "",
+  coachNote: "", coachNoteAt: null, coachNoteDismissedAt: null,
 };
 
 export default function App() {
@@ -898,6 +899,14 @@ export default function App() {
     return saved;
   };
 
+  const onDismissCoachNote = async () => {
+    const saved = await db.dismissCoachNote();
+    setProfile((p) => ({
+      ...p,
+      coachNoteDismissedAt: saved.coachNoteDismissedAt,
+    }));
+  };
+
   const updateMealEntry = async (id, patch) => {
     if (!id) return;
     try {
@@ -1114,6 +1123,7 @@ export default function App() {
       onSuggestAiWeek={onSuggestAiWeek}
       onMealIdea={onMealIdea}
       onSaveFoodPrefs={onSaveFoodPrefs}
+      onDismissCoachNote={onDismissCoachNote}
     />
   );
 

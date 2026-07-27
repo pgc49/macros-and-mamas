@@ -70,6 +70,9 @@ function rowToProfile(row) {
     allergens: Array.isArray(row.allergens) ? row.allergens : [],
     allergenNote: row.allergen_note || "",
     foodAvoids: row.food_avoids || "",
+    coachNote: row.coach_note || "",
+    coachNoteAt: row.coach_note_at || null,
+    coachNoteDismissedAt: row.coach_note_dismissed_at || null,
     bottleOz: row.bottle_oz != null ? Number(row.bottle_oz) : 24,
     status: row.status,
     paid: !!row.paid,
@@ -914,6 +917,9 @@ export const db = {
         allergenNote: p.allergen_note || "",
         foodAvoids: p.food_avoids || "",
         bottleOz: p.bottle_oz != null ? Number(p.bottle_oz) : 24,
+        coachNote: p.coach_note || "",
+        coachNoteAt: p.coach_note_at || null,
+        coachNoteDismissedAt: p.coach_note_dismissed_at || null,
         status: p.status,
         week: p.week,
         paid,
@@ -1040,6 +1046,47 @@ export const db = {
       .update({ status: "active", week: 1 })
       .eq("id", clientId);
     if (pErr) throw pErr;
+  },
+
+  /** Callie → mama note on Today. Empty string clears. */
+  async saveCoachNote(clientId, note) {
+    if (!clientId) throw new Error("client required");
+    const trimmed = String(note || "").trim().slice(0, 1000);
+    const row = trimmed
+      ? {
+        coach_note: trimmed,
+        coach_note_at: new Date().toISOString(),
+        coach_note_dismissed_at: null,
+      }
+      : {
+        coach_note: null,
+        coach_note_at: null,
+        coach_note_dismissed_at: null,
+      };
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(row)
+      .eq("id", clientId)
+      .select("coach_note, coach_note_at, coach_note_dismissed_at")
+      .single();
+    if (error) throw error;
+    return {
+      coachNote: data.coach_note || "",
+      coachNoteAt: data.coach_note_at || null,
+      coachNoteDismissedAt: data.coach_note_dismissed_at || null,
+    };
+  },
+
+  /** Mama dismisses Callie's note on Today. */
+  async dismissCoachNote() {
+    const uid = await requireUserId();
+    const at = new Date().toISOString();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ coach_note_dismissed_at: at })
+      .eq("id", uid);
+    if (error) throw error;
+    return { coachNoteDismissedAt: at };
   },
 
   /** Load meal-plan row for a client (or self). Missing row = default mode. */

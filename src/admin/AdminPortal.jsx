@@ -21,7 +21,7 @@ import { PATHS } from "../routing";
 import { Shell, Card, Btn, inputStyle } from "../components/ui";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { MealPlanDraft } from "./MealPlanDraft";
+import { AdminCoachNote } from "./AdminCoachNote";
 import { AdminClientTracking } from "./AdminClientTracking";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
@@ -40,7 +40,6 @@ const AI_LABELS = {
   estimate_text: "Describe",
   meal_suggest: "Suggest my week",
   meal_idea: "Meal ideas",
-  meal_plan: "Plan draft",
 };
 
 const AI_KINDS = {
@@ -524,7 +523,21 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
         </Card>
 
         {sel.macros && (
-          <MealPlanDraft client={sel} />
+          <AdminCoachNote
+            client={sel}
+            onSaved={(id, saved) => {
+              setRoster((list) => list.map((c) => (
+                c.id === id
+                  ? {
+                    ...c,
+                    coachNote: saved.coachNote,
+                    coachNoteAt: saved.coachNoteAt,
+                    coachNoteDismissedAt: saved.coachNoteDismissedAt,
+                  }
+                  : c
+              )));
+            }}
+          />
         )}
 
         {sel.macros && (sel.status === "active" || sel.stage === "active" || sel.role === "admin") && (

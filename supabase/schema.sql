@@ -30,6 +30,9 @@ create table if not exists public.profiles (
   allergens text[] not null default '{}',
   allergen_note text,
   food_avoids text,
+  coach_note text,
+  coach_note_at timestamptz,
+  coach_note_dismissed_at timestamptz,
   role text not null default 'client',
   status text not null default 'pending',
   paid boolean not null default false,
@@ -352,6 +355,9 @@ begin
   if new.status is distinct from old.status and new.status = 'active' then
     new.status := old.status;
   end if;
+  -- Coach notes: only admin may author/clear body + timestamp
+  new.coach_note := old.coach_note;
+  new.coach_note_at := old.coach_note_at;
   return new;
 end;
 $$;

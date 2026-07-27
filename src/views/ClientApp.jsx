@@ -14,9 +14,21 @@ import { RecipeCreator } from "../components/RecipeCreator";
 import { WeekPlanner, FoodPrefsEditor } from "../components/WeekPlanner";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { TechHelpFooter } from "../components/TechHelpFooter";
+import { CoachNoteBanner } from "../components/CoachNoteBanner";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
 import { useState } from "react";
+
+function coachNoteVisible(profile) {
+  const note = String(profile?.coachNote || "").trim();
+  if (!note) return false;
+  const at = profile?.coachNoteAt ? new Date(profile.coachNoteAt).getTime() : 0;
+  const dismissed = profile?.coachNoteDismissedAt
+    ? new Date(profile.coachNoteDismissedAt).getTime()
+    : 0;
+  if (!at) return true;
+  return !(dismissed && dismissed >= at);
+}
 
 export function ClientApp({
   tab, setTab,
@@ -51,6 +63,7 @@ export function ClientApp({
   onSuggestAiWeek,
   onMealIdea,
   onSaveFoodPrefs,
+  onDismissCoachNote,
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
@@ -137,6 +150,13 @@ export function ClientApp({
               ? "Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win."
               : `Ranges below show ${formatLongDay(mealLogDate)} — switch days in the meal log to compare.`}
           </p>
+
+          {coachNoteVisible(profile) && (
+            <CoachNoteBanner
+              note={profile.coachNote}
+              onDismiss={onDismissCoachNote}
+            />
+          )}
 
           <HomeScreenTip />
 
