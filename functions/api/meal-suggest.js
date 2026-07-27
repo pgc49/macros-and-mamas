@@ -41,16 +41,20 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "payment required" }, 403);
     }
 
-    const limit = await checkSuggestLimit(env, user.id);
-    if (!limit.ok) {
-      return json(
-        {
-          error: "rate_limited",
-          message: limit.message,
-          retry_after_seconds: limit.retryAfterSeconds || 86400,
-        },
-        429,
-      );
+    // Admins (Callie / Tech Guy) — unlimited AI for coaching + QA. Mamas stay capped.
+    const isAdmin = access.role === "admin";
+    if (!isAdmin) {
+      const limit = await checkSuggestLimit(env, user.id);
+      if (!limit.ok) {
+        return json(
+          {
+            error: "rate_limited",
+            message: limit.message,
+            retry_after_seconds: limit.retryAfterSeconds || 86400,
+          },
+          429,
+        );
+      }
     }
 
     const { profile, macros } = await loadSelfForSuggest(env, user.id, authHeader);

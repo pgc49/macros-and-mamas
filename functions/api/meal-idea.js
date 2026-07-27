@@ -62,16 +62,20 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "Describe the meal you want (a few words is fine)." }, 400);
     }
 
-    const limit = await checkIdeaLimit(env, user.id);
-    if (!limit.ok) {
-      return json(
-        {
-          error: "rate_limited",
-          message: limit.message,
-          retry_after_seconds: limit.retryAfterSeconds || 86400,
-        },
-        429,
-      );
+    // Admins (Callie / Tech Guy) — unlimited AI for coaching + QA. Mamas stay capped.
+    const isAdmin = access.role === "admin";
+    if (!isAdmin) {
+      const limit = await checkIdeaLimit(env, user.id);
+      if (!limit.ok) {
+        return json(
+          {
+            error: "rate_limited",
+            message: limit.message,
+            retry_after_seconds: limit.retryAfterSeconds || 86400,
+          },
+          429,
+        );
+      }
     }
 
     const { profile, macros } = await loadSelf(env, user.id, authHeader);

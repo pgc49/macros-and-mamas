@@ -111,16 +111,20 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "type must be 'photo', 'text' or 'recipe'" }, 400);
     }
 
-    const limit = await checkEstimateLimit(env, user.id);
-    if (!limit.ok) {
-      return json(
-        {
-          error: "rate_limited",
-          message: limit.message,
-          retry_after_seconds: limit.retryAfterSeconds || 3600,
-        },
-        429
-      );
+    // Admins (Callie / Tech Guy) — unlimited AI for coaching + QA. Mamas stay capped.
+    const isAdmin = access.role === "admin";
+    if (!isAdmin) {
+      const limit = await checkEstimateLimit(env, user.id);
+      if (!limit.ok) {
+        return json(
+          {
+            error: "rate_limited",
+            message: limit.message,
+            retry_after_seconds: limit.retryAfterSeconds || 3600,
+          },
+          429
+        );
+      }
     }
 
     const label = `estimate_${type}`;
