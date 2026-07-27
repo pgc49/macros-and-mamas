@@ -74,18 +74,23 @@ export function mergeDescription(original, addition) {
  * Pull the food out of a coach tip so tapping it can prefill the add box.
  * Tips are free text, so this is best-effort — she edits before sending.
  *
- * Do not treat praise about something already on the plate as a suggestion.
+ * Do not treat praise or coaching fluff as a suggestion.
  * e.g. "adding that cottage cheese is a smart way…" must NOT yield a chip;
- * "Add Greek yogurt…" / "Consider adding nuts…" should.
+ * "to add some fiber and keep your energy…" must NOT;
+ * "Add Greek yogurt…" / "try pairing them with fruit…" should.
  */
 export function foodFromTip(tip) {
   const text = String(tip || "").trim();
   if (!text) return "";
 
-  // Imperative / clear ask — bare "adding" is omitted on purpose (often praise).
+  // Prefer explicit food-pairing phrasing before bare "add" (avoids "to add fiber…").
   const patterns = [
-    /\b(?:add|toss in|throw in|include|top (?:it )?with|pair (?:it )?with|serve (?:it )?with)\s+(.+?)(?:[.!?]|$)/i,
+    /\b(?:try\s+)?pair(?:ing)?(?:\s+(?:them|it))?\s+with\s+(.+?)(?:[.!?]|$)/i,
+    /\b(?:top(?:ping)?(?:\s+(?:them|it))?\s+with|serve(?:\s+(?:them|it))?\s+with|toss\s+in|throw\s+in)\s+(.+?)(?:[.!?]|$)/i,
     /\b(?:consider|try|maybe|perhaps|suggest(?:ing)?|recommend(?:ing)?)\s+adding\s+(.+?)(?:[.!?]|$)/i,
+    // Imperative "add …" — not infinitive "to add …" (coaching purpose clause).
+    /(?:^|[.!?]\s+|,\s*but\s+)add\s+(.+?)(?:[.!?]|$)/i,
+    /\b(?:you\s+could|you\s+might|maybe|try\s+to)\s+add\s+(.+?)(?:[.!?]|$)/i,
   ];
 
   let raw = "";
@@ -98,14 +103,27 @@ export function foodFromTip(tip) {
   }
   if (!raw) return "";
 
-  // Safety net: extracted span still reads like praise, not a food to add.
-  if (/\b(?:is|was)\s+(?:a\s+)?(?:smart|great|good|nice|perfect|clever)\b/i.test(raw)) {
-    return "";
-  }
-
-  return raw
-    .replace(/\s+(?:to|for|and you|which|that)\b.*$/i, "")
+  let food = raw
+    // Drop purpose / praise tails: "… to add fiber", "… for more protein", "… is a smart way"
+    .replace(/\s+(?:to|for|and you|which|that|so\s+you|and\s+keep)\b.*$/i, "")
     .replace(/[,;]\s*$/, "")
     .trim()
     .slice(0, 120);
+
+  if (!food || !looksLikeFoodAddition(food)) return "";
+  return food;
+}
+
+/** Reject coaching fluff that slipped past the verb match. */
+function looksLikeFoodAddition(food) {
+  const s = String(food || "").trim();
+  if (s.length < 2) return false;
+  // Praise leftovers
+  if (/\b(?:is|was)\s+(?:a\s+)?(?:smart|great|good|nice|perfect|clever)\b/i.test(s)) return false;
+  // Macro/coaching goals, not a plate item ("some fiber", "more protein")
+  if (/^(?:some|more|a\s+bit\s+of|extra)?\s*(?:fiber|protein|energy|calories?|macros?)\b/i.test(s)) {
+    return false;
+  }
+  if (/\b(?:keep your|throughout the|energy steady|steady throughout)\b/i.test(s)) return false;
+  return true;
 }
