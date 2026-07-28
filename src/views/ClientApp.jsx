@@ -17,7 +17,7 @@ import { TechHelpFooter } from "../components/TechHelpFooter";
 import { MessagesPanel } from "../components/MessagesPanel";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export function ClientApp({
   tab, setTab,

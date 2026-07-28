@@ -1,11 +1,10 @@
 /* ==================================================================
    /functions/api/message-notify.js
    After a message insert: web push to recipient, email if no push.
-   Auth required (sender). Secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
-   SUPABASE_*, optional VAPID_SUBJECT
+   Auth required (sender). Push goes through Edge Function send-push
+   (VAPID keys live there). Optional RESEND_API_KEY for email fallback.
    ================================================================== */
 
-import webpush from "web-push";
 import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/supabaseEmail.js";
 
 export async function onRequestPost({ request, env }) {
@@ -30,7 +29,6 @@ export async function onRequestPost({ request, env }) {
     let emailSent = false;
 
     if (fromMama) {
-      // Mama → Callie: notify admins (push if subscribed) + email Callie/owner
       const adminIds = await listAdminIds(env);
       for (const adminId of adminIds) {
         pushSent += await sendPushToProfile(env, adminId, {
@@ -66,7 +64,6 @@ export async function onRequestPost({ request, env }) {
         });
       }
     } else {
-      // Callie → mama: push first, email if no subscriptions
       pushSent = await sendPushToProfile(env, msg.client_id, {
         title: "Callie messaged you",
         body: preview || "Open Messages in the app",
@@ -113,6 +110,20 @@ export async function onRequestPost({ request, env }) {
     console.error("message-notify failed", e);
     return json({ error: "notify failed" }, 500);
   }
+}
+
+async function sendPushToProfile(env, profileId, payload) {
+  const result = await invokeEdgeFunction(env, "send-push", {
+    profileId,
+    title: payload.title,
+    body: payload.body,
+    url: payload.url,
+  });
+  if (!result.ok) {
+    console.warn("send-push edge failed", result);
+    return 0;
+  }
+  return Number(result.data?.sent) || 0;
 }
 
 async function sendMamaEmailDirect(env, { email, name, preview }) {
@@ -185,67 +196,6 @@ function escapeHtml(s) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-async function sendPushToProfile(env, profileId, payload) {
-  const pub = String(env.VAPID_PUBLIC_KEY || env.VITE_VAPID_PUBLIC_KEY || "").trim();
-  const priv = String(env.VAPID_PRIVATE_KEY || "").trim();
-  if (!pub || !priv) {
-    console.warn("VAPID keys missing — skip push");
-    return 0;
-  }
-  webpush.setVapidDetails(
-    String(env.VAPID_SUBJECT || "mailto:pgchammas@gmail.com"),
-    pub,
-    priv,
-  );
-
-  const subs = await listPushSubs(env, profileId);
-  let sent = 0;
-  for (const sub of subs) {
-    try {
-      await webpush.sendNotification(
-        {
-          endpoint: sub.endpoint,
-          keys: { p256dh: sub.p256dh, auth: sub.auth },
-        },
-        JSON.stringify(payload),
-      );
-      sent += 1;
-    } catch (e) {
-      console.warn("push send failed", e?.statusCode || e?.message || e);
-      if (e?.statusCode === 404 || e?.statusCode === 410) {
-        await deletePushSub(env, sub.endpoint);
-      }
-    }
-  }
-  return sent;
-}
-
-async function listPushSubs(env, profileId) {
-  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
-  const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!base || !key || !profileId) return [];
-  const resp = await fetch(
-    `${base}/rest/v1/push_subscriptions?profile_id=eq.${encodeURIComponent(profileId)}&select=endpoint,p256dh,auth`,
-    { headers: { apikey: key, authorization: `Bearer ${key}` } },
-  );
-  if (!resp.ok) return [];
-  const rows = await resp.json().catch(() => []);
-  return Array.isArray(rows) ? rows : [];
-}
-
-async function deletePushSub(env, endpoint) {
-  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
-  const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!base || !key || !endpoint) return;
-  await fetch(
-    `${base}/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`,
-    {
-      method: "DELETE",
-      headers: { apikey: key, authorization: `Bearer ${key}` },
-    },
-  );
 }
 
 async function loadMessage(env, id) {
