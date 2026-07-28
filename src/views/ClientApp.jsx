@@ -100,9 +100,10 @@ export function ClientApp({
         display: "flex",
         justifyContent: "center",
         gap: 4,
-        padding: "10px 16px 8px",
+        padding: "10px 16px 6px",
         maxWidth: 560,
         margin: "0 auto",
+        boxSizing: "border-box",
       }}
       aria-label="Main"
     >

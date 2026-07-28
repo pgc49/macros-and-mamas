@@ -228,7 +228,9 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
             flexShrink: 0,
             background: "#fff",
             borderTop: `1px solid ${T.border}`,
-            paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
+            /* iOS Home Screen: env(safe-area-inset-bottom) is sometimes 0 even with
+               viewport-fit=cover — floor at 34px so labels clear the home indicator. */
+            paddingBottom: "max(34px, calc(10px + env(safe-area-inset-bottom, 0px)))",
           }}
         >
           {bottomBar}
