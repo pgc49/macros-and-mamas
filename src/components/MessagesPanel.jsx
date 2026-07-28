@@ -4,7 +4,7 @@ import { db } from "../db/db";
 import { supabase } from "../lib/supabase";
 
 /** Mama Messages tab — 1:1 with Callie. */
-export function MessagesPanel({ userId, onUnreadChange }) {
+export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange }) {
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -99,6 +99,7 @@ export function MessagesPanel({ userId, onUnreadChange }) {
         onMarkRead={markRead}
         showPushPrompt
         onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+        onComposerFocusChange={onComposerFocusChange}
       />
     </>
   );

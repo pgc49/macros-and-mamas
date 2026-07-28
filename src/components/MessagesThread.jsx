@@ -29,6 +29,7 @@ export function MessagesThread({
   showPushPrompt = false,
   onSavePushSubscription,
   compact = false,
+  onComposerFocusChange,
 }) {
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState(null);
@@ -265,7 +266,13 @@ export function MessagesThread({
   }, [menuId]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: compact ? undefined : "55vh" }}>
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      minHeight: compact ? undefined : "55vh",
+      flex: compact ? undefined : 1,
+    }}
+    >
       {(title || subtitle) && (
         <div style={{ marginBottom: 10 }}>
           {title ? (
@@ -311,8 +318,9 @@ export function MessagesThread({
           border: `1.5px solid ${T.border}`,
           borderRadius: 14,
           padding: 12,
-          minHeight: compact ? 180 : 280,
-          maxHeight: compact ? "36vh" : "52vh",
+          minHeight: compact ? 180 : 220,
+          maxHeight: compact ? "36vh" : "min(52vh, 420px)",
+          WebkitOverflowScrolling: "touch",
         }}
       >
         {!messages.length && (
@@ -593,6 +601,14 @@ export function MessagesThread({
           onChange={(e) => setDraft(e.target.value.slice(0, 2000))}
           rows={1}
           placeholder="Write a message…"
+          enterKeyHint="send"
+          autoComplete="off"
+          autoCorrect="on"
+          onFocus={() => onComposerFocusChange?.(true)}
+          onBlur={() => {
+            // Delay so Send/attach taps still register before tabs return
+            window.setTimeout(() => onComposerFocusChange?.(false), 180);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -606,7 +622,7 @@ export function MessagesThread({
             borderRadius: 12,
             border: `1.5px solid ${T.border}`,
             fontFamily: F,
-            fontSize: 15,
+            fontSize: 16,
             lineHeight: 1.4,
             resize: "none",
             overflowY: "auto",

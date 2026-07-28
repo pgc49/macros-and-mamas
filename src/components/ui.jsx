@@ -142,14 +142,15 @@ export const RangeBand = ({ label, lo, hi, unit = "g", eaten }) => {
 /* Shell — prototype's coach toggle and reset button removed.
    Shows signed-in email + sign-out when a session exists.
    Optional bottomBar docks via flex (avoids iOS position:fixed mid-screen jumps). */
-export const Shell = ({ children, bottomBar = null }) => {
+export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => {
   const { user, isAdmin, signOut } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const linkStyle = {
     fontFamily: F, fontSize: 12, fontWeight: 700, color: T.accent, textDecoration: "underline",
   };
-  const hasBar = !!bottomBar;
+  const showBar = !!bottomBar && !hideBottomBar;
+  const hasBarSlot = !!bottomBar;
   return (
     <div
       style={{
@@ -157,7 +158,7 @@ export const Shell = ({ children, bottomBar = null }) => {
         background: T.bg,
         color: T.ink,
         minHeight: "100vh",
-        ...(hasBar
+        ...(hasBarSlot
           ? {
               height: "100dvh",
               maxHeight: "100dvh",
@@ -174,9 +175,9 @@ export const Shell = ({ children, bottomBar = null }) => {
           maxWidth: 560,
           width: "100%",
           margin: "0 auto",
-          padding: hasBar ? "0 16px 20px" : "0 16px 90px",
+          padding: hasBarSlot ? "0 16px 20px" : "0 16px 90px",
           boxSizing: "border-box",
-          ...(hasBar
+          ...(hasBarSlot
             ? {
                 flex: 1,
                 minHeight: 0,
@@ -221,7 +222,7 @@ export const Shell = ({ children, bottomBar = null }) => {
         </header>
         {children}
       </div>
-      {hasBar && (
+      {showBar && (
         <div
           style={{
             flexShrink: 0,
