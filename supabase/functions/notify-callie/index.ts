@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { APP_URL, FROM_CALLIE, notifyRecipients, OWNER_NOTIFY_EMAIL } from "../_shared/emailTemplates.ts";
+import { APP_URL, FROM_CALLIE, notifyRecipients, CALLIE_NOTIFY_EMAIL, OWNER_NOTIFY_EMAIL } from "../_shared/emailTemplates.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { assertServiceRole } from "../_shared/assertServiceRole.ts";
 
@@ -126,7 +126,8 @@ serve(async (req) => {
       return jsonResponse({ error: "unknown type" }, 400);
     }
 
-    // Support fallback goes to owner only so Callie's inbox stays clean.
+    // Support fallback → owner only. Message alerts → Callie only (not Patrick).
+    // Everything else → Callie + owner.
     const to = type === "support"
       ? [...new Set(
           String(OWNER_NOTIFY_EMAIL || "")
@@ -134,6 +135,13 @@ serve(async (req) => {
             .map((s) => s.trim().toLowerCase())
             .filter(Boolean),
         )]
+      : type === "message"
+        ? [...new Set(
+            String(CALLIE_NOTIFY_EMAIL || "")
+              .split(",")
+              .map((s) => s.trim().toLowerCase())
+              .filter(Boolean),
+          )]
       : notifyRecipients();
     if (!to.length) return jsonResponse({ error: "no notify recipients" }, 500);
 
