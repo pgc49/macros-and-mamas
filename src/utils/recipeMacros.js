@@ -77,11 +77,16 @@ export function mergeDescription(original, addition) {
  * Do not treat praise or coaching fluff as a suggestion.
  * e.g. "adding that cottage cheese is a smart way…" must NOT yield a chip;
  * "to add some fiber and keep your energy…" must NOT;
+ * "…pairing it with Greek yogurt next time…" must NOT (future advice);
  * "Add Greek yogurt…" / "try pairing them with fruit…" should.
  */
 export function foodFromTip(tip) {
   const text = String(tip || "").trim();
   if (!text) return "";
+
+  // Future coaching is not something she can confirm on this meal.
+  // e.g. "try pairing it with Greek yogurt next time…"
+  if (isFutureAdviceTip(text)) return "";
 
   // Prefer explicit food-pairing phrasing before bare "add" (avoids "to add fiber…").
   const patterns = [
@@ -106,12 +111,21 @@ export function foodFromTip(tip) {
   let food = raw
     // Drop purpose / praise tails: "… to add fiber", "… for more protein", "… is a smart way"
     .replace(/\s+(?:to|for|and you|which|that|so\s+you|and\s+keep)\b.*$/i, "")
+    // Drop leftover future tails if a tip slipped past isFutureAdviceTip
+    .replace(/\s+next\s+time\b.*$/i, "")
     .replace(/[,;]\s*$/, "")
     .trim()
     .slice(0, 120);
 
   if (!food || !looksLikeFoodAddition(food)) return "";
   return food;
+}
+
+/** Tips about a future plate — never show "I did add …" for those. */
+function isFutureAdviceTip(text) {
+  return /\b(?:next\s+time|for\s+next\s+time|going\s+forward|in\s+the\s+future|next\s+meal|another\s+time)\b/i.test(
+    String(text || ""),
+  );
 }
 
 /** Reject coaching fluff that slipped past the verb match. */
@@ -125,5 +139,6 @@ function looksLikeFoodAddition(food) {
     return false;
   }
   if (/\b(?:keep your|throughout the|energy steady|steady throughout)\b/i.test(s)) return false;
+  if (/\bnext\s+time\b/i.test(s)) return false;
   return true;
 }

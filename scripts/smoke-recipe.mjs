@@ -151,6 +151,37 @@ assert(
 assert(foodFromTip("This looks like a balanced plate.") === "", "no suggestion → empty");
 assert(foodFromTip("") === "", "empty tip → empty");
 assert(foodFromTip(null) === "", "null tip → empty");
+// Praise / purpose-clause false positives (Deana-class)
+assert(
+  foodFromTip("Nice work — adding that cottage cheese is a smart way to hit protein.") === "",
+  "praise 'adding that…' must not become a chip",
+);
+assert(
+  foodFromTip("Looks great — to add some fiber and keep your energy steady, sip water with it.") === "",
+  "purpose 'to add fiber…' must not become a chip",
+);
+// Future coaching must not become "I did add … next time" (Deana pancake tip)
+const pancakeNextTime =
+  "That pancake looks perfectly golden, but let's try pairing it with some Greek yogurt or a side of eggs next time to add a protein boost that will keep your energy steady through the morning.";
+assert(foodFromTip(pancakeNextTime) === "", `next-time tip must be empty, got "${foodFromTip(pancakeNextTime)}"`);
+assert(
+  foodFromTip("Try pairing it with Greek yogurt next time.") === "",
+  "short next-time pairing tip → empty",
+);
+assert(
+  foodFromTip("Add eggs going forward for a steadier morning.") === "",
+  "going-forward tip → empty",
+);
+// Present-tense suggestions still work
+assert(
+  foodFromTip("Consider adding eggs or Greek yogurt for more protein.") === "eggs or Greek yogurt",
+  `present consider-adding: got "${foodFromTip("Consider adding eggs or Greek yogurt for more protein.")}"`,
+);
+assert(
+  foodFromTip("Try pairing it with some Greek yogurt or a side of eggs.") ===
+    "some Greek yogurt or a side of eggs",
+  `present pairing (no next time): got "${foodFromTip("Try pairing it with some Greek yogurt or a side of eggs.")}"`,
+);
 
 console.log("OK recipe smoke", {
   plate: { cal: plate.calories, basis: plate.basis },
