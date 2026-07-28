@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Range remaining preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Marcellus&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #FAF5F2;
+      --ink: #33272E;
+      --inkSoft: #6E5D66;
+      --accent: #B4416B;
+      --accentSoft: #F6E4EC;
+      --sage: #5F8168;
+      --sageSoft: #E6EFE8;
+      --sageDeep: #3E5A46;
+      --amber: #A9711F;
+      --card: #FFFFFF;
+      --border: #ECDEE2;
+      --track: #F1E7EA;
+      --f: 'Karla', sans-serif;
+      --fd: 'Marcellus', serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--f);
+      background: var(--bg);
+      color: var(--ink);
+      padding: 20px 16px 40px;
+    }
+    h1 {
+      font-family: var(--fd);
+      font-weight: 400;
+      font-size: 28px;
+      margin: 0 0 6px;
+    }
+    .sub { color: var(--inkSoft); font-size: 14px; margin-bottom: 18px; line-height: 1.45; }
+    .phone {
+      max-width: 390px;
+      margin: 0 auto 28px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+    }
+    .label {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.4px;
+      text-transform: uppercase; color: var(--inkSoft); margin-bottom: 12px;
+    }
+    .band { margin-bottom: 20px; }
+    .row { display: flex; justify-content: space-between; align-items: baseline; }
+    .name { font-size: 13px; font-weight: 700; color: var(--inkSoft); letter-spacing: 0.4px; text-transform: uppercase; }
+    .nums { font-family: var(--fd); font-size: 26px; }
+    .nums .dash { color: var(--inkSoft); font-size: 20px; }
+    .nums .u { font-size: 15px; color: var(--inkSoft); }
+    .track {
+      position: relative; height: 10px; background: var(--track);
+      border-radius: 999px; margin-top: 6px;
+    }
+    .fill { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.35; border-radius: 999px; }
+    .window {
+      position: absolute; left: 22%; width: 56%; top: 0; bottom: 0;
+      border-radius: 999px; border: 1.5px solid;
+    }
+    .tick {
+      position: absolute; top: -3px; width: 3px; height: 16px; border-radius: 2px;
+    }
+    .dot {
+      position: absolute; top: -5px; width: 14px; height: 20px; border-radius: 6px;
+      border: 2.5px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25);
+      transform: translateX(-50%);
+    }
+    .cap {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 11.5px; margin-top: 5px; min-height: 16px; font-weight: 700;
+    }
+    .logged { color: var(--inkSoft); }
+    .left { color: var(--ink); }
+    .over { color: var(--amber); }
+    .inbadge {
+      display: inline-flex; align-items: center; gap: 5px;
+      color: var(--sage); font-weight: 700;
+    }
+    .check {
+      width: 14px; height: 14px; border-radius: 50%; background: var(--sage); color: #fff;
+      font-size: 9.5px; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .room { color: var(--sageDeep); }
+    .cal {
+      border-top: 1px dashed var(--border); padding-top: 12px;
+      display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    }
+    .cal-l {
+      font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+      line-height: 1.35; color: var(--inkSoft);
+    }
+    .cal-r { font-family: var(--fd); font-size: 22px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <h1>Range remaining preview</h1>
+  <p class="sub">Not shipped yet — same copy helpers as the app. Patrick-style mid-day under, plus in-range and over.</p>
+
+  <div class="phone" id="under-card">
+    <div class="label">Under (mid-day) — Patrick example</div>
+    <div class="band" data-state="under" data-lo="140" data-hi="150" data-eaten="45" data-label="Protein"></div>
+    <div class="band" data-state="under" data-lo="180" data-hi="190" data-eaten="45" data-label="Carbs"></div>
+    <div class="band" data-state="under" data-lo="60" data-hi="70" data-eaten="10" data-label="Fat"></div>
+    <div class="cal">
+      <span class="cal-l">Calories · 450 · 1300–1450 cal left</span>
+      <span class="cal-r">1750–1900</span>
+    </div>
+  </div>
+
+  <div class="phone" id="in-card">
+    <div class="label">In range</div>
+    <div class="band" data-state="in" data-lo="140" data-hi="150" data-eaten="145" data-label="Protein"></div>
+    <div class="band" data-state="in" data-lo="180" data-hi="190" data-eaten="190" data-label="Carbs"></div>
+  </div>
+
+  <div class="phone" id="over-card">
+    <div class="label">Over</div>
+    <div class="band" data-state="over" data-lo="140" data-hi="150" data-eaten="160" data-label="Protein"></div>
+    <div class="cal">
+      <span class="cal-l" style="color: var(--amber)">Calories · 2050 · 150 cal over</span>
+      <span class="cal-r">1750–1900</span>
+    </div>
+  </div>
+
+  <script type="module">
+    import { formatRangeProgress, rangeState } from "../src/utils/rangeProgress.js";
+
+    const RANGE_START = 22;
+    const RANGE_WIDTH = 56;
+
+    function dotPos(eaten, lo, hi) {
+      if (!(eaten > 0)) return null;
+      const pos = eaten <= lo
+        ? (eaten / lo) * RANGE_START
+        : RANGE_START + Math.min((eaten - lo) / (hi - lo), 1.35) * RANGE_WIDTH;
+      return Math.min(pos, 96);
+    }
+
+    for (const el of document.querySelectorAll(".band")) {
+      const lo = Number(el.dataset.lo);
+      const hi = Number(el.dataset.hi);
+      const eaten = Number(el.dataset.eaten);
+      const label = el.dataset.label;
+      const st = rangeState(eaten, lo, hi);
+      const progress = formatRangeProgress(eaten, lo, hi, "g");
+      const fill = st === "over" ? "var(--amber)" : st === "in" ? "var(--sage)" : "var(--accent)";
+      const bandBg = st === "in" ? "var(--sageSoft)" : "var(--accentSoft)";
+      const bandEdge = st === "in" ? "var(--sage)" : "var(--accent)";
+      const rangeColor = st === "in" ? "var(--sageDeep)" : "var(--ink)";
+      const dot = dotPos(eaten, lo, hi);
+
+      let cap = "";
+      if (st === "under") {
+        cap = `<span class="logged">${progress.logged}</span><span class="left">${progress.detail}</span>`;
+      } else if (st === "in") {
+        cap = `<span class="inbadge"><span class="check">✓</span> in range <span class="room">· ${progress.detail}</span></span><span class="room">${progress.logged}</span>`;
+      } else if (st === "over") {
+        cap = `<span class="logged">${progress.logged}</span><span class="over">${progress.detail}</span>`;
+      }
+
+      el.innerHTML = `
+        <div class="row">
+          <span class="name">${label}</span>
+          <span class="nums" style="color:${rangeColor}">${lo}<span class="dash">–</span>${hi}<span class="u"> g</span></span>
+        </div>
+        <div class="track">
+          ${dot != null ? `<div class="fill" style="width:${dot}%;background:${fill}"></div>` : ""}
+          <div class="window" style="background:${bandBg};border-color:${bandEdge}"></div>
+          <div class="tick" style="left:22%;background:${bandEdge}"></div>
+          <div class="tick" style="left:78%;background:${bandEdge}"></div>
+          ${dot != null ? `<div class="dot" style="left:${dot}%;background:${fill}"></div>` : ""}
+        </div>
+        <div class="cap">${cap}</div>
+      `;
+    }
+  </script>
+</body>
+</html>

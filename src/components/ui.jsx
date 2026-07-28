@@ -3,6 +3,9 @@ import { T, F, FD } from "../theme/tokens";
 import { Fonts } from "../theme/Fonts";
 import { useAuth } from "../auth/useAuth.jsx";
 import { PATHS } from "../routing";
+import { rangeState, formatRangeProgress } from "../utils/rangeProgress";
+
+export { rangeState } from "../utils/rangeProgress";
 
 /* ------------------------------------------------------------------ */
 /*  Building blocks (defined OUTSIDE the app so inputs keep focus)     */
@@ -52,14 +55,6 @@ export const RANGE_WIDTH = 56;
 
 const SAGE_DEEP = "#3E5A46";
 
-/** empty | under | in | over — sage only inside Callie's lo–hi. */
-export function rangeState(eaten, lo, hi) {
-  if (typeof eaten !== "number" || eaten <= 0) return "empty";
-  if (eaten < lo) return "under";
-  if (eaten <= hi) return "in";
-  return "over";
-}
-
 function rangeDotPos(eaten, lo, hi) {
   if (typeof eaten !== "number" || eaten <= 0) return null;
   const pos = eaten <= lo
@@ -70,6 +65,7 @@ function rangeDotPos(eaten, lo, hi) {
 
 export const RangeBand = ({ label, lo, hi, unit = "g", eaten }) => {
   const st = rangeState(eaten, lo, hi);
+  const progress = formatRangeProgress(eaten, lo, hi, unit);
   const dot = rangeDotPos(eaten, lo, hi);
   const fillColor = st === "over" ? T.amber : st === "in" ? T.sage : T.accent;
   const bandBg = st === "in" ? T.sageSoft : T.accentSoft;
@@ -108,13 +104,13 @@ export const RangeBand = ({ label, lo, hi, unit = "g", eaten }) => {
             <span style={{ color: T.inkSoft }}>active day → aim high</span>
           </>
         )}
-        {st === "under" && (
+        {st === "under" && progress && (
           <>
-            <span />
-            <span style={{ fontWeight: 700, color: T.ink }}>logged: {Math.round(eaten)}{unit}</span>
+            <span style={{ fontWeight: 700, color: T.inkSoft }}>{progress.logged}</span>
+            <span style={{ fontWeight: 700, color: T.ink }}>{progress.detail}</span>
           </>
         )}
-        {st === "in" && (
+        {st === "in" && progress && (
           <>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700, color: T.sage }}>
               <span style={{
@@ -122,16 +118,15 @@ export const RangeBand = ({ label, lo, hi, unit = "g", eaten }) => {
                 fontSize: 9.5, display: "inline-flex", alignItems: "center", justifyContent: "center",
               }}>✓</span>
               in range
+              <span style={{ color: SAGE_DEEP, fontWeight: 700 }}> · {progress.detail}</span>
             </span>
-            <span style={{ fontWeight: 700, color: SAGE_DEEP }}>logged: {Math.round(eaten)}{unit}</span>
+            <span style={{ fontWeight: 700, color: SAGE_DEEP }}>{progress.logged}</span>
           </>
         )}
-        {st === "over" && (
+        {st === "over" && progress && (
           <>
-            <span />
-            <span style={{ fontWeight: 700, color: T.amber }}>
-              logged: {Math.round(eaten)}{unit} · {Math.round(eaten - hi)}{unit} over
-            </span>
+            <span style={{ fontWeight: 700, color: T.inkSoft }}>{progress.logged}</span>
+            <span style={{ fontWeight: 700, color: T.amber }}>{progress.detail}</span>
           </>
         )}
       </div>

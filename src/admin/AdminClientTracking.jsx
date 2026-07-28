@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card, RangeBand, rangeState } from "../components/ui";
+import { formatRangeProgress } from "../utils/rangeProgress";
 import { db } from "../db/db";
 import {
   addDaysIso,
@@ -140,6 +141,7 @@ export function AdminClientTracking({ client }) {
   const calLo = Number(macros.cal) || 0;
   const calHi = calLo + 150;
   const calSt = rangeState(totals.cal, calLo, calHi);
+  const calProgress = formatRangeProgress(totals.cal, calLo, calHi, " cal");
 
   const changeWeek = (dir) => {
     const next = addDaysIso(weekStart, 7 * dir);
@@ -248,6 +250,7 @@ export function AdminClientTracking({ client }) {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
+          gap: 10,
         }}
         >
           <span style={{
@@ -256,14 +259,15 @@ export function AdminClientTracking({ client }) {
             textTransform: "uppercase",
             letterSpacing: 0.4,
             color: calSt === "over" ? T.amber : calSt === "in" ? T.sage : T.inkSoft,
+            lineHeight: 1.35,
           }}
           >
-            {calSt === "empty" && "Calories land around"}
-            {calSt === "under" && <>Calories · {Math.round(totals.cal)}</>}
-            {calSt === "in" && <>Calories · {Math.round(totals.cal)} · ✓</>}
-            {calSt === "over" && <>Calories · {Math.round(totals.cal)} · {Math.round(totals.cal - calHi)} over</>}
+            {!calProgress && "Calories land around"}
+            {calProgress?.state === "under" && <>Calories · {Math.round(totals.cal)} · {calProgress.detail}</>}
+            {calProgress?.state === "in" && <>Calories · {Math.round(totals.cal)} · ✓ · {calProgress.detail}</>}
+            {calProgress?.state === "over" && <>Calories · {Math.round(totals.cal)} · {calProgress.detail}</>}
           </span>
-          <span style={{ fontFamily: FD, fontSize: 22, color: calSt === "in" ? "#3E5A46" : T.ink }}>
+          <span style={{ fontFamily: FD, fontSize: 22, color: calSt === "in" ? "#3E5A46" : T.ink, flexShrink: 0 }}>
             {calLo}–{calHi}
           </span>
         </div>
