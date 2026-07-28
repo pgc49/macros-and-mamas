@@ -33,6 +33,7 @@ import { ClientApp } from "./views/ClientApp";
 import { Shell } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
+import { isStandaloneDisplay, registerMessageServiceWorker, syncAppBadge } from "./lib/push";
 
 /* Admin is a separate chunk — never loaded on customer marketing/dashboard paths. */
 const AdminPortal = lazy(() =>
@@ -60,6 +61,23 @@ export default function App() {
     return ["today", "meals", "messages", "progress"].includes(q) ? q : "today";
   });
   const [unreadMessages, setUnreadMessages] = useState(0);
+
+  // Home Screen icon badge mirrors unread (iOS 16.4+ / supported browsers).
+  useEffect(() => {
+    if (!user?.id) {
+      syncAppBadge(0);
+      return;
+    }
+    syncAppBadge(unreadMessages);
+  }, [user?.id, unreadMessages]);
+
+  // Keep the push SW registered in standalone so badge updates on push work.
+  useEffect(() => {
+    if (!user?.id || !isStandaloneDisplay()) return undefined;
+    registerMessageServiceWorker();
+    return undefined;
+  }, [user?.id]);
+
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState(() => ({ ...EMPTY_PROFILE }));
   const [macros, setMacros] = useState(null);

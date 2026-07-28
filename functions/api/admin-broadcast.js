@@ -40,10 +40,12 @@ export async function onRequestPost({ request, env }) {
       if (!row?.id) continue;
       messages += 1;
 
+      const unreadCount = await countUnreadForMama(env, clientId);
       const n = await sendPushToProfile(env, clientId, {
         title: "Message from Callie",
         body: preview || "Open Messages in the app",
         url: "/dashboard?tab=messages",
+        unreadCount: unreadCount || 1,
       });
       pushSent += n;
       if (n > 0) continue;
@@ -137,12 +139,36 @@ async function sendPushToProfile(env, profileId, payload) {
     title: payload.title,
     body: payload.body,
     url: payload.url,
+    unreadCount: payload.unreadCount,
   });
   if (!result.ok) {
     console.warn("send-push edge failed", result);
     return 0;
   }
   return Number(result.data?.sent) || 0;
+}
+
+async function countUnreadForMama(env, profileId) {
+  if (!profileId) return 0;
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const qs = `select=id&client_id=eq.${encodeURIComponent(profileId)}&read_at=is.null&deleted_at=is.null&sender_id=neq.${encodeURIComponent(profileId)}`;
+  try {
+    const resp = await fetch(`${base}/rest/v1/messages?${qs}`, {
+      method: "HEAD",
+      headers: {
+        apikey: key,
+        authorization: `Bearer ${key}`,
+        Prefer: "count=exact",
+      },
+    });
+    const range = resp.headers.get("content-range") || "";
+    const m = range.match(/\/(\d+)\s*$/);
+    return m ? Math.max(0, Number(m[1]) || 0) : 0;
+  } catch (e) {
+    console.warn("countUnreadForMama failed", e);
+    return 0;
+  }
 }
 
 async function isAdmin(env, userId) {

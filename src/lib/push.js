@@ -89,3 +89,36 @@ export function notificationPermission() {
   if (typeof Notification === "undefined") return "unsupported";
   return Notification.permission;
 }
+
+/** Home Screen icon badge (iOS 16.4+ standalone / supported browsers). */
+export function badgingSupported() {
+  return typeof navigator !== "undefined"
+    && (typeof navigator.setAppBadge === "function" || typeof navigator.clearAppBadge === "function");
+}
+
+/**
+ * Sync the Home Screen app-icon badge with unread message count.
+ * Safe no-op when badging isn't available.
+ */
+export async function syncAppBadge(unreadCount) {
+  const n = Math.max(0, Math.floor(Number(unreadCount) || 0));
+  try {
+    if (typeof navigator !== "undefined") {
+      if (n > 0 && typeof navigator.setAppBadge === "function") {
+        await navigator.setAppBadge(n);
+      } else if (typeof navigator.clearAppBadge === "function") {
+        await navigator.clearAppBadge();
+      }
+    }
+  } catch (e) {
+    console.warn("setAppBadge failed", e);
+  }
+  try {
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.ready.catch(() => null);
+      reg?.active?.postMessage({ type: "SET_APP_BADGE", unreadCount: n });
+    }
+  } catch {
+    /* ignore */
+  }
+}
