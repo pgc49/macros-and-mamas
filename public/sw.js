@@ -8,7 +8,7 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  let data = { title: "Macros and Mamas", body: "New message from Callie", url: "/dashboard?tab=messages" };
+  let data = { title: "Message from Callie", body: "Open Messages", url: "/dashboard?tab=messages" };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch {
@@ -19,8 +19,8 @@ self.addEventListener("push", (event) => {
     }
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || "Macros and Mamas", {
-      body: data.body || "New message",
+    self.registration.showNotification(data.title || "Message from Callie", {
+      body: data.body || "Open Messages",
       icon: "/icon-192-v6.png",
       badge: "/icon-192-v6.png",
       data: { url: data.url || "/dashboard?tab=messages" },

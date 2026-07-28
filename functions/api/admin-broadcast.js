@@ -41,7 +41,7 @@ export async function onRequestPost({ request, env }) {
       messages += 1;
 
       const n = await sendPushToProfile(env, clientId, {
-        title: "Update from Callie",
+        title: "Message from Callie",
         body: preview || "Open Messages in the app",
         url: "/dashboard?tab=messages",
       });
