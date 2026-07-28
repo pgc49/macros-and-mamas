@@ -1,5 +1,5 @@
 /* Service worker — web push + Home Screen icon badge (iOS 16.4+ / Android). */
-/* v7 — app badge support */
+/* v8 — title is sender name only (iOS already shows from Macros & Mamas) */
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -29,7 +29,7 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  let data = { title: "Message from Callie", body: "Open Messages", url: "/dashboard?tab=messages" };
+  let data = { title: "Callie", body: "Open Messages", url: "/dashboard?tab=messages" };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch {
@@ -44,7 +44,7 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     Promise.all([
-      self.registration.showNotification(data.title || "Message from Callie", {
+      self.registration.showNotification(data.title || "Callie", {
         body: data.body || "Open Messages",
         icon: "/icon-192-v6.png",
         badge: "/icon-192-v6.png",

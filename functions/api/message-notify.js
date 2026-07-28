@@ -53,7 +53,7 @@ export async function onRequestPost({ request, env }) {
         if (coachId === msg.sender_id) continue;
         const unreadCount = await countUnreadForProfile(env, coachId, { asAdmin: true });
         pushSent += await sendPushToProfile(env, coachId, {
-          title: `Message from ${firstName(client.name) || "Mama"}`,
+          title: firstName(client.name) || "Mama",
           body: preview || "Open Messages in admin",
           url: `/admin?tab=messages&client=${encodeURIComponent(msg.client_id)}`,
           unreadCount: unreadCount || 1,
@@ -90,7 +90,7 @@ export async function onRequestPost({ request, env }) {
       if (msg.client_id !== msg.sender_id) {
         const unreadCount = await countUnreadForProfile(env, msg.client_id, { asAdmin: false });
         pushSent = await sendPushToProfile(env, msg.client_id, {
-          title: "Message from Callie",
+          title: "Callie",
           body: preview || "Open Messages in the app",
           url: "/dashboard?tab=messages",
           unreadCount: unreadCount || 1,
@@ -138,7 +138,7 @@ export async function onRequestPost({ request, env }) {
       for (const adminId of recipients) {
         const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
         const n = await sendPushToProfile(env, adminId, {
-          title: `Message from ${firstName(sender.name) || "Admin"}`,
+          title: firstName(sender.name) || "Admin",
           body: preview || "Open Messages in admin",
           url: "/admin?tab=messages",
           unreadCount: unreadCount || 1,
