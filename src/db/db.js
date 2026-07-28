@@ -1163,7 +1163,7 @@ export const db = {
     if (!clientId) return [];
     const { data, error } = await supabase
       .from("messages")
-      .select("id, client_id, sender_id, body, created_at, read_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .eq("client_id", clientId)
       .order("created_at", { ascending: true })
       .limit(Math.min(200, Math.max(1, limit)));
@@ -1195,7 +1195,7 @@ export const db = {
           }
           : {}),
       })
-      .select("id, client_id, sender_id, body, created_at, read_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .single();
     if (error) throw error;
     try {
@@ -1218,6 +1218,44 @@ export const db = {
     return hydrated || data;
   },
 
+  async editMessage(messageId, body) {
+    const uid = await requireUserId();
+    if (!messageId) throw new Error("message required");
+    const text = String(body || "").trim().slice(0, 2000);
+    if (text.length < 1) throw new Error("Message is empty");
+    const { data, error } = await supabase
+      .from("messages")
+      .update({
+        body: text,
+        edited_at: new Date().toISOString(),
+      })
+      .eq("id", messageId)
+      .eq("sender_id", uid)
+      .is("deleted_at", null)
+      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .single();
+    if (error) throw error;
+    const [hydrated] = await hydrateMessageAttachments([data]);
+    return hydrated || data;
+  },
+
+  async deleteMessage(messageId) {
+    const uid = await requireUserId();
+    if (!messageId) throw new Error("message required");
+    const { data, error } = await supabase
+      .from("messages")
+      .update({
+        deleted_at: new Date().toISOString(),
+      })
+      .eq("id", messageId)
+      .eq("sender_id", uid)
+      .is("deleted_at", null)
+      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   async markMessagesRead(clientId, readerId) {
     if (!clientId || !readerId) return;
     const { error } = await supabase
@@ -1225,6 +1263,7 @@ export const db = {
       .update({ read_at: new Date().toISOString() })
       .eq("client_id", clientId)
       .is("read_at", null)
+      .is("deleted_at", null)
       .neq("sender_id", readerId);
     if (error) console.warn("markMessagesRead failed", error);
   },
@@ -1236,6 +1275,7 @@ export const db = {
       .select("id", { count: "exact", head: true })
       .eq("client_id", clientId)
       .is("read_at", null)
+      .is("deleted_at", null)
       .neq("sender_id", readerId);
     if (error) {
       console.warn("countUnreadMessages failed", error);
@@ -1247,7 +1287,7 @@ export const db = {
   async loadMessageInbox(readerId = null) {
     const { data: msgs, error } = await supabase
       .from("messages")
-      .select("id, client_id, sender_id, body, created_at, read_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .order("created_at", { ascending: false })
       .limit(500);
     if (error) throw error;
@@ -1261,8 +1301,11 @@ export const db = {
         });
       }
       const row = byClient.get(m.client_id);
-      // Unread for the reader = someone else sent it and it's not read yet
-      if (!m.read_at && (!readerId || m.sender_id !== readerId)) {
+      // Prefer a non-deleted last preview when possible
+      if (row.lastMessage?.deleted_at && !m.deleted_at) {
+        row.lastMessage = m;
+      }
+      if (!m.deleted_at && !m.read_at && (!readerId || m.sender_id !== readerId)) {
         row.unread += 1;
       }
     }

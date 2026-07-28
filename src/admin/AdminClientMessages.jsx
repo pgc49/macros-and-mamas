@@ -70,6 +70,18 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     }
   };
 
+  const edit = async (messageId, body) => {
+    const row = await db.editMessage(messageId, body);
+    setMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+    onActivity?.();
+  };
+
+  const remove = async (messageId) => {
+    const row = await db.deleteMessage(messageId);
+    setMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row, attachmentUrl: null } : m)));
+    onActivity?.();
+  };
+
   const markRead = async () => {
     if (!clientId || !adminUserId) return;
     await db.markMessagesRead(clientId, adminUserId);
@@ -94,6 +106,8 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
         selfId={adminUserId}
         busy={busy}
         onSend={send}
+        onEdit={edit}
+        onDelete={remove}
         onMarkRead={markRead}
         showPushPrompt={false}
         compact

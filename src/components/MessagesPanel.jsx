@@ -14,7 +14,7 @@ export function MessagesPanel({ userId, onUnreadChange }) {
     try {
       const list = await db.loadMessages(userId);
       setMessages(list);
-      const unread = list.filter((m) => !m.read_at && m.sender_id !== userId).length;
+      const unread = list.filter((m) => !m.deleted_at && !m.read_at && m.sender_id !== userId).length;
       onUnreadChange?.(unread);
     } catch (e) {
       console.error(e);
@@ -61,12 +61,22 @@ export function MessagesPanel({ userId, onUnreadChange }) {
     }
   };
 
+  const edit = async (messageId, body) => {
+    const row = await db.editMessage(messageId, body);
+    setMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+  };
+
+  const remove = async (messageId) => {
+    const row = await db.deleteMessage(messageId);
+    setMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row, attachmentUrl: null } : m)));
+  };
+
   const markRead = async () => {
     if (!userId) return;
     await db.markMessagesRead(userId, userId);
     onUnreadChange?.(0);
     setMessages((list) => list.map((m) => (
-      m.sender_id === userId || m.read_at
+      m.sender_id === userId || m.read_at || m.deleted_at
         ? m
         : { ...m, read_at: m.read_at || new Date().toISOString() }
     )));
@@ -84,6 +94,8 @@ export function MessagesPanel({ userId, onUnreadChange }) {
         selfId={userId}
         busy={busy}
         onSend={send}
+        onEdit={edit}
+        onDelete={remove}
         onMarkRead={markRead}
         showPushPrompt
         onSavePushSubscription={(sub) => db.savePushSubscription(sub)}

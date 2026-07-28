@@ -22,6 +22,8 @@ export function MessagesThread({
   selfId,
   busy = false,
   onSend,
+  onEdit,
+  onDelete,
   onMarkRead,
   showPushPrompt = false,
   onSavePushSubscription,
@@ -33,6 +35,9 @@ export function MessagesThread({
   const [attachError, setAttachError] = useState("");
   const [pushMsg, setPushMsg] = useState("");
   const [pushBusy, setPushBusy] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
   const bottomRef = useRef(null);
   const listRef = useRef(null);
   const fileRef = useRef(null);
@@ -144,6 +149,54 @@ export function MessagesThread({
 
   const canSend = !busy && (!!draft.trim() || !!file);
 
+  const startEdit = (m) => {
+    if (!onEdit || m.deleted_at) return;
+    setEditingId(m.id);
+    setEditDraft(m.body || "");
+    setAttachError("");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+
+  const saveEdit = async () => {
+    if (!onEdit || !editingId || editBusy) return;
+    const text = editDraft.trim();
+    if (!text) {
+      setAttachError("Edited message can’t be empty.");
+      return;
+    }
+    setEditBusy(true);
+    setAttachError("");
+    try {
+      await onEdit(editingId, text);
+      cancelEdit();
+    } catch (e) {
+      console.error(e);
+      setAttachError(e.message || "Couldn’t save edit.");
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const removeMessage = async (m) => {
+    if (!onDelete || !m?.id || editBusy) return;
+    if (!window.confirm("Delete this message?")) return;
+    setEditBusy(true);
+    setAttachError("");
+    try {
+      await onDelete(m.id);
+      if (editingId === m.id) cancelEdit();
+    } catch (e) {
+      console.error(e);
+      setAttachError(e.message || "Couldn’t delete.");
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: compact ? undefined : "55vh" }}>
       {(title || subtitle) && (
@@ -202,8 +255,10 @@ export function MessagesThread({
         )}
         {messages.map((m) => {
           const mine = m.sender_id === selfId;
+          const deleted = !!m.deleted_at;
           const isImage = String(m.attachment_mime || "").startsWith("image/");
-          const hasAttach = !!m.attachment_path;
+          const hasAttach = !!m.attachment_path && !deleted;
+          const isEditing = editingId === m.id;
           return (
             <div
               key={m.id}
@@ -215,7 +270,7 @@ export function MessagesThread({
             >
               <div style={{
                 maxWidth: "85%",
-                background: mine ? T.accentSoft : T.sageSoft,
+                background: deleted ? T.track : (mine ? T.accentSoft : T.sageSoft),
                 color: T.ink,
                 borderRadius: 14,
                 padding: "10px 12px",
@@ -226,52 +281,129 @@ export function MessagesThread({
                 wordBreak: "break-word",
               }}
               >
-                {!mine && (
+                {!mine && !deleted && (
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, marginBottom: 4 }}>
                     Callie
                   </div>
                 )}
-                {hasAttach && isImage && m.attachmentUrl && (
-                  <a href={m.attachmentUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: m.body ? 8 : 0 }}>
-                    <img
-                      src={m.attachmentUrl}
-                      alt={m.attachment_name || "Attachment"}
+                {deleted ? (
+                  <div style={{ fontSize: 13.5, color: T.inkSoft, fontStyle: "italic" }}>
+                    Message deleted
+                  </div>
+                ) : isEditing ? (
+                  <div>
+                    <textarea
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value.slice(0, 2000))}
+                      rows={3}
                       style={{
-                        display: "block",
-                        maxWidth: "100%",
-                        maxHeight: 240,
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "8px 10px",
                         borderRadius: 10,
-                        objectFit: "cover",
+                        border: `1.5px solid ${T.border}`,
+                        fontFamily: F,
+                        fontSize: 14.5,
+                        resize: "vertical",
+                        color: T.ink,
+                        background: "#fff",
                       }}
                     />
-                  </a>
-                )}
-                {hasAttach && !isImage && (
-                  <a
-                    href={m.attachmentUrl || undefined}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      display: "inline-block",
-                      marginBottom: m.body ? 8 : 0,
-                      color: T.accentDeep,
-                      fontWeight: 700,
-                      fontSize: 13.5,
-                      textDecoration: "underline",
-                    }}
-                  >
-                    {m.attachment_name || "Open attachment"}
-                  </a>
-                )}
-                {hasAttach && isImage && !m.attachmentUrl && (
-                  <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: m.body ? 8 : 0 }}>
-                    Photo attached
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <Btn small onClick={saveEdit} disabled={editBusy || !editDraft.trim()}>
+                        {editBusy ? "…" : "Save"}
+                      </Btn>
+                      <Btn small ghost onClick={cancelEdit} disabled={editBusy}>Cancel</Btn>
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    {hasAttach && isImage && m.attachmentUrl && (
+                      <a href={m.attachmentUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: m.body ? 8 : 0 }}>
+                        <img
+                          src={m.attachmentUrl}
+                          alt={m.attachment_name || "Attachment"}
+                          style={{
+                            display: "block",
+                            maxWidth: "100%",
+                            maxHeight: 240,
+                            borderRadius: 10,
+                            objectFit: "cover",
+                          }}
+                        />
+                      </a>
+                    )}
+                    {hasAttach && !isImage && (
+                      <a
+                        href={m.attachmentUrl || undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          display: "inline-block",
+                          marginBottom: m.body ? 8 : 0,
+                          color: T.accentDeep,
+                          fontWeight: 700,
+                          fontSize: 13.5,
+                          textDecoration: "underline",
+                        }}
+                      >
+                        {m.attachment_name || "Open attachment"}
+                      </a>
+                    )}
+                    {hasAttach && isImage && !m.attachmentUrl && (
+                      <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: m.body ? 8 : 0 }}>
+                        Photo attached
+                      </div>
+                    )}
+                    {m.body}
+                  </>
                 )}
-                {m.body}
                 <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 6 }}>
                   {formatMsgTime(m.created_at)}
+                  {!deleted && m.edited_at ? " · edited" : ""}
                 </div>
+                {mine && !deleted && !isEditing && (onEdit || onDelete) && (
+                  <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                    {onEdit && (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(m)}
+                        disabled={editBusy || busy}
+                        style={{
+                          border: "none",
+                          background: "none",
+                          padding: 0,
+                          color: T.accentDeep,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          fontFamily: F,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button
+                        type="button"
+                        onClick={() => removeMessage(m)}
+                        disabled={editBusy || busy}
+                        style={{
+                          border: "none",
+                          background: "none",
+                          padding: 0,
+                          color: T.inkSoft,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          fontFamily: F,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );

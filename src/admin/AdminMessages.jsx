@@ -11,6 +11,7 @@ function displayName(c) {
 }
 
 function previewText(m) {
+  if (m?.deleted_at) return "Message deleted";
   const body = String(m?.body || "").replace(/\s+/g, " ").trim();
   if (body) return body;
   if (m?.attachment_path) {
@@ -116,6 +117,18 @@ export function AdminMessages({
     } finally {
       setBusy(false);
     }
+  };
+
+  const edit = async (messageId, body) => {
+    const row = await db.editMessage(messageId, body);
+    setMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+    refreshInbox();
+  };
+
+  const remove = async (messageId) => {
+    const row = await db.deleteMessage(messageId);
+    setMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row, attachmentUrl: null } : m)));
+    refreshInbox();
   };
 
   const markRead = async () => {
@@ -307,6 +320,8 @@ export function AdminMessages({
               selfId={adminUserId}
               busy={busy}
               onSend={send}
+              onEdit={edit}
+              onDelete={remove}
               onMarkRead={markRead}
               showPushPrompt
               onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
