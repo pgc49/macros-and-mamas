@@ -9,8 +9,11 @@ import {
   registerMessageServiceWorker,
 } from "../lib/push";
 
+const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
+
 /**
  * Shared chat thread UI (mama Messages tab + admin per-client thread).
+ * onSend(body, file?) — body may be empty when sending a photo/PDF alone.
  */
 export function MessagesThread({
   title = "Callie",
@@ -24,10 +27,14 @@ export function MessagesThread({
   onSavePushSubscription,
 }) {
   const [draft, setDraft] = useState("");
+  const [file, setFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [attachError, setAttachError] = useState("");
   const [pushMsg, setPushMsg] = useState("");
   const [pushBusy, setPushBusy] = useState(false);
   const bottomRef = useRef(null);
   const listRef = useRef(null);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     registerMessageServiceWorker();
@@ -41,15 +48,61 @@ export function MessagesThread({
     onMarkRead?.();
   }, [messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  const clearFile = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setFile(null);
+    setAttachError("");
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const onPickFile = (e) => {
+    const next = e.target.files?.[0] || null;
+    setAttachError("");
+    if (!next) {
+      clearFile();
+      return;
+    }
+    if (next.size > 10 * 1024 * 1024) {
+      setAttachError("That file is over 10 MB — try a smaller photo.");
+      e.target.value = "";
+      return;
+    }
+    const mime = String(next.type || "").toLowerCase();
+    const ok = mime.startsWith("image/") || mime === "application/pdf";
+    if (!ok) {
+      setAttachError("Photos or a PDF only.");
+      e.target.value = "";
+      return;
+    }
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setFile(next);
+    setPreviewUrl(mime.startsWith("image/") ? URL.createObjectURL(next) : null);
+  };
+
   const send = async () => {
     const text = draft.trim();
-    if (!text || busy || !onSend) return;
+    if ((!text && !file) || busy || !onSend) return;
+    const keptText = text;
+    const keptFile = file;
     setDraft("");
+    clearFile();
     try {
-      await onSend(text);
+      await onSend(keptText, keptFile);
     } catch (e) {
       console.error(e);
-      setDraft(text);
+      setDraft(keptText);
+      if (keptFile) {
+        setFile(keptFile);
+        if (String(keptFile.type || "").startsWith("image/")) {
+          setPreviewUrl(URL.createObjectURL(keptFile));
+        }
+      }
+      setAttachError(e.message || "Couldn’t send.");
     }
   };
 
@@ -77,6 +130,8 @@ export function MessagesThread({
   const needPushPrompt = showPushPrompt
     && pushSupported()
     && notificationPermission() !== "granted";
+
+  const canSend = !busy && (!!draft.trim() || !!file);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "55vh" }}>
@@ -125,11 +180,13 @@ export function MessagesThread({
       >
         {!messages.length && (
           <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, padding: "20px 8px", textAlign: "center" }}>
-            No messages yet — say hi. Callie will reply here.
+            No messages yet — say hi or send a photo. Callie will reply here.
           </div>
         )}
         {messages.map((m) => {
           const mine = m.sender_id === selfId;
+          const isImage = String(m.attachment_mime || "").startsWith("image/");
+          const hasAttach = !!m.attachment_path;
           return (
             <div
               key={m.id}
@@ -157,6 +214,43 @@ export function MessagesThread({
                     Callie
                   </div>
                 )}
+                {hasAttach && isImage && m.attachmentUrl && (
+                  <a href={m.attachmentUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: m.body ? 8 : 0 }}>
+                    <img
+                      src={m.attachmentUrl}
+                      alt={m.attachment_name || "Attachment"}
+                      style={{
+                        display: "block",
+                        maxWidth: "100%",
+                        maxHeight: 240,
+                        borderRadius: 10,
+                        objectFit: "cover",
+                      }}
+                    />
+                  </a>
+                )}
+                {hasAttach && !isImage && (
+                  <a
+                    href={m.attachmentUrl || undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: "inline-block",
+                      marginBottom: m.body ? 8 : 0,
+                      color: T.accentDeep,
+                      fontWeight: 700,
+                      fontSize: 13.5,
+                      textDecoration: "underline",
+                    }}
+                  >
+                    {m.attachment_name || "Open attachment"}
+                  </a>
+                )}
+                {hasAttach && isImage && !m.attachmentUrl && (
+                  <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: m.body ? 8 : 0 }}>
+                    Photo attached
+                  </div>
+                )}
                 {m.body}
                 <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 6 }}>
                   {formatMsgTime(m.created_at)}
@@ -168,7 +262,88 @@ export function MessagesThread({
         <div ref={bottomRef} />
       </div>
 
+      {(file || attachError) && (
+        <div style={{
+          marginTop: 10,
+          padding: "10px 12px",
+          borderRadius: 12,
+          border: `1.5px solid ${T.border}`,
+          background: "#fff",
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+        }}
+        >
+          {previewUrl && (
+            <img
+              src={previewUrl}
+              alt="Preview"
+              style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
+            />
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {attachError ? (
+              <div style={{ fontSize: 13, color: T.amber }}>{attachError}</div>
+            ) : (
+              <div style={{ fontSize: 13.5, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {file?.name || "Attachment"}
+              </div>
+            )}
+            {file && !attachError && (
+              <div style={{ fontSize: 12, color: T.inkSoft }}>Ready to send</div>
+            )}
+          </div>
+          {file && (
+            <button
+              type="button"
+              onClick={clearFile}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: T.inkSoft,
+                fontWeight: 700,
+                fontFamily: F,
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-end" }}>
+        <label
+          style={{
+            flexShrink: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            border: `1.5px solid ${T.border}`,
+            background: "#fff",
+            color: T.accentDeep,
+            fontWeight: 800,
+            fontSize: 18,
+            cursor: busy ? "default" : "pointer",
+            opacity: busy ? 0.6 : 1,
+          }}
+          title="Attach photo or PDF"
+          aria-label="Attach photo or PDF"
+        >
+          +
+          <input
+            ref={fileRef}
+            type="file"
+            accept={ACCEPT_ATTACH}
+            disabled={busy}
+            onChange={onPickFile}
+            style={{ display: "none" }}
+          />
+        </label>
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value.slice(0, 2000))}
@@ -193,7 +368,7 @@ export function MessagesThread({
             background: "#fff",
           }}
         />
-        <Btn onClick={send} disabled={busy || !draft.trim()} style={{ flexShrink: 0 }}>
+        <Btn onClick={send} disabled={!canSend} style={{ flexShrink: 0 }}>
           {busy ? "…" : "Send"}
         </Btn>
       </div>

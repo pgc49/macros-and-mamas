@@ -285,6 +285,75 @@ function mapCustomMeal(r) {
   };
 }
 
+const MESSAGE_ATTACHMENT_BUCKET = "message-attachments";
+const MESSAGE_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const MESSAGE_ATTACHMENT_MIME = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/gif",
+  "application/pdf",
+]);
+
+function safeAttachmentName(name) {
+  return String(name || "file")
+    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .slice(0, 80) || "file";
+}
+
+async function uploadMessageAttachment({ clientId, file }) {
+  if (!file) return null;
+  const mime = String(file.type || "").toLowerCase();
+  if (!MESSAGE_ATTACHMENT_MIME.has(mime)) {
+    throw new Error("Attachments must be a photo (JPG/PNG/WebP) or PDF.");
+  }
+  if (file.size > MESSAGE_ATTACHMENT_MAX_BYTES) {
+    throw new Error("That file is over 10 MB — try a smaller photo.");
+  }
+  const id = (typeof crypto !== "undefined" && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const path = `${clientId}/${id}-${safeAttachmentName(file.name)}`;
+  const { error } = await supabase.storage
+    .from(MESSAGE_ATTACHMENT_BUCKET)
+    .upload(path, file, {
+      contentType: mime,
+      upsert: false,
+    });
+  if (error) {
+    console.error("message attachment upload failed", error);
+    throw new Error("Couldn’t upload that attachment — try again.");
+  }
+  return {
+    path,
+    name: String(file.name || "attachment").slice(0, 120),
+    mime,
+    bytes: Number(file.size) || null,
+  };
+}
+
+async function hydrateMessageAttachments(rows) {
+  const list = rows || [];
+  return Promise.all(list.map(async (m) => {
+    if (!m?.attachment_path) return m;
+    try {
+      const { data, error } = await supabase.storage
+        .from(MESSAGE_ATTACHMENT_BUCKET)
+        .createSignedUrl(m.attachment_path, 60 * 60);
+      if (error) {
+        console.warn("message attachment signed url failed", error);
+        return m;
+      }
+      return { ...m, attachmentUrl: data?.signedUrl || null };
+    } catch (e) {
+      console.warn("message attachment signed url failed", e);
+      return m;
+    }
+  }));
+}
+
 export const db = {
   async loadClientState() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -1094,27 +1163,39 @@ export const db = {
     if (!clientId) return [];
     const { data, error } = await supabase
       .from("messages")
-      .select("id, client_id, sender_id, body, created_at, read_at")
+      .select("id, client_id, sender_id, body, created_at, read_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .eq("client_id", clientId)
       .order("created_at", { ascending: true })
       .limit(Math.min(200, Math.max(1, limit)));
     if (error) throw error;
-    return data || [];
+    return hydrateMessageAttachments(data || []);
   },
 
-  async sendMessage({ clientId, body }) {
+  async sendMessage({ clientId, body, file = null }) {
     const uid = await requireUserId();
     if (!clientId) throw new Error("client required");
     const text = String(body || "").trim().slice(0, 2000);
-    if (text.length < 1) throw new Error("Message is empty");
+    let attachment = null;
+    if (file) {
+      attachment = await uploadMessageAttachment({ clientId, file });
+    }
+    if (text.length < 1 && !attachment) throw new Error("Message is empty");
     const { data, error } = await supabase
       .from("messages")
       .insert({
         client_id: clientId,
         sender_id: uid,
         body: text,
+        ...(attachment
+          ? {
+            attachment_path: attachment.path,
+            attachment_name: attachment.name,
+            attachment_mime: attachment.mime,
+            attachment_bytes: attachment.bytes,
+          }
+          : {}),
       })
-      .select("id, client_id, sender_id, body, created_at, read_at")
+      .select("id, client_id, sender_id, body, created_at, read_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .single();
     if (error) throw error;
     try {
@@ -1133,7 +1214,8 @@ export const db = {
     } catch (e) {
       console.warn("message-notify invoke failed", e);
     }
-    return data;
+    const [hydrated] = await hydrateMessageAttachments([data]);
+    return hydrated || data;
   },
 
   async markMessagesRead(clientId, readerId) {
@@ -1165,7 +1247,7 @@ export const db = {
   async loadMessageInbox(readerId = null) {
     const { data: msgs, error } = await supabase
       .from("messages")
-      .select("id, client_id, sender_id, body, created_at, read_at")
+      .select("id, client_id, sender_id, body, created_at, read_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .order("created_at", { ascending: false })
       .limit(500);
     if (error) throw error;

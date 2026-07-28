@@ -10,6 +10,16 @@ function displayName(c) {
   return fullName(c) || c.name || c.email || "Mama";
 }
 
+function previewText(m) {
+  const body = String(m?.body || "").replace(/\s+/g, " ").trim();
+  if (body) return body;
+  if (m?.attachment_path) {
+    if (String(m.attachment_mime || "").startsWith("image/")) return "Sent a photo";
+    return m.attachment_name ? `Sent ${m.attachment_name}` : "Sent an attachment";
+  }
+  return "";
+}
+
 /**
  * Admin Messages inbox — list of mama threads + 1:1 reply.
  * Admins (Callie / Patrick) are also startable so you can DM each other to test.
@@ -91,12 +101,12 @@ export function AdminMessages({
   const activeClient = activeId ? clientMap.get(activeId) : null;
   const activeName = displayName(activeClient);
 
-  const send = async (body) => {
+  const send = async (body, file = null) => {
     if (!activeId) return;
     setBusy(true);
     setError("");
     try {
-      const row = await db.sendMessage({ clientId: activeId, body });
+      const row = await db.sendMessage({ clientId: activeId, body, file });
       setMessages((list) => [...list, row]);
       refreshInbox();
     } catch (e) {
@@ -215,7 +225,7 @@ export function AdminMessages({
                   whiteSpace: "nowrap",
                 }}
                 >
-                  {row.lastMessage?.body || ""}
+                  {previewText(row.lastMessage)}
                 </div>
               </button>
             );

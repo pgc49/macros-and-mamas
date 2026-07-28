@@ -23,7 +23,11 @@ export async function onRequestPost({ request, env }) {
     }
 
     const fromMama = msg.sender_id === msg.client_id;
-    const preview = String(msg.body || "").replace(/\s+/g, " ").trim().slice(0, 140);
+    const bodyPreview = String(msg.body || "").replace(/\s+/g, " ").trim().slice(0, 140);
+    const preview = bodyPreview
+      || (msg.attachment_path
+        ? (String(msg.attachment_mime || "").startsWith("image/") ? "Sent a photo" : "Sent an attachment")
+        : "");
 
     let pushSent = 0;
     let emailSent = false;

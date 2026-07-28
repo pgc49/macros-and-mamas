@@ -46,11 +46,11 @@ export function MessagesPanel({ userId, onUnreadChange }) {
     };
   }, [userId, refresh]);
 
-  const send = async (body) => {
+  const send = async (body, file = null) => {
     setBusy(true);
     setError("");
     try {
-      const row = await db.sendMessage({ clientId: userId, body });
+      const row = await db.sendMessage({ clientId: userId, body, file });
       setMessages((list) => [...list, row]);
     } catch (e) {
       console.error(e);
