@@ -51,10 +51,12 @@ export async function onRequestPost({ request, env }) {
       const coachIds = await listCallieAdminIds(env);
       for (const coachId of coachIds) {
         if (coachId === msg.sender_id) continue;
+        const unreadCount = await countUnreadForProfile(env, coachId, { asAdmin: true });
         pushSent += await sendPushToProfile(env, coachId, {
           title: `Message from ${firstName(client.name) || "Mama"}`,
           body: preview || "Open Messages in admin",
           url: `/admin?tab=messages&client=${encodeURIComponent(msg.client_id)}`,
+          unreadCount: unreadCount || 1,
         });
       }
       const edge = await invokeEdgeFunction(env, "notify-callie", {
@@ -86,10 +88,12 @@ export async function onRequestPost({ request, env }) {
       // Coach/admin → that mama only (never other admins, never other mamas).
       route = "admin_to_mama";
       if (msg.client_id !== msg.sender_id) {
+        const unreadCount = await countUnreadForProfile(env, msg.client_id, { asAdmin: false });
         pushSent = await sendPushToProfile(env, msg.client_id, {
           title: "Message from Callie",
           body: preview || "Open Messages in the app",
           url: "/dashboard?tab=messages",
+          unreadCount: unreadCount || 1,
         });
         if (pushSent === 0) {
           const contact = await loadUserContact(env, msg.client_id);
@@ -132,10 +136,12 @@ export async function onRequestPost({ request, env }) {
       const adminIds = await listAdminIds(env);
       const recipients = adminIds.filter((id) => id !== msg.sender_id);
       for (const adminId of recipients) {
+        const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
         const n = await sendPushToProfile(env, adminId, {
           title: `Message from ${firstName(sender.name) || "Admin"}`,
           body: preview || "Open Messages in admin",
           url: "/admin?tab=messages",
+          unreadCount: unreadCount || 1,
         });
         pushSent += n;
         if (n > 0) continue;
@@ -208,12 +214,39 @@ async function sendPushToProfile(env, profileId, payload) {
     title: payload.title,
     body: payload.body,
     url: payload.url,
+    unreadCount: payload.unreadCount,
   });
   if (!result.ok) {
     console.warn("send-push edge failed", result);
     return 0;
   }
   return Number(result.data?.sent) || 0;
+}
+
+/** Unread messages waiting for this profile (not sent by them). */
+async function countUnreadForProfile(env, profileId, { asAdmin }) {
+  if (!profileId) return 0;
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const qs = asAdmin
+    ? `select=id&read_at=is.null&deleted_at=is.null&sender_id=neq.${encodeURIComponent(profileId)}`
+    : `select=id&client_id=eq.${encodeURIComponent(profileId)}&read_at=is.null&deleted_at=is.null&sender_id=neq.${encodeURIComponent(profileId)}`;
+  try {
+    const resp = await fetch(`${base}/rest/v1/messages?${qs}`, {
+      method: "HEAD",
+      headers: {
+        apikey: key,
+        authorization: `Bearer ${key}`,
+        Prefer: "count=exact",
+      },
+    });
+    const range = resp.headers.get("content-range") || "";
+    const m = range.match(/\/(\d+)\s*$/);
+    return m ? Math.max(0, Number(m[1]) || 0) : 0;
+  } catch (e) {
+    console.warn("countUnreadForProfile failed", e);
+    return 0;
+  }
 }
 
 async function sendMamaEmailDirect(env, { email, name, preview }) {

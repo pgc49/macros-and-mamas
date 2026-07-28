@@ -28,6 +28,7 @@ import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 import { CONFIG } from "../config";
 import { useAuth } from "../auth/useAuth.jsx";
+import { syncAppBadge } from "../lib/push";
 
 const STAGE_LABEL = {
   signed_up: "Signed up — unpaid",
@@ -277,6 +278,10 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   const [progressError, setProgressError] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const debounceRef = useRef({});
+
+  useEffect(() => {
+    syncAppBadge(unreadMessages);
+  }, [unreadMessages]);
 
   const all = roster || [];
   const nonAdmin = useMemo(() => all.filter((c) => c.role !== "admin"), [all]);

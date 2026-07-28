@@ -73,7 +73,7 @@ serve(async (req) => {
       return jsonResponse({ ok: false, error: "missing VAPID keys", sent: 0 }, 503);
     }
 
-    const { profileId, title, body, url } = await req.json();
+    const { profileId, title, body, url, unreadCount } = await req.json();
     if (!profileId) return jsonResponse({ error: "profileId required" }, 400);
 
     webpush.setVapidDetails(vapid.subject, vapid.pub, vapid.priv);
@@ -87,6 +87,13 @@ serve(async (req) => {
       return jsonResponse({ error: error.message }, 500);
     }
 
+    const payload = JSON.stringify({
+      title: title || "Message from Callie",
+      body: body || "Open Messages",
+      url: url || "/dashboard?tab=messages",
+      ...(unreadCount != null ? { unreadCount: Number(unreadCount) || 0 } : {}),
+    });
+
     let sent = 0;
     const failures: { status?: number; message?: string }[] = [];
     for (const sub of subs || []) {
@@ -96,11 +103,7 @@ serve(async (req) => {
             endpoint: sub.endpoint,
             keys: { p256dh: sub.p256dh, auth: sub.auth },
           },
-          JSON.stringify({
-            title: title || "Message from Callie",
-            body: body || "Open Messages",
-            url: url || "/dashboard?tab=messages",
-          }),
+          payload,
         );
         sent += 1;
       } catch (e) {
