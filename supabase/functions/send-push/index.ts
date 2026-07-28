@@ -97,8 +97,8 @@ serve(async (req) => {
             keys: { p256dh: sub.p256dh, auth: sub.auth },
           },
           JSON.stringify({
-            title: title || "Macros and Mamas",
-            body: body || "New message",
+            title: title || "Message from Callie",
+            body: body || "Open Messages",
             url: url || "/dashboard?tab=messages",
           }),
         );

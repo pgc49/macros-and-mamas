@@ -52,7 +52,7 @@ export async function onRequestPost({ request, env }) {
       for (const coachId of coachIds) {
         if (coachId === msg.sender_id) continue;
         pushSent += await sendPushToProfile(env, coachId, {
-          title: `Message from ${firstName(client.name) || "a mama"}`,
+          title: `Message from ${firstName(client.name) || "Mama"}`,
           body: preview || "Open Messages in admin",
           url: `/admin?tab=messages&client=${encodeURIComponent(msg.client_id)}`,
         });
@@ -87,7 +87,7 @@ export async function onRequestPost({ request, env }) {
       route = "admin_to_mama";
       if (msg.client_id !== msg.sender_id) {
         pushSent = await sendPushToProfile(env, msg.client_id, {
-          title: "Callie messaged you",
+          title: "Message from Callie",
           body: preview || "Open Messages in the app",
           url: "/dashboard?tab=messages",
         });
