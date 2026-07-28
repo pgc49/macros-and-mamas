@@ -131,7 +131,9 @@ export function MessagesThread({
     setPushMsg("");
     try {
       const result = await enablePushNotifications(onSavePushSubscription);
-      if (result.ok) setPushMsg("Notifications on — you’ll get a ping for new messages.");
+      if (result.ok) {
+        setPushMsg("Notifications on. Lock your phone or leave the app — iOS won’t show a banner while you’re inside it.");
+      }
       else if (result.reason === "not_standalone") {
         setPushMsg("Open Macros and Mamas from your Home Screen icon first, then tap again.");
       } else if (result.reason === "denied") {

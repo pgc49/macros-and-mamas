@@ -47,6 +47,18 @@
     <meta name="twitter:image" content="https://www.macrosandmamas.com/og-image.jpg?v=1" />
   </head>
   <body>
+    <style>
+      /* Keep Home Screen PWA content above the iOS home indicator */
+      html, body, #root {
+        min-height: 100%;
+        min-height: 100dvh;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        background: #FBF7F2;
+      }
+    </style>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
