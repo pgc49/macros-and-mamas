@@ -25,6 +25,7 @@ export function MessagesThread({
   onMarkRead,
   showPushPrompt = false,
   onSavePushSubscription,
+  compact = false,
 }) {
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState(null);
@@ -144,11 +145,17 @@ export function MessagesThread({
   const canSend = !busy && (!!draft.trim() || !!file);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "55vh" }}>
-      <div style={{ marginBottom: 10 }}>
-        <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>{title}</h2>
-        <p style={{ fontSize: 13.5, color: T.inkSoft, margin: 0, lineHeight: 1.45 }}>{subtitle}</p>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: compact ? undefined : "55vh" }}>
+      {(title || subtitle) && (
+        <div style={{ marginBottom: 10 }}>
+          {title ? (
+            <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: compact ? 20 : 26, margin: "6px 0 2px" }}>{title}</h2>
+          ) : null}
+          {subtitle ? (
+            <p style={{ fontSize: 13.5, color: T.inkSoft, margin: 0, lineHeight: 1.45 }}>{subtitle}</p>
+          ) : null}
+        </div>
+      )}
 
       {needPushPrompt && (
         <div style={{
@@ -184,8 +191,8 @@ export function MessagesThread({
           border: `1.5px solid ${T.border}`,
           borderRadius: 14,
           padding: 12,
-          minHeight: 280,
-          maxHeight: "52vh",
+          minHeight: compact ? 180 : 280,
+          maxHeight: compact ? "36vh" : "52vh",
         }}
       >
         {!messages.length && (

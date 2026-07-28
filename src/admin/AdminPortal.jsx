@@ -8,7 +8,7 @@
  * 3. Wrap new admin surfaces in ErrorBoundary so a coach-UI bug cannot blank
  *    the customer SPA.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid,
@@ -23,6 +23,7 @@ import { ProgressCharts } from "../components/ProgressCharts";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AdminMessages } from "./AdminMessages";
 import { AdminClientTracking } from "./AdminClientTracking";
+import { AdminClientMessages } from "./AdminClientMessages";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 import { CONFIG } from "../config";
@@ -281,32 +282,37 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   const nonAdmin = useMemo(() => all.filter((c) => c.role !== "admin"), [all]);
 
   // Keep unread count fresh on Overview (and elsewhere) so Callie sees it without opening Messages.
+  const refreshUnread = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const rows = await db.loadMessageInbox(user.id);
+      setUnreadMessages(rows.reduce((n, r) => n + (r.unread || 0), 0));
+    } catch (e) {
+      console.warn("admin unread poll failed", e);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (!user?.id) return undefined;
     let cancelled = false;
-    const refreshUnread = async () => {
-      try {
-        const rows = await db.loadMessageInbox(user.id);
-        if (cancelled) return;
-        setUnreadMessages(rows.reduce((n, r) => n + (r.unread || 0), 0));
-      } catch (e) {
-        console.warn("admin unread poll failed", e);
-      }
+    const run = async () => {
+      if (cancelled) return;
+      await refreshUnread();
     };
-    refreshUnread();
+    run();
     const channel = supabase
       .channel("messages-admin-unread-badge")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages" },
-        () => { refreshUnread(); },
+        () => { run(); },
       )
       .subscribe();
     return () => {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, refreshUnread]);
 
   const computedStats = useMemo(() => {
     if (stats) return stats;
@@ -584,6 +590,18 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             </>
           )}
         </Card>
+
+        <ErrorBoundary
+          name="AdminClientMessages"
+          title="Messages couldn’t load"
+          message="Her profile still works — open the Messages tab or refresh to try again."
+        >
+          <AdminClientMessages
+            client={sel}
+            adminUserId={user?.id}
+            onActivity={refreshUnread}
+          />
+        </ErrorBoundary>
 
         {sel.macros && (sel.status === "active" || sel.stage === "active" || sel.role === "admin") && (
           <ErrorBoundary
