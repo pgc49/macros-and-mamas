@@ -35,6 +35,7 @@ export function MessagesThread({
   const bottomRef = useRef(null);
   const listRef = useRef(null);
   const fileRef = useRef(null);
+  const draftRef = useRef(null);
 
   useEffect(() => {
     registerMessageServiceWorker();
@@ -51,6 +52,15 @@ export function MessagesThread({
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
+
+  // Grow the composer with the text (up to ~6 lines), then scroll inside.
+  useEffect(() => {
+    const el = draftRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    const next = Math.min(Math.max(el.scrollHeight, 52), 160);
+    el.style.height = `${next}px`;
+  }, [draft]);
 
   const clearFile = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -345,9 +355,10 @@ export function MessagesThread({
           />
         </label>
         <textarea
+          ref={draftRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value.slice(0, 2000))}
-          rows={2}
+          rows={1}
           placeholder="Write a message…"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -363,9 +374,13 @@ export function MessagesThread({
             border: `1.5px solid ${T.border}`,
             fontFamily: F,
             fontSize: 15,
+            lineHeight: 1.4,
             resize: "none",
+            overflowY: "auto",
             color: T.ink,
             background: "#fff",
+            minHeight: 52,
+            maxHeight: 160,
           }}
         />
         <Btn onClick={send} disabled={!canSend} style={{ flexShrink: 0 }}>
