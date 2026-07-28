@@ -54,7 +54,12 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [signInNext, setSignInNext] = useState("intake"); // "intake" → create; "app" → returning
-  const [tab, setTab] = useState("today");
+  const [tab, setTab] = useState(() => {
+    if (typeof window === "undefined") return "today";
+    const q = new URLSearchParams(window.location.search).get("tab");
+    return ["today", "meals", "messages", "progress"].includes(q) ? q : "today";
+  });
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState(() => ({ ...EMPTY_PROFILE }));
   const [macros, setMacros] = useState(null);
@@ -182,6 +187,12 @@ export default function App() {
             } catch (cErr) {
               console.warn("loadCustomMeals failed", cErr);
               if (!cancelled) setCustomMeals([]);
+            }
+            try {
+              const unread = await db.countUnreadMessages(user.id, user.id);
+              if (!cancelled) setUnreadMessages(unread);
+            } catch (uErr) {
+              console.warn("countUnreadMessages failed", uErr);
             }
             if (!cancelled) {
               await refreshMealPlan(user.id);
@@ -899,14 +910,6 @@ export default function App() {
     return saved;
   };
 
-  const onDismissCoachNote = async () => {
-    const saved = await db.dismissCoachNote();
-    setProfile((p) => ({
-      ...p,
-      coachNoteDismissedAt: saved.coachNoteDismissedAt,
-    }));
-  };
-
   const updateMealEntry = async (id, patch) => {
     if (!id) return;
     try {
@@ -1123,7 +1126,9 @@ export default function App() {
       onSuggestAiWeek={onSuggestAiWeek}
       onMealIdea={onMealIdea}
       onSaveFoodPrefs={onSaveFoodPrefs}
-      onDismissCoachNote={onDismissCoachNote}
+      userId={user?.id || null}
+      unreadMessages={unreadMessages}
+      onUnreadMessagesChange={setUnreadMessages}
     />
   );
 

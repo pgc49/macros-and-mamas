@@ -21,11 +21,12 @@ import { PATHS } from "../routing";
 import { Shell, Card, Btn, inputStyle } from "../components/ui";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { AdminCoachNote } from "./AdminCoachNote";
+import { AdminMessages } from "./AdminMessages";
 import { AdminClientTracking } from "./AdminClientTracking";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 import { CONFIG } from "../config";
+import { useAuth } from "../auth/useAuth.jsx";
 
 const STAGE_LABEL = {
   signed_up: "Signed up — unpaid",
@@ -136,6 +137,7 @@ function TabBar({ tab, setTab }) {
   const tabs = [
     ["overview", "Overview"],
     ["clients", "Clients"],
+    ["messages", "Messages"],
     ["emails", "Email templates"],
   ];
   return (
@@ -232,7 +234,12 @@ function EmailTimeline({ profileId }) {
 }
 
 export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel }) {
-  const [tab, setTab] = useState("overview");
+  const { user } = useAuth();
+  const [tab, setTab] = useState(() => {
+    if (typeof window === "undefined") return "overview";
+    const q = new URLSearchParams(window.location.search).get("tab");
+    return q === "messages" ? "messages" : "overview";
+  });
   const [filter, setFilter] = useState("active");
   const [recentEmails, setRecentEmails] = useState([]);
   const [aiFailures, setAiFailures] = useState([]);
@@ -521,24 +528,6 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             </>
           )}
         </Card>
-
-        {sel.macros && (
-          <AdminCoachNote
-            client={sel}
-            onSaved={(id, saved) => {
-              setRoster((list) => list.map((c) => (
-                c.id === id
-                  ? {
-                    ...c,
-                    coachNote: saved.coachNote,
-                    coachNoteAt: saved.coachNoteAt,
-                    coachNoteDismissedAt: saved.coachNoteDismissedAt,
-                  }
-                  : c
-              )));
-            }}
-          />
-        )}
 
         {sel.macros && (sel.status === "active" || sel.stage === "active" || sel.role === "admin") && (
           <ErrorBoundary
@@ -933,6 +922,14 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             </div>
           )}
         </>
+      )}
+
+      {tab === "messages" && (
+        <AdminMessages
+          roster={all}
+          adminUserId={user?.id}
+          initialClientId={adminSel}
+        />
       )}
 
       {tab === "emails" && (

@@ -1048,7 +1048,7 @@ export const db = {
     if (pErr) throw pErr;
   },
 
-  /** Callie → mama note on Today. Empty string clears. */
+  /** Callie → mama note on Today. Empty string clears. (legacy — prefer Messages) */
   async saveCoachNote(clientId, note) {
     if (!clientId) throw new Error("client required");
     const trimmed = String(note || "").trim().slice(0, 1000);
@@ -1087,6 +1087,117 @@ export const db = {
       .eq("id", uid);
     if (error) throw error;
     return { coachNoteDismissedAt: at };
+  },
+
+  /** Load 1:1 thread for a mama (self or admin viewing client). */
+  async loadMessages(clientId, { limit = 100 } = {}) {
+    if (!clientId) return [];
+    const { data, error } = await supabase
+      .from("messages")
+      .select("id, client_id, sender_id, body, created_at, read_at")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: true })
+      .limit(Math.min(200, Math.max(1, limit)));
+    if (error) throw error;
+    return data || [];
+  },
+
+  async sendMessage({ clientId, body }) {
+    const uid = await requireUserId();
+    if (!clientId) throw new Error("client required");
+    const text = String(body || "").trim().slice(0, 2000);
+    if (text.length < 1) throw new Error("Message is empty");
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({
+        client_id: clientId,
+        sender_id: uid,
+        body: text,
+      })
+      .select("id, client_id, sender_id, body, created_at, read_at")
+      .single();
+    if (error) throw error;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) {
+        fetch("/api/message-notify", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ messageId: data.id }),
+        }).catch((e) => console.warn("message-notify failed", e));
+      }
+    } catch (e) {
+      console.warn("message-notify invoke failed", e);
+    }
+    return data;
+  },
+
+  async markMessagesRead(clientId, readerId) {
+    if (!clientId || !readerId) return;
+    const { error } = await supabase
+      .from("messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("client_id", clientId)
+      .is("read_at", null)
+      .neq("sender_id", readerId);
+    if (error) console.warn("markMessagesRead failed", error);
+  },
+
+  async countUnreadMessages(clientId, readerId) {
+    if (!clientId || !readerId) return 0;
+    const { count, error } = await supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId)
+      .is("read_at", null)
+      .neq("sender_id", readerId);
+    if (error) {
+      console.warn("countUnreadMessages failed", error);
+      return 0;
+    }
+    return count || 0;
+  },
+
+  async loadMessageInbox() {
+    const { data: msgs, error } = await supabase
+      .from("messages")
+      .select("id, client_id, sender_id, body, created_at, read_at")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    const byClient = new Map();
+    for (const m of msgs || []) {
+      if (!byClient.has(m.client_id)) {
+        byClient.set(m.client_id, {
+          clientId: m.client_id,
+          lastMessage: m,
+          unread: 0,
+        });
+      }
+      const row = byClient.get(m.client_id);
+      if (!m.read_at && m.sender_id === m.client_id) row.unread += 1;
+    }
+    return [...byClient.values()].sort(
+      (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at),
+    );
+  },
+
+  async savePushSubscription({ endpoint, p256dh, auth, userAgent }) {
+    const uid = await requireUserId();
+    if (!endpoint || !p256dh || !auth) throw new Error("invalid subscription");
+    const { error } = await supabase.from("push_subscriptions").upsert({
+      profile_id: uid,
+      endpoint: String(endpoint).slice(0, 2000),
+      p256dh: String(p256dh).slice(0, 200),
+      auth: String(auth).slice(0, 200),
+      user_agent: String(userAgent || "").slice(0, 300) || null,
+    }, { onConflict: "endpoint" });
+    if (error) throw error;
+    return { ok: true };
   },
 
   /** Load meal-plan row for a client (or self). Missing row = default mode. */

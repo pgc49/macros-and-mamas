@@ -14,21 +14,10 @@ import { RecipeCreator } from "../components/RecipeCreator";
 import { WeekPlanner, FoodPrefsEditor } from "../components/WeekPlanner";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { TechHelpFooter } from "../components/TechHelpFooter";
-import { CoachNoteBanner } from "../components/CoachNoteBanner";
+import { MessagesPanel } from "../components/MessagesPanel";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
-import { useState } from "react";
-
-function coachNoteVisible(profile) {
-  const note = String(profile?.coachNote || "").trim();
-  if (!note) return false;
-  const at = profile?.coachNoteAt ? new Date(profile.coachNoteAt).getTime() : 0;
-  const dismissed = profile?.coachNoteDismissedAt
-    ? new Date(profile.coachNoteDismissedAt).getTime()
-    : 0;
-  if (!at) return true;
-  return !(dismissed && dismissed >= at);
-}
+import { useEffect, useState } from "react";
 
 export function ClientApp({
   tab, setTab,
@@ -63,7 +52,9 @@ export function ClientApp({
   onSuggestAiWeek,
   onMealIdea,
   onSaveFoodPrefs,
-  onDismissCoachNote,
+  userId = null,
+  unreadMessages = 0,
+  onUnreadMessagesChange,
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
@@ -114,25 +105,46 @@ export function ClientApp({
       }}
       aria-label="Main"
     >
-      {[["today", "Today"], ["meals", "Meals"], ["progress", "Progress"]].map(([k, l]) => (
+      {[["today", "Today"], ["meals", "Meals"], ["messages", "Messages"], ["progress", "Progress"]].map(([k, l]) => (
         <button
           key={k}
           type="button"
           onClick={() => setTab(k)}
           style={{
             fontFamily: F,
-            fontSize: 14,
+            fontSize: 13.5,
             fontWeight: 700,
-            padding: "14px 22px",
+            padding: "14px 14px",
             minHeight: 48,
             borderRadius: 999,
             border: "none",
             cursor: "pointer",
             background: tab === k ? T.accentSoft : "transparent",
             color: tab === k ? T.accentDeep : T.inkSoft,
+            position: "relative",
           }}
         >
           {l}
+          {k === "messages" && unreadMessages > 0 && (
+            <span style={{
+              position: "absolute",
+              top: 6,
+              right: 6,
+              minWidth: 18,
+              height: 18,
+              borderRadius: 99,
+              background: T.accent,
+              color: "#fff",
+              fontSize: 11,
+              fontWeight: 700,
+              lineHeight: "18px",
+              padding: "0 5px",
+              boxSizing: "border-box",
+            }}
+            >
+              {unreadMessages > 9 ? "9+" : unreadMessages}
+            </span>
+          )}
         </button>
       ))}
     </nav>
@@ -150,13 +162,6 @@ export function ClientApp({
               ? "Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win."
               : `Ranges below show ${formatLongDay(mealLogDate)} — switch days in the meal log to compare.`}
           </p>
-
-          {coachNoteVisible(profile) && (
-            <CoachNoteBanner
-              note={profile.coachNote}
-              onDismiss={onDismissCoachNote}
-            />
-          )}
 
           <HomeScreenTip />
 
@@ -475,6 +480,16 @@ export function ClientApp({
             .map((r) => (
               <MealRecipeCard key={r.name} meal={r} onLog={logRecipe} />
             ))}
+          <TechHelpFooter />
+        </>
+      )}
+
+      {tab === "messages" && (
+        <>
+          <MessagesPanel
+            userId={userId}
+            onUnreadChange={onUnreadMessagesChange}
+          />
           <TechHelpFooter />
         </>
       )}
