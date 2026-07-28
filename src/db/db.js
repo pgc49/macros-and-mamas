@@ -1163,7 +1163,7 @@ export const db = {
     if (!clientId) return [];
     const { data, error } = await supabase
       .from("messages")
-      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .eq("client_id", clientId)
       .order("created_at", { ascending: true })
       .limit(Math.min(200, Math.max(1, limit)));
@@ -1186,6 +1186,7 @@ export const db = {
         client_id: clientId,
         sender_id: uid,
         body: text,
+        kind: "chat",
         ...(attachment
           ? {
             attachment_path: attachment.path,
@@ -1195,7 +1196,7 @@ export const db = {
           }
           : {}),
       })
-      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .single();
     if (error) throw error;
     try {
@@ -1218,6 +1219,30 @@ export const db = {
     return hydrated || data;
   },
 
+  /**
+   * Admin broadcast: inserts an announcement into each mama thread + push/email.
+   * audience: "active" (default) | "all_mamas"
+   */
+  async broadcastAnnouncement({ body, audience = "active" } = {}) {
+    await requireUserId();
+    const text = String(body || "").trim().slice(0, 2000);
+    if (text.length < 1) throw new Error("Announcement is empty");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error("Not signed in");
+    const resp = await fetch("/api/admin-broadcast", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ body: text, audience }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || "Broadcast failed");
+    return data;
+  },
+
   async editMessage(messageId, body) {
     const uid = await requireUserId();
     if (!messageId) throw new Error("message required");
@@ -1232,7 +1257,7 @@ export const db = {
       .eq("id", messageId)
       .eq("sender_id", uid)
       .is("deleted_at", null)
-      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .single();
     if (error) throw error;
     const [hydrated] = await hydrateMessageAttachments([data]);
@@ -1250,7 +1275,7 @@ export const db = {
       .eq("id", messageId)
       .eq("sender_id", uid)
       .is("deleted_at", null)
-      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .single();
     if (error) throw error;
     return data;
@@ -1287,7 +1312,7 @@ export const db = {
   async loadMessageInbox(readerId = null) {
     const { data: msgs, error } = await supabase
       .from("messages")
-      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .order("created_at", { ascending: false })
       .limit(500);
     if (error) throw error;

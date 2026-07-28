@@ -234,8 +234,6 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
             flex: "0 0 auto",
             background: "#fff",
             borderTop: `1px solid ${T.border}`,
-            /* Plain px floor — iOS PWA often ignores max()/env() in inline styles. */
-            paddingBottom: 48,
           }}
         >
           {bottomBar}

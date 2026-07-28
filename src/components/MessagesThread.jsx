@@ -368,7 +368,7 @@ export function MessagesThread({
               >
                 {!mine && !deleted && (
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, marginBottom: 4 }}>
-                    {peerName || "Callie"}
+                    {m.kind === "announcement" ? "Announcement · Callie" : (peerName || "Callie")}
                   </div>
                 )}
                 {deleted ? (
