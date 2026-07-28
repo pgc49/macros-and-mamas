@@ -86,6 +86,21 @@ serve(async (req) => {
       ]
         .filter(Boolean)
         .join("\n");
+    } else if (type === "message") {
+      const s = stats || {};
+      subject = `💬 Message from ${display}`;
+      text = [
+        `${display} sent you a message in the app.`,
+        email ? `Email: ${email}` : "",
+        s.clientId ? `Client id: ${s.clientId}` : "",
+        "",
+        "Preview:",
+        s.message || "(empty)",
+        "",
+        `Reply in admin → Messages: ${APP_URL}/admin?tab=messages`,
+      ]
+        .filter((line) => line !== undefined)
+        .join("\n");
     } else if (type === "support") {
       // Tech/support fallback when GitHub issue create fails — owner only (not Callie).
       const s = stats || {};

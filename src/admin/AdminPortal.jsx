@@ -8,7 +8,7 @@
  * 3. Wrap new admin surfaces in ErrorBoundary so a coach-UI bug cannot blank
  *    the customer SPA.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid,
@@ -21,11 +21,13 @@ import { PATHS } from "../routing";
 import { Shell, Card, Btn, inputStyle } from "../components/ui";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { MealPlanDraft } from "./MealPlanDraft";
+import { AdminMessages } from "./AdminMessages";
 import { AdminClientTracking } from "./AdminClientTracking";
+import { AdminClientMessages } from "./AdminClientMessages";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 import { CONFIG } from "../config";
+import { useAuth } from "../auth/useAuth.jsx";
 
 const STAGE_LABEL = {
   signed_up: "Signed up — unpaid",
@@ -40,7 +42,6 @@ const AI_LABELS = {
   estimate_text: "Describe",
   meal_suggest: "Suggest my week",
   meal_idea: "Meal ideas",
-  meal_plan: "Plan draft",
 };
 
 const AI_KINDS = {
@@ -133,34 +134,62 @@ function StatPill({ label, value, bg, color }) {
   );
 }
 
-function TabBar({ tab, setTab }) {
+function TabBar({ tab, setTab, unreadMessages = 0 }) {
   const tabs = [
     ["overview", "Overview"],
     ["clients", "Clients"],
+    ["messages", "Messages"],
     ["emails", "Email templates"],
   ];
   return (
     <div style={{ display: "flex", gap: 6, margin: "10px 0 18px", flexWrap: "wrap" }}>
-      {tabs.map(([id, label]) => (
-        <button
-          key={id}
-          type="button"
-          onClick={() => setTab(id)}
-          style={{
-            padding: "8px 14px",
-            borderRadius: 999,
-            border: `1.5px solid ${tab === id ? T.accent : T.border}`,
-            background: tab === id ? T.accentSoft : "#fff",
-            color: tab === id ? T.accentDeep : T.inkSoft,
-            fontWeight: 700,
-            fontSize: 13,
-            cursor: "pointer",
-            fontFamily: F,
-          }}
-        >
-          {label}
-        </button>
-      ))}
+      {tabs.map(([id, label]) => {
+        const showBadge = id === "messages" && unreadMessages > 0;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            style={{
+              padding: "8px 14px",
+              borderRadius: 999,
+              border: `1.5px solid ${
+                tab === id ? T.accent : showBadge ? T.accent : T.border
+              }`,
+              background: tab === id ? T.accentSoft : showBadge ? T.accentSoft : "#fff",
+              color: tab === id || showBadge ? T.accentDeep : T.inkSoft,
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: "pointer",
+              fontFamily: F,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {label}
+            {showBadge && (
+              <span
+                style={{
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 99,
+                  background: T.accent,
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  lineHeight: "18px",
+                  padding: "0 5px",
+                  boxSizing: "border-box",
+                  textAlign: "center",
+                }}
+              >
+                {unreadMessages > 9 ? "9+" : unreadMessages}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -233,7 +262,12 @@ function EmailTimeline({ profileId }) {
 }
 
 export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel }) {
-  const [tab, setTab] = useState("overview");
+  const { user } = useAuth();
+  const [tab, setTab] = useState(() => {
+    if (typeof window === "undefined") return "overview";
+    const q = new URLSearchParams(window.location.search).get("tab");
+    return q === "messages" ? "messages" : "overview";
+  });
   const [filter, setFilter] = useState("active");
   const [recentEmails, setRecentEmails] = useState([]);
   const [aiFailures, setAiFailures] = useState([]);
@@ -241,10 +275,44 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   const [clientProgress, setClientProgress] = useState(null);
   const [progressLoading, setProgressLoading] = useState(false);
   const [progressError, setProgressError] = useState(null);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const debounceRef = useRef({});
 
   const all = roster || [];
   const nonAdmin = useMemo(() => all.filter((c) => c.role !== "admin"), [all]);
+
+  // Keep unread count fresh on Overview (and elsewhere) so Callie sees it without opening Messages.
+  const refreshUnread = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const rows = await db.loadMessageInbox(user.id);
+      setUnreadMessages(rows.reduce((n, r) => n + (r.unread || 0), 0));
+    } catch (e) {
+      console.warn("admin unread poll failed", e);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let cancelled = false;
+    const run = async () => {
+      if (cancelled) return;
+      await refreshUnread();
+    };
+    run();
+    const channel = supabase
+      .channel("messages-admin-unread-badge")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages" },
+        () => { run(); },
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, refreshUnread]);
 
   const computedStats = useMemo(() => {
     if (stats) return stats;
@@ -523,9 +591,17 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           )}
         </Card>
 
-        {sel.macros && (
-          <MealPlanDraft client={sel} />
-        )}
+        <ErrorBoundary
+          name="AdminClientMessages"
+          title="Messages couldn’t load"
+          message="Her profile still works — open the Messages tab or refresh to try again."
+        >
+          <AdminClientMessages
+            client={sel}
+            adminUserId={user?.id}
+            onActivity={refreshUnread}
+          />
+        </ErrorBoundary>
 
         {sel.macros && (sel.status === "active" || sel.stage === "active" || sel.role === "admin") && (
           <ErrorBoundary
@@ -670,10 +746,55 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
         Admin only.
       </p>
 
-      <TabBar tab={tab} setTab={setTab} />
+      <TabBar tab={tab} setTab={setTab} unreadMessages={unreadMessages} />
 
       {tab === "overview" && (
         <>
+          {unreadMessages > 0 && (
+            <button
+              type="button"
+              onClick={() => setTab("messages")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                width: "100%",
+                boxSizing: "border-box",
+                marginBottom: 14,
+                padding: "16px 18px",
+                borderRadius: 14,
+                border: `2px solid ${T.accent}`,
+                background: T.accentSoft,
+                color: T.accentDeep,
+                fontFamily: F,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <span>
+                <span style={{ display: "block", fontFamily: FD, fontSize: 20, color: T.ink, marginBottom: 4 }}>
+                  {unreadMessages} unread message{unreadMessages === 1 ? "" : "s"}
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: T.inkSoft }}>
+                  Open Messages to reply — no need to hunt for the tab.
+                </span>
+              </span>
+              <span style={{
+                flexShrink: 0,
+                fontWeight: 800,
+                fontSize: 13,
+                padding: "8px 12px",
+                borderRadius: 999,
+                background: T.accent,
+                color: "#fff",
+              }}
+              >
+                Open →
+              </span>
+            </button>
+          )}
+
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
             <StatPill label="Signups" value={computedStats.signups} bg={T.accentSoft} color={T.accentDeep} />
             <StatPill label="Paid" value={computedStats.paid} bg={T.sageSoft} color={T.sage} />
@@ -687,6 +808,29 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           <Card>
             <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>What needs you</div>
             <div style={{ fontSize: 14, lineHeight: 1.55, color: T.inkSoft }}>
+              {unreadMessages > 0 && (
+                <p style={{ margin: "0 0 8px" }}>
+                  <b style={{ color: T.accentDeep }}>{unreadMessages}</b> unread message{unreadMessages === 1 ? "" : "s"}
+                  {" — "}
+                  <button
+                    type="button"
+                    onClick={() => setTab("messages")}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      color: T.accent,
+                      fontWeight: 700,
+                      fontFamily: F,
+                      fontSize: 14,
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    open Messages
+                  </button>
+                </p>
+              )}
               {computedStats.awaitingApproval > 0
                 ? <p style={{ margin: "0 0 8px" }}><b style={{ color: T.ink }}>{computedStats.awaitingApproval}</b> mama{computedStats.awaitingApproval === 1 ? "" : "s"} waiting on macro approval.</p>
                 : <p style={{ margin: "0 0 8px" }}>No intakes waiting on approval.</p>}
@@ -920,6 +1064,15 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             </div>
           )}
         </>
+      )}
+
+      {tab === "messages" && (
+        <AdminMessages
+          roster={all}
+          adminUserId={user?.id}
+          initialClientId={adminSel}
+          onUnreadTotalChange={setUnreadMessages}
+        />
       )}
 
       {tab === "emails" && (

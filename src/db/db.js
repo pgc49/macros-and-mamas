@@ -70,6 +70,9 @@ function rowToProfile(row) {
     allergens: Array.isArray(row.allergens) ? row.allergens : [],
     allergenNote: row.allergen_note || "",
     foodAvoids: row.food_avoids || "",
+    coachNote: row.coach_note || "",
+    coachNoteAt: row.coach_note_at || null,
+    coachNoteDismissedAt: row.coach_note_dismissed_at || null,
     bottleOz: row.bottle_oz != null ? Number(row.bottle_oz) : 24,
     status: row.status,
     paid: !!row.paid,
@@ -280,6 +283,75 @@ function mapCustomMeal(r) {
     ingredients: r.ingredients || "",
     updated_at: r.updated_at,
   };
+}
+
+const MESSAGE_ATTACHMENT_BUCKET = "message-attachments";
+const MESSAGE_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const MESSAGE_ATTACHMENT_MIME = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/gif",
+  "application/pdf",
+]);
+
+function safeAttachmentName(name) {
+  return String(name || "file")
+    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .slice(0, 80) || "file";
+}
+
+async function uploadMessageAttachment({ clientId, file }) {
+  if (!file) return null;
+  const mime = String(file.type || "").toLowerCase();
+  if (!MESSAGE_ATTACHMENT_MIME.has(mime)) {
+    throw new Error("Attachments must be a photo (JPG/PNG/WebP) or PDF.");
+  }
+  if (file.size > MESSAGE_ATTACHMENT_MAX_BYTES) {
+    throw new Error("That file is over 10 MB — try a smaller photo.");
+  }
+  const id = (typeof crypto !== "undefined" && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const path = `${clientId}/${id}-${safeAttachmentName(file.name)}`;
+  const { error } = await supabase.storage
+    .from(MESSAGE_ATTACHMENT_BUCKET)
+    .upload(path, file, {
+      contentType: mime,
+      upsert: false,
+    });
+  if (error) {
+    console.error("message attachment upload failed", error);
+    throw new Error("Couldn’t upload that attachment — try again.");
+  }
+  return {
+    path,
+    name: String(file.name || "attachment").slice(0, 120),
+    mime,
+    bytes: Number(file.size) || null,
+  };
+}
+
+async function hydrateMessageAttachments(rows) {
+  const list = rows || [];
+  return Promise.all(list.map(async (m) => {
+    if (!m?.attachment_path) return m;
+    try {
+      const { data, error } = await supabase.storage
+        .from(MESSAGE_ATTACHMENT_BUCKET)
+        .createSignedUrl(m.attachment_path, 60 * 60);
+      if (error) {
+        console.warn("message attachment signed url failed", error);
+        return m;
+      }
+      return { ...m, attachmentUrl: data?.signedUrl || null };
+    } catch (e) {
+      console.warn("message attachment signed url failed", e);
+      return m;
+    }
+  }));
 }
 
 export const db = {
@@ -914,6 +986,9 @@ export const db = {
         allergenNote: p.allergen_note || "",
         foodAvoids: p.food_avoids || "",
         bottleOz: p.bottle_oz != null ? Number(p.bottle_oz) : 24,
+        coachNote: p.coach_note || "",
+        coachNoteAt: p.coach_note_at || null,
+        coachNoteDismissedAt: p.coach_note_dismissed_at || null,
         status: p.status,
         week: p.week,
         paid,
@@ -1040,6 +1115,225 @@ export const db = {
       .update({ status: "active", week: 1 })
       .eq("id", clientId);
     if (pErr) throw pErr;
+  },
+
+  /** Callie → mama note on Today. Empty string clears. (legacy — prefer Messages) */
+  async saveCoachNote(clientId, note) {
+    if (!clientId) throw new Error("client required");
+    const trimmed = String(note || "").trim().slice(0, 1000);
+    const row = trimmed
+      ? {
+        coach_note: trimmed,
+        coach_note_at: new Date().toISOString(),
+        coach_note_dismissed_at: null,
+      }
+      : {
+        coach_note: null,
+        coach_note_at: null,
+        coach_note_dismissed_at: null,
+      };
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(row)
+      .eq("id", clientId)
+      .select("coach_note, coach_note_at, coach_note_dismissed_at")
+      .single();
+    if (error) throw error;
+    return {
+      coachNote: data.coach_note || "",
+      coachNoteAt: data.coach_note_at || null,
+      coachNoteDismissedAt: data.coach_note_dismissed_at || null,
+    };
+  },
+
+  /** Mama dismisses Callie's note on Today. */
+  async dismissCoachNote() {
+    const uid = await requireUserId();
+    const at = new Date().toISOString();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ coach_note_dismissed_at: at })
+      .eq("id", uid);
+    if (error) throw error;
+    return { coachNoteDismissedAt: at };
+  },
+
+  /** Load 1:1 thread for a mama (self or admin viewing client). */
+  async loadMessages(clientId, { limit = 100 } = {}) {
+    if (!clientId) return [];
+    const { data, error } = await supabase
+      .from("messages")
+      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: true })
+      .limit(Math.min(200, Math.max(1, limit)));
+    if (error) throw error;
+    return hydrateMessageAttachments(data || []);
+  },
+
+  async sendMessage({ clientId, body, file = null }) {
+    const uid = await requireUserId();
+    if (!clientId) throw new Error("client required");
+    const text = String(body || "").trim().slice(0, 2000);
+    let attachment = null;
+    if (file) {
+      attachment = await uploadMessageAttachment({ clientId, file });
+    }
+    if (text.length < 1 && !attachment) throw new Error("Message is empty");
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({
+        client_id: clientId,
+        sender_id: uid,
+        body: text,
+        ...(attachment
+          ? {
+            attachment_path: attachment.path,
+            attachment_name: attachment.name,
+            attachment_mime: attachment.mime,
+            attachment_bytes: attachment.bytes,
+          }
+          : {}),
+      })
+      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .single();
+    if (error) throw error;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) {
+        fetch("/api/message-notify", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ messageId: data.id }),
+        }).catch((e) => console.warn("message-notify failed", e));
+      }
+    } catch (e) {
+      console.warn("message-notify invoke failed", e);
+    }
+    const [hydrated] = await hydrateMessageAttachments([data]);
+    return hydrated || data;
+  },
+
+  async editMessage(messageId, body) {
+    const uid = await requireUserId();
+    if (!messageId) throw new Error("message required");
+    const text = String(body || "").trim().slice(0, 2000);
+    if (text.length < 1) throw new Error("Message is empty");
+    const { data, error } = await supabase
+      .from("messages")
+      .update({
+        body: text,
+        edited_at: new Date().toISOString(),
+      })
+      .eq("id", messageId)
+      .eq("sender_id", uid)
+      .is("deleted_at", null)
+      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .single();
+    if (error) throw error;
+    const [hydrated] = await hydrateMessageAttachments([data]);
+    return hydrated || data;
+  },
+
+  async deleteMessage(messageId) {
+    const uid = await requireUserId();
+    if (!messageId) throw new Error("message required");
+    const { data, error } = await supabase
+      .from("messages")
+      .update({
+        deleted_at: new Date().toISOString(),
+      })
+      .eq("id", messageId)
+      .eq("sender_id", uid)
+      .is("deleted_at", null)
+      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async markMessagesRead(clientId, readerId) {
+    if (!clientId || !readerId) return;
+    const { error } = await supabase
+      .from("messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("client_id", clientId)
+      .is("read_at", null)
+      .is("deleted_at", null)
+      .neq("sender_id", readerId);
+    if (error) console.warn("markMessagesRead failed", error);
+  },
+
+  async countUnreadMessages(clientId, readerId) {
+    if (!clientId || !readerId) return 0;
+    const { count, error } = await supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId)
+      .is("read_at", null)
+      .is("deleted_at", null)
+      .neq("sender_id", readerId);
+    if (error) {
+      console.warn("countUnreadMessages failed", error);
+      return 0;
+    }
+    return count || 0;
+  },
+
+  async loadMessageInbox(readerId = null) {
+    const { data: msgs, error } = await supabase
+      .from("messages")
+      .select("id, client_id, sender_id, body, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    const byClient = new Map();
+    for (const m of msgs || []) {
+      if (!byClient.has(m.client_id)) {
+        byClient.set(m.client_id, {
+          clientId: m.client_id,
+          lastMessage: m,
+          unread: 0,
+          participantIds: new Set(),
+        });
+      }
+      const row = byClient.get(m.client_id);
+      row.participantIds.add(m.sender_id);
+      row.participantIds.add(m.client_id);
+      // Prefer a non-deleted last preview when possible
+      if (row.lastMessage?.deleted_at && !m.deleted_at) {
+        row.lastMessage = m;
+      }
+      if (!m.deleted_at && !m.read_at && (!readerId || m.sender_id !== readerId)) {
+        row.unread += 1;
+      }
+    }
+    return [...byClient.values()]
+      .map((row) => ({
+        ...row,
+        participantIds: [...row.participantIds],
+      }))
+      .sort(
+        (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at),
+      );
+  },
+
+  async savePushSubscription({ endpoint, p256dh, auth, userAgent }) {
+    const uid = await requireUserId();
+    if (!endpoint || !p256dh || !auth) throw new Error("invalid subscription");
+    const { error } = await supabase.from("push_subscriptions").upsert({
+      profile_id: uid,
+      endpoint: String(endpoint).slice(0, 2000),
+      p256dh: String(p256dh).slice(0, 200),
+      auth: String(auth).slice(0, 200),
+      user_agent: String(userAgent || "").slice(0, 300) || null,
+    }, { onConflict: "endpoint" });
+    if (error) throw error;
+    return { ok: true };
   },
 
   /** Load meal-plan row for a client (or self). Missing row = default mode. */

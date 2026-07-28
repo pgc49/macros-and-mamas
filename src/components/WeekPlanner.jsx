@@ -73,6 +73,7 @@ export function WeekPlanner({
   const [activeDay, setActiveDay] = useState(PLAN_DAYS[0]);
   const [picker, setPicker] = useState(null);
   const [message, setMessage] = useState("");
+  const [messageSticky, setMessageSticky] = useState(false);
   const [error, setError] = useState("");
   const [dragId, setDragId] = useState(null);
   const [dropDay, setDropDay] = useState(null);
@@ -101,10 +102,15 @@ export function WeekPlanner({
   }, [days, weekStart]);
 
   useEffect(() => {
+    // Short flashes (clear week, meal added) still auto-clear; longer AI summaries stay until ×.
     if (!message) return undefined;
-    const t = window.setTimeout(() => setMessage(""), 4500);
+    if (messageSticky) return undefined;
+    const t = window.setTimeout(() => {
+      setMessage("");
+      setMessageSticky(false);
+    }, 4500);
     return () => window.clearTimeout(t);
-  }, [message]);
+  }, [message, messageSticky]);
 
   useEffect(() => {
     if (mealCount === 0 && groceryOpen) setGroceryOpen(false);
@@ -117,6 +123,7 @@ export function WeekPlanner({
   const clearWeek = () => {
     setError("");
     applyDays(emptyWeekPlan(), "blank");
+    setMessageSticky(false);
     setMessage("Cleared — board is empty so you can rebuild.");
   };
 
@@ -137,6 +144,7 @@ export function WeekPlanner({
       }
       if (result?.days) {
         applyDays(cloneDaysToPlan(result.days), "ai");
+        setMessageSticky(true);
         setMessage(result.summary || "AI week ready — tweak servings until the day chips go green.");
       }
     } catch (e) {
@@ -191,8 +199,10 @@ export function WeekPlanner({
         c: meal.c,
         f: meal.f,
       });
+      setMessageSticky(false);
       setMessage(`Added to ${picker.day} and saved to My meals.`);
     } else {
+      setMessageSticky(false);
       setMessage(`Added to ${picker.day}.`);
     }
     placeMeal(meal);
@@ -289,8 +299,45 @@ export function WeekPlanner({
         </div>
       )}
       {message && (
-        <div style={{ fontSize: 12.5, color: "#3E5A46", background: T.sageSoft, borderRadius: 10, padding: "8px 10px", marginBottom: 10 }}>
+        <div style={{
+          position: "relative",
+          fontSize: 13.5,
+          lineHeight: 1.5,
+          color: "#3E5A46",
+          background: T.sageSoft,
+          borderRadius: 10,
+          padding: messageSticky ? "12px 36px 12px 12px" : "8px 10px",
+          marginBottom: 10,
+        }}
+        >
           {message}
+          {messageSticky && (
+            <button
+              type="button"
+              aria-label="Dismiss plan summary"
+              onClick={() => {
+                setMessage("");
+                setMessageSticky(false);
+              }}
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 6,
+                width: 28,
+                height: 28,
+                border: "none",
+                borderRadius: 8,
+                background: "transparent",
+                color: "#3E5A46",
+                fontSize: 18,
+                fontWeight: 700,
+                cursor: "pointer",
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+          )}
         </div>
       )}
       {error && <div style={{ fontSize: 12.5, color: T.amber, marginBottom: 10 }}>{error}</div>}
