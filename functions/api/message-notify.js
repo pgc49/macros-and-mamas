@@ -165,10 +165,8 @@ async function sendMamaEmailDirect(env, { email, name, preview }) {
 async function sendOpsEmailDirect(env, { subject, text }) {
   const key = String(env.RESEND_API_KEY || "").trim();
   if (!key) return false;
-  const to = [
-    env.CALLIE_NOTIFY_EMAIL || "calista@nourishwithcalista.com",
-    env.OWNER_NOTIFY_EMAIL || "pgchammas@gmail.com",
-  ]
+  // Mama → Callie message fallback: Callie only (do not CC owner/Patrick).
+  const to = [env.CALLIE_NOTIFY_EMAIL || "calista@nourishwithcalista.com"]
     .flatMap((s) => String(s).split(","))
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
