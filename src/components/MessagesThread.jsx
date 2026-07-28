@@ -271,7 +271,7 @@ export function MessagesThread({
     <div style={{
       display: "flex",
       flexDirection: "column",
-      minHeight: compact ? undefined : "55vh",
+      minHeight: compact ? undefined : "62vh",
       flex: compact ? undefined : 1,
     }}
     >
@@ -320,8 +320,10 @@ export function MessagesThread({
           border: `1.5px solid ${T.border}`,
           borderRadius: 14,
           padding: 12,
-          minHeight: compact ? 180 : 220,
-          maxHeight: compact ? "36vh" : "min(52vh, 420px)",
+          minHeight: compact ? 180 : 280,
+          /* Mama tab: a bit taller so less empty cream above the tab bar.
+             Keep a cap — don't fight keyboard/nav layout. */
+          maxHeight: compact ? "36vh" : "min(64vh, 520px)",
           WebkitOverflowScrolling: "touch",
         }}
       >
