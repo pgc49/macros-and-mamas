@@ -142,6 +142,15 @@ export function AdminMessages({
   const activeName = displayName(activePeer);
   const activeIsAdmin = isAdminProfile(activePeer);
 
+  const senderNameById = useMemo(() => {
+    const map = {};
+    for (const c of roster || []) {
+      if (c?.id) map[c.id] = displayName(c);
+    }
+    // Mama threads: any admin without a nicer map entry stays "Callie" via MessagesThread fallback.
+    return map;
+  }, [roster]);
+
   const openThreadWith = (profile) => {
     if (!profile?.id) return;
     if (isAdminProfile(profile) && adminUserId) {
@@ -475,6 +484,8 @@ export function AdminMessages({
               messages={messages}
               selfId={adminUserId}
               peerName={activeName}
+              senderNameById={senderNameById}
+              threadClientId={activeIsAdmin ? null : activeId}
               busy={busy}
               onSend={send}
               onEdit={edit}
