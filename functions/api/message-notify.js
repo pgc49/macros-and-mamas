@@ -22,7 +22,9 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "forbidden" }, 403);
     }
 
-    const fromMama = msg.sender_id === msg.client_id;
+    const senderIsAdmin = await isAdmin(env, msg.sender_id);
+    const clientProfile = await loadProfile(env, msg.client_id);
+    const clientIsAdmin = String(clientProfile?.role || "").toLowerCase() === "admin";
     const bodyPreview = String(msg.body || "").replace(/\s+/g, " ").trim().slice(0, 140);
     const preview = bodyPreview
       || (msg.attachment_path
@@ -32,7 +34,10 @@ export async function onRequestPost({ request, env }) {
     let pushSent = 0;
     let emailSent = false;
 
-    if (fromMama) {
+    // Mama → Callie: notify admins (email Callie only).
+    // Admin → mama: notify that mama.
+    // Admin ↔ admin test DM: notify the other admin(s), never the sender.
+    if (!senderIsAdmin) {
       const adminIds = await listAdminIds(env);
       for (const adminId of adminIds) {
         pushSent += await sendPushToProfile(env, adminId, {
@@ -41,11 +46,10 @@ export async function onRequestPost({ request, env }) {
           url: "/admin?tab=messages",
         });
       }
-      const client = await loadProfile(env, msg.client_id);
       const edge = await invokeEdgeFunction(env, "notify-callie", {
         type: "message",
-        name: client?.name || "Mama",
-        email: client?.email || "",
+        name: clientProfile?.name || "Mama",
+        email: clientProfile?.email || "",
         stats: {
           message: preview,
           clientId: msg.client_id,
@@ -55,10 +59,10 @@ export async function onRequestPost({ request, env }) {
         emailSent = true;
       } else {
         emailSent = await sendOpsEmailDirect(env, {
-          subject: `💬 Message from ${client?.name || "Mama"}`,
+          subject: `💬 Message from ${clientProfile?.name || "Mama"}`,
           text: [
-            `${client?.name || "Mama"} sent you a message in the app.`,
-            client?.email ? `Email: ${client.email}` : "",
+            `${clientProfile?.name || "Mama"} sent you a message in the app.`,
+            clientProfile?.email ? `Email: ${clientProfile.email}` : "",
             "",
             "Preview:",
             preview || "(empty)",
@@ -66,6 +70,35 @@ export async function onRequestPost({ request, env }) {
             "Reply in admin → Messages.",
           ].filter(Boolean).join("\n"),
         });
+      }
+    } else if (clientIsAdmin) {
+      const adminIds = await listAdminIds(env);
+      const recipients = adminIds.filter((id) => id !== msg.sender_id);
+      for (const adminId of recipients) {
+        const n = await sendPushToProfile(env, adminId, {
+          title: "New admin message",
+          body: preview || "Open Messages in admin",
+          url: "/admin?tab=messages",
+        });
+        pushSent += n;
+        if (n > 0) continue;
+        const contact = await loadUserContact(env, adminId);
+        const email = contact.email || "";
+        if (!email) continue;
+        const mail = await invokeEdgeFunction(env, "message-email", {
+          email,
+          name: contact.name || "Admin",
+          preview,
+        });
+        if (mail.ok) {
+          emailSent = true;
+        } else if (await sendMamaEmailDirect(env, {
+          email,
+          name: contact.name || "Admin",
+          preview,
+        })) {
+          emailSent = true;
+        }
       }
     } else {
       pushSent = await sendPushToProfile(env, msg.client_id, {

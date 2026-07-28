@@ -57,6 +57,7 @@ export function ClientApp({
   onUnreadMessagesChange,
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
+  const [composerFocused, setComposerFocused] = useState(false);
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
@@ -151,7 +152,7 @@ export function ClientApp({
   );
 
   return (
-    <Shell bottomBar={tabBar}>
+    <Shell bottomBar={tabBar} hideBottomBar={tab === "messages" && composerFocused}>
       {tab === "today" && macros && (
         <>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
@@ -489,8 +490,9 @@ export function ClientApp({
           <MessagesPanel
             userId={userId}
             onUnreadChange={onUnreadMessagesChange}
+            onComposerFocusChange={setComposerFocused}
           />
-          <TechHelpFooter />
+          {!composerFocused && <TechHelpFooter />}
         </>
       )}
 
