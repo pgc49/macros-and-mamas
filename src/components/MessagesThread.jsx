@@ -38,10 +38,12 @@ export function MessagesThread({
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState("");
   const [editBusy, setEditBusy] = useState(false);
+  const [menuId, setMenuId] = useState(null);
   const bottomRef = useRef(null);
   const listRef = useRef(null);
   const fileRef = useRef(null);
   const draftRef = useRef(null);
+  const holdTimer = useRef(null);
 
   useEffect(() => {
     registerMessageServiceWorker();
@@ -151,6 +153,7 @@ export function MessagesThread({
 
   const startEdit = (m) => {
     if (!onEdit || m.deleted_at) return;
+    setMenuId(null);
     setEditingId(m.id);
     setEditDraft(m.body || "");
     setAttachError("");
@@ -183,6 +186,7 @@ export function MessagesThread({
 
   const removeMessage = async (m) => {
     if (!onDelete || !m?.id || editBusy) return;
+    setMenuId(null);
     if (!window.confirm("Delete this message?")) return;
     setEditBusy(true);
     setAttachError("");
@@ -196,6 +200,68 @@ export function MessagesThread({
       setEditBusy(false);
     }
   };
+
+  const clearHold = () => {
+    if (holdTimer.current) {
+      window.clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+  };
+
+  const canManage = (m) => (
+    m.sender_id === selfId
+    && !m.deleted_at
+    && (onEdit || onDelete)
+  );
+
+  const openMenu = (m) => {
+    if (!canManage(m) || editingId === m.id) return;
+    setMenuId(m.id);
+  };
+
+  const pressHandlers = (m) => {
+    if (!canManage(m)) return {};
+    return {
+      onContextMenu: (e) => {
+        e.preventDefault();
+        openMenu(m);
+      },
+      onTouchStart: () => {
+        clearHold();
+        holdTimer.current = window.setTimeout(() => openMenu(m), 450);
+      },
+      onTouchEnd: clearHold,
+      onTouchMove: clearHold,
+      onTouchCancel: clearHold,
+      onMouseDown: (e) => {
+        if (e.button !== 0) return;
+        clearHold();
+        holdTimer.current = window.setTimeout(() => openMenu(m), 450);
+      },
+      onMouseUp: clearHold,
+      onMouseLeave: clearHold,
+    };
+  };
+
+  useEffect(() => () => clearHold(), []);
+
+  useEffect(() => {
+    if (!menuId) return undefined;
+    const onDoc = (e) => {
+      if (e.target?.closest?.("[data-msg-menu]")) return;
+      if (e.target?.closest?.(`[data-msg-id="${menuId}"]`)) return;
+      setMenuId(null);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setMenuId(null);
+    };
+    document.addEventListener("pointerdown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuId]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: compact ? undefined : "55vh" }}>
@@ -259,6 +325,7 @@ export function MessagesThread({
           const isImage = String(m.attachment_mime || "").startsWith("image/");
           const hasAttach = !!m.attachment_path && !deleted;
           const isEditing = editingId === m.id;
+          const showMenu = menuId === m.id && canManage(m) && !isEditing;
           return (
             <div
               key={m.id}
@@ -266,20 +333,27 @@ export function MessagesThread({
                 display: "flex",
                 justifyContent: mine ? "flex-end" : "flex-start",
                 marginBottom: 10,
+                position: "relative",
               }}
             >
-              <div style={{
-                maxWidth: "85%",
-                background: deleted ? T.track : (mine ? T.accentSoft : T.sageSoft),
-                color: T.ink,
-                borderRadius: 14,
-                padding: "10px 12px",
-                fontFamily: F,
-                fontSize: 14.5,
-                lineHeight: 1.45,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
+              <div
+                data-msg-id={m.id}
+                {...pressHandlers(m)}
+                style={{
+                  maxWidth: "85%",
+                  background: deleted ? T.track : (mine ? T.accentSoft : T.sageSoft),
+                  color: T.ink,
+                  borderRadius: 14,
+                  padding: "10px 12px",
+                  fontFamily: F,
+                  fontSize: 14.5,
+                  lineHeight: 1.45,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  userSelect: canManage(m) ? "none" : "text",
+                  WebkitUserSelect: canManage(m) ? "none" : "text",
+                  cursor: canManage(m) ? "default" : undefined,
+                }}
               >
                 {!mine && !deleted && (
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, marginBottom: 4 }}>
@@ -323,6 +397,7 @@ export function MessagesThread({
                         <img
                           src={m.attachmentUrl}
                           alt={m.attachment_name || "Attachment"}
+                          draggable={false}
                           style={{
                             display: "block",
                             maxWidth: "100%",
@@ -362,49 +437,67 @@ export function MessagesThread({
                   {formatMsgTime(m.created_at)}
                   {!deleted && m.edited_at ? " · edited" : ""}
                 </div>
-                {mine && !deleted && !isEditing && (onEdit || onDelete) && (
-                  <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-                    {onEdit && (
-                      <button
-                        type="button"
-                        onClick={() => startEdit(m)}
-                        disabled={editBusy || busy}
-                        style={{
-                          border: "none",
-                          background: "none",
-                          padding: 0,
-                          color: T.accentDeep,
-                          fontWeight: 700,
-                          fontSize: 12,
-                          fontFamily: F,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Edit
-                      </button>
-                    )}
-                    {onDelete && (
-                      <button
-                        type="button"
-                        onClick={() => removeMessage(m)}
-                        disabled={editBusy || busy}
-                        style={{
-                          border: "none",
-                          background: "none",
-                          padding: 0,
-                          color: T.inkSoft,
-                          fontWeight: 700,
-                          fontSize: 12,
-                          fontFamily: F,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
+              {showMenu && (
+                <div
+                  data-msg-menu
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    [mine ? "right" : "left"]: 0,
+                    marginTop: 4,
+                    zIndex: 5,
+                    display: "flex",
+                    gap: 6,
+                    background: "#fff",
+                    border: `1.5px solid ${T.border}`,
+                    borderRadius: 12,
+                    padding: 6,
+                    boxShadow: "0 6px 18px rgba(51,39,46,0.12)",
+                  }}
+                >
+                  {onEdit && (
+                    <button
+                      type="button"
+                      onClick={() => startEdit(m)}
+                      disabled={editBusy || busy}
+                      style={{
+                        border: "none",
+                        background: T.accentSoft,
+                        color: T.accentDeep,
+                        fontWeight: 700,
+                        fontSize: 13,
+                        fontFamily: F,
+                        cursor: "pointer",
+                        borderRadius: 999,
+                        padding: "8px 12px",
+                      }}
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      type="button"
+                      onClick={() => removeMessage(m)}
+                      disabled={editBusy || busy}
+                      style={{
+                        border: "none",
+                        background: T.track,
+                        color: T.inkSoft,
+                        fontWeight: 700,
+                        fontSize: 13,
+                        fontFamily: F,
+                        cursor: "pointer",
+                        borderRadius: 999,
+                        padding: "8px 12px",
+                      }}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
