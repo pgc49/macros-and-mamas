@@ -105,7 +105,7 @@ export function ClientApp({
       }}
       aria-label="Main"
     >
-      {[["today", "Today"], ["meals", "Meals"], ["messages", "Messages"], ["progress", "Progress"]].map(([k, l]) => (
+      {[["today", "Today"], ["meals", "Meals"], ["progress", "Progress"], ["messages", "Messages"]].map(([k, l]) => (
         <button
           key={k}
           type="button"

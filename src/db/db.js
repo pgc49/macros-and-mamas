@@ -1162,7 +1162,7 @@ export const db = {
     return count || 0;
   },
 
-  async loadMessageInbox() {
+  async loadMessageInbox(readerId = null) {
     const { data: msgs, error } = await supabase
       .from("messages")
       .select("id, client_id, sender_id, body, created_at, read_at")
@@ -1179,7 +1179,10 @@ export const db = {
         });
       }
       const row = byClient.get(m.client_id);
-      if (!m.read_at && m.sender_id === m.client_id) row.unread += 1;
+      // Unread for the reader = someone else sent it and it's not read yet
+      if (!m.read_at && (!readerId || m.sender_id !== readerId)) {
+        row.unread += 1;
+      }
     }
     return [...byClient.values()].sort(
       (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at),
