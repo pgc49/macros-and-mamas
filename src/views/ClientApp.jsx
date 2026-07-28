@@ -3,6 +3,7 @@ import { T, F, FD } from "../theme/tokens";
 import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
 import { Shell, Card, Chip, RangeBand, rangeState } from "../components/ui";
+import { formatRangeProgress } from "../utils/rangeProgress";
 import { MealLogCard } from "../components/MealLogCard";
 import { MealRecipeCard } from "../components/MealRecipeCard";
 import { WaterLogCard } from "../components/WaterLogCard";
@@ -85,6 +86,7 @@ export function ClientApp({
   const cSt = rangeState(totals?.c, cLo, cHi);
   const fSt = rangeState(totals?.f, fLo, fHi);
   const calSt = rangeState(totals?.cal, calLo, calHi);
+  const calProgress = formatRangeProgress(totals?.cal, calLo, calHi, " cal");
   const anyOver = [pSt, cSt, fSt, calSt].includes("over");
   const daysWithEntries = Object.fromEntries(
     Object.entries(mealLogsByDate || {}).map(([d, list]) => [d, (list || []).length > 0]),
@@ -179,17 +181,18 @@ export function ClientApp({
             <RangeBand label="Protein" lo={pLo} hi={pHi} eaten={totals.p} />
             <RangeBand label="Carbs" lo={cLo} hi={cHi} eaten={totals.c} />
             <RangeBand label="Fat" lo={fLo} hi={fHi} eaten={totals.f} />
-            <div style={{ borderTop: `1px dashed ${T.border}`, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <div style={{ borderTop: `1px dashed ${T.border}`, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
               <span style={{
                 fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4,
                 color: calSt === "over" ? T.amber : calSt === "in" ? T.sage : T.inkSoft,
+                lineHeight: 1.35,
               }}>
-                {calSt === "empty" && "Calories land around"}
-                {calSt === "under" && <>Calories · {Math.round(totals.cal)}</>}
-                {calSt === "in" && <>Calories · {Math.round(totals.cal)} · ✓</>}
-                {calSt === "over" && <>Calories · {Math.round(totals.cal)} · {Math.round(totals.cal - calHi)} over</>}
+                {!calProgress && "Calories land around"}
+                {calProgress?.state === "under" && <>Calories · {Math.round(totals.cal)} · {calProgress.detail}</>}
+                {calProgress?.state === "in" && <>Calories · {Math.round(totals.cal)} · ✓ · {calProgress.detail}</>}
+                {calProgress?.state === "over" && <>Calories · {Math.round(totals.cal)} · {calProgress.detail}</>}
               </span>
-              <span style={{ fontFamily: FD, fontSize: 22, color: calSt === "in" ? "#3E5A46" : T.ink }}>
+              <span style={{ fontFamily: FD, fontSize: 22, color: calSt === "in" ? "#3E5A46" : T.ink, flexShrink: 0 }}>
                 {calLo}–{calHi}
               </span>
             </div>
