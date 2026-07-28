@@ -88,7 +88,7 @@ serve(async (req) => {
     }
 
     const payload = JSON.stringify({
-      title: title || "Message from Callie",
+      title: title || "Callie",
       body: body || "Open Messages",
       url: url || "/dashboard?tab=messages",
       ...(unreadCount != null ? { unreadCount: Number(unreadCount) || 0 } : {}),

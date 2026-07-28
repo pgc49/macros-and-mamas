@@ -42,7 +42,7 @@ export async function onRequestPost({ request, env }) {
 
       const unreadCount = await countUnreadForMama(env, clientId);
       const n = await sendPushToProfile(env, clientId, {
-        title: "Message from Callie",
+        title: "Callie",
         body: preview || "Open Messages in the app",
         url: "/dashboard?tab=messages",
         unreadCount: unreadCount || 1,
