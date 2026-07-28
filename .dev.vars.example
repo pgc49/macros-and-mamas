@@ -30,6 +30,10 @@ CRON_SECRET=replace-with-long-random-string
 ENROLLMENT_OPEN=false
 ENROLLMENT_CLOSED_AT=2026-07-26T02:00:00.000Z
 
+# Mama → Callie push/email: Callie only (never Tech Guy / other admins).
+# Comma-separated OK. Must match profiles.email for the coach admin row.
+CALLIE_NOTIFY_EMAIL=calista@nourishwithcalista.com
+
 # Support form → private GitHub issues (/api/support)
 # Fine-grained PAT: this repo only, Issues: Read and write. Nothing else.
 GITHUB_TOKEN=replace-me

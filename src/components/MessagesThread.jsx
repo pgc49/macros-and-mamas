@@ -21,6 +21,10 @@ export function MessagesThread({
   messages = [],
   selfId,
   peerName = "Callie",
+  /** Optional: map sender_id → display label for incoming bubbles. */
+  senderNameById = null,
+  /** Thread's mama id (admin views). Incoming from this id = mama; other admins = their name / Callie. */
+  threadClientId = null,
   busy = false,
   onSend,
   onEdit,
@@ -218,6 +222,21 @@ export function MessagesThread({
     && (onEdit || onDelete)
   );
 
+  /** Label for bubbles that aren't "mine" — always from the real sender, never a single peerName blanket. */
+  const incomingSenderLabel = (m) => {
+    if (m.kind === "announcement") return "Announcement · Callie";
+    if (senderNameById && senderNameById[m.sender_id]) {
+      return senderNameById[m.sender_id];
+    }
+    if (threadClientId) {
+      if (m.sender_id === threadClientId) return peerName || "Mama";
+      // Another admin wrote in this mama thread — brand as Callie unless mapped above.
+      return "Callie";
+    }
+    // Mama-facing 1:1: coach side is always Callie.
+    return peerName || "Callie";
+  };
+
   const openMenu = (m) => {
     if (!canManage(m) || editingId === m.id) return;
     setMenuId(m.id);
@@ -370,7 +389,7 @@ export function MessagesThread({
               >
                 {!mine && !deleted && (
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, marginBottom: 4 }}>
-                    {m.kind === "announcement" ? "Announcement · Callie" : (peerName || "Callie")}
+                    {incomingSenderLabel(m)}
                   </div>
                 )}
                 {deleted ? (

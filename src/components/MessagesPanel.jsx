@@ -92,6 +92,8 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
         subtitle="Private chat with Callie — stays in the app"
         messages={messages}
         selfId={userId}
+        peerName="Callie"
+        threadClientId={userId}
         busy={busy}
         onSend={send}
         onEdit={edit}
