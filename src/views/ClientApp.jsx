@@ -99,11 +99,13 @@ export function ClientApp({
       style={{
         display: "flex",
         justifyContent: "center",
+        alignItems: "center",
         gap: 4,
-        padding: "10px 16px 6px",
+        padding: "12px 12px 4px",
         maxWidth: 560,
         margin: "0 auto",
         boxSizing: "border-box",
+        width: "100%",
       }}
       aria-label="Main"
     >

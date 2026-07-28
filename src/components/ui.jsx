@@ -153,6 +153,7 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
   const hasBarSlot = !!bottomBar;
   return (
     <div
+      className={hasBarSlot ? "mam-shell mam-shell--tabs" : "mam-shell"}
       style={{
         fontFamily: F,
         background: T.bg,
@@ -160,11 +161,15 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
         minHeight: "100vh",
         ...(hasBarSlot
           ? {
-              height: "100dvh",
-              maxHeight: "100dvh",
+              /* Fixed inset avoids iOS standalone 100dvh clipping the tab bar
+                 under the home indicator. */
+              position: "fixed",
+              inset: 0,
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
+              minHeight: 0,
+              height: "auto",
             }
           : null),
       }}
@@ -179,7 +184,7 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
           boxSizing: "border-box",
           ...(hasBarSlot
             ? {
-                flex: 1,
+                flex: "1 1 auto",
                 minHeight: 0,
                 overflowY: "auto",
                 WebkitOverflowScrolling: "touch",
@@ -224,13 +229,13 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
       </div>
       {showBar && (
         <div
+          className="mam-tabbar"
           style={{
-            flexShrink: 0,
+            flex: "0 0 auto",
             background: "#fff",
             borderTop: `1px solid ${T.border}`,
-            /* iOS Home Screen: env(safe-area-inset-bottom) is sometimes 0 even with
-               viewport-fit=cover — floor at 34px so labels clear the home indicator. */
-            paddingBottom: "max(34px, calc(10px + env(safe-area-inset-bottom, 0px)))",
+            /* Plain px floor — iOS PWA often ignores max()/env() in inline styles. */
+            paddingBottom: 48,
           }}
         >
           {bottomBar}
