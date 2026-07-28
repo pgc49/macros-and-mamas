@@ -22,7 +22,7 @@ import {
   normalizeSlot,
   resolveLogSlot,
 } from "../utils/mealSlots";
-import { addMacros, foodFromTip, mergeDescription } from "../utils/recipeMacros";
+import { addMacros } from "../utils/recipeMacros";
 import { AddFoodBox } from "./AddFoodBox";
 
 /** She pasted a link — the estimator only reads text, so say so plainly. */
@@ -495,15 +495,6 @@ export function MealLogCard({
     runTextEstimate(text);
   };
 
-  /** Coach tip suggested a food — drop it into the editable source text. */
-  const applyTipFood = (food) => {
-    if (!food || !estimateDraft) return;
-    setEstimateDraft((d) => ({
-      ...d,
-      sourceText: mergeDescription(d.sourceText, food),
-    }));
-  };
-
   const clearEstimateInputs = () => {
     clearSnap();
     setDesc("");
@@ -547,8 +538,6 @@ export function MealLogCard({
 
   const slotBuckets = groupEntriesBySlot(entries, { logDate: date, todayIso: today });
   const hasAnyEntries = entries.length > 0;
-  // When the tip suggests a food, offer it as a one-tap amendment.
-  const tipFood = foodFromTip(estimateDraft?.tip);
 
   return (
     <div style={{ marginTop: 4 }}>
@@ -1136,27 +1125,6 @@ export function MealLogCard({
             {estimateDraft.tip && (
               <div style={{ fontSize: 13, color: T.accentDeep, lineHeight: 1.5, marginBottom: 10 }}>
                 💬 {estimateDraft.tip}
-                {tipFood && !busy && (
-                  <button
-                    type="button"
-                    onClick={() => applyTipFood(tipFood)}
-                    style={{
-                      display: "block",
-                      marginTop: 6,
-                      background: "none",
-                      border: "none",
-                      padding: 0,
-                      fontFamily: F,
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                      color: T.accentDeep,
-                      cursor: "pointer",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    I did add {tipFood} →
-                  </button>
-                )}
               </div>
             )}
             {/* Edit exactly what drove the estimate — Describe text, or the
