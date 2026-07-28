@@ -10,6 +10,15 @@ function displayName(c) {
   return fullName(c) || c.name || c.email || "Mama";
 }
 
+function isAdminProfile(c) {
+  return String(c?.role || "").toLowerCase() === "admin";
+}
+
+/** One shared Patrick↔Callie thread (whichever uuid sorts first). */
+function canonicalAdminThreadId(a, b) {
+  return String(a) < String(b) ? a : b;
+}
+
 function previewText(m) {
   if (m?.deleted_at) return "Message deleted";
   const body = String(m?.body || "").replace(/\s+/g, " ").trim();
@@ -19,6 +28,17 @@ function previewText(m) {
     return m.attachment_name ? `Sent ${m.attachment_name}` : "Sent an attachment";
   }
   return "";
+}
+
+/**
+ * Who the admin is chatting with in this thread (not herself).
+ */
+function peerIdForThread({ clientId, adminUserId, participantIds = [], clientMap }) {
+  const client = clientMap.get(clientId);
+  if (!isAdminProfile(client)) return clientId;
+  if (clientId !== adminUserId) return clientId;
+  const other = (participantIds || []).find((id) => id && id !== adminUserId);
+  return other || null;
 }
 
 /**
@@ -99,8 +119,32 @@ export function AdminMessages({
     };
   }, [activeId, refreshInbox, refreshThread]);
 
-  const activeClient = activeId ? clientMap.get(activeId) : null;
-  const activeName = displayName(activeClient);
+  const activePeerId = useMemo(() => {
+    if (!activeId || !adminUserId) return activeId;
+    const fromMsgs = messages
+      .map((m) => m.sender_id)
+      .filter((id) => id && id !== adminUserId);
+    const participants = [...new Set([activeId, ...fromMsgs])];
+    return peerIdForThread({
+      clientId: activeId,
+      adminUserId,
+      participantIds: participants,
+      clientMap,
+    }) || activeId;
+  }, [activeId, adminUserId, messages, clientMap]);
+
+  const activePeer = activePeerId ? clientMap.get(activePeerId) : null;
+  const activeName = displayName(activePeer);
+  const activeIsAdmin = isAdminProfile(activePeer);
+
+  const openThreadWith = (profile) => {
+    if (!profile?.id) return;
+    if (isAdminProfile(profile) && adminUserId) {
+      setActiveId(canonicalAdminThreadId(adminUserId, profile.id));
+      return;
+    }
+    setActiveId(profile.id);
+  };
 
   const send = async (body, file = null) => {
     if (!activeId) return;
@@ -143,11 +187,14 @@ export function AdminMessages({
     const q = query.trim().toLowerCase();
     return (roster || [])
       .filter((c) => {
-        if (adminUserId && c.id === adminUserId) return false; // don't start a thread with yourself
-        const isAdmin = String(c.role || "").toLowerCase() === "admin";
+        if (adminUserId && c.id === adminUserId) return false;
+        const isAdmin = isAdminProfile(c);
         const active = c.stage === "active" || c.status === "active" || isAdmin;
         if (!active) return false;
-        if (inboxIds.has(c.id)) return false;
+        const threadId = (isAdmin && adminUserId)
+          ? canonicalAdminThreadId(adminUserId, c.id)
+          : c.id;
+        if (inboxIds.has(threadId)) return false;
         if (!q) return true;
         const hay = `${displayName(c)} ${c.email || ""} ${c.phone || ""}`.toLowerCase();
         return hay.includes(q);
@@ -164,7 +211,7 @@ export function AdminMessages({
     <div>
       <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 28, margin: "4px 0 6px" }}>Messages</h2>
       <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px", lineHeight: 1.5 }}>
-        1:1 with each mama — same thread she sees under Messages. Admins (you + Callie) are listed too for testing.
+        1:1 with each mama — same thread she sees under Messages. Admins (you + Callie) share one test thread.
       </p>
       {error && <div style={{ fontSize: 13, color: T.amber, marginBottom: 10 }}>{error}</div>}
 
@@ -185,10 +232,16 @@ export function AdminMessages({
             </div>
           )}
           {sortedInbox.map((row) => {
-            const c = clientMap.get(row.clientId);
+            const peerId = peerIdForThread({
+              clientId: row.clientId,
+              adminUserId,
+              participantIds: row.participantIds,
+              clientMap,
+            });
+            const c = clientMap.get(peerId || row.clientId);
             const name = displayName(c);
             const active = activeId === row.clientId;
-            const isAdminRow = String(c?.role || "").toLowerCase() === "admin";
+            const isAdminRow = isAdminProfile(c);
             return (
               <button
                 key={row.clientId}
@@ -274,12 +327,12 @@ export function AdminMessages({
             </div>
           ) : (
             startable.map((c) => {
-              const isAdminRow = String(c.role || "").toLowerCase() === "admin";
+              const isAdminRow = isAdminProfile(c);
               return (
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => setActiveId(c.id)}
+                  onClick={() => openThreadWith(c)}
                   style={{
                     display: "block",
                     width: "100%",
@@ -312,12 +365,13 @@ export function AdminMessages({
             <MessagesThread
               title={activeName}
               subtitle={
-                String(activeClient?.role || "").toLowerCase() === "admin"
-                  ? `${activeClient?.email || "Admin"} · test thread`
-                  : (activeClient?.email || "Private 1:1")
+                activeIsAdmin
+                  ? `${activePeer?.email || "Admin"} · test thread`
+                  : (activePeer?.email || "Private 1:1")
               }
               messages={messages}
               selfId={adminUserId}
+              peerName={activeName}
               busy={busy}
               onSend={send}
               onEdit={edit}

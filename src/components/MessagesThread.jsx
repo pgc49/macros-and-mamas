@@ -20,6 +20,7 @@ export function MessagesThread({
   subtitle = "Private messages — just you two",
   messages = [],
   selfId,
+  peerName = "Callie",
   busy = false,
   onSend,
   onEdit,
@@ -357,7 +358,7 @@ export function MessagesThread({
               >
                 {!mine && !deleted && (
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, marginBottom: 4 }}>
-                    Callie
+                    {peerName || "Callie"}
                   </div>
                 )}
                 {deleted ? (

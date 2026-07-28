@@ -104,6 +104,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
         subtitle=""
         messages={messages}
         selfId={adminUserId}
+        peerName={first}
         busy={busy}
         onSend={send}
         onEdit={edit}

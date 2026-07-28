@@ -1298,9 +1298,12 @@ export const db = {
           clientId: m.client_id,
           lastMessage: m,
           unread: 0,
+          participantIds: new Set(),
         });
       }
       const row = byClient.get(m.client_id);
+      row.participantIds.add(m.sender_id);
+      row.participantIds.add(m.client_id);
       // Prefer a non-deleted last preview when possible
       if (row.lastMessage?.deleted_at && !m.deleted_at) {
         row.lastMessage = m;
@@ -1309,9 +1312,14 @@ export const db = {
         row.unread += 1;
       }
     }
-    return [...byClient.values()].sort(
-      (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at),
-    );
+    return [...byClient.values()]
+      .map((row) => ({
+        ...row,
+        participantIds: [...row.participantIds],
+      }))
+      .sort(
+        (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at),
+      );
   },
 
   async savePushSubscription({ endpoint, p256dh, auth, userAgent }) {
