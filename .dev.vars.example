@@ -14,8 +14,6 @@ STRIPE_PRICE_ID_FOUNDING=price_...149
 STRIPE_PRICE_ID_WAITLIST=price_...249
 STRIPE_PRICE_ID_FULL=price_...299
 STRIPE_WEBHOOK_SECRET=replace-me
-# Optional — Stripe Customer Portal configuration id (Payments → Manage card)
-# STRIPE_BILLING_PORTAL_CONFIGURATION=bpc_...
 
 # Supabase — URL is public; the server key is webhook-only (never ship to the client)
 SUPABASE_URL=https://your-project.supabase.co
