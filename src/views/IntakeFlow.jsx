@@ -1,6 +1,5 @@
 import { FD, T, F } from "../theme/tokens";
 import { Shell, Card, Btn, Field, Chip, inputStyle } from "../components/ui";
-import { ageFromDateOfBirth } from "../db/db";
 
 /** Full intake — no eligibility denials. Callie reviews flags in admin. */
 export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
@@ -8,8 +7,6 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
 
   const monthsNum = Number(profile.monthsPP);
   const monthsValid = profile.monthsPP !== "" && !Number.isNaN(monthsNum);
-  const dob = String(profile.dateOfBirth || "").trim();
-  const dobValid = !!ageFromDateOfBirth(dob);
 
   const setPregnant = (v) => {
     set("pregnant", v);
@@ -71,21 +68,7 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
               />
             </Field>
           </div>
-          <Field label="Date of birth">
-            <input
-              style={inputStyle}
-              type="date"
-              value={dob}
-              onChange={(e) => set("dateOfBirth", e.target.value)}
-              autoComplete="bday"
-              max={new Date().toISOString().slice(0, 10)}
-            />
-          </Field>
-          {dobValid && (
-            <div style={{ fontSize: 13, color: T.inkSoft, marginTop: -6, marginBottom: 12 }}>
-              Age {ageFromDateOfBirth(dob)}
-            </div>
-          )}
+          <Field label="Age"><input style={inputStyle} inputMode="numeric" value={profile.age} onChange={(e) => set("age", e.target.value)} placeholder="33" /></Field>
           <Field label="Current weight (lbs)"><input style={inputStyle} inputMode="numeric" value={profile.currentWeight} onChange={(e) => set("currentWeight", e.target.value)} placeholder="162" /></Field>
           <Field label="Goal weight (lbs) — where you feel your best"><input style={inputStyle} inputMode="numeric" value={profile.goalWeight} onChange={(e) => set("goalWeight", e.target.value)} placeholder="145" /></Field>
           <Field label="Cell number — your WhatsApp group invite comes by text">
@@ -99,7 +82,6 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
             disabled={
               !String(profile.name || "").trim()
               || !String(profile.lastName || "").trim()
-              || !dobValid
               || !profile.goalWeight
               || !profile.currentWeight
               || !profile.phone

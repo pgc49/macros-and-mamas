@@ -20,9 +20,6 @@ import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./ro
 import { SalesPage } from "./views/SalesPage";
 import { WaitlistPage } from "./views/WaitlistPage";
 import { SupportPage } from "./views/SupportPage";
-import { AccountPage } from "./views/AccountPage";
-import { ProfilePage } from "./views/ProfilePage";
-import { PaymentsPage } from "./views/PaymentsPage";
 import { IntakeFlow } from "./views/IntakeFlow";
 import { PendingPage } from "./views/PendingPage";
 import { JoinPage } from "./views/JoinPage";
@@ -37,7 +34,6 @@ import { Shell } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
 import { isStandaloneDisplay, registerMessageServiceWorker, syncAppBadge } from "./lib/push";
-import { ageFromDateOfBirth } from "./db/db";
 
 /* Admin is a separate chunk — never loaded on customer marketing/dashboard paths. */
 const AdminPortal = lazy(() =>
@@ -45,14 +41,13 @@ const AdminPortal = lazy(() =>
 );
 
 const EMPTY_PROFILE = {
-  name: "", lastName: "", age: "", dateOfBirth: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
+  name: "", lastName: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
   bottleOz: 24,
   breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
   stress: "medium", insulinResistance: false, diet: "none",
   prefB: "", prefL: "", prefD: "", prefS: "", seasonNote: "",
   allergens: [], allergenNote: "", foodAvoids: "",
   coachNote: "", coachNoteAt: null, coachNoteDismissedAt: null,
-  avatarPath: null, avatarUrl: null,
 };
 
 export default function App() {
@@ -281,19 +276,10 @@ export default function App() {
     if (!entryPaths.includes(location.pathname)) return;
     if (routedAfterLoad.current && location.pathname === PATHS.home) return;
 
-    // Deep-links: after sign-in, return to support / account (not dashboard).
+    // Tech help deep-link: after sign-in, return to /support (not dashboard).
     if (location.pathname === PATHS.signin && location.state?.from === PATHS.support) {
       routedAfterLoad.current = true;
       navigate(PATHS.support, { replace: true });
-      return;
-    }
-    if (
-      location.pathname === PATHS.signin
-      && location.state?.from
-      && String(location.state.from).startsWith("/account")
-    ) {
-      routedAfterLoad.current = true;
-      navigate(location.state.from, { replace: true });
       return;
     }
 
@@ -340,11 +326,8 @@ export default function App() {
 
   /* No auto-deny / auto-refund. Pregnant & early postpartum flag in admin for Callie. */
   const submitIntake = async () => {
-    const derivedAge = ageFromDateOfBirth(profile.dateOfBirth);
     const forEngine = {
       ...profile,
-      // Store age derived from DOB (column kept for admin/display; DOB is source of truth)
-      age: derivedAge != null ? String(derivedAge) : profile.age,
       // monthsPP only applies when nursing; clear for non-BF so storage stays clean
       monthsPP: profile.breastfeeding ? profile.monthsPP : "",
     };
@@ -367,7 +350,6 @@ export default function App() {
             body: JSON.stringify({
               name: [forEngine.name, forEngine.lastName].filter(Boolean).join(" "),
               age: forEngine.age,
-              dateOfBirth: forEngine.dateOfBirth || null,
               currentWeight: forEngine.currentWeight,
               goalWeight: forEngine.goalWeight,
               breastfeeding: forEngine.breastfeeding,
@@ -1204,61 +1186,20 @@ export default function App() {
       />
 
       <Route
-        path={PATHS.account}
-        element={
-          !user
-            ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.account }} />
-            : <AccountPage />
-        }
-      />
-      <Route
-        path={PATHS.accountProfile}
-        element={
-          !user
-            ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.accountProfile }} />
-            : (
-              <ProfilePage
-                onProfileSaved={(saved) => {
-                  if (saved) setProfile((prev) => ({ ...prev, ...saved }));
-                }}
-              />
-            )
-        }
-      />
-      <Route
-        path={PATHS.accountPayments}
-        element={
-          !user
-            ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.accountPayments }} />
-            : <PaymentsPage />
-        }
-      />
-
-      <Route
         path={PATHS.signin}
         element={
           user
             ? (
               <Navigate
-                to={
-                  location.state?.from
-                  && String(location.state.from).startsWith("/account")
-                    ? location.state.from
-                    : location.state?.from === PATHS.support
-                      ? PATHS.support
-                      : homePathFor({ isAdmin, approved, paid, macros, refunded })
-                }
+                to={location.state?.from === PATHS.support
+                  ? PATHS.support
+                  : homePathFor({ isAdmin, approved, paid, macros, refunded })}
                 replace
               />
             )
             : (
               <SignInPage
-                mode={
-                  location.state?.from === PATHS.support
-                  || (location.state?.from && String(location.state.from).startsWith("/account"))
-                    ? "signin"
-                    : authMode
-                }
+                mode={location.state?.from === PATHS.support ? "signin" : authMode}
                 onSwitchMode={switchAuthMode}
                 onBack={() => navigate(PATHS.home)}
               />

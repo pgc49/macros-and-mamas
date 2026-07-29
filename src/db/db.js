@@ -9,31 +9,11 @@ import { sanitizeWeekMeals } from "../utils/planMealShape";
 /*    profiles, macros, checkins, weighins, meal_logs, water_logs      */
 /* ------------------------------------------------------------------ */
 
-/** Age in whole years from YYYY-MM-DD (local), or null. */
-export function ageFromDateOfBirth(dob) {
-  if (!dob || !/^\d{4}-\d{2}-\d{2}$/.test(String(dob))) return null;
-  const [y, m, d] = String(dob).split("-").map(Number);
-  const born = new Date(y, m - 1, d);
-  if (Number.isNaN(born.getTime())) return null;
-  const now = new Date();
-  let age = now.getFullYear() - born.getFullYear();
-  const md = now.getMonth() - born.getMonth();
-  if (md < 0 || (md === 0 && now.getDate() < born.getDate())) age -= 1;
-  return age >= 0 && age < 120 ? age : null;
-}
-
 function profileToRow(p) {
-  const dob = p.dateOfBirth && /^\d{4}-\d{2}-\d{2}$/.test(String(p.dateOfBirth))
-    ? String(p.dateOfBirth)
-    : null;
-  const ageFromDob = ageFromDateOfBirth(dob);
   return {
     name: p.name || null,
     last_name: p.lastName || null,
-    age: ageFromDob != null
-      ? ageFromDob
-      : (p.age === "" || p.age == null ? null : Number(p.age)),
-    date_of_birth: dob,
+    age: p.age === "" || p.age == null ? null : Number(p.age),
     phone: p.phone || null,
     current_weight: p.currentWeight === "" || p.currentWeight == null ? null : Number(p.currentWeight),
     goal_weight: p.goalWeight === "" || p.goalWeight == null ? null : Number(p.goalWeight),
@@ -54,7 +34,6 @@ function profileToRow(p) {
     allergen_note: p.allergenNote?.trim() ? p.allergenNote.trim() : null,
     food_avoids: p.foodAvoids?.trim() ? p.foodAvoids.trim() : null,
     bottle_oz: p.bottleOz != null && p.bottleOz !== "" ? Math.round(Number(p.bottleOz)) : 24,
-    avatar_path: p.avatarPath || null,
   };
 }
 
@@ -66,21 +45,12 @@ export function fullName(profileOrRow) {
   return [first, last].filter(Boolean).join(" ");
 }
 
-/** Public URL for a profile avatar path in the avatars bucket. */
-export function avatarPublicUrl(avatarPath) {
-  if (!avatarPath) return null;
-  const { data } = supabase.storage.from("avatars").getPublicUrl(avatarPath);
-  return data?.publicUrl || null;
-}
-
 function rowToProfile(row) {
   if (!row) return null;
-  const avatarPath = row.avatar_path || null;
   return {
     name: row.name || "",
     lastName: row.last_name || "",
     age: row.age != null ? String(row.age) : "",
-    dateOfBirth: row.date_of_birth || "",
     phone: row.phone || "",
     currentWeight: row.current_weight != null ? String(row.current_weight) : "",
     goalWeight: row.goal_weight != null ? String(row.goal_weight) : "",
@@ -104,12 +74,9 @@ function rowToProfile(row) {
     coachNoteAt: row.coach_note_at || null,
     coachNoteDismissedAt: row.coach_note_dismissed_at || null,
     bottleOz: row.bottle_oz != null ? Number(row.bottle_oz) : 24,
-    avatarPath,
-    avatarUrl: avatarPublicUrl(avatarPath),
     status: row.status,
     paid: !!row.paid,
     refunded: !!row.refunded,
-    paidAt: row.paid_at || null,
     week: row.week ?? 0,
     role: row.role,
     createdAt: row.created_at || null,
@@ -875,111 +842,6 @@ export const db = {
       .eq("id", uid);
     if (error) throw error;
     return n;
-  },
-
-  /**
-   * Account page: name, DOB/age, phone, postpartum flags, goals, tastes.
-   * Does not touch payment / role / status (DB triggers enforce).
-   */
-  async updateAccountProfile(patch = {}) {
-    const uid = await requireUserId();
-    const row = {};
-    if (patch.name !== undefined) row.name = String(patch.name || "").trim().slice(0, 80) || null;
-    if (patch.lastName !== undefined) row.last_name = String(patch.lastName || "").trim().slice(0, 80) || null;
-    if (patch.phone !== undefined) row.phone = String(patch.phone || "").trim().slice(0, 40) || null;
-    if (patch.dateOfBirth !== undefined) {
-      const dob = String(patch.dateOfBirth || "").trim();
-      if (dob && /^\d{4}-\d{2}-\d{2}$/.test(dob)) {
-        row.date_of_birth = dob;
-        const derived = ageFromDateOfBirth(dob);
-        if (derived != null) row.age = derived;
-      } else if (!dob) {
-        row.date_of_birth = null;
-      }
-    }
-    if (patch.age !== undefined && row.age === undefined) {
-      row.age = patch.age === "" || patch.age == null ? null : Number(patch.age);
-    }
-    if (patch.currentWeight !== undefined) {
-      row.current_weight = patch.currentWeight === "" || patch.currentWeight == null
-        ? null
-        : Number(patch.currentWeight);
-    }
-    if (patch.goalWeight !== undefined) {
-      row.goal_weight = patch.goalWeight === "" || patch.goalWeight == null
-        ? null
-        : Number(patch.goalWeight);
-    }
-    if (patch.pregnant !== undefined) row.pregnant = patch.pregnant;
-    if (patch.breastfeeding !== undefined) row.breastfeeding = patch.breastfeeding;
-    if (patch.monthsPP !== undefined) {
-      row.months_pp = patch.monthsPP === "" || patch.monthsPP == null
-        ? null
-        : Number(patch.monthsPP);
-    }
-    if (patch.goal !== undefined) row.goal = patch.goal || null;
-    if (patch.activity !== undefined) row.activity = patch.activity || null;
-    if (patch.stress !== undefined) row.stress = patch.stress || null;
-    if (patch.insulinResistance !== undefined) {
-      row.insulin_resistance = !!patch.insulinResistance;
-    }
-    if (Object.keys(row).length === 0) return null;
-    const { data, error } = await supabase
-      .from("profiles")
-      .update(row)
-      .eq("id", uid)
-      .select("*")
-      .maybeSingle();
-    if (error) throw error;
-    return rowToProfile(data);
-  },
-
-  /** Upload/replace avatar image. Returns updated profile fields. */
-  async uploadAvatar(file) {
-    const uid = await requireUserId();
-    if (!file || !(file instanceof Blob)) throw new Error("missing file");
-    const mime = String(file.type || "").toLowerCase();
-    const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
-    if (!allowed.has(mime)) throw new Error("Use a JPG, PNG, or WEBP photo.");
-    if (file.size > 5 * 1024 * 1024) throw new Error("Photo must be under 5 MB.");
-
-    const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
-    const path = `${uid}/avatar.${ext}`;
-
-    const { error: upErr } = await supabase.storage
-      .from("avatars")
-      .upload(path, file, { upsert: true, contentType: mime, cacheControl: "3600" });
-    if (upErr) throw upErr;
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .update({ avatar_path: path })
-      .eq("id", uid)
-      .select("*")
-      .maybeSingle();
-    if (error) throw error;
-    return rowToProfile(data);
-  },
-
-  async removeAvatar() {
-    const uid = await requireUserId();
-    const { data: cur } = await supabase
-      .from("profiles")
-      .select("avatar_path")
-      .eq("id", uid)
-      .maybeSingle();
-    const path = cur?.avatar_path;
-    if (path) {
-      await supabase.storage.from("avatars").remove([path]);
-    }
-    const { data, error } = await supabase
-      .from("profiles")
-      .update({ avatar_path: null })
-      .eq("id", uid)
-      .select("*")
-      .maybeSingle();
-    if (error) throw error;
-    return rowToProfile(data);
   },
 
   /** Update diet + allergens + food loves — used by planner + AI suggest. */
