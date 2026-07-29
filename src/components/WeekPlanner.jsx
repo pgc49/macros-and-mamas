@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
-import { Card, Btn, Chip } from "./ui";
+import { Card, Btn } from "./ui";
 import { GroceryListBody } from "./GroceryListPanel";
 import { withRecipeDetail, mealToCard } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
