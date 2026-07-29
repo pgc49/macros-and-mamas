@@ -755,9 +755,9 @@ export default function App() {
       if (date !== mealLogDate) {
         selectMealLogDate(date);
       }
+      // Stay on Meals / Plan / Today so mamas can keep adding more than one meal.
       setLogFlash(`Added ${recipe.name} to Today`);
       window.setTimeout(() => setLogFlash(""), 3500);
-      setTab("today");
     }
     return ok;
   };
