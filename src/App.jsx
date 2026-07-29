@@ -37,6 +37,7 @@ import { Shell } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
 import { isStandaloneDisplay, registerMessageServiceWorker, syncAppBadge } from "./lib/push";
+import { ageFromDateOfBirth } from "./db/db";
 
 /* Admin is a separate chunk — never loaded on customer marketing/dashboard paths. */
 const AdminPortal = lazy(() =>
@@ -339,8 +340,11 @@ export default function App() {
 
   /* No auto-deny / auto-refund. Pregnant & early postpartum flag in admin for Callie. */
   const submitIntake = async () => {
+    const derivedAge = ageFromDateOfBirth(profile.dateOfBirth);
     const forEngine = {
       ...profile,
+      // Store age derived from DOB (column kept for admin/display; DOB is source of truth)
+      age: derivedAge != null ? String(derivedAge) : profile.age,
       // monthsPP only applies when nursing; clear for non-BF so storage stays clean
       monthsPP: profile.breastfeeding ? profile.monthsPP : "",
     };
@@ -363,6 +367,7 @@ export default function App() {
             body: JSON.stringify({
               name: [forEngine.name, forEngine.lastName].filter(Boolean).join(" "),
               age: forEngine.age,
+              dateOfBirth: forEngine.dateOfBirth || null,
               currentWeight: forEngine.currentWeight,
               goalWeight: forEngine.goalWeight,
               breastfeeding: forEngine.breastfeeding,

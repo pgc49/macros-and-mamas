@@ -264,24 +264,19 @@ export function ProfilePage({ onProfileSaved }) {
             type="date"
             value={profile.dateOfBirth || ""}
             onChange={(e) => set("dateOfBirth", e.target.value)}
+            autoComplete="bday"
+            max={new Date().toISOString().slice(0, 10)}
           />
         </Field>
-        {!profile.dateOfBirth && (
-          <Field label="Age (if you prefer not to share birthday)">
-            <input
-              style={inputStyle}
-              inputMode="numeric"
-              value={profile.age || ""}
-              onChange={(e) => set("age", e.target.value)}
-              placeholder="33"
-            />
-          </Field>
-        )}
-        {derivedAge != null && (
+        {derivedAge != null ? (
           <div style={{ fontSize: 13, color: T.inkSoft, marginTop: -6, marginBottom: 12 }}>
-            Age on file: {derivedAge}
+            Age {derivedAge}
           </div>
-        )}
+        ) : profile.age ? (
+          <div style={{ fontSize: 13, color: T.inkSoft, marginTop: -6, marginBottom: 12 }}>
+            Age on file: {profile.age} (add birthday so it stays accurate)
+          </div>
+        ) : null}
         <Field label="Cell number">
           <input style={inputStyle} value={profile.phone || ""} onChange={(e) => set("phone", e.target.value)} />
         </Field>
