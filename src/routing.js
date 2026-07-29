@@ -16,6 +16,10 @@ export const PATHS = {
   resetPassword: "/reset-password",
   /** Signed-in tech/support form — WhatsApp link prompts sign-in → GitHub issue. */
   support: "/support",
+  /** Account hub + profile / payments (paid clients). */
+  account: "/account",
+  accountProfile: "/account/profile",
+  accountPayments: "/account/payments",
 };
 
 /**
