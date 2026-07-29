@@ -13,20 +13,27 @@ serve(async (req) => {
   if (denied) return denied;
 
   try {
-    const { email, name, preview } = await req.json();
+    const { email, name, preview, announcement } = await req.json();
     if (!email) return jsonResponse({ error: "missing email" }, 400);
 
     const first = (name || "Mama").trim().split(/\s+/)[0] || "Mama";
     const snippet = String(preview || "").trim().slice(0, 160);
+    const isAnnouncement = !!announcement;
 
     const { data, error } = await resend.emails.send({
       from: FROM_CALLIE,
       to: [email],
       reply_to: "calista@nourishwithcalista.com",
-      subject: "Callie sent you a message",
+      subject: isAnnouncement ? "Update from Callie" : "Callie sent you a message",
       html: renderEmail({
         header: `Hi ${first},`,
-        body: `
+        body: isAnnouncement
+          ? `
+          <p>Callie shared an update in Macros and Mamas.</p>
+          ${snippet ? `<p style="background:#FAF5F2;border-radius:12px;padding:12px 14px;color:#33272E"><i>${escapeHtml(snippet)}</i></p>` : ""}
+          <p>Open the app → <b>Messages</b> to read it.</p>
+        `
+          : `
           <p>Callie left you a message in Macros and Mamas.</p>
           ${snippet ? `<p style="background:#FAF5F2;border-radius:12px;padding:12px 14px;color:#33272E"><i>${escapeHtml(snippet)}</i></p>` : ""}
           <p>Open the app → <b>Messages</b> to read and reply.</p>

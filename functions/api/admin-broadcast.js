@@ -57,6 +57,7 @@ export async function onRequestPost({ request, env }) {
         email,
         name: contact.name || "Mama",
         preview: preview || "Callie posted an update in Messages.",
+        announcement: true,
       });
       if (mail.ok) {
         emailSent += 1;
