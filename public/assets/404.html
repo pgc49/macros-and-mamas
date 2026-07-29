@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Asset missing — Macros and Mamas</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: Georgia, "Times New Roman", serif;
+        background: #FBF7F2;
+        color: #2B1C24;
+        padding: 24px;
+        text-align: center;
+      }
+      p { max-width: 28rem; line-height: 1.5; color: #5C4A52; }
+      a { color: #B4416B; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Cloudflare Pages uses the nearest 404.html for missing paths.
+      Keeping this under /assets/ makes missing hashed JS/CSS return a real 404
+      instead of soft-404'ing to the SPA shell as text/html (which white-screens
+      module loads, and can be cached under /assets/* immutable headers).
+    -->
+    <div>
+      <h1 style="font-weight: 400; font-size: 1.5rem;">Something’s out of date</h1>
+      <p>This app file isn’t on the server (usually right after a deploy). Refresh the page — if that fails, force-close the home-screen app and reopen.</p>
+      <p><a href="/">Go to Macros and Mamas</a></p>
+    </div>
+  </body>
+</html>
