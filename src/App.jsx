@@ -280,10 +280,19 @@ export default function App() {
     if (!entryPaths.includes(location.pathname)) return;
     if (routedAfterLoad.current && location.pathname === PATHS.home) return;
 
-    // Tech help deep-link: after sign-in, return to /support (not dashboard).
+    // Deep-links: after sign-in, return to support / account (not dashboard).
     if (location.pathname === PATHS.signin && location.state?.from === PATHS.support) {
       routedAfterLoad.current = true;
       navigate(PATHS.support, { replace: true });
+      return;
+    }
+    if (
+      location.pathname === PATHS.signin
+      && location.state?.from
+      && String(location.state.from).startsWith("/account")
+    ) {
+      routedAfterLoad.current = true;
+      navigate(location.state.from, { replace: true });
       return;
     }
 
