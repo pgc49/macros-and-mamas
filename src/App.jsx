@@ -20,6 +20,9 @@ import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./ro
 import { SalesPage } from "./views/SalesPage";
 import { WaitlistPage } from "./views/WaitlistPage";
 import { SupportPage } from "./views/SupportPage";
+import { AccountPage } from "./views/AccountPage";
+import { ProfilePage } from "./views/ProfilePage";
+import { PaymentsPage } from "./views/PaymentsPage";
 import { IntakeFlow } from "./views/IntakeFlow";
 import { PendingPage } from "./views/PendingPage";
 import { JoinPage } from "./views/JoinPage";
@@ -41,13 +44,14 @@ const AdminPortal = lazy(() =>
 );
 
 const EMPTY_PROFILE = {
-  name: "", lastName: "", age: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
+  name: "", lastName: "", age: "", dateOfBirth: "", phone: "", currentWeight: "", goalWeight: "", monthsPP: "",
   bottleOz: 24,
   breastfeeding: null, pregnant: null, goal: "lose", activity: "moderate",
   stress: "medium", insulinResistance: false, diet: "none",
   prefB: "", prefL: "", prefD: "", prefS: "", seasonNote: "",
   allergens: [], allergenNote: "", foodAvoids: "",
   coachNote: "", coachNoteAt: null, coachNoteDismissedAt: null,
+  avatarPath: null, avatarUrl: null,
 };
 
 export default function App() {
@@ -1186,20 +1190,61 @@ export default function App() {
       />
 
       <Route
+        path={PATHS.account}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.account }} />
+            : <AccountPage />
+        }
+      />
+      <Route
+        path={PATHS.accountProfile}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.accountProfile }} />
+            : (
+              <ProfilePage
+                onProfileSaved={(saved) => {
+                  if (saved) setProfile((prev) => ({ ...prev, ...saved }));
+                }}
+              />
+            )
+        }
+      />
+      <Route
+        path={PATHS.accountPayments}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.accountPayments }} />
+            : <PaymentsPage />
+        }
+      />
+
+      <Route
         path={PATHS.signin}
         element={
           user
             ? (
               <Navigate
-                to={location.state?.from === PATHS.support
-                  ? PATHS.support
-                  : homePathFor({ isAdmin, approved, paid, macros, refunded })}
+                to={
+                  location.state?.from
+                  && String(location.state.from).startsWith("/account")
+                    ? location.state.from
+                    : location.state?.from === PATHS.support
+                      ? PATHS.support
+                      : homePathFor({ isAdmin, approved, paid, macros, refunded })
+                }
                 replace
               />
             )
             : (
               <SignInPage
-                mode={location.state?.from === PATHS.support ? "signin" : authMode}
+                mode={
+                  location.state?.from === PATHS.support
+                  || (location.state?.from && String(location.state.from).startsWith("/account"))
+                    ? "signin"
+                    : authMode
+                }
                 onSwitchMode={switchAuthMode}
                 onBack={() => navigate(PATHS.home)}
               />

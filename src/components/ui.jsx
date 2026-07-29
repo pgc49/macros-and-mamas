@@ -137,8 +137,18 @@ export const RangeBand = ({ label, lo, hi, unit = "g", eaten }) => {
 /* Shell — prototype's coach toggle and reset button removed.
    Shows signed-in email + sign-out when a session exists.
    Optional bottomBar docks via flex (avoids iOS position:fixed mid-screen jumps). */
+function accountInitials(profile, email) {
+  const first = String(profile?.name || "").trim();
+  const last = String(profile?.last_name || "").trim();
+  if (first || last) {
+    return [first[0], last[0]].filter(Boolean).join("").toUpperCase();
+  }
+  const local = String(email || "").split("@")[0] || "?";
+  return local.slice(0, 2).toUpperCase();
+}
+
 export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => {
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin, signOut } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const linkStyle = {
@@ -146,6 +156,8 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
   };
   const showBar = !!bottomBar && !hideBottomBar;
   const hasBarSlot = !!bottomBar;
+  const onAccount = pathname === PATHS.account || pathname.startsWith(`${PATHS.account}/`);
+  const initials = accountInitials(profile, user?.email);
   return (
     <div
       className={hasBarSlot ? "mam-shell mam-shell--tabs" : "mam-shell"}
@@ -193,10 +205,9 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
             <div style={{ fontSize: 12, color: T.accentDeep, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase" }}>ranges, not rules</div>
           </div>
           {user?.email && (
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 11.5, color: T.inkSoft, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {isAdmin && (
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 2 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
                   {pathname !== PATHS.admin && (
                     <Link to={PATHS.admin} style={linkStyle}>Admin</Link>
                   )}
@@ -205,18 +216,44 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
                   )}
                 </div>
               )}
-              <button
-                onClick={async () => {
-                  await signOut();
-                  navigate(PATHS.home);
-                }}
+              <Link
+                to={PATHS.account}
+                aria-label="Account"
+                title="Account"
                 style={{
-                  marginTop: 2, background: "none", border: "none", padding: 0,
-                  fontFamily: F, fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", textDecoration: "underline",
+                  width: 38,
+                  height: 38,
+                  borderRadius: "50%",
+                  background: onAccount ? T.accent : T.accentSoft,
+                  color: onAccount ? "#fff" : T.accentDeep,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: F,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  border: `1.5px solid ${onAccount ? T.accent : T.border}`,
+                  flexShrink: 0,
                 }}
               >
-                Sign out
-              </button>
+                {initials}
+              </Link>
+              {!onAccount && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await signOut();
+                    navigate(PATHS.home);
+                  }}
+                  style={{
+                    background: "none", border: "none", padding: 0,
+                    fontFamily: F, fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", textDecoration: "underline",
+                  }}
+                >
+                  Sign out
+                </button>
+              )}
             </div>
           )}
         </header>

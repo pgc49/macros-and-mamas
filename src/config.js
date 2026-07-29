@@ -24,6 +24,7 @@ export const CONFIG = {
   // Server picks Price ID: founding $149 / waitlist $249 / full $299.
   CHECKOUT_ENDPOINT: "/api/checkout",
   CHECKOUT_QUOTE_ENDPOINT: "/api/checkout-quote",
+  BILLING_ENDPOINT: "/api/billing",
   REFUND_ENDPOINT: "/api/refund",
   INTAKE_SUBMITTED_ENDPOINT: "/api/intake-submitted",
   MACROS_APPROVED_ENDPOINT: "/api/macros-approved",
