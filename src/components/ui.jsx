@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { T, F, FD } from "../theme/tokens";
 import { Fonts } from "../theme/Fonts";
 import { useAuth } from "../auth/useAuth.jsx";
@@ -239,21 +239,6 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
               >
                 {initials}
               </Link>
-              {!onAccount && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await signOut();
-                    navigate(PATHS.home);
-                  }}
-                  style={{
-                    background: "none", border: "none", padding: 0,
-                    fontFamily: F, fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", textDecoration: "underline",
-                  }}
-                >
-                  Sign out
-                </button>
-              )}
             </div>
           )}
         </header>
