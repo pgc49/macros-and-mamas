@@ -5,7 +5,10 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import { AuthProvider } from "./auth/useAuth.jsx";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { clearBootReloadFlag, installBootRecovery } from "./lib/bootRecovery";
 import App from "./App.jsx";
+
+installBootRecovery();
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
@@ -22,3 +25,6 @@ createRoot(document.getElementById("root")).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+window.__MAM_BOOTED__ = true;
+clearBootReloadFlag();

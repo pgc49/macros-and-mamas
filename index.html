@@ -58,6 +58,8 @@
         margin: 0;
         padding: 0;
         background: #FBF7F2;
+        color: #2B1C24;
+        font-family: Georgia, "Times New Roman", serif;
       }
       /* Tab bar: match device home-indicator inset (fixed shell makes env() reliable).
          Floor at 16px when inset is 0; no hard 48px overshoot. */
@@ -66,8 +68,100 @@
         padding-bottom: max(16px, constant(safe-area-inset-bottom));
         padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
       }
+      #mam-boot-loading, #mam-boot-fail {
+        min-height: 100dvh;
+        min-height: -webkit-fill-available;
+        display: grid;
+        place-items: center;
+        padding: 28px 22px;
+        text-align: center;
+        box-sizing: border-box;
+      }
+      #mam-boot-fail[hidden], #mam-boot-loading[hidden] { display: none !important; }
+      #mam-boot-loading p, #mam-boot-fail p {
+        max-width: 22rem;
+        margin: 10px auto 0;
+        line-height: 1.5;
+        color: #5C4A52;
+        font-size: 15px;
+      }
+      #mam-boot-fail a {
+        color: #B4416B;
+      }
+      #mam-boot-fail button {
+        margin-top: 18px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 15px;
+        font-weight: 700;
+        padding: 12px 18px;
+        border-radius: 12px;
+        border: 1.5px solid #B4416B;
+        background: #B4416B;
+        color: #fff;
+        cursor: pointer;
+      }
     </style>
-    <div id="root"></div>
+    <div id="root">
+      <div id="mam-boot-loading" role="status" aria-live="polite">
+        <div>
+          <div style="font-size: 1.35rem; letter-spacing: 0.02em;">Macros and Mamas</div>
+          <p>Loading…</p>
+        </div>
+      </div>
+      <div id="mam-boot-fail" hidden role="alert">
+        <div>
+          <div style="font-size: 1.35rem;">Couldn’t load the app</div>
+          <p>Usually this is a brief glitch right after an update. Tap refresh — or force-close the home-screen icon and open it again.</p>
+          <p id="mam-boot-fail-detail" style="font-size: 12px; color: #8A737C;"></p>
+          <button type="button" onclick="location.reload()">Refresh</button>
+          <p style="margin-top: 16px; font-size: 13px;"><a href="/support">Report a problem</a></p>
+        </div>
+      </div>
+    </div>
+    <!-- Inline early recovery: module script failures never reach React/Sentry. -->
+    <script>
+      (function () {
+        var KEY = "mam-boot-reload";
+        function marked() {
+          try { return sessionStorage.getItem(KEY) === "1"; } catch (e) { return false; }
+        }
+        function mark() {
+          try { sessionStorage.setItem(KEY, "1"); } catch (e) {}
+        }
+        function fail(msg) {
+          var el = document.getElementById("mam-boot-fail");
+          var d = document.getElementById("mam-boot-fail-detail");
+          var loading = document.getElementById("mam-boot-loading");
+          if (d && msg) d.textContent = String(msg).slice(0, 240);
+          if (el) el.hidden = false;
+          if (loading) loading.hidden = true;
+        }
+        function reloadOnce(reason) {
+          if (marked()) { fail(reason || ""); return; }
+          mark();
+          location.reload();
+        }
+        window.addEventListener("error", function (ev) {
+          var t = ev && ev.target;
+          if (t && (t.tagName === "SCRIPT" || t.tagName === "LINK")) {
+            reloadOnce("A required file failed to load.");
+          }
+        }, true);
+        window.addEventListener("unhandledrejection", function (ev) {
+          var r = ev && ev.reason;
+          var msg = (r && (r.message || String(r))) || "";
+          if (/Failed to fetch dynamically imported module|Loading chunk|error loading dynamically imported module|MIME type/i.test(msg)) {
+            reloadOnce(msg);
+          }
+        });
+        /* If the module never mounts, surface UI after 12s instead of endless blank. */
+        window.setTimeout(function () {
+          if (!window.__MAM_BOOTED__) {
+            fail("The app took too long to start. Refresh, or check your connection.");
+          }
+        }, 12000);
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

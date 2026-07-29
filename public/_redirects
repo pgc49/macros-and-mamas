@@ -1,3 +1,7 @@
+# SPA client routes → app shell.
+# Do NOT soft-404 /assets/* here — missing hashed JS must be a real 404
+# (public/assets/404.html). Soft-404 as text/html white-screens Safari/module loads
+# and can be cached under /assets/* immutable headers.
 /*    /index.html   200
 
 https://macrosandmamas.com/* https://www.macrosandmamas.com/:splat 301
