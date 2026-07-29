@@ -148,9 +148,8 @@ function accountInitials(profile, email) {
 }
 
 export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => {
-  const { user, profile, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   const linkStyle = {
     fontFamily: F, fontSize: 12, fontWeight: 700, color: T.accent, textDecoration: "underline",
   };

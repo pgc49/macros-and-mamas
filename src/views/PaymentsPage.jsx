@@ -112,7 +112,7 @@ export function PaymentsPage() {
         Payments
       </h1>
       <p style={{ fontSize: 14.5, color: T.inkSoft, margin: "0 0 18px", lineHeight: 1.5 }}>
-        Your program purchase and, later, optional monthly access after the 8 weeks.
+        Your 8-week program purchase — and monthly membership when it launches.
       </p>
 
       {err && (
@@ -152,10 +152,11 @@ export function PaymentsPage() {
           After your 8 weeks
         </div>
         <div style={{ fontFamily: FD, fontSize: 22, marginTop: 6 }}>
-          Monthly access
+          Monthly membership
         </div>
         <p style={{ fontSize: 14.5, color: T.inkSoft, lineHeight: 1.55, margin: "8px 0 0" }}>
-          {subscription?.note}
+          {subscription?.note
+            || "As an 8-week member, you’ll get access to a discounted monthly membership to keep using the app. Coming soon — nothing charges automatically."}
         </p>
         <div
           style={{
@@ -169,19 +170,8 @@ export function PaymentsPage() {
             lineHeight: 1.5,
           }}
         >
-          <div style={{ fontWeight: 700, color: T.ink, marginBottom: 4 }}>Upcoming</div>
-          No subscription scheduled — nothing will charge automatically.
-        </div>
-        <Btn
-          ghost
-          style={{ width: "100%", marginTop: 12 }}
-          disabled
-          onClick={() => {}}
-        >
-          Cancel membership (coming soon)
-        </Btn>
-        <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
-          When monthly access launches, you’ll opt in here — and can cancel anytime before renewal.
+          <div style={{ fontWeight: 700, color: T.ink, marginBottom: 4 }}>Coming soon</div>
+          You’ll opt in here when it launches. No charge until you do.
         </div>
       </Card>
 

@@ -108,19 +108,16 @@ function buildProgramSummary(profile, payments) {
   };
 }
 
-/** Shell only — monthly access after week 8 is not configured yet. */
-function buildSubscriptionShell(profile) {
-  const week = Number(profile.week) || 0;
+/** Shell only — discounted monthly membership after the 8-week program (not live yet). */
+function buildSubscriptionShell(_profile) {
   return {
-    status: "not_offered",
+    status: "coming_soon",
     priceLabel: null,
     amount: null,
     currency: "usd",
     renewsAt: null,
     cancelAtPeriodEnd: false,
-    note: week >= 8
-      ? "Monthly access after the 8-week program isn’t open yet. You’ll see options here when it launches — you can opt out anytime."
-      : "After your 8 weeks, we may offer an optional monthly membership so you can keep the app. Nothing will charge automatically until you choose it.",
+    note: "As an 8-week member, you’ll get access to a discounted monthly membership to keep using the app. Coming soon — nothing charges automatically.",
   };
 }
 
