@@ -46,7 +46,7 @@ export function batchMacros(perServing, servings) {
 
 /**
  * Add an extra food's macros onto a meal already estimated or logged.
- * Used when she amends a saved entry with something she forgot.
+ * Used when she takes the coach tip and actually adds the thing.
  */
 export function addMacros(base, extra) {
   const sum = (a, b) => Math.max(0, Math.round((Number(a) || 0) + (Number(b) || 0)));
@@ -56,4 +56,74 @@ export function addMacros(base, extra) {
     c: sum(base?.c, extra?.c),
     f: sum(base?.f, extra?.f),
   };
+}
+
+/**
+ * Merge a plate description with something she added afterwards, so the
+ * re-estimate sees one coherent plate instead of two fragments.
+ */
+export function mergeDescription(original, addition) {
+  const base = String(original || "").trim().replace(/[.;,]+$/, "");
+  const extra = String(addition || "").trim().replace(/^(?:plus|and|with|\+)\s+/i, "");
+  if (!extra) return base;
+  if (!base) return extra;
+  return `${base}, plus ${extra}`;
+}
+
+/**
+ * Pull the food out of a coach tip so tapping it can prefill the add box.
+ * Tips are free text, so this is best-effort — she edits before sending.
+ *
+ * Do not treat praise or coaching fluff as a suggestion.
+ * e.g. "adding that cottage cheese is a smart way…" must NOT yield a chip;
+ * "to add some fiber and keep your energy…" must NOT;
+ * "Add Greek yogurt…" / "try pairing them with fruit…" should.
+ */
+export function foodFromTip(tip) {
+  const text = String(tip || "").trim();
+  if (!text) return "";
+
+  // Prefer explicit food-pairing phrasing before bare "add" (avoids "to add fiber…").
+  const patterns = [
+    /\b(?:try\s+)?pair(?:ing)?(?:\s+(?:them|it))?\s+with\s+(.+?)(?:[.!?]|$)/i,
+    /\b(?:top(?:ping)?(?:\s+(?:them|it))?\s+with|serve(?:\s+(?:them|it))?\s+with|toss\s+in|throw\s+in)\s+(.+?)(?:[.!?]|$)/i,
+    /\b(?:consider|try|maybe|perhaps|suggest(?:ing)?|recommend(?:ing)?)\s+adding\s+(.+?)(?:[.!?]|$)/i,
+    // Imperative "add …" — not infinitive "to add …" (coaching purpose clause).
+    /(?:^|[.!?]\s+|,\s*but\s+)add\s+(.+?)(?:[.!?]|$)/i,
+    /\b(?:you\s+could|you\s+might|maybe|try\s+to)\s+add\s+(.+?)(?:[.!?]|$)/i,
+  ];
+
+  let raw = "";
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m?.[1]) {
+      raw = m[1];
+      break;
+    }
+  }
+  if (!raw) return "";
+
+  let food = raw
+    // Drop purpose / praise tails: "… to add fiber", "… for more protein", "… is a smart way"
+    .replace(/\s+(?:to|for|and you|which|that|so\s+you|and\s+keep)\b.*$/i, "")
+    .replace(/[,;]\s*$/, "")
+    .trim()
+    .slice(0, 120);
+
+  if (!food || !looksLikeFoodAddition(food)) return "";
+  return food;
+}
+
+/** Reject coaching fluff that slipped past the verb match. */
+function looksLikeFoodAddition(food) {
+  const s = String(food || "").trim();
+  if (s.length < 2) return false;
+  // Praise leftovers
+  if (/\b(?:is|was)\s+(?:a\s+)?(?:smart|great|good|nice|perfect|clever)\b/i.test(s)) return false;
+  // Macro/coaching goals, not a plate item ("some fiber", "more protein")
+  if (/^(?:some|more|a\s+bit\s+of|extra)?\s*(?:fiber|protein|energy|calories?|macros?)\b/i.test(s)) {
+    return false;
+  }
+  if (/\b(?:keep your|throughout the|energy steady|steady throughout)\b/i.test(s)) return false;
+  return true;
 }

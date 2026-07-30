@@ -49,7 +49,11 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
       disabled={logPhase === "busy" || logPhase === "done"}
       onClick={async (e) => {
         e.stopPropagation();
-        if (logPhase !== "idle") return;
+        if (logPhase === "idle") {
+          setLogPhase("confirm");
+          return;
+        }
+        if (logPhase !== "confirm") return;
         setLogPhase("busy");
         try {
           const ok = await onLog?.(scaleMealForLog({ ...r, via: "recipe", fromPlanner: true }, servings));
@@ -78,6 +82,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
       }}
     >
       {logPhase === "idle" && "Add to Today"}
+      {logPhase === "confirm" && "Confirm?"}
       {logPhase === "busy" && "Adding…"}
       {logPhase === "done" && "Added ✓"}
     </button>
