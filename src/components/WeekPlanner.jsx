@@ -30,6 +30,8 @@ import {
   targetBands,
   dayInRange,
   rangeCoach,
+  hydrateWeekPlanCustomIngredients,
+  weekPlanNeedsCustomIngredientHydration,
 } from "../utils/weekPlan";
 
 /** How far ahead she can plan (blank weeks until she adds meals). */
@@ -99,6 +101,15 @@ export function WeekPlanner({
     // Only heal when incoming days change (week switch / refresh).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days, weekStart]);
+
+  // Backfill ingredients onto My-meals plan rows placed before we copied them
+  // (e.g. saved Create Recipe text, empty plan ingredients).
+  useEffect(() => {
+    if (!weekPlanNeedsCustomIngredientHydration(days, customMeals)) return;
+    const healed = hydrateWeekPlanCustomIngredients(normalizeWeekDays(days), customMeals);
+    onChangeDays?.(healed, source || "manual");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days, customMeals, weekStart]);
 
   useEffect(() => {
     // Short flashes (clear week, meal added) still auto-clear; longer AI summaries stay until ×.
@@ -1111,7 +1122,7 @@ function MealPickerModal({
             />
             <HubBtn
               title="My meals"
-              sub={customMeals.length ? `${customMeals.length} saved · macros only` : "Empty until you save one"}
+              sub={customMeals.length ? `${customMeals.length} saved · with ingredients when you added them` : "Empty until you save one"}
               onClick={() => setView("mine")}
             />
             <HubBtn

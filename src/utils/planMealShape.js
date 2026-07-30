@@ -17,6 +17,44 @@ export function asIngredientLines(value, { max = 40 } = {}) {
     .slice(0, max);
 }
 
+/**
+ * My meals store ingredients as a newline (or " · ") joined string from Create Recipe.
+ * Planner / grocery need { amount, item }[] — parse best-effort.
+ */
+export function ingredientsFromText(value, { max = 40 } = {}) {
+  if (Array.isArray(value)) {
+    if (!value.length) return [];
+    if (typeof value[0] === "object") return asIngredientLines(value, { max });
+    return asIngredientLines(
+      value.map((line) => lineToIngredient(String(line || ""))).filter(Boolean),
+      { max },
+    );
+  }
+  const text = String(value || "").trim();
+  if (!text) return [];
+  const chunks = text
+    .split(/\n+| · |•/g)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return asIngredientLines(chunks.map(lineToIngredient).filter(Boolean), { max });
+}
+
+/** "1 cup oats" → { amount: "1 cup", item: "oats" }; otherwise whole line as item. */
+function lineToIngredient(line) {
+  const s = String(line || "").trim();
+  if (!s) return null;
+  const m = s.match(
+    /^((?:\d+\s*\/\s*\d+|[½⅓¼¾⅔⅛⅜⅝⅞\d./-]+)\s*(?:cups?|tbsp|tsp|teaspoons?|tablespoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|cloves?|slices?|cans?|packages?|pkgs?|bunches?|handfuls?|pinch(?:es)?|dash(?:es)?|links?|pieces?)?)\s+(.+)$/i,
+  );
+  if (m) {
+    return {
+      amount: m[1].trim().slice(0, 80),
+      item: m[2].trim().slice(0, 160),
+    };
+  }
+  return { amount: "", item: s.slice(0, 160) };
+}
+
 export function asStepLines(value, { max = 12 } = {}) {
   if (!Array.isArray(value)) return [];
   return value
