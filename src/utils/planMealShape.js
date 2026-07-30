@@ -44,7 +44,7 @@ function lineToIngredient(line) {
   const s = String(line || "").trim();
   if (!s) return null;
   const m = s.match(
-    /^((?:\d+\s*\/\s*\d+|[½⅓¼¾⅔⅛⅜⅝⅞\d./\-]+)\s*(?:cups?|tbsp|tsp|teaspoons?|tablespoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|cloves?|slices?|cans?|packages?|pkgs?|bunches?|handfuls?|pinch(?:es)?|dash(?:es)?|links?|pieces?)?)\s+(.+)$/i,
+    /^((?:\d+\s*\/\s*\d+|[½⅓¼¾⅔⅛⅜⅝⅞\d./-]+)\s*(?:cups?|tbsp|tsp|teaspoons?|tablespoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|cloves?|slices?|cans?|packages?|pkgs?|bunches?|handfuls?|pinch(?:es)?|dash(?:es)?|links?|pieces?)?)\s+(.+)$/i,
   );
   if (m) {
     return {
