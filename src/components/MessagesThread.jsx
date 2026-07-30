@@ -356,20 +356,41 @@ export function MessagesThread({
             No messages yet — say hi or send a photo. Callie will reply here.
           </div>
         )}
-        {messages.map((m) => {
+        {(() => {
+          // Only annotate the latest relevant outbound — not every coach bubble.
+          // Read → last coach message the mama has opened; Delivered → latest send if still unread.
+          let lastReadId = null;
+          let lastDeliveredId = null;
+          if (showReadReceipts) {
+            for (const m of messages) {
+              if (m.deleted_at) continue;
+              const coachOutbound = threadClientId
+                ? m.sender_id !== threadClientId
+                : m.sender_id === selfId;
+              if (!coachOutbound) continue;
+              if (m.read_at) lastReadId = m.id;
+              else lastDeliveredId = m.id;
+            }
+            // If the latest outbound is read, don't also leave a stale Delivered marker.
+            if (lastDeliveredId && lastReadId) {
+              const readIdx = messages.findIndex((m) => m.id === lastReadId);
+              const delIdx = messages.findIndex((m) => m.id === lastDeliveredId);
+              if (readIdx > delIdx) lastDeliveredId = null;
+            }
+          }
+          return messages.map((m) => {
           const mine = m.sender_id === selfId;
           const deleted = !!m.deleted_at;
           const isImage = String(m.attachment_mime || "").startsWith("image/");
           const hasAttach = !!m.attachment_path && !deleted;
           const isEditing = editingId === m.id;
           const showMenu = menuId === m.id && canManage(m) && !isEditing;
-          // Mama thread: any coach/admin outbound. Admin DM: only your own sends.
-          const showReceipt = showReadReceipts && !deleted && (
-            threadClientId
-              ? m.sender_id !== threadClientId
-              : mine
-          );
-          const receiptLabel = m.read_at ? "Read" : "Delivered";
+          const receiptLabel = m.id === lastReadId
+            ? "Read"
+            : m.id === lastDeliveredId
+              ? "Delivered"
+              : null;
+          const showReceipt = !!receiptLabel;
           return (
             <div
               key={m.id}
@@ -493,8 +514,8 @@ export function MessagesThread({
                   </span>
                   {showReceipt ? (
                     <span style={{
-                      fontWeight: m.read_at ? 700 : 600,
-                      color: m.read_at ? T.accentDeep : T.inkSoft,
+                      fontWeight: receiptLabel === "Read" ? 700 : 600,
+                      color: receiptLabel === "Read" ? T.accentDeep : T.inkSoft,
                       flexShrink: 0,
                     }}
                     >
@@ -565,7 +586,8 @@ export function MessagesThread({
               )}
             </div>
           );
-        })}
+          });
+        })()}
         <div ref={bottomRef} />
       </div>
 
