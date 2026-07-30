@@ -1421,13 +1421,31 @@ export const db = {
 
   async markMessagesRead(clientId, readerId) {
     if (!clientId || !readerId) return;
-    const { error } = await supabase
+    // Mama threads: admins only clear mama→coach unread. Do not stamp read_at on
+    // another admin’s outbound (those stay unread until the mama opens Messages).
+    const { data: roles, error: roleErr } = await supabase
+      .from("profiles")
+      .select("id, role")
+      .in("id", [clientId, readerId]);
+    if (roleErr) {
+      console.warn("markMessagesRead role lookup failed", roleErr);
+      return;
+    }
+    const roleOf = (id) => String((roles || []).find((p) => p.id === id)?.role || "").toLowerCase();
+    const readerIsAdmin = roleOf(readerId) === "admin";
+    const threadIsMama = roleOf(clientId) !== "admin";
+
+    let q = supabase
       .from("messages")
       .update({ read_at: new Date().toISOString() })
       .eq("client_id", clientId)
       .is("read_at", null)
       .is("deleted_at", null)
       .neq("sender_id", readerId);
+    if (readerIsAdmin && threadIsMama) {
+      q = q.eq("sender_id", clientId);
+    }
+    const { error } = await q;
     if (error) console.warn("markMessagesRead failed", error);
   },
 
@@ -1448,12 +1466,18 @@ export const db = {
   },
 
   async loadMessageInbox(readerId = null) {
-    const { data: msgs, error } = await supabase
-      .from("messages")
-      .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
-      .order("created_at", { ascending: false })
-      .limit(500);
+    const [{ data: msgs, error }, { data: admins, error: adminErr }] = await Promise.all([
+      supabase
+        .from("messages")
+        .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabase.from("profiles").select("id").eq("role", "admin"),
+    ]);
     if (error) throw error;
+    if (adminErr) console.warn("loadMessageInbox admin lookup failed", adminErr);
+    const adminIds = new Set((admins || []).map((a) => a.id));
+
     const byClient = new Map();
     for (const m of msgs || []) {
       if (!byClient.has(m.client_id)) {
@@ -1471,9 +1495,14 @@ export const db = {
       if (row.lastMessage?.deleted_at && !m.deleted_at) {
         row.lastMessage = m;
       }
-      if (!m.deleted_at && !m.read_at && (!readerId || m.sender_id !== readerId)) {
-        row.unread += 1;
-      }
+      // Admin inbox: only mama→coach (or admin↔admin DM). Never Callie's own
+      // outbound sitting unread for the mama — that was lighting false badges.
+      if (m.deleted_at || m.read_at) continue;
+      if (readerId && m.sender_id === readerId) continue;
+      const senderIsAdmin = adminIds.has(m.sender_id);
+      const threadIsAdminDm = adminIds.has(m.client_id);
+      if (senderIsAdmin && !threadIsAdminDm) continue;
+      row.unread += 1;
     }
     return [...byClient.values()]
       .map((row) => ({
