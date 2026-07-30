@@ -25,6 +25,11 @@ export function MessagesThread({
   senderNameById = null,
   /** Thread's mama id (admin views). Incoming from this id = mama; other admins = their name / Callie. */
   threadClientId = null,
+  /**
+   * Admin-only: show Delivered / Read under coach outbound using messages.read_at
+   * (mama opened the thread). Inbox unread bubbles stay separate — mama→Callie only.
+   */
+  showReadReceipts = false,
   busy = false,
   onSend,
   onEdit,
@@ -358,6 +363,13 @@ export function MessagesThread({
           const hasAttach = !!m.attachment_path && !deleted;
           const isEditing = editingId === m.id;
           const showMenu = menuId === m.id && canManage(m) && !isEditing;
+          // Mama thread: any coach/admin outbound. Admin DM: only your own sends.
+          const showReceipt = showReadReceipts && !deleted && (
+            threadClientId
+              ? m.sender_id !== threadClientId
+              : mine
+          );
+          const receiptLabel = m.read_at ? "Read" : "Delivered";
           return (
             <div
               key={m.id}
@@ -465,9 +477,30 @@ export function MessagesThread({
                     {m.body}
                   </>
                 )}
-                <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 6 }}>
-                  {formatMsgTime(m.created_at)}
-                  {!deleted && m.edited_at ? " · edited" : ""}
+                <div style={{
+                  fontSize: 11,
+                  color: T.inkSoft,
+                  marginTop: 6,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  alignItems: "baseline",
+                }}
+                >
+                  <span>
+                    {formatMsgTime(m.created_at)}
+                    {!deleted && m.edited_at ? " · edited" : ""}
+                  </span>
+                  {showReceipt ? (
+                    <span style={{
+                      fontWeight: m.read_at ? 700 : 600,
+                      color: m.read_at ? T.accentDeep : T.inkSoft,
+                      flexShrink: 0,
+                    }}
+                    >
+                      {receiptLabel}
+                    </span>
+                  ) : null}
                 </div>
               </div>
               {showMenu && (

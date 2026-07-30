@@ -112,6 +112,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
         onEdit={edit}
         onDelete={remove}
         onMarkRead={markRead}
+        showReadReceipts
         showPushPrompt={false}
         compact
       />
