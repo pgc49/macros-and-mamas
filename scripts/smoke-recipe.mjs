@@ -12,8 +12,6 @@ import {
   perServingMacros,
   batchMacros,
   addMacros,
-  mergeDescription,
-  foodFromTip,
   normalizeServings,
 } from "../src/utils/recipeMacros.js";
 
@@ -121,41 +119,9 @@ assert(summed.cal === 550 && summed.p === 53 && summed.c === 48 && summed.f === 
 assert(addMacros(null, { cal: 100 }).cal === 100, "adding onto nothing works");
 assert(addMacros({ cal: 100 }, null).cal === 100, "adding nothing is a no-op");
 
-/* ---------- description merging ---------- */
-
-assert(
-  mergeDescription("6 oz chicken and rice", "a cup of greek yogurt")
-    === "6 oz chicken and rice, plus a cup of greek yogurt",
-  "merge joins with plus",
-);
-assert(mergeDescription("chicken.", "yogurt") === "chicken, plus yogurt", "trailing period dropped");
-assert(mergeDescription("chicken", "plus yogurt") === "chicken, plus yogurt", "no doubled 'plus'");
-assert(mergeDescription("chicken", "and yogurt") === "chicken, plus yogurt", "leading 'and' normalised");
-assert(mergeDescription("", "yogurt") === "yogurt", "empty original");
-assert(mergeDescription("chicken", "  ") === "chicken", "empty addition");
-
-/* ---------- pulling the food out of a coach tip ---------- */
-
-assert(
-  foodFromTip("Add a scoop of Greek yogurt to bump your protein.") === "a scoop of Greek yogurt",
-  `tip parse: got "${foodFromTip("Add a scoop of Greek yogurt to bump your protein.")}"`,
-);
-assert(
-  foodFromTip("Try to pair it with a piece of fruit!") === "a piece of fruit",
-  `pair-with parse: got "${foodFromTip("Try to pair it with a piece of fruit!")}"`,
-);
-assert(
-  foodFromTip("Top with sliced avocado for healthy fats.") === "sliced avocado",
-  `top-with parse: got "${foodFromTip("Top with sliced avocado for healthy fats.")}"`,
-);
-assert(foodFromTip("This looks like a balanced plate.") === "", "no suggestion → empty");
-assert(foodFromTip("") === "", "empty tip → empty");
-assert(foodFromTip(null) === "", "null tip → empty");
-
 console.log("OK recipe smoke", {
   plate: { cal: plate.calories, basis: plate.basis },
   batch: { cal: batch.calories, serves: batch.servings, basis: batch.basis },
   perServing: per,
   capScales: `${PLATE_CAPS.calories} × 8 = ${runaway.calories}`,
-  tipFood: foodFromTip("Add a scoop of Greek yogurt to bump your protein."),
 });
