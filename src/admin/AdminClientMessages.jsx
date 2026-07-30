@@ -113,6 +113,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
         onDelete={remove}
         onMarkRead={markRead}
         showReadReceipts
+        allowVoiceMemo
         showPushPrompt={false}
         compact
       />
