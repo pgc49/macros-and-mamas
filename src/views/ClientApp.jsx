@@ -10,6 +10,7 @@ import { WaterLogCard } from "../components/WaterLogCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
+import { MondayVoiceDropBanner } from "../components/MondayVoiceDropBanner";
 import { LoggableMealRow } from "../components/LoggableMealRow";
 import { RecipeCreator } from "../components/RecipeCreator";
 import { WeekPlanner } from "../components/WeekPlanner";
@@ -170,6 +171,7 @@ export function ClientApp({
               : `Ranges below show ${formatLongDay(mealLogDate)} — switch days in the meal log to compare.`}
           </p>
 
+          <MondayVoiceDropBanner />
           <HomeScreenTip />
 
           {logFlash ? (

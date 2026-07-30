@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card, Btn, inputStyle } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
+import { AdminVoiceDropCard } from "./AdminVoiceDropCard";
 import { db, fullName } from "../db/db";
 import { supabase } from "../lib/supabase";
 
@@ -326,6 +327,11 @@ export function AdminMessages({
           <div style={{ fontSize: 13, color: "#3E5A46", marginTop: 10 }}>{announceMsg}</div>
         )}
       </Card>
+
+      <AdminVoiceDropCard
+        activeMamaCount={activeMamaCount}
+        allMamaCount={allMamaCount}
+      />
 
       <div style={{
         display: "grid",
