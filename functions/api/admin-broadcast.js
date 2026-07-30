@@ -3,11 +3,16 @@
    Admin-only: post a Callie announcement into each mama's Messages
    thread and push (email fallback when no push subscription).
    Body: { body, audience?: "active" | "all_mamas" }
+
+   Designed for ~40+ recipients on Cloudflare Pages:
+   - bulk insert messages (one REST call)
+   - skip mamas who already got the same body in the last 24h (safe retry)
+   - notify best-effort; never fail the whole send after inserts succeed
    ================================================================== */
 
 import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/supabaseEmail.js";
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, waitUntil }) {
   try {
     const user = await requireUser(request, env);
     if (!user) return json({ error: "unauthorized" }, 401);
@@ -20,81 +25,137 @@ export async function onRequestPost({ request, env }) {
       : "active";
     if (text.length < 1) return json({ error: "body required" }, 400);
 
-    const recipients = await listMamaIds(env, audience);
+    const allRecipients = await listMamaIds(env, audience);
+    if (!allRecipients.length) {
+      return json({ ok: true, recipients: 0, messages: 0, skipped: 0, pushSent: 0, emailSent: 0 });
+    }
+
+    // Safe retry after a partial/timed-out send — don't double-post the same text.
+    const already = await clientsWithRecentAnnouncement(env, text, allRecipients);
+    const recipients = allRecipients.filter((id) => !already.has(id));
+    const skipped = allRecipients.length - recipients.length;
+
     if (!recipients.length) {
-      return json({ ok: true, recipients: 0, messages: 0, pushSent: 0, emailSent: 0 });
+      return json({
+        ok: true,
+        audience,
+        recipients: allRecipients.length,
+        messages: 0,
+        skipped,
+        pushSent: 0,
+        emailSent: 0,
+        note: "Every mama in this audience already got this exact announcement recently.",
+      });
+    }
+
+    const inserted = await insertAnnouncementsBulk(env, {
+      clientIds: recipients,
+      senderId: user.id,
+      body: text,
+    });
+    if (!inserted.length) {
+      return json({ error: "Couldn’t save announcement messages — try again." }, 500);
     }
 
     const preview = text.replace(/\s+/g, " ").trim().slice(0, 140);
-    let messages = 0;
-    let pushSent = 0;
-    let emailSent = 0;
+    const notifyPromise = notifyRecipients(env, inserted, preview);
 
-    // Insert one announcement per mama thread (service role — same as 1:1).
-    for (const clientId of recipients) {
-      const row = await insertAnnouncement(env, {
-        clientId,
-        senderId: user.id,
-        body: text,
+    // Prefer finishing notifies after the response so the admin UI isn't blocked /
+    // timed out by 40+ push+email subrequests.
+    if (typeof waitUntil === "function") {
+      waitUntil(notifyPromise.catch((e) => console.error("broadcast notify failed", e)));
+      return json({
+        ok: true,
+        audience,
+        recipients: allRecipients.length,
+        messages: inserted.length,
+        skipped,
+        pushSent: null,
+        emailSent: null,
+        notifying: true,
       });
-      if (!row?.id) continue;
-      messages += 1;
-
-      const unreadCount = await countUnreadForMama(env, clientId);
-      const n = await sendPushToProfile(env, clientId, {
-        title: "Callie",
-        body: preview || "Open Messages in the app",
-        url: "/dashboard?tab=messages",
-        unreadCount: unreadCount || 1,
-      });
-      pushSent += n;
-      if (n > 0) continue;
-
-      const contact = await loadUserContact(env, clientId);
-      const email = contact.email || "";
-      if (!email) continue;
-      const mail = await invokeEdgeFunction(env, "message-email", {
-        email,
-        name: contact.name || "Mama",
-        preview: preview || "Callie posted an update in Messages.",
-      });
-      if (mail.ok) {
-        emailSent += 1;
-        await logEmailEvent(env, {
-          profileId: clientId,
-          emailType: "message",
-          toEmail: email,
-          meta: { messageId: row.id, announcement: true },
-        });
-      }
     }
 
+    const { pushSent, emailSent } = await notifyPromise;
     return json({
       ok: true,
       audience,
-      recipients: recipients.length,
-      messages,
+      recipients: allRecipients.length,
+      messages: inserted.length,
+      skipped,
       pushSent,
       emailSent,
     });
   } catch (e) {
     console.error("admin-broadcast failed", e);
-    return json({ error: "broadcast failed" }, 500);
+    return json({
+      error: "broadcast failed",
+      detail: String(e?.message || e).slice(0, 240),
+    }, 500);
   }
+}
+
+async function notifyRecipients(env, rows, preview) {
+  // Small concurrency — stays under Pages subrequest limits better than fully serial,
+  // without exploding parallel fan-out. Each worker keeps local counters.
+  const queue = [...rows];
+  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+    let pushSent = 0;
+    let emailSent = 0;
+    while (queue.length) {
+      const row = queue.shift();
+      if (!row?.id || !row.client_id) continue;
+      try {
+        const n = await sendPushToProfile(env, row.client_id, {
+          title: "Callie",
+          body: preview || "Open Messages in the app",
+          url: "/dashboard?tab=messages",
+          unreadCount: 1,
+        });
+        pushSent += n;
+        if (n > 0) continue;
+
+        const contact = await loadUserContact(env, row.client_id);
+        const email = contact.email || "";
+        if (!email) continue;
+        const mail = await invokeEdgeFunction(env, "message-email", {
+          email,
+          name: contact.name || "Mama",
+          preview: preview || "Callie posted an update in Messages.",
+        });
+        if (mail.ok) {
+          emailSent += 1;
+          await logEmailEvent(env, {
+            profileId: row.client_id,
+            emailType: "message",
+            toEmail: email,
+            meta: { messageId: row.id, announcement: true },
+          });
+        }
+      } catch (e) {
+        console.warn("broadcast notify one failed", row.client_id, e);
+      }
+    }
+    return { pushSent, emailSent };
+  });
+  const parts = await Promise.all(workers);
+  return parts.reduce(
+    (acc, p) => ({ pushSent: acc.pushSent + p.pushSent, emailSent: acc.emailSent + p.emailSent }),
+    { pushSent: 0, emailSent: 0 },
+  );
 }
 
 async function listMamaIds(env, audience) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  // Active cohort by default; all_mamas = any non-admin non-refunded profile.
-  const select = audience === "all_mamas"
-    ? "id,role,status,refunded"
-    : "id,role,status,refunded";
   const resp = await fetch(
-    `${base}/rest/v1/profiles?select=${select}&role=neq.admin`,
+    `${base}/rest/v1/profiles?select=id,role,status,refunded&role=neq.admin`,
     { headers: { apikey: key, authorization: `Bearer ${key}` } },
   );
-  if (!resp.ok) return [];
+  if (!resp.ok) {
+    console.error("listMamaIds failed", resp.status, await resp.text().catch(() => ""));
+    return [];
+  }
   const rows = await resp.json().catch(() => []);
   return (rows || [])
     .filter((r) => {
@@ -107,30 +168,74 @@ async function listMamaIds(env, audience) {
     .filter(Boolean);
 }
 
-async function insertAnnouncement(env, { clientId, senderId, body }) {
+/** Clients who already received this exact announcement body in the last day. */
+async function clientsWithRecentAnnouncement(env, body, clientIds) {
+  const out = new Set();
+  if (!clientIds.length) return out;
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  const resp = await fetch(`${base}/rest/v1/messages`, {
-    method: "POST",
-    headers: {
-      apikey: key,
-      authorization: `Bearer ${key}`,
-      "content-type": "application/json",
-      prefer: "return=representation",
-    },
-    body: JSON.stringify({
-      client_id: clientId,
-      sender_id: senderId,
-      body,
-      kind: "announcement",
-    }),
-  });
-  if (!resp.ok) {
-    console.error("insert announcement failed", resp.status, await resp.text().catch(() => ""));
-    return null;
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  // Chunk `in` filters — PostgREST URL length limits.
+  for (let i = 0; i < clientIds.length; i += 40) {
+    const chunk = clientIds.slice(i, i + 40);
+    const inList = `(${chunk.join(",")})`;
+    const url =
+      `${base}/rest/v1/messages`
+      + `?select=client_id`
+      + `&kind=eq.announcement`
+      + `&body=eq.${encodeURIComponent(body)}`
+      + `&created_at=gte.${encodeURIComponent(since)}`
+      + `&client_id=in.${inList}`;
+    try {
+      const resp = await fetch(url, {
+        headers: { apikey: key, authorization: `Bearer ${key}` },
+      });
+      if (!resp.ok) {
+        console.warn("recent announcement lookup failed", resp.status);
+        continue;
+      }
+      const rows = await resp.json().catch(() => []);
+      for (const r of rows || []) {
+        if (r.client_id) out.add(r.client_id);
+      }
+    } catch (e) {
+      console.warn("recent announcement lookup error", e);
+    }
   }
-  const rows = await resp.json().catch(() => []);
-  return rows[0] || null;
+  return out;
+}
+
+async function insertAnnouncementsBulk(env, { clientIds, senderId, body }) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const rows = clientIds.map((clientId) => ({
+    client_id: clientId,
+    sender_id: senderId,
+    body,
+    kind: "announcement",
+  }));
+  const inserted = [];
+  // Chunk inserts so a single payload stays small.
+  for (let i = 0; i < rows.length; i += 50) {
+    const chunk = rows.slice(i, i + 50);
+    const resp = await fetch(`${base}/rest/v1/messages`, {
+      method: "POST",
+      headers: {
+        apikey: key,
+        authorization: `Bearer ${key}`,
+        "content-type": "application/json",
+        prefer: "return=representation",
+      },
+      body: JSON.stringify(chunk),
+    });
+    if (!resp.ok) {
+      console.error("bulk insert announcement failed", resp.status, await resp.text().catch(() => ""));
+      continue;
+    }
+    const data = await resp.json().catch(() => []);
+    if (Array.isArray(data)) inserted.push(...data);
+  }
+  return inserted;
 }
 
 async function sendPushToProfile(env, profileId, payload) {
@@ -146,29 +251,6 @@ async function sendPushToProfile(env, profileId, payload) {
     return 0;
   }
   return Number(result.data?.sent) || 0;
-}
-
-async function countUnreadForMama(env, profileId) {
-  if (!profileId) return 0;
-  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
-  const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  const qs = `select=id&client_id=eq.${encodeURIComponent(profileId)}&read_at=is.null&deleted_at=is.null&sender_id=neq.${encodeURIComponent(profileId)}`;
-  try {
-    const resp = await fetch(`${base}/rest/v1/messages?${qs}`, {
-      method: "HEAD",
-      headers: {
-        apikey: key,
-        authorization: `Bearer ${key}`,
-        Prefer: "count=exact",
-      },
-    });
-    const range = resp.headers.get("content-range") || "";
-    const m = range.match(/\/(\d+)\s*$/);
-    return m ? Math.max(0, Number(m[1]) || 0) : 0;
-  } catch (e) {
-    console.warn("countUnreadForMama failed", e);
-    return 0;
-  }
 }
 
 async function isAdmin(env, userId) {

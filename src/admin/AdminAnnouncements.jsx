@@ -11,10 +11,12 @@ function isAdminProfile(c) {
 /**
  * Visual preview matching message-email (Resend) layout for announcements.
  * Push always goes out; email is the fallback when a mama has no push.
+ * Real emails only include a short snippet — we show that clearly + the full text.
  */
 function AnnouncementEmailPreview({ body }) {
-  const snippet = String(body || "").replace(/\s+/g, " ").trim().slice(0, 160);
-  const hasBody = snippet.length > 0;
+  const full = String(body || "").trim();
+  const emailSnippet = full.replace(/\s+/g, " ").slice(0, 140);
+  const snippetCut = full.replace(/\s+/g, " ").length > 140;
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -29,6 +31,9 @@ function AnnouncementEmailPreview({ body }) {
       >
         Email preview · fallback when push isn’t on
       </div>
+      <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45 }}>
+        Emails show a short teaser (below). The full announcement always lands in Messages.
+      </p>
       <div style={{
         background: T.bg,
         borderRadius: 14,
@@ -75,7 +80,7 @@ function AnnouncementEmailPreview({ body }) {
           </h3>
           <div style={{ fontSize: 14.5, lineHeight: 1.55, color: T.ink, fontFamily: F }}>
             <p style={{ margin: "0 0 12px" }}>Callie left you a message in Macros and Mamas.</p>
-            {hasBody ? (
+            {emailSnippet ? (
               <p style={{
                 margin: "0 0 12px",
                 background: T.bg,
@@ -83,9 +88,10 @@ function AnnouncementEmailPreview({ body }) {
                 padding: "12px 14px",
                 fontStyle: "italic",
                 color: T.ink,
+                whiteSpace: "pre-wrap",
               }}
               >
-                {snippet}
+                {emailSnippet}{snippetCut ? "…" : ""}
               </p>
             ) : (
               <p style={{
@@ -94,7 +100,7 @@ function AnnouncementEmailPreview({ body }) {
                 fontStyle: "italic",
               }}
               >
-                Your announcement text appears here…
+                Your announcement teaser appears here…
               </p>
             )}
             <p style={{ margin: "0 0 16px" }}>
@@ -126,6 +132,35 @@ function AnnouncementEmailPreview({ body }) {
           Macros and Mamas · Sacramento, CA · Reply to this email anytime.
         </p>
       </div>
+      {full ? (
+        <div style={{ marginTop: 12 }}>
+          <div style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: T.inkSoft,
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            marginBottom: 6,
+          }}
+          >
+            Full text in Messages
+          </div>
+          <div style={{
+            fontSize: 13.5,
+            lineHeight: 1.5,
+            color: T.ink,
+            fontFamily: F,
+            whiteSpace: "pre-wrap",
+            background: "#fff",
+            border: `1px solid ${T.border}`,
+            borderRadius: 12,
+            padding: "12px 14px",
+          }}
+          >
+            {full}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -173,12 +208,18 @@ export function AdminAnnouncements({ roster = [] }) {
         audience: announceAudience,
       });
       setAnnounceBody("");
-      setAnnounceMsg(
-        `Sent to ${result.messages || 0} thread${(result.messages || 0) === 1 ? "" : "s"}`
-        + (result.pushSent ? ` · ${result.pushSent} push` : "")
-        + (result.emailSent ? ` · ${result.emailSent} email` : "")
-        + ".",
-      );
+      const parts = [
+        `Sent to ${result.messages || 0} thread${(result.messages || 0) === 1 ? "" : "s"}`,
+      ];
+      if (result.skipped) parts.push(`${result.skipped} already had it`);
+      if (result.notifying) {
+        parts.push("push/email sending in background");
+      } else {
+        if (result.pushSent) parts.push(`${result.pushSent} push`);
+        if (result.emailSent) parts.push(`${result.emailSent} email`);
+      }
+      if (result.note) parts.push(result.note);
+      setAnnounceMsg(`${parts.join(" · ")}.`);
     } catch (e) {
       console.error(e);
       setError(e.message || "Couldn’t send announcement.");
