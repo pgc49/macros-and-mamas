@@ -4,6 +4,8 @@
    Auth + paid (or admin). Body:
      { mode: "describe", slot, description }
      { mode: "options", slot }  → 2–3 meals for that slot from prefs
+     { mode: "eating_out", slot, description?, images[], remaining?, dayTotals? }
+       → 2–3 restaurant picks from menu photo(s) + caption
    Soft rate limit: 20 / day via estimate_calls type='meal_idea'.
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
    Default model: google/gemini-3.1-flash-lite (OpenRouter).
@@ -11,7 +13,9 @@
 
 import {
   buildDescribeMealPrompt,
+  buildEatingOutPrompt,
   buildSlotOptionsPrompt,
+  EATING_OUT_JSON_HINT,
   MEAL_IDEA_JSON_HINT,
 } from "../_shared/clientMealIdeaPrompt.js";
 import {
@@ -25,7 +29,10 @@ import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 
 const MAX_PER_DAY = 20;
+const MAX_IMAGES = 3;
+const MAX_IMAGE_CHARS = 2_500_000;
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
+const MODES = new Set(["describe", "options", "eating_out"]);
 const MEAL_IDEA_COPY = {
   retryLabel: "tap it again",
   manualLabel: "pick a recipe from the bank",
@@ -48,18 +55,25 @@ export async function onRequestPost({ request, env }) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const mode = body.mode === "describe" ? "describe" : body.mode === "options" ? "options" : null;
-    if (!mode) return json({ error: "mode must be describe or options" }, 400);
+    const mode = MODES.has(body.mode) ? body.mode : null;
+    if (!mode) return json({ error: "mode must be describe, options, or eating_out" }, 400);
 
     let slot = String(body.slot || "").toLowerCase();
     if (!SLOTS.has(slot)) {
-      if (mode === "options") return json({ error: "slot required (breakfast|lunch|dinner|snack)" }, 400);
+      if (mode === "options" || mode === "eating_out") {
+        return json({ error: "slot required (breakfast|lunch|dinner|snack)" }, 400);
+      }
       slot = "dinner";
     }
 
     const description = String(body.description || "").trim().slice(0, 500);
     if (mode === "describe" && description.length < 3) {
       return json({ error: "Describe the meal you want (a few words is fine)." }, 400);
+    }
+
+    const images = mode === "eating_out" ? parseImages(body) : [];
+    if (mode === "eating_out" && !images.length) {
+      return json({ error: "Add a photo of the menu first." }, 400);
     }
 
     // Admins (Callie / Tech Guy) — unlimited AI for coaching + QA. Mamas stay capped.
@@ -92,25 +106,56 @@ export async function onRequestPost({ request, env }) {
 
     const customMeals = await fetchCustomMeals(env, user.id, { authHeader });
     const models = resolveModels(env);
-    const prompt =
-      mode === "describe"
-        ? buildDescribeMealPrompt({ profile, macros, slot, description, customMeals })
-        : buildSlotOptionsPrompt({ profile, macros, slot, customMeals });
+    const remaining = sanitizeMacroBag(body.remaining);
+    const dayTotals = sanitizeMacroBag(body.dayTotals);
+
+    let prompt;
+    let userContent;
+    let jsonHint = MEAL_IDEA_JSON_HINT;
+    let maxTokens = 4000;
+    let system =
+      "You are Callie's postpartum meal assistant. Prefer her saved My meals when they fit, then the recipe bank. Honest macros from ingredients. Honor food loves and diet/allergens. JSON only.";
+
+    if (mode === "describe") {
+      prompt = buildDescribeMealPrompt({ profile, macros, slot, description, customMeals });
+      userContent = `${prompt}\n\n${jsonHint}`;
+    } else if (mode === "options") {
+      prompt = buildSlotOptionsPrompt({ profile, macros, slot, customMeals });
+      userContent = `${prompt}\n\n${jsonHint}`;
+      maxTokens = 8000;
+    } else {
+      prompt = buildEatingOutPrompt({
+        profile,
+        macros,
+        slot,
+        description,
+        customMeals,
+        remaining,
+        dayTotals,
+      });
+      jsonHint = EATING_OUT_JSON_HINT;
+      maxTokens = 7000;
+      system =
+        "You are Callie's postpartum meal assistant helping with restaurant menus. Read menu photos carefully. Suggest orderable dishes that fit remaining macros. Restaurant macros are rough estimates. Honor diet/allergens. JSON only.";
+      userContent = [
+        { type: "text", text: `${prompt}\n\n${jsonHint}` },
+        ...images.map((img) => ({
+          type: "image_url",
+          image_url: { url: `data:${img.media_type};base64,${img.image_b64}` },
+        })),
+      ];
+    }
 
     const result = await callOpenRouter({
       env,
       label: "meal_idea",
       models,
-      maxTokens: mode === "options" ? 8000 : 4000,
-      temperature: 0.3,
-      timeoutMs: 40_000,
+      maxTokens,
+      temperature: mode === "eating_out" ? 0.25 : 0.3,
+      timeoutMs: mode === "eating_out" ? 55_000 : 40_000,
       messages: [
-        {
-          role: "system",
-          content:
-            "You are Callie's postpartum meal assistant. Prefer her saved My meals when they fit, then the recipe bank. Honest macros from ingredients. Honor food loves and diet/allergens. JSON only.",
-        },
-        { role: "user", content: `${prompt}\n\n${MEAL_IDEA_JSON_HINT}` },
+        { role: "system", content: system },
+        { role: "user", content: userContent },
       ],
     });
 
@@ -144,7 +189,7 @@ export async function onRequestPost({ request, env }) {
       );
     }
 
-    const meals = normalizeMeals(parsedJson.value, slot);
+    const meals = normalizeMeals(parsedJson.value, slot, { eatingOut: mode === "eating_out" });
     if (!meals.length) {
       await logAiFailure(env, {
         userId: user.id,
@@ -154,7 +199,12 @@ export async function onRequestPost({ request, env }) {
         detail: "no meals returned after normalize",
       });
       return json(
-        { error: "no meals returned", message: messageForKind("empty", MEAL_IDEA_COPY) },
+        {
+          error: "no meals returned",
+          message: mode === "eating_out"
+            ? "Couldn't read clear dishes from that menu — try a sharper photo or add a note with the dishes you're considering."
+            : messageForKind("empty", MEAL_IDEA_COPY),
+        },
         502,
       );
     }
@@ -168,7 +218,33 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-function normalizeMeals(parsed, fallbackSlot) {
+function parseImages(body) {
+  const rawList = Array.isArray(body?.images) && body.images.length
+    ? body.images.slice(0, MAX_IMAGES)
+    : (body?.image_b64 && typeof body.image_b64 === "string"
+      ? [{ image_b64: body.image_b64, media_type: body.media_type }]
+      : []);
+  const images = [];
+  for (const item of rawList) {
+    const b64 = typeof item?.image_b64 === "string" ? item.image_b64 : "";
+    if (!b64 || b64.length > MAX_IMAGE_CHARS) continue;
+    const mime = String(item?.media_type || "image/jpeg").slice(0, 40);
+    if (!/^image\/(jpeg|jpg|png|webp|gif)$/i.test(mime)) continue;
+    images.push({ image_b64: b64, media_type: mime });
+  }
+  return images;
+}
+
+function sanitizeMacroBag(value) {
+  if (!value || typeof value !== "object") return null;
+  const n = (k) => {
+    const v = Number(value[k]);
+    return Number.isFinite(v) ? Math.round(v) : 0;
+  };
+  return { cal: n("cal"), p: n("p"), c: n("c"), f: n("f") };
+}
+
+function normalizeMeals(parsed, fallbackSlot, { eatingOut = false } = {}) {
   const raw = Array.isArray(parsed?.meals)
     ? parsed.meals
     : parsed?.meal
@@ -176,22 +252,28 @@ function normalizeMeals(parsed, fallbackSlot) {
       : [];
   return raw
     .filter((m) => m && m.name)
-    .map((m) => sanitizePlanMeal({
-      slot: SLOTS.has(String(m.slot || "").toLowerCase())
-        ? String(m.slot).toLowerCase()
-        : fallbackSlot,
-      name: String(m.name).slice(0, 120),
-      basedOn: m.basedOn ? String(m.basedOn).slice(0, 120) : null,
-      desc: String(m.desc || "").slice(0, 280),
-      cal: Math.round(Number(m.cal) || 0),
-      p: Math.round(Number(m.p) || 0),
-      c: Math.round(Number(m.c) || 0),
-      f: Math.round(Number(m.f) || 0),
-      servings: Number(m.servings) > 0 ? Number(m.servings) : 1,
-      ingredients: m.ingredients,
-      batch: m.batch,
-      steps: m.steps,
-    }));
+    .map((m) => {
+      let desc = String(m.desc || "").slice(0, 280);
+      if (eatingOut && desc && !/rough|estimate|restaurant/i.test(desc)) {
+        desc = `Rough restaurant estimate — ${desc}`.slice(0, 280);
+      }
+      return sanitizePlanMeal({
+        slot: SLOTS.has(String(m.slot || "").toLowerCase())
+          ? String(m.slot).toLowerCase()
+          : fallbackSlot,
+        name: String(m.name).slice(0, 120),
+        basedOn: eatingOut ? null : (m.basedOn ? String(m.basedOn).slice(0, 120) : null),
+        desc,
+        cal: Math.round(Number(m.cal) || 0),
+        p: Math.round(Number(m.p) || 0),
+        c: Math.round(Number(m.c) || 0),
+        f: Math.round(Number(m.f) || 0),
+        servings: 1,
+        ingredients: m.ingredients,
+        batch: eatingOut ? null : m.batch,
+        steps: m.steps,
+      });
+    });
 }
 
 async function requireSupabaseUser(request, env) {

@@ -34,6 +34,29 @@ import {
   weekPlanNeedsCustomIngredientHydration,
 } from "../utils/weekPlan";
 
+const MAX_MENU_PHOTOS = 3;
+
+/** Headroom to day high bands for the selected plan day (exclude meal being swapped). */
+function roomLeftForDay(days, dayKey, macros, replaceId = null) {
+  const dayRow = (Array.isArray(days) ? days : []).find((d) => d.day === dayKey);
+  let meals = Array.isArray(dayRow?.meals) ? dayRow.meals : [];
+  if (replaceId) meals = meals.filter((m) => m.id !== replaceId);
+  const dayTotals = sumDayTotals(meals);
+  const bands = targetBands(macros);
+  if (!bands) {
+    return { dayTotals, remaining: null };
+  }
+  return {
+    dayTotals,
+    remaining: {
+      cal: bands.calHi - dayTotals.cal,
+      p: bands.pHi - dayTotals.p,
+      c: bands.cHi - dayTotals.c,
+      f: bands.fHi - dayTotals.f,
+    },
+  };
+}
+
 /** How far ahead she can plan (blank weeks until she adds meals). */
 const FUTURE_WEEKS = 4;
 /** How far back she can flip (same ballpark as meal log). */
@@ -464,6 +487,8 @@ export function WeekPlanner({
           day={picker.day}
           slot={picker.slot}
           replacing={!!picker.replaceId}
+          replaceId={picker.replaceId || null}
+          dayMeals={(planned.find((d) => d.day === picker.day)?.meals) || []}
           customMeals={customMeals}
           onClose={closePicker}
           onPickRecipe={chooseRecipe}
@@ -935,6 +960,8 @@ function MealPickerModal({
   day,
   slot,
   replacing,
+  replaceId = null,
+  dayMeals = [],
   customMeals = [],
   onClose,
   onPickRecipe,
@@ -943,7 +970,7 @@ function MealPickerModal({
   onMealIdea,
 }) {
   const initialSlot = slot === "any" ? null : slot;
-  const [view, setView] = useState("hub"); // hub | bank | pantry | mine | describe | options
+  const [view, setView] = useState("hub"); // hub | bank | pantry | mine | describe | options | eating_out
   const [slotPick, setSlotPick] = useState(initialSlot);
   const [pantryGroup, setPantryGroup] = useState("all");
   const [description, setDescription] = useState("");
@@ -952,6 +979,10 @@ function MealPickerModal({
   const [describeMeal, setDescribeMeal] = useState(null);
   const [optionMeals, setOptionMeals] = useState([]);
   const [saveMine, setSaveMine] = useState(true);
+  const [menuCaption, setMenuCaption] = useState("");
+  const [menuItems, setMenuItems] = useState([]); // { file, previewUrl }[]
+  const menuCamRef = useRef(null);
+  const menuLibRef = useRef(null);
 
   const effectiveSlot = slotPick || (slot !== "any" ? slot : null);
   const bank = useMemo(
@@ -963,10 +994,47 @@ function MealPickerModal({
     if (!pantryGroup || pantryGroup === "all") return all;
     return all.filter((item) => item.group === pantryGroup);
   }, [pantryGroup]);
+  const eatingRoom = useMemo(
+    () => roomLeftForDay([{ day, meals: dayMeals }], day, macros, replaceId),
+    [day, dayMeals, macros, replaceId],
+  );
   const title =
     effectiveSlot
       ? `${replacing ? "Swap" : "Add"} ${SLOT_LABEL[effectiveSlot] || "meal"} · ${day}`
       : `${replacing ? "Swap meal" : "Add meal"} · ${day}`;
+
+  const clearMenuPhotos = () => {
+    setMenuItems((prev) => {
+      prev.forEach((item) => {
+        try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
+      });
+      return [];
+    });
+  };
+
+  const stageMenuFiles = (fileList) => {
+    const incoming = Array.from(fileList || []).filter((f) => f && f.type?.startsWith("image/"));
+    if (!incoming.length) return;
+    setMenuItems((prev) => {
+      const room = Math.max(0, MAX_MENU_PHOTOS - prev.length);
+      const take = incoming.slice(0, room).map((file) => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+      return [...prev, ...take];
+    });
+  };
+
+  const removeMenuAt = (idx) => {
+    setMenuItems((prev) => {
+      const next = [...prev];
+      const [gone] = next.splice(idx, 1);
+      if (gone?.previewUrl) {
+        try { URL.revokeObjectURL(gone.previewUrl); } catch { /* ignore */ }
+      }
+      return next;
+    });
+  };
 
   const goHub = () => {
     setView("hub");
@@ -974,7 +1042,17 @@ function MealPickerModal({
     setDescribeMeal(null);
     setOptionMeals([]);
     setBusy(false);
+    setMenuCaption("");
+    clearMenuPhotos();
   };
+
+  useEffect(() => () => {
+    // Revoke previews if the modal unmounts mid-flow.
+    menuItems.forEach((item) => {
+      try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const runDescribe = async () => {
     if (!onMealIdea) return;
@@ -1024,6 +1102,45 @@ function MealPickerModal({
       setOptionMeals(list.slice(0, 3));
     } catch (e) {
       setErr(e.message || "Couldn’t generate options.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runEatingOut = async () => {
+    if (!onMealIdea) return;
+    if (!effectiveSlot) {
+      setErr("Pick breakfast, lunch, dinner, or snack first.");
+      return;
+    }
+    if (!menuItems.length) {
+      setErr("Add a photo of the menu first.");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    setOptionMeals([]);
+    try {
+      const result = await onMealIdea({
+        mode: "eating_out",
+        slot: effectiveSlot,
+        description: menuCaption.trim(),
+        files: menuItems.map((m) => m.file),
+        remaining: eatingRoom.remaining,
+        dayTotals: eatingRoom.dayTotals,
+      });
+      if (result?.error) {
+        setErr(result.error);
+        return;
+      }
+      const list = Array.isArray(result?.meals) ? result.meals : [];
+      if (!list.length) {
+        setErr("No dishes came back — try a clearer menu photo or name the dishes in your note.");
+        return;
+      }
+      setOptionMeals(list.slice(0, 3));
+    } catch (e) {
+      setErr(e.message || "Couldn’t read that menu.");
     } finally {
       setBusy(false);
     }
@@ -1088,7 +1205,9 @@ function MealPickerModal({
                       ? "Your saved macros meals"
                       : view === "describe"
                         ? "Describe what you want — AI builds one meal"
-                        : "2–3 options from your tastes + Callie’s guide"}
+                        : view === "eating_out"
+                          ? "Snap a menu — picks in your remaining macros"
+                          : "2–3 options from your tastes + Callie’s guide"}
             </div>
           </div>
           <ActionPill onClick={onClose}>Close</ActionPill>
@@ -1145,6 +1264,24 @@ function MealPickerModal({
                 setView("options");
                 setErr("");
                 setOptionMeals([]);
+                setSaveMine(true);
+              }}
+            />
+            <HubBtn
+              title="Eating out"
+              sub={effectiveSlot
+                ? `Snap a menu · ${SLOT_LABEL[effectiveSlot]} picks in your remaining macros`
+                : "Snap a menu photo + note — AI suggests dishes in range"}
+              disabled={!macros}
+              onClick={() => {
+                if (!effectiveSlot) {
+                  setErr("Pick breakfast, lunch, dinner, or snack first.");
+                  return;
+                }
+                setView("eating_out");
+                setErr("");
+                setOptionMeals([]);
+                setSaveMine(false);
               }}
             />
             {!macros && (
@@ -1338,6 +1475,201 @@ function MealPickerModal({
             ))}
           </>
         )}
+
+        {view === "eating_out" && (
+          <>
+            {!initialSlot && (
+              <>
+                <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 6 }}>Slot for this meal</div>
+                {slotChooser}
+              </>
+            )}
+            <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.45 }}>
+              Snap the menu (up to {MAX_MENU_PHOTOS} photos). Add a note like “can’t decide between the salmon or the salad”
+              or “appetizer only.” Picks aim for your <b style={{ color: T.ink }}>remaining macros</b> today — restaurant numbers are rough.
+            </div>
+            {eatingRoom.remaining && (
+              <div style={{
+                fontSize: 12,
+                color: T.inkSoft,
+                marginBottom: 10,
+                padding: "8px 10px",
+                borderRadius: 10,
+                background: T.sageSoft,
+                lineHeight: 1.4,
+              }}
+              >
+                Room left ~{Math.max(0, Math.round(eatingRoom.remaining.cal))} cal
+                {" · "}P {Math.round(eatingRoom.remaining.p)}g
+                {" · "}C {Math.round(eatingRoom.remaining.c)}g
+                {" · "}F {Math.round(eatingRoom.remaining.f)}g
+                {eatingRoom.remaining.cal < 0 || eatingRoom.remaining.p < 0
+                  ? " — you’re a bit over; we’ll lean lighter."
+                  : ""}
+              </div>
+            )}
+
+            {!menuItems.length ? (
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+                <Btn small onClick={() => menuCamRef.current?.click()} disabled={busy}>Open camera</Btn>
+                <Btn small ghost onClick={() => menuLibRef.current?.click()} disabled={busy}>Photo library</Btn>
+              </div>
+            ) : (
+              <>
+                <div style={{
+                  display: "flex",
+                  gap: 8,
+                  overflowX: "auto",
+                  marginBottom: 10,
+                  WebkitOverflowScrolling: "touch",
+                }}
+                >
+                  {menuItems.map((item, idx) => (
+                    <div
+                      key={`${item.previewUrl}-${idx}`}
+                      style={{
+                        position: "relative",
+                        flex: "0 0 auto",
+                        width: menuItems.length === 1 ? "100%" : 112,
+                        height: menuItems.length === 1 ? 180 : 112,
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        border: `1px solid ${T.border}`,
+                        background: "#fff",
+                      }}
+                    >
+                      <img
+                        src={item.previewUrl}
+                        alt={idx === 0 ? "Menu photo" : `Menu photo ${idx + 1}`}
+                        style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => removeMenuAt(idx)}
+                        aria-label={`Remove menu photo ${idx + 1}`}
+                        style={{
+                          position: "absolute",
+                          top: 6,
+                          right: 6,
+                          width: 28,
+                          height: 28,
+                          borderRadius: 999,
+                          border: "none",
+                          background: "rgba(51,39,46,0.72)",
+                          color: "#fff",
+                          fontSize: 16,
+                          lineHeight: 1,
+                          cursor: busy ? "default" : "pointer",
+                          fontFamily: F,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {menuItems.length < MAX_MENU_PHOTOS && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                    <Btn small ghost onClick={() => menuCamRef.current?.click()} disabled={busy}>Add photo</Btn>
+                    <Btn small ghost onClick={() => menuLibRef.current?.click()} disabled={busy}>From library</Btn>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={clearMenuPhotos}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        fontSize: 13,
+                        color: T.inkSoft,
+                        cursor: busy ? "default" : "pointer",
+                        textDecoration: "underline",
+                        fontFamily: F,
+                      }}
+                    >
+                      clear
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: T.inkSoft, marginBottom: 10 }}>
+              Optional note
+              <textarea
+                value={menuCaption}
+                onChange={(e) => setMenuCaption(e.target.value.slice(0, 400))}
+                placeholder="e.g. can’t decide between the grilled salmon or the chicken salad — or help pick an appetizer"
+                rows={2}
+                disabled={busy}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  marginTop: 6,
+                  padding: "10px 12px",
+                  fontSize: 15,
+                  fontFamily: F,
+                  border: `1.5px solid ${T.border}`,
+                  borderRadius: 12,
+                  background: "#fff",
+                  color: T.ink,
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                }}
+              />
+            </label>
+
+            <Btn
+              onClick={runEatingOut}
+              disabled={busy || !menuItems.length || !effectiveSlot}
+              style={{ width: "100%", marginBottom: 10 }}
+            >
+              {busy ? "Reading menu…" : optionMeals.length ? "Regenerate picks" : "Get 2–3 picks"}
+            </Btn>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.ink, marginBottom: 10 }}>
+              <input
+                type="checkbox"
+                checked={saveMine}
+                onChange={(e) => setSaveMine(e.target.checked)}
+              />
+              Save the one I pick to My meals
+            </label>
+            {err && <div style={{ fontSize: 12.5, color: T.amber, marginBottom: 8 }}>{err}</div>}
+            {optionMeals.map((m, i) => (
+              <AiMealPreview
+                key={`${m.name}-${i}`}
+                meal={m}
+                onAdd={() => onPickAi(m, { saveToMine: saveMine })}
+                eatingOut
+              />
+            ))}
+
+            <input
+              ref={menuCamRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              disabled={busy}
+              style={{ display: "none" }}
+              onChange={(e) => {
+                stageMenuFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <input
+              ref={menuLibRef}
+              type="file"
+              accept="image/*"
+              multiple
+              disabled={busy}
+              style={{ display: "none" }}
+              onChange={(e) => {
+                stageMenuFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </>
+        )}
       </div>
     </div>
   );
@@ -1367,7 +1699,7 @@ function HubBtn({ title, sub, onClick, disabled }) {
   );
 }
 
-function AiMealPreview({ meal, onAdd }) {
+function AiMealPreview({ meal, onAdd, eatingOut = false }) {
   const [open, setOpen] = useState(false);
   const ings = Array.isArray(meal.ingredients) ? meal.ingredients : [];
   const steps = Array.isArray(meal.steps) ? meal.steps : [];
@@ -1383,7 +1715,13 @@ function AiMealPreview({ meal, onAdd }) {
     >
       <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, textTransform: "uppercase" }}>
         {SLOT_LABEL[String(meal.slot || "").toLowerCase()] || "Meal"}
-        {Number(meal.servings) > 1 ? ` · batch · serves ${meal.servings}` : meal.basedOn ? ` · based on ${meal.basedOn}` : " · custom AI"}
+        {eatingOut
+          ? " · eating out · rough estimate"
+          : Number(meal.servings) > 1
+            ? ` · batch · serves ${meal.servings}`
+            : meal.basedOn
+              ? ` · based on ${meal.basedOn}`
+              : " · custom AI"}
       </div>
       <div style={{ fontWeight: 700, fontSize: 15, color: T.ink, marginTop: 2 }}>{meal.name}</div>
       <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>

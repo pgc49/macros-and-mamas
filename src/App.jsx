@@ -941,18 +941,47 @@ export default function App() {
     }
   };
 
-  /** Single-meal AI: describe one meal, or 2–3 options for a slot. */
-  const onMealIdea = async ({ mode, slot, description } = {}) => {
+  /**
+   * Single-meal AI: describe one meal, 2–3 slot options, or eating-out menu picks.
+   * Eating out may pass File[] as `files` (menu photos) plus remaining macros.
+   */
+  const onMealIdea = async ({
+    mode,
+    slot,
+    description,
+    files,
+    remaining,
+    dayTotals,
+  } = {}) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return { error: "Sign in again for AI meal ideas." };
+
+      let payload = { mode, slot, description };
+      if (mode === "eating_out") {
+        const photo = await photoPayload(files || [], description || "");
+        if (!photo?.images?.length) {
+          return { error: "Add a clear photo of the menu first." };
+        }
+        payload = {
+          mode,
+          slot,
+          description: String(description || "").trim().slice(0, 400),
+          images: photo.images,
+          image_b64: photo.image_b64,
+          media_type: photo.media_type,
+          ...(remaining ? { remaining } : {}),
+          ...(dayTotals ? { dayTotals } : {}),
+        };
+      }
+
       const resp = await fetch("/api/meal-idea", {
         method: "POST",
         headers: {
           "content-type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ mode, slot, description }),
+        body: JSON.stringify(payload),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
