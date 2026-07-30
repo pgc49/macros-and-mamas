@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card, Btn, inputStyle } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
-import { AdminVoiceDropCard } from "./AdminVoiceDropCard";
 import { db, fullName } from "../db/db";
 import { supabase } from "../lib/supabase";
 
@@ -59,10 +58,6 @@ export function AdminMessages({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [announceBody, setAnnounceBody] = useState("");
-  const [announceAudience, setAnnounceAudience] = useState("active");
-  const [announceBusy, setAnnounceBusy] = useState(false);
-  const [announceMsg, setAnnounceMsg] = useState("");
 
   const clientMap = useMemo(() => {
     const m = new Map();
@@ -196,50 +191,6 @@ export function AdminMessages({
     refreshInbox();
   };
 
-  const activeMamaCount = useMemo(
-    () => (roster || []).filter((c) => {
-      if (isAdminProfile(c)) return false;
-      return c.stage === "active" || c.status === "active";
-    }).length,
-    [roster],
-  );
-  const allMamaCount = useMemo(
-    () => (roster || []).filter((c) => !isAdminProfile(c) && !c.refunded).length,
-    [roster],
-  );
-
-  const sendAnnouncement = async () => {
-    const text = announceBody.trim();
-    if (!text) return;
-    const n = announceAudience === "all_mamas" ? allMamaCount : activeMamaCount;
-    if (!window.confirm(`Send this announcement to ${n} mama${n === 1 ? "" : "s"}? They’ll get it in Messages${n ? " + a push/email" : ""}.`)) {
-      return;
-    }
-    setAnnounceBusy(true);
-    setAnnounceMsg("");
-    setError("");
-    try {
-      const result = await db.broadcastAnnouncement({
-        body: text,
-        audience: announceAudience,
-      });
-      setAnnounceBody("");
-      setAnnounceMsg(
-        `Sent to ${result.messages || 0} thread${(result.messages || 0) === 1 ? "" : "s"}`
-        + (result.pushSent ? ` · ${result.pushSent} push` : "")
-        + (result.emailSent ? ` · ${result.emailSent} email` : "")
-        + ".",
-      );
-      refreshInbox();
-      if (activeId) refreshThread(activeId);
-    } catch (e) {
-      console.error(e);
-      setError(e.message || "Couldn’t send announcement.");
-    } finally {
-      setAnnounceBusy(false);
-    }
-  };
-
   const inboxIds = useMemo(() => new Set(inbox.map((i) => i.clientId)), [inbox]);
 
   const startable = useMemo(() => {
@@ -271,67 +222,9 @@ export function AdminMessages({
       <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 28, margin: "4px 0 6px" }}>Messages</h2>
       <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px", lineHeight: 1.5 }}>
         1:1 with each mama — same thread she sees under Messages. Admins (you + Callie) share one test thread.
+        Broadcasts live under Announcements.
       </p>
       {error && <div style={{ fontSize: 13, color: T.amber, marginBottom: 10 }}>{error}</div>}
-
-      <Card style={{ marginBottom: 14, padding: 14 }}>
-        <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>Announce to mamas</div>
-        <p style={{ fontSize: 13, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45 }}>
-          Posts as a Callie announcement in each mama’s Messages thread and sends a push (email if push isn’t on).
-        </p>
-        <textarea
-          value={announceBody}
-          onChange={(e) => setAnnounceBody(e.target.value.slice(0, 2000))}
-          rows={3}
-          placeholder="App update, schedule note, quick tip…"
-          style={{
-            ...inputStyle,
-            resize: "vertical",
-            minHeight: 72,
-            fontFamily: F,
-          }}
-        />
-        <div style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 10,
-          alignItems: "center",
-          marginTop: 10,
-        }}
-        >
-          <label style={{ fontSize: 13, fontWeight: 700, color: T.inkSoft, display: "flex", alignItems: "center", gap: 6 }}>
-            To
-            <select
-              value={announceAudience}
-              onChange={(e) => setAnnounceAudience(e.target.value)}
-              style={{
-                ...inputStyle,
-                width: "auto",
-                padding: "8px 10px",
-                fontSize: 13,
-              }}
-            >
-              <option value="active">Active mamas ({activeMamaCount})</option>
-              <option value="all_mamas">All mamas ({allMamaCount})</option>
-            </select>
-          </label>
-          <Btn
-            small
-            onClick={sendAnnouncement}
-            disabled={announceBusy || !announceBody.trim()}
-          >
-            {announceBusy ? "Sending…" : "Send announcement"}
-          </Btn>
-        </div>
-        {announceMsg && (
-          <div style={{ fontSize: 13, color: "#3E5A46", marginTop: 10 }}>{announceMsg}</div>
-        )}
-      </Card>
-
-      <AdminVoiceDropCard
-        activeMamaCount={activeMamaCount}
-        allMamaCount={allMamaCount}
-      />
 
       <div style={{
         display: "grid",
