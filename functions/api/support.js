@@ -48,6 +48,12 @@ export async function onRequestPost({ request, env }) {
 
     const limit = await checkSupportLimit(env, user.id, email);
     if (!limit.ok) {
+      if (limit.error === "rate_limit_unavailable") {
+        return json({
+          error: "unavailable",
+          message: "Support is briefly unavailable — try again in a minute, or text Callie if it's urgent.",
+        }, 503);
+      }
       return json({
         error: "rate_limited",
         message: "You've sent a few reports today — if it's urgent, text Callie and she'll loop in Tech Guy.",
@@ -222,8 +228,8 @@ async function checkSupportLimit(env, profileId, email) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key) {
-    console.warn("support rate limit skipped — missing service role");
-    return { ok: true };
+    console.warn("support rate limit unavailable — missing service role");
+    return { ok: false, error: "rate_limit_unavailable" };
   }
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const url =
@@ -240,7 +246,7 @@ async function checkSupportLimit(env, profileId, email) {
   });
   if (!resp.ok) {
     console.warn("support rate limit count failed", resp.status, await resp.text());
-    return { ok: true };
+    return { ok: false, error: "rate_limit_unavailable" };
   }
   const range = resp.headers.get("content-range") || "";
   const total = Number((range.split("/")[1] || "").trim());

@@ -137,7 +137,14 @@ function authorize(request, env) {
   }
   const auth = request.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  return token && token === secret;
+  return timingSafeEqual(token, secret);
+}
+
+function timingSafeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return out === 0;
 }
 
 /** While closed, only nudge unpaid accounts created before the cutoff. */

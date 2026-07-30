@@ -106,10 +106,19 @@ export async function onRequestPost({ request, env }) {
 }
 
 function authorize(request, env) {
-  const secret = env.CRON_SECRET;
+  // Prefer dedicated blast secret; fall back to CRON_SECRET so existing deploys keep working.
+  const secret = env.WAITLIST_BLAST_SECRET || env.CRON_SECRET;
   if (!secret) return false;
   const auth = request.headers.get("authorization") || "";
-  return auth === `Bearer ${secret}`;
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  return timingSafeEqual(token, secret);
+}
+
+function timingSafeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return out === 0;
 }
 
 async function fetchWaitlist(base, key, cohort, limit) {

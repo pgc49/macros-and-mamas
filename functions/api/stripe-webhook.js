@@ -34,6 +34,13 @@ export async function onRequestPost({ request, env }) {
         return json({ error: "missing user" }, 400);
       }
 
+      // Defense-in-depth: only unlock paid when Stripe says the session is paid.
+      const payStatus = String(session.payment_status || "");
+      if (payStatus && payStatus !== "paid" && payStatus !== "no_payment_required") {
+        console.error("checkout.session.completed not paid", session.id, payStatus);
+        return json({ error: "not paid", payment_status: payStatus }, 400);
+      }
+
       await markPaid(env, userId, session);
 
       // Email #2 + Callie A — best-effort (don't fail the webhook)
@@ -91,15 +98,14 @@ async function markPaid(env, userId, session) {
 
 /** Verify Stripe-Signature header (t=,v1=) with Web Crypto HMAC-SHA256. */
 async function verifyStripeSignature(rawBody, header, secret) {
-  const parts = Object.fromEntries(
-    header.split(",").map((p) => {
-      const [k, ...rest] = p.split("=");
-      return [k.trim(), rest.join("=")];
-    })
-  );
-  const timestamp = parts.t;
-  const v1 = parts.v1;
-  if (!timestamp || !v1) return null;
+  const pairs = header.split(",").map((p) => {
+    const [k, ...rest] = p.split("=");
+    return [k.trim(), rest.join("=")];
+  });
+  const timestamp = pairs.find(([k]) => k === "t")?.[1];
+  // Stripe may send multiple v1 signatures during secret rotation — accept any match.
+  const v1List = pairs.filter(([k]) => k === "v1").map(([, v]) => v).filter(Boolean);
+  if (!timestamp || !v1List.length) return null;
 
   // Reject timestamps older than 5 minutes
   const age = Math.floor(Date.now() / 1000) - Number(timestamp);
@@ -122,7 +128,7 @@ async function verifyStripeSignature(rawBody, header, secret) {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  if (!timingSafeEqual(expected, v1)) return null;
+  if (!v1List.some((v1) => timingSafeEqual(expected, v1))) return null;
 
   try {
     return JSON.parse(rawBody);

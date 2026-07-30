@@ -26,12 +26,17 @@ export async function onRequestPost({ request, env }) {
 
     const msg = await loadMessage(env, messageId);
     if (!msg) return json({ error: "not found" }, 404);
-    if (msg.sender_id !== user.id && !(await isAdmin(env, user.id))) {
+    // Only the sender may notify — blocks admin re-notify spam loops.
+    if (msg.sender_id !== user.id) {
       return json({ error: "forbidden" }, 403);
     }
 
     // Never notify on soft-deleted / empty identity rows.
     if (msg.deleted_at) return json({ ok: true, skipped: "deleted", pushSent: 0, emailSent: false });
+    // Idempotent — one notify per message (survives client retries).
+    if (msg.notified_at) {
+      return json({ ok: true, skipped: "already_notified", pushSent: 0, emailSent: false });
+    }
 
     const sender = await loadProfile(env, msg.sender_id);
     const client = await loadProfile(env, msg.client_id);
@@ -131,10 +136,9 @@ export async function onRequestPost({ request, env }) {
         }
       }
     } else if (senderIsAdmin && clientIsAdmin) {
-      // Admin ↔ admin test DM: only the other admin(s), never mamas.
+      // Admin ↔ admin DM: only the other party in THIS thread (never every admin).
       route = "admin_to_admin";
-      const adminIds = await listAdminIds(env);
-      const recipients = adminIds.filter((id) => id !== msg.sender_id);
+      const recipients = await adminDmRecipients(env, msg);
       for (const adminId of recipients) {
         const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
         const n = await sendPushToProfile(env, adminId, {
@@ -167,6 +171,7 @@ export async function onRequestPost({ request, env }) {
       route = "ignored";
     }
 
+    await markMessageNotified(env, messageId);
     return json({ ok: true, route, pushSent, emailSent });
   } catch (e) {
     console.error("message-notify failed", e);
@@ -339,6 +344,51 @@ async function loadMessage(env, id) {
   return rows[0] || null;
 }
 
+async function markMessageNotified(env, messageId) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key || !messageId) return;
+  try {
+    await fetch(`${base}/rest/v1/messages?id=eq.${encodeURIComponent(messageId)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        apikey: key,
+        authorization: `Bearer ${key}`,
+        prefer: "return=minimal",
+      },
+      body: JSON.stringify({ notified_at: new Date().toISOString() }),
+    });
+  } catch (e) {
+    console.warn("markMessageNotified failed", e);
+  }
+}
+
+/** Peer for Patrick↔Callie DMs — never fan out to every admin. */
+async function adminDmRecipients(env, msg) {
+  if (msg.client_id && msg.client_id !== msg.sender_id) {
+    return [msg.client_id];
+  }
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  try {
+    const resp = await fetch(
+      `${base}/rest/v1/messages?client_id=eq.${encodeURIComponent(msg.client_id)}`
+      + `&sender_id=neq.${encodeURIComponent(msg.sender_id)}`
+      + `&select=sender_id&limit=1`,
+      { headers: { apikey: key, authorization: `Bearer ${key}` } },
+    );
+    if (resp.ok) {
+      const rows = await resp.json().catch(() => []);
+      if (rows[0]?.sender_id) return [rows[0].sender_id];
+    }
+  } catch (e) {
+    console.warn("adminDmRecipients lookup failed", e);
+  }
+  // Brand-new thread owned by sender: notify Callie coach admins only.
+  return (await listCallieAdminIds(env)).filter((id) => id !== msg.sender_id);
+}
+
 async function loadProfile(env, id) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -364,11 +414,6 @@ async function listAdminProfiles(env) {
 
 async function listAdminIds(env) {
   return (await listAdminProfiles(env)).map((r) => r.id).filter(Boolean);
-}
-
-async function isAdmin(env, userId) {
-  const p = await loadProfile(env, userId);
-  return p?.role === "admin";
 }
 
 async function requireUser(request, env) {

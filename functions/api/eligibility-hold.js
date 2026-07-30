@@ -5,7 +5,7 @@
    Does NOT refund — Callie decides via 1:1.
    ================================================================== */
 
-import { loadUserContact, invokeEdgeFunction, logEmailEvent } from "../_shared/supabaseEmail.js";
+import { loadUserContact, invokeEdgeFunction, logEmailEvent, hasEmailEvent } from "../_shared/supabaseEmail.js";
 
 const ALLOWED = new Set(["pregnant", "early_nursing", "early"]);
 
@@ -23,8 +23,13 @@ export async function onRequestPost({ request, env }) {
 
     await persistEligibility(env, user.id, reason, body);
 
+    // Idempotent ops email — one hold notice per mama (Callie decides 1:1 after).
+    if (await hasEmailEvent(env, user.id, "callie_eligibility_hold")) {
+      return json({ ok: true, refunded: false, skipped: "already_notified" }, 200);
+    }
+
     const contact = await loadUserContact(env, user.id);
-    const name = contact.name || body.name || user.email;
+    const name = contact.name || user.email;
     const email = contact.email || user.email;
     const label = reason === "pregnant" ? "pregnant" : "early nursing (<3 mo)";
 
