@@ -4,7 +4,7 @@ import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings
 
 /**
  * Compact row: meal name, scaled macros, 0.25 serving stepper, Add to Today.
- * One tap logs — stays in place so mamas can add several meals in a row.
+ * Used for My meals and Today → My plan lists.
  */
 export function LoggableMealRow({
   meal,
@@ -12,9 +12,10 @@ export function LoggableMealRow({
   onLog,
   onRemove,
   accent = false,
+  confirmLog = false,
 }) {
   const [qty, setQty] = useState(1);
-  const [phase, setPhase] = useState("idle"); // idle | busy | done
+  const [phase, setPhase] = useState("idle"); // idle | confirm | busy | done
   const servings = snapServings(qty);
   const scaled = scaleMealForLog(meal, servings);
   const slot = meal.slot
@@ -23,11 +24,16 @@ export function LoggableMealRow({
 
   const label =
     phase === "idle" ? "Add to Today"
-      : phase === "busy" ? "Adding…"
-        : "Added ✓";
+      : phase === "confirm" ? "Confirm?"
+        : phase === "busy" ? "Adding…"
+          : "Added ✓";
 
   const handleLog = async () => {
     if (phase === "busy" || phase === "done") return;
+    if (confirmLog && phase === "idle") {
+      setPhase("confirm");
+      return;
+    }
     setPhase("busy");
     try {
       const ok = await onLog?.({ ...scaled, via });
@@ -87,6 +93,22 @@ export function LoggableMealRow({
           >
             {label}
           </button>
+          {phase === "confirm" && (
+            <button
+              type="button"
+              onClick={() => setPhase("idle")}
+              style={{
+                background: "none",
+                border: "none",
+                fontSize: 11.5,
+                color: T.inkSoft,
+                cursor: "pointer",
+                fontFamily: F,
+              }}
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </div>
       <div style={{

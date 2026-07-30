@@ -928,7 +928,12 @@ export function MealLogCard({
                     }}
                     via="recipe"
                     accent
-                    onLog={onLogRecipe}
+                    confirmLog
+                    onLog={async (scaled) => {
+                      const ok = await onLogRecipe?.(scaled);
+                      if (ok !== false) setMethod(null);
+                      return ok;
+                    }}
                   />
                 ))}
               </>
@@ -952,7 +957,12 @@ export function MealLogCard({
                     meal={r}
                     via="custom"
                     accent={!(plannedMeals || []).length}
-                    onLog={onLogRecipe}
+                    confirmLog
+                    onLog={async (scaled) => {
+                      const ok = await onLogRecipe?.(scaled);
+                      if (ok !== false) setMethod(null);
+                      return ok;
+                    }}
                   />
                 ))}
               </>
@@ -978,7 +988,12 @@ export function MealLogCard({
                 key={r.name}
                 meal={r}
                 via="recipe"
-                onLog={onLogRecipe}
+                confirmLog
+                onLog={async (scaled) => {
+                  const ok = await onLogRecipe?.(scaled);
+                  if (ok !== false) setMethod(null);
+                  return ok;
+                }}
               />
             ))}
             <div style={{
@@ -1036,7 +1051,12 @@ export function MealLogCard({
                 key={r.name}
                 meal={r}
                 via="recipe"
-                onLog={onLogRecipe}
+                confirmLog
+                onLog={async (scaled) => {
+                  const ok = await onLogRecipe?.(scaled);
+                  if (ok !== false) setMethod(null);
+                  return ok;
+                }}
               />
             ))}
           </div>
