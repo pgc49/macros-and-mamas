@@ -20,7 +20,9 @@ import {
   cloneDaysToPlan,
   rangeCoach,
   targetBands,
+  hydrateWeekPlanCustomIngredients,
 } from "../src/utils/weekPlan.js";
+import { ingredientsFromText } from "../src/utils/planMealShape.js";
 import { suggestRecipesForSlot, suggestWeekFromBank } from "../src/utils/suggestFromPrefs.js";
 import { RECIPES } from "../src/content/data.js";
 
@@ -89,7 +91,40 @@ assert(groceryPlanned.mealCount === 1 && groceryPlanned.lineCount > 0, "planned 
 
 const customPlan = customMealToPlanMeal({ name: "My turkey wrap", cal: 420, p: 35, c: 30, f: 14 }, "lunch");
 assert(customPlan.slot === "lunch" && customPlan.name === "My turkey wrap", "custom → plan meal");
-assert(!(customPlan.ingredients || []).length, "custom meals are macros-only");
+assert(!(customPlan.ingredients || []).length, "custom without ingredients stays empty");
+
+const meatballsText = "1 lb ground chicken\n1 egg\n1/2 cup breadcrumbs\n2 tbsp olive oil";
+const parsed = ingredientsFromText(meatballsText);
+assert(parsed.length === 4, `parse Create Recipe text → ${parsed.length} lines`);
+assert(parsed[0].item.toLowerCase().includes("chicken"), "first line keeps chicken");
+
+const customWithIng = customMealToPlanMeal({
+  name: "Juicy Chicken Meatballs",
+  cal: 158,
+  p: 18,
+  c: 5,
+  f: 7,
+  serves: 4,
+  ingredients: meatballsText,
+}, "lunch");
+assert(customWithIng.ingredients.length === 4, "custom → plan copies ingredients");
+assert(customWithIng.servings === 4, "custom → plan copies serves");
+
+const legacyDays = addMealToDay(
+  emptyWeekPlan(),
+  "Fri",
+  customMealToPlanMeal({ name: "Juicy Chicken Meatballs", cal: 158, p: 18, c: 5, f: 7 }, "lunch"),
+);
+assert(!(legacyDays.find((d) => d.day === "Fri").meals[0].ingredients || []).length, "legacy place had no ingredients");
+const hydrated = hydrateWeekPlanCustomIngredients(legacyDays, [{
+  name: "Juicy Chicken Meatballs",
+  ingredients: meatballsText,
+  serves: 4,
+}]);
+assert(
+  hydrated.find((d) => d.day === "Fri").meals[0].ingredients.length === 4,
+  "hydrate backfills My meals ingredients onto plan",
+);
 
 const aiPlan = aiIdeaToPlanMeal({
   slot: "dinner",

@@ -8,7 +8,7 @@
 import { RECIPES, PANTRY_ITEMS } from "../content/data.js";
 import { DEFAULT_WEEK } from "../content/defaultWeek.js";
 import { withRecipeDetail } from "../content/recipeDetails.js";
-import { sanitizePlanMeal } from "./planMealShape.js";
+import { ingredientsFromText, sanitizePlanMeal } from "./planMealShape.js";
 import { snapServings } from "./servings.jsx";
 
 export const PLAN_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -246,9 +246,11 @@ export function recipeToPlanMeal(recipe, slotOverride = null) {
   });
 }
 
-/** My meals are macros-only — fine for ranges; grocery lines will be thin. */
+/** My meals → planner row. Copy saved Create Recipe ingredients when present. */
 export function customMealToPlanMeal(custom, slotOverride = "snack") {
   const slot = String(slotOverride || "snack").toLowerCase();
+  const ingredients = ingredientsFromText(custom?.ingredients);
+  const serves = Number(custom?.serves) || 1;
   return withMealId({
     slot: PLAN_SLOTS.includes(slot) ? slot : "snack",
     name: custom.name,
@@ -258,12 +260,55 @@ export function customMealToPlanMeal(custom, slotOverride = "snack") {
     p: Number(custom.p) || 0,
     c: Number(custom.c) || 0,
     f: Number(custom.f) || 0,
-    servings: 1,
+    servings: serves > 0 ? serves : 1,
     qty: 1,
-    ingredients: [],
+    ingredients,
     batch: null,
     steps: [],
   });
+}
+
+/**
+ * Backfill ingredients onto plan meals placed from My meals before we copied them.
+ * Match by meal name when the plan row still has an empty ingredients list.
+ */
+export function hydrateWeekPlanCustomIngredients(days, customMeals) {
+  const byName = new Map();
+  (Array.isArray(customMeals) ? customMeals : []).forEach((m) => {
+    const key = String(m?.name || "").trim().toLowerCase();
+    if (!key) return;
+    const lines = ingredientsFromText(m.ingredients);
+    if (!lines.length) return;
+    byName.set(key, { lines, serves: Number(m.serves) || 1 });
+  });
+  if (!byName.size) return days;
+
+  let changed = false;
+  const next = (Array.isArray(days) ? days : []).map((d) => {
+    if (!d || typeof d !== "object") return d;
+    const meals = (Array.isArray(d.meals) ? d.meals : []).map((meal) => {
+      if (!meal?.name) return meal;
+      if (Array.isArray(meal.ingredients) && meal.ingredients.length) return meal;
+      // Bank recipes hydrate via basedOn / name in the UI — leave those alone.
+      if (meal.basedOn) return meal;
+      const hit = byName.get(String(meal.name).trim().toLowerCase());
+      if (!hit) return meal;
+      changed = true;
+      return {
+        ...meal,
+        ingredients: hit.lines,
+        servings: Number(meal.servings || meal.serves) || hit.serves || 1,
+        desc: meal.desc || "From My meals",
+      };
+    });
+    return { ...d, meals };
+  });
+  return changed ? next : days;
+}
+
+/** True when any My-meals plan row is missing ingredients that exist on the saved meal. */
+export function weekPlanNeedsCustomIngredientHydration(days, customMeals) {
+  return hydrateWeekPlanCustomIngredients(days, customMeals) !== days;
 }
 
 /** AI describe / slot-options meal → planner row (keeps ingredients for grocery). */
