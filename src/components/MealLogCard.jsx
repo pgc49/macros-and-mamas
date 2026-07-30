@@ -680,7 +680,7 @@ export function MealLogCard({
                   Photo library
                 </button>
                 <span style={{ fontSize: 11.5, color: T.inkSoft }}>
-                  plate first — you can add a label photo next
+                  add more photos if needed (second plate, label…)
                 </span>
               </div>
             ) : (
@@ -746,7 +746,7 @@ export function MealLogCard({
                 </div>
                 {snapItems.length < MAX_SNAP_PHOTOS && (
                   <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.4 }}>
-                    Add a nutrition-label or package photo if you have one — up to {MAX_SNAP_PHOTOS} photos.
+                    Add another plate, side, or nutrition label — everything across the photos is totaled. Up to {MAX_SNAP_PHOTOS}.
                   </div>
                 )}
                 <label style={{ display: "block", marginBottom: 10 }}>
