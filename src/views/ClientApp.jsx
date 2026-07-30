@@ -361,6 +361,12 @@ export function ClientApp({
 
       {tab === "meals" && (
         <>
+          {logFlash ? (
+            <Card style={{ marginBottom: 10, padding: 12, background: T.sageSoft, border: "none" }}>
+              <div style={{ fontSize: 13.5, color: "#3E5A46", fontWeight: 700 }}>{logFlash}</div>
+            </Card>
+          ) : null}
+
           {mealFilter !== "Plan" && mealFilter !== "Food prefs" && (
             <>
               <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
@@ -372,10 +378,10 @@ export function ClientApp({
               </h2>
               <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
                 {mealFilter === "My meals"
-                  ? "Saved meals for one-tap logging — or jump back to Plan to build your week."
+                  ? "Saved meals for one-tap logging — add a few, then hop to Today when you’re ready."
                   : mealFilter === "Pantry"
-                    ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap to log or add from Plan."
-                    : "Browse Callie’s recipes by slot. Add them to your week from Plan."}
+                    ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap Add to Today as many times as you need."
+                    : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
               </p>
             </>
           )}
