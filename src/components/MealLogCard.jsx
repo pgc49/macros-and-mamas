@@ -161,8 +161,7 @@ export function MealLogCard({
   const [method, setMethod] = useState(null); // snap | describe | recipes | manual
   const [desc, setDesc] = useState("");
   const [photoNote, setPhotoNote] = useState("");
-  const [snapFile, setSnapFile] = useState(null);
-  const [snapPreview, setSnapPreview] = useState(null);
+  const [snapItems, setSnapItems] = useState([]); // { file, previewUrl }[]
   const [manual, setManual] = useState({ name: "", cal: "", p: "", c: "", f: "" });
   const [saveManualCustom, setSaveManualCustom] = useState(true);
   const [saveEstimateCustom, setSaveEstimateCustom] = useState(false);
@@ -188,29 +187,46 @@ export function MealLogCard({
     ? PANTRY_ITEMS
     : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
 
+  const MAX_SNAP_PHOTOS = 3;
+
   const clearSnap = () => {
-    setSnapPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
+    setSnapItems((prev) => {
+      prev.forEach((item) => {
+        if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+      return [];
     });
-    setSnapFile(null);
     setPhotoNote("");
   };
 
-  const stageSnap = (file) => {
-    if (!file) return;
-    setSnapPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
+  const stageSnapFiles = (fileList) => {
+    const incoming = Array.from(fileList || []).filter(Boolean);
+    if (!incoming.length) return;
+    setSnapItems((prev) => {
+      const room = Math.max(0, MAX_SNAP_PHOTOS - prev.length);
+      if (room < 1) return prev;
+      const next = [...prev];
+      for (const file of incoming.slice(0, room)) {
+        next.push({ file, previewUrl: URL.createObjectURL(file) });
+      }
+      return next;
     });
-    setSnapFile(file);
+  };
+
+  const removeSnapAt = (index) => {
+    setSnapItems((prev) => {
+      const target = prev[index];
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   useEffect(() => () => {
-    // revoke on unmount
-    setSnapPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
+    setSnapItems((prev) => {
+      prev.forEach((item) => {
+        if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+      return [];
     });
   }, []);
 
@@ -464,10 +480,10 @@ export function MealLogCard({
 
   /** Fire a photo estimate and remember the note it was based on. */
   const runSnapEstimate = (note) => {
-    if (!snapFile || busy) return;
+    if (!snapItems.length || busy) return;
     const text = String(note || "").trim();
     setLastInput({ kind: "photo", text });
-    onAnalyzePhoto?.(snapFile, text);
+    onAnalyzePhoto?.(snapItems.map((s) => s.file), text);
   };
 
   const runTextEstimate = (text) => {
@@ -480,12 +496,12 @@ export function MealLogCard({
   /**
    * Re-run the estimate using the text in the review panel — either the
    * Describe box she just edited, or the Snap note with something added.
-   * The photo (if any) stays; only the text changes.
+   * The photo(s) stay; only the text changes.
    */
   const reEstimateFromSource = () => {
     if (!estimateDraft || busy) return;
     const text = String(estimateDraft.sourceText || "").trim();
-    if (estimateDraft.sourceKind === "photo" && snapFile) {
+    if (estimateDraft.sourceKind === "photo" && snapItems.length) {
       setPhotoNote(text);
       runSnapEstimate(text);
       return;
@@ -514,7 +530,7 @@ export function MealLogCard({
     && String(estimateDraft.sourceText || "").trim() !== String(lastInput?.text || "").trim();
   const canReEstimate = !!estimateDraft && !busy && (
     estimateDraft.sourceKind === "photo"
-      ? !!snapFile && sourceDirty
+      ? snapItems.length > 0 && sourceDirty
       : sourceDirty && String(estimateDraft.sourceText || "").trim().length > 0
   );
 
@@ -654,8 +670,8 @@ export function MealLogCard({
         {method === "snap" && (
           <div style={{ marginTop: 12 }}>
             {/* While a draft is up the review panel owns the screen —
-                the photo stays in state behind it for re-estimating. */}
-            {estimateDraft ? null : !snapFile ? (
+                photos stay in state behind it for re-estimating. */}
+            {estimateDraft ? null : !snapItems.length ? (
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 <button type="button" disabled={busy} style={pill(false, busy)} onClick={() => camRef.current?.click()}>
                   Open camera
@@ -663,25 +679,74 @@ export function MealLogCard({
                 <button type="button" disabled={busy} style={pill(true, busy)} onClick={() => libRef.current?.click()}>
                   Photo library
                 </button>
-                <span style={{ fontSize: 11.5, color: T.inkSoft }}>snap first, then add a note if you want</span>
+                <span style={{ fontSize: 11.5, color: T.inkSoft }}>
+                  add more photos if needed (second plate, label…)
+                </span>
               </div>
             ) : (
               <>
-                {snapPreview && (
-                  <div style={{
-                    marginBottom: 10,
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    border: `1px solid ${T.border}`,
-                    background: "#fff",
-                    maxHeight: 200,
-                  }}
-                  >
-                    <img
-                      src={snapPreview}
-                      alt="Meal to estimate"
-                      style={{ display: "block", width: "100%", maxHeight: 200, objectFit: "cover" }}
-                    />
+                <div style={{
+                  display: "flex",
+                  gap: 8,
+                  overflowX: "auto",
+                  marginBottom: 10,
+                  WebkitOverflowScrolling: "touch",
+                }}
+                >
+                  {snapItems.map((item, idx) => (
+                    <div
+                      key={`${item.previewUrl}-${idx}`}
+                      style={{
+                        position: "relative",
+                        flex: "0 0 auto",
+                        width: snapItems.length === 1 ? "100%" : 112,
+                        maxWidth: snapItems.length === 1 ? "100%" : 112,
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        border: `1px solid ${T.border}`,
+                        background: "#fff",
+                        height: snapItems.length === 1 ? 200 : 112,
+                      }}
+                    >
+                      <img
+                        src={item.previewUrl}
+                        alt={idx === 0 ? "Meal photo" : `Extra photo ${idx + 1}`}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => removeSnapAt(idx)}
+                        aria-label={`Remove photo ${idx + 1}`}
+                        style={{
+                          position: "absolute",
+                          top: 6,
+                          right: 6,
+                          width: 28,
+                          height: 28,
+                          borderRadius: 999,
+                          border: "none",
+                          background: "rgba(51,39,46,0.72)",
+                          color: "#fff",
+                          fontSize: 16,
+                          lineHeight: 1,
+                          cursor: busy ? "default" : "pointer",
+                          fontFamily: F,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {snapItems.length < MAX_SNAP_PHOTOS && (
+                  <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.4 }}>
+                    Add another plate, side, or nutrition label — everything across the photos is totaled. Up to {MAX_SNAP_PHOTOS}.
                   </div>
                 )}
                 <label style={{ display: "block", marginBottom: 10 }}>
@@ -700,28 +765,32 @@ export function MealLogCard({
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                   <button
                     type="button"
-                    disabled={busy || !snapFile}
-                    style={pill(false, busy || !snapFile)}
+                    disabled={busy || !snapItems.length}
+                    style={pill(false, busy || !snapItems.length)}
                     onClick={() => runSnapEstimate(photoNote)}
                   >
                     {busy ? "Reading…" : "Estimate"}
                   </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    style={pill(true, busy)}
-                    onClick={() => camRef.current?.click()}
-                  >
-                    Retake
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    style={pill(true, busy)}
-                    onClick={() => libRef.current?.click()}
-                  >
-                    Library
-                  </button>
+                  {snapItems.length < MAX_SNAP_PHOTOS && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        style={pill(true, busy)}
+                        onClick={() => camRef.current?.click()}
+                      >
+                        Add photo
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        style={pill(true, busy)}
+                        onClick={() => libRef.current?.click()}
+                      >
+                        From library
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     disabled={busy}
@@ -749,7 +818,7 @@ export function MealLogCard({
               disabled={busy}
               style={{ display: "none" }}
               onChange={(e) => {
-                stageSnap(e.target.files?.[0]);
+                stageSnapFiles(e.target.files);
                 e.target.value = "";
               }}
             />
@@ -757,10 +826,11 @@ export function MealLogCard({
               ref={libRef}
               type="file"
               accept="image/*"
+              multiple
               disabled={busy}
               style={{ display: "none" }}
               onChange={(e) => {
-                stageSnap(e.target.files?.[0]);
+                stageSnapFiles(e.target.files);
                 e.target.value = "";
               }}
             />
@@ -1078,21 +1148,35 @@ export function MealLogCard({
             <div style={{ fontSize: 12, fontWeight: 700, color: T.accentDeep, marginBottom: 8 }}>
               Review &amp; edit, then save
             </div>
-            {snapPreview && (
+            {snapItems.length > 0 && (
               <div style={{
+                display: "flex",
+                gap: 8,
+                overflowX: "auto",
                 marginBottom: 10,
-                borderRadius: 10,
-                overflow: "hidden",
-                border: `1px solid ${T.border}`,
-                background: "#fff",
-                maxHeight: 120,
+                WebkitOverflowScrolling: "touch",
               }}
               >
-                <img
-                  src={snapPreview}
-                  alt="The meal this estimate came from"
-                  style={{ display: "block", width: "100%", maxHeight: 120, objectFit: "cover" }}
-                />
+                {snapItems.map((item, idx) => (
+                  <div
+                    key={`review-${item.previewUrl}-${idx}`}
+                    style={{
+                      flex: "0 0 auto",
+                      width: snapItems.length === 1 ? "100%" : 88,
+                      height: snapItems.length === 1 ? 120 : 88,
+                      borderRadius: 10,
+                      overflow: "hidden",
+                      border: `1px solid ${T.border}`,
+                      background: "#fff",
+                    }}
+                  >
+                    <img
+                      src={item.previewUrl}
+                      alt={idx === 0 ? "Meal photo for this estimate" : `Extra photo ${idx + 1}`}
+                      style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  </div>
+                ))}
               </div>
             )}
             <input

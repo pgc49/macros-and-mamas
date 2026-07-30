@@ -509,21 +509,33 @@ export default function App() {
     return result;
   };
 
-  const photoPayload = async (file, note = "") => {
-    const b64 = await downscaleImage(file);
-    if (!b64) return null;
+  const photoPayload = async (files, note = "") => {
+    const list = (Array.isArray(files) ? files : (files ? [files] : []))
+      .filter(Boolean)
+      .slice(0, 3);
+    if (!list.length) return null;
+    const images = [];
+    for (const file of list) {
+      const b64 = await downscaleImage(file);
+      if (!b64) continue;
+      images.push({ image_b64: b64, media_type: "image/jpeg" });
+    }
+    if (!images.length) return null;
     const description = String(note || "").trim().slice(0, 400);
     return {
       type: "photo",
-      image_b64: b64,
+      // Legacy single-image fields (first photo) + images[] for multi-photo.
+      image_b64: images[0].image_b64,
       media_type: "image/jpeg",
+      images,
       ...(description ? { description } : {}),
     };
   };
 
-  const analyzePhoto = async (file, note = "") => {
-    if (!file) return;
-    const payload = await photoPayload(file, note);
+  const analyzePhoto = async (files, note = "") => {
+    const list = (Array.isArray(files) ? files : (files ? [files] : [])).filter(Boolean);
+    if (!list.length) return;
+    const payload = await photoPayload(list, note);
     if (!payload) {
       setEstimate({
         error: true,
