@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Meal plan recipe card mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Karla:wght@400;700&family=Marcellus&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #FAF5F2;
+      --ink: #33272E;
+      --inkSoft: #6E5D66;
+      --accent: #B4416B;
+      --accentDeep: #8E2F53;
+      --accentSoft: #F6E4EC;
+      --card: #FFFFFF;
+      --border: #ECDEE2;
+      --sage: #5F8168;
+      --sageSoft: #E6EFE8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Karla, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 20px 14px 48px;
+    }
+    .wrap { max-width: 420px; margin: 0 auto; }
+    .wide { max-width: 780px; margin: 0 auto 18px; }
+    h1 {
+      font-family: Marcellus, serif;
+      font-weight: 400;
+      font-size: 24px;
+      margin: 0 0 8px;
+    }
+    .lede {
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--inkSoft);
+      margin: 0 0 16px;
+    }
+    .phone {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 16px 14px 22px;
+      box-shadow: 0 10px 32px rgba(51, 39, 46, 0.07);
+    }
+    .day-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+    .day-head .d { font-family: Marcellus, serif; font-size: 20px; }
+    .day-head .t { font-size: 13px; color: var(--inkSoft); }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .chip {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 99px;
+      background: var(--sageSoft);
+      color: var(--sage);
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .card > button {
+      width: 100%;
+      text-align: left;
+      border: none;
+      background: transparent;
+      padding: 12px 14px;
+      cursor: pointer;
+      font-family: Karla, sans-serif;
+      color: inherit;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .slot {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accentDeep);
+    }
+    .name {
+      font-family: Marcellus, serif;
+      font-size: 17px;
+      margin-top: 2px;
+    }
+    .why { font-size: 12.5px; color: var(--inkSoft); margin-top: 4px; line-height: 1.4; }
+    .macros { text-align: right; flex-shrink: 0; }
+    .macros .cal { font-size: 13px; font-weight: 700; }
+    .macros .pcf { font-size: 12px; color: var(--inkSoft); }
+    .macros .tog { font-size: 12px; color: var(--accent); font-weight: 700; margin-top: 4px; }
+    .detail {
+      display: none;
+      padding: 0 14px 14px;
+      border-top: 1px dashed var(--border);
+    }
+    .card.open .detail { display: block; }
+    .based {
+      font-size: 12.5px;
+      color: var(--inkSoft);
+      margin: 10px 0 8px;
+    }
+    .detail h4 {
+      font-size: 13px;
+      font-weight: 700;
+      margin: 0 0 6px;
+    }
+    .detail ul, .detail ol {
+      margin: 0 0 12px;
+      padding-left: 18px;
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+    .detail li { margin-bottom: 3px; }
+    .detail-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+    .log-btn {
+      font-family: Karla, sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1.5px solid var(--accent);
+      background: var(--accentSoft);
+      color: var(--accentDeep);
+      cursor: pointer;
+    }
+    .note {
+      margin-top: 18px;
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: var(--inkSoft);
+      background: #fff;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .hint { font-size: 12px; color: var(--accentDeep); font-weight: 700; margin: 0 0 10px; }
+  </style>
+</head>
+<body>
+  <div class="wide">
+    <h1>Recipe card mockup</h1>
+    <p class="lede">
+      Collapsed: name + macros. Tap → ingredients + steps, with <b>+ Log</b> (same control as today’s Meals tab) to add macros to her day.
+    </p>
+  </div>
+
+  <div class="wrap">
+    <div class="phone">
+      <p class="hint">Tap “Callie’s chicken teriyaki” to open / close</p>
+      <div class="day-head">
+        <div>
+          <span class="d">Mon</span>
+          <span class="t"> · High-protein leftovers night</span>
+        </div>
+      </div>
+      <div class="chips">
+        <span class="chip">cal 2280</span>
+        <span class="chip">P 165g</span>
+        <span class="chip">C 205g</span>
+        <span class="chip">F 74g</span>
+      </div>
+
+      <div class="card" id="bf">
+        <button type="button" onclick="toggle('bf')">
+          <div class="row">
+            <div>
+              <div class="slot">Breakfast</div>
+              <div class="name">Protein oatmeal</div>
+              <div class="why">Matches her “anything with peanut butter” morning note — PB stirred in.</div>
+            </div>
+            <div class="macros">
+              <div class="cal">340 cal</div>
+              <div class="pcf">32P · 38C · 8F</div>
+              <div class="tog" data-tog>Open recipe ▾</div>
+            </div>
+          </div>
+        </button>
+        <div class="detail">
+          <div class="based">Based on Callie’s <b>Protein oatmeal</b></div>
+          <h4>Ingredients</h4>
+          <ul>
+            <li><b>40g</b> dry oats, cooked in water</li>
+            <li><b>30g</b> (1 scoop) vanilla protein</li>
+            <li><b>100g</b> berries</li>
+            <li><b>8g</b> natural peanut butter</li>
+            <li>cinnamon</li>
+          </ul>
+          <h4>Steps</h4>
+          <ol>
+            <li>Cook oats in water until thick.</li>
+            <li>Stir in protein off heat until smooth.</li>
+            <li>Top with berries, peanut butter, cinnamon.</li>
+          </ol>
+          <div class="detail-actions">
+            <button type="button" class="log-btn">+ Log</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="lunch">
+        <button type="button" onclick="toggle('lunch')">
+          <div class="row">
+            <div>
+              <div class="slot">Lunch</div>
+              <div class="name">Chicken salad on sourdough</div>
+              <div class="why">Uses her “sandwiches / leftovers” lunch preference.</div>
+            </div>
+            <div class="macros">
+              <div class="cal">410 cal</div>
+              <div class="pcf">53P · 30C · 6F</div>
+              <div class="tog" data-tog>Open recipe ▾</div>
+            </div>
+          </div>
+        </button>
+        <div class="detail">
+          <div class="based">Based on Callie’s <b>Chicken salad on sourdough</b></div>
+          <h4>Ingredients</h4>
+          <ul>
+            <li><b>5 oz (140g)</b> shredded cooked chicken breast</li>
+            <li><b>3 tbsp (45g)</b> nonfat Greek yogurt</li>
+            <li><b>1 tsp</b> Dijon</li>
+            <li><b>¼ cup</b> diced celery</li>
+            <li><b>1 slice (2 oz)</b> toasted sourdough</li>
+          </ul>
+          <h4>Steps</h4>
+          <ol>
+            <li>Mix chicken, yogurt, Dijon, celery.</li>
+            <li>Toast sourdough; pile salad on top open-face.</li>
+          </ol>
+          <div class="detail-actions">
+            <button type="button" class="log-btn">+ Log</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card open" id="dinner">
+        <button type="button" onclick="toggle('dinner')">
+          <div class="row">
+            <div>
+              <div class="slot">Dinner</div>
+              <div class="name">Callie’s chicken teriyaki</div>
+              <div class="why">Family dinner she already loves — macros from the bank recipe, her plate only.</div>
+            </div>
+            <div class="macros">
+              <div class="cal">540 cal</div>
+              <div class="pcf">38P · 64C · 13F</div>
+              <div class="tog" data-tog>Hide ▴</div>
+            </div>
+          </div>
+        </button>
+        <div class="detail">
+          <div class="based">Based on Callie’s <b>Callie’s chicken teriyaki</b> · per serving (serves 4 batch)</div>
+          <h4>Ingredients (her plate)</h4>
+          <ul>
+            <li><b>6 oz</b> raw boneless skinless chicken thighs + ¼ of glaze</li>
+            <li><b>Glaze batch:</b> 3 tbsp honey + ¼ cup tamari + garlic + ginger</li>
+            <li><b>1 cup (158g)</b> cooked rice</li>
+            <li><b>1 cup</b> steamed broccoli</li>
+          </ul>
+          <h4>Steps</h4>
+          <ol>
+            <li>Whisk honey, tamari, garlic, ginger for glaze.</li>
+            <li>Cook thighs; brush with glaze through the finish.</li>
+            <li>Plate her serving: 6 oz thighs + glaze share, rice, broccoli.</li>
+            <li>Leftovers cover family plates — same recipe, her macros stay the per-serving numbers above.</li>
+          </ol>
+          <div class="detail-actions">
+            <button type="button" class="log-btn">+ Log</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="snack">
+        <button type="button" onclick="toggle('snack')">
+          <div class="row">
+            <div>
+              <div class="slot">Snack</div>
+              <div class="name">Greek yogurt + berries</div>
+              <div class="why">Fills protein to land inside her band without another heavy meal.</div>
+            </div>
+            <div class="macros">
+              <div class="cal">180 cal</div>
+              <div class="pcf">24P · 16C · 2F</div>
+              <div class="tog" data-tog>Open recipe ▾</div>
+            </div>
+          </div>
+        </button>
+        <div class="detail">
+          <h4>Ingredients</h4>
+          <ul>
+            <li><b>170g</b> nonfat Greek yogurt</li>
+            <li><b>75g</b> berries</li>
+          </ul>
+          <h4>Steps</h4>
+          <ol>
+            <li>Bowl yogurt; top with berries. Eat cold.</li>
+          </ol>
+          <div class="detail-actions">
+            <button type="button" class="log-btn">+ Log</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">
+      <b>Collapsed:</b> name + macros (same as before). <b>Opened:</b> ingredients, steps, and <b>+ Log</b> to add that meal to her day — same control as today’s Meals recipe bank.
+    </p>
+  </div>
+
+  <script>
+    function toggle(id) {
+      const el = document.getElementById(id);
+      const open = el.classList.toggle("open");
+      const tog = el.querySelector("[data-tog]");
+      if (tog) tog.textContent = open ? "Hide ▴" : "Open recipe ▾";
+    }
+  </script>
+</body>
+</html>

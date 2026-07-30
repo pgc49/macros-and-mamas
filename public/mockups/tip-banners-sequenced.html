@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mockup — sequenced Getting started tips</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Karla:wght@400;700&family=Marcellus&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #FAF5F2;
+      --ink: #33272E;
+      --inkSoft: #6E5D66;
+      --accent: #B4416B;
+      --accentDeep: #8E2F53;
+      --accentSoft: #F6E4EC;
+      --card: #FFFFFF;
+      --border: #ECDEE2;
+      --track: #F1E7EA;
+      --iconBg: #FBEFF4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Karla, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 20px 14px 48px;
+    }
+    .wrap { max-width: 820px; margin: 0 auto; }
+    .page-title {
+      font-family: Marcellus, serif;
+      font-size: 22px;
+      font-weight: 400;
+      margin: 0 0 6px;
+    }
+    .lede {
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--inkSoft);
+      margin: 0 0 18px;
+    }
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 780px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+    }
+    .phone {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 16px 14px 22px;
+      box-shadow: 0 10px 32px rgba(51, 39, 46, 0.07);
+    }
+    .state {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 10px;
+    }
+    .hi {
+      font-family: Marcellus, serif;
+      font-size: 24px;
+      font-weight: 400;
+      margin: 0 0 4px;
+    }
+    .sub {
+      font-size: 13.5px;
+      line-height: 1.45;
+      color: var(--inkSoft);
+      margin: 0 0 12px;
+    }
+    .tip {
+      position: relative;
+      background: var(--accentSoft);
+      border-radius: 16px;
+      padding: 14px 16px 14px;
+      margin-bottom: 12px;
+    }
+    .tip-kicker {
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accentDeep);
+      margin: 0 0 6px;
+    }
+    .tip h3 {
+      font-family: Marcellus, serif;
+      font-size: 18px;
+      font-weight: 400;
+      margin: 0 0 8px;
+      color: var(--accentDeep);
+      line-height: 1.25;
+      padding-right: 28px;
+    }
+    .tip p {
+      margin: 0 0 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--inkSoft);
+    }
+    .tip-dismiss {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      border: none;
+      background: transparent;
+      color: var(--accentDeep);
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px;
+    }
+    .steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+    .step {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      font-size: 13.5px;
+      line-height: 1.45;
+    }
+    .icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--iconBg);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--accentDeep);
+      font-size: 16px;
+    }
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 999px;
+      padding: 11px 16px;
+      font-family: Karla, sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      background: var(--accentDeep);
+      color: #fff;
+    }
+    .btn-row { display: flex; gap: 8px; }
+    .btn-row .btn { flex: 1; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--accentDeep);
+      border: 1.5px solid var(--accent);
+    }
+    .fake-macros {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 13px;
+      color: var(--inkSoft);
+      line-height: 1.5;
+    }
+    .band {
+      height: 8px;
+      background: var(--track);
+      border-radius: 99px;
+      margin: 8px 0 12px;
+      position: relative;
+    }
+    .band span {
+      position: absolute;
+      left: 35%;
+      right: 28%;
+      top: 0;
+      bottom: 0;
+      background: var(--accent);
+      border-radius: 99px;
+      opacity: 0.85;
+    }
+    .note {
+      margin-top: 20px;
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: var(--inkSoft);
+      background: #fff;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .live {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+    .live .phone { max-width: 390px; margin: 0 auto; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 class="page-title">Mockup · two sequenced tips</h1>
+    <p class="lede">
+      Not stacked at once. Step 1 = Home Screen (current). After Got it / × → Step 2 = WhatsApp (smaller).
+      Each dismisses forever on its own.
+    </p>
+
+    <div class="grid">
+      <div class="phone">
+        <p class="state">State A · first open</p>
+        <div class="hi">Hi Patrick.</div>
+        <p class="sub">Live inside the bands. Busy day? Eat the top. Slow day? The bottom.</p>
+
+        <aside class="tip">
+          <button class="tip-dismiss" type="button" tabindex="-1">×</button>
+          <p class="tip-kicker">Getting started · 1 of 2</p>
+          <h3>Put Macros and Mamas on your home screen</h3>
+          <p>Add Macros and Mamas to your home screen for quick, one-tap access—no App Store required.</p>
+          <div class="steps">
+            <div class="step"><span class="icon">📱</span><div><b>iPhone (Safari):</b> Tap Share and Add to Home Screen.</div></div>
+            <div class="step"><span class="icon">🤖</span><div><b>Android (Chrome):</b> Tap the menu and select Install.</div></div>
+          </div>
+          <button class="btn" type="button" tabindex="-1">Got it</button>
+        </aside>
+
+        <div class="fake-macros">
+          Protein / Carbs / Fat ranges sit under the tip as usual.
+          <div class="band"><span></span></div>
+        </div>
+      </div>
+
+      <div class="phone">
+        <p class="state">State B · after Home Screen dismissed</p>
+        <div class="hi">Hi Patrick.</div>
+        <p class="sub">Live inside the bands. Busy day? Eat the top. Slow day? The bottom.</p>
+
+        <aside class="tip">
+          <button class="tip-dismiss" type="button" tabindex="-1">×</button>
+          <p class="tip-kicker">Getting started · 2 of 2</p>
+          <h3>Join the mamas group chat</h3>
+          <p>Callie&apos;s in WhatsApp Mon–Fri with voice notes. Come say hi — plate pics and wins welcome.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" tabindex="-1">Open WhatsApp</button>
+          </div>
+          <button type="button" style="margin-top:10px;border:none;background:transparent;color:var(--accentDeep);font-weight:700;font-size:13px;text-decoration:underline;cursor:pointer;padding:0;font-family:Karla,sans-serif" tabindex="-1">Got it</button>
+        </aside>
+
+        <div class="fake-macros">
+          Same macros card — tip is shorter so Today stays usable.
+          <div class="band"><span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="live">
+      <p class="lede" style="margin-bottom:12px"><b>Interactive:</b> click Got it / × on the tip below to flip from step 1 → step 2 → gone.</p>
+      <div class="phone" id="demo">
+        <p class="state" id="demo-state">Live demo · step 1</p>
+        <div class="hi">Hi Patrick.</div>
+        <p class="sub">Live inside the bands…</p>
+
+        <aside class="tip" id="tip-home">
+          <button class="tip-dismiss" type="button" data-next="wa">×</button>
+          <p class="tip-kicker">Getting started · 1 of 2</p>
+          <h3>Put Macros and Mamas on your home screen</h3>
+          <p>Add for one-tap access—no App Store required.</p>
+          <div class="steps">
+            <div class="step"><span class="icon">📱</span><div><b>iPhone:</b> Share → Add to Home Screen</div></div>
+            <div class="step"><span class="icon">🤖</span><div><b>Android:</b> Menu → Install</div></div>
+          </div>
+          <button class="btn" type="button" data-next="wa">Got it</button>
+        </aside>
+
+        <aside class="tip hidden" id="tip-wa">
+          <button class="tip-dismiss" type="button" data-next="done">×</button>
+          <p class="tip-kicker">Getting started · 2 of 2</p>
+          <h3>Join the mamas group chat</h3>
+          <p>Callie&apos;s in WhatsApp Mon–Fri with voice notes. Come say hi.</p>
+          <button class="btn" type="button" data-next="done">Open WhatsApp</button>
+          <button type="button" data-next="done" style="margin-top:10px;border:none;background:transparent;color:var(--accentDeep);font-weight:700;font-size:13px;text-decoration:underline;cursor:pointer;padding:0;font-family:Karla,sans-serif">Got it</button>
+        </aside>
+
+        <p class="sub hidden" id="tip-gone" style="margin:0 0 12px;font-style:italic">Both tips dismissed — Today is clean.</p>
+
+        <div class="fake-macros">
+          Macro ranges card
+          <div class="band"><span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">
+      <b>Admin email templates:</b> Yes — <code>macros_live</code> (“Your macros are live”) in Admin → Email templates was updated to show the WhatsApp join link.
+      Older templates (welcome / intake) still mention invite “by text” — those weren’t rewritten in that pass.
+    </p>
+  </div>
+
+  <script>
+    const home = document.getElementById("tip-home");
+    const wa = document.getElementById("tip-wa");
+    const gone = document.getElementById("tip-gone");
+    const state = document.getElementById("demo-state");
+    document.getElementById("demo").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-next]");
+      if (!btn) return;
+      const next = btn.getAttribute("data-next");
+      if (next === "wa") {
+        home.classList.add("hidden");
+        wa.classList.remove("hidden");
+        state.textContent = "Live demo · step 2";
+      } else if (next === "done") {
+        home.classList.add("hidden");
+        wa.classList.add("hidden");
+        gone.classList.remove("hidden");
+        state.textContent = "Live demo · done";
+      }
+    });
+  </script>
+</body>
+</html>
