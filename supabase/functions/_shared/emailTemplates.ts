@@ -1,6 +1,27 @@
 const LLC_FOOTER =
   "Macros and Mamas · 2108 N St, Ste N, Sacramento, CA 95816 · Reply to this email anytime.";
 
+/** Escape text interpolated into HTML email templates (profile names, etc.). */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeHttpsUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return undefined;
+    return u.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 export function renderEmail({
   header,
   body,
@@ -12,13 +33,18 @@ export function renderEmail({
   cta_text?: string;
   cta_url?: string;
 }) {
+  // header / cta_text may include mama-controlled names — always escape.
+  // body is trusted markup from our edge functions (call sites escape any user bits).
+  const safeHeader = escapeHtml(header);
+  const safeCtaText = cta_text ? escapeHtml(cta_text) : "";
+  const safeCtaUrl = safeHttpsUrl(cta_url);
   const cta =
-    cta_text && cta_url
+    safeCtaText && safeCtaUrl
       ? `<p style="margin:28px 0 8px">
-          <a href="${cta_url}"
+          <a href="${escapeHtml(safeCtaUrl)}"
              style="display:inline-block;background:#B4416B;color:#ffffff;text-decoration:none;
                     font-weight:700;font-size:15px;padding:14px 22px;border-radius:999px">
-            ${cta_text}
+            ${safeCtaText}
           </a>
         </p>`
       : "";
@@ -31,7 +57,7 @@ export function renderEmail({
       Macros and Mamas
     </div>
     <div style="background:#ffffff;border-radius:16px;padding:28px 24px;border:1px solid #ECDEE2">
-      <h1 style="font-size:26px;font-weight:400;line-height:1.25;margin:0 0 16px">${header}</h1>
+      <h1 style="font-size:26px;font-weight:400;line-height:1.25;margin:0 0 16px">${safeHeader}</h1>
       <div style="font-size:16px;line-height:1.65;font-family:Helvetica,Arial,sans-serif;color:#33272E">
         ${body}
       </div>

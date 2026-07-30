@@ -4,10 +4,8 @@ import { supabase } from "../lib/supabase";
 
 function syncSentryUser(nextUser) {
   if (nextUser?.id) {
-    Sentry.setUser({
-      id: nextUser.id,
-      email: nextUser.email || undefined,
-    });
+    // Id only — never email (PII). Replay masking is in instrument.js.
+    Sentry.setUser({ id: nextUser.id });
   } else {
     Sentry.setUser(null);
   }

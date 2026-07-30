@@ -1405,6 +1405,16 @@ export const db = {
   async deleteMessage(messageId) {
     const uid = await requireUserId();
     if (!messageId) throw new Error("message required");
+    // Load path first so we can remove the storage object after scrub.
+    const { data: existing } = await supabase
+      .from("messages")
+      .select("id, attachment_path")
+      .eq("id", messageId)
+      .eq("sender_id", uid)
+      .is("deleted_at", null)
+      .maybeSingle();
+    const attachmentPath = existing?.attachment_path || null;
+
     const { data, error } = await supabase
       .from("messages")
       .update({
@@ -1416,6 +1426,14 @@ export const db = {
       .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
       .single();
     if (error) throw error;
+
+    if (attachmentPath) {
+      try {
+        await supabase.storage.from("message-attachments").remove([attachmentPath]);
+      } catch (e) {
+        console.warn("message attachment cleanup failed", e);
+      }
+    }
     return data;
   },
 
@@ -1528,12 +1546,28 @@ export const db = {
     return { ok: true };
   },
 
-  /** Load meal-plan row for a client (or self). Missing row = default mode. */
+  /** Load meal-plan row for a client (or self). Missing row = default mode.
+   *  Mamas never receive draft/draft_meta over the wire (coach unpublished work). */
   async loadClientMealPlan(profileId) {
     if (!profileId) return { mode: "default", draft: null, published: null };
+    const uid = await requireUserId();
+    let isAdmin = false;
+    try {
+      const { data: me } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", uid)
+        .maybeSingle();
+      isAdmin = String(me?.role || "").toLowerCase() === "admin";
+    } catch {
+      isAdmin = false;
+    }
+    const select = isAdmin
+      ? "profile_id, mode, draft, draft_meta, published, published_at, published_by, updated_at"
+      : "profile_id, mode, published, published_at, published_by, updated_at";
     const { data, error } = await supabase
       .from("client_meal_plans")
-      .select("profile_id, mode, draft, draft_meta, published, published_at, published_by, updated_at")
+      .select(select)
       .eq("profile_id", profileId)
       .maybeSingle();
     if (error) {

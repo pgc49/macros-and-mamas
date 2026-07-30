@@ -2,37 +2,41 @@
    /functions/api/intake-submitted.js — email #4 + Callie B after intake
    ==================================================================
    Authed client calls this after a successful db.submitIntake.
+   Idempotent: skips if intake_received already logged for this profile.
+   Stats loaded from DB (not trusted client body).
    ================================================================== */
 
-import { loadUserContact, sendIntakeEmails } from "../_shared/supabaseEmail.js";
+import { loadUserContact, sendIntakeEmails, hasEmailEvent } from "../_shared/supabaseEmail.js";
 
 export async function onRequestPost({ request, env }) {
   try {
     const user = await requireUser(request, env);
     if (!user) return json({ error: "unauthorized" }, 401);
 
-    const body = await request.json().catch(() => ({}));
+    // Ignore client-supplied stats/name — use DB only.
     const contact = await loadUserContact(env, user.id);
     const profile = contact.profile || {};
 
+    if (await hasEmailEvent(env, user.id, "intake_received")) {
+      return json({ ok: true, skipped: "already_sent" }, 200);
+    }
+
     const stats = {
-      age: body.age ?? profile.age ?? null,
-      currentWeight: body.currentWeight ?? profile.current_weight ?? null,
-      goalWeight: body.goalWeight ?? profile.goal_weight ?? null,
-      breastfeeding: body.breastfeeding ?? profile.breastfeeding ?? null,
-      monthsPP: body.monthsPP ?? profile.months_pp ?? null,
-      diet: body.diet ?? profile.diet ?? null,
-      pregnant: body.pregnant ?? profile.pregnant ?? null,
-      phone: body.phone ?? profile.phone ?? null,
-      tastes: body.tastes
-        || [profile.pref_b, profile.pref_l, profile.pref_d].filter(Boolean).join(" · ")
-        || null,
-      seasonNote: body.seasonNote ?? profile.season_note ?? null,
+      age: profile.age ?? null,
+      currentWeight: profile.current_weight ?? null,
+      goalWeight: profile.goal_weight ?? null,
+      breastfeeding: profile.breastfeeding ?? null,
+      monthsPP: profile.months_pp ?? null,
+      diet: profile.diet ?? null,
+      pregnant: profile.pregnant ?? null,
+      phone: profile.phone ?? null,
+      tastes: [profile.pref_b, profile.pref_l, profile.pref_d].filter(Boolean).join(" · ") || null,
+      seasonNote: profile.season_note ?? null,
     };
 
     await sendIntakeEmails(env, {
       email: contact.email || user.email,
-      name: body.name || contact.name || profile.name,
+      name: contact.name || profile.name,
       userId: user.id,
       stats,
     });

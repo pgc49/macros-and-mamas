@@ -1,5 +1,5 @@
 /* Service worker — web push + Home Screen icon badge (iOS 16.4+ / Android). */
-/* v8 — title is sender name only (iOS already shows from Macros & Mamas) */
+/* v9 — title is sender name only (iOS already shows from Macros & Mamas) */
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -57,7 +57,8 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || "/dashboard?tab=messages";
+  const raw = event.notification.data?.url || "/dashboard?tab=messages";
+  const url = safeAppPath(raw);
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
@@ -71,3 +72,13 @@ self.addEventListener("notificationclick", (event) => {
     }),
   );
 });
+
+/** Same-origin relative paths only — blocks javascript: / external open-redirects. */
+function safeAppPath(url) {
+  const fallback = "/dashboard?tab=messages";
+  if (typeof url !== "string") return fallback;
+  const trimmed = url.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return fallback;
+  if (trimmed.includes("://") || trimmed.toLowerCase().startsWith("javascript:")) return fallback;
+  return trimmed.slice(0, 500) || fallback;
+}

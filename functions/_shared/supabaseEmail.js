@@ -75,6 +75,29 @@ export async function logEmailEvent(env, {
   }
 }
 
+/** True if this profile already has a sent/logged email of this type (idempotency). */
+export async function hasEmailEvent(env, profileId, emailType) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key || !profileId || !emailType) return false;
+  try {
+    const url =
+      `${base}/rest/v1/email_events`
+      + `?profile_id=eq.${encodeURIComponent(profileId)}`
+      + `&email_type=eq.${encodeURIComponent(emailType)}`
+      + `&select=id&limit=1`;
+    const resp = await fetch(url, {
+      headers: { apikey: key, authorization: `Bearer ${key}` },
+    });
+    if (!resp.ok) return false;
+    const rows = await resp.json().catch(() => []);
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (e) {
+    console.warn("hasEmailEvent failed", e);
+    return false;
+  }
+}
+
 function resendIdFrom(result) {
   return result?.data?.data?.id || result?.data?.id || null;
 }
