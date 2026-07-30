@@ -320,6 +320,15 @@ function mapCustomMeal(r) {
 
 const MESSAGE_ATTACHMENT_BUCKET = "message-attachments";
 const MESSAGE_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const MESSAGE_AUDIO_MIME = new Set([
+  "audio/webm",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/wav",
+  "audio/x-m4a",
+  "audio/aac",
+]);
 const MESSAGE_ATTACHMENT_MIME = new Set([
   "image/jpeg",
   "image/png",
@@ -328,6 +337,7 @@ const MESSAGE_ATTACHMENT_MIME = new Set([
   "image/heif",
   "image/gif",
   "application/pdf",
+  ...MESSAGE_AUDIO_MIME,
 ]);
 
 function safeAttachmentName(name) {
@@ -336,14 +346,31 @@ function safeAttachmentName(name) {
     .slice(0, 80) || "file";
 }
 
-async function uploadMessageAttachment({ clientId, file }) {
+function isAudioMime(mime) {
+  const base = String(mime || "").toLowerCase().split(";")[0].trim();
+  return MESSAGE_AUDIO_MIME.has(base) || base.startsWith("audio/");
+}
+
+async function uploadMessageAttachment({ clientId, file, allowAudio = false }) {
   if (!file) return null;
-  const mime = String(file.type || "").toLowerCase();
-  if (!MESSAGE_ATTACHMENT_MIME.has(mime)) {
-    throw new Error("Attachments must be a photo (JPG/PNG/WebP) or PDF.");
+  // Strip codec params (e.g. audio/webm;codecs=opus) for allowlist + Storage.
+  const mime = String(file.type || "").toLowerCase().split(";")[0].trim();
+  if (isAudioMime(mime) && !allowAudio) {
+    throw new Error("Only Callie can send voice memos.");
+  }
+  if (!MESSAGE_ATTACHMENT_MIME.has(mime) && !(allowAudio && isAudioMime(mime))) {
+    throw new Error(
+      allowAudio
+        ? "Attachments must be a photo, PDF, or voice memo."
+        : "Attachments must be a photo (JPG/PNG/WebP) or PDF.",
+    );
   }
   if (file.size > MESSAGE_ATTACHMENT_MAX_BYTES) {
-    throw new Error("That file is over 10 MB — try a smaller photo.");
+    throw new Error(
+      isAudioMime(mime)
+        ? "That voice memo is over 10 MB — try a shorter recording."
+        : "That file is over 10 MB — try a smaller photo.",
+    );
   }
   const id = (typeof crypto !== "undefined" && crypto.randomUUID)
     ? crypto.randomUUID()
@@ -1315,7 +1342,18 @@ export const db = {
     const text = String(body || "").trim().slice(0, 2000);
     let attachment = null;
     if (file) {
-      attachment = await uploadMessageAttachment({ clientId, file });
+      let allowAudio = false;
+      if (isAudioMime(file.type)) {
+        const { data: me, error: roleErr } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", uid)
+          .maybeSingle();
+        if (roleErr) throw roleErr;
+        allowAudio = String(me?.role || "").toLowerCase() === "admin";
+        if (!allowAudio) throw new Error("Only Callie can send voice memos.");
+      }
+      attachment = await uploadMessageAttachment({ clientId, file, allowAudio });
     }
     if (text.length < 1 && !attachment) throw new Error("Message is empty");
     const { data, error } = await supabase

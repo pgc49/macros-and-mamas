@@ -183,9 +183,10 @@ function messagePreview(msg) {
   const bodyPreview = String(msg.body || "").replace(/\s+/g, " ").trim().slice(0, 140);
   if (bodyPreview) return bodyPreview;
   if (msg.attachment_path) {
-    return String(msg.attachment_mime || "").startsWith("image/")
-      ? "Sent a photo"
-      : "Sent an attachment";
+    const mime = String(msg.attachment_mime || "");
+    if (mime.startsWith("image/")) return "Sent a photo";
+    if (mime.startsWith("audio/")) return "Sent a voice memo";
+    return "Sent an attachment";
   }
   return "";
 }
