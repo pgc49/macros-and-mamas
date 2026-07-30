@@ -13,6 +13,11 @@ comment on column public.profiles.homescreen_tip_dismissed_at is
 -- Current cohort already installed — stop re-showing. New joiners stay null and see the tip once.
 update public.profiles
 set homescreen_tip_dismissed_at = coalesce(homescreen_tip_dismissed_at, now())
-where coalesce(role, '') <> 'admin'
-  and status = 'active'
+where status = 'active'
+  and homescreen_tip_dismissed_at is null;
+
+-- Admins dogfood the dashboard on preview URLs often — don't keep nagging them.
+update public.profiles
+set homescreen_tip_dismissed_at = coalesce(homescreen_tip_dismissed_at, now())
+where coalesce(role, '') = 'admin'
   and homescreen_tip_dismissed_at is null;
