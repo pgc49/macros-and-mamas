@@ -491,6 +491,7 @@ export function AdminMessages({
               onEdit={edit}
               onDelete={remove}
               onMarkRead={markRead}
+              showReadReceipts
               showPushPrompt
               onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
             />

@@ -223,14 +223,27 @@ async function sendPushToProfile(env, profileId, payload) {
   return Number(result.data?.sent) || 0;
 }
 
-/** Unread messages waiting for this profile (not sent by them). */
+/**
+ * Unread waiting for this profile.
+ * Mama: any inbound in her thread.
+ * Admin: mama→coach only (plus admin↔admin DMs) — never another admin’s
+ * unreplied outbound sitting in a mama thread.
+ */
 async function countUnreadForProfile(env, profileId, { asAdmin }) {
   if (!profileId) return 0;
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  const qs = asAdmin
-    ? `select=id&read_at=is.null&deleted_at=is.null&sender_id=neq.${encodeURIComponent(profileId)}`
-    : `select=id&client_id=eq.${encodeURIComponent(profileId)}&read_at=is.null&deleted_at=is.null&sender_id=neq.${encodeURIComponent(profileId)}`;
+  let qs = `select=id&read_at=is.null&deleted_at=is.null&sender_id=neq.${encodeURIComponent(profileId)}`;
+  if (!asAdmin) {
+    qs += `&client_id=eq.${encodeURIComponent(profileId)}`;
+  } else {
+    const adminIds = await listAdminIds(env);
+    if (adminIds.length) {
+      const list = adminIds.map(encodeURIComponent).join(",");
+      // Mama senders OR threads owned by an admin (Patrick↔Callie DMs).
+      qs += `&or=(sender_id.not.in.(${list}),client_id.in.(${list}))`;
+    }
+  }
   try {
     const resp = await fetch(`${base}/rest/v1/messages?${qs}`, {
       method: "HEAD",
