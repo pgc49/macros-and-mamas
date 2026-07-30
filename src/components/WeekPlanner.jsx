@@ -693,7 +693,7 @@ function PlanMealTile({
 }) {
   const [open, setOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
-  const [logPhase, setLogPhase] = useState("idle"); // idle | confirm | busy | done
+  const [logPhase, setLogPhase] = useState("idle"); // idle | busy | done
   const slot = SLOT_LABEL[String(meal.slot || "").toLowerCase()] || "Meal";
   const qty = snapServings(meal.qty ?? 1);
   const scaled = scaledMealMacros(meal);
@@ -788,11 +788,7 @@ function PlanMealTile({
             accent
             disabled={logPhase === "busy" || logPhase === "done"}
             onClick={async () => {
-              if (logPhase === "idle") {
-                setLogPhase("confirm");
-                return;
-              }
-              if (logPhase !== "confirm") return;
+              if (logPhase !== "idle") return;
               setLogPhase("busy");
               try {
                 // Keep the planner slot (breakfast/lunch/dinner/snack) — do not
@@ -813,19 +809,16 @@ function PlanMealTile({
                   return;
                 }
                 setLogPhase("done");
+                window.setTimeout(() => setLogPhase("idle"), 2000);
               } catch {
                 setLogPhase("idle");
               }
             }}
           >
             {logPhase === "idle" && "Add to Today"}
-            {logPhase === "confirm" && "Confirm add?"}
             {logPhase === "busy" && "Adding…"}
             {logPhase === "done" && "Added ✓"}
           </ActionPill>
-        )}
-        {logPhase === "confirm" && (
-          <ActionPill onClick={() => setLogPhase("idle")}>Cancel</ActionPill>
         )}
       </div>
 
