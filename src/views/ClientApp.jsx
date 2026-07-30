@@ -10,6 +10,8 @@ import { WaterLogCard } from "../components/WaterLogCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
+import { MondayVoiceDropBanner } from "../components/MondayVoiceDropBanner";
+import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { LoggableMealRow } from "../components/LoggableMealRow";
 import { RecipeCreator } from "../components/RecipeCreator";
 import { WeekPlanner } from "../components/WeekPlanner";
@@ -19,6 +21,7 @@ import { TechHelpFooter } from "../components/TechHelpFooter";
 import { MessagesPanel } from "../components/MessagesPanel";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
+import { db } from "../db/db";
 import { useState } from "react";
 
 export function ClientApp({
@@ -51,6 +54,7 @@ export function ClientApp({
   logFlash = "",
   onWeekPlanChange,
   onChangeWeekPlanWeek,
+  onHomescreenTipDismissed,
   onSuggestAiWeek,
   onMealIdea,
   onSaveFoodPrefs,
@@ -170,7 +174,15 @@ export function ClientApp({
               : `Ranges below show ${formatLongDay(mealLogDate)} — switch days in the meal log to compare.`}
           </p>
 
-          <HomeScreenTip />
+          <AppUpdateBanner />
+          <MondayVoiceDropBanner />
+          <HomeScreenTip
+            profileDismissedAt={profile.homescreenTipDismissedAt}
+            onDismissPersist={async () => {
+              const result = await db.dismissHomescreenTip();
+              onHomescreenTipDismissed?.(result.homescreenTipDismissedAt);
+            }}
+          />
 
           {logFlash ? (
             <Card style={{ marginBottom: 10, padding: 12, background: T.sageSoft, border: "none" }}>

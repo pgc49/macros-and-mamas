@@ -103,6 +103,7 @@ function rowToProfile(row) {
     coachNote: row.coach_note || "",
     coachNoteAt: row.coach_note_at || null,
     coachNoteDismissedAt: row.coach_note_dismissed_at || null,
+    homescreenTipDismissedAt: row.homescreen_tip_dismissed_at || null,
     bottleOz: row.bottle_oz != null ? Number(row.bottle_oz) : 24,
     avatarPath,
     avatarUrl: avatarPublicUrl(avatarPath),
@@ -1323,6 +1324,18 @@ export const db = {
     return { coachNoteDismissedAt: at };
   },
 
+  /** Mama dismisses the Getting Started home-screen tip (sticky across devices). */
+  async dismissHomescreenTip() {
+    const uid = await requireUserId();
+    const at = new Date().toISOString();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ homescreen_tip_dismissed_at: at })
+      .eq("id", uid);
+    if (error) throw error;
+    return { homescreenTipDismissedAt: at };
+  },
+
   /** Load 1:1 thread for a mama (self or admin viewing client). */
   async loadMessages(clientId, { limit = 100 } = {}) {
     if (!clientId) return [];
@@ -1417,6 +1430,129 @@ export const db = {
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.error || "Broadcast failed");
     return data;
+  },
+
+  /**
+   * Upload a single Monday voice-drop audio file (admins only via Storage RLS).
+   * Returns { path, mime, bytes }.
+   */
+  async uploadVoiceDropAudio(file) {
+    await requireUserId();
+    if (!file) throw new Error("Audio required");
+    const mime = String(file.type || "").toLowerCase().split(";")[0].trim();
+    if (!mime.startsWith("audio/")) throw new Error("Voice drop must be audio.");
+    if (!MESSAGE_AUDIO_MIME.has(mime)) {
+      throw new Error("Unsupported audio format — try again from Safari or Chrome.");
+    }
+    if (file.size > MESSAGE_ATTACHMENT_MAX_BYTES) {
+      throw new Error("That voice drop is over 10 MB — try a shorter recording.");
+    }
+    const id = (typeof crypto !== "undefined" && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const ext = mime.includes("mp4") || mime.includes("m4a") || mime.includes("aac")
+      ? "m4a"
+      : mime.includes("mpeg")
+        ? "mp3"
+        : mime.includes("ogg")
+          ? "ogg"
+          : "webm";
+    const path = `${id}/monday-voice.${ext}`;
+    const { error } = await supabase.storage
+      .from("voice-drops")
+      .upload(path, file, { contentType: mime, upsert: false });
+    if (error) {
+      console.error("voice drop upload failed", error);
+      throw new Error("Couldn’t upload the voice drop — try again.");
+    }
+    return { path, mime, bytes: Number(file.size) || null };
+  },
+
+  /**
+   * Publish Monday voice drop (Today banner only — no Messages copies).
+   * audience: "admins" | "active" | "all_mamas"
+   * notify: push/email when true (keep false while testing on preview).
+   */
+  async publishVoiceDrop({
+    file,
+    caption = "",
+    audience = "admins",
+    notify = false,
+    durationMs = null,
+  } = {}) {
+    await requireUserId();
+    const uploaded = await this.uploadVoiceDropAudio(file);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error("Not signed in");
+    const resp = await fetch("/api/admin-voice-drop", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        caption: String(caption || "").trim().slice(0, 500),
+        audience,
+        notify: notify === true,
+        audioPath: uploaded.path,
+        audioMime: uploaded.mime,
+        audioBytes: uploaded.bytes,
+        durationMs: durationMs != null ? Number(durationMs) : null,
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || "Voice drop failed");
+    return data;
+  },
+
+  /** Current published, non-expired drop the signed-in user is allowed to see. */
+  async loadCurrentVoiceDrop() {
+    await requireUserId();
+    const { data, error } = await supabase
+      .from("voice_drops")
+      .select("id, caption, audio_path, audio_mime, audio_bytes, duration_ms, audience, published_at, expires_at, status")
+      .eq("status", "published")
+      .gt("expires_at", new Date().toISOString())
+      .order("published_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data?.audio_path) return null;
+    try {
+      const { data: signed, error: signErr } = await supabase.storage
+        .from("voice-drops")
+        .createSignedUrl(data.audio_path, 60 * 60);
+      if (signErr) {
+        console.warn("voice drop signed url failed", signErr);
+        return { ...data, audioUrl: null };
+      }
+      return { ...data, audioUrl: signed?.signedUrl || null, durationMs: data.duration_ms };
+    } catch (e) {
+      console.warn("voice drop signed url failed", e);
+      return { ...data, audioUrl: null, durationMs: data.duration_ms };
+    }
+  },
+
+  /** Admin: latest drop row (any status) for the Messages card status line. */
+  async loadLatestVoiceDropAdmin() {
+    await requireUserId();
+    const { data, error } = await supabase
+      .from("voice_drops")
+      .select("id, caption, audio_path, audio_mime, duration_ms, audience, published_at, expires_at, status")
+      .order("published_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    let audioUrl = null;
+    if (data.audio_path) {
+      const { data: signed } = await supabase.storage
+        .from("voice-drops")
+        .createSignedUrl(data.audio_path, 60 * 60);
+      audioUrl = signed?.signedUrl || null;
+    }
+    return { ...data, audioUrl, durationMs: data.duration_ms };
   },
 
   async editMessage(messageId, body) {

@@ -70,6 +70,7 @@ const EMPTY_PROFILE = {
   prefB: "", prefL: "", prefD: "", prefS: "", seasonNote: "",
   allergens: [], allergenNote: "", foodAvoids: "",
   coachNote: "", coachNoteAt: null, coachNoteDismissedAt: null,
+  homescreenTipDismissedAt: null,
   avatarPath: null, avatarUrl: null,
 };
 
@@ -1180,6 +1181,9 @@ export default function App() {
       onSuggestAiWeek={onSuggestAiWeek}
       onMealIdea={onMealIdea}
       onSaveFoodPrefs={onSaveFoodPrefs}
+      onHomescreenTipDismissed={(at) => {
+        setProfile((p) => ({ ...p, homescreenTipDismissedAt: at }));
+      }}
       userId={user?.id || null}
       unreadMessages={unreadMessages}
       onUnreadMessagesChange={setUnreadMessages}

@@ -22,8 +22,10 @@ import { Shell, Card, Btn, inputStyle } from "../components/ui";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AdminMessages } from "./AdminMessages";
+import { AdminAnnouncements } from "./AdminAnnouncements";
 import { AdminClientTracking } from "./AdminClientTracking";
 import { AdminClientMessages } from "./AdminClientMessages";
+import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 import { CONFIG } from "../config";
@@ -140,6 +142,7 @@ function TabBar({ tab, setTab, unreadMessages = 0 }) {
     ["overview", "Overview"],
     ["clients", "Clients"],
     ["messages", "Messages"],
+    ["announcements", "Announcements"],
     ["emails", "Email templates"],
   ];
   return (
@@ -267,7 +270,8 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   const [tab, setTab] = useState(() => {
     if (typeof window === "undefined") return "overview";
     const q = new URLSearchParams(window.location.search).get("tab");
-    return q === "messages" ? "messages" : "overview";
+    if (q === "messages" || q === "announcements" || q === "emails" || q === "clients") return q;
+    return "overview";
   });
   const [filter, setFilter] = useState("active");
   const [recentEmails, setRecentEmails] = useState([]);
@@ -753,6 +757,8 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
 
       <TabBar tab={tab} setTab={setTab} unreadMessages={unreadMessages} />
 
+      <AppUpdateBanner />
+
       {tab === "overview" && (
         <>
           {unreadMessages > 0 && (
@@ -1078,6 +1084,10 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           initialClientId={adminSel}
           onUnreadTotalChange={setUnreadMessages}
         />
+      )}
+
+      {tab === "announcements" && (
+        <AdminAnnouncements roster={all} />
       )}
 
       {tab === "emails" && (
