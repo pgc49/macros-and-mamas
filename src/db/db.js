@@ -103,6 +103,7 @@ function rowToProfile(row) {
     coachNote: row.coach_note || "",
     coachNoteAt: row.coach_note_at || null,
     coachNoteDismissedAt: row.coach_note_dismissed_at || null,
+    homescreenTipDismissedAt: row.homescreen_tip_dismissed_at || null,
     bottleOz: row.bottle_oz != null ? Number(row.bottle_oz) : 24,
     avatarPath,
     avatarUrl: avatarPublicUrl(avatarPath),
@@ -1321,6 +1322,18 @@ export const db = {
       .eq("id", uid);
     if (error) throw error;
     return { coachNoteDismissedAt: at };
+  },
+
+  /** Mama dismisses the Getting Started home-screen tip (sticky across devices). */
+  async dismissHomescreenTip() {
+    const uid = await requireUserId();
+    const at = new Date().toISOString();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ homescreen_tip_dismissed_at: at })
+      .eq("id", uid);
+    if (error) throw error;
+    return { homescreenTipDismissedAt: at };
   },
 
   /** Load 1:1 thread for a mama (self or admin viewing client). */

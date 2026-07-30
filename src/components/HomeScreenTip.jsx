@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
+import { isStandaloneDisplay } from "../lib/push";
 
 const STORAGE_KEY = "mm_homescreen_tip_dismissed";
 
-function wasDismissed() {
+function wasDismissedLocally() {
   try {
     return localStorage.getItem(STORAGE_KEY) === "1";
   } catch {
@@ -11,11 +12,11 @@ function wasDismissed() {
   }
 }
 
-function persistDismissed() {
+function persistDismissedLocally() {
   try {
     localStorage.setItem(STORAGE_KEY, "1");
   } catch {
-    /* private mode / blocked storage — still hide for this session */
+    /* private mode / blocked storage — session hide still applies via state */
   }
 }
 
@@ -104,15 +105,49 @@ function Step({ icon, children }) {
   );
 }
 
-/** Visual getting-started tip (icon rows). Gone forever after dismiss. */
-export function HomeScreenTip() {
-  const [visible, setVisible] = useState(() => !wasDismissed());
+/**
+ * Getting-started home-screen tip.
+ * Hidden when:
+ * - already running as a home-screen / standalone app
+ * - dismissed on this device (localStorage)
+ * - dismissed on the account (profile.homescreen_tip_dismissed_at)
+ */
+export function HomeScreenTip({
+  profileDismissedAt = null,
+  onDismissPersist,
+}) {
+  const alreadyStandalone = isStandaloneDisplay();
+  const [visible, setVisible] = useState(() => {
+    if (alreadyStandalone) return false;
+    if (profileDismissedAt) return false;
+    if (wasDismissedLocally()) return false;
+    return true;
+  });
+
+  // If she opens from the Home Screen icon, never show — and remember it.
+  useEffect(() => {
+    if (!alreadyStandalone) return;
+    setVisible(false);
+    persistDismissedLocally();
+    if (!profileDismissedAt) {
+      onDismissPersist?.().catch((e) => console.warn("homescreen tip persist failed", e));
+    }
+  }, [alreadyStandalone, profileDismissedAt, onDismissPersist]);
+
+  // Profile loaded after first paint with a dismiss timestamp.
+  useEffect(() => {
+    if (profileDismissedAt) {
+      persistDismissedLocally();
+      setVisible(false);
+    }
+  }, [profileDismissedAt]);
 
   if (!visible) return null;
 
   const dismiss = () => {
-    persistDismissed();
+    persistDismissedLocally();
     setVisible(false);
+    onDismissPersist?.().catch((e) => console.warn("homescreen tip persist failed", e));
   };
 
   return (

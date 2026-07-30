@@ -21,6 +21,7 @@ import { TechHelpFooter } from "../components/TechHelpFooter";
 import { MessagesPanel } from "../components/MessagesPanel";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
+import { db } from "../db/db";
 import { useState } from "react";
 
 export function ClientApp({
@@ -53,6 +54,7 @@ export function ClientApp({
   logFlash = "",
   onWeekPlanChange,
   onChangeWeekPlanWeek,
+  onHomescreenTipDismissed,
   onSuggestAiWeek,
   onMealIdea,
   onSaveFoodPrefs,
@@ -174,7 +176,13 @@ export function ClientApp({
 
           <AppUpdateBanner />
           <MondayVoiceDropBanner />
-          <HomeScreenTip />
+          <HomeScreenTip
+            profileDismissedAt={profile.homescreenTipDismissedAt}
+            onDismissPersist={async () => {
+              const result = await db.dismissHomescreenTip();
+              onHomescreenTipDismissed?.(result.homescreenTipDismissedAt);
+            }}
+          />
 
           {logFlash ? (
             <Card style={{ marginBottom: 10, padding: 12, background: T.sageSoft, border: "none" }}>
