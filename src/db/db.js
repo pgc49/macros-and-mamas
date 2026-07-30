@@ -1428,7 +1428,10 @@ export const db = {
       body: JSON.stringify({ body: text, audience }),
     });
     const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(data.error || "Broadcast failed");
+    if (!resp.ok) {
+      const detail = data.detail ? `: ${data.detail}` : "";
+      throw new Error(`${data.error || "Broadcast failed"}${detail}`);
+    }
     return data;
   },
 
