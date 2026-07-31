@@ -751,23 +751,28 @@ export default function App() {
   };
 
   const confirmEstimate = async (overrides = null, opts = {}) => {
-    if (!estimate || estimate.error) return;
-    const name = overrides?.name ?? estimate.meal;
-    const cal = overrides?.cal ?? estimate.calories;
-    const p = overrides?.p ?? estimate.protein_g;
-    const c = overrides?.c ?? estimate.carbs_g;
-    const f = overrides?.f ?? estimate.fat_g;
-    const baseVia = estimateSource === "text" ? "describe" : estimateSource;
-    await appendMealEntry({
+    // Prefer explicit review-panel overrides so Save still works after a
+    // failed re-estimate (estimate may be an error object or briefly null).
+    const o = overrides && typeof overrides === "object" ? overrides : null;
+    if (!o && (!estimate || estimate.error)) return;
+    const name = o?.name ?? estimate?.meal;
+    const cal = o?.cal ?? estimate?.calories;
+    const p = o?.p ?? estimate?.protein_g;
+    const c = o?.c ?? estimate?.carbs_g;
+    const f = o?.f ?? estimate?.fat_g;
+    if (name == null || String(name).trim() === "") return;
+    const baseVia = estimateSource === "text" ? "describe" : (estimateSource || "photo");
+    const ok = await appendMealEntry({
       name,
       cal,
       p,
       c,
       f,
       via: opts.adjusted ? "adjusted" : baseVia,
-      slot: overrides?.slot ?? opts.slot ?? null,
+      slot: o?.slot ?? opts.slot ?? null,
       logged_date: mealLogDate,
     });
+    if (!ok) return false;
     if (opts.saveCustom) {
       try {
         const saved = await db.saveCustomMeal({ name, cal, p, c, f });
@@ -780,6 +785,7 @@ export default function App() {
       }
     }
     setEstimate(null);
+    return true;
   };
 
   const discardEstimate = () => setEstimate(null);
@@ -811,11 +817,12 @@ export default function App() {
   };
 
   const logManualMeal = async (entry) => {
-    await appendMealEntry({
+    const ok = await appendMealEntry({
       ...entry,
       via: entry.via || "manual",
       logged_date: entry.logged_date || mealLogDate,
     });
+    if (!ok) return false;
     if (entry.saveCustom) {
       try {
         const saved = await db.saveCustomMeal({
@@ -833,6 +840,7 @@ export default function App() {
         console.error("saveCustomMeal failed", e);
       }
     }
+    return true;
   };
 
   const saveCustomMeal = async (meal) => {

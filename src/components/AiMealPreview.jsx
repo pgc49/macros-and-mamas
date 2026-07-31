@@ -49,6 +49,7 @@ export function AiMealPreview({
   addLabel = "Add to plan",
   rank = null,
   rankLabel = null,
+  addDisabled = false,
 }) {
   const [open, setOpen] = useState(false);
   const ings = Array.isArray(meal.ingredients) ? meal.ingredients : [];
@@ -115,7 +116,7 @@ export function AiMealPreview({
         <div style={{ fontSize: 12.5, color: T.ink, marginTop: 6, lineHeight: 1.4 }}>{meal.desc}</div>
       )}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-        <Btn small onClick={onAdd}>{addLabel}</Btn>
+        <Btn small onClick={onAdd} disabled={addDisabled}>{addLabel}</Btn>
         {(ings.length > 0 || steps.length > 0) && (
           <ActionPill onClick={() => setOpen((o) => !o)}>
             {open ? "Hide tips" : eatingOut ? "Order tips" : "Show recipe"}

@@ -207,7 +207,7 @@ export function MealLogCard({
   };
 
   const stageSnapFiles = (fileList) => {
-    const incoming = Array.from(fileList || []).filter(Boolean);
+    const incoming = Array.from(fileList || []).filter((f) => f && f.type?.startsWith("image/"));
     if (!incoming.length) return;
     setSnapItems((prev) => {
       const room = Math.max(0, MAX_SNAP_PHOTOS - prev.length);
@@ -241,11 +241,14 @@ export function MealLogCard({
   // sourceText is a copy of what she wrote so she can edit it in place and
   // re-run (Describe used to wipe the box, so a light estimate meant
   // typing the whole meal again).
+  // Keep the draft across a failed/in-flight re-estimate so Snap doesn't
+  // wipe a good review if the second read fails or App briefly clears estimate.
   useEffect(() => {
-    if (!estimate || estimate.error) {
-      setEstimateDraft(null);
+    if (!estimate) {
+      if (!busy) setEstimateDraft(null);
       return;
     }
+    if (estimate.error) return;
     const input = lastInputRef.current;
     setEstimateDraft({
       name: estimate.meal || "",
@@ -266,7 +269,7 @@ export function MealLogCard({
         f: Number(estimate.fat_g) || 0,
       },
     });
-  }, [estimate]);
+  }, [estimate, busy]);
 
   const today = localDateIso();
   const date = mealLogDate || todayLog?.date || today;
@@ -304,9 +307,9 @@ export function MealLogCard({
   }, [macros, totals.cal, totals.p, totals.c, totals.f]);
 
   const pickMenuMeal = async (meal, opts = {}) => {
-    if (!meal) return;
-    await onManualLog?.({
-      name: meal.name,
+    if (!meal || !onManualLog) return false;
+    const ok = await onManualLog({
+      name: String(meal.name || "").trim() || "Restaurant meal",
       cal: Number(meal.cal) || 0,
       p: Number(meal.p) || 0,
       c: Number(meal.c) || 0,
@@ -316,8 +319,10 @@ export function MealLogCard({
       logged_date: date,
       saveCustom: !!opts.saveToMine,
     });
+    if (ok === false) return false;
     setSnapMenuOpen(false);
     setMethod(null);
+    return true;
   };
 
   const toggleMethod = (key) => {
@@ -560,6 +565,7 @@ export function MealLogCard({
 
   const clearEstimateInputs = () => {
     clearSnap();
+    setSnapMenuOpen(false);
     setDesc("");
     setLastInput(null);
   };
@@ -573,7 +579,7 @@ export function MealLogCard({
   );
 
   const saveEstimateDraft = async () => {
-    if (!estimateDraft) return;
+    if (!estimateDraft || busy) return;
     const payload = {
       name: String(estimateDraft.name || "").trim() || "Meal",
       cal: Number(estimateDraft.cal) || 0,
@@ -588,11 +594,12 @@ export function MealLogCard({
       || payload.p !== (Number(b.p) || 0)
       || payload.c !== (Number(b.c) || 0)
       || payload.f !== (Number(b.f) || 0);
-    await onConfirmEstimate?.(payload, {
+    const ok = await onConfirmEstimate?.(payload, {
       adjusted: changed,
       saveCustom: saveEstimateCustom,
       slot: resolveLogSlot(logSlot),
     });
+    if (ok === false) return;
     setEstimateDraft(null);
     setSaveEstimateCustom(false);
     clearEstimateInputs();
@@ -712,16 +719,16 @@ export function MealLogCard({
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: snapMenuOpen || snapItems.length ? 12 : 0 }}>
                   <button
                     type="button"
-                    disabled={busy}
-                    style={pill(false, busy)}
+                    disabled={busy || snapMenuOpen}
+                    style={pill(false, busy || snapMenuOpen)}
                     onClick={() => openSnapPlate("camera")}
                   >
                     Open camera
                   </button>
                   <button
                     type="button"
-                    disabled={busy}
-                    style={pill(true, busy)}
+                    disabled={busy || snapMenuOpen}
+                    style={pill(true, busy || snapMenuOpen)}
                     onClick={() => openSnapPlate("library")}
                   >
                     Photo library
@@ -731,8 +738,10 @@ export function MealLogCard({
                     disabled={busy}
                     style={pill(!snapMenuOpen, busy)}
                     onClick={() => {
-                      clearSnap();
-                      setSnapMenuOpen((open) => !open);
+                      setSnapMenuOpen((open) => {
+                        if (!open) clearSnap(); // opening Menu — drop any staged plate photos
+                        return !open;
+                      });
                     }}
                   >
                     Menu
@@ -1215,7 +1224,7 @@ export function MealLogCard({
           </div>
         )}
 
-        {estimate && !estimate.error && estimateDraft && (
+        {estimateDraft && (
           <div style={{ marginTop: 12, background: T.accentSoft, borderRadius: 12, padding: "12px 14px" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.accentDeep, marginBottom: 8 }}>
               Review &amp; edit, then save

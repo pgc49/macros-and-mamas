@@ -85,15 +85,28 @@ export function rankEatingOutPicks(meals, remaining, dayTotals, bands) {
     return (ia?.score ?? 0) - (ib?.score ?? 0);
   });
   const used = new Set();
+  const takeLabel = (candidate) => {
+    const label = String(candidate || "").trim();
+    if (!label || used.has(label.toLowerCase())) return null;
+    used.add(label.toLowerCase());
+    return label;
+  };
   return list.slice(0, 5).map((meal, i) => {
     const impact = eatingOutDayImpact(meal, remaining, dayTotals, bands);
-    let label = String(meal.rankLabel || "").trim();
-    if (!label || used.has(label.toLowerCase())) {
-      if (i === 2 && impact?.helpsProtein) label = "Protein-forward";
-      else if (i === 3 && impact?.fits) label = "Lighter pick";
-      else label = FALLBACK_RANK_LABELS[i] || `Pick ${i + 1}`;
+    let label = takeLabel(meal.rankLabel);
+    if (!label && i === 2 && impact?.helpsProtein) label = takeLabel("Protein-forward");
+    if (!label && i === 3 && impact?.fits) label = takeLabel("Lighter pick");
+    if (!label) label = takeLabel(FALLBACK_RANK_LABELS[i]);
+    if (!label) {
+      for (const fallback of FALLBACK_RANK_LABELS) {
+        label = takeLabel(fallback);
+        if (label) break;
+      }
     }
-    used.add(label.toLowerCase());
+    if (!label) {
+      label = `Pick ${i + 1}`;
+      used.add(label.toLowerCase());
+    }
     return { ...meal, rank: i + 1, rankLabel: label };
   });
 }

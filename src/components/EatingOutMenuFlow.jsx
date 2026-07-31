@@ -7,7 +7,7 @@ import { eatingOutDayImpact, rankEatingOutPicks } from "../utils/eatingOutImpact
 export const MAX_MENU_PHOTOS = 3;
 
 /**
- * Restaurant menu → 3 range-aware picks.
+ * Restaurant menu → up to 5 range-aware picks.
  * Used from Today (log) and Meals → Plan (plan day).
  */
 export function EatingOutMenuFlow({
@@ -30,16 +30,23 @@ export function EatingOutMenuFlow({
   const [menuCaption, setMenuCaption] = useState("");
   const [picks, setPicks] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [err, setErr] = useState("");
   const [saveMine, setSaveMine] = useState(defaultSaveMine);
   const camRef = useRef(null);
   const libRef = useRef(null);
+  const aliveRef = useRef(true);
+  const menuItemsRef = useRef(menuItems);
+  menuItemsRef.current = menuItems;
 
-  useEffect(() => () => {
-    menuItems.forEach((item) => {
-      try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- revoke on unmount only
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      menuItemsRef.current.forEach((item) => {
+        try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
+      });
+    };
   }, []);
 
   const clearMenuPhotos = () => {
@@ -76,7 +83,7 @@ export function EatingOutMenuFlow({
   };
 
   const runPicks = async () => {
-    if (!onMealIdea || !slot || !menuItems.length || busy || disabled) return;
+    if (!onMealIdea || !slot || !menuItems.length || busy || picking || disabled) return;
     setBusy(true);
     setErr("");
     setPicks([]);
@@ -89,6 +96,7 @@ export function EatingOutMenuFlow({
         remaining,
         dayTotals,
       });
+      if (!aliveRef.current) return;
       if (result?.error) {
         setErr(result.error);
         return;
@@ -100,13 +108,32 @@ export function EatingOutMenuFlow({
       }
       setPicks(rankEatingOutPicks(list, remaining, dayTotals, bands));
     } catch (e) {
+      if (!aliveRef.current) return;
       setErr(e.message || "Couldn't read that menu.");
     } finally {
-      setBusy(false);
+      if (aliveRef.current) setBusy(false);
     }
   };
 
-  const locked = busy || disabled;
+  const handlePick = async (meal) => {
+    if (!meal || picking || busy || disabled) return;
+    setPicking(true);
+    setErr("");
+    try {
+      const ok = await onPick?.(meal, { saveToMine: saveMine });
+      if (!aliveRef.current) return;
+      if (ok === false) {
+        setErr("Couldn't log that meal — try again.");
+      }
+    } catch (e) {
+      if (!aliveRef.current) return;
+      setErr(e?.message || "Couldn't log that meal — try again.");
+    } finally {
+      if (aliveRef.current) setPicking(false);
+    }
+  };
+
+  const locked = busy || picking || disabled;
 
   return (
     <div>
@@ -283,12 +310,13 @@ export function EatingOutMenuFlow({
         <AiMealPreview
           key={`${m.name}-${i}`}
           meal={m}
-          onAdd={() => onPick?.(m, { saveToMine: saveMine })}
+          onAdd={() => handlePick(m)}
           eatingOut
-          addLabel={addLabel}
+          addLabel={picking ? "Logging…" : addLabel}
           rank={m.rank || i + 1}
           rankLabel={m.rankLabel}
           dayImpact={eatingOutDayImpact(m, remaining, dayTotals, bands)}
+          addDisabled={locked}
         />
       ))}
 

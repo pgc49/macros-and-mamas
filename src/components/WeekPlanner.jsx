@@ -208,7 +208,7 @@ export function WeekPlanner({
   };
 
   const chooseAiMeal = async (idea, { saveToMine = false } = {}) => {
-    if (!picker) return;
+    if (!picker) return false;
     const slot =
       picker.slot && picker.slot !== "any"
         ? picker.slot
@@ -229,6 +229,7 @@ export function WeekPlanner({
       setMessage(`Added to ${picker.day}.`);
     }
     placeMeal(meal);
+    return true;
   };
 
   const removeMeal = (mealId) => applyDays(removeMealById(planned, mealId), "manual");
