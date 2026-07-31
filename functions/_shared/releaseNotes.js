@@ -18,7 +18,7 @@
 export const APP_RELEASE_NOTES = {
   headline: "What’s new",
   bullets: [
-    "Snap → Menu — photograph a restaurant menu for up to 5 ranked picks, then tap I ordered this to log.",
-    "Update this meal — one box on any logged meal for a plate photo or “also had…” note.",
+    "Eating out and still want to hit your macros? On Today, open Snap → Menu, photograph the menu, and AI ranks up to 5 dishes that fit what’s left in your day. Tap “I ordered this” on the one you pick to log it.",
+    "Once your food arrives, open that meal and add a plate photo (or a quick note) under Update this meal — that tightens the estimate so your log stays closer to what you actually ate.",
   ],
 };
