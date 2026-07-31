@@ -6,8 +6,10 @@ const MAX_PHOTOS = 3;
 const NOTE_MAX = 400;
 
 /**
- * Update a logged meal from a plate photo and/or description.
- * Replaces macros on the draft — she still taps Save on the row.
+ * One catch-all updater for a logged meal:
+ * optional photo(s) + one note → Update.
+ * Photo is optional — note alone can add food or adjust portions.
+ * New photos are treated as extra context on the meal already logged.
  */
 export function LogMealRefine({
   onRefine,
@@ -27,13 +29,17 @@ export function LogMealRefine({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- revoke on unmount only
   }, []);
 
-  const clear = () => {
+  const clearPhotos = () => {
     setFiles((prev) => {
       prev.forEach((item) => {
         try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
       });
       return [];
     });
+  };
+
+  const clear = () => {
+    clearPhotos();
     setNote("");
   };
 
@@ -77,15 +83,15 @@ export function LogMealRefine({
   return (
     <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${T.border}` }}>
       <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, marginBottom: 4, letterSpacing: 0.3 }}>
-        Update with photo or note
+        Update this meal
       </div>
       <div style={{ fontSize: 11.5, color: T.inkSoft, marginBottom: 8, lineHeight: 1.45 }}>
-        Plate photo and/or a short note — we’ll re-estimate this meal (replaces the macros above).
+        Describe what you added or changed — photo optional. New photos are usually extras or portion context on what’s already logged.
       </div>
 
       {!files.length ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-          <Btn small ghost onClick={() => camRef.current?.click()} disabled={busy || disabled}>Plate photo</Btn>
+          <Btn small ghost onClick={() => camRef.current?.click()} disabled={busy || disabled}>Add photo</Btn>
           <Btn small ghost onClick={() => libRef.current?.click()} disabled={busy || disabled}>From library</Btn>
         </div>
       ) : (
@@ -114,7 +120,7 @@ export function LogMealRefine({
               >
                 <img
                   src={item.previewUrl}
-                  alt={`Refine photo ${idx + 1}`}
+                  alt={`Update photo ${idx + 1}`}
                   style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
                 />
                 <button
@@ -149,7 +155,7 @@ export function LogMealRefine({
               <button
                 type="button"
                 disabled={busy || disabled}
-                onClick={clear}
+                onClick={clearPhotos}
                 style={{
                   background: "none",
                   border: "none",
@@ -170,7 +176,11 @@ export function LogMealRefine({
       <textarea
         value={note}
         onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
-        placeholder="e.g. half the plate · no rice · sauce on the side · shared the pasta"
+        placeholder={
+          files.length
+            ? "What’s in the new photo? e.g. side of bread · half eaten · also the salad"
+            : "e.g. also had Greek yogurt · half the plate · no rice · sauce on the side"
+        }
         rows={2}
         disabled={busy || disabled}
         style={{
@@ -190,7 +200,7 @@ export function LogMealRefine({
       />
 
       <Btn small onClick={submit} disabled={!ready}>
-        {busy ? "Updating…" : "Update estimate"}
+        {busy ? "Updating…" : "Update"}
       </Btn>
 
       {error && (

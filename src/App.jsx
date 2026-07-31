@@ -523,7 +523,7 @@ export default function App() {
       images.push({ image_b64: b64, media_type: "image/jpeg" });
     }
     if (!images.length) return null;
-    const description = String(note || "").trim().slice(0, 400);
+    const description = String(note || "").trim().slice(0, 800);
     return {
       type: "photo",
       // Legacy single-image fields (first photo) + images[] for multi-photo.
@@ -554,39 +554,47 @@ export default function App() {
   };
 
   /**
-   * Price a single food she is adding to a meal that already exists.
-   * Deliberately does not disturb `estimate` — the meal under review (or
-   * already logged) stays on screen while this resolves.
-   */
-  const estimateAddition = async (text) => {
-    const description = String(text || "").trim();
-    if (!description) return { error: true, message: "Type what you added first." };
-    return postEstimate({ type: "text", description });
-  };
-
-  /**
-   * Re-estimate a logged meal from plate photo and/or description.
+   * Update a logged meal from optional photo(s) and/or a note.
    * Silent — does not open the new-meal review panel.
+   * Pass currentMeal so the model treats new photos as extras/context
+   * on what’s already logged, not a brand-new unrelated plate.
    */
-  const estimateMealRefine = async ({ files, description } = {}) => {
+  const estimateMealRefine = async ({ files, description, currentMeal } = {}) => {
     const list = (Array.isArray(files) ? files : (files ? [files] : []))
       .filter(Boolean)
       .slice(0, 3);
     const note = String(description || "").trim();
+    const cur = currentMeal && typeof currentMeal === "object" ? currentMeal : null;
+    const baseline = cur
+      ? `Already logged: ${String(cur.name || "Meal").trim() || "Meal"} — ${Math.round(Number(cur.cal) || 0)} cal · P ${Math.round(Number(cur.p) || 0)}g · C ${Math.round(Number(cur.c) || 0)}g · F ${Math.round(Number(cur.f) || 0)}g.`
+      : "";
+
     if (list.length) {
-      const payload = await photoPayload(list, note.slice(0, 400));
+      const photoNote = [
+        baseline,
+        "New photo is usually additional food, a side, leftovers, or portion context on the meal above — not a totally different plate. Return one updated meal total.",
+        note
+          ? `Her note (additions/portions/hidden extras): """${note.slice(0, 280)}"""`
+          : "No note — add what you can see onto the logged meal; don't invent a new dish.",
+      ].filter(Boolean).join(" ");
+      const payload = await photoPayload(list, photoNote.slice(0, 800));
       if (!payload) {
         return {
           error: true,
-          message: "Couldn't process that image. Try a JPG/PNG, or describe the meal instead.",
+          message: "Couldn't process that image. Try a JPG/PNG, or describe the change instead.",
         };
       }
       return postEstimate(payload);
     }
     if (!note) {
-      return { error: true, message: "Add a photo or describe what changed." };
+      return { error: true, message: "Add a photo or describe what you added / changed." };
     }
-    return postEstimate({ type: "text", description: note.slice(0, 1000) });
+    const textBody = [
+      baseline,
+      "Update this logged meal. Her note may add food, remove something, or change the portion — return the NEW full meal total (not only the addition).",
+      `Note: """${note}"""`,
+    ].filter(Boolean).join(" ");
+    return postEstimate({ type: "text", description: textBody.slice(0, 1000) });
   };
 
   /** Batch macros + detected yield for a pasted recipe. */
@@ -1235,7 +1243,6 @@ export default function App() {
       customMeals={customMeals}
       onSaveCustomMeal={saveCustomMeal}
       onDeleteCustomMeal={deleteCustomMeal}
-      onEstimateAddition={estimateAddition}
       onEstimateRefine={estimateMealRefine}
       onEstimateRecipe={estimateRecipe}
       weekPlanDays={weekPlanDays}

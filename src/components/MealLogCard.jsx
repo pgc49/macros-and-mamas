@@ -22,10 +22,8 @@ import {
   normalizeSlot,
   resolveLogSlot,
 } from "../utils/mealSlots";
-import { addMacros } from "../utils/recipeMacros";
 import { targetBands } from "../utils/weekPlan";
 import { roomLeftFromTotals } from "../utils/eatingOutImpact";
-import { AddFoodBox } from "./AddFoodBox";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
 import { LogMealRefine } from "./LogMealRefine";
 
@@ -154,7 +152,6 @@ export function MealLogCard({
   onManualLog,
   onLogRecipe,
   onSaveCustomMeal,
-  onEstimateAddition,
   onEstimateRefine,
   onMealIdea,
   todayLog,
@@ -184,9 +181,6 @@ export function MealLogCard({
   // What was sent for the estimate on screen, so "I added X" can re-ask
   // about the whole plate instead of throwing the first answer away.
   const [lastInput, setLastInput] = useState(null);
-  const [rowAdd, setRowAdd] = useState("");
-  const [rowAddBusy, setRowAddBusy] = useState(false);
-  const [rowAddError, setRowAddError] = useState("");
   const [rowRefineBusy, setRowRefineBusy] = useState(false);
   const [rowRefineError, setRowRefineError] = useState("");
   const camRef = useRef(null);
@@ -412,8 +406,6 @@ export function MealLogCard({
 
   const startEdit = (e) => {
     setEditingId(e.id);
-    setRowAdd("");
-    setRowAddError("");
     setRowRefineError("");
     setDraft({
       name: e.name,
@@ -426,37 +418,6 @@ export function MealLogCard({
       saveCustom: false,
       handTweaked: false,
     });
-  };
-
-  /**
-   * Add a food to a meal that is already logged. The photo is long gone by
-   * now, so this prices the addition on its own and folds it in — which is
-   * what she'd otherwise do by deleting the entry and logging it again.
-   */
-  const addFoodToRow = async () => {
-    const text = rowAdd.trim();
-    if (!text || !draft || rowAddBusy) return;
-    setRowAddBusy(true);
-    setRowAddError("");
-    const result = await onEstimateAddition?.(text);
-    if (!result || result.error) {
-      setRowAddError(result?.message || "Couldn't price that one — add the macros by hand.");
-      setRowAddBusy(false);
-      return;
-    }
-    const summed = addMacros(
-      { cal: draft.cal, p: draft.p, c: draft.c, f: draft.f },
-      { cal: result.calories, p: result.protein_g, c: result.carbs_g, f: result.fat_g },
-    );
-    const addedName = String(result.meal || text).trim();
-    setDraft((d) => ({
-      ...d,
-      ...summed,
-      name: `${String(d.name || "").trim()} + ${addedName}`.slice(0, 80),
-      via: "adjusted",
-    }));
-    setRowAdd("");
-    setRowAddBusy(false);
   };
 
   const saveEdit = async () => {
@@ -492,7 +453,17 @@ export function MealLogCard({
     if (!draft || rowRefineBusy || !onEstimateRefine) return false;
     setRowRefineBusy(true);
     setRowRefineError("");
-    const result = await onEstimateRefine({ files, description });
+    const result = await onEstimateRefine({
+      files,
+      description,
+      currentMeal: {
+        name: draft.name,
+        cal: draft.cal,
+        p: draft.p,
+        c: draft.c,
+        f: draft.f,
+      },
+    });
     if (!result || result.error) {
       setRowRefineError(result?.message || "Couldn't update that estimate — try again or edit macros by hand.");
       setRowRefineBusy(false);
@@ -1528,19 +1499,6 @@ export function MealLogCard({
                             onRefine={refineRowEstimate}
                             busy={rowRefineBusy}
                             error={rowRefineError}
-                            disabled={rowAddBusy}
-                          />
-                        )}
-                        {onEstimateAddition && (
-                          <AddFoodBox
-                            value={rowAdd}
-                            onChange={setRowAdd}
-                            onSubmit={addFoodToRow}
-                            busy={rowAddBusy}
-                            error={rowAddError}
-                            label="Add food to this meal"
-                            hint="We'll work out its macros and add them on — no need to delete and re-log."
-                            cta="Add"
                           />
                         )}
                         <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
