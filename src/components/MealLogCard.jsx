@@ -167,10 +167,12 @@ export function MealLogCard({
   onChangeMealWeek,
   earliestWeekStart,
 }) {
-  const [method, setMethod] = useState(null); // snap | describe | recipes | manual | menu
+  const [method, setMethod] = useState(null); // snap | describe | recipes | manual
   const [desc, setDesc] = useState("");
   const [photoNote, setPhotoNote] = useState("");
   const [snapItems, setSnapItems] = useState([]); // { file, previewUrl }[]
+  /** Under Snap: plate photo flow vs Menu recommendation expander. */
+  const [snapMenuOpen, setSnapMenuOpen] = useState(false);
   const [manual, setManual] = useState({ name: "", cal: "", p: "", c: "", f: "" });
   const [saveManualCustom, setSaveManualCustom] = useState(true);
   const [saveEstimateCustom, setSaveEstimateCustom] = useState(false);
@@ -320,16 +322,27 @@ export function MealLogCard({
       logged_date: date,
       saveCustom: !!opts.saveToMine,
     });
+    setSnapMenuOpen(false);
     setMethod(null);
   };
 
   const toggleMethod = (key) => {
     setMethod((m) => {
       const next = m === key ? null : key;
-      if (m === "snap" && next !== "snap") clearSnap();
+      if (m === "snap" && next !== "snap") {
+        clearSnap();
+        setSnapMenuOpen(false);
+      }
+      if (next === "snap") setSnapMenuOpen(false);
       if (next) setLogSlot(guessSlotFromTime());
       return next;
     });
+  };
+
+  const openSnapPlate = (source) => {
+    setSnapMenuOpen(false);
+    if (source === "camera") camRef.current?.click();
+    else if (source === "library") libRef.current?.click();
   };
 
   const selectDay = (d) => {
@@ -354,8 +367,8 @@ export function MealLogCard({
       type="button"
       onClick={() => toggleMethod(key)}
       style={{
-        flex: "1 1 28%",
-        minWidth: 72,
+        flex: 1,
+        minWidth: 0,
         padding: "12px 6px 10px",
         borderRadius: 14,
         cursor: "pointer",
@@ -712,9 +725,8 @@ export function MealLogCard({
             </>
           )}
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-          {methodTile("snap", "📸", "Snap", "plate")}
-          {methodTile("menu", "☰", "Menu", "decide")}
+        <div style={{ display: "flex", gap: 7 }}>
+          {methodTile("snap", "📸", "Snap", "plate or menu")}
           {methodTile("describe", "✏️", "Describe", "type it")}
           {methodTile("recipes", "🍳", "My plan", "exact")}
           {methodTile("manual", "＃", "Macros", "I know them")}
@@ -724,143 +736,197 @@ export function MealLogCard({
           <div style={{ marginTop: 12 }}>
             {/* While a draft is up the review panel owns the screen —
                 photos stay in state behind it for re-estimating. */}
-            {estimateDraft ? null : !snapItems.length ? (
-              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <button type="button" disabled={busy} style={pill(false, busy)} onClick={() => camRef.current?.click()}>
-                  Open camera
-                </button>
-                <button type="button" disabled={busy} style={pill(true, busy)} onClick={() => libRef.current?.click()}>
-                  Photo library
-                </button>
-                <span style={{ fontSize: 11.5, color: T.inkSoft }}>
-                  add more photos if needed (second plate, label…)
-                </span>
-              </div>
-            ) : (
+            {estimateDraft ? null : (
               <>
-                <div style={{
-                  display: "flex",
-                  gap: 8,
-                  overflowX: "auto",
-                  marginBottom: 10,
-                  WebkitOverflowScrolling: "touch",
-                }}
-                >
-                  {snapItems.map((item, idx) => (
-                    <div
-                      key={`${item.previewUrl}-${idx}`}
-                      style={{
-                        position: "relative",
-                        flex: "0 0 auto",
-                        width: snapItems.length === 1 ? "100%" : 112,
-                        maxWidth: snapItems.length === 1 ? "100%" : 112,
-                        borderRadius: 12,
-                        overflow: "hidden",
-                        border: `1px solid ${T.border}`,
-                        background: "#fff",
-                        height: snapItems.length === 1 ? 200 : 112,
-                      }}
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: snapMenuOpen || snapItems.length ? 12 : 0 }}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    style={pill(false, busy)}
+                    onClick={() => openSnapPlate("camera")}
+                  >
+                    Open camera
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    style={pill(true, busy)}
+                    onClick={() => openSnapPlate("library")}
+                  >
+                    Photo library
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    style={pill(!snapMenuOpen, busy)}
+                    onClick={() => {
+                      clearSnap();
+                      setSnapMenuOpen((open) => !open);
+                    }}
+                  >
+                    Menu
+                  </button>
+                  {!snapMenuOpen && !snapItems.length && (
+                    <span style={{ fontSize: 11.5, color: T.inkSoft }}>
+                      plate photo, or menu to decide
+                    </span>
+                  )}
+                </div>
+
+                {snapMenuOpen ? (
+                  <div>
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 6 }}>
+                        Slot for this meal
+                      </div>
+                      <SlotChips value={logSlot} onChange={setLogSlot} />
+                    </div>
+                    <EatingOutMenuFlow
+                      slot={logSlot}
+                      macros={macros}
+                      remaining={logRoom.remaining}
+                      dayTotals={logRoom.dayTotals}
+                      bands={logRoom.bands}
+                      onMealIdea={onMealIdea}
+                      onPick={pickMenuMeal}
+                      addLabel="I ordered this"
+                      roomCaption="logged so far"
+                      defaultSaveMine={false}
+                      intro={(
+                        <>
+                          Snap the menu — this is a <b style={{ color: T.ink }}>recommendation</b>, not a log yet.
+                          Get 3 picks ranked for what’s left in today’s ranges, then tap the one you ordered.
+                        </>
+                      )}
+                    />
+                  </div>
+                ) : !snapItems.length ? null : (
+                  <>
+                    <div style={{
+                      display: "flex",
+                      gap: 8,
+                      overflowX: "auto",
+                      marginBottom: 10,
+                      WebkitOverflowScrolling: "touch",
+                    }}
                     >
-                      <img
-                        src={item.previewUrl}
-                        alt={idx === 0 ? "Meal photo" : `Extra photo ${idx + 1}`}
-                        style={{
-                          display: "block",
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
+                      {snapItems.map((item, idx) => (
+                        <div
+                          key={`${item.previewUrl}-${idx}`}
+                          style={{
+                            position: "relative",
+                            flex: "0 0 auto",
+                            width: snapItems.length === 1 ? "100%" : 112,
+                            maxWidth: snapItems.length === 1 ? "100%" : 112,
+                            borderRadius: 12,
+                            overflow: "hidden",
+                            border: `1px solid ${T.border}`,
+                            background: "#fff",
+                            height: snapItems.length === 1 ? 200 : 112,
+                          }}
+                        >
+                          <img
+                            src={item.previewUrl}
+                            alt={idx === 0 ? "Meal photo" : `Extra photo ${idx + 1}`}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => removeSnapAt(idx)}
+                            aria-label={`Remove photo ${idx + 1}`}
+                            style={{
+                              position: "absolute",
+                              top: 6,
+                              right: 6,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 999,
+                              border: "none",
+                              background: "rgba(51,39,46,0.72)",
+                              color: "#fff",
+                              fontSize: 16,
+                              lineHeight: 1,
+                              cursor: busy ? "default" : "pointer",
+                              fontFamily: F,
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    {snapItems.length < MAX_SNAP_PHOTOS && (
+                      <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.4 }}>
+                        Add another plate, side, or nutrition label — everything across the photos is totaled. Up to {MAX_SNAP_PHOTOS}.
+                      </div>
+                    )}
+                    <label style={{ display: "block", marginBottom: 10 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>
+                        Optional note <span style={{ fontWeight: 500 }}>(portions, oil, leftovers…)</span>
+                      </div>
+                      <input
+                        value={photoNote}
+                        onChange={(e) => setPhotoNote(e.target.value)}
+                        placeholder="e.g. about 6 oz chicken, cooked in 1 tsp olive oil"
+                        disabled={busy}
+                        maxLength={400}
+                        style={{ ...inputStyle, padding: "11px 13px", fontSize: 15 }}
                       />
+                    </label>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        disabled={busy || !snapItems.length}
+                        style={pill(false, busy || !snapItems.length)}
+                        onClick={() => runSnapEstimate(photoNote)}
+                      >
+                        {busy ? "Reading…" : "Estimate"}
+                      </button>
+                      {snapItems.length < MAX_SNAP_PHOTOS && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            style={pill(true, busy)}
+                            onClick={() => openSnapPlate("camera")}
+                          >
+                            Add photo
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            style={pill(true, busy)}
+                            onClick={() => openSnapPlate("library")}
+                          >
+                            From library
+                          </button>
+                        </>
+                      )}
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => removeSnapAt(idx)}
-                        aria-label={`Remove photo ${idx + 1}`}
+                        onClick={clearSnap}
                         style={{
-                          position: "absolute",
-                          top: 6,
-                          right: 6,
-                          width: 28,
-                          height: 28,
-                          borderRadius: 999,
+                          background: "none",
                           border: "none",
-                          background: "rgba(51,39,46,0.72)",
-                          color: "#fff",
-                          fontSize: 16,
-                          lineHeight: 1,
+                          fontSize: 13,
+                          color: T.inkSoft,
                           cursor: busy ? "default" : "pointer",
+                          textDecoration: "underline",
                           fontFamily: F,
                         }}
                       >
-                        ×
+                        clear
                       </button>
                     </div>
-                  ))}
-                </div>
-                {snapItems.length < MAX_SNAP_PHOTOS && (
-                  <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.4 }}>
-                    Add another plate, side, or nutrition label — everything across the photos is totaled. Up to {MAX_SNAP_PHOTOS}.
-                  </div>
+                  </>
                 )}
-                <label style={{ display: "block", marginBottom: 10 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>
-                    Optional note <span style={{ fontWeight: 500 }}>(portions, oil, leftovers…)</span>
-                  </div>
-                  <input
-                    value={photoNote}
-                    onChange={(e) => setPhotoNote(e.target.value)}
-                    placeholder="e.g. about 6 oz chicken, cooked in 1 tsp olive oil"
-                    disabled={busy}
-                    maxLength={400}
-                    style={{ ...inputStyle, padding: "11px 13px", fontSize: 15 }}
-                  />
-                </label>
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    disabled={busy || !snapItems.length}
-                    style={pill(false, busy || !snapItems.length)}
-                    onClick={() => runSnapEstimate(photoNote)}
-                  >
-                    {busy ? "Reading…" : "Estimate"}
-                  </button>
-                  {snapItems.length < MAX_SNAP_PHOTOS && (
-                    <>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        style={pill(true, busy)}
-                        onClick={() => camRef.current?.click()}
-                      >
-                        Add photo
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        style={pill(true, busy)}
-                        onClick={() => libRef.current?.click()}
-                      >
-                        From library
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={clearSnap}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      fontSize: 13,
-                      color: T.inkSoft,
-                      cursor: busy ? "default" : "pointer",
-                      textDecoration: "underline",
-                      fontFamily: F,
-                    }}
-                  >
-                    clear
-                  </button>
-                </div>
               </>
             )}
             <input
@@ -871,6 +937,7 @@ export function MealLogCard({
               disabled={busy}
               style={{ display: "none" }}
               onChange={(e) => {
+                setSnapMenuOpen(false);
                 stageSnapFiles(e.target.files);
                 e.target.value = "";
               }}
@@ -883,38 +950,10 @@ export function MealLogCard({
               disabled={busy}
               style={{ display: "none" }}
               onChange={(e) => {
+                setSnapMenuOpen(false);
                 stageSnapFiles(e.target.files);
                 e.target.value = "";
               }}
-            />
-          </div>
-        )}
-
-        {method === "menu" && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 6 }}>
-                Slot for this meal
-              </div>
-              <SlotChips value={logSlot} onChange={setLogSlot} />
-            </div>
-            <EatingOutMenuFlow
-              slot={logSlot}
-              macros={macros}
-              remaining={logRoom.remaining}
-              dayTotals={logRoom.dayTotals}
-              bands={logRoom.bands}
-              onMealIdea={onMealIdea}
-              onPick={pickMenuMeal}
-              addLabel="I ordered this"
-              roomCaption="logged so far"
-              defaultSaveMine={false}
-              intro={(
-                <>
-                  Snap the menu — this is a <b style={{ color: T.ink }}>recommendation</b>, not a log yet.
-                  Get 3 picks ranked for what’s left in today’s ranges, then tap the one you ordered.
-                </>
-              )}
             />
           </div>
         )}
@@ -1399,7 +1438,7 @@ export function MealLogCard({
 
         {!hasAnyEntries ? (
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6, padding: "6px 0 10px" }}>
-            Nothing logged this day. Snap a plate, Menu for eating out, describe, or tap a recipe.
+            Nothing logged this day. Snap a plate or menu, describe, or tap a recipe.
           </div>
         ) : (
           <>
