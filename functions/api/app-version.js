@@ -1,7 +1,21 @@
 /* ==================================================================
    /functions/api/app-version.js
-   Uncached build id for home-screen update checks.
+   Uncached build id (+ optional release notes) for home-screen update checks.
    ================================================================== */
+
+import { APP_RELEASE_NOTES } from "../_shared/releaseNotes.js";
+
+function notesPayload() {
+  const headline = String(APP_RELEASE_NOTES?.headline || "").trim();
+  const bullets = Array.isArray(APP_RELEASE_NOTES?.bullets)
+    ? APP_RELEASE_NOTES.bullets.map((b) => String(b || "").trim()).filter(Boolean).slice(0, 5)
+    : [];
+  if (!headline && !bullets.length) return null;
+  return {
+    headline: headline || "What’s new",
+    bullets,
+  };
+}
 
 export async function onRequestGet({ env }) {
   const buildId = String(
@@ -10,7 +24,12 @@ export async function onRequestGet({ env }) {
     || "unknown",
   ).trim() || "unknown";
 
-  return new Response(JSON.stringify({ buildId }), {
+  const notes = notesPayload();
+
+  return new Response(JSON.stringify({
+    buildId,
+    ...(notes ? { notes } : {}),
+  }), {
     status: 200,
     headers: {
       "content-type": "application/json",

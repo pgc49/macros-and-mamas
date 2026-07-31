@@ -24,7 +24,7 @@ import {
 import { sanitizeEstimate } from "../_shared/estimateShape.js";
 
 const MAX_BODY_CHARS = 2_500_000; // ~2MB guard on base64 payload
-const MAX_NOTE_CHARS = 400;
+const MAX_NOTE_CHARS = 800;
 // A described meal can name a lot of components; a pasted recipe carries
 // ingredients and often the method too. Measured real recipe pastes run
 // ~1,000–2,100 chars, so 4,000 clears them with room to spare.

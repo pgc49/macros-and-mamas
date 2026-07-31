@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "./ui";
 import { LoggableMealRow } from "./LoggableMealRow";
@@ -22,8 +22,10 @@ import {
   normalizeSlot,
   resolveLogSlot,
 } from "../utils/mealSlots";
-import { addMacros } from "../utils/recipeMacros";
-import { AddFoodBox } from "./AddFoodBox";
+import { targetBands } from "../utils/weekPlan";
+import { roomLeftFromTotals } from "../utils/eatingOutImpact";
+import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
+import { LogMealRefine } from "./LogMealRefine";
 
 /** She pasted a link — the estimator only reads text, so say so plainly. */
 const URL_RE = /(https?:\/\/|www\.)\S+/i;
@@ -40,7 +42,10 @@ const VIA_LABEL = {
   custom: "from My meals",
   manual: "entered by you",
   adjusted: "adjusted by you",
+  menu: "from menu · rough estimate",
 };
+
+const AI_VIA = new Set(["photo", "describe", "menu"]);
 
 function SlotChips({ value, onChange, compact = false }) {
   return (
@@ -147,7 +152,8 @@ export function MealLogCard({
   onManualLog,
   onLogRecipe,
   onSaveCustomMeal,
-  onEstimateAddition,
+  onEstimateRefine,
+  onMealIdea,
   todayLog,
   onUpdateEntry,
   onDeleteEntry,
@@ -162,6 +168,8 @@ export function MealLogCard({
   const [desc, setDesc] = useState("");
   const [photoNote, setPhotoNote] = useState("");
   const [snapItems, setSnapItems] = useState([]); // { file, previewUrl }[]
+  /** Under Snap: plate photo flow vs Menu recommendation expander. */
+  const [snapMenuOpen, setSnapMenuOpen] = useState(false);
   const [manual, setManual] = useState({ name: "", cal: "", p: "", c: "", f: "" });
   const [saveManualCustom, setSaveManualCustom] = useState(true);
   const [saveEstimateCustom, setSaveEstimateCustom] = useState(false);
@@ -173,9 +181,8 @@ export function MealLogCard({
   // What was sent for the estimate on screen, so "I added X" can re-ask
   // about the whole plate instead of throwing the first answer away.
   const [lastInput, setLastInput] = useState(null);
-  const [rowAdd, setRowAdd] = useState("");
-  const [rowAddBusy, setRowAddBusy] = useState(false);
-  const [rowAddError, setRowAddError] = useState("");
+  const [rowRefineBusy, setRowRefineBusy] = useState(false);
+  const [rowRefineError, setRowRefineError] = useState("");
   const camRef = useRef(null);
   const libRef = useRef(null);
   // Read at estimate-arrival time only — putting lastInput in the effect
@@ -200,7 +207,7 @@ export function MealLogCard({
   };
 
   const stageSnapFiles = (fileList) => {
-    const incoming = Array.from(fileList || []).filter(Boolean);
+    const incoming = Array.from(fileList || []).filter((f) => f && f.type?.startsWith("image/"));
     if (!incoming.length) return;
     setSnapItems((prev) => {
       const room = Math.max(0, MAX_SNAP_PHOTOS - prev.length);
@@ -234,11 +241,14 @@ export function MealLogCard({
   // sourceText is a copy of what she wrote so she can edit it in place and
   // re-run (Describe used to wipe the box, so a light estimate meant
   // typing the whole meal again).
+  // Keep the draft across a failed/in-flight re-estimate so Snap doesn't
+  // wipe a good review if the second read fails or App briefly clears estimate.
   useEffect(() => {
-    if (!estimate || estimate.error) {
-      setEstimateDraft(null);
+    if (!estimate) {
+      if (!busy) setEstimateDraft(null);
       return;
     }
+    if (estimate.error) return;
     const input = lastInputRef.current;
     setEstimateDraft({
       name: estimate.meal || "",
@@ -259,7 +269,7 @@ export function MealLogCard({
         f: Number(estimate.fat_g) || 0,
       },
     });
-  }, [estimate]);
+  }, [estimate, busy]);
 
   const today = localDateIso();
   const date = mealLogDate || todayLog?.date || today;
@@ -291,13 +301,47 @@ export function MealLogCard({
     { cal: 0, p: 0, c: 0, f: 0 },
   );
 
+  const logRoom = useMemo(() => {
+    const bands = targetBands(macros);
+    return roomLeftFromTotals(totals, bands);
+  }, [macros, totals.cal, totals.p, totals.c, totals.f]);
+
+  const pickMenuMeal = async (meal, opts = {}) => {
+    if (!meal || !onManualLog) return false;
+    const ok = await onManualLog({
+      name: String(meal.name || "").trim() || "Restaurant meal",
+      cal: Number(meal.cal) || 0,
+      p: Number(meal.p) || 0,
+      c: Number(meal.c) || 0,
+      f: Number(meal.f) || 0,
+      via: "menu",
+      slot: resolveLogSlot(meal.slot || logSlot),
+      logged_date: date,
+      saveCustom: !!opts.saveToMine,
+    });
+    if (ok === false) return false;
+    setSnapMenuOpen(false);
+    setMethod(null);
+    return true;
+  };
+
   const toggleMethod = (key) => {
     setMethod((m) => {
       const next = m === key ? null : key;
-      if (m === "snap" && next !== "snap") clearSnap();
+      if (m === "snap" && next !== "snap") {
+        clearSnap();
+        setSnapMenuOpen(false);
+      }
+      if (next === "snap") setSnapMenuOpen(false);
       if (next) setLogSlot(guessSlotFromTime());
       return next;
     });
+  };
+
+  const openSnapPlate = (source) => {
+    setSnapMenuOpen(false);
+    if (source === "camera") camRef.current?.click();
+    else if (source === "library") libRef.current?.click();
   };
 
   const selectDay = (d) => {
@@ -323,6 +367,7 @@ export function MealLogCard({
       onClick={() => toggleMethod(key)}
       style={{
         flex: 1,
+        minWidth: 0,
         padding: "12px 6px 10px",
         borderRadius: 14,
         cursor: "pointer",
@@ -366,8 +411,7 @@ export function MealLogCard({
 
   const startEdit = (e) => {
     setEditingId(e.id);
-    setRowAdd("");
-    setRowAddError("");
+    setRowRefineError("");
     setDraft({
       name: e.name,
       cal: e.cal,
@@ -377,51 +421,23 @@ export function MealLogCard({
       via: e.via,
       slot: normalizeSlot(e.slot) || (onToday ? guessSlotFromTime() : "lunch"),
       saveCustom: false,
+      handTweaked: false,
     });
-  };
-
-  /**
-   * Add a food to a meal that is already logged. The photo is long gone by
-   * now, so this prices the addition on its own and folds it in — which is
-   * what she'd otherwise do by deleting the entry and logging it again.
-   */
-  const addFoodToRow = async () => {
-    const text = rowAdd.trim();
-    if (!text || !draft || rowAddBusy) return;
-    setRowAddBusy(true);
-    setRowAddError("");
-    const result = await onEstimateAddition?.(text);
-    if (!result || result.error) {
-      setRowAddError(result?.message || "Couldn't price that one — add the macros by hand.");
-      setRowAddBusy(false);
-      return;
-    }
-    const summed = addMacros(
-      { cal: draft.cal, p: draft.p, c: draft.c, f: draft.f },
-      { cal: result.calories, p: result.protein_g, c: result.carbs_g, f: result.fat_g },
-    );
-    const addedName = String(result.meal || text).trim();
-    setDraft((d) => ({
-      ...d,
-      ...summed,
-      name: `${String(d.name || "").trim()} + ${addedName}`.slice(0, 80),
-      via: "adjusted",
-    }));
-    setRowAdd("");
-    setRowAddBusy(false);
   };
 
   const saveEdit = async () => {
     if (!editingId || !draft) return;
     const prevVia = draft.via;
-    const nextVia = prevVia === "photo" || prevVia === "describe" ? "adjusted" : prevVia;
+    const nextVia = draft.handTweaked && AI_VIA.has(prevVia)
+      ? "adjusted"
+      : (prevVia || "manual");
     await onUpdateEntry?.(editingId, {
       name: draft.name,
       cal: Number(draft.cal) || 0,
       p: Number(draft.p) || 0,
       c: Number(draft.c) || 0,
       f: Number(draft.f) || 0,
-      via: nextVia || "manual",
+      via: nextVia,
       slot: resolveLogSlot(draft.slot),
     });
     if (draft.saveCustom) {
@@ -435,6 +451,42 @@ export function MealLogCard({
     }
     setEditingId(null);
     setDraft(null);
+    setRowRefineError("");
+  };
+
+  const refineRowEstimate = async ({ files, description } = {}) => {
+    if (!draft || rowRefineBusy || !onEstimateRefine) return false;
+    setRowRefineBusy(true);
+    setRowRefineError("");
+    const result = await onEstimateRefine({
+      files,
+      description,
+      currentMeal: {
+        name: draft.name,
+        cal: draft.cal,
+        p: draft.p,
+        c: draft.c,
+        f: draft.f,
+      },
+    });
+    if (!result || result.error) {
+      setRowRefineError(result?.message || "Couldn't update that estimate — try again or edit macros by hand.");
+      setRowRefineBusy(false);
+      return false;
+    }
+    const via = (Array.isArray(files) && files.length) ? "photo" : "describe";
+    setDraft((d) => ({
+      ...d,
+      name: String(result.meal || d.name || "Meal").trim().slice(0, 80) || d.name,
+      cal: Math.round(Number(result.calories) || 0),
+      p: Math.round(Number(result.protein_g) || 0),
+      c: Math.round(Number(result.carbs_g) || 0),
+      f: Math.round(Number(result.fat_g) || 0),
+      via,
+      handTweaked: false,
+    }));
+    setRowRefineBusy(false);
+    return true;
   };
 
   const removeWhileEditing = async (id) => {
@@ -447,7 +499,7 @@ export function MealLogCard({
     <input
       inputMode="numeric"
       value={draft[k]}
-      onChange={(ev) => setDraft((d) => ({ ...d, [k]: ev.target.value }))}
+      onChange={(ev) => setDraft((d) => ({ ...d, [k]: ev.target.value, handTweaked: true }))}
       style={{
         width: w,
         padding: "8px 8px",
@@ -513,6 +565,7 @@ export function MealLogCard({
 
   const clearEstimateInputs = () => {
     clearSnap();
+    setSnapMenuOpen(false);
     setDesc("");
     setLastInput(null);
   };
@@ -526,7 +579,7 @@ export function MealLogCard({
   );
 
   const saveEstimateDraft = async () => {
-    if (!estimateDraft) return;
+    if (!estimateDraft || busy) return;
     const payload = {
       name: String(estimateDraft.name || "").trim() || "Meal",
       cal: Number(estimateDraft.cal) || 0,
@@ -541,11 +594,12 @@ export function MealLogCard({
       || payload.p !== (Number(b.p) || 0)
       || payload.c !== (Number(b.c) || 0)
       || payload.f !== (Number(b.f) || 0);
-    await onConfirmEstimate?.(payload, {
+    const ok = await onConfirmEstimate?.(payload, {
       adjusted: changed,
       saveCustom: saveEstimateCustom,
       slot: resolveLogSlot(logSlot),
     });
+    if (ok === false) return;
     setEstimateDraft(null);
     setSaveEstimateCustom(false);
     clearEstimateInputs();
@@ -650,7 +704,7 @@ export function MealLogCard({
           )}
         </div>
         <div style={{ display: "flex", gap: 7 }}>
-          {methodTile("snap", "📸", "Snap", "photo")}
+          {methodTile("snap", "📸", "Snap", "plate or menu")}
           {methodTile("describe", "✏️", "Describe", "type it")}
           {methodTile("recipes", "🍳", "My plan", "exact")}
           {methodTile("manual", "＃", "Macros", "I know them")}
@@ -660,143 +714,199 @@ export function MealLogCard({
           <div style={{ marginTop: 12 }}>
             {/* While a draft is up the review panel owns the screen —
                 photos stay in state behind it for re-estimating. */}
-            {estimateDraft ? null : !snapItems.length ? (
-              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <button type="button" disabled={busy} style={pill(false, busy)} onClick={() => camRef.current?.click()}>
-                  Open camera
-                </button>
-                <button type="button" disabled={busy} style={pill(true, busy)} onClick={() => libRef.current?.click()}>
-                  Photo library
-                </button>
-                <span style={{ fontSize: 11.5, color: T.inkSoft }}>
-                  add more photos if needed (second plate, label…)
-                </span>
-              </div>
-            ) : (
+            {estimateDraft ? null : (
               <>
-                <div style={{
-                  display: "flex",
-                  gap: 8,
-                  overflowX: "auto",
-                  marginBottom: 10,
-                  WebkitOverflowScrolling: "touch",
-                }}
-                >
-                  {snapItems.map((item, idx) => (
-                    <div
-                      key={`${item.previewUrl}-${idx}`}
-                      style={{
-                        position: "relative",
-                        flex: "0 0 auto",
-                        width: snapItems.length === 1 ? "100%" : 112,
-                        maxWidth: snapItems.length === 1 ? "100%" : 112,
-                        borderRadius: 12,
-                        overflow: "hidden",
-                        border: `1px solid ${T.border}`,
-                        background: "#fff",
-                        height: snapItems.length === 1 ? 200 : 112,
-                      }}
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: snapMenuOpen || snapItems.length ? 12 : 0 }}>
+                  <button
+                    type="button"
+                    disabled={busy || snapMenuOpen}
+                    style={pill(false, busy || snapMenuOpen)}
+                    onClick={() => openSnapPlate("camera")}
+                  >
+                    Open camera
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || snapMenuOpen}
+                    style={pill(true, busy || snapMenuOpen)}
+                    onClick={() => openSnapPlate("library")}
+                  >
+                    Photo library
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    style={pill(!snapMenuOpen, busy)}
+                    onClick={() => {
+                      setSnapMenuOpen((open) => {
+                        if (!open) clearSnap(); // opening Menu — drop any staged plate photos
+                        return !open;
+                      });
+                    }}
+                  >
+                    Menu
+                  </button>
+                  {!snapMenuOpen && !snapItems.length && (
+                    <span style={{ fontSize: 11.5, color: T.inkSoft }}>
+                      plate photo, or menu to decide
+                    </span>
+                  )}
+                </div>
+
+                {snapMenuOpen ? (
+                  <div>
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 6 }}>
+                        Slot for this meal
+                      </div>
+                      <SlotChips value={logSlot} onChange={setLogSlot} />
+                    </div>
+                    <EatingOutMenuFlow
+                      slot={logSlot}
+                      macros={macros}
+                      remaining={logRoom.remaining}
+                      dayTotals={logRoom.dayTotals}
+                      bands={logRoom.bands}
+                      onMealIdea={onMealIdea}
+                      onPick={pickMenuMeal}
+                      addLabel="I ordered this"
+                      roomCaption="logged so far"
+                      defaultSaveMine={false}
+                      intro={(
+                        <>
+                          Snap the menu — this is a <b style={{ color: T.ink }}>recommendation</b>, not a log yet.
+                          A short note helps. You’ll get up to 5 ranked picks for today’s ranges — tap the one you ordered.
+                        </>
+                      )}
+                    />
+                  </div>
+                ) : !snapItems.length ? null : (
+                  <>
+                    <div style={{
+                      display: "flex",
+                      gap: 8,
+                      overflowX: "auto",
+                      marginBottom: 10,
+                      WebkitOverflowScrolling: "touch",
+                    }}
                     >
-                      <img
-                        src={item.previewUrl}
-                        alt={idx === 0 ? "Meal photo" : `Extra photo ${idx + 1}`}
-                        style={{
-                          display: "block",
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
+                      {snapItems.map((item, idx) => (
+                        <div
+                          key={`${item.previewUrl}-${idx}`}
+                          style={{
+                            position: "relative",
+                            flex: "0 0 auto",
+                            width: snapItems.length === 1 ? "100%" : 112,
+                            maxWidth: snapItems.length === 1 ? "100%" : 112,
+                            borderRadius: 12,
+                            overflow: "hidden",
+                            border: `1px solid ${T.border}`,
+                            background: "#fff",
+                            height: snapItems.length === 1 ? 200 : 112,
+                          }}
+                        >
+                          <img
+                            src={item.previewUrl}
+                            alt={idx === 0 ? "Meal photo" : `Extra photo ${idx + 1}`}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => removeSnapAt(idx)}
+                            aria-label={`Remove photo ${idx + 1}`}
+                            style={{
+                              position: "absolute",
+                              top: 6,
+                              right: 6,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 999,
+                              border: "none",
+                              background: "rgba(51,39,46,0.72)",
+                              color: "#fff",
+                              fontSize: 16,
+                              lineHeight: 1,
+                              cursor: busy ? "default" : "pointer",
+                              fontFamily: F,
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    {snapItems.length < MAX_SNAP_PHOTOS && (
+                      <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.4 }}>
+                        Add another plate, side, or nutrition label — everything across the photos is totaled. Up to {MAX_SNAP_PHOTOS}.
+                      </div>
+                    )}
+                    <label style={{ display: "block", marginBottom: 10 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>
+                        Optional note <span style={{ fontWeight: 500 }}>(portions, oil, leftovers…)</span>
+                      </div>
+                      <input
+                        value={photoNote}
+                        onChange={(e) => setPhotoNote(e.target.value)}
+                        placeholder="e.g. about 6 oz chicken, cooked in 1 tsp olive oil"
+                        disabled={busy}
+                        maxLength={400}
+                        style={{ ...inputStyle, padding: "11px 13px", fontSize: 15 }}
                       />
+                    </label>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        disabled={busy || !snapItems.length}
+                        style={pill(false, busy || !snapItems.length)}
+                        onClick={() => runSnapEstimate(photoNote)}
+                      >
+                        {busy ? "Reading…" : "Estimate"}
+                      </button>
+                      {snapItems.length < MAX_SNAP_PHOTOS && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            style={pill(true, busy)}
+                            onClick={() => openSnapPlate("camera")}
+                          >
+                            Add photo
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            style={pill(true, busy)}
+                            onClick={() => openSnapPlate("library")}
+                          >
+                            From library
+                          </button>
+                        </>
+                      )}
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => removeSnapAt(idx)}
-                        aria-label={`Remove photo ${idx + 1}`}
+                        onClick={clearSnap}
                         style={{
-                          position: "absolute",
-                          top: 6,
-                          right: 6,
-                          width: 28,
-                          height: 28,
-                          borderRadius: 999,
+                          background: "none",
                           border: "none",
-                          background: "rgba(51,39,46,0.72)",
-                          color: "#fff",
-                          fontSize: 16,
-                          lineHeight: 1,
+                          fontSize: 13,
+                          color: T.inkSoft,
                           cursor: busy ? "default" : "pointer",
+                          textDecoration: "underline",
                           fontFamily: F,
                         }}
                       >
-                        ×
+                        clear
                       </button>
                     </div>
-                  ))}
-                </div>
-                {snapItems.length < MAX_SNAP_PHOTOS && (
-                  <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.4 }}>
-                    Add another plate, side, or nutrition label — everything across the photos is totaled. Up to {MAX_SNAP_PHOTOS}.
-                  </div>
+                  </>
                 )}
-                <label style={{ display: "block", marginBottom: 10 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>
-                    Optional note <span style={{ fontWeight: 500 }}>(portions, oil, leftovers…)</span>
-                  </div>
-                  <input
-                    value={photoNote}
-                    onChange={(e) => setPhotoNote(e.target.value)}
-                    placeholder="e.g. about 6 oz chicken, cooked in 1 tsp olive oil"
-                    disabled={busy}
-                    maxLength={400}
-                    style={{ ...inputStyle, padding: "11px 13px", fontSize: 15 }}
-                  />
-                </label>
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    disabled={busy || !snapItems.length}
-                    style={pill(false, busy || !snapItems.length)}
-                    onClick={() => runSnapEstimate(photoNote)}
-                  >
-                    {busy ? "Reading…" : "Estimate"}
-                  </button>
-                  {snapItems.length < MAX_SNAP_PHOTOS && (
-                    <>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        style={pill(true, busy)}
-                        onClick={() => camRef.current?.click()}
-                      >
-                        Add photo
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        style={pill(true, busy)}
-                        onClick={() => libRef.current?.click()}
-                      >
-                        From library
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={clearSnap}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      fontSize: 13,
-                      color: T.inkSoft,
-                      cursor: busy ? "default" : "pointer",
-                      textDecoration: "underline",
-                      fontFamily: F,
-                    }}
-                  >
-                    clear
-                  </button>
-                </div>
               </>
             )}
             <input
@@ -807,6 +917,7 @@ export function MealLogCard({
               disabled={busy}
               style={{ display: "none" }}
               onChange={(e) => {
+                setSnapMenuOpen(false);
                 stageSnapFiles(e.target.files);
                 e.target.value = "";
               }}
@@ -819,6 +930,7 @@ export function MealLogCard({
               disabled={busy}
               style={{ display: "none" }}
               onChange={(e) => {
+                setSnapMenuOpen(false);
                 stageSnapFiles(e.target.files);
                 e.target.value = "";
               }}
@@ -1112,7 +1224,7 @@ export function MealLogCard({
           </div>
         )}
 
-        {estimate && !estimate.error && estimateDraft && (
+        {estimateDraft && (
           <div style={{ marginTop: 12, background: T.accentSoft, borderRadius: 12, padding: "12px 14px" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.accentDeep, marginBottom: 8 }}>
               Review &amp; edit, then save
@@ -1306,7 +1418,7 @@ export function MealLogCard({
 
         {!hasAnyEntries ? (
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6, padding: "6px 0 10px" }}>
-            Nothing logged this day. Snap, describe, or tap a recipe to add it here.
+            Nothing logged this day. Snap a plate or menu, describe, or tap a recipe.
           </div>
         ) : (
           <>
@@ -1341,7 +1453,7 @@ export function MealLogCard({
                       >
                         <input
                           value={draft.name}
-                          onChange={(ev) => setDraft((d) => ({ ...d, name: ev.target.value }))}
+                          onChange={(ev) => setDraft((d) => ({ ...d, name: ev.target.value, handTweaked: true }))}
                           style={{
                             width: "100%",
                             padding: "8px 10px",
@@ -1391,16 +1503,11 @@ export function MealLogCard({
                             </button>
                           </div>
                         </div>
-                        {onEstimateAddition && (
-                          <AddFoodBox
-                            value={rowAdd}
-                            onChange={setRowAdd}
-                            onSubmit={addFoodToRow}
-                            busy={rowAddBusy}
-                            error={rowAddError}
-                            label="Add food to this meal"
-                            hint="We'll work out its macros and add them on — no need to delete and re-log."
-                            cta="Add"
+                        {onEstimateRefine && (
+                          <LogMealRefine
+                            onRefine={refineRowEstimate}
+                            busy={rowRefineBusy}
+                            error={rowRefineError}
                           />
                         )}
                         <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
@@ -1437,11 +1544,11 @@ export function MealLogCard({
                           <div
                             style={{
                               fontSize: 11.5,
-                              color: e.via === "photo" || e.via === "describe" ? T.accentDeep : T.inkSoft,
+                              color: AI_VIA.has(e.via) ? T.accentDeep : T.inkSoft,
                             }}
                           >
                             {VIA_LABEL[e.via] || "adjusted by you"}
-                            {e.via === "photo" || e.via === "describe" ? " · tap to adjust" : ""}
+                            {AI_VIA.has(e.via) ? " · tap to adjust" : " · tap to edit"}
                           </div>
                         </div>
                         <div style={{ fontSize: 12.5, color: T.inkSoft, whiteSpace: "nowrap" }}>

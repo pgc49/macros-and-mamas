@@ -237,8 +237,8 @@ export default function App() {
               console.warn("countUnreadMessages failed", uErr);
             }
             if (!cancelled) {
-              await refreshMealPlan(user.id);
-              await refreshWeekPlan();
+              try { await refreshMealPlan(user.id); } catch (e) { console.warn("refreshMealPlan failed", e); }
+              try { await refreshWeekPlan(); } catch (e) { console.warn("refreshWeekPlan failed", e); }
             }
           }
         } else {
@@ -253,27 +253,29 @@ export default function App() {
           setWeekPlanWeekStart(wkStartOf());
           setCustomMeals([]);
         }
-        if (isAdmin) {
-          try {
-            const r = await db.loadRoster();
-            if (!cancelled) {
-              // Supports new { clients, stats } shape and legacy array
-              if (Array.isArray(r)) {
-                setRoster(r);
-                setAdminStats(null);
-              } else {
-                setRoster(r.clients || []);
-                setAdminStats(r.stats || null);
-              }
-            }
-          } catch (rosterErr) {
-            console.error("loadRoster failed", rosterErr);
-          }
-        }
       } catch (e) {
         console.error("initial load failed", e);
+      } finally {
+        // Paint the app even if admin roster is slow — roster used to block Loading forever.
+        if (!cancelled) setLoaded(true);
       }
-      if (!cancelled) setLoaded(true);
+      if (!cancelled && isAdmin) {
+        try {
+          const r = await db.loadRoster();
+          if (!cancelled) {
+            // Supports new { clients, stats } shape and legacy array
+            if (Array.isArray(r)) {
+              setRoster(r);
+              setAdminStats(null);
+            } else {
+              setRoster(r.clients || []);
+              setAdminStats(r.stats || null);
+            }
+          }
+        } catch (rosterErr) {
+          console.error("loadRoster failed", rosterErr);
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, [authLoading, user?.id, isAdmin]);
@@ -521,7 +523,7 @@ export default function App() {
       images.push({ image_b64: b64, media_type: "image/jpeg" });
     }
     if (!images.length) return null;
-    const description = String(note || "").trim().slice(0, 400);
+    const description = String(note || "").trim().slice(0, 800);
     return {
       type: "photo",
       // Legacy single-image fields (first photo) + images[] for multi-photo.
@@ -552,14 +554,47 @@ export default function App() {
   };
 
   /**
-   * Price a single food she is adding to a meal that already exists.
-   * Deliberately does not disturb `estimate` — the meal under review (or
-   * already logged) stays on screen while this resolves.
+   * Update a logged meal from optional photo(s) and/or a note.
+   * Silent — does not open the new-meal review panel.
+   * Pass currentMeal so the model treats new photos as extras/context
+   * on what’s already logged, not a brand-new unrelated plate.
    */
-  const estimateAddition = async (text) => {
-    const description = String(text || "").trim();
-    if (!description) return { error: true, message: "Type what you added first." };
-    return postEstimate({ type: "text", description });
+  const estimateMealRefine = async ({ files, description, currentMeal } = {}) => {
+    const list = (Array.isArray(files) ? files : (files ? [files] : []))
+      .filter(Boolean)
+      .slice(0, 3);
+    const note = String(description || "").trim();
+    const cur = currentMeal && typeof currentMeal === "object" ? currentMeal : null;
+    const baseline = cur
+      ? `Already logged: ${String(cur.name || "Meal").trim() || "Meal"} — ${Math.round(Number(cur.cal) || 0)} cal · P ${Math.round(Number(cur.p) || 0)}g · C ${Math.round(Number(cur.c) || 0)}g · F ${Math.round(Number(cur.f) || 0)}g.`
+      : "";
+
+    if (list.length) {
+      const photoNote = [
+        baseline,
+        "New photo is usually additional food, a side, leftovers, or portion context on the meal above — not a totally different plate. Return one updated meal total.",
+        note
+          ? `Her note (additions/portions/hidden extras): """${note.slice(0, 280)}"""`
+          : "No note — add what you can see onto the logged meal; don't invent a new dish.",
+      ].filter(Boolean).join(" ");
+      const payload = await photoPayload(list, photoNote.slice(0, 800));
+      if (!payload) {
+        return {
+          error: true,
+          message: "Couldn't process that image. Try a JPG/PNG, or describe the change instead.",
+        };
+      }
+      return postEstimate(payload);
+    }
+    if (!note) {
+      return { error: true, message: "Add a photo or describe what you added / changed." };
+    }
+    const textBody = [
+      baseline,
+      "Update this logged meal. Her note may add food, remove something, or change the portion — return the NEW full meal total (not only the addition).",
+      `Note: """${note}"""`,
+    ].filter(Boolean).join(" ");
+    return postEstimate({ type: "text", description: textBody.slice(0, 1000) });
   };
 
   /** Batch macros + detected yield for a pasted recipe. */
@@ -716,23 +751,28 @@ export default function App() {
   };
 
   const confirmEstimate = async (overrides = null, opts = {}) => {
-    if (!estimate || estimate.error) return;
-    const name = overrides?.name ?? estimate.meal;
-    const cal = overrides?.cal ?? estimate.calories;
-    const p = overrides?.p ?? estimate.protein_g;
-    const c = overrides?.c ?? estimate.carbs_g;
-    const f = overrides?.f ?? estimate.fat_g;
-    const baseVia = estimateSource === "text" ? "describe" : estimateSource;
-    await appendMealEntry({
+    // Prefer explicit review-panel overrides so Save still works after a
+    // failed re-estimate (estimate may be an error object or briefly null).
+    const o = overrides && typeof overrides === "object" ? overrides : null;
+    if (!o && (!estimate || estimate.error)) return;
+    const name = o?.name ?? estimate?.meal;
+    const cal = o?.cal ?? estimate?.calories;
+    const p = o?.p ?? estimate?.protein_g;
+    const c = o?.c ?? estimate?.carbs_g;
+    const f = o?.f ?? estimate?.fat_g;
+    if (name == null || String(name).trim() === "") return;
+    const baseVia = estimateSource === "text" ? "describe" : (estimateSource || "photo");
+    const ok = await appendMealEntry({
       name,
       cal,
       p,
       c,
       f,
       via: opts.adjusted ? "adjusted" : baseVia,
-      slot: overrides?.slot ?? opts.slot ?? null,
+      slot: o?.slot ?? opts.slot ?? null,
       logged_date: mealLogDate,
     });
+    if (!ok) return false;
     if (opts.saveCustom) {
       try {
         const saved = await db.saveCustomMeal({ name, cal, p, c, f });
@@ -745,6 +785,7 @@ export default function App() {
       }
     }
     setEstimate(null);
+    return true;
   };
 
   const discardEstimate = () => setEstimate(null);
@@ -776,11 +817,12 @@ export default function App() {
   };
 
   const logManualMeal = async (entry) => {
-    await appendMealEntry({
+    const ok = await appendMealEntry({
       ...entry,
       via: entry.via || "manual",
       logged_date: entry.logged_date || mealLogDate,
     });
+    if (!ok) return false;
     if (entry.saveCustom) {
       try {
         const saved = await db.saveCustomMeal({
@@ -798,6 +840,7 @@ export default function App() {
         console.error("saveCustomMeal failed", e);
       }
     }
+    return true;
   };
 
   const saveCustomMeal = async (meal) => {
@@ -941,18 +984,47 @@ export default function App() {
     }
   };
 
-  /** Single-meal AI: describe one meal, or 2–3 options for a slot. */
-  const onMealIdea = async ({ mode, slot, description } = {}) => {
+  /**
+   * Single-meal AI: describe one meal, 2–3 slot options, or eating-out menu picks.
+   * Eating out may pass File[] as `files` (menu photos) plus remaining macros (up to 5 ranked picks).
+   */
+  const onMealIdea = async ({
+    mode,
+    slot,
+    description,
+    files,
+    remaining,
+    dayTotals,
+  } = {}) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return { error: "Sign in again for AI meal ideas." };
+
+      let payload = { mode, slot, description };
+      if (mode === "eating_out") {
+        const photo = await photoPayload(files || [], description || "");
+        if (!photo?.images?.length) {
+          return { error: "Add a clear photo of the menu first." };
+        }
+        payload = {
+          mode,
+          slot,
+          description: String(description || "").trim().slice(0, 400),
+          images: photo.images,
+          image_b64: photo.image_b64,
+          media_type: photo.media_type,
+          ...(remaining ? { remaining } : {}),
+          ...(dayTotals ? { dayTotals } : {}),
+        };
+      }
+
       const resp = await fetch("/api/meal-idea", {
         method: "POST",
         headers: {
           "content-type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ mode, slot, description }),
+        body: JSON.stringify(payload),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
@@ -1179,7 +1251,7 @@ export default function App() {
       customMeals={customMeals}
       onSaveCustomMeal={saveCustomMeal}
       onDeleteCustomMeal={deleteCustomMeal}
-      onEstimateAddition={estimateAddition}
+      onEstimateRefine={estimateMealRefine}
       onEstimateRecipe={estimateRecipe}
       weekPlanDays={weekPlanDays}
       weekPlanSource={weekPlanSource}

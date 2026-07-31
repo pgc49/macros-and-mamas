@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { T, F, FD } from "../theme/tokens";
 import { Card, Btn } from "./ui";
 import { GroceryListBody } from "./GroceryListPanel";
+import { AiMealPreview } from "./AiMealPreview";
+import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
 import { withRecipeDetail, mealToCard } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 import { addDaysIso, fmtRange, wkStartOf } from "../utils/dates";
 import { safeBuildGroceryList } from "../utils/groceryList";
 import { weekPlanHasPoisonShapes } from "../utils/planMealShape";
+import { roomLeftFromTotals } from "../utils/eatingOutImpact";
 import {
   PLAN_DAYS,
   PLAN_SLOTS,
@@ -33,6 +37,15 @@ import {
   hydrateWeekPlanCustomIngredients,
   weekPlanNeedsCustomIngredientHydration,
 } from "../utils/weekPlan";
+
+/** Headroom to day high bands for the selected plan day (exclude meal being swapped). */
+function roomLeftForDay(days, dayKey, macros, replaceId = null) {
+  const dayRow = (Array.isArray(days) ? days : []).find((d) => d.day === dayKey);
+  let meals = Array.isArray(dayRow?.meals) ? dayRow.meals : [];
+  if (replaceId) meals = meals.filter((m) => m.id !== replaceId);
+  const dayTotals = sumDayTotals(meals);
+  return roomLeftFromTotals(dayTotals, targetBands(macros));
+}
 
 /** How far ahead she can plan (blank weeks until she adds meals). */
 const FUTURE_WEEKS = 4;
@@ -195,7 +208,7 @@ export function WeekPlanner({
   };
 
   const chooseAiMeal = async (idea, { saveToMine = false } = {}) => {
-    if (!picker) return;
+    if (!picker) return false;
     const slot =
       picker.slot && picker.slot !== "any"
         ? picker.slot
@@ -216,6 +229,7 @@ export function WeekPlanner({
       setMessage(`Added to ${picker.day}.`);
     }
     placeMeal(meal);
+    return true;
   };
 
   const removeMeal = (mealId) => applyDays(removeMealById(planned, mealId), "manual");
@@ -464,6 +478,8 @@ export function WeekPlanner({
           day={picker.day}
           slot={picker.slot}
           replacing={!!picker.replaceId}
+          replaceId={picker.replaceId || null}
+          dayMeals={(planned.find((d) => d.day === picker.day)?.meals) || []}
           customMeals={customMeals}
           onClose={closePicker}
           onPickRecipe={chooseRecipe}
@@ -935,6 +951,8 @@ function MealPickerModal({
   day,
   slot,
   replacing,
+  replaceId = null,
+  dayMeals = [],
   customMeals = [],
   onClose,
   onPickRecipe,
@@ -943,7 +961,7 @@ function MealPickerModal({
   onMealIdea,
 }) {
   const initialSlot = slot === "any" ? null : slot;
-  const [view, setView] = useState("hub"); // hub | bank | pantry | mine | describe | options
+  const [view, setView] = useState("hub"); // hub | bank | pantry | mine | describe | options | eating_out
   const [slotPick, setSlotPick] = useState(initialSlot);
   const [pantryGroup, setPantryGroup] = useState("all");
   const [description, setDescription] = useState("");
@@ -963,6 +981,10 @@ function MealPickerModal({
     if (!pantryGroup || pantryGroup === "all") return all;
     return all.filter((item) => item.group === pantryGroup);
   }, [pantryGroup]);
+  const eatingRoom = useMemo(
+    () => roomLeftForDay([{ day, meals: dayMeals }], day, macros, replaceId),
+    [day, dayMeals, macros, replaceId],
+  );
   const title =
     effectiveSlot
       ? `${replacing ? "Swap" : "Add"} ${SLOT_LABEL[effectiveSlot] || "meal"} · ${day}`
@@ -1043,7 +1065,9 @@ function MealPickerModal({
     </div>
   );
 
-  return (
+  // Portal to body — Shell's fixed + overflow scroll otherwise traps position:fixed
+  // and the bottom tab bar bleeds over the dialog on iPhone.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -1051,12 +1075,13 @@ function MealPickerModal({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 80,
+        zIndex: 200,
         background: "rgba(40, 24, 32, 0.45)",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-end",
         justifyContent: "center",
-        padding: 16,
+        padding: 0,
+        boxSizing: "border-box",
       }}
       onClick={onClose}
       onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
@@ -1064,13 +1089,16 @@ function MealPickerModal({
       <div
         style={{
           width: "100%",
-          maxWidth: 480,
-          maxHeight: "min(85vh, 720px)",
+          maxWidth: 560,
+          maxHeight: "min(92dvh, 720px)",
           overflow: "auto",
+          WebkitOverflowScrolling: "touch",
           background: "#fff",
-          borderRadius: 18,
-          padding: 16,
-          boxShadow: "0 12px 40px rgba(40, 24, 32, 0.18)",
+          borderRadius: "18px 18px 0 0",
+          /* Extra bottom pad so last pick actions clear Safari chrome / home indicator */
+          padding: "16px 16px calc(88px + env(safe-area-inset-bottom, 0px))",
+          boxShadow: "0 -8px 40px rgba(40, 24, 32, 0.18)",
+          boxSizing: "border-box",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1088,7 +1116,9 @@ function MealPickerModal({
                       ? "Your saved macros meals"
                       : view === "describe"
                         ? "Describe what you want — AI builds one meal"
-                        : "2–3 options from your tastes + Callie’s guide"}
+                        : view === "eating_out"
+                          ? "Menu picks for this plan day (Today → Menu logs it)"
+                          : "2–3 options from your tastes + Callie’s guide"}
             </div>
           </div>
           <ActionPill onClick={onClose}>Close</ActionPill>
@@ -1145,6 +1175,24 @@ function MealPickerModal({
                 setView("options");
                 setErr("");
                 setOptionMeals([]);
+                setSaveMine(true);
+              }}
+            />
+            <HubBtn
+              title="Eating out (plan)"
+              sub={effectiveSlot
+                ? `Menu picks → add to ${SLOT_LABEL[effectiveSlot]} on this plan day. Same-day logging: Today → Menu.`
+                : "Plan a dinner out this week — or use Today → Menu to log what you ordered"}
+              disabled={!macros}
+              onClick={() => {
+                if (!effectiveSlot) {
+                  setErr("Pick breakfast, lunch, dinner, or snack first.");
+                  return;
+                }
+                setView("eating_out");
+                setErr("");
+                setOptionMeals([]);
+                setSaveMine(false);
               }}
             />
             {!macros && (
@@ -1338,8 +1386,39 @@ function MealPickerModal({
             ))}
           </>
         )}
+
+        {view === "eating_out" && (
+          <>
+            {!initialSlot && (
+              <>
+                <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 6 }}>Slot for this meal</div>
+                {slotChooser}
+              </>
+            )}
+            <EatingOutMenuFlow
+              slot={effectiveSlot}
+              macros={macros}
+              remaining={eatingRoom.remaining}
+              dayTotals={eatingRoom.dayTotals}
+              bands={eatingRoom.bands}
+              onMealIdea={onMealIdea}
+              onPick={(m, opts) => onPickAi(m, { saveToMine: !!opts?.saveToMine })}
+              addLabel="Add to plan"
+              roomCaption="planned so far"
+              defaultSaveMine={false}
+              intro={(
+                <>
+                  Plan ahead: snap the menu for <b style={{ color: T.ink }}>this plan day</b>.
+                  Same-night logging lives under Today → Menu.
+                </>
+              )}
+              afterPickHint="Adds to the plan with a rough estimate. To log what you ate, use Today → Menu (or Add to Today, then refine with a plate photo)."
+            />
+          </>
+        )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1364,61 +1443,6 @@ function HubBtn({ title, sub, onClick, disabled }) {
       <div style={{ fontWeight: 700, fontSize: 15, color: T.ink }}>{title}</div>
       <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 3, lineHeight: 1.4 }}>{sub}</div>
     </button>
-  );
-}
-
-function AiMealPreview({ meal, onAdd }) {
-  const [open, setOpen] = useState(false);
-  const ings = Array.isArray(meal.ingredients) ? meal.ingredients : [];
-  const steps = Array.isArray(meal.steps) ? meal.steps : [];
-  return (
-    <div
-      style={{
-        border: `1.5px solid ${T.border}`,
-        borderRadius: 14,
-        padding: 12,
-        marginBottom: 10,
-        background: T.accentSoft,
-      }}
-    >
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, textTransform: "uppercase" }}>
-        {SLOT_LABEL[String(meal.slot || "").toLowerCase()] || "Meal"}
-        {Number(meal.servings) > 1 ? ` · batch · serves ${meal.servings}` : meal.basedOn ? ` · based on ${meal.basedOn}` : " · custom AI"}
-      </div>
-      <div style={{ fontWeight: 700, fontSize: 15, color: T.ink, marginTop: 2 }}>{meal.name}</div>
-      <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
-        {meal.cal} cal · P {meal.p}g · C {meal.c}g · F {meal.f}g
-      </div>
-      {meal.desc && (
-        <div style={{ fontSize: 12.5, color: T.ink, marginTop: 6, lineHeight: 1.4 }}>{meal.desc}</div>
-      )}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-        <Btn small onClick={onAdd}>Add to plan</Btn>
-        {(ings.length > 0 || steps.length > 0) && (
-          <ActionPill onClick={() => setOpen((o) => !o)}>{open ? "Hide recipe" : "Show recipe"}</ActionPill>
-        )}
-      </div>
-      {open && (
-        <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
-          {ings.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Ingredients · one serving</div>
-              <IngList items={ings} />
-            </div>
-          )}
-          {steps.length > 0 && (
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Steps</div>
-              <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.5, color: T.ink }}>
-                {steps.map((s, i) => (
-                  <li key={i} style={{ marginBottom: 4 }}>{s}</li>
-                ))}
-              </ol>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 

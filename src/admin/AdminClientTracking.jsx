@@ -28,6 +28,7 @@ const VIA_LABEL = {
   custom: "from My meals",
   manual: "entered by her",
   adjusted: "adjusted by her",
+  menu: "from menu · rough estimate",
   plan: "from her plan · exact",
 };
 

@@ -4,7 +4,7 @@ import { Btn } from "./ui";
 import {
   APP_BUILD_ID,
   dismissUpdateThisSession,
-  fetchRemoteBuildId,
+  fetchRemoteAppVersion,
   hardReloadApp,
   wasUpdateDismissedThisSession,
 } from "../lib/appUpdate";
@@ -21,32 +21,43 @@ function demoUpdateBannerRequested() {
 /**
  * Shown when the home-screen / open tab is on an older build than production.
  * "Update app" hard-reloads; "Later" hides until the next session (or newer build).
- * Preview/test: add ?demoUpdateBanner=1 to force the banner on.
+ *
+ * Optional release notes come from /api/app-version (set in
+ * functions/_shared/releaseNotes.js for significant UI ships).
+ *
+ * Preview banner + notes on any deploy: ?demoUpdateBanner=1
  */
 export function AppUpdateBanner() {
   const [remoteBuildId, setRemoteBuildId] = useState(null);
+  const [notes, setNotes] = useState(null);
   const [demo, setDemo] = useState(() => demoUpdateBannerRequested());
   const [busy, setBusy] = useState(false);
 
   const check = useCallback(async () => {
     if (demoUpdateBannerRequested()) {
       setDemo(true);
-      setRemoteBuildId("demo");
+      // Pull live notes from this deploy so preview matches production copy.
+      const remote = await fetchRemoteAppVersion();
+      setRemoteBuildId(remote?.buildId || "demo");
+      setNotes(remote?.notes || null);
       return;
     }
     setDemo(false);
     // Skip noisy prompts in local vite (build id is always "dev").
     if (!APP_BUILD_ID || APP_BUILD_ID === "dev") return;
-    const remote = await fetchRemoteBuildId();
-    if (!remote || remote === APP_BUILD_ID) {
+    const remote = await fetchRemoteAppVersion();
+    if (!remote || remote.buildId === APP_BUILD_ID) {
       setRemoteBuildId(null);
+      setNotes(null);
       return;
     }
-    if (wasUpdateDismissedThisSession(remote)) {
+    if (wasUpdateDismissedThisSession(remote.buildId)) {
       setRemoteBuildId(null);
+      setNotes(null);
       return;
     }
-    setRemoteBuildId(remote);
+    setRemoteBuildId(remote.buildId);
+    setNotes(remote.notes || null);
   }, []);
 
   useEffect(() => {
@@ -71,6 +82,7 @@ export function AppUpdateBanner() {
       window.setTimeout(() => {
         setBusy(false);
         setRemoteBuildId(null);
+        setNotes(null);
         setDemo(false);
       }, 600);
       return;
@@ -88,8 +100,11 @@ export function AppUpdateBanner() {
   const onLater = () => {
     if (!demo) dismissUpdateThisSession(remoteBuildId);
     setRemoteBuildId(null);
+    setNotes(null);
     setDemo(false);
   };
+
+  const hasNotes = Array.isArray(notes?.bullets) && notes.bullets.length > 0;
 
   return (
     <div
@@ -107,12 +122,41 @@ export function AppUpdateBanner() {
       </div>
       <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45, fontFamily: F }}>
         A newer version of Macros and Mamas is live. Tap Update so your home-screen app loads the latest.
-        {demo ? (
-          <span style={{ display: "block", marginTop: 6, fontSize: 12.5, color: T.amber }}>
-            Demo preview — Update won’t reload the page.
-          </span>
-        ) : null}
       </p>
+      {hasNotes ? (
+        <div style={{ margin: "0 0 10px" }}>
+          <div style={{
+            fontFamily: F,
+            fontSize: 12,
+            fontWeight: 700,
+            color: T.accentDeep,
+            letterSpacing: 0.3,
+            marginBottom: 6,
+          }}
+          >
+            {notes.headline || "What’s new"}
+          </div>
+          <ul style={{
+            margin: 0,
+            paddingLeft: 18,
+            fontFamily: F,
+            fontSize: 13,
+            color: T.ink,
+            lineHeight: 1.45,
+          }}
+          >
+            {notes.bullets.map((b) => (
+              <li key={b} style={{ marginBottom: 4 }}>{b}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {demo ? (
+        <p style={{ fontSize: 12.5, color: T.amber, margin: "0 0 10px", lineHeight: 1.4, fontFamily: F }}>
+          Demo preview — Update won’t reload the page.
+          {" "}Edit notes in <code style={{ fontSize: 11 }}>functions/_shared/releaseNotes.js</code>.
+        </p>
+      ) : null}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <Btn small onClick={onUpdate} disabled={busy}>
           {busy ? "Updating…" : "Update app"}

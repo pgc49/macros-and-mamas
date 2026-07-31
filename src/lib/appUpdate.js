@@ -1,7 +1,7 @@
 /**
  * Home-screen / PWA update detection.
  * Client bakes a build id at Vite build time; /api/app-version returns the
- * currently deployed id (no-store). Mismatch → show Update banner.
+ * currently deployed id (+ optional release notes). Mismatch → Update banner.
  */
 
 export const APP_BUILD_ID = String(
@@ -28,8 +28,25 @@ export function dismissUpdateThisSession(remoteBuildId) {
   }
 }
 
-/** Fetch deployed build id. Returns null on network/parse failure. */
-export async function fetchRemoteBuildId() {
+/** Normalize release-notes payload from /api/app-version. */
+export function normalizeReleaseNotes(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const headline = String(raw.headline || "").trim();
+  const bullets = Array.isArray(raw.bullets)
+    ? raw.bullets.map((b) => String(b || "").trim()).filter(Boolean).slice(0, 5)
+    : [];
+  if (!headline && !bullets.length) return null;
+  return {
+    headline: headline || "What’s new",
+    bullets,
+  };
+}
+
+/**
+ * Fetch deployed build id + optional release notes.
+ * Returns null on network/parse failure.
+ */
+export async function fetchRemoteAppVersion() {
   try {
     const resp = await fetch(`/api/app-version?t=${Date.now()}`, {
       method: "GET",
@@ -38,12 +55,21 @@ export async function fetchRemoteBuildId() {
     });
     if (!resp.ok) return null;
     const data = await resp.json().catch(() => null);
-    const id = String(data?.buildId || "").trim();
-    if (!id || id === "unknown") return null;
-    return id;
+    const buildId = String(data?.buildId || "").trim();
+    if (!buildId || buildId === "unknown") return null;
+    return {
+      buildId,
+      notes: normalizeReleaseNotes(data?.notes),
+    };
   } catch {
     return null;
   }
+}
+
+/** @deprecated use fetchRemoteAppVersion — kept for any stray imports */
+export async function fetchRemoteBuildId() {
+  const v = await fetchRemoteAppVersion();
+  return v?.buildId || null;
 }
 
 /**
