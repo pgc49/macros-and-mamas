@@ -237,8 +237,8 @@ export default function App() {
               console.warn("countUnreadMessages failed", uErr);
             }
             if (!cancelled) {
-              await refreshMealPlan(user.id);
-              await refreshWeekPlan();
+              try { await refreshMealPlan(user.id); } catch (e) { console.warn("refreshMealPlan failed", e); }
+              try { await refreshWeekPlan(); } catch (e) { console.warn("refreshWeekPlan failed", e); }
             }
           }
         } else {
@@ -253,27 +253,29 @@ export default function App() {
           setWeekPlanWeekStart(wkStartOf());
           setCustomMeals([]);
         }
-        if (isAdmin) {
-          try {
-            const r = await db.loadRoster();
-            if (!cancelled) {
-              // Supports new { clients, stats } shape and legacy array
-              if (Array.isArray(r)) {
-                setRoster(r);
-                setAdminStats(null);
-              } else {
-                setRoster(r.clients || []);
-                setAdminStats(r.stats || null);
-              }
-            }
-          } catch (rosterErr) {
-            console.error("loadRoster failed", rosterErr);
-          }
-        }
       } catch (e) {
         console.error("initial load failed", e);
+      } finally {
+        // Paint the app even if admin roster is slow — roster used to block Loading forever.
+        if (!cancelled) setLoaded(true);
       }
-      if (!cancelled) setLoaded(true);
+      if (!cancelled && isAdmin) {
+        try {
+          const r = await db.loadRoster();
+          if (!cancelled) {
+            // Supports new { clients, stats } shape and legacy array
+            if (Array.isArray(r)) {
+              setRoster(r);
+              setAdminStats(null);
+            } else {
+              setRoster(r.clients || []);
+              setAdminStats(r.stats || null);
+            }
+          }
+        } catch (rosterErr) {
+          console.error("loadRoster failed", rosterErr);
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, [authLoading, user?.id, isAdmin]);
