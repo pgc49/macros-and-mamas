@@ -112,8 +112,21 @@ ${recipesBlock()}
 6. Return ONLY JSON: { "meals": [ ${MEAL_SCHEMA}, ${MEAL_SCHEMA}, ${MEAL_SCHEMA} ] }`;
 }
 
+const EATING_OUT_MEAL_SCHEMA = `{
+  "slot": "breakfast"|"lunch"|"dinner"|"snack",
+  "name": "menu dish name",
+  "rankLabel": "Best fit"|"Strong alternative"|"Protein-forward"|"Lighter pick"|"If you're hungry",
+  "basedOn": null,
+  "desc": "Rough restaurant estimate — …",
+  "cal": 0, "p": 0, "c": 0, "f": 0,
+  "servings": 1,
+  "ingredients": [{ "item": "...", "amount": "..." }],
+  "batch": null,
+  "steps": ["how to order tip", "tip"]
+}`;
+
 /**
- * Restaurant / travel: read menu photo(s) + optional caption, suggest 3 dishes
+ * Restaurant / travel: read menu photo(s) + optional caption, suggest 5 dishes
  * ranked for remaining room in her day bands. Macros are rough restaurant estimates.
  */
 export function buildEatingOutPrompt({
@@ -148,7 +161,7 @@ Day lows (fill toward these): ${bands.calLo} cal · P ${bands.pLo}g · C ${bands
     : `Day lows (fill toward these): ${bands.calLo} cal · P ${bands.pLo}g · C ${bands.cLo}g · F ${bands.fLo}g.`;
   const caption = String(description || "").trim().slice(0, 400);
   const captionBlock = caption
-    ? `## Her note (honor this — e.g. decide between dishes, appetizer only, avoid something)
+    ? `## Her note (PRIMARY filter — honor this first: decide between dishes, appetizer only, avoid something, sharing, etc.)
 """
 ${caption}
 """`
@@ -156,8 +169,14 @@ ${caption}
 (none — pick solid ${slotLabel} options from the menu that fit her room left.)`;
 
   return `You are Callie's postpartum meal assistant helping a mama eat out / travel.
-She attached restaurant MENU photo(s). Read the menu. Propose exactly 3 orderable dishes for ${slotLabel}.
-Rank them best → okay for her remaining macros: what fits today's room, what helps protein toward range, and one lighter fallback when the menu is heavy.
+She attached restaurant MENU photo(s). Read the menu. Propose exactly 5 orderable dishes for ${slotLabel}.
+Return them in rank order best → okay for her remaining macros AND her note.
+Use distinct rankLabels so she can scan quickly:
+1. Best fit — closest to staying in today's room / her ask
+2. Strong alternative — different dish, still solid for range
+3. Protein-forward — best protein when room allows (or closest if tight)
+4. Lighter pick — safer if the menu is rich or she's nearly full
+5. If you're hungry — bigger plate only if it can still be defensible; otherwise another sensible menu option
 
 ${remBlock}
 ${loggedBlock}
@@ -168,18 +187,19 @@ ${captionBlock}
 
 ## Rules
 1. Only suggest items that appear (or clearly match) the menu photo(s). Do not invent off-menu dishes.
-2. Exactly 3 options, meaningfully different (not tiny renames). Prefer higher protein when room allows; include a lighter pick if most dishes are rich.
-3. Honor diet/allergens strictly. Soft-prefer her tastes when the menu allows.
-4. Macros are ROUGH restaurant estimates (say so in desc). Prefer defensible ballparks over fake precision. servings = 1, batch = null.
-5. basedOn = null. name = the menu dish name (short). desc = one line starting with "Rough restaurant estimate — …" plus how to order (grilled, sauce on side, etc.) and a brief fit note (fits room / lighter / protein-forward).
-6. ingredients = key components as ordered (not a full grocery list). steps = 2–4 short "how to order / modify" tips (not home cooking).
-7. If her note asks to choose between specific dishes, prioritize those and explain the macro tradeoff in desc.
-8. If the photos are not a menu / unreadable, still return 3 light generic ${slotLabel} restaurant-style picks and say the menu was hard to read in desc.
-9. Return ONLY JSON: { "meals": [ ${MEAL_SCHEMA}, ${MEAL_SCHEMA}, ${MEAL_SCHEMA} ] }.`;
+2. Exactly 5 options, meaningfully different (not tiny renames). Meals array order = rank 1→5.
+3. If she wrote a note, prioritize that ask over generic range tips (still never violate diet/allergens).
+4. Honor diet/allergens strictly. Soft-prefer her tastes when the menu allows.
+5. Macros are ROUGH restaurant estimates (say so in desc). Prefer defensible ballparks over fake precision. servings = 1, batch = null.
+6. basedOn = null. name = the menu dish name (short). rankLabel = one of the five labels above (unique). desc = one line starting with "Rough restaurant estimate — …" plus how to order (grilled, sauce on side, etc.).
+7. ingredients = key components as ordered (not a full grocery list). steps = 2–4 short "how to order / modify" tips (not home cooking).
+8. If her note asks to choose between specific dishes, put those near the top and explain the macro tradeoff in desc.
+9. If the photos are not a menu / unreadable, still return 5 light generic ${slotLabel} restaurant-style picks and say the menu was hard to read in desc.
+10. Return ONLY JSON: { "meals": [ ${EATING_OUT_MEAL_SCHEMA}, ${EATING_OUT_MEAL_SCHEMA}, ${EATING_OUT_MEAL_SCHEMA}, ${EATING_OUT_MEAL_SCHEMA}, ${EATING_OUT_MEAL_SCHEMA} ] }.`;
 }
 
 export const MEAL_IDEA_JSON_HINT =
   "Return only valid JSON. Macros must match ingredients. Prefer Callie's bank via basedOn when you adapt a known recipe.";
 
 export const EATING_OUT_JSON_HINT =
-  "Return only valid JSON with exactly 3 meals. Restaurant macros are rough estimates. basedOn must be null. No markdown.";
+  "Return only valid JSON with exactly 5 meals in rank order (best first). Each needs rankLabel. Restaurant macros are rough estimates. basedOn must be null. No markdown.";

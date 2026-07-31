@@ -766,7 +766,7 @@ export function MealLogCard({
                       intro={(
                         <>
                           Snap the menu — this is a <b style={{ color: T.ink }}>recommendation</b>, not a log yet.
-                          Get 3 picks ranked for what’s left in today’s ranges, then tap the one you ordered.
+                          A short note helps. You’ll get up to 5 ranked picks for today’s ranges — tap the one you ordered.
                         </>
                       )}
                     />

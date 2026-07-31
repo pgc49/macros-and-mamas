@@ -62,5 +62,38 @@ export function eatingOutDayImpact(meal, remaining, dayTotals, bands) {
     + Math.max(0, -left.c) * 2
     + Math.max(0, -left.f) * 3;
   const proteinBonus = helpsProtein ? Math.min(m.p, Math.max(0, pGapBefore)) * 2 : 0;
-  return { badge, detail, fits, score: overPenalty - proteinBonus };
+  return { badge, detail, fits, score: overPenalty - proteinBonus, helpsProtein };
+}
+
+const FALLBACK_RANK_LABELS = [
+  "Best fit",
+  "Strong alternative",
+  "Protein-forward",
+  "Lighter pick",
+  "If you're hungry",
+];
+
+/**
+ * Sort by day-range fit and attach rank (1–5) + rankLabel for scanning.
+ * Prefers model rankLabel when present and unique; otherwise fallback labels.
+ */
+export function rankEatingOutPicks(meals, remaining, dayTotals, bands) {
+  const list = Array.isArray(meals) ? [...meals] : [];
+  list.sort((a, b) => {
+    const ia = eatingOutDayImpact(a, remaining, dayTotals, bands);
+    const ib = eatingOutDayImpact(b, remaining, dayTotals, bands);
+    return (ia?.score ?? 0) - (ib?.score ?? 0);
+  });
+  const used = new Set();
+  return list.slice(0, 5).map((meal, i) => {
+    const impact = eatingOutDayImpact(meal, remaining, dayTotals, bands);
+    let label = String(meal.rankLabel || "").trim();
+    if (!label || used.has(label.toLowerCase())) {
+      if (i === 2 && impact?.helpsProtein) label = "Protein-forward";
+      else if (i === 3 && impact?.fits) label = "Lighter pick";
+      else label = FALLBACK_RANK_LABELS[i] || `Pick ${i + 1}`;
+    }
+    used.add(label.toLowerCase());
+    return { ...meal, rank: i + 1, rankLabel: label };
+  });
 }

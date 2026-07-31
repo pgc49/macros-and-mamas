@@ -5,7 +5,7 @@
      { mode: "describe", slot, description }
      { mode: "options", slot }  → 2–3 meals for that slot from prefs
      { mode: "eating_out", slot, description?, images[], remaining?, dayTotals? }
-       → 3 restaurant picks from menu photo(s) + caption (ranked for remaining macros)
+       → up to 5 restaurant picks from menu photo(s) + caption (ranked for remaining macros)
    Soft rate limit: 20 / day via estimate_calls type='meal_idea'.
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
    Default model: google/gemini-3.1-flash-lite (OpenRouter).
@@ -134,9 +134,9 @@ export async function onRequestPost({ request, env }) {
         dayTotals,
       });
       jsonHint = EATING_OUT_JSON_HINT;
-      maxTokens = 8000;
+      maxTokens = 10000;
       system =
-        "You are Callie's postpartum meal assistant helping with restaurant menus. Read menu photos carefully. Suggest exactly 3 orderable dishes ranked for remaining macros / day range. Restaurant macros are rough estimates. Honor diet/allergens. JSON only.";
+        "You are Callie's postpartum meal assistant helping with restaurant menus. Read menu photos carefully. Suggest exactly 5 orderable dishes ranked best→okay for remaining macros / her note. Include rankLabel on each. Restaurant macros are rough estimates. Honor diet/allergens. JSON only.";
       userContent = [
         { type: "text", text: `${prompt}\n\n${jsonHint}` },
         ...images.map((img) => ({
@@ -211,7 +211,8 @@ export async function onRequestPost({ request, env }) {
     if (mode === "describe") {
       return json({ ok: true, mode, meal: meals[0] }, 200);
     }
-    return json({ ok: true, mode, meals: meals.slice(0, 3) }, 200);
+    const limit = mode === "eating_out" ? 5 : 3;
+    return json({ ok: true, mode, meals: meals.slice(0, limit) }, 200);
   } catch (e) {
     console.error("meal-idea failed", e);
     return json({ error: "meal ideas failed" }, 500);
@@ -257,6 +258,9 @@ function normalizeMeals(parsed, fallbackSlot, { eatingOut = false } = {}) {
       if (eatingOut && desc && !/rough|estimate|restaurant/i.test(desc)) {
         desc = `Rough restaurant estimate — ${desc}`.slice(0, 280);
       }
+      const rankLabel = eatingOut && m.rankLabel
+        ? String(m.rankLabel).trim().slice(0, 40)
+        : null;
       return sanitizePlanMeal({
         slot: SLOTS.has(String(m.slot || "").toLowerCase())
           ? String(m.slot).toLowerCase()
@@ -272,6 +276,7 @@ function normalizeMeals(parsed, fallbackSlot, { eatingOut = false } = {}) {
         ingredients: m.ingredients,
         batch: eatingOut ? null : m.batch,
         steps: m.steps,
+        ...(rankLabel ? { rankLabel } : {}),
       });
     });
 }

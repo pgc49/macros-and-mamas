@@ -978,7 +978,7 @@ export default function App() {
 
   /**
    * Single-meal AI: describe one meal, 2–3 slot options, or eating-out menu picks.
-   * Eating out may pass File[] as `files` (menu photos) plus remaining macros (3 picks).
+   * Eating out may pass File[] as `files` (menu photos) plus remaining macros (up to 5 ranked picks).
    */
   const onMealIdea = async ({
     mode,

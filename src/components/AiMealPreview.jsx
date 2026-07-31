@@ -47,11 +47,14 @@ export function AiMealPreview({
   eatingOut = false,
   dayImpact = null,
   addLabel = "Add to plan",
+  rank = null,
+  rankLabel = null,
 }) {
   const [open, setOpen] = useState(false);
   const ings = Array.isArray(meal.ingredients) ? meal.ingredients : [];
   const steps = Array.isArray(meal.steps) ? meal.steps : [];
   const impactOk = dayImpact?.fits !== false;
+  const showRank = eatingOut && (rank != null || rankLabel || meal.rankLabel);
   return (
     <div
       style={{
@@ -62,6 +65,20 @@ export function AiMealPreview({
         background: T.accentSoft,
       }}
     >
+      {showRank && (
+        <div style={{
+          fontSize: 12,
+          fontWeight: 800,
+          color: rank === 1 ? "#3E5A46" : T.accentDeep,
+          marginBottom: 4,
+          letterSpacing: 0.2,
+        }}
+        >
+          #{rank || meal.rank || "·"}
+          {" · "}
+          {rankLabel || meal.rankLabel || "Pick"}
+        </div>
+      )}
       <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, textTransform: "uppercase" }}>
         {SLOT_LABEL[String(meal.slot || "").toLowerCase()] || "Meal"}
         {eatingOut

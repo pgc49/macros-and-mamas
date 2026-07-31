@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { T, F } from "../theme/tokens";
 import { Btn } from "./ui";
 import { AiMealPreview } from "./AiMealPreview";
-import { eatingOutDayImpact } from "../utils/eatingOutImpact";
+import { eatingOutDayImpact, rankEatingOutPicks } from "../utils/eatingOutImpact";
 
 export const MAX_MENU_PHOTOS = 3;
 
@@ -98,12 +98,7 @@ export function EatingOutMenuFlow({
         setErr("No dishes came back — try a clearer menu photo or name the dishes in your note.");
         return;
       }
-      const ranked = [...list].sort((a, b) => {
-        const ia = eatingOutDayImpact(a, remaining, dayTotals, bands);
-        const ib = eatingOutDayImpact(b, remaining, dayTotals, bands);
-        return (ia?.score ?? 0) - (ib?.score ?? 0);
-      });
-      setPicks(ranked.slice(0, 3));
+      setPicks(rankEatingOutPicks(list, remaining, dayTotals, bands));
     } catch (e) {
       setErr(e.message || "Couldn't read that menu.");
     } finally {
@@ -118,9 +113,9 @@ export function EatingOutMenuFlow({
       <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.45 }}>
         {intro || (
           <>
-            Snap the menu (up to {MAX_MENU_PHOTOS} photos). Optional note (“can’t decide between the salmon or the salad”
-            / “appetizer only”). You’ll get <b style={{ color: T.ink }}>3 picks</b> ranked for your day range —
-            pick one when you’ve decided. Restaurant numbers are rough.
+            Snap the menu (up to {MAX_MENU_PHOTOS} photos). A note helps a lot (“can’t decide between the salmon or the salad”
+            / “appetizer only” / “sharing”). You’ll get up to <b style={{ color: T.ink }}>5 ranked picks</b> for your day range —
+            best fit first. Restaurant numbers are rough.
           </>
         )}
       </div>
@@ -262,7 +257,7 @@ export function EatingOutMenuFlow({
         disabled={locked || !menuItems.length || !slot || !macros}
         style={{ width: "100%", marginBottom: 10 }}
       >
-        {busy ? "Reading menu…" : picks.length ? "Regenerate 3 picks" : "Get 3 picks"}
+        {busy ? "Reading menu…" : picks.length ? "Regenerate 5 picks" : "Get 5 picks"}
       </Btn>
 
       {showSaveMine && (
@@ -291,6 +286,8 @@ export function EatingOutMenuFlow({
           onAdd={() => onPick?.(m, { saveToMine: saveMine })}
           eatingOut
           addLabel={addLabel}
+          rank={m.rank || i + 1}
+          rankLabel={m.rankLabel}
           dayImpact={eatingOutDayImpact(m, remaining, dayTotals, bands)}
         />
       ))}
