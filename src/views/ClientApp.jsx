@@ -44,6 +44,7 @@ export function ClientApp({
   onSaveCustomMeal,
   onDeleteCustomMeal,
   onEstimateAddition,
+  onEstimateRefine,
   onEstimateRecipe,
   weekPlanDays = [],
   weekPlanSource = "manual",
@@ -241,6 +242,8 @@ export function ClientApp({
             onLogRecipe={logRecipe}
             onSaveCustomMeal={onSaveCustomMeal}
             onEstimateAddition={onEstimateAddition}
+            onEstimateRefine={onEstimateRefine}
+            onMealIdea={onMealIdea}
             todayLog={todayLog}
             onUpdateEntry={updateMealEntry}
             onDeleteEntry={deleteMealEntry}

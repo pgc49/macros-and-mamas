@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "./ui";
 import { LoggableMealRow } from "./LoggableMealRow";
@@ -23,7 +23,11 @@ import {
   resolveLogSlot,
 } from "../utils/mealSlots";
 import { addMacros } from "../utils/recipeMacros";
+import { targetBands } from "../utils/weekPlan";
+import { roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { AddFoodBox } from "./AddFoodBox";
+import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
+import { LogMealRefine } from "./LogMealRefine";
 
 /** She pasted a link — the estimator only reads text, so say so plainly. */
 const URL_RE = /(https?:\/\/|www\.)\S+/i;
@@ -40,7 +44,10 @@ const VIA_LABEL = {
   custom: "from My meals",
   manual: "entered by you",
   adjusted: "adjusted by you",
+  menu: "from menu · rough estimate",
 };
+
+const AI_VIA = new Set(["photo", "describe", "menu"]);
 
 function SlotChips({ value, onChange, compact = false }) {
   return (
@@ -148,6 +155,8 @@ export function MealLogCard({
   onLogRecipe,
   onSaveCustomMeal,
   onEstimateAddition,
+  onEstimateRefine,
+  onMealIdea,
   todayLog,
   onUpdateEntry,
   onDeleteEntry,
@@ -158,7 +167,7 @@ export function MealLogCard({
   onChangeMealWeek,
   earliestWeekStart,
 }) {
-  const [method, setMethod] = useState(null); // snap | describe | recipes | manual
+  const [method, setMethod] = useState(null); // snap | describe | recipes | manual | menu
   const [desc, setDesc] = useState("");
   const [photoNote, setPhotoNote] = useState("");
   const [snapItems, setSnapItems] = useState([]); // { file, previewUrl }[]
@@ -176,6 +185,8 @@ export function MealLogCard({
   const [rowAdd, setRowAdd] = useState("");
   const [rowAddBusy, setRowAddBusy] = useState(false);
   const [rowAddError, setRowAddError] = useState("");
+  const [rowRefineBusy, setRowRefineBusy] = useState(false);
+  const [rowRefineError, setRowRefineError] = useState("");
   const camRef = useRef(null);
   const libRef = useRef(null);
   // Read at estimate-arrival time only — putting lastInput in the effect
@@ -291,6 +302,27 @@ export function MealLogCard({
     { cal: 0, p: 0, c: 0, f: 0 },
   );
 
+  const logRoom = useMemo(() => {
+    const bands = targetBands(macros);
+    return roomLeftFromTotals(totals, bands);
+  }, [macros, totals.cal, totals.p, totals.c, totals.f]);
+
+  const pickMenuMeal = async (meal, opts = {}) => {
+    if (!meal) return;
+    await onManualLog?.({
+      name: meal.name,
+      cal: Number(meal.cal) || 0,
+      p: Number(meal.p) || 0,
+      c: Number(meal.c) || 0,
+      f: Number(meal.f) || 0,
+      via: "menu",
+      slot: resolveLogSlot(meal.slot || logSlot),
+      logged_date: date,
+      saveCustom: !!opts.saveToMine,
+    });
+    setMethod(null);
+  };
+
   const toggleMethod = (key) => {
     setMethod((m) => {
       const next = m === key ? null : key;
@@ -322,7 +354,8 @@ export function MealLogCard({
       type="button"
       onClick={() => toggleMethod(key)}
       style={{
-        flex: 1,
+        flex: "1 1 28%",
+        minWidth: 72,
         padding: "12px 6px 10px",
         borderRadius: 14,
         cursor: "pointer",
@@ -368,6 +401,7 @@ export function MealLogCard({
     setEditingId(e.id);
     setRowAdd("");
     setRowAddError("");
+    setRowRefineError("");
     setDraft({
       name: e.name,
       cal: e.cal,
@@ -377,6 +411,7 @@ export function MealLogCard({
       via: e.via,
       slot: normalizeSlot(e.slot) || (onToday ? guessSlotFromTime() : "lunch"),
       saveCustom: false,
+      handTweaked: false,
     });
   };
 
@@ -414,14 +449,16 @@ export function MealLogCard({
   const saveEdit = async () => {
     if (!editingId || !draft) return;
     const prevVia = draft.via;
-    const nextVia = prevVia === "photo" || prevVia === "describe" ? "adjusted" : prevVia;
+    const nextVia = draft.handTweaked && AI_VIA.has(prevVia)
+      ? "adjusted"
+      : (prevVia || "manual");
     await onUpdateEntry?.(editingId, {
       name: draft.name,
       cal: Number(draft.cal) || 0,
       p: Number(draft.p) || 0,
       c: Number(draft.c) || 0,
       f: Number(draft.f) || 0,
-      via: nextVia || "manual",
+      via: nextVia,
       slot: resolveLogSlot(draft.slot),
     });
     if (draft.saveCustom) {
@@ -435,6 +472,32 @@ export function MealLogCard({
     }
     setEditingId(null);
     setDraft(null);
+    setRowRefineError("");
+  };
+
+  const refineRowEstimate = async ({ files, description } = {}) => {
+    if (!draft || rowRefineBusy || !onEstimateRefine) return false;
+    setRowRefineBusy(true);
+    setRowRefineError("");
+    const result = await onEstimateRefine({ files, description });
+    if (!result || result.error) {
+      setRowRefineError(result?.message || "Couldn't update that estimate — try again or edit macros by hand.");
+      setRowRefineBusy(false);
+      return false;
+    }
+    const via = (Array.isArray(files) && files.length) ? "photo" : "describe";
+    setDraft((d) => ({
+      ...d,
+      name: String(result.meal || d.name || "Meal").trim().slice(0, 80) || d.name,
+      cal: Math.round(Number(result.calories) || 0),
+      p: Math.round(Number(result.protein_g) || 0),
+      c: Math.round(Number(result.carbs_g) || 0),
+      f: Math.round(Number(result.fat_g) || 0),
+      via,
+      handTweaked: false,
+    }));
+    setRowRefineBusy(false);
+    return true;
   };
 
   const removeWhileEditing = async (id) => {
@@ -447,7 +510,7 @@ export function MealLogCard({
     <input
       inputMode="numeric"
       value={draft[k]}
-      onChange={(ev) => setDraft((d) => ({ ...d, [k]: ev.target.value }))}
+      onChange={(ev) => setDraft((d) => ({ ...d, [k]: ev.target.value, handTweaked: true }))}
       style={{
         width: w,
         padding: "8px 8px",
@@ -649,8 +712,9 @@ export function MealLogCard({
             </>
           )}
         </div>
-        <div style={{ display: "flex", gap: 7 }}>
-          {methodTile("snap", "📸", "Snap", "photo")}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+          {methodTile("snap", "📸", "Snap", "plate")}
+          {methodTile("menu", "☰", "Menu", "decide")}
           {methodTile("describe", "✏️", "Describe", "type it")}
           {methodTile("recipes", "🍳", "My plan", "exact")}
           {methodTile("manual", "＃", "Macros", "I know them")}
@@ -822,6 +886,35 @@ export function MealLogCard({
                 stageSnapFiles(e.target.files);
                 e.target.value = "";
               }}
+            />
+          </div>
+        )}
+
+        {method === "menu" && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 6 }}>
+                Slot for this meal
+              </div>
+              <SlotChips value={logSlot} onChange={setLogSlot} />
+            </div>
+            <EatingOutMenuFlow
+              slot={logSlot}
+              macros={macros}
+              remaining={logRoom.remaining}
+              dayTotals={logRoom.dayTotals}
+              bands={logRoom.bands}
+              onMealIdea={onMealIdea}
+              onPick={pickMenuMeal}
+              addLabel="I ordered this"
+              roomCaption="logged so far"
+              defaultSaveMine={false}
+              intro={(
+                <>
+                  Snap the menu — this is a <b style={{ color: T.ink }}>recommendation</b>, not a log yet.
+                  Get 3 picks ranked for what’s left in today’s ranges, then tap the one you ordered.
+                </>
+              )}
             />
           </div>
         )}
@@ -1306,7 +1399,7 @@ export function MealLogCard({
 
         {!hasAnyEntries ? (
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6, padding: "6px 0 10px" }}>
-            Nothing logged this day. Snap, describe, or tap a recipe to add it here.
+            Nothing logged this day. Snap a plate, Menu for eating out, describe, or tap a recipe.
           </div>
         ) : (
           <>
@@ -1341,7 +1434,7 @@ export function MealLogCard({
                       >
                         <input
                           value={draft.name}
-                          onChange={(ev) => setDraft((d) => ({ ...d, name: ev.target.value }))}
+                          onChange={(ev) => setDraft((d) => ({ ...d, name: ev.target.value, handTweaked: true }))}
                           style={{
                             width: "100%",
                             padding: "8px 10px",
@@ -1391,6 +1484,14 @@ export function MealLogCard({
                             </button>
                           </div>
                         </div>
+                        {onEstimateRefine && (
+                          <LogMealRefine
+                            onRefine={refineRowEstimate}
+                            busy={rowRefineBusy}
+                            error={rowRefineError}
+                            disabled={rowAddBusy}
+                          />
+                        )}
                         {onEstimateAddition && (
                           <AddFoodBox
                             value={rowAdd}
@@ -1437,11 +1538,11 @@ export function MealLogCard({
                           <div
                             style={{
                               fontSize: 11.5,
-                              color: e.via === "photo" || e.via === "describe" ? T.accentDeep : T.inkSoft,
+                              color: AI_VIA.has(e.via) ? T.accentDeep : T.inkSoft,
                             }}
                           >
                             {VIA_LABEL[e.via] || "adjusted by you"}
-                            {e.via === "photo" || e.via === "describe" ? " · tap to adjust" : ""}
+                            {AI_VIA.has(e.via) ? " · tap to adjust" : " · tap to edit"}
                           </div>
                         </div>
                         <div style={{ fontSize: 12.5, color: T.inkSoft, whiteSpace: "nowrap" }}>

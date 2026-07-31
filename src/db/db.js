@@ -171,11 +171,18 @@ function emptyAdminStats() {
   };
 }
 
-/** Normalize legacy `source` into `via` (photo | describe | recipe | manual | adjusted). */
+/** Normalize legacy `source` into `via` (photo | describe | recipe | manual | adjusted | menu | custom). */
 export function normalizeVia(row) {
   if (row?.via) return row.via;
   if (row?.source === "text") return "describe";
-  if (row?.source === "photo" || row?.source === "recipe" || row?.source === "manual" || row?.source === "adjusted") {
+  if (
+    row?.source === "photo"
+    || row?.source === "recipe"
+    || row?.source === "manual"
+    || row?.source === "adjusted"
+    || row?.source === "menu"
+    || row?.source === "custom"
+  ) {
     return row.source;
   }
   return "manual";

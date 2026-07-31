@@ -1,0 +1,330 @@
+import { useEffect, useRef, useState } from "react";
+import { T, F } from "../theme/tokens";
+import { Btn } from "./ui";
+import { AiMealPreview } from "./AiMealPreview";
+import { eatingOutDayImpact } from "../utils/eatingOutImpact";
+
+export const MAX_MENU_PHOTOS = 3;
+
+/**
+ * Restaurant menu → 3 range-aware picks.
+ * Used from Today (log) and Meals → Plan (plan day).
+ */
+export function EatingOutMenuFlow({
+  slot,
+  macros,
+  remaining = null,
+  dayTotals = null,
+  bands = null,
+  onMealIdea,
+  onPick,
+  addLabel = "Add to plan",
+  roomCaption = "planned so far",
+  intro = null,
+  showSaveMine = true,
+  defaultSaveMine = false,
+  disabled = false,
+  afterPickHint = "After you order, open this meal in today’s log and add a plate photo to tighten the portion.",
+}) {
+  const [menuItems, setMenuItems] = useState([]);
+  const [menuCaption, setMenuCaption] = useState("");
+  const [picks, setPicks] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [saveMine, setSaveMine] = useState(defaultSaveMine);
+  const camRef = useRef(null);
+  const libRef = useRef(null);
+
+  useEffect(() => () => {
+    menuItems.forEach((item) => {
+      try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- revoke on unmount only
+  }, []);
+
+  const clearMenuPhotos = () => {
+    setMenuItems((prev) => {
+      prev.forEach((item) => {
+        try { URL.revokeObjectURL(item.previewUrl); } catch { /* ignore */ }
+      });
+      return [];
+    });
+  };
+
+  const stageMenuFiles = (fileList) => {
+    const incoming = Array.from(fileList || []).filter((f) => f && f.type?.startsWith("image/"));
+    if (!incoming.length) return;
+    setMenuItems((prev) => {
+      const room = Math.max(0, MAX_MENU_PHOTOS - prev.length);
+      const take = incoming.slice(0, room).map((file) => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+      return [...prev, ...take];
+    });
+  };
+
+  const removeMenuAt = (idx) => {
+    setMenuItems((prev) => {
+      const next = [...prev];
+      const [gone] = next.splice(idx, 1);
+      if (gone?.previewUrl) {
+        try { URL.revokeObjectURL(gone.previewUrl); } catch { /* ignore */ }
+      }
+      return next;
+    });
+  };
+
+  const runPicks = async () => {
+    if (!onMealIdea || !slot || !menuItems.length || busy || disabled) return;
+    setBusy(true);
+    setErr("");
+    setPicks([]);
+    try {
+      const result = await onMealIdea({
+        mode: "eating_out",
+        slot,
+        description: menuCaption.trim(),
+        files: menuItems.map((m) => m.file),
+        remaining,
+        dayTotals,
+      });
+      if (result?.error) {
+        setErr(result.error);
+        return;
+      }
+      const list = Array.isArray(result?.meals) ? result.meals : [];
+      if (!list.length) {
+        setErr("No dishes came back — try a clearer menu photo or name the dishes in your note.");
+        return;
+      }
+      const ranked = [...list].sort((a, b) => {
+        const ia = eatingOutDayImpact(a, remaining, dayTotals, bands);
+        const ib = eatingOutDayImpact(b, remaining, dayTotals, bands);
+        return (ia?.score ?? 0) - (ib?.score ?? 0);
+      });
+      setPicks(ranked.slice(0, 3));
+    } catch (e) {
+      setErr(e.message || "Couldn't read that menu.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const locked = busy || disabled;
+
+  return (
+    <div>
+      <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.45 }}>
+        {intro || (
+          <>
+            Snap the menu (up to {MAX_MENU_PHOTOS} photos). Optional note (“can’t decide between the salmon or the salad”
+            / “appetizer only”). You’ll get <b style={{ color: T.ink }}>3 picks</b> ranked for your day range —
+            pick one when you’ve decided. Restaurant numbers are rough.
+          </>
+        )}
+      </div>
+
+      {remaining && (
+        <div style={{
+          fontSize: 12,
+          color: T.inkSoft,
+          marginBottom: 10,
+          padding: "8px 10px",
+          borderRadius: 10,
+          background: T.sageSoft,
+          lineHeight: 1.4,
+        }}
+        >
+          Room left ~{Math.max(0, Math.round(remaining.cal))} cal
+          {" · "}P {Math.round(remaining.p)}g
+          {" · "}C {Math.round(remaining.c)}g
+          {" · "}F {Math.round(remaining.f)}g
+          {dayTotals ? ` · ${roomCaption} ${Math.round(dayTotals.cal)} cal` : ""}
+          {remaining.cal < 0 || remaining.p < 0
+            ? " — you’re a bit over; we’ll lean lighter."
+            : ""}
+        </div>
+      )}
+
+      {!menuItems.length ? (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+          <Btn small onClick={() => camRef.current?.click()} disabled={locked || !macros}>Open camera</Btn>
+          <Btn small ghost onClick={() => libRef.current?.click()} disabled={locked || !macros}>Photo library</Btn>
+        </div>
+      ) : (
+        <>
+          <div style={{
+            display: "flex",
+            gap: 8,
+            overflowX: "auto",
+            marginBottom: 10,
+            WebkitOverflowScrolling: "touch",
+          }}
+          >
+            {menuItems.map((item, idx) => (
+              <div
+                key={`${item.previewUrl}-${idx}`}
+                style={{
+                  position: "relative",
+                  flex: "0 0 auto",
+                  width: menuItems.length === 1 ? "100%" : 112,
+                  height: menuItems.length === 1 ? 180 : 112,
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  border: `1px solid ${T.border}`,
+                  background: "#fff",
+                }}
+              >
+                <img
+                  src={item.previewUrl}
+                  alt={idx === 0 ? "Menu photo" : `Menu photo ${idx + 1}`}
+                  style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
+                />
+                <button
+                  type="button"
+                  disabled={locked}
+                  onClick={() => removeMenuAt(idx)}
+                  aria-label={`Remove menu photo ${idx + 1}`}
+                  style={{
+                    position: "absolute",
+                    top: 6,
+                    right: 6,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 999,
+                    border: "none",
+                    background: "rgba(51,39,46,0.72)",
+                    color: "#fff",
+                    fontSize: 16,
+                    lineHeight: 1,
+                    cursor: locked ? "default" : "pointer",
+                    fontFamily: F,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          {menuItems.length < MAX_MENU_PHOTOS && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              <Btn small ghost onClick={() => camRef.current?.click()} disabled={locked}>Add photo</Btn>
+              <Btn small ghost onClick={() => libRef.current?.click()} disabled={locked}>From library</Btn>
+              <button
+                type="button"
+                disabled={locked}
+                onClick={clearMenuPhotos}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: 13,
+                  color: T.inkSoft,
+                  cursor: locked ? "default" : "pointer",
+                  textDecoration: "underline",
+                  fontFamily: F,
+                }}
+              >
+                clear
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: T.inkSoft, marginBottom: 10 }}>
+        Optional note
+        <textarea
+          value={menuCaption}
+          onChange={(e) => setMenuCaption(e.target.value.slice(0, 400))}
+          placeholder="e.g. can’t decide between the grilled salmon or the chicken salad — or help pick an appetizer"
+          rows={2}
+          disabled={locked}
+          style={{
+            display: "block",
+            width: "100%",
+            marginTop: 6,
+            padding: "10px 12px",
+            fontSize: 15,
+            fontFamily: F,
+            border: `1.5px solid ${T.border}`,
+            borderRadius: 12,
+            background: "#fff",
+            color: T.ink,
+            boxSizing: "border-box",
+            resize: "vertical",
+          }}
+        />
+      </label>
+
+      <Btn
+        onClick={runPicks}
+        disabled={locked || !menuItems.length || !slot || !macros}
+        style={{ width: "100%", marginBottom: 10 }}
+      >
+        {busy ? "Reading menu…" : picks.length ? "Regenerate 3 picks" : "Get 3 picks"}
+      </Btn>
+
+      {showSaveMine && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.ink, marginBottom: 10 }}>
+          <input
+            type="checkbox"
+            checked={saveMine}
+            onChange={(e) => setSaveMine(e.target.checked)}
+          />
+          Save the one I pick to My meals
+        </label>
+      )}
+
+      {err && <div style={{ fontSize: 12.5, color: T.amber, marginBottom: 8 }}>{err}</div>}
+
+      {!macros && (
+        <div style={{ fontSize: 12.5, color: T.amber, marginBottom: 8, lineHeight: 1.45 }}>
+          Menu picks unlock after Callie approves your macros.
+        </div>
+      )}
+
+      {picks.map((m, i) => (
+        <AiMealPreview
+          key={`${m.name}-${i}`}
+          meal={m}
+          onAdd={() => onPick?.(m, { saveToMine: saveMine })}
+          eatingOut
+          addLabel={addLabel}
+          dayImpact={eatingOutDayImpact(m, remaining, dayTotals, bands)}
+        />
+      ))}
+
+      {picks.length > 0 && afterPickHint && (
+        <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.45, marginTop: 4, marginBottom: 8 }}>
+          {afterPickHint}
+        </div>
+      )}
+
+      <input
+        ref={camRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        disabled={locked}
+        style={{ display: "none" }}
+        onChange={(e) => {
+          stageMenuFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={libRef}
+        type="file"
+        accept="image/*"
+        multiple
+        disabled={locked}
+        style={{ display: "none" }}
+        onChange={(e) => {
+          stageMenuFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
+    </div>
+  );
+}

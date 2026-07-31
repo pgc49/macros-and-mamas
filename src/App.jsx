@@ -562,6 +562,31 @@ export default function App() {
     return postEstimate({ type: "text", description });
   };
 
+  /**
+   * Re-estimate a logged meal from plate photo and/or description.
+   * Silent — does not open the new-meal review panel.
+   */
+  const estimateMealRefine = async ({ files, description } = {}) => {
+    const list = (Array.isArray(files) ? files : (files ? [files] : []))
+      .filter(Boolean)
+      .slice(0, 3);
+    const note = String(description || "").trim();
+    if (list.length) {
+      const payload = await photoPayload(list, note.slice(0, 400));
+      if (!payload) {
+        return {
+          error: true,
+          message: "Couldn't process that image. Try a JPG/PNG, or describe the meal instead.",
+        };
+      }
+      return postEstimate(payload);
+    }
+    if (!note) {
+      return { error: true, message: "Add a photo or describe what changed." };
+    }
+    return postEstimate({ type: "text", description: note.slice(0, 1000) });
+  };
+
   /** Batch macros + detected yield for a pasted recipe. */
   const estimateRecipe = async (text) => {
     const description = String(text || "").trim();
@@ -1209,6 +1234,7 @@ export default function App() {
       onSaveCustomMeal={saveCustomMeal}
       onDeleteCustomMeal={deleteCustomMeal}
       onEstimateAddition={estimateAddition}
+      onEstimateRefine={estimateMealRefine}
       onEstimateRecipe={estimateRecipe}
       weekPlanDays={weekPlanDays}
       weekPlanSource={weekPlanSource}
