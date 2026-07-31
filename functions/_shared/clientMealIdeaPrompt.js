@@ -113,8 +113,8 @@ ${recipesBlock()}
 }
 
 /**
- * Restaurant / travel: read menu photo(s) + optional caption, suggest 2–3 dishes
- * that fit remaining room in her day bands. Macros are rough restaurant estimates.
+ * Restaurant / travel: read menu photo(s) + optional caption, suggest 3 dishes
+ * ranked for remaining room in her day bands. Macros are rough restaurant estimates.
  */
 export function buildEatingOutPrompt({
   profile,
@@ -130,20 +130,22 @@ export function buildEatingOutPrompt({
   const rem = remaining && typeof remaining === "object" ? remaining : null;
   const totals = dayTotals && typeof dayTotals === "object" ? dayTotals : null;
   const remBlock = rem
-    ? `## Room left today (stay in range — prefer options near or under these)
-- Calories left (to day high): ~${Math.round(Number(rem.cal) || 0)}
-- Protein left (to day high): ~${Math.round(Number(rem.p) || 0)} g
-- Carbs left (to day high): ~${Math.round(Number(rem.c) || 0)} g
-- Fat left (to day high): ~${Math.round(Number(rem.f) || 0)} g
-Negative means she is already over that band — then pick the lightest sensible ${slotLabel} that still fits her ask.`
+    ? `## Room left today (to day HIGH — stay at or under these when possible)
+- Calories left: ~${Math.round(Number(rem.cal) || 0)}
+- Protein left: ~${Math.round(Number(rem.p) || 0)} g
+- Carbs left: ~${Math.round(Number(rem.c) || 0)} g
+- Fat left: ~${Math.round(Number(rem.f) || 0)} g
+Negative means she is already over that band — then pick the lightest sensible ${slotLabel} options that still fit her ask.
+Goal: help her choose what stays in range or is net-beneficial (esp. protein toward the day low) vs what blows the day high.`
     : `## Day bands (no day plan yet — keep this ${slotLabel} to ~20–35% of the day)
 - Calories day: ${bands.calLo}–${bands.calHi}
 - Protein day: ${bands.pLo}–${bands.pHi} g
 - Carbs day: ${bands.cLo}–${bands.cHi} g
 - Fat day: ${bands.fLo}–${bands.fHi} g`;
   const loggedBlock = totals
-    ? `Already logged/planned today (approx): ${Math.round(Number(totals.cal) || 0)} cal · P ${Math.round(Number(totals.p) || 0)} · C ${Math.round(Number(totals.c) || 0)} · F ${Math.round(Number(totals.f) || 0)}.`
-    : "";
+    ? `Already logged/planned today (approx): ${Math.round(Number(totals.cal) || 0)} cal · P ${Math.round(Number(totals.p) || 0)} · C ${Math.round(Number(totals.c) || 0)} · F ${Math.round(Number(totals.f) || 0)}.
+Day lows (fill toward these): ${bands.calLo} cal · P ${bands.pLo}g · C ${bands.cLo}g · F ${bands.fLo}g.`
+    : `Day lows (fill toward these): ${bands.calLo} cal · P ${bands.pLo}g · C ${bands.cLo}g · F ${bands.fLo}g.`;
   const caption = String(description || "").trim().slice(0, 400);
   const captionBlock = caption
     ? `## Her note (honor this — e.g. decide between dishes, appetizer only, avoid something)
@@ -154,7 +156,8 @@ ${caption}
 (none — pick solid ${slotLabel} options from the menu that fit her room left.)`;
 
   return `You are Callie's postpartum meal assistant helping a mama eat out / travel.
-She attached restaurant MENU photo(s). Read the menu. Propose 2–3 orderable dishes for ${slotLabel} that fit her remaining macros and her note.
+She attached restaurant MENU photo(s). Read the menu. Propose exactly 3 orderable dishes for ${slotLabel}.
+Rank them best → okay for her remaining macros: what fits today's room, what helps protein toward range, and one lighter fallback when the menu is heavy.
 
 ${remBlock}
 ${loggedBlock}
@@ -165,18 +168,18 @@ ${captionBlock}
 
 ## Rules
 1. Only suggest items that appear (or clearly match) the menu photo(s). Do not invent off-menu dishes.
-2. Exactly 2 or 3 options, meaningfully different. Prefer higher protein when room allows.
+2. Exactly 3 options, meaningfully different (not tiny renames). Prefer higher protein when room allows; include a lighter pick if most dishes are rich.
 3. Honor diet/allergens strictly. Soft-prefer her tastes when the menu allows.
 4. Macros are ROUGH restaurant estimates (say so in desc). Prefer defensible ballparks over fake precision. servings = 1, batch = null.
-5. basedOn = null. name = the menu dish name (short). desc = one line starting with "Rough restaurant estimate — …" plus how to order (grilled, sauce on side, etc.).
+5. basedOn = null. name = the menu dish name (short). desc = one line starting with "Rough restaurant estimate — …" plus how to order (grilled, sauce on side, etc.) and a brief fit note (fits room / lighter / protein-forward).
 6. ingredients = key components as ordered (not a full grocery list). steps = 2–4 short "how to order / modify" tips (not home cooking).
 7. If her note asks to choose between specific dishes, prioritize those and explain the macro tradeoff in desc.
-8. If the photos are not a menu, return the best-effort empty meals array is NOT allowed — still return 2 light generic ${slotLabel} restaurant-style picks only if the menu is unreadable, and say so in desc.
-9. Return ONLY JSON: { "meals": [ ${MEAL_SCHEMA}, ${MEAL_SCHEMA} ] } (2 or 3 meals).`;
+8. If the photos are not a menu / unreadable, still return 3 light generic ${slotLabel} restaurant-style picks and say the menu was hard to read in desc.
+9. Return ONLY JSON: { "meals": [ ${MEAL_SCHEMA}, ${MEAL_SCHEMA}, ${MEAL_SCHEMA} ] }.`;
 }
 
 export const MEAL_IDEA_JSON_HINT =
   "Return only valid JSON. Macros must match ingredients. Prefer Callie's bank via basedOn when you adapt a known recipe.";
 
 export const EATING_OUT_JSON_HINT =
-  "Return only valid JSON with a meals array (2–3). Restaurant macros are rough estimates. basedOn must be null. No markdown.";
+  "Return only valid JSON with exactly 3 meals. Restaurant macros are rough estimates. basedOn must be null. No markdown.";

@@ -5,7 +5,7 @@
      { mode: "describe", slot, description }
      { mode: "options", slot }  → 2–3 meals for that slot from prefs
      { mode: "eating_out", slot, description?, images[], remaining?, dayTotals? }
-       → 2–3 restaurant picks from menu photo(s) + caption
+       → 3 restaurant picks from menu photo(s) + caption (ranked for remaining macros)
    Soft rate limit: 20 / day via estimate_calls type='meal_idea'.
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
    Default model: google/gemini-3.1-flash-lite (OpenRouter).
@@ -134,9 +134,9 @@ export async function onRequestPost({ request, env }) {
         dayTotals,
       });
       jsonHint = EATING_OUT_JSON_HINT;
-      maxTokens = 7000;
+      maxTokens = 8000;
       system =
-        "You are Callie's postpartum meal assistant helping with restaurant menus. Read menu photos carefully. Suggest orderable dishes that fit remaining macros. Restaurant macros are rough estimates. Honor diet/allergens. JSON only.";
+        "You are Callie's postpartum meal assistant helping with restaurant menus. Read menu photos carefully. Suggest exactly 3 orderable dishes ranked for remaining macros / day range. Restaurant macros are rough estimates. Honor diet/allergens. JSON only.";
       userContent = [
         { type: "text", text: `${prompt}\n\n${jsonHint}` },
         ...images.map((img) => ({

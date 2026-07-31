@@ -45,10 +45,11 @@ function roomLeftForDay(days, dayKey, macros, replaceId = null) {
   const dayTotals = sumDayTotals(meals);
   const bands = targetBands(macros);
   if (!bands) {
-    return { dayTotals, remaining: null };
+    return { dayTotals, remaining: null, bands: null };
   }
   return {
     dayTotals,
+    bands,
     remaining: {
       cal: bands.calHi - dayTotals.cal,
       p: bands.pHi - dayTotals.p,
@@ -56,6 +57,56 @@ function roomLeftForDay(days, dayKey, macros, replaceId = null) {
       f: bands.fHi - dayTotals.f,
     },
   };
+}
+
+/**
+ * How an eating-out pick lands on today's plan — fit vs day high + protein fill.
+ * remaining = room to day HIGH before this meal.
+ */
+function eatingOutDayImpact(meal, remaining, dayTotals, bands) {
+  if (!meal || !bands || !remaining) return null;
+  const m = {
+    cal: Number(meal.cal) || 0,
+    p: Number(meal.p) || 0,
+    c: Number(meal.c) || 0,
+    f: Number(meal.f) || 0,
+  };
+  const left = {
+    cal: remaining.cal - m.cal,
+    p: remaining.p - m.p,
+    c: remaining.c - m.c,
+    f: remaining.f - m.f,
+  };
+  const projected = {
+    cal: (dayTotals?.cal || 0) + m.cal,
+    p: (dayTotals?.p || 0) + m.p,
+    c: (dayTotals?.c || 0) + m.c,
+    f: (dayTotals?.f || 0) + m.f,
+  };
+  const overs = [];
+  if (left.cal < -40) overs.push(`~${Math.round(-left.cal)} cal`);
+  if (left.p < -8) overs.push(`~${Math.round(-left.p)}g P`);
+  if (left.c < -15) overs.push(`~${Math.round(-left.c)}g C`);
+  if (left.f < -8) overs.push(`~${Math.round(-left.f)}g F`);
+  const fits = overs.length === 0;
+  const pGapBefore = bands.pLo - (dayTotals?.p || 0);
+  const helpsProtein = pGapBefore > 8 && m.p >= 25 && left.p >= -8;
+  let badge;
+  if (!fits) badge = `Over day high · ${overs[0]}`;
+  else if (helpsProtein) badge = "Fits · helps protein toward range";
+  else if (remaining.cal > 250 && m.cal <= remaining.cal * 0.4) badge = "Fits · lighter on today's room";
+  else badge = "Fits today's room";
+  const detail = fits
+    ? `Leaves ~${Math.max(0, Math.round(left.cal))} cal · P ${Math.round(left.p)}g · C ${Math.round(left.c)}g · F ${Math.round(left.f)}g to your day high`
+    : `Day would hit ~${Math.round(projected.cal)} cal · P ${Math.round(projected.p)}g · C ${Math.round(projected.c)}g · F ${Math.round(projected.f)}g`;
+  // Lower score = better fit for sorting
+  const overPenalty =
+    Math.max(0, -left.cal) * 1.2
+    + Math.max(0, -left.p) * 4
+    + Math.max(0, -left.c) * 2
+    + Math.max(0, -left.f) * 3;
+  const proteinBonus = helpsProtein ? Math.min(m.p, Math.max(0, pGapBefore)) * 2 : 0;
+  return { badge, detail, fits, score: overPenalty - proteinBonus };
 }
 
 /** How far ahead she can plan (blank weeks until she adds meals). */
@@ -1139,7 +1190,12 @@ function MealPickerModal({
         setErr("No dishes came back — try a clearer menu photo or name the dishes in your note.");
         return;
       }
-      setOptionMeals(list.slice(0, 3));
+      const ranked = [...list].sort((a, b) => {
+        const ia = eatingOutDayImpact(a, eatingRoom.remaining, eatingRoom.dayTotals, eatingRoom.bands);
+        const ib = eatingOutDayImpact(b, eatingRoom.remaining, eatingRoom.dayTotals, eatingRoom.bands);
+        return (ia?.score ?? 0) - (ib?.score ?? 0);
+      });
+      setOptionMeals(ranked.slice(0, 3));
     } catch (e) {
       setErr(e.message || "Couldn’t read that menu.");
     } finally {
@@ -1191,7 +1247,8 @@ function MealPickerModal({
           WebkitOverflowScrolling: "touch",
           background: "#fff",
           borderRadius: "18px 18px 0 0",
-          padding: "16px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
+          /* Extra bottom pad so last pick actions clear Safari chrome / home indicator */
+          padding: "16px 16px calc(88px + env(safe-area-inset-bottom, 0px))",
           boxShadow: "0 -8px 40px rgba(40, 24, 32, 0.18)",
           boxSizing: "border-box",
         }}
@@ -1212,7 +1269,7 @@ function MealPickerModal({
                       : view === "describe"
                         ? "Describe what you want — AI builds one meal"
                         : view === "eating_out"
-                          ? "Snap a menu — picks in your remaining macros"
+                          ? "Snap a menu — 3 picks vs your day range"
                           : "2–3 options from your tastes + Callie’s guide"}
             </div>
           </div>
@@ -1276,7 +1333,7 @@ function MealPickerModal({
             <HubBtn
               title="Eating out"
               sub={effectiveSlot
-                ? `Snap a menu · ${SLOT_LABEL[effectiveSlot]} picks in your remaining macros`
+                ? `Snap a menu · 3 ${SLOT_LABEL[effectiveSlot]} picks vs your day range`
                 : "Snap a menu photo + note — AI suggests dishes in range"}
               disabled={!macros}
               onClick={() => {
@@ -1492,7 +1549,8 @@ function MealPickerModal({
             )}
             <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 10, lineHeight: 1.45 }}>
               Snap the menu (up to {MAX_MENU_PHOTOS} photos). Add a note like “can’t decide between the salmon or the salad”
-              or “appetizer only.” Picks aim for your <b style={{ color: T.ink }}>remaining macros</b> today — restaurant numbers are rough.
+              or “appetizer only.” You’ll get <b style={{ color: T.ink }}>3 picks</b> ranked for your day range —
+              each shows how it lands on today’s plan. Restaurant numbers are rough.
             </div>
             {eatingRoom.remaining && (
               <div style={{
@@ -1505,10 +1563,13 @@ function MealPickerModal({
                 lineHeight: 1.4,
               }}
               >
-                Room left ~{Math.max(0, Math.round(eatingRoom.remaining.cal))} cal
+                Room left today ~{Math.max(0, Math.round(eatingRoom.remaining.cal))} cal
                 {" · "}P {Math.round(eatingRoom.remaining.p)}g
                 {" · "}C {Math.round(eatingRoom.remaining.c)}g
                 {" · "}F {Math.round(eatingRoom.remaining.f)}g
+                {eatingRoom.dayTotals
+                  ? ` · planned so far ${Math.round(eatingRoom.dayTotals.cal)} cal`
+                  : ""}
                 {eatingRoom.remaining.cal < 0 || eatingRoom.remaining.p < 0
                   ? " — you’re a bit over; we’ll lean lighter."
                   : ""}
@@ -1630,7 +1691,7 @@ function MealPickerModal({
               disabled={busy || !menuItems.length || !effectiveSlot}
               style={{ width: "100%", marginBottom: 10 }}
             >
-              {busy ? "Reading menu…" : optionMeals.length ? "Regenerate picks" : "Get 2–3 picks"}
+              {busy ? "Reading menu…" : optionMeals.length ? "Regenerate 3 picks" : "Get 3 picks"}
             </Btn>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.ink, marginBottom: 10 }}>
               <input
@@ -1647,8 +1708,17 @@ function MealPickerModal({
                 meal={m}
                 onAdd={() => onPickAi(m, { saveToMine: saveMine })}
                 eatingOut
+                dayImpact={eatingOutDayImpact(
+                  m,
+                  eatingRoom.remaining,
+                  eatingRoom.dayTotals,
+                  eatingRoom.bands,
+                )}
               />
             ))}
+            {optionMeals.length > 0 && (
+              <div style={{ height: 24 }} aria-hidden />
+            )}
 
             <input
               ref={menuCamRef}
@@ -1706,10 +1776,11 @@ function HubBtn({ title, sub, onClick, disabled }) {
   );
 }
 
-function AiMealPreview({ meal, onAdd, eatingOut = false }) {
+function AiMealPreview({ meal, onAdd, eatingOut = false, dayImpact = null }) {
   const [open, setOpen] = useState(false);
   const ings = Array.isArray(meal.ingredients) ? meal.ingredients : [];
   const steps = Array.isArray(meal.steps) ? meal.steps : [];
+  const impactOk = dayImpact?.fits !== false;
   return (
     <div
       style={{
@@ -1734,13 +1805,33 @@ function AiMealPreview({ meal, onAdd, eatingOut = false }) {
       <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
         {meal.cal} cal · P {meal.p}g · C {meal.c}g · F {meal.f}g
       </div>
+      {dayImpact && (
+        <div
+          style={{
+            marginTop: 8,
+            padding: "8px 10px",
+            borderRadius: 10,
+            background: impactOk ? "rgba(255,255,255,0.72)" : T.amberSoft,
+            lineHeight: 1.4,
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 700, color: impactOk ? "#3E5A46" : T.amber }}>
+            {dayImpact.badge}
+          </div>
+          <div style={{ fontSize: 11.5, color: T.ink, marginTop: 2 }}>
+            {dayImpact.detail}
+          </div>
+        </div>
+      )}
       {meal.desc && (
         <div style={{ fontSize: 12.5, color: T.ink, marginTop: 6, lineHeight: 1.4 }}>{meal.desc}</div>
       )}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
         <Btn small onClick={onAdd}>Add to plan</Btn>
         {(ings.length > 0 || steps.length > 0) && (
-          <ActionPill onClick={() => setOpen((o) => !o)}>{open ? "Hide recipe" : "Show recipe"}</ActionPill>
+          <ActionPill onClick={() => setOpen((o) => !o)}>
+            {open ? "Hide tips" : eatingOut ? "Order tips" : "Show recipe"}
+          </ActionPill>
         )}
       </div>
       {open && (
