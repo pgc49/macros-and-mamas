@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { T, F, FD } from "../theme/tokens";
 import { Card, Btn } from "./ui";
 import { GroceryListBody } from "./GroceryListPanel";
@@ -1160,7 +1161,9 @@ function MealPickerModal({
     </div>
   );
 
-  return (
+  // Portal to body — Shell's fixed + overflow scroll otherwise traps position:fixed
+  // and the bottom tab bar bleeds over the dialog on iPhone.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -1168,12 +1171,13 @@ function MealPickerModal({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 80,
+        zIndex: 200,
         background: "rgba(40, 24, 32, 0.45)",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-end",
         justifyContent: "center",
-        padding: 16,
+        padding: 0,
+        boxSizing: "border-box",
       }}
       onClick={onClose}
       onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
@@ -1181,13 +1185,15 @@ function MealPickerModal({
       <div
         style={{
           width: "100%",
-          maxWidth: 480,
-          maxHeight: "min(85vh, 720px)",
+          maxWidth: 560,
+          maxHeight: "min(92dvh, 720px)",
           overflow: "auto",
+          WebkitOverflowScrolling: "touch",
           background: "#fff",
-          borderRadius: 18,
-          padding: 16,
-          boxShadow: "0 12px 40px rgba(40, 24, 32, 0.18)",
+          borderRadius: "18px 18px 0 0",
+          padding: "16px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
+          boxShadow: "0 -8px 40px rgba(40, 24, 32, 0.18)",
+          boxSizing: "border-box",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1671,7 +1677,8 @@ function MealPickerModal({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
