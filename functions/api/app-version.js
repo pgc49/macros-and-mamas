@@ -6,12 +6,14 @@
 import { APP_RELEASE_NOTES } from "../_shared/releaseNotes.js";
 
 function notesPayload() {
+  const id = String(APP_RELEASE_NOTES?.id || "").trim();
   const headline = String(APP_RELEASE_NOTES?.headline || "").trim();
   const bullets = Array.isArray(APP_RELEASE_NOTES?.bullets)
     ? APP_RELEASE_NOTES.bullets.map((b) => String(b || "").trim()).filter(Boolean).slice(0, 5)
     : [];
-  if (!headline && !bullets.length) return null;
+  if (!bullets.length) return null;
   return {
+    id: id || `notes-${bullets.length}`,
     headline: headline || "What’s new",
     bullets,
   };

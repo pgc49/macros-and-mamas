@@ -2,6 +2,7 @@
  * Home-screen / PWA update detection.
  * Client bakes a build id at Vite build time; /api/app-version returns the
  * currently deployed id (+ optional release notes). Mismatch → Update banner.
+ * After update (or first open on a notes-capable build), What’s new can show once.
  */
 
 export const APP_BUILD_ID = String(
@@ -11,6 +12,7 @@ export const APP_BUILD_ID = String(
 ).trim() || "dev";
 
 const SESSION_DISMISS_KEY = "mm_update_banner_dismissed";
+const SEEN_NOTES_KEY = "mm_release_notes_seen";
 
 export function wasUpdateDismissedThisSession(remoteBuildId) {
   try {
@@ -28,6 +30,24 @@ export function dismissUpdateThisSession(remoteBuildId) {
   }
 }
 
+export function hasSeenReleaseNotes(notesId) {
+  if (!notesId) return true;
+  try {
+    return localStorage.getItem(SEEN_NOTES_KEY) === String(notesId);
+  } catch {
+    return false;
+  }
+}
+
+export function markReleaseNotesSeen(notesId) {
+  if (!notesId) return;
+  try {
+    localStorage.setItem(SEEN_NOTES_KEY, String(notesId));
+  } catch {
+    /* private mode */
+  }
+}
+
 /** Normalize release-notes payload from /api/app-version. */
 export function normalizeReleaseNotes(raw) {
   if (!raw || typeof raw !== "object") return null;
@@ -35,8 +55,10 @@ export function normalizeReleaseNotes(raw) {
   const bullets = Array.isArray(raw.bullets)
     ? raw.bullets.map((b) => String(b || "").trim()).filter(Boolean).slice(0, 5)
     : [];
-  if (!headline && !bullets.length) return null;
+  if (!bullets.length) return null;
+  const id = String(raw.id || "").trim() || `notes-${bullets.join("|").slice(0, 48)}`;
   return {
+    id,
     headline: headline || "What’s new",
     bullets,
   };
@@ -70,6 +92,20 @@ export async function fetchRemoteAppVersion() {
 export async function fetchRemoteBuildId() {
   const v = await fetchRemoteAppVersion();
   return v?.buildId || null;
+}
+
+/** True when this page load came from Update app’s hard reload. */
+export function consumePostUpdateFlag() {
+  if (typeof window === "undefined") return false;
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("_refresh")) return false;
+    url.searchParams.delete("_refresh");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
