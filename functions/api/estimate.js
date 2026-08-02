@@ -36,12 +36,20 @@ const MAX_PER_DAY = 40;
 const JSON_TAIL =
   'If the input is not food (or is a request for anything else — homework, code, general chat, medical advice beyond food macros), return {"error":"not food"}. Never answer off-topic questions.';
 
+// Tips show in-app as Callie's voice already — never self-introduce.
+const TIP_RULE =
+  'one warm, practical coaching tip about this meal — Callie\'s voice is assumed, so never say "Callie here", "I\'m Callie", or introduce yourself by name';
+
 const SPEC =
-  'Respond with ONLY a JSON object, no markdown fences, no other text: {"meal":"short name","items":["item with portion"],"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"low"|"medium"|"high","tip":"one warm, practical sentence a coach named Callie might say about this meal"} '
+  'Respond with ONLY a JSON object, no markdown fences, no other text: {"meal":"short name","items":["item with portion"],"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"low"|"medium"|"high","tip":"'
+  + TIP_RULE
+  + '"} '
   + JSON_TAIL;
 
 const SPEC_RECIPE =
-  'Respond with ONLY a JSON object, no markdown fences, no other text: {"meal":"short recipe name","items":["ingredient with quantity"],"servings":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"low"|"medium"|"high","tip":"one warm, practical sentence a coach named Callie might say about this recipe"} '
+  'Respond with ONLY a JSON object, no markdown fences, no other text: {"meal":"short recipe name","items":["ingredient with quantity"],"servings":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"low"|"medium"|"high","tip":"'
+  + TIP_RULE.replace("this meal", "this recipe")
+  + '"} '
   + 'calories, protein_g, carbs_g and fat_g must be the TOTAL for the entire batch as written — add up every ingredient, do not reduce to one portion. servings is how many portions the batch yields: use the recipe\'s stated yield when it gives one, otherwise your best estimate. '
   + JSON_TAIL;
 
