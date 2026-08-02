@@ -70,7 +70,8 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 /* hero photo — arch */
 .hero-photo{position:relative;max-width:470px;margin:0 auto}
 .hero-photo .frame{border-radius:260px 260px var(--r) var(--r);overflow:hidden;box-shadow:0 44px 80px -44px rgba(142,47,83,.5)}
-.hero-photo img{width:100%;height:auto;object-fit:cover}
+.hero-photo .frame{aspect-ratio:4/5}
+.hero-photo img{width:100%;height:100%;object-fit:cover;object-position:center 30%}
 .hero-badge{position:absolute;left:-14px;bottom:34px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px 16px;box-shadow:0 18px 40px -22px rgba(51,39,46,.4);max-width:230px}
 .hero-badge .who{font-weight:700;font-size:14.5px}
 .hero-badge .what{font-size:12.5px;color:var(--ink-soft);line-height:1.45}
@@ -114,8 +115,9 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .letter-grid{display:grid;gap:40px;align-items:center}
 @media(min-width:880px){.letter-grid{grid-template-columns:.85fr 1.15fr;gap:72px}}
 .letter-photo{position:relative;max-width:430px}
-.letter-photo .frame{border-radius:var(--r) var(--r) 220px 220px;overflow:hidden;box-shadow:0 40px 70px -40px rgba(51,39,46,.4)}
-.letter-photo .tape{position:absolute;top:-16px;left:38%;width:110px;height:32px;background:var(--accent-soft);opacity:.85;transform:rotate(-4deg);border-radius:3px}
+.letter-photo .frame{border-radius:var(--r) var(--r) 220px 220px;overflow:hidden;box-shadow:0 40px 70px -40px rgba(51,39,46,.4);aspect-ratio:4/5}
+.letter-photo .frame img{width:100%;height:100%;object-fit:cover;object-position:center 18%}
+.letter-photo .tape{position:absolute;top:-16px;left:38%;width:110px;height:32px;background:var(--accent-soft);opacity:.85;transform:rotate(-4deg);border-radius:3px;z-index:1}
 .creds{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 22px}
 .creds span{font-size:12px;background:var(--sage-soft);color:#3F5D48;font-weight:700;padding:5px 12px;border-radius:99px;letter-spacing:.02em;white-space:nowrap}
 .letter-body p{color:var(--ink-soft);margin-bottom:16px;max-width:56ch}
@@ -260,8 +262,8 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 
 /* ================= FAMILY BANNER ================= */
 .fam-banner{max-width:900px;margin:64px auto 0}
-.fam-banner .frame{border-radius:26px;overflow:hidden;box-shadow:0 36px 70px -44px rgba(51,39,46,.45)}
-.fam-banner img{width:100%;height:auto}
+.fam-banner .frame{border-radius:26px;overflow:hidden;box-shadow:0 36px 70px -44px rgba(51,39,46,.45);aspect-ratio:16/10}
+.fam-banner img{width:100%;height:100%;object-fit:cover;object-position:center 42%}
 .fam-caption{text-align:center;margin-top:16px}
 .fam-caption .script{font-size:clamp(20px,2.6vw,26px)}
 /* ================= PRICING ================= */

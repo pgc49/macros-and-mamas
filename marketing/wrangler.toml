@@ -1,6 +1,4 @@
 # Cloudflare Pages project for the marketing site (separate from the product SPA).
-# Point the Pages project root / build to this marketing/ directory.
 name = "macrosandmamas-marketing"
 compatibility_date = "2026-07-01"
-# @astrojs/cloudflare static builds emit HTML/assets under dist/client
-pages_build_output_dir = "dist/client"
+pages_build_output_dir = "dist"
