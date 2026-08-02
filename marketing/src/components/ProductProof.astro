@@ -1,0 +1,209 @@
+---
+/**
+ * Interim styled phone-frame mocks (real screenshots can replace later).
+ * One job: show the app — not only Callie-the-coach.
+ */
+const frames = [
+  {
+    title: 'Today',
+    caption: 'Live inside your bands. Snap a plate — or the menu.',
+    kind: 'today',
+  },
+  {
+    title: 'Eating out',
+    caption: 'Menu picks ranked to what is left in your day.',
+    kind: 'menu',
+  },
+  {
+    title: 'Plan + groceries',
+    caption: 'A week around your kitchen, list written for you.',
+    kind: 'plan',
+  },
+  {
+    title: 'Messages',
+    caption: 'Callie in-app with push on your home screen.',
+    kind: 'messages',
+  },
+];
+---
+
+<section class="proof" id="app-proof">
+  <div class="wrap">
+    <span class="kicker">The app in your pocket</span>
+    <h2 class="rv">Coaching you can actually use on a Tuesday.</h2>
+    <p class="lede"
+      >Ranges you can live in, AI that makes logging and planning easy, and real
+      coaching in-app (and on WhatsApp).</p
+    >
+    <div class="proof-grid">
+      {
+        frames.map((f) => (
+          <figure class="phone-frame rv">
+            <div class={`phone-screen ${f.kind}`} aria-hidden="true">
+              {f.kind === 'today' && (
+                <>
+                  <div class="ph-kicker">Today</div>
+                  <div class="ph-band" />
+                  <div class="ph-band" />
+                  <div class="ph-pill">📸 Snap · plate or menu</div>
+                </>
+              )}
+              {f.kind === 'menu' && (
+                <>
+                  <div class="ph-kicker">Menu picks</div>
+                  <div class="ph-row">1. Grilled chicken bowl</div>
+                  <div class="ph-row">2. Salmon + rice</div>
+                  <div class="ph-row dim">3. Pasta primavera</div>
+                </>
+              )}
+              {f.kind === 'plan' && (
+                <>
+                  <div class="ph-kicker">This week</div>
+                  <div class="ph-row">Mon · Teriyaki thighs</div>
+                  <div class="ph-row">Tue · Sheet-pan chicken</div>
+                  <div class="ph-check">Grocery list ready</div>
+                </>
+              )}
+              {f.kind === 'messages' && (
+                <>
+                  <div class="ph-kicker">Messages</div>
+                  <div class="ph-bubble">Week blew up. Reset?</div>
+                  <div class="ph-bubble callie">One protein-first meal today. That’s it.</div>
+                </>
+              )}
+            </div>
+            <figcaption>
+              <strong>{f.title}</strong>
+              <span>{f.caption}</span>
+            </figcaption>
+          </figure>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .proof {
+    padding: 76px 0;
+    background: linear-gradient(180deg, var(--bg) 0%, #f3ebe7 100%);
+  }
+  @media (min-width: 880px) {
+    .proof {
+      padding: 110px 0;
+    }
+  }
+  .proof-grid {
+    display: grid;
+    gap: 28px;
+    margin-top: 44px;
+  }
+  @media (min-width: 720px) {
+    .proof-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (min-width: 1100px) {
+    .proof-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+  .phone-frame {
+    margin: 0;
+    text-align: center;
+  }
+  .phone-screen {
+    margin: 0 auto;
+    width: min(100%, 220px);
+    aspect-ratio: 9 / 17;
+    border-radius: 28px;
+    border: 3px solid #2b1f27;
+    background: #fff;
+    box-shadow: 0 28px 50px -34px rgba(51, 39, 46, 0.55);
+    padding: 22px 14px 14px;
+    text-align: left;
+    position: relative;
+  }
+  .phone-screen::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 42%;
+    height: 6px;
+    border-radius: 99px;
+    background: #2b1f27;
+  }
+  .ph-kicker {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  .ph-band {
+    height: 10px;
+    border-radius: 99px;
+    background: var(--accent-soft);
+    border: 2px solid var(--accent);
+    margin-bottom: 10px;
+  }
+  .ph-pill {
+    margin-top: 16px;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+  .ph-row {
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 0;
+    border-bottom: 1px dashed var(--border);
+    color: var(--ink);
+  }
+  .ph-row.dim {
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  .ph-check {
+    margin-top: 14px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--sage);
+    background: var(--sage-soft);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .ph-bubble {
+    font-size: 12.5px;
+    line-height: 1.4;
+    background: var(--accent-soft);
+    border-radius: 14px 14px 4px 14px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+  .ph-bubble.callie {
+    background: var(--sage-soft);
+    border-radius: 14px 14px 14px 4px;
+  }
+  .phone-frame figcaption {
+    margin-top: 14px;
+    display: grid;
+    gap: 4px;
+  }
+  .phone-frame strong {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 400;
+  }
+  .phone-frame span {
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+</style>

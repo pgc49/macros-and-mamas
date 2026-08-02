@@ -3,6 +3,12 @@ import { T, F } from "../theme/tokens";
 import { Btn } from "./ui";
 import { db } from "../db/db";
 import { CONFIG } from "../config";
+import {
+  captureAttributionFromLocation,
+  getStoredAttribution,
+  newBrowserEventId,
+  trackPixel,
+} from "../lib/attribution";
 
 /** Waitlist capture form — used on /waitlist (first name, last name, email, phone). */
 export function CohortWaitlistForm({ source = "waitlist_page" }) {
@@ -61,6 +67,9 @@ export function CohortWaitlistForm({ source = "waitlist_page" }) {
       return;
     }
     setBusy(true);
+    const eventId = newBrowserEventId("lead");
+    captureAttributionFromLocation();
+    const attr = { ...(getStoredAttribution() || {}), event_id: eventId };
     try {
       await db.joinCohortWaitlist({
         firstName: first,
@@ -69,12 +78,34 @@ export function CohortWaitlistForm({ source = "waitlist_page" }) {
         phone: ph,
         cohort: CONFIG.WAITLIST_COHORT,
         source,
+        attribution: attr,
       });
+      trackPixel("Lead", { content_name: "cohort_waitlist", currency: "USD", value: 249 }, eventId);
+      // Server CAPI Lead (best-effort; deduped via shared event_id)
+      try {
+        await fetch("/api/meta-capi", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event_name: "Lead",
+            event_id: eventId,
+            email: em,
+            phone: ph,
+            fbp: attr.fbp || "",
+            fbc: attr.fbc || "",
+            event_source_url: window.location.href,
+            custom_data: { content_name: "cohort_waitlist", currency: "USD", value: 249 },
+          }),
+        });
+      } catch {
+        /* ignore */
+      }
       setDone(true);
     } catch (err) {
       console.error("cohort waitlist failed", err);
       const msg = String(err?.message || "");
       if (/duplicate|unique|already/i.test(msg)) {
+        trackPixel("Lead", { content_name: "cohort_waitlist", currency: "USD", value: 249 }, eventId);
         setDone(true);
       } else {
         setError("Couldn't save that — try again in a moment.");

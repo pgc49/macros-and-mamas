@@ -62,6 +62,13 @@ export const CONFIG = {
   /** ISO cutoff: accounts created before this may still finish paying while closed. */
   ENROLLMENT_CLOSED_AT: "2026-07-26T02:00:00.000Z",
   WAITLIST_COHORT: "cohort_2",
+
+  /**
+   * Meta Pixel (browser). Set VITE_META_PIXEL_ID in Cloudflare Pages.
+   * Pixel script loads only on public routes — never on coaching tabs.
+   * Leave empty until privacy update is live and Pixel ID is ready.
+   */
+  META_PIXEL_ID: envUrl("VITE_META_PIXEL_ID"),
 };
 
 /** True when public checkout / new signups are open. */

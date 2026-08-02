@@ -20,7 +20,7 @@ export const fullPrice = 299;
 export const foundingPrice = 149;
 
 /** Existing checkout / enroll flow in the product app. */
-export const enrollUrl = '/enroll';
+export const enrollUrl = '/join';
 
 export const siteUrl = 'https://www.macrosandmamas.com';
 

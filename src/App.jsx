@@ -34,6 +34,7 @@ import { Shell } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
 import { isStandaloneDisplay, registerMessageServiceWorker, syncAppBadge } from "./lib/push";
+import { ensureMetaPixel } from "./lib/metaPixel";
 import { ageFromDateOfBirth } from "./db/db";
 
 /* Admin is a separate chunk — never loaded on customer marketing/dashboard paths. */
@@ -101,6 +102,11 @@ export default function App() {
     registerMessageServiceWorker();
     return undefined;
   }, [user?.id]);
+
+  // Meta Pixel + UTM capture on public routes only (env-gated).
+  useEffect(() => {
+    ensureMetaPixel(location.pathname);
+  }, [location.pathname]);
 
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState(() => ({ ...EMPTY_PROFILE }));

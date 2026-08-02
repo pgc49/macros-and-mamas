@@ -11,6 +11,11 @@
    ================================================================== */
 
 import { resolveCheckoutOffer } from "../_shared/pricing.js";
+import {
+  clientIpFromRequest,
+  newEventId,
+  sendMetaCapiEvent,
+} from "../_shared/metaCapi.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -40,6 +45,20 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "checkout unavailable" }, 503);
     }
 
+    let clientBody = {};
+    try {
+      clientBody = await request.json();
+    } catch {
+      clientBody = {};
+    }
+
+    const eventId = String(clientBody.event_id || "").trim() || newEventId("ic");
+    const fbp = String(clientBody.fbp || "").trim().slice(0, 128);
+    const fbc = String(clientBody.fbc || "").trim().slice(0, 128);
+    const fbclid = String(clientBody.fbclid || "").trim().slice(0, 200);
+    const clientIp = clientIpFromRequest(request);
+    const clientUa = (request.headers.get("user-agent") || "").slice(0, 480);
+
     const origin = new URL(request.url).origin;
     const body = new URLSearchParams();
     body.set("mode", "payment");
@@ -52,6 +71,12 @@ export async function onRequestPost({ request, env }) {
     body.set("metadata[supabase_user_id]", user.id);
     body.set("metadata[price_tier]", offer.tier);
     body.set("metadata[amount_usd]", String(offer.amount));
+    body.set("metadata[event_id]", eventId);
+    if (fbp) body.set("metadata[fbp]", fbp);
+    if (fbc) body.set("metadata[fbc]", fbc);
+    if (fbclid) body.set("metadata[fbclid]", fbclid);
+    if (clientIp) body.set("metadata[client_ip]", clientIp.slice(0, 64));
+    if (clientUa) body.set("metadata[client_ua]", clientUa);
 
     const resp = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
@@ -68,12 +93,34 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "checkout failed" }, 502);
     }
 
+    // InitiateCheckout CAPI (best-effort)
+    try {
+      await sendMetaCapiEvent(env, {
+        eventName: "InitiateCheckout",
+        eventId,
+        email: user.email,
+        fbp,
+        fbc,
+        eventSourceUrl: `${origin}/join`,
+        clientIp,
+        clientUa,
+        customData: {
+          currency: "USD",
+          value: Number(offer.amount) || 0,
+          content_name: `checkout_${offer.tier}`,
+        },
+      });
+    } catch (metaErr) {
+      console.error("InitiateCheckout CAPI failed", metaErr);
+    }
+
     return json({
       url: data.url,
       id: data.id,
       tier: offer.tier,
       amount: offer.amount,
       label: offer.label,
+      event_id: eventId,
     }, 200);
   } catch (e) {
     console.error("checkout failed", e);

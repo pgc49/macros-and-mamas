@@ -1,6 +1,6 @@
-# Macros and Mamas — marketing site
+# Macros and Mamas — marketing site (Astro)
 
-Static Astro homepage for `macrosandmamas.com`. Separate from the logged-in React SPA.
+Static Astro homepage + `/waitlist` for SEO and ads. Separate from the logged-in React SPA.
 
 ## Commands
 
@@ -8,29 +8,36 @@ Static Astro homepage for `macrosandmamas.com`. Separate from the logged-in Reac
 npm install
 PUBLIC_ENROLLMENT_MODE=waitlist npm run build   # default
 PUBLIC_ENROLLMENT_MODE=open npm run build
-npm run dev
+PUBLIC_NOINDEX=true npm run build               # staging / *.pages.dev
+npm run preview
 ```
 
 ## Enrollment mode
 
-`PUBLIC_ENROLLMENT_MODE` is `waitlist` or `open` (default `waitlist`). Exactly one mode is rendered at build time. There is no client-side preview toggle.
+`PUBLIC_ENROLLMENT_MODE` = `waitlist` | `open` (default `waitlist`). Build-time only.
 
-Dates and prices live in `src/config.ts`.
+Dates/prices: `src/config.ts`.
 
-## Waitlist API
+## Member / PWA safety
 
-`functions/api/waitlist.ts` is a Cloudflare Pages Function:
+- Homepage includes a sync `<head>` guard: standalone display-mode / iOS standalone **or** Supabase auth token in `localStorage` → `/dashboard`.
+- Product SPA manifest `start_url` is `/dashboard` (repo root `public/site.webmanifest`).
+- Push notification clicks already open `/dashboard?tab=messages`.
 
-- Validates email, honeypot (`company`), basic IP rate limit via KV (`WAITLIST` binding)
-- Redirects to `/thanks` on success (works with JS disabled)
-- `// TODO: wire to ESP` seam + optional `WAITLIST_WEBHOOK_URL`
+## Waitlist
 
-## Deploy
+`POST /api/waitlist` → Supabase `cohort_waitlist` (same table as the SPA).  
+Requires `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (or anon) on the Pages project.  
+Optional: Meta CAPI Lead via `META_PIXEL_ID` + `META_CAPI_ACCESS_TOKEN`.
 
-Point a **separate** Cloudflare Pages project at this `marketing/` directory:
+## Staging (zero www impact)
 
-- Build command: `npm run build` (set `PUBLIC_ENROLLMENT_MODE` in Pages env)
-- Output directory: `dist`
-- Functions root: `functions/`
+Deploy this folder as a **separate** Cloudflare Pages project:
 
-Do not attach a custom domain until the cutover plan is ready. The product PWA must keep working.
+- Root directory: `marketing`
+- Build: `npm run build`
+- Output: `dist`
+- Env: `PUBLIC_ENROLLMENT_MODE=waitlist`, `PUBLIC_NOINDEX=true`
+- Do **not** attach `www` until cutover review
+
+See `../docs/META-SETUP.md` for Pixel / CAPI secrets.

@@ -1,5 +1,11 @@
 import { supabase } from "./supabase";
 import { CONFIG } from "../config";
+import {
+  captureAttributionFromLocation,
+  getStoredAttribution,
+  newBrowserEventId,
+  trackPixel,
+} from "./attribution";
 
 async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
@@ -31,15 +37,34 @@ export async function fetchCheckoutQuote() {
 /** Start Stripe Checkout; redirects the browser on success. */
 export async function startCheckout() {
   const headers = await authHeaders();
+  captureAttributionFromLocation();
+  const attr = getStoredAttribution() || {};
+  const eventId = newBrowserEventId("ic");
+  trackPixel(
+    "InitiateCheckout",
+    { currency: "USD", content_name: "enrollment" },
+    eventId,
+  );
   const resp = await fetch(CONFIG.CHECKOUT_ENDPOINT, {
     method: "POST",
     headers,
+    body: JSON.stringify({
+      event_id: eventId,
+      fbp: attr.fbp || "",
+      fbc: attr.fbc || "",
+      fbclid: attr.fbclid || "",
+    }),
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok || !data.url) {
     const err = new Error(data.error || `checkout failed: ${resp.status}`);
     err.status = resp.status;
     throw err;
+  }
+  try {
+    sessionStorage.setItem("mm_purchase_event_id", data.event_id || eventId);
+  } catch {
+    /* ignore */
   }
   window.location.href = data.url;
 }

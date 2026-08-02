@@ -11,6 +11,7 @@ import {
   loadUserContact,
   sendWelcomeEmails,
 } from "../_shared/supabaseEmail.js";
+import { sendMetaCapiEvent } from "../_shared/metaCapi.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -42,6 +43,38 @@ export async function onRequestPost({ request, env }) {
       }
 
       await markPaid(env, userId, session);
+
+      // Purchase CAPI — idempotent event_id = Stripe session.id (dedupe with browser)
+      try {
+        const contact = await loadUserContact(env, userId);
+        const email =
+          contact.email ||
+          session.customer_email ||
+          session.customer_details?.email ||
+          "";
+        const amount =
+          Number(session.metadata?.amount_usd) ||
+          (session.amount_total != null ? Number(session.amount_total) / 100 : 0);
+        const purchaseEventId = String(session.metadata?.event_id || session.id);
+        await sendMetaCapiEvent(env, {
+          eventName: "Purchase",
+          eventId: purchaseEventId,
+          email,
+          fbp: session.metadata?.fbp || "",
+          fbc: session.metadata?.fbc || "",
+          clientIp: session.metadata?.client_ip || "",
+          clientUa: session.metadata?.client_ua || "",
+          eventSourceUrl: "https://www.macrosandmamas.com/welcome",
+          customData: {
+            currency: "USD",
+            value: amount,
+            content_name: `purchase_${session.metadata?.price_tier || "unknown"}`,
+            order_id: String(session.id),
+          },
+        });
+      } catch (metaErr) {
+        console.error("Purchase CAPI failed", metaErr);
+      }
 
       // Email #2 + Callie A — best-effort (don't fail the webhook)
       try {

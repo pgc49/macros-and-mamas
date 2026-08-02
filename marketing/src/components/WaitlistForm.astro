@@ -8,17 +8,20 @@ import {
 
 interface Props {
   id?: string;
-  variant?: 'hero' | 'final';
+  variant?: 'hero' | 'final' | 'page';
   ariaLabel?: string;
+  source?: string;
 }
 
 const {
   id,
   variant = 'hero',
   ariaLabel = 'Join the cohort 2 waitlist',
+  source = 'homepage',
 } = Astro.props;
 
 const isFinal = variant === 'final';
+const isPage = variant === 'page';
 ---
 
 <form
@@ -27,14 +30,29 @@ const isFinal = variant === 'final';
   action="/api/waitlist"
   method="post"
   aria-label={ariaLabel}
+  data-waitlist-form
+  data-source={source}
 >
-  {/* Honeypot: hidden from humans, bots often fill it */}
-  <div aria-hidden="true" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden">
+  {/* Honeypot */}
+  <div
+    aria-hidden="true"
+    style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden"
+  >
     <label>
       Company
       <input type="text" name="company" tabindex="-1" autocomplete="off" />
     </label>
   </div>
+  {/* Attribution — filled by inline script when JS is available */}
+  <input type="hidden" name="utm_source" value="" />
+  <input type="hidden" name="utm_medium" value="" />
+  <input type="hidden" name="utm_campaign" value="" />
+  <input type="hidden" name="utm_content" value="" />
+  <input type="hidden" name="fbclid" value="" />
+  <input type="hidden" name="fbp" value="" />
+  <input type="hidden" name="fbc" value="" />
+  <input type="hidden" name="event_id" value="" />
+
   <div class="fields">
     <input
       type="text"
@@ -44,14 +62,30 @@ const isFinal = variant === 'final';
       required
     />
     <input
+      type="text"
+      name="last_name"
+      placeholder="Last name"
+      autocomplete="family-name"
+      required
+    />
+    <input
       type="email"
       name="email"
       placeholder="Email"
       autocomplete="email"
       required
+      style="grid-column:1/-1"
+    />
+    <input
+      type="tel"
+      name="phone"
+      placeholder="Phone"
+      autocomplete="tel"
+      required
+      style="grid-column:1/-1"
     />
     {
-      isFinal && (
+      (isFinal || isPage) && (
         <select name="season" aria-label="Your season (optional)">
           <option value="" selected>
             Your season (optional, helps Callie)
@@ -67,13 +101,13 @@ const isFinal = variant === 'final';
     <button
       class="btn"
       type="submit"
-      style={isFinal ? 'grid-column:1/-1' : undefined}
+      style="grid-column:1/-1"
     >
       Save my spot · lock ${waitlistPrice}
     </button>
   </div>
   {
-    isFinal ? (
+    isFinal || isPage ? (
       <p class="price-note">
         No charge today · Founding cohort sold out at ${foundingPrice}
       </p>

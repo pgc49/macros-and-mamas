@@ -3,6 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
 import Hero from '../components/Hero.astro';
 import Ticker from '../components/Ticker.astro';
+import ProductProof from '../components/ProductProof.astro';
 import TwoAm from '../components/TwoAm.astro';
 import CallieLetter from '../components/CallieLetter.astro';
 import StatsStrip from '../components/StatsStrip.astro';
@@ -33,10 +34,12 @@ const ogDescription = isWaitlist
   title={title}
   description={description}
   ogDescription={ogDescription}
+  memberGuard
 >
   <Header />
   <Hero />
   <Ticker />
+  <ProductProof />
   <TwoAm />
   <CallieLetter />
   <StatsStrip />
