@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Macros and Mamas — Landing mockup v1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Marcellus&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #FAF5F2;
+      --ink: #33272E;
+      --ink-soft: #6E5D66;
+      --accent: #B4416B;
+      --accent-deep: #8E2F53;
+      --accent-soft: #F6E4EC;
+      --sage: #5F8168;
+      --sage-soft: #E6EFE8;
+      --amber: #A9711F;
+      --amber-soft: #F7ECD9;
+      --border: #ECDEE2;
+      --card: #FFFFFF;
+      --f: "Karla", system-ui, sans-serif;
+      --fd: "Marcellus", Georgia, serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--f);
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.45;
+    }
+    a { color: inherit; }
+    .banner {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--ink);
+      color: #fff;
+      font-size: 12.5px;
+      padding: 10px 14px;
+      text-align: center;
+    }
+    .banner strong { color: #F6C9D8; }
+    .wrap { max-width: 560px; margin: 0 auto; }
+
+    /* —— Hero —— */
+    .hero {
+      position: relative;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      overflow: hidden;
+      background: var(--ink);
+    }
+    .hero-media { position: absolute; inset: 0; }
+    .hero-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 18%;
+      display: block;
+    }
+    .hero-scrim {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        180deg,
+        rgba(51,39,46,0.18) 0%,
+        rgba(51,39,46,0.2) 38%,
+        rgba(51,39,46,0.78) 76%,
+        rgba(51,39,46,0.94) 100%
+      );
+      pointer-events: none;
+    }
+    .hero-copy {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 28px 20px 36px;
+      color: #fff;
+    }
+    .brand {
+      font-family: var(--fd);
+      font-size: clamp(38px, 9.5vw, 50px);
+      line-height: 1.02;
+      letter-spacing: 0.2px;
+      margin: 0 0 6px;
+    }
+    .kicker {
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.8);
+      margin: 0 0 16px;
+    }
+    .headline {
+      font-family: var(--fd);
+      font-size: clamp(26px, 6.5vw, 34px);
+      font-weight: 400;
+      line-height: 1.18;
+      margin: 0 0 12px;
+    }
+    .headline em {
+      font-style: normal;
+      color: #F6C9D8;
+    }
+    .lede {
+      font-size: 15.5px;
+      line-height: 1.5;
+      color: rgba(255,255,255,0.88);
+      margin: 0 0 20px;
+      max-width: 26rem;
+    }
+    .cta {
+      display: block;
+      width: 100%;
+      text-align: center;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 16px;
+      padding: 15px 18px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+    }
+    .cta:active { background: var(--accent-deep); }
+    .cta-note {
+      text-align: center;
+      font-size: 12.5px;
+      color: rgba(255,255,255,0.72);
+      margin: 10px 0 0;
+    }
+    .signin {
+      display: block;
+      width: 100%;
+      margin-top: 14px;
+      background: none;
+      border: none;
+      color: #fff;
+      font: inherit;
+      font-size: 13.5px;
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    /* —— Sections —— */
+    .section {
+      padding: 40px 20px 8px;
+    }
+    .section h2 {
+      font-family: var(--fd);
+      font-weight: 400;
+      font-size: 26px;
+      margin: 0 0 8px;
+      line-height: 1.15;
+    }
+    .section .sub {
+      font-size: 15px;
+      color: var(--ink-soft);
+      margin: 0 0 22px;
+      line-height: 1.5;
+    }
+
+    /* Phone frames */
+    .phones {
+      display: flex;
+      gap: 14px;
+      overflow-x: auto;
+      padding: 4px 20px 28px;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+    .phone-card {
+      flex: 0 0 210px;
+      scroll-snap-align: start;
+    }
+    .phone {
+      width: 210px;
+      border-radius: 28px;
+      border: 2px solid var(--ink);
+      background: #1c1518;
+      padding: 10px 8px 12px;
+      box-shadow: 0 18px 40px rgba(51,39,46,0.18);
+    }
+    .phone-notch {
+      width: 72px;
+      height: 8px;
+      border-radius: 999px;
+      background: #2e2428;
+      margin: 0 auto 8px;
+    }
+    .phone-screen {
+      border-radius: 18px;
+      overflow: hidden;
+      background: var(--bg);
+      min-height: 340px;
+      padding: 12px;
+      position: relative;
+    }
+    .phone-label {
+      margin-top: 12px;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .phone-cap {
+      margin-top: 4px;
+      font-size: 12.5px;
+      color: var(--ink-soft);
+      line-height: 1.4;
+    }
+    .ph-title {
+      font-family: var(--fd);
+      font-size: 17px;
+      margin: 0 0 8px;
+    }
+    .ph-chip {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-deep);
+      margin-bottom: 8px;
+    }
+    .band {
+      height: 8px;
+      border-radius: 999px;
+      background: var(--border);
+      margin-bottom: 6px;
+      overflow: hidden;
+    }
+    .band > i {
+      display: block;
+      height: 100%;
+      background: var(--sage);
+      border-radius: 999px;
+    }
+    .band-lab {
+      font-size: 10px;
+      color: var(--ink-soft);
+      margin-bottom: 10px;
+    }
+    .pill-row { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+    .pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 5px 8px;
+      border-radius: 999px;
+      border: 1.5px solid var(--border);
+      background: #fff;
+    }
+    .pill.on {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent-deep);
+    }
+    .pick {
+      background: var(--accent-soft);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px;
+      margin-bottom: 7px;
+    }
+    .pick .r {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--sage);
+      margin-bottom: 2px;
+    }
+    .pick .n { font-size: 12px; font-weight: 700; }
+    .pick .m { font-size: 10px; color: var(--ink-soft); margin-top: 2px; }
+    .day {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 11.5px;
+    }
+    .day b { font-size: 11px; }
+    .msg {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: 11.5px;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .msg.callie { background: var(--accent-soft); border-color: transparent; }
+    .tabs {
+      position: absolute;
+      left: 8px; right: 8px; bottom: 8px;
+      display: flex;
+      justify-content: space-around;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 6px 4px;
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--ink-soft);
+    }
+    .tabs .on { color: var(--accent-deep); }
+
+    /* Capability list */
+    .caps { display: flex; flex-direction: column; gap: 18px; padding-bottom: 16px; }
+    .cap {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .cap-ico {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--sage-soft);
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+    }
+    .cap h3 {
+      margin: 0 0 4px;
+      font-size: 15.5px;
+      font-weight: 700;
+    }
+    .cap p {
+      margin: 0;
+      font-size: 13.5px;
+      color: var(--ink-soft);
+      line-height: 1.45;
+    }
+
+    /* Steps */
+    .steps { counter-reset: step; padding-bottom: 12px; }
+    .step {
+      counter-increment: step;
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .step::before {
+      content: counter(step);
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+    }
+    .step h3 { margin: 2px 0 4px; font-size: 15px; }
+    .step p { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+
+    /* Meet */
+    .meet {
+      margin: 12px 20px 28px;
+      border-radius: 20px;
+      overflow: hidden;
+      background: var(--accent-soft);
+    }
+    .meet img {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      object-position: center 20%;
+      display: block;
+    }
+    .meet-copy { padding: 18px 18px 22px; }
+    .meet-copy h2 { margin: 0 0 8px; font-family: var(--fd); font-weight: 400; font-size: 24px; }
+    .meet-copy p { margin: 0; font-size: 14.5px; color: var(--ink-soft); line-height: 1.5; }
+
+    /* FAQ */
+    details {
+      border-top: 1px solid var(--border);
+      padding: 14px 0;
+    }
+    details:last-child { border-bottom: 1px solid var(--border); }
+    summary {
+      font-weight: 700;
+      font-size: 14.5px;
+      cursor: pointer;
+      list-style: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    details p {
+      margin: 8px 0 0;
+      font-size: 13.5px;
+      color: var(--ink-soft);
+      line-height: 1.5;
+    }
+
+    /* Final CTA */
+    .final {
+      margin: 28px 20px 48px;
+      padding: 22px 18px;
+      border-radius: 20px;
+      background:
+        radial-gradient(120% 80% at 10% 0%, #F6C9D8 0%, transparent 55%),
+        linear-gradient(160deg, var(--accent-soft), #fff 60%);
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+    .final h2 {
+      font-family: var(--fd);
+      font-weight: 400;
+      font-size: 24px;
+      margin: 0 0 8px;
+    }
+    .final p {
+      margin: 0 0 16px;
+      font-size: 14px;
+      color: var(--ink-soft);
+    }
+    .final .cta { max-width: 320px; margin: 0 auto; }
+    .final .note { margin-top: 10px; font-size: 12.5px; color: var(--ink-soft); }
+
+    .foot {
+      text-align: center;
+      font-size: 12px;
+      color: var(--ink-soft);
+      padding: 0 20px 40px;
+    }
+    .foot a { color: var(--accent-deep); font-weight: 700; }
+
+    .placeholder-tag {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      background: rgba(51,39,46,0.72);
+      color: #fff;
+      padding: 3px 6px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <strong>Mockup v1</strong> — not live. Placeholder phone UIs stand in for real screenshots.
+    Approve direction before we build Astro.
+  </div>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="hero-media">
+      <img src="https://www.macrosandmamas.com/callie-hero.jpg" alt="Callie" />
+      <div class="hero-scrim"></div>
+    </div>
+    <div class="hero-copy">
+      <p class="brand">Macros and Mamas</p>
+      <p class="kicker">Ranges, not rules</p>
+      <h1 class="headline">Lose the weight. Keep the muscle. <em>Eat like a mother.</em></h1>
+      <p class="lede">
+        An 8-week postpartum macro program with Callie in your pocket —
+        AI that makes logging and planning easy, plus real coaching when you need it.
+      </p>
+      <a class="cta" href="#waitlist">Join the waitlist</a>
+      <p class="cta-note">Lock in $249 — $50 off full price ($299)</p>
+      <button type="button" class="signin">Already enrolled? Sign in</button>
+    </div>
+  </header>
+
+  <!-- APP PROOF -->
+  <section class="section wrap">
+    <h2>The app moms actually open</h2>
+    <p class="sub">Not a PDF. A home-screen app for ranges, meals, eating out, and Callie — one tap away.</p>
+  </section>
+  <div class="phones" aria-label="App previews">
+    <article class="phone-card">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <span class="placeholder-tag">Placeholder</span>
+          <div class="ph-chip">Today</div>
+          <p class="ph-title">Saturday</p>
+          <div class="band-lab">Calories</div>
+          <div class="band"><i style="width:62%"></i></div>
+          <div class="band-lab">Protein</div>
+          <div class="band"><i style="width:74%; background: var(--accent)"></i></div>
+          <div class="pill-row" style="margin-top:12px">
+            <span class="pill on">Snap</span>
+            <span class="pill">Describe</span>
+            <span class="pill">My plan</span>
+          </div>
+          <div style="font-size:11px;color:var(--ink-soft);line-height:1.4;margin-top:4px">
+            Open camera · Photo library · <b style="color:var(--accent-deep)">Menu</b>
+          </div>
+          <div class="tabs"><span class="on">Today</span><span>Meals</span><span>Progress</span><span>Msgs</span></div>
+        </div>
+      </div>
+      <p class="phone-label">Today + Snap</p>
+      <p class="phone-cap">Live inside your bands. Log a plate — or the restaurant menu.</p>
+    </article>
+
+    <article class="phone-card">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <span class="placeholder-tag">Placeholder</span>
+          <div class="ph-chip">Eating out</div>
+          <p class="ph-title" style="font-size:15px">Menu picks for dinner</p>
+          <div class="pick">
+            <div class="r">#1 · Best fit</div>
+            <div class="n">Grilled salmon bowl</div>
+            <div class="m">520 cal · P 42 · Fits today’s room</div>
+          </div>
+          <div class="pick">
+            <div class="r">#2 · Protein-forward</div>
+            <div class="n">Chicken fajita plate</div>
+            <div class="m">610 cal · P 48 · Rough estimate</div>
+          </div>
+          <div class="pick">
+            <div class="r">#3 · Lighter pick</div>
+            <div class="n">Greek salad + shrimp</div>
+            <div class="m">390 cal · P 28</div>
+          </div>
+        </div>
+      </div>
+      <p class="phone-label">Snap → Menu</p>
+      <p class="phone-cap">Photograph the menu. Get up to 5 ranked picks for what’s left in your day.</p>
+    </article>
+
+    <article class="phone-card">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <span class="placeholder-tag">Placeholder</span>
+          <div class="ph-chip">Meals</div>
+          <p class="ph-title">This week</p>
+          <div class="day"><span>Mon · Lunch</span><b>Turkey bowl</b></div>
+          <div class="day"><span>Tue · Dinner</span><b>Callie teriyaki</b></div>
+          <div class="day"><span>Wed · Lunch</span><b>Greek yogurt plate</b></div>
+          <div class="day"><span>Thu · Dinner</span><b>Salmon + rice</b></div>
+          <div style="margin-top:14px;padding:10px;border-radius:12px;background:var(--sage-soft);font-size:11.5px;font-weight:700;color:var(--sage)">
+            Grocery list · 18 items ready
+          </div>
+          <div class="tabs"><span>Today</span><span class="on">Meals</span><span>Progress</span><span>Msgs</span></div>
+        </div>
+      </div>
+      <p class="phone-label">Plan + groceries</p>
+      <p class="phone-cap">Suggest a week that hits your ranges — then shop from one list.</p>
+    </article>
+
+    <article class="phone-card">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <span class="placeholder-tag">Placeholder</span>
+          <div class="ph-chip">Messages</div>
+          <p class="ph-title" style="font-size:15px">Callie</p>
+          <div class="msg">Quick plate check — does this look like enough protein for lunch?</div>
+          <div class="msg callie">Looks solid. If you’re still hungry at 3, Greek yogurt + berries keeps you in range.</div>
+          <div style="margin-top:16px;padding:10px;border-radius:12px;background:var(--amber-soft);font-size:11px;color:var(--amber);font-weight:700;line-height:1.35">
+            Push on · badge on your home-screen icon
+          </div>
+          <div class="tabs"><span>Today</span><span>Meals</span><span>Progress</span><span class="on">Msgs</span></div>
+        </div>
+      </div>
+      <p class="phone-label">Callie in-app</p>
+      <p class="phone-cap">1:1 messages + push — and the WhatsApp group Mon–Fri.</p>
+    </article>
+  </div>
+
+  <!-- CAPABILITIES -->
+  <section class="section wrap">
+    <h2>What’s inside</h2>
+    <p class="sub">Everything that makes eight weeks feel doable when you’re already holding a baby.</p>
+    <div class="caps">
+      <div class="cap">
+        <div class="cap-ico">◎</div>
+        <div>
+          <h3>Ranges Callie approves herself</h3>
+          <p>Not a chatbot diet. Your intake → human-reviewed macros you can live in.</p>
+        </div>
+      </div>
+      <div class="cap">
+        <div class="cap-ico">⌁</div>
+        <div>
+          <h3>Snap a plate — or the menu</h3>
+          <p>AI estimates from photos, text, or restaurant menus ranked to what’s left in your day. Refine anytime.</p>
+        </div>
+      </div>
+      <div class="cap">
+        <div class="cap-ico">☰</div>
+        <div>
+          <h3>Plan the week + grocery list</h3>
+          <p>Suggest my week from foods you love, then check off groceries without a second app.</p>
+        </div>
+      </div>
+      <div class="cap">
+        <div class="cap-ico">💧</div>
+        <div>
+          <h3>Water, habits, weigh-ins</h3>
+          <p>Track the boring stuff that compounds — charts and a gentle 1.5 lb/week guardrail.</p>
+        </div>
+      </div>
+      <div class="cap">
+        <div class="cap-ico">💬</div>
+        <div>
+          <h3>Coaching where you already are</h3>
+          <p>In-app Messages with push, WhatsApp with Callie Mon–Fri, and a Monday voice note to set the week.</p>
+        </div>
+      </div>
+      <div class="cap">
+        <div class="cap-ico">⌂</div>
+        <div>
+          <h3>Lives on your home screen</h3>
+          <p>Add to Home Screen — opens like an app. No App Store. Push works when it’s pinned.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW -->
+  <section class="section wrap">
+    <h2>How it works</h2>
+    <p class="sub">Simple on purpose. Callie still does the thinking on your macros.</p>
+    <div class="steps">
+      <div class="step">
+        <div>
+          <h3>Join the waitlist</h3>
+          <p>Lock the early rate while cohort two fills.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>Create your account &amp; pay</h3>
+          <p>When doors open, you’ll get the link — waitlist moms keep $249.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>Short intake</h3>
+          <p>Feeding, goals, foods you love, what you won’t eat.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>Callie unlocks your app</h3>
+          <p>Your ranges, plan tools, logging, and coaching — ready on your phone.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MEET -->
+  <div class="meet wrap">
+    <img src="https://www.macrosandmamas.com/callie-about.jpg" alt="Callie" />
+    <div class="meet-copy">
+      <h2>Meet Callie</h2>
+      <p>
+        Holistic nutritionist, blood chemistry nerd, and a mama who refuses the 1,200-calorie script.
+        She builds your ranges herself — then shows up in the group and in your Messages when real life gets messy.
+      </p>
+    </div>
+  </div>
+
+  <!-- FAQ -->
+  <section class="section wrap" id="faq">
+    <h2>Questions moms ask</h2>
+    <p class="sub">Straight answers. No funnel fluff.</p>
+    <details open>
+      <summary>Who is this for?</summary>
+      <p>Postpartum moms ready for fat loss without tanking supply or living on chicken breast. Best fit around 3+ months postpartum and breastfeeding-friendly.</p>
+    </details>
+    <details>
+      <summary>What’s the price?</summary>
+      <p>Waitlist early rate is $249 for cohort two. Full price is $299. Founding spots are closed.</p>
+    </details>
+    <details>
+      <summary>Is it just WhatsApp?</summary>
+      <p>No. You get the full home-screen app — logging, menu picks, week planning, groceries, progress — plus WhatsApp and in-app Messages with Callie.</p>
+    </details>
+    <details>
+      <summary>Do I need a gym?</summary>
+      <p>No. Walks, babywearing, and real life count. Strength helps; it’s not required to start.</p>
+    </details>
+  </section>
+
+  <!-- FINAL CTA -->
+  <div class="final wrap" id="waitlist">
+    <h2>Save your spot for cohort two</h2>
+    <p>Join the waitlist to lock $249 before doors open.</p>
+    <a class="cta" href="#">Join the waitlist</a>
+    <p class="note">Mockup only — button does not submit.</p>
+  </div>
+
+  <p class="foot">
+    Mockup for design approval · Macros and Mamas<br />
+    <a href="https://www.macrosandmamas.com/">Current live site</a>
+  </p>
+</body>
+</html>
