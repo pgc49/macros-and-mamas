@@ -5,25 +5,23 @@
    what’s new on the newly deployed build.
 
    Policy:
-   - Banner still appears whenever the build id changes (PWA reload).
-   - Set id + headline + bullets only for significant UI / UX ships.
-   - Bump `id` whenever you change the bullets (so “What’s new” can
-     show once to people who already updated).
-   - Leave notes in place until the next significant ship replaces them
-     (tiny fixes can keep the last notable “what’s new”).
-   - Clear bullets to [] for a quiet deploy with generic banner copy only.
+   - The reload banner still appears whenever the build id changes.
+   - Put bullets here ONLY for significant UI / UX ships.
+   - For small / quiet deploys, set bullets: [] so the banner is just
+     “App update ready” with no What’s new section.
+   - Do not leave old feature notes sitting around — they resurface on
+     every later update until cleared or replaced.
+   - When you do ship notes, bump `id` so “You’re up to date” can show
+     once to people who already refreshed.
 
    Preview:
-     ?demoUpdateBanner=1  — “App update ready” + notes
+     ?demoUpdateBanner=1  — “App update ready” (+ notes if any)
      ?demoWhatsNew=1      — post-update “What’s new” card
    ================================================================== */
 
 export const APP_RELEASE_NOTES = {
-  // Bump when replacing copy so moms who already refreshed still see it once.
-  id: "2026-07-menu-v2",
+  id: "",
   headline: "What’s new",
-  bullets: [
-    "Eating out and still want to hit your macros? On Today, open Snap → Menu, photograph the menu, and AI ranks up to 5 dishes that fit what’s left in your day. Tap “I ordered this” on the one you pick to log it.",
-    "Once your food arrives, open that meal and add a plate photo (or a quick note) under Update this meal — that tightens the estimate so your log stays closer to what you actually ate.",
-  ],
+  // Quiet deploy — no feature notes until the next significant UI ship.
+  bullets: [],
 };
