@@ -1,0 +1,54 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Hero from '../components/Hero.astro';
+import Ticker from '../components/Ticker.astro';
+import TwoAm from '../components/TwoAm.astro';
+import CallieLetter from '../components/CallieLetter.astro';
+import StatsStrip from '../components/StatsStrip.astro';
+import Ranges from '../components/Ranges.astro';
+import SystemCollage from '../components/SystemCollage.astro';
+import Guardrail from '../components/Guardrail.astro';
+import WeeksArc from '../components/WeeksArc.astro';
+import Quotes from '../components/Quotes.astro';
+import FitCheck from '../components/FitCheck.astro';
+import Pricing from '../components/Pricing.astro';
+import Faq from '../components/Faq.astro';
+import FinalCta from '../components/FinalCta.astro';
+import Footer from '../components/Footer.astro';
+import StickyCta from '../components/StickyCta.astro';
+import { isWaitlist, waitlistPrice } from '../config';
+
+const title =
+  'Macros and Mamas — Feel like yourself again. 8-week postpartum macro coaching with Callie.';
+const description = isWaitlist
+  ? `Lose the weight. Keep the muscle. Eat like a mother. An 8-week coaching program from Callie, certified holistic nutritionist and mom of two boys. Hand-built macro ranges, a real app, and a real human in your corner. Waitlist locks $${waitlistPrice}.`
+  : 'Lose the weight. Keep the muscle. Eat like a mother. An 8-week coaching program from Callie, certified holistic nutritionist and mom of two boys. Hand-built macro ranges, a real app, and a real human in your corner.';
+const ogDescription = isWaitlist
+  ? `An 8-week postpartum-aware macro coaching program. Hand-built ranges, a real app, and Callie every step of the way. Waitlist locks $${waitlistPrice}.`
+  : 'An 8-week postpartum-aware macro coaching program. Hand-built ranges, a real app, and Callie every step of the way.';
+---
+
+<BaseLayout
+  title={title}
+  description={description}
+  ogDescription={ogDescription}
+>
+  <Header />
+  <Hero />
+  <Ticker />
+  <TwoAm />
+  <CallieLetter />
+  <StatsStrip />
+  <Ranges />
+  <SystemCollage />
+  <Guardrail />
+  <WeeksArc />
+  <Quotes />
+  <FitCheck />
+  <Pricing />
+  <Faq />
+  <FinalCta />
+  <Footer />
+  <StickyCta />
+</BaseLayout>

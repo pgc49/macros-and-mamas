@@ -1,0 +1,109 @@
+---
+import {
+  fullPrice,
+  foundingPrice,
+  isWaitlist,
+  waitlistPrice,
+} from '../config';
+---
+
+<section id="faq">
+  <div class="wrap">
+    <div style="text-align:center">
+      <span class="kicker">Questions mamas actually ask</span>
+      <h2>Before you ask</h2>
+    </div>
+    <div class="faq">
+      <details
+        ><summary>Is this a crash diet?</summary><p
+          >The opposite. Your ranges are built to protect muscle and, if you're
+          nursing, milk supply. Lose faster than your plan calls for and the app
+          flags it, then Callie raises your food. We are firmly against
+          1,200-calorie culture.</p
+        ></details
+      >
+      <details
+        ><summary>Can I do this while breastfeeding?</summary><p
+          >Yes, if you're at least 3 months postpartum. Callie coaches
+          supply-aware and your ranges account for nursing from day one. Under 3
+          months? Join the waitlist now and start when your supply is
+          established.</p
+        ></details
+      >
+      <details
+        ><summary>How much of Callie do I actually get?</summary><p
+          >Callie personally reads your intake and builds your ranges. She's in
+          the group coaching thread Monday through Friday, usually in voice
+          notes, and her answers teach the whole group. You also get 1:1
+          Messages and the Monday voice note every week. This is not a bot with
+          her name on it.</p
+        ></details
+      >
+      <details
+        ><summary>Are there hidden costs? Shakes? Supplements?</summary><p
+          >No. One price covers the full 8 weeks, the app, and the coaching. The
+          food is real food from your regular grocery store, built around what
+          your family already eats.</p
+        ></details
+      >
+      <details
+        ><summary>Do I need a gym?</summary><p
+          >No. The daily rhythm works with walks, home strength, and whatever
+          your season allows. Your ranges are built around your real activity,
+          not an aspirational one.</p
+        ></details
+      >
+      <details
+        ><summary>Will I have to track food forever?</summary><p
+          >No, and that's the point. Eight weeks of honest logging builds plate
+          intuition: you learn what your portions look like so you can eyeball a
+          plate and get on with your life.</p
+        ></details
+      >
+      <details
+        ><summary>What happens when I have a bad week?</summary><p
+          >You will, and it's built in. Log it (you can log past days), tell
+          Callie what happened, reset Monday. No shame spiral, no starting over
+          from zero. The pattern over weeks matters more than any single day.</p
+        ></details
+      >
+      <details
+        ><summary>Do I have to be a mom, or postpartum?</summary><p
+          >No. The coaching is postpartum-aware because that's where the worst
+          advice lives, but any woman who wants ranges, real food, and a human
+          coach is welcome.</p
+        ></details
+      >
+      <details
+        ><summary>Is this an App Store app?</summary><p
+          >It's a web app you add to your home screen from the link we send.
+          Same icon, same push notifications, nothing to download or update.
+          About 20 seconds to set up, and we walk you through it.</p
+        ></details
+      >
+      <details
+        ><summary
+          >Is founding pricing still open? What does the waitlist lock?</summary
+        >
+        {
+          isWaitlist ? (
+            <p>
+              The ${foundingPrice} founding rate closed with cohort 1. Joining
+              the waitlist locks ${waitlistPrice} for cohort 2, which is $50 off
+              the full ${fullPrice}. You're not charged anything until
+              enrollment opens and you choose to join.
+            </p>
+          ) : (
+            <p>
+              The ${foundingPrice} founding rate closed with cohort 1, and
+              waitlist members locked ${waitlistPrice} before doors opened.
+              Enrollment is open now at ${fullPrice}. Doors close a few days
+              before each start date so Callie can build every member's ranges
+              by hand.
+            </p>
+          )
+        }
+      </details>
+    </div>
+  </div>
+</section>

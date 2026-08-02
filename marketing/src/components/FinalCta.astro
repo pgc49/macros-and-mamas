@@ -1,0 +1,42 @@
+---
+import {
+  cohortStartDate,
+  doorsCloseDate,
+  enrollUrl,
+  fullPrice,
+  isWaitlist,
+  waitlistPrice,
+} from '../config';
+import WaitlistForm from './WaitlistForm.astro';
+---
+
+<section class="final">
+  <div class="wrap">
+    <span class="script">Your season. Your ranges. Your coach.</span>
+    <h2>Feel like yourself again.</h2>
+    {
+      isWaitlist ? (
+        <>
+          <p class="lede">
+            Join the cohort 2 waitlist. Lock ${waitlistPrice}. Callie takes it
+            from there.
+          </p>
+          <WaitlistForm variant="final" />
+        </>
+      ) : (
+        <div class="open-cta" style="position:relative;z-index:2">
+          <a
+            class="btn"
+            href={enrollUrl}
+            style="background:#fff;color:var(--accent-deep)"
+          >
+            Join cohort 2 · start {cohortStartDate}
+          </a>
+          <p class="price-note">
+            ${fullPrice} · doors close {doorsCloseDate} or when the cohort fills
+          </p>
+        </div>
+      )
+    }
+  </div>
+</section>

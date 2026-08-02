@@ -1,0 +1,88 @@
+---
+import {
+  cohortStartDate,
+  foundingPrice,
+  fullPrice,
+  waitlistPrice,
+} from '../config';
+
+interface Props {
+  id?: string;
+  variant?: 'hero' | 'final';
+  ariaLabel?: string;
+}
+
+const {
+  id,
+  variant = 'hero',
+  ariaLabel = 'Join the cohort 2 waitlist',
+} = Astro.props;
+
+const isFinal = variant === 'final';
+---
+
+<form
+  class="wl-form"
+  id={id}
+  action="/api/waitlist"
+  method="post"
+  aria-label={ariaLabel}
+>
+  {/* Honeypot: hidden from humans, bots often fill it */}
+  <div aria-hidden="true" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden">
+    <label>
+      Company
+      <input type="text" name="company" tabindex="-1" autocomplete="off" />
+    </label>
+  </div>
+  <div class="fields">
+    <input
+      type="text"
+      name="first_name"
+      placeholder="First name"
+      autocomplete="given-name"
+      required
+    />
+    <input
+      type="email"
+      name="email"
+      placeholder="Email"
+      autocomplete="email"
+      required
+    />
+    {
+      isFinal && (
+        <select name="season" aria-label="Your season (optional)">
+          <option value="" selected>
+            Your season (optional, helps Callie)
+          </option>
+          <option>Pregnant, planning ahead</option>
+          <option>0–3 months postpartum</option>
+          <option>3–12 months postpartum</option>
+          <option>1–3 years postpartum</option>
+          <option>Not postpartum, still my people</option>
+        </select>
+      )
+    }
+    <button
+      class="btn"
+      type="submit"
+      style={isFinal ? 'grid-column:1/-1' : undefined}
+    >
+      Save my spot · lock ${waitlistPrice}
+    </button>
+  </div>
+  {
+    isFinal ? (
+      <p class="price-note">
+        No charge today · Founding cohort sold out at ${foundingPrice}
+      </p>
+    ) : (
+      <p class="price-note">
+        No charge today. Locks the <strong>${waitlistPrice}</strong> rate ($50
+        off the full ${fullPrice}). Cohort 2 starts {cohortStartDate}; enrollment
+        email comes first to the waitlist.
+      </p>
+    )
+  }
+</form>

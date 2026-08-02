@@ -1,0 +1,94 @@
+---
+import {
+  cohortStartDate,
+  cohortStartDateShort,
+  enrollUrl,
+  foundingPrice,
+  fullPrice,
+  isWaitlist,
+  waitlistPrice,
+} from '../config';
+import RangeBand from './RangeBand.astro';
+---
+
+<section id="pricing">
+  <div class="wrap">
+    <div style="text-align:center">
+      <span class="kicker">One price · everything included</span>
+      <h2>Cohort 2 starts {cohortStartDateShort}.</h2>
+    </div>
+    <div class="price-card rv">
+      {
+        isWaitlist ? (
+          <span class="cohort">Waitlist rate, locked when you join</span>
+        ) : (
+          <span class="cohort">Enrollment open · starts {cohortStartDate}</span>
+        )
+      }
+      {
+        isWaitlist ? (
+          <div class="big-price">
+            <small>$</small>
+            {waitlistPrice}
+          </div>
+        ) : (
+          <div class="big-price">
+            <small>$</small>
+            {fullPrice}
+          </div>
+        )
+      }
+      {
+        isWaitlist ? (
+          <p class="price-history">
+            Full price <s>${fullPrice}</s> · Founding rate ${foundingPrice}{' '}
+            closed with cohort 1
+          </p>
+        ) : (
+          <p class="price-history">
+            Waitlist members locked ${waitlistPrice} before doors opened ·
+            Founding ${foundingPrice} closed
+          </p>
+        )
+      }
+      <div class="price-band"><RangeBand sage /></div>
+      <ul class="includes">
+        <li
+          ><strong>8 weeks of coaching with Callie,</strong> Monday through
+          Friday</li
+        >
+        <li
+          ><strong>Macro ranges built by hand,</strong> adjusted as your season
+          changes</li
+        >
+        <li
+          ><strong>The full app:</strong> photo and menu logging, week planner,
+          grocery lists, habits, water, weigh-ins</li
+        >
+        <li
+          ><strong>Group coaching and 1:1 Messages,</strong> built into the app</li
+        >
+        <li><strong>Monday voice note,</strong> every week</li>
+        <li
+          ><strong>Zero product costs.</strong> No shakes or supplements, just
+          groceries you'd buy anyway</li
+        >
+      </ul>
+      {
+        isWaitlist ? (
+          <a class="btn" href="#top-form">
+            Save my spot · lock ${waitlistPrice}
+          </a>
+        ) : (
+          <a class="btn" href={enrollUrl}>
+            Join now · start Monday
+          </a>
+        )
+      }
+      <p class="disclosure"
+        >Everything lives in one app: coaching, logging, planning, groceries.
+        Nothing extra to install, and your phone number stays yours.</p
+      >
+    </div>
+  </div>
+</section>

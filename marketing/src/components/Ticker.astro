@@ -1,0 +1,17 @@
+---
+const items = [
+  'Ranges, not rules',
+  'Milk supply protected',
+  'Real food your kids recognize',
+  'No shakes, no supplements',
+  'A human coach, Mon–Fri',
+  'Bad weeks are built in',
+  'Eight weeks, then plate intuition',
+];
+---
+
+<div class="ticker" aria-hidden="true">
+  <div class="ticker-track">
+    {[...items, ...items].map((t) => <span>{t}</span>)}
+  </div>
+</div>

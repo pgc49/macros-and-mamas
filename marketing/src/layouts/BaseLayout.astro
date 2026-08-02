@@ -1,0 +1,126 @@
+---
+import '@fontsource/marcellus/400.css';
+import '@fontsource/karla/400.css';
+import '@fontsource/karla/500.css';
+import '@fontsource/karla/700.css';
+import '@fontsource/karla/400-italic.css';
+import '@fontsource/karla/700-italic.css';
+import '@fontsource/caveat/600.css';
+import '../styles/global.css';
+import {
+  offerAvailability,
+  offerPrice,
+  siteUrl,
+} from '../config';
+
+interface Props {
+  title: string;
+  description: string;
+  ogTitle?: string;
+  ogDescription?: string;
+}
+
+const {
+  title,
+  description,
+  ogTitle = 'Macros and Mamas — Ranges, Not Rules',
+  ogDescription = description,
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, siteUrl).href;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: 'Macros and Mamas — 8-Week Macro Coaching Program',
+  description:
+    'An 8-week postpartum-aware macro coaching program with hand-built macro ranges, app-based logging and planning, and direct coaching from certified holistic nutritionist Callie.',
+  brand: { '@type': 'Brand', name: 'Macros and Mamas' },
+  offers: {
+    '@type': 'Offer',
+    price: String(offerPrice),
+    priceCurrency: 'USD',
+    availability: offerAvailability,
+    url: siteUrl + '/',
+  },
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:title" content={ogTitle} />
+    <meta property="og:description" content={ogDescription} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={`${siteUrl}/og-image.jpg`} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link
+      rel="preload"
+      href="/fonts/marcellus-latin-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/karla-latin-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    <!-- Analytics slot: paste Meta Pixel / analytics script tags here when wired. -->
+    <script is:inline>document.documentElement.classList.add("js")</script>
+  </head>
+  <body>
+    <slot />
+    <script is:inline>
+      /* Sticky CTA + scroll reveals. No framework needed. */
+      (function () {
+        var hero = document.querySelector('.hero');
+        var bar = document.getElementById('stickyCta');
+        if ('IntersectionObserver' in window) {
+          if (hero && bar) {
+            new IntersectionObserver(
+              function (e) {
+                var out = !e[0].isIntersecting && e[0].boundingClientRect.top < 0;
+                bar.classList.toggle('on', out);
+                bar.setAttribute('aria-hidden', String(!out));
+              },
+              { threshold: 0 },
+            ).observe(hero);
+          }
+          var rvObs = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (en) {
+                if (en.isIntersecting) {
+                  en.target.classList.add('in');
+                  rvObs.unobserve(en.target);
+                }
+              });
+            },
+            { threshold: 0.15, rootMargin: '0px 0px -6% 0px' },
+          );
+          document.querySelectorAll('.rv').forEach(function (el) {
+            rvObs.observe(el);
+          });
+        } else {
+          document.querySelectorAll('.rv').forEach(function (el) {
+            el.classList.add('in');
+          });
+          if (bar) {
+            bar.classList.add('on');
+            bar.setAttribute('aria-hidden', 'false');
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

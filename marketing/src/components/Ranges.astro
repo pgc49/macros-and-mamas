@@ -1,0 +1,77 @@
+---
+import RangeBand from './RangeBand.astro';
+---
+
+<section id="ranges">
+  <div class="wrap ranges-grid">
+    <div>
+      <span class="kicker">The philosophy</span>
+      <h2>You don't need one number. You need room.</h2>
+      <p class="lede"
+        >Calculators hand you a single rigid target and call it a plan. Then
+        Tuesday happens. Callie builds you a band instead: calories, protein,
+        carbs, and fat as ranges. Busy, active day? Eat the top. Slow day, sick
+        kid, no sleep? The bottom. <strong style="color:var(--ink)"
+          >Both count as a win.</strong
+        ></p
+      >
+      <p class="lede" style="margin-top:16px"
+        >Your ranges flex with nursing, activity, stress, and how fast you're
+        actually losing. This is what a plan looks like when it's built for a
+        mother, not a spreadsheet.</p
+      >
+    </div>
+    <div
+      class="ui-card rv"
+      aria-label="Example of hand-built macro ranges from the app"
+    >
+      <div class="greet">Hi Sarah.</div>
+      <div class="greet-sub"
+        >Live inside the bands. Busy, active day? Eat the top. Slow day? The
+        bottom. Both count as a win.</div
+      >
+      <div class="range-row">
+        <div class="range-head"
+          ><span class="label">Protein</span><span class="val"
+            >115–125 <small>g</small></span
+          ></div
+        >
+        <RangeBand />
+        <div class="band-labels"
+          ><span>slower day → aim low</span><span>active day → aim high</span></div
+        >
+      </div>
+      <div class="range-row">
+        <div class="range-head"
+          ><span class="label">Carbs</span><span class="val"
+            >160–175 <small>g</small></span
+          ></div
+        >
+        <RangeBand />
+        <div class="band-labels"
+          ><span>slower day → aim low</span><span>active day → aim high</span></div
+        >
+      </div>
+      <div class="range-row">
+        <div class="range-head"
+          ><span class="label">Fat</span><span class="val"
+            >55–65 <small>g</small></span
+          ></div
+        >
+        <RangeBand />
+        <div class="band-labels"
+          ><span>slower day → aim low</span><span>active day → aim high</span></div
+        >
+      </div>
+      <div class="cal-line"
+        ><span class="label">Calories land around</span><span class="val"
+          >1,850–2,000</span
+        ></div
+      >
+      <div class="human-note"
+        ><span class="dot"></span>Built by Callie from your intake. Nursing?
+        Your ranges already account for it.</div
+      >
+    </div>
+  </div>
+</section>

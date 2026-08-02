@@ -1,0 +1,52 @@
+---
+import { isWaitlist } from '../config';
+---
+
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="/" aria-label="Macros and Mamas home">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
+        ><defs
+          ><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"
+            ><stop offset="0" stop-color="#B4416B"></stop><stop
+              offset="1"
+              stop-color="#8E2F53"></stop></linearGradient
+          ></defs
+        ><rect width="64" height="64" rx="15" fill="url(#g)"></rect><path
+          d="M 15 46 L 15 17 L 27 31"
+          fill="none"
+          stroke="#FFF"
+          stroke-width="6"
+          stroke-linecap="round"
+          stroke-linejoin="round"></path><path
+          d="M 37 31 L 49 17 L 49 46"
+          fill="none"
+          stroke="#FFF"
+          stroke-width="6"
+          stroke-linecap="round"
+          stroke-linejoin="round"></path><path
+          d="M 32 49 C 27.6 44.8 25.4 42.5 25.4 39.9 C 25.4 37.6 27.2 35.8 29.5 35.8 C 30.8 35.8 31.7 36.4 32 37.5 C 32.3 36.4 33.2 35.8 34.5 35.8 C 36.8 35.8 38.6 37.6 38.6 39.9 C 38.6 42.5 36.4 44.8 32 49 Z"
+          fill="#FFF"></path></svg
+      >
+      <span
+        ><span class="brand-name">Macros and Mamas</span><br /><span
+          class="brand-kicker">RANGES, NOT RULES</span
+        ></span
+      >
+    </a>
+    <div class="nav-cta">
+      <a class="signin" href="/app">Sign in</a>
+      {
+        isWaitlist ? (
+          <a class="btn sm" href="#top-form">
+            Join the waitlist
+          </a>
+        ) : (
+          <a class="btn sm" href="#pricing">
+            Join cohort 2
+          </a>
+        )
+      }
+    </div>
+  </div>
+</header>

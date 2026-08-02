@@ -1,0 +1,91 @@
+---
+import { Image } from 'astro:assets';
+import familyField from '../assets/family-field.jpg';
+---
+
+<section id="fit">
+  <div class="wrap">
+    <span class="kicker">Honest fit check</span>
+    <h2>Is this your season?</h2>
+    <p class="lede"
+      >We'd rather be honest than take your money. This works when it's the right
+      time.</p
+    >
+    <div class="fit-grid">
+      <div class="fit-card yes rv">
+        <h3>Built for you if</h3>
+        <ul>
+          <li
+            >You want to <strong>lose fat and keep your muscle</strong>, without
+            punishing yourself to do it</li
+          >
+          <li
+            >You're postpartum, or in any caregiving season where the week rarely
+            goes to plan</li
+          >
+          <li
+            >You're nursing and <strong>at least 3 months</strong> postpartum.
+            Supply-aware coaching is the point.</li
+          >
+          <li
+            >You'll track food for a season so you can <strong
+              >stop tracking for good</strong
+            ></li
+          >
+          <li
+            >You want a human reading your week, not just an algorithm scoring it</li
+          >
+          <li
+            >Your kitchen runs on animal protein, or pescatarian or vegetarian
+            patterns</li
+          >
+        </ul>
+      </div>
+      <div class="fit-card notyet rv">
+        <h3>Not yet if</h3>
+        <ul>
+          <li
+            ><strong>You're pregnant.</strong> That's an abundance season, not a
+            cut. Join the waitlist and start after.</li
+          >
+          <li
+            ><strong>You're nursing, under 3 months.</strong> Let your supply
+            establish. We'll be here.</li
+          >
+          <li
+            >You want a crash diet. We will make you eat more. It won't be a fit.</li
+          >
+          <li
+            >Your kitchen is fully vegan. Our playbook leans on animal protein,
+            and honesty beats a refund request.</li
+          >
+          <li
+            >You're navigating an active eating disorder without your provider's
+            clearance.</li
+          >
+        </ul>
+      </div>
+    </div>
+    <p class="fit-note"
+      >Not a mom, or not postpartum? You're still welcome. You have to want
+      ranges, real food, and a coach who treats you like an adult, that's the
+      whole entry bar.</p
+    >
+    <div class="fam-banner rv">
+      <div class="frame">
+        <Image
+          src={familyField}
+          alt="Callie, Patrick, their two boys, and Maple the dog in front of the Golden Gate Bridge"
+          widths={[640, 900, 1400]}
+          sizes="(max-width: 880px) 92vw, 900px"
+          loading="lazy"
+        />
+      </div>
+      <p class="fam-caption"
+        ><span class="script"
+          >The whole operation: Callie, The Tech Guy, two boys, and Maple.</span
+        ></p
+      >
+    </div>
+  </div>
+</section>
