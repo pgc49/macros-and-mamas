@@ -38,6 +38,28 @@ export function normalizeServings(value) {
 }
 
 /**
+ * Tips already read as Callie in the UI — strip self-intros the model adds.
+ */
+export function sanitizeTip(raw) {
+  let tip = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!tip) return "";
+
+  tip = tip
+    .replace(/^(hey[, ]+)?(hi[, ]+)?(mamas?[, ]+)?((it'?s|it is|this is)\s+)?callie(\s+here)?\s*[-—,:]+\s*/i, "")
+    .replace(/^(i'?m|i am)\s+callie\b\s*[-—,:]*\s*/i, "")
+    .replace(/,?\s*callie\s+here\s*[-—,:]*\s*/gi, " — ")
+    .replace(/\s*[—-]\s*[—-]\s*/g, " — ")
+    .replace(/^\s*[—-]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (tip && /^[a-z]/.test(tip)) {
+    tip = tip[0].toUpperCase() + tip.slice(1);
+  }
+  return tip.slice(0, 240);
+}
+
+/**
  * Coerce raw model JSON into the client contract.
  *
  * @param {object} parsed  raw parsed model output
@@ -71,6 +93,6 @@ export function sanitizeEstimate(parsed, mode = "meal") {
     carbs_g: capped("carbs_g", parsed.carbs_g),
     fat_g: capped("fat_g", parsed.fat_g),
     confidence,
-    tip: String(parsed.tip || "").slice(0, 240),
+    tip: sanitizeTip(parsed.tip),
   };
 }
