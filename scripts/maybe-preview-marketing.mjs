@@ -3,7 +3,7 @@
  * build the Astro marketing site and overlay it onto Vite dist/ so the
  * preview URL shows the homepage. Production / main is untouched.
  */
-import { cpSync, existsSync } from "node:fs";
+import { cpSync, existsSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
