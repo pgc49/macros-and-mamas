@@ -63,6 +63,14 @@ Sentry.init({
       delete event.user.ip_address;
       delete event.user.username;
     }
+    // Instagram / Facebook in-app browsers inject native-bridge JS that
+    // crashes on window.webkit.messageHandlers — not our code.
+    const exc = event.exception?.values?.[0];
+    const msg = String(exc?.value || event.message || "");
+    const frames = exc?.stacktrace?.frames || [];
+    const bridgeNoise = /webkit\.messageHandlers/i.test(msg)
+      || frames.some((f) => /sendDataToNative|sendPageHideMessage/i.test(String(f?.function || "")));
+    if (bridgeNoise) return null;
     return event;
   },
   beforeSendTransaction(event) {
