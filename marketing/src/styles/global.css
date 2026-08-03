@@ -177,7 +177,7 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .mode .mi{display:block;font-size:17px;line-height:1.2;margin-bottom:2px}
 .mode .mi-hash{font-weight:700;color:#2E6BE6;font-size:16px}
 .meal-res{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:13px 14px;margin-top:10px}
-.mr-photo{width:100%;height:120px;object-fit:cover;border-radius:10px;margin-bottom:10px}
+.mr-photo{width:100%;aspect-ratio:4/3;height:auto;object-fit:cover;object-position:center 40%;border-radius:10px;margin-bottom:10px;display:block}
 .meal-res .mr-name{font-weight:700;font-size:14.5px}
 .meal-res .mr-sub{font-size:12.5px;color:var(--ink-soft);margin-top:2px}
 .mp{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
