@@ -33,15 +33,18 @@ const isPage = variant === 'page';
   data-waitlist-form
   data-source={source}
 >
-  {/* Honeypot */}
+  {/* Honeypot — off-screen, not focusable, no autofill-friendly name */}
   <div
     aria-hidden="true"
     style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden"
   >
-    <label>
-      Company
-      <input type="text" name="company" tabindex="-1" autocomplete="off" />
-    </label>
+    <input
+      type="text"
+      name="website_url"
+      tabindex="-1"
+      autocomplete="off"
+      aria-hidden="true"
+    />
   </div>
   {/* Attribution — filled by inline script when JS is available */}
   <input type="hidden" name="utm_source" value="" />

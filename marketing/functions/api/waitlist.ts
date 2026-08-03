@@ -30,7 +30,8 @@ type WaitlistBody = {
   last_name: string;
   phone: string;
   season?: string;
-  company?: string;
+  /** Honeypot — reject when non-empty. */
+  website_url?: string;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
@@ -70,7 +71,7 @@ async function parseBody(request: Request): Promise<WaitlistBody> {
       last_name: String(body.last_name ?? "").trim(),
       phone: String(body.phone ?? "").trim(),
       season: body.season ? String(body.season).trim() : undefined,
-      company: body.company ? String(body.company).trim() : undefined,
+      website_url: body.website_url ? String(body.website_url).trim() : undefined,
       utm_source: body.utm_source ? String(body.utm_source).trim() : undefined,
       utm_medium: body.utm_medium ? String(body.utm_medium).trim() : undefined,
       utm_campaign: body.utm_campaign ? String(body.utm_campaign).trim() : undefined,
@@ -88,7 +89,7 @@ async function parseBody(request: Request): Promise<WaitlistBody> {
     last_name: pick(form, "last_name"),
     phone: pick(form, "phone"),
     season: pick(form, "season") || undefined,
-    company: pick(form, "company") || undefined,
+    website_url: pick(form, "website_url") || undefined,
     utm_source: pick(form, "utm_source") || undefined,
     utm_medium: pick(form, "utm_medium") || undefined,
     utm_campaign: pick(form, "utm_campaign") || undefined,
@@ -226,7 +227,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const body = await parseBody(request);
 
-    if (body.company) {
+    if (body.website_url) {
       if (wantsJson) return json({ ok: true });
       return redirect("/thanks");
     }
