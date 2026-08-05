@@ -1379,7 +1379,9 @@ export default function App() {
                   location.state?.from === PATHS.support
                   || (location.state?.from && String(location.state.from).startsWith("/account"))
                     ? "signin"
-                    : authMode
+                    : location.state?.from === PATHS.join
+                      ? (CONFIG.ENROLLMENT_OPEN ? "create" : "signin")
+                      : authMode
                 }
                 onSwitchMode={switchAuthMode}
                 onBack={() => navigate(PATHS.home)}
@@ -1392,7 +1394,13 @@ export default function App() {
         path={PATHS.join}
         element={
           !user
-            ? <Navigate to={PATHS.signin} replace />
+            ? (
+              <Navigate
+                to={PATHS.signin}
+                replace
+                state={{ from: PATHS.join }}
+              />
+            )
             : refunded
               ? <Navigate to={PATHS.goodbye} replace />
               : paid || isAdmin

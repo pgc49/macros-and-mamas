@@ -47,6 +47,23 @@ function tryReloadOnce(reason) {
   window.location.reload();
 }
 
+/** Only same-origin app bundles — ignore Meta/Sentry/font CDN blips (those caused reload flicker). */
+function isAppAssetTarget(el) {
+  if (!el || (el.tagName !== "SCRIPT" && el.tagName !== "LINK")) return false;
+  const raw = el.src || el.href || "";
+  if (!raw) return false;
+  try {
+    const u = new URL(raw, window.location.href);
+    if (u.origin !== window.location.origin) return false;
+    return (
+      u.pathname.includes("/assets/")
+      || /\.(?:js|mjs|css)$/i.test(u.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Call once from main.jsx before React mounts. */
 export function installBootRecovery() {
   if (typeof window === "undefined") return;
@@ -63,8 +80,7 @@ export function installBootRecovery() {
   window.addEventListener(
     "error",
     (event) => {
-      const t = event?.target;
-      if (t && (t.tagName === "SCRIPT" || t.tagName === "LINK")) {
+      if (isAppAssetTarget(event?.target)) {
         tryReloadOnce("A required script or stylesheet failed to load.");
       }
     },

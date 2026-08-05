@@ -144,9 +144,17 @@
         }
         window.addEventListener("error", function (ev) {
           var t = ev && ev.target;
-          if (t && (t.tagName === "SCRIPT" || t.tagName === "LINK")) {
-            reloadOnce("A required file failed to load.");
+          if (!t || (t.tagName !== "SCRIPT" && t.tagName !== "LINK")) return;
+          var raw = t.src || t.href || "";
+          if (!raw) return;
+          try {
+            var u = new URL(raw, location.href);
+            if (u.origin !== location.origin) return;
+            if (u.pathname.indexOf("/assets/") === -1 && !/\.(js|mjs|css)$/i.test(u.pathname)) return;
+          } catch (e) {
+            return;
           }
+          reloadOnce("A required file failed to load.");
         }, true);
         window.addEventListener("unhandledrejection", function (ev) {
           var r = ev && ev.reason;
