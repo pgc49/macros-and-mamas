@@ -1,6 +1,7 @@
 ---
 import {
   cohortStartDate,
+  cohortStartDateCompact,
   cohortStartDateShort,
   enrollUrl,
   foundingPrice,
@@ -84,7 +85,7 @@ import RangeBand from './RangeBand.astro';
           </a>
         ) : (
           <a class="btn" href={enrollUrl}>
-            Join now · start Monday
+            Join now · starts {cohortStartDateCompact}
           </a>
         )
       }
