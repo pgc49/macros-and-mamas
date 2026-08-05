@@ -3,8 +3,8 @@ import {
   cohortStartDate,
   doorsCloseDate,
   enrollUrl,
-  fullPrice,
   isWaitlist,
+  offerPrice,
   waitlistPrice,
 } from '../config';
 import WaitlistForm from './WaitlistForm.astro';
@@ -33,7 +33,7 @@ import WaitlistForm from './WaitlistForm.astro';
             Join now · starts {cohortStartDate}
           </a>
           <p class="price-note">
-            ${fullPrice} · doors close {doorsCloseDate} or when the cohort fills
+            ${offerPrice} · doors close {doorsCloseDate} or when the cohort fills
           </p>
         </div>
       )

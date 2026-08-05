@@ -10,6 +10,7 @@ import {
   labAddonPrice,
   labPanelPrice,
   labStandalonePrice,
+  openPrice,
   waitlistPrice,
 } from '../config';
 import RangeBand from './RangeBand.astro';
@@ -38,7 +39,7 @@ import RangeBand from './RangeBand.astro';
         ) : (
           <div class="big-price">
             <small>$</small>
-            {fullPrice}
+            {openPrice}
           </div>
         )
       }
@@ -50,8 +51,8 @@ import RangeBand from './RangeBand.astro';
           </p>
         ) : (
           <p class="price-history">
-            Waitlist members locked ${waitlistPrice} before doors opened ·
-            Founding ${foundingPrice} closed
+            Early rate · Full <s>${fullPrice}</s> · Founding ${foundingPrice}{' '}
+            closed with cohort 1
           </p>
         )
       }

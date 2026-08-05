@@ -5,8 +5,8 @@ import {
   cohortStartDate,
   doorsCloseDate,
   enrollUrl,
-  fullPrice,
   isWaitlist,
+  offerPrice,
 } from '../config';
 import WaitlistForm from './WaitlistForm.astro';
 ---
@@ -33,7 +33,7 @@ import WaitlistForm from './WaitlistForm.astro';
         ) : (
           <div class="open-cta">
             <a class="btn" href={enrollUrl}>
-              Join now · ${fullPrice}
+              Join now · ${offerPrice}
             </a>
             <p class="price-note">
               <strong>Starts {cohortStartDate}.</strong> Doors close{' '}

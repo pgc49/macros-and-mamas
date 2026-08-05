@@ -5,6 +5,7 @@ import {
   enrollUrl,
   fullPrice,
   isWaitlist,
+  offerPrice,
   waitlistPrice,
 } from '../config';
 ---
@@ -23,7 +24,7 @@ import {
     ) : (
       <>
         <div class="s-price">
-          <strong>${fullPrice} · starts {cohortStartDateCompact}</strong>
+          <strong>${offerPrice} · starts {cohortStartDateCompact}</strong>
           Enrollment open · doors close {doorsCloseDate}
         </div>
         <a class="btn" href={enrollUrl}>

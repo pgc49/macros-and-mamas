@@ -196,7 +196,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
   }
 
   const openBlurb = quote?.tier === "waitlist"
-    ? `Your waitlist early rate is $${amount} (full price is $299). After checkout you’ll complete a short intake so Callie can build your macros.`
+    ? `Early rate $${amount} (full rate is $299). After checkout you’ll complete a short intake so Callie can build your macros.`
     : quote?.tier === "founding"
       ? `Founding rate $${amount}. After checkout you’ll complete a short intake so Callie can build your macros.`
       : amount != null

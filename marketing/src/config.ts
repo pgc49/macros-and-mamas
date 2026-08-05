@@ -16,8 +16,11 @@ export const cohortStartDateCompact = 'Aug 31';
 export const doorsCloseDate = 'Aug 27';
 
 export const waitlistPrice = 249;
+/** Later full rate (shown as reference while early $249 is live). */
 export const fullPrice = 299;
 export const foundingPrice = 149;
+/** Public checkout price while enrollment is open at the early rate. */
+export const openPrice = waitlistPrice;
 
 /** Optional Lab Review add-on (pricing section + FAQ). */
 export const labAddonPrice = 299;
@@ -35,7 +38,7 @@ export const termsUrl = `${siteUrl}/terms`;
 export const privacyUrl = `${siteUrl}/privacy`;
 export const dashboardUrl = `${siteUrl}/dashboard`;
 
-export const offerPrice = isWaitlist ? waitlistPrice : fullPrice;
+export const offerPrice = isWaitlist ? waitlistPrice : openPrice;
 export const offerAvailability = isWaitlist
   ? 'https://schema.org/PreOrder'
   : 'https://schema.org/LimitedAvailability';
