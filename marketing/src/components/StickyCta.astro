@@ -2,6 +2,7 @@
 import {
   cohortStartDateCompact,
   doorsCloseDate,
+  enrollUrl,
   fullPrice,
   isWaitlist,
   waitlistPrice,
@@ -25,8 +26,8 @@ import {
           <strong>${fullPrice} · starts {cohortStartDateCompact}</strong>
           Enrollment open · doors close {doorsCloseDate}
         </div>
-        <a class="btn" href="#pricing">
-          Join cohort 2
+        <a class="btn" href={enrollUrl}>
+          Join now
         </a>
       </>
     )

@@ -4,6 +4,7 @@ import heroImg from '../assets/callie-family-hero.jpg';
 import {
   cohortStartDate,
   doorsCloseDate,
+  enrollUrl,
   fullPrice,
   isWaitlist,
 } from '../config';
@@ -31,8 +32,8 @@ import WaitlistForm from './WaitlistForm.astro';
           <WaitlistForm id="top-form" variant="hero" />
         ) : (
           <div class="open-cta">
-            <a class="btn" href="#pricing">
-              Join cohort 2 · ${fullPrice}
+            <a class="btn" href={enrollUrl}>
+              Join now · ${fullPrice}
             </a>
             <p class="price-note">
               <strong>Starts {cohortStartDate}.</strong> Doors close{' '}

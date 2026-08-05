@@ -1,5 +1,5 @@
 ---
-import { isWaitlist, signInUrl } from '../config';
+import { enrollUrl, isWaitlist, signInUrl } from '../config';
 ---
 
 <header>
@@ -42,8 +42,8 @@ import { isWaitlist, signInUrl } from '../config';
             Join the waitlist
           </a>
         ) : (
-          <a class="btn sm" href="#pricing">
-            Join cohort 2
+          <a class="btn sm" href={enrollUrl}>
+            Join now
           </a>
         )
       }
