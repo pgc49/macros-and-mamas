@@ -8,6 +8,7 @@ import '@fontsource/karla/700-italic.css';
 import '@fontsource/caveat/600.css';
 import '../styles/global.css';
 import {
+  dashboardUrl,
   offerAvailability,
   offerPrice,
   siteUrl,
@@ -93,8 +94,10 @@ const jsonLd = {
     <script is:inline>document.documentElement.classList.add("js")</script>
     {
       memberGuard && (
-        <script is:inline>
-          /* Sync member / PWA guard — must run before paint when possible. */
+        <script is:inline define:vars={{ dashboardUrl }}>
+          /* Sync member / PWA guard — must run before paint when possible.
+             Absolute www URL so marketing *.pages.dev previews send members
+             to the product app, not a missing path on the marketing host. */
           (function () {
             try {
               var standalone =
@@ -113,7 +116,7 @@ const jsonLd = {
                 }
               }
               if (standalone || authed) {
-                location.replace('/dashboard');
+                location.replace(dashboardUrl);
               }
             } catch (e) {}
           })();

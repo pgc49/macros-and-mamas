@@ -20,7 +20,8 @@ Dates/prices: `src/config.ts`.
 
 ## Member / PWA safety
 
-- Homepage includes a sync `<head>` guard: standalone display-mode / iOS standalone **or** Supabase auth token in `localStorage` → `/dashboard`.
+- Homepage includes a sync `<head>` guard: standalone display-mode / iOS standalone **or** Supabase auth token in `localStorage` → `https://www.macrosandmamas.com/dashboard`.
+- Join / Sign in / Terms / Privacy on the marketing site are absolute `www` URLs so `*.pages.dev` previews click through to the product SPA without DNS cutover.
 - Product SPA manifest `start_url` is `/dashboard` (repo root `public/site.webmanifest`).
 - Push notification clicks already open `/dashboard?tab=messages`.
 

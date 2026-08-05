@@ -24,10 +24,16 @@ export const labAddonPrice = 299;
 export const labStandalonePrice = 600;
 export const labPanelPrice = 200;
 
-/** Existing checkout / enroll flow in the product app. */
-export const enrollUrl = '/join';
-
+/**
+ * Absolute product-app URLs so marketing *.pages.dev previews can click
+ * through to www without DNS cutover. At www cutover these still work.
+ */
 export const siteUrl = 'https://www.macrosandmamas.com';
+export const enrollUrl = `${siteUrl}/join`;
+export const signInUrl = `${siteUrl}/signin`;
+export const termsUrl = `${siteUrl}/terms`;
+export const privacyUrl = `${siteUrl}/privacy`;
+export const dashboardUrl = `${siteUrl}/dashboard`;
 
 export const offerPrice = isWaitlist ? waitlistPrice : fullPrice;
 export const offerAvailability = isWaitlist

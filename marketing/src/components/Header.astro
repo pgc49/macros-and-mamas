@@ -1,5 +1,5 @@
 ---
-import { isWaitlist } from '../config';
+import { isWaitlist, signInUrl } from '../config';
 ---
 
 <header>
@@ -35,7 +35,7 @@ import { isWaitlist } from '../config';
       >
     </a>
     <div class="nav-cta">
-      <a class="signin" href="/signin">Sign in</a>
+      <a class="signin" href={signInUrl}>Sign in</a>
       {
         isWaitlist ? (
           <a class="btn sm" href="/waitlist">
