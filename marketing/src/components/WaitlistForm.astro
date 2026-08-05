@@ -33,11 +33,8 @@ const isPage = variant === 'page';
   data-waitlist-form
   data-source={source}
 >
-  {/* Honeypot — off-screen, not focusable, no autofill-friendly name */}
-  <div
-    aria-hidden="true"
-    style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden"
-  >
+  {/* Honeypot — clipped, not focusable; never uses left:-9999px (mobile scroll bleed) */}
+  <div class="hp" aria-hidden="true">
     <input
       type="text"
       name="website_url"

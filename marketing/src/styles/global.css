@@ -10,13 +10,17 @@
   --maxw:1120px; --r:22px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
+html{scroll-behavior:smooth;overflow-x:hidden;max-width:100%}
+@supports (overflow:clip){html{overflow-x:clip}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;max-width:100%;overscroll-behavior-x:none}
+@supports (overflow:clip){body{overflow-x:clip}}
 img{display:block;max-width:100%}
 a{color:var(--accent-deep)}
 h1,h2,h3,.display{font-family:var(--display);font-weight:400;line-height:1.08}
-.wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px;width:100%}
+/* Honeypot: keep in DOM, never expand scroll width (avoid left:-9999px). */
+.hp{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
 .kicker{font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:700}
 .script{font-family:var(--script);color:var(--accent);font-size:clamp(22px,3vw,30px);line-height:1.2}
 section{padding:76px 0;position:relative}
@@ -54,7 +58,7 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 @media(max-width:520px){.nav .btn.sm{display:none}}
 
 /* ================= HERO ================= */
-.hero{padding:52px 0 84px;overflow:visible}
+.hero{padding:52px 0 84px;overflow:hidden}
 .hero::before{content:"";position:absolute;top:-180px;right:-160px;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle,var(--accent-soft) 0%,rgba(246,228,236,0) 70%);pointer-events:none}
 .hero-grid{display:grid;gap:44px;align-items:center;position:relative;z-index:1}
 @media(min-width:880px){.hero-grid{grid-template-columns:1.08fr .92fr;gap:64px}}
@@ -72,7 +76,8 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .hero-photo .frame{border-radius:260px 260px var(--r) var(--r);overflow:hidden;box-shadow:0 44px 80px -44px rgba(142,47,83,.5)}
 .hero-photo .frame{aspect-ratio:4/5}
 .hero-photo img{width:100%;height:100%;object-fit:cover;object-position:center 30%}
-.hero-badge{position:absolute;left:-14px;bottom:34px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px 16px;box-shadow:0 18px 40px -22px rgba(51,39,46,.4);max-width:230px}
+.hero-badge{position:absolute;left:8px;bottom:34px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px 16px;box-shadow:0 18px 40px -22px rgba(51,39,46,.4);max-width:min(230px,calc(100% - 24px))}
+@media(min-width:880px){.hero-badge{left:-14px}}
 .hero-badge .who{font-weight:700;font-size:14.5px}
 .hero-badge .what{font-size:12.5px;color:var(--ink-soft);line-height:1.45}
 .hero-badge .script{font-size:19px;display:block;margin-bottom:2px}
@@ -114,7 +119,7 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 /* ================= LETTER FROM CALLIE ================= */
 .letter-grid{display:grid;gap:40px;align-items:center}
 @media(min-width:880px){.letter-grid{grid-template-columns:.85fr 1.15fr;gap:72px}}
-.letter-photo{position:relative;max-width:430px}
+.letter-photo{position:relative;max-width:430px;width:100%;overflow:hidden}
 .letter-photo .frame{border-radius:var(--r) var(--r) 220px 220px;overflow:hidden;box-shadow:0 40px 70px -40px rgba(51,39,46,.4);aspect-ratio:4/5}
 .letter-photo .frame img{width:100%;height:100%;object-fit:cover;object-position:center 18%}
 .letter-photo .tape{position:absolute;top:-16px;left:38%;width:110px;height:32px;background:var(--accent-soft);opacity:.85;transform:rotate(-4deg);border-radius:3px;z-index:1}
@@ -287,7 +292,7 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .disclosure{font-size:13px;color:var(--ink-soft);margin-top:18px;max-width:420px;margin-left:auto;margin-right:auto}
 .addon{max-width:580px;margin:18px auto 0;background:var(--card);border:1.5px dashed var(--accent);border-radius:20px;padding:22px 24px}
 .addon .a-kicker{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;color:var(--accent)}
-.addon .a-row{display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin:8px 0 6px}
+.addon .a-row{display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin:8px 0 6px;flex-wrap:wrap}
 .addon h3{font-size:24px}
 .addon .a-price{font-family:var(--display);font-size:26px;white-space:nowrap}
 .addon .a-price small{font-family:var(--body);font-size:12.5px;color:var(--ink-soft);display:block;text-align:right}
