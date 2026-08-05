@@ -158,8 +158,8 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .human-note .dot{flex:none;width:9px;height:9px;border-radius:99px;background:var(--sage);margin-top:6px}
 
 /* ================= SYSTEM COLLAGE ================= */
-.system{background:linear-gradient(180deg,var(--bg) 0%,#F4EAE7 100%)}
-.collage{display:grid;gap:22px;margin-top:52px}
+.system{background:linear-gradient(180deg,var(--bg) 0%,#F4EAE7 100%);overflow-x:hidden}
+.collage{display:grid;gap:22px;margin-top:52px;min-width:0}
 @media(min-width:880px){
   .collage{grid-template-columns:repeat(6,1fr)}
   .c-menu{grid-column:1/4;grid-row:1/3}
@@ -168,15 +168,16 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
   .c-groc{grid-column:1/4;grid-row:3}
   .c-habits{grid-column:4/7;grid-row:3}
 }
-.mini{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:22px;box-shadow:0 26px 50px -38px rgba(51,39,46,.38)}
+.mini{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px;box-shadow:0 26px 50px -38px rgba(51,39,46,.38);min-width:0;max-width:100%}
+@media(min-width:480px){.mini{padding:22px}}
 .mini .m-kicker{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;color:var(--accent);margin-bottom:12px}
 .mini h3{font-size:21px;margin:16px 0 6px}
 .mini .m-desc{font-size:14.5px;color:var(--ink-soft)}
 /* log-a-meal vignette */
-.modes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.mode{border:1.5px solid var(--border);border-radius:12px;padding:9px 4px;text-align:center}
-.mode .ml{display:block;font-size:12.5px;font-weight:700;color:var(--ink)}
-.mode .ms{display:block;font-size:10.5px;color:var(--ink-soft)}
+.modes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.mode{border:1.5px solid var(--border);border-radius:12px;padding:9px 4px;text-align:center;min-width:0}
+.mode .ml{display:block;font-size:12.5px;font-weight:700;color:var(--ink);overflow-wrap:anywhere}
+.mode .ms{display:block;font-size:10.5px;color:var(--ink-soft);overflow-wrap:anywhere}
 .mode.act{border-color:var(--accent);background:var(--accent-soft)}
 .mode.act .ml{color:var(--accent-deep)}
 .mode .mi{display:block;font-size:17px;line-height:1.2;margin-bottom:2px}
@@ -235,7 +236,8 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
   .arc{margin-left:auto;margin-right:auto}
 }
 .arc{max-width:760px;margin-top:48px}
-.wk{display:grid;grid-template-columns:96px 1fr;gap:20px;padding:26px 0;border-top:1px solid var(--border)}
+.wk{display:grid;grid-template-columns:72px minmax(0,1fr);gap:14px;padding:26px 0;border-top:1px solid var(--border)}
+@media(min-width:480px){.wk{grid-template-columns:96px minmax(0,1fr);gap:20px}}
 .wk:last-child{border-bottom:1px solid var(--border)}
 .wk .n{font-family:var(--display);font-size:clamp(22px,3vw,28px);color:var(--accent-deep);line-height:1.15}
 .wk .n small{display:block;font-family:var(--body);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px}
@@ -277,11 +279,12 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .fam-caption{text-align:center;margin-top:16px}
 .fam-caption .script{font-size:clamp(20px,2.6vw,26px)}
 /* ================= PRICING ================= */
-.price-card{background:var(--card);border:1px solid var(--border);border-radius:30px;max-width:580px;margin:44px auto 0;padding:40px 28px;text-align:center;box-shadow:0 44px 90px -50px rgba(142,47,83,.5);position:relative;overflow:hidden}
+.price-card{background:var(--card);border:1px solid var(--border);border-radius:30px;max-width:580px;margin:44px auto 0;padding:32px 20px;text-align:center;box-shadow:0 44px 90px -50px rgba(142,47,83,.5);position:relative;overflow:hidden}
+@media(min-width:480px){.price-card{padding:40px 28px}}
 .price-card::before{content:"";position:absolute;top:0;left:0;right:0;height:6px;background:linear-gradient(90deg,var(--accent),var(--accent-deep))}
 .price-card .cohort{font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:700}
-.big-price{font-family:var(--display);font-size:74px;line-height:1;margin:16px 0 4px}
-.big-price small{font-size:26px;vertical-align:super}
+.big-price{font-family:var(--display);font-size:clamp(56px,16vw,74px);line-height:1;margin:16px 0 4px}
+.big-price small{font-size:clamp(20px,5vw,26px);vertical-align:super}
 .price-history{font-size:14.5px;color:var(--ink-soft);margin-bottom:10px}
 .price-history s{opacity:.7}
 .price-band{max-width:280px;margin:20px auto}
@@ -290,7 +293,8 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .includes li strong{color:var(--ink)}
 .includes li::before{content:"";position:absolute;left:0;top:14px;width:15px;height:15px;border-radius:99px;background:var(--accent-soft);border:2px solid var(--accent)}
 .disclosure{font-size:13px;color:var(--ink-soft);margin-top:18px;max-width:420px;margin-left:auto;margin-right:auto}
-.addon{max-width:580px;margin:18px auto 0;background:var(--card);border:1.5px dashed var(--accent);border-radius:20px;padding:22px 24px}
+.addon{max-width:580px;margin:18px auto 0;background:var(--card);border:1.5px dashed var(--accent);border-radius:20px;padding:18px 16px}
+@media(min-width:480px){.addon{padding:22px 24px}}
 .addon .a-kicker{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;color:var(--accent)}
 .addon .a-row{display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin:8px 0 6px;flex-wrap:wrap}
 .addon h3{font-size:24px}
