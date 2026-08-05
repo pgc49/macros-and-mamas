@@ -34,15 +34,22 @@ export async function fetchCheckoutQuote() {
   return data;
 }
 
-/** Start Stripe Checkout; redirects the browser on success. */
-export async function startCheckout() {
+/**
+ * Start Stripe Checkout; redirects the browser on success.
+ * @param {{ labReview?: boolean }} [opts]
+ */
+export async function startCheckout(opts = {}) {
+  const labReview = Boolean(opts.labReview);
   const headers = await authHeaders();
   captureAttributionFromLocation();
   const attr = getStoredAttribution() || {};
   const eventId = newBrowserEventId("ic");
   trackPixel(
     "InitiateCheckout",
-    { currency: "USD", content_name: "enrollment" },
+    {
+      currency: "USD",
+      content_name: labReview ? "enrollment_lab" : "enrollment",
+    },
     eventId,
   );
   const resp = await fetch(CONFIG.CHECKOUT_ENDPOINT, {
@@ -53,6 +60,7 @@ export async function startCheckout() {
       fbp: attr.fbp || "",
       fbc: attr.fbc || "",
       fbclid: attr.fbclid || "",
+      lab_review: labReview,
     }),
   });
   const data = await resp.json().catch(() => ({}));

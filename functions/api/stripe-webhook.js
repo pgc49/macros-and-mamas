@@ -103,14 +103,22 @@ async function markPaid(env, userId, session) {
 
   // Do NOT set status=active here — that means Callie approved.
   // Payment only flips paid + stores Stripe ids for refunds.
+  const paidAt = new Date().toISOString();
   const patch = {
     paid: true,
     refunded: false,
-    paid_at: new Date().toISOString(),
+    paid_at: paidAt,
   };
   if (session.customer) patch.stripe_customer_id = String(session.customer);
   const pi = session.payment_intent;
   if (pi) patch.stripe_payment_intent = String(pi);
+
+  const labReview =
+    String(session.metadata?.lab_review || "").toLowerCase() === "true";
+  if (labReview) {
+    patch.lab_review_purchased = true;
+    patch.lab_review_purchased_at = paidAt;
+  }
 
   const resp = await fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
     method: "PATCH",

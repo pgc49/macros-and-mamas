@@ -6,11 +6,16 @@
      STRIPE_PRICE_ID_FOUNDING  ($149; falls back to STRIPE_PRICE_ID)
      STRIPE_PRICE_ID_WAITLIST  ($249)
      STRIPE_PRICE_ID_FULL      ($299)
+     STRIPE_PRICE_ID_LAB_ADDON ($299 The Lab Review; optional)
      SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
      ENROLLMENT_OPEN / ENROLLMENT_CLOSED_AT / WAITLIST_COHORT
    ================================================================== */
 
-import { resolveCheckoutOffer } from "../_shared/pricing.js";
+import {
+  LAB_ADDON_AMOUNT,
+  labAddonPriceId,
+  resolveCheckoutOffer,
+} from "../_shared/pricing.js";
 import {
   clientIpFromRequest,
   newEventId,
@@ -56,8 +61,20 @@ export async function onRequestPost({ request, env }) {
     const fbp = String(clientBody.fbp || "").trim().slice(0, 128);
     const fbc = String(clientBody.fbc || "").trim().slice(0, 128);
     const fbclid = String(clientBody.fbclid || "").trim().slice(0, 200);
+    const wantLabReview = Boolean(clientBody.lab_review);
     const clientIp = clientIpFromRequest(request);
     const clientUa = (request.headers.get("user-agent") || "").slice(0, 480);
+
+    let labPriceId = "";
+    if (wantLabReview) {
+      labPriceId = labAddonPriceId(env);
+      if (!labPriceId) {
+        console.error("missing STRIPE_PRICE_ID_LAB_ADDON");
+        return json({ error: "lab add-on unavailable" }, 503);
+      }
+    }
+
+    const totalAmount = offer.amount + (wantLabReview ? LAB_ADDON_AMOUNT : 0);
 
     const origin = new URL(request.url).origin;
     const body = new URLSearchParams();
@@ -68,13 +85,16 @@ export async function onRequestPost({ request, env }) {
     body.set("customer_email", user.email || "");
     body.set("line_items[0][price]", offer.priceId);
     body.set("line_items[0][quantity]", "1");
-    // TODO(lab-review): attach optional Lab Review add-on ($299) and optional
-    // Callie-ordered blood panel ($200) as additional Stripe line items when
-    // the join/checkout UI exposes those toggles. Do not invent prices here —
-    // mirror marketing/src/config.ts labAddonPrice / labPanelPrice.
+    if (wantLabReview) {
+      body.set("line_items[1][price]", labPriceId);
+      body.set("line_items[1][quantity]", "1");
+    }
+    // TODO(lab-panel): optional Callie-ordered blood panel ($200) as a later
+    // separate checkout or third line item when UI exists.
     body.set("metadata[supabase_user_id]", user.id);
     body.set("metadata[price_tier]", offer.tier);
-    body.set("metadata[amount_usd]", String(offer.amount));
+    body.set("metadata[amount_usd]", String(totalAmount));
+    body.set("metadata[lab_review]", wantLabReview ? "true" : "false");
     body.set("metadata[event_id]", eventId);
     if (fbp) body.set("metadata[fbp]", fbp);
     if (fbc) body.set("metadata[fbc]", fbc);
@@ -110,8 +130,10 @@ export async function onRequestPost({ request, env }) {
         clientUa,
         customData: {
           currency: "USD",
-          value: Number(offer.amount) || 0,
-          content_name: `checkout_${offer.tier}`,
+          value: Number(totalAmount) || 0,
+          content_name: wantLabReview
+            ? `checkout_${offer.tier}_lab`
+            : `checkout_${offer.tier}`,
         },
       });
     } catch (metaErr) {
