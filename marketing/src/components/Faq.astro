@@ -3,6 +3,9 @@ import {
   fullPrice,
   foundingPrice,
   isWaitlist,
+  labAddonPrice,
+  labPanelPrice,
+  labStandalonePrice,
   waitlistPrice,
 } from '../config';
 ---
@@ -79,6 +82,20 @@ import {
           >It's a web app you add to your home screen from the link we send.
           Same icon, same push notifications, nothing to download or update.
           About 20 seconds to set up, and we walk you through it.</p
+        ></details
+      >
+      <details
+        ><summary>What's the Lab Review add-on?</summary><p
+          >An optional deep-dive for ${labAddonPrice}, added at enrollment or
+          anytime during your 8 weeks. Callie, who is blood chemistry certified,
+          personally reviews your bloodwork, records a voice memo walkthrough,
+          answers your questions in Messages, and adjusts your ranges based on
+          what your labs show. You can use recent lab results, order bloodwork
+          through Callie for an additional ${labPanelPrice}, or get a panel
+          through your GP, which insurance often covers. It's educational
+          analysis, not medical diagnosis, and spots are limited to protect
+          Callie's review time. Her standalone lab analysis is normally
+          ${labStandalonePrice}.</p
         ></details
       >
       <details

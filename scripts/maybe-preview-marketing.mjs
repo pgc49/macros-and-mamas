@@ -37,7 +37,7 @@ const build = spawnSync("npm", ["run", "build"], {
   stdio: "inherit",
   env: {
     ...process.env,
-    PUBLIC_ENROLLMENT_MODE: "waitlist",
+    PUBLIC_ENROLLMENT_MODE: "open",
     PUBLIC_NOINDEX: "true",
   },
 });

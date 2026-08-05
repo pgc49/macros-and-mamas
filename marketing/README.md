@@ -6,15 +6,15 @@ Static Astro homepage + `/waitlist` for SEO and ads. Separate from the logged-in
 
 ```bash
 npm install
-PUBLIC_ENROLLMENT_MODE=waitlist npm run build   # default
-PUBLIC_ENROLLMENT_MODE=open npm run build
+PUBLIC_ENROLLMENT_MODE=open npm run build       # default
+PUBLIC_ENROLLMENT_MODE=waitlist npm run build
 PUBLIC_NOINDEX=true npm run build               # staging / *.pages.dev
 npm run preview
 ```
 
 ## Enrollment mode
 
-`PUBLIC_ENROLLMENT_MODE` = `waitlist` | `open` (default `waitlist`). Build-time only.
+`PUBLIC_ENROLLMENT_MODE` = `waitlist` | `open` (default `open`). Build-time only.
 
 Dates/prices: `src/config.ts`.
 
@@ -55,7 +55,7 @@ Workers & Pages → Create → Pages → Connect to Git → `pgc49/macros-and-ma
 
 **Build environment variables** (Preview + Production):
 
-- `PUBLIC_ENROLLMENT_MODE` = `waitlist`
+- `PUBLIC_ENROLLMENT_MODE` = `open`
 - `PUBLIC_NOINDEX` = `true`
 
 **Runtime secrets** (Settings → Environment variables):

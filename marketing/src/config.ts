@@ -1,9 +1,9 @@
 export type EnrollmentMode = 'waitlist' | 'open';
 
-const rawMode = import.meta.env.PUBLIC_ENROLLMENT_MODE ?? 'waitlist';
+const rawMode = import.meta.env.PUBLIC_ENROLLMENT_MODE ?? 'open';
 
 export const enrollmentMode: EnrollmentMode =
-  rawMode === 'open' ? 'open' : 'waitlist';
+  rawMode === 'waitlist' ? 'waitlist' : 'open';
 
 export const isWaitlist = enrollmentMode === 'waitlist';
 export const isOpen = enrollmentMode === 'open';
@@ -18,6 +18,11 @@ export const doorsCloseDate = 'Aug 27';
 export const waitlistPrice = 249;
 export const fullPrice = 299;
 export const foundingPrice = 149;
+
+/** Optional Lab Review add-on (pricing section + FAQ). */
+export const labAddonPrice = 299;
+export const labStandalonePrice = 600;
+export const labPanelPrice = 200;
 
 /** Existing checkout / enroll flow in the product app. */
 export const enrollUrl = '/join';

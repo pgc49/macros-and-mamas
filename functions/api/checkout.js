@@ -68,6 +68,10 @@ export async function onRequestPost({ request, env }) {
     body.set("customer_email", user.email || "");
     body.set("line_items[0][price]", offer.priceId);
     body.set("line_items[0][quantity]", "1");
+    // TODO(lab-review): attach optional Lab Review add-on ($299) and optional
+    // Callie-ordered blood panel ($200) as additional Stripe line items when
+    // the join/checkout UI exposes those toggles. Do not invent prices here —
+    // mirror marketing/src/config.ts labAddonPrice / labPanelPrice.
     body.set("metadata[supabase_user_id]", user.id);
     body.set("metadata[price_tier]", offer.tier);
     body.set("metadata[amount_usd]", String(offer.amount));

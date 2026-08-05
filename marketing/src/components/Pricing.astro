@@ -6,6 +6,9 @@ import {
   foundingPrice,
   fullPrice,
   isWaitlist,
+  labAddonPrice,
+  labPanelPrice,
+  labStandalonePrice,
   waitlistPrice,
 } from '../config';
 import RangeBand from './RangeBand.astro';
@@ -88,6 +91,28 @@ import RangeBand from './RangeBand.astro';
       <p class="disclosure"
         >Everything lives in one app: coaching, logging, planning, groceries.
         Nothing extra to install, and your phone number stays yours.</p
+      >
+    </div>
+    <div class="addon rv">
+      <span class="a-kicker">Optional add-on · limited spots per cohort</span>
+      <div class="a-row">
+        <h3>The Lab Review</h3>
+        <div class="a-price"
+          >${labAddonPrice}{' '}
+          <small>${labStandalonePrice} as a standalone review</small></div
+        >
+      </div>
+      <p
+        >Told your labs are normal, but you still feel off? Callie is blood
+        chemistry certified. She personally reads your bloodwork, records you a
+        voice memo walking through what it says, answers your questions in
+        Messages, and tunes your ranges to match. Add it at enrollment or
+        anytime during your 8 weeks.</p
+      >
+      <p class="a-fine"
+        >Use recent labs, order bloodwork through Callie (${labPanelPrice},
+        separate), or get a panel through your GP, often covered by insurance.
+        Educational analysis, not medical diagnosis or treatment.</p
       >
     </div>
   </div>
