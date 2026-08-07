@@ -61,6 +61,14 @@ export async function onRequestPost({ request, env }) {
     const fbp = String(clientBody.fbp || "").trim().slice(0, 128);
     const fbc = String(clientBody.fbc || "").trim().slice(0, 128);
     const fbclid = String(clientBody.fbclid || "").trim().slice(0, 200);
+    const utmSource = String(clientBody.utm_source || "").trim().slice(0, 120);
+    const utmMedium = String(clientBody.utm_medium || "").trim().slice(0, 120);
+    const utmCampaign = String(clientBody.utm_campaign || "").trim().slice(0, 120);
+    const utmContent = String(clientBody.utm_content || "").trim().slice(0, 120);
+    const utmTerm = String(clientBody.utm_term || "").trim().slice(0, 120);
+    const anonId = String(clientBody.anon_id || "").trim().slice(0, 64);
+    const landingPath = String(clientBody.landing_path || "").trim().slice(0, 200);
+    const referrerHost = String(clientBody.referrer_host || "").trim().slice(0, 200);
     const wantLabReview = Boolean(clientBody.lab_review);
     const clientIp = clientIpFromRequest(request);
     const clientUa = (request.headers.get("user-agent") || "").slice(0, 480);
@@ -99,6 +107,14 @@ export async function onRequestPost({ request, env }) {
     if (fbp) body.set("metadata[fbp]", fbp);
     if (fbc) body.set("metadata[fbc]", fbc);
     if (fbclid) body.set("metadata[fbclid]", fbclid);
+    if (utmSource) body.set("metadata[utm_source]", utmSource);
+    if (utmMedium) body.set("metadata[utm_medium]", utmMedium);
+    if (utmCampaign) body.set("metadata[utm_campaign]", utmCampaign);
+    if (utmContent) body.set("metadata[utm_content]", utmContent);
+    if (utmTerm) body.set("metadata[utm_term]", utmTerm);
+    if (anonId) body.set("metadata[anon_id]", anonId);
+    if (landingPath) body.set("metadata[landing_path]", landingPath);
+    if (referrerHost) body.set("metadata[referrer_host]", referrerHost);
     if (clientIp) body.set("metadata[client_ip]", clientIp.slice(0, 64));
     if (clientUa) body.set("metadata[client_ua]", clientUa);
 

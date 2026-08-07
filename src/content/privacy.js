@@ -1,5 +1,5 @@
 /** Privacy Policy — mirrored from launch legal copy. */
-export const PRIVACY_EFFECTIVE_DATE = "August 2, 2026";
+export const PRIVACY_EFFECTIVE_DATE = "August 7, 2026";
 
 export const PRIVACY_INTRO = [
   'This Privacy Policy explains how C&C Health Coaching LLC ("we," "us," or "our") collects, uses, and shares information when you use the Macros and Mamas program, website (macrosandmamas.com), and web application (the "Program"). It is incorporated into our Terms and Conditions.',
@@ -16,7 +16,8 @@ export const PRIVACY_SECTIONS = [
       "Program activity — meal logs, meal photos and descriptions, weekly weigh-ins, and habit checklist entries.",
       "Communications — messages you send us by email or in the group chat, and any testimonials or progress photos you choose to share with us.",
       "Information collected automatically:",
-      "Basic technical and usage data such as IP address, browser and device type, pages viewed, and timestamps, used to operate and secure the site.",
+      "Basic technical and usage data such as IP address, browser and device type, pages viewed, and timestamps, used to operate and secure the site. We may use Cloudflare Web Analytics for aggregate site traffic (pageviews by path); that product is designed not to use cookies for analytics and does not give us a per-visitor identity in our database.",
+      "Marketing attribution — when you arrive from a campaign link (for example with UTM parameters) or a Meta ad, we may store those parameters in your browser and, if you create an account, attach first-touch source fields to your profile so we can understand which channels lead to signups. A first-party browser identifier may be stored locally and linked to your profile at signup; we do not store anonymous pageview rows for visitors who never create an account.",
       "Advertising measurement data — when you arrive from a Meta (Facebook/Instagram) ad or interact with a tracked conversion (for example joining the waitlist or completing checkout), we may collect Meta cookie identifiers (_fbp / _fbc), click IDs (fbclid), and UTM campaign parameters, and we may hash your email and phone for ads measurement. See Section 4.",
       "Information we do not collect: we never see or store your full payment card details. Payments are processed by Stripe.",
     ],
@@ -49,7 +50,7 @@ export const PRIVACY_SECTIONS = [
       "We share information only with service providers who help us run the Program, and only as needed for them to do so:",
       "Stripe — payment processing",
       "Supabase — database and account authentication",
-      "Cloudflare — website hosting and delivery",
+      "Cloudflare — website hosting, delivery, and optional Web Analytics (aggregate traffic)",
       "Resend — email delivery",
       "AI provider(s) — meal photo and description estimates",
       "WhatsApp (Meta) — group communication",
