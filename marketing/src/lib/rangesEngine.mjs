@@ -42,9 +42,12 @@ function review(reason) {
 
 /**
  * Compute macro bands from raw answers.
- * Review triggers show NO numbers.
+ * Review triggers show NO numbers — unless skipReview (early-PP preview path).
+ * @param {object} answers
+ * @param {{ skipReview?: boolean }} [opts]
  */
-export function computeRanges(answers) {
+export function computeRanges(answers, opts = {}) {
+  const skipReview = opts.skipReview === true;
   const gw = Number(answers.goal_weight_lbs);
   const cw = Number(answers.current_weight_lbs);
   const height = Number(answers.height_in);
@@ -55,20 +58,21 @@ export function computeRanges(answers) {
     return review('incomplete_inputs');
   }
 
+  // Maintain / gain still need Callie's eyes — no honest cut-band preview.
   if (answers.goal === 'maintain' || answers.goal === 'gain') {
     return review(answers.goal === 'maintain' ? 'goal_maintain' : 'goal_gain');
   }
 
-  if (flags.includes('thyroid')) {
+  if (!skipReview && flags.includes('thyroid')) {
     return review('thyroid');
   }
 
   const bmi = goalBmi(gw, height);
-  if (Number.isFinite(bmi) && bmi < 19) {
+  if (!skipReview && Number.isFinite(bmi) && bmi < 19) {
     return review('goal_bmi_under_19');
   }
 
-  if (cw > 0 && gw < cw * 0.75) {
+  if (!skipReview && cw > 0 && gw < cw * 0.75) {
     return review('goal_over_25pct_below_current');
   }
 
@@ -86,10 +90,11 @@ export function computeRanges(answers) {
 
   // Protein at goal weight grams, fat at TOP of band — per Callie.
   const carbCals = calMin - gw * 4 - fat_high_g * 9;
-  const carbs_low_g = round5(carbCals / 4);
+  let carbs_low_g = round5(carbCals / 4);
+  if (skipReview && carbs_low_g < 100) carbs_low_g = 100;
   const carbs_high_g = carbs_low_g + BAND_WIDTH_G;
 
-  if (carbs_low_g < 100) {
+  if (!skipReview && carbs_low_g < 100) {
     return review('carbs_under_100');
   }
 

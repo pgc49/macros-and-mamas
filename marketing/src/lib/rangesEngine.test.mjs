@@ -147,4 +147,12 @@ describe('review triggers', () => {
     assert.equal(r.needs_review, true);
     assert.equal(r.review_reason, 'goal_gain');
   });
+
+  it('skipReview returns bands for thyroid (early-PP preview path)', () => {
+    const blocked = computeRanges(base({ flags: ['thyroid'] }));
+    assert.equal(blocked.needs_review, true);
+    const soft = computeRanges(base({ flags: ['thyroid'] }), { skipReview: true });
+    assert.equal(soft.needs_review, false);
+    assert.ok(soft.protein_low_g > 0);
+  });
 });

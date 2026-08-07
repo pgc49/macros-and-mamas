@@ -262,7 +262,7 @@ async function sendRangesEmail(
   } else if (opts.ranges) {
     subject = `Your ranges, ${name}`;
     const early = opts.earlyPp
-      ? `<p><strong>Here's a preview based on your answers.</strong> You're early postpartum, so if you decide to join the program, Callie will confirm your final ranges herself.</p>`
+      ? `<p><strong>Here's a preview based on your answers.</strong> Early postpartum is welcome — if you join, Callie builds your final ranges gently and supply-aware for this season.</p>`
       : '';
     const feed = feedingLine(opts.feeding as 'exclusive');
     html = `<p>Hi ${name},</p>
@@ -339,13 +339,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       ? { needs_review: false, review_reason: null as string | null }
       : computeRanges(answers as Parameters<typeof computeRanges>[0]);
 
-  // Early PP + review trigger → review wins (no numbers).
-  if (
-    segment === 'early_pp_nurture' &&
-    !engine.needs_review &&
-    'protein_low_g' in engine
-  ) {
-    // keep numbers with early banner client-side
+  // Early postpartum is welcome — always return a preview band when we can.
+  // (0–3 months is not a block; Callie softens the plan if they join.)
+  if (segment === 'early_pp_nurture' && engine.needs_review) {
+    const reason = String(engine.review_reason || '');
+    if (
+      reason !== 'incomplete_inputs' &&
+      reason !== 'goal_maintain' &&
+      reason !== 'goal_gain'
+    ) {
+      const soft = computeRanges(
+        answers as Parameters<typeof computeRanges>[0],
+        { skipReview: true },
+      );
+      if (!soft.needs_review && 'protein_low_g' in soft) {
+        engine = soft;
+      }
+    }
   }
 
   const eventId =

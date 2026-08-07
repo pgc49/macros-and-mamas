@@ -35,8 +35,8 @@
     { v: 'gain', l: 'Gain / rebuild' },
   ];
   const Q6 = [
-    { v: 'minimal', l: 'Minimal — survival mode' },
-    { v: 'light', l: 'Light walks most days' },
+    { v: 'minimal', l: 'Minimal / survival' },
+    { v: 'light', l: 'Light walks' },
     { v: 'moderate', l: 'Moderate movement' },
     { v: 'high', l: 'Training consistently' },
   ];
@@ -383,7 +383,7 @@
 
   function previewDisclaimer(r) {
     const early = r.early_pp
-      ? ` You're early postpartum — some women are ready within 0 to 3 months; it depends on how your body feels.`
+      ? ` You're early postpartum — that's welcome here. If you join, Callie builds your final ranges gently and supply-aware for this season.`
       : '';
     return `<div class="q-banner q-banner-preview">
       <strong>This is a preview — not your final numbers.</strong>
