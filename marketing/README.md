@@ -78,11 +78,19 @@ adapter only if we need on-demand rendering at www cutover.
 
 ### PR preview on the SPA project (temporary)
 
-The product Pages build on branch `cursor/full-marketing-execution*` runs
+The product Pages build on marketing feature branches
+(`cursor/full-marketing-execution*`, `cursor/ranges-quiz-lead*`,
+`cursor/web-analytics-supabase*`, …) runs
 `scripts/maybe-preview-marketing.mjs`, which overlays `marketing/dist` onto
-the SPA `dist/` **for that branch only**. Production/`main` skips it.
+the SPA `dist/` **for those branches only**. Production/`main` skips it.
 That overlay is for a quick visual URL; waitlist API and proper Astro
 asset hosting still belong on the separate Pages project above.
 
 See `../docs/META-SETUP.md` for Pixel / CAPI secrets.  
-See `../docs/ANALYTICS.md` for Cloudflare Web Analytics + profile attribution.
+See `../docs/ANALYTICS.md` for Cloudflare Web Analytics + profile attribution.  
+See `../docs/RANGES-QUIZ.md` for the free ranges quiz lead magnet.
+
+### Ranges quiz (`/quiz`)
+
+Requires `SUPABASE_SERVICE_ROLE_KEY` + `RESEND_API_KEY` on the marketing Pages project.
+In waitlist mode the quiz is the primary CTA; in open mode it is secondary to Join.

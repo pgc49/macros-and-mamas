@@ -4,6 +4,7 @@ import {
   cohortStartDateCompact,
   cohortStartDateShort,
   enrollUrl,
+  quizUrl,
   foundingPrice,
   fullPrice,
   isWaitlist,
@@ -81,8 +82,8 @@ import RangeBand from './RangeBand.astro';
       </ul>
       {
         isWaitlist ? (
-          <a class="btn" href="#top-form">
-            Save my spot · lock ${waitlistPrice}
+          <a class="btn" href={quizUrl}>
+            See your ranges · lock ${waitlistPrice}
           </a>
         ) : (
           <a class="btn" href={enrollUrl}>

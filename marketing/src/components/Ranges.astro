@@ -1,5 +1,9 @@
 ---
 import RangeBand from './RangeBand.astro';
+import { sampleCardRanges } from '../lib/rangesEngine.mjs';
+
+const sample = sampleCardRanges();
+const fmt = (n: number) => n.toLocaleString('en-US');
 ---
 
 <section id="ranges">
@@ -33,7 +37,7 @@ import RangeBand from './RangeBand.astro';
       <div class="range-row">
         <div class="range-head"
           ><span class="label">Protein</span><span class="val"
-            >115–125 <small>g</small></span
+            >{sample.protein_low_g}–{sample.protein_high_g} <small>g</small></span
           ></div
         >
         <RangeBand />
@@ -44,7 +48,7 @@ import RangeBand from './RangeBand.astro';
       <div class="range-row">
         <div class="range-head"
           ><span class="label">Carbs</span><span class="val"
-            >160–175 <small>g</small></span
+            >{sample.carbs_low_g}–{sample.carbs_high_g} <small>g</small></span
           ></div
         >
         <RangeBand />
@@ -55,7 +59,7 @@ import RangeBand from './RangeBand.astro';
       <div class="range-row">
         <div class="range-head"
           ><span class="label">Fat</span><span class="val"
-            >55–65 <small>g</small></span
+            >{sample.fat_low_g}–{sample.fat_high_g} <small>g</small></span
           ></div
         >
         <RangeBand />
@@ -65,7 +69,7 @@ import RangeBand from './RangeBand.astro';
       </div>
       <div class="cal-line"
         ><span class="label">Calories land around</span><span class="val"
-          >1,850–2,000</span
+          >{fmt(sample.calories_low)}–{fmt(sample.calories_high)}</span
         ></div
       >
       <div class="human-note"

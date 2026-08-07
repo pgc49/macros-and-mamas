@@ -5,9 +5,9 @@ import {
   enrollUrl,
   isWaitlist,
   offerPrice,
+  quizUrl,
   waitlistPrice,
 } from '../config';
-import WaitlistForm from './WaitlistForm.astro';
 ---
 
 <section class="final">
@@ -16,13 +16,19 @@ import WaitlistForm from './WaitlistForm.astro';
     <h2>Feel like yourself again.</h2>
     {
       isWaitlist ? (
-        <>
+        <div class="open-cta" style="position:relative;z-index:2">
           <p class="lede">
-            Join the cohort 2 waitlist. Lock ${waitlistPrice}. Callie takes it
-            from there.
+            See your ranges free — then lock ${waitlistPrice} for cohort 2 when
+            you're ready.
           </p>
-          <WaitlistForm variant="final" />
-        </>
+          <a
+            class="btn"
+            href={quizUrl}
+            style="background:#fff;color:var(--accent-deep)"
+          >
+            See your ranges free
+          </a>
+        </div>
       ) : (
         <div class="open-cta" style="position:relative;z-index:2">
           <a
@@ -34,6 +40,11 @@ import WaitlistForm from './WaitlistForm.astro';
           </a>
           <p class="price-note">
             ${offerPrice} · doors close {doorsCloseDate} or when the cohort fills
+          </p>
+          <p class="price-note" style="margin-top:10px">
+            <a href={quizUrl} style="color:inherit;text-decoration:underline"
+              >Or see your ranges free first</a
+            >
           </p>
         </div>
       )

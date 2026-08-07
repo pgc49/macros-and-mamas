@@ -1,0 +1,33 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { enrollUrl, isWaitlist } from '../config';
+
+const title = 'See your ranges free — Macros and Mamas';
+const description =
+  'Ninety seconds. Built the same way Callie builds them for the 8-week program — free.';
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  <main class="quiz-page">
+    <div class="wrap quiz-wrap">
+      <noscript>
+        <p class="q-copy"
+          >Turn on JavaScript to take the ranges quiz, or email
+          calista@nourishwithcalista.com and Callie will help you directly.</p
+        >
+      </noscript>
+      <div
+        id="quiz-root"
+        data-waitlist={isWaitlist ? 'true' : 'false'}
+        data-enroll-url={enrollUrl}
+      >
+        <p class="q-copy">Loading your quiz…</p>
+      </div>
+    </div>
+  </main>
+  <Footer />
+  <script is:inline src="/quiz-app.js"></script>
+</BaseLayout>

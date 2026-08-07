@@ -1,5 +1,5 @@
 ---
-import { enrollUrl, isWaitlist, signInUrl } from '../config';
+import { enrollUrl, isWaitlist, quizUrl, signInUrl } from '../config';
 ---
 
 <header>
@@ -38,8 +38,8 @@ import { enrollUrl, isWaitlist, signInUrl } from '../config';
       <a class="signin" href={signInUrl}>Sign in</a>
       {
         isWaitlist ? (
-          <a class="btn sm" href="/waitlist">
-            Join the waitlist
+          <a class="btn sm" href={quizUrl}>
+            See your ranges
           </a>
         ) : (
           <a class="btn sm" href={enrollUrl}>
