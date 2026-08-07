@@ -44,6 +44,16 @@ On **`macros-and-mamas`** Production (and Preview if you test quiz there):
 
 Plaintext enrollment mode stays in `marketing/wrangler.toml` (`waitlist` \| `open`).
 
+## Before you merge / deploy
+
+On Cloudflare → **`macros-and-mamas`** (SPA) → Settings → Variables:
+
+- [ ] `RESEND_API_KEY` present (Production) — required for quiz email on www
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` present — usually already there for webhooks
+- [ ] Optional: `LEAD_FROM_EMAIL`
+
+`macrosandmamas-marketing` can stay as staging; no domain change.
+
 ## Smoke checklist (after `main` deploy)
 
 Do these **before** sending paid traffic:
