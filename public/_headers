@@ -27,3 +27,7 @@
 /site.webmanifest
   Content-Type: application/manifest+json
   Cache-Control: public, max-age=3600
+
+# Marketing quiz client — must pick up offer/CTA deploys immediately
+/quiz-app.js
+  Cache-Control: no-cache, must-revalidate

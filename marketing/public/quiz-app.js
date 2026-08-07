@@ -447,11 +447,7 @@
       <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks · everything included</p>
       <a class="btn q-offer-btn" href="${joinHref}">Pre-pay $${offerPrice} — lock my spot</a>
       <p class="q-offer-fine">Use the <strong>same email</strong> you just entered so checkout unlocks this rate. Ranges above are a preview — Callie approves your final numbers if you join.</p>
-      ${
-        isWaitlist
-          ? `<p class="q-copy muted" style="margin-bottom:0">Not ready to pay? You're on the list — we'll also email you when doors are fully open.</p>`
-          : ''
-      }
+      <p class="q-copy muted" style="margin-bottom:0">Not ready to pay yet? No problem — your ranges stay in your inbox either way.</p>
     </div>`;
   }
 
