@@ -68,6 +68,12 @@ export const CONFIG = {
    * Leave empty until privacy update is live and Pixel ID is ready.
    */
   META_PIXEL_ID: envUrl("VITE_META_PIXEL_ID"),
+
+  /**
+   * Cloudflare Web Analytics (browser beacon). Aggregate pageviews only —
+   * no visitor ids in Supabase. Public routes only. See docs/ANALYTICS.md.
+   */
+  CF_WEB_ANALYTICS_TOKEN: envUrl("VITE_CF_WEB_ANALYTICS_TOKEN"),
 };
 
 /** True when public checkout / new signups are open. */

@@ -35,6 +35,11 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
 import { isStandaloneDisplay, registerMessageServiceWorker, syncAppBadge } from "./lib/push";
 import { ensureMetaPixel } from "./lib/metaPixel";
+import { ensureCloudflareWebAnalytics } from "./lib/cloudflareWebAnalytics";
+import {
+  isPublicTrackingPath,
+  persistAttributionToProfile,
+} from "./lib/attribution";
 import { ageFromDateOfBirth } from "./db/db";
 
 /* Admin is a separate chunk — never loaded on customer marketing/dashboard paths. */
@@ -103,10 +108,24 @@ export default function App() {
     return undefined;
   }, [user?.id]);
 
-  // Meta Pixel + UTM capture on public routes only (env-gated).
+  // Meta Pixel + CF Web Analytics + UTM capture on public routes only (env-gated).
   useEffect(() => {
     ensureMetaPixel(location.pathname);
+    ensureCloudflareWebAnalytics(location.pathname);
   }, [location.pathname]);
+
+  // First-touch attribution → profiles once signed in (signup / join / welcome).
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    if (!isPublicTrackingPath(location.pathname)) return undefined;
+    let cancelled = false;
+    persistAttributionToProfile(user.id).catch((err) => {
+      if (!cancelled) console.error("attribution persist failed", err);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, location.pathname]);
 
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState(() => ({ ...EMPTY_PROFILE }));

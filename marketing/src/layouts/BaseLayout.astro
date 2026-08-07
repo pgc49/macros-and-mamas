@@ -37,6 +37,9 @@ const noindex =
   import.meta.env.PUBLIC_NOINDEX === '1';
 const metaPixelId = (import.meta.env.PUBLIC_META_PIXEL_ID || '').trim();
 const metaDomainVerify = (import.meta.env.PUBLIC_META_DOMAIN_VERIFY || '').trim();
+const cfWebAnalyticsToken = (
+  import.meta.env.PUBLIC_CF_WEB_ANALYTICS_TOKEN || ''
+).trim();
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -154,45 +157,85 @@ const jsonLd = {
         </script>
       )
     }
+    {
+      cfWebAnalyticsToken && (
+        <script
+          is:inline
+          defer
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon={JSON.stringify({ token: cfWebAnalyticsToken })}
+        />
+      )
+    }
   </head>
   <body>
     <slot />
     <script is:inline>
-      /* Attribution capture → waitlist hidden fields */
+      /* Attribution capture → waitlist hidden fields + SPA handoff (sessionStorage).
+         anon_id is first-party localStorage — NOT Cloudflare Web Analytics. */
       (function () {
         try {
           var KEY = 'mm_attribution_v1';
+          var ANON_KEY = 'mm_anon_id';
           var params = new URLSearchParams(location.search);
           var fbclid = (params.get('fbclid') || '').trim();
           function cookie(n) {
             var m = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)'));
             return m ? decodeURIComponent(m[1]) : '';
           }
+          var anonId = '';
+          try {
+            anonId = (localStorage.getItem(ANON_KEY) || '').trim();
+            if (!anonId) {
+              anonId =
+                'anon_' +
+                (crypto.randomUUID
+                  ? crypto.randomUUID()
+                  : Date.now() + '_' + Math.random().toString(36).slice(2));
+              localStorage.setItem(ANON_KEY, anonId);
+            }
+          } catch (e) {}
+          var refHost = '';
+          try {
+            if (document.referrer) refHost = new URL(document.referrer).hostname;
+          } catch (e) {}
           var data = {
             utm_source: (params.get('utm_source') || '').trim(),
             utm_medium: (params.get('utm_medium') || '').trim(),
             utm_campaign: (params.get('utm_campaign') || '').trim(),
             utm_content: (params.get('utm_content') || '').trim(),
+            utm_term: (params.get('utm_term') || '').trim(),
             fbclid: fbclid,
             fbp: cookie('_fbp'),
             fbc: cookie('_fbc') || (fbclid ? 'fb.1.' + Date.now() + '.' + fbclid : ''),
+            landing_path: location.pathname || '/',
+            referrer_host: refHost,
+            anon_id: anonId,
           };
           var prev = {};
           try {
             prev = JSON.parse(sessionStorage.getItem(KEY) || '{}') || {};
           } catch (e) {}
+          /* First-touch: keep earlier non-empty values */
           var merged = Object.assign({}, prev);
           Object.keys(data).forEach(function (k) {
-            if (data[k]) merged[k] = data[k];
+            if (!merged[k] && data[k]) merged[k] = data[k];
           });
           sessionStorage.setItem(KEY, JSON.stringify(merged));
           document.querySelectorAll('[data-waitlist-form]').forEach(function (form) {
-            ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'fbclid', 'fbp', 'fbc'].forEach(
-              function (name) {
-                var input = form.querySelector('input[name="' + name + '"]');
-                if (input && merged[name]) input.value = merged[name];
-              },
-            );
+            [
+              'utm_source',
+              'utm_medium',
+              'utm_campaign',
+              'utm_content',
+              'utm_term',
+              'fbclid',
+              'fbp',
+              'fbc',
+            ].forEach(function (name) {
+              var input = form.querySelector('input[name="' + name + '"]');
+              if (input && merged[name]) input.value = merged[name];
+            });
             var eid = form.querySelector('input[name="event_id"]');
             if (eid && !eid.value) {
               eid.value =
