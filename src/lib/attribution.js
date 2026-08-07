@@ -39,17 +39,21 @@ function buildFbc(fbclid) {
   return `fb.1.${Date.now()}.${fbclid}`;
 }
 
-/** Stable first-party browser id (localStorage). Survives tab close; not CF WA. */
-export function getOrCreateAnonId() {
+/**
+ * Stable first-party browser id (localStorage). Survives tab close; not CF WA.
+ * Accepts mm_anon from marketing→www handoff query when localStorage is empty.
+ */
+export function getOrCreateAnonId(handoffAnon = "") {
   if (typeof localStorage === "undefined") return "";
   try {
     let id = (localStorage.getItem(ANON_KEY) || "").trim();
     if (id) return id.slice(0, 64);
-    id = newBrowserEventId("anon").slice(0, 64);
+    const fromHandoff = String(handoffAnon || "").trim().slice(0, 64);
+    id = fromHandoff || newBrowserEventId("anon").slice(0, 64);
     localStorage.setItem(ANON_KEY, id);
     return id;
   } catch {
-    return "";
+    return String(handoffAnon || "").trim().slice(0, 64);
   }
 }
 
@@ -78,10 +82,13 @@ function mergeAttribution(prev, data) {
 export function captureAttributionFromLocation(search = window.location.search) {
   const params = new URLSearchParams(search);
   const fbclid = (params.get("fbclid") || "").trim();
+  const handoffAnon = (params.get("mm_anon") || "").trim();
+  const handoffLanding = (params.get("mm_lp") || "").trim().slice(0, 200);
   const path =
-    typeof window !== "undefined"
+    handoffLanding ||
+    (typeof window !== "undefined"
       ? (window.location.pathname || "/").slice(0, 200)
-      : "/";
+      : "/");
   const data = {
     utm_source: (params.get("utm_source") || "").trim().slice(0, 120),
     utm_medium: (params.get("utm_medium") || "").trim().slice(0, 120),
@@ -93,7 +100,7 @@ export function captureAttributionFromLocation(search = window.location.search) 
     fbc: (readCookie("_fbc") || buildFbc(fbclid)).slice(0, 128),
     landing_path: path,
     referrer_host: referrerHost(),
-    anon_id: getOrCreateAnonId(),
+    anon_id: getOrCreateAnonId(handoffAnon),
     captured_at: new Date().toISOString(),
   };
 

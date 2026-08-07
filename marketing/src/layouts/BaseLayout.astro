@@ -245,6 +245,49 @@ const jsonLd = {
                   : Date.now() + '_' + Math.random().toString(36).slice(2));
             }
           });
+
+          /* Pre-cutover handoff: marketing may be on *.pages.dev while Join is on
+             www — sessionStorage does not cross origins, so append first-touch
+             params onto product-app links (/join, /signin). Safe after cutover too. */
+          function withAttr(href) {
+            try {
+              var u = new URL(href, location.href);
+              var host = (u.hostname || '').toLowerCase();
+              if (
+                host !== 'www.macrosandmamas.com' &&
+                host !== 'macrosandmamas.com'
+              ) {
+                return href;
+              }
+              var path = (u.pathname || '').replace(/\/$/, '') || '/';
+              if (path !== '/join' && path !== '/signin') return href;
+              [
+                'utm_source',
+                'utm_medium',
+                'utm_campaign',
+                'utm_content',
+                'utm_term',
+                'fbclid',
+              ].forEach(function (k) {
+                if (merged[k] && !u.searchParams.get(k)) {
+                  u.searchParams.set(k, merged[k]);
+                }
+              });
+              if (merged.anon_id && !u.searchParams.get('mm_anon')) {
+                u.searchParams.set('mm_anon', merged.anon_id);
+              }
+              if (merged.landing_path && !u.searchParams.get('mm_lp')) {
+                u.searchParams.set('mm_lp', merged.landing_path);
+              }
+              return u.toString();
+            } catch (e) {
+              return href;
+            }
+          }
+          document.querySelectorAll('a[href]').forEach(function (a) {
+            var next = withAttr(a.getAttribute('href') || '');
+            if (next) a.setAttribute('href', next);
+          });
         } catch (e) {}
       })();
     </script>

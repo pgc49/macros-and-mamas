@@ -21,10 +21,24 @@ We also set a first-party `mm_anon_id` in `localStorage` on marketing + public S
 
 So: you will **not** see a table of anonymous landers. You **will** see `anon_id` + UTMs on converted profiles (and waitlist leads still use `cohort_waitlist` UTMs).
 
+## Works before www cutover?
+
+**Yes**, with tokens set on both Pages projects:
+
+| Before cutover | After cutover (tomorrow) |
+| --- | --- |
+| Marketing visits: CF Web Analytics on the **marketing** `*.pages.dev` project | Marketing visits: same beacon on **www** |
+| Join / signup / paid: SPA on **www** (CF WA + profile attribution) | Same origin end-to-end |
+| Campaign UTMs / anon id: marketing appends them onto Join links (`utm_*`, `mm_anon`, `mm_lp`) so www can stamp `profiles` even though storage does not cross origins | Still works; same-origin sessionStorage is a bonus |
+
+Point ads/tests at the **marketing preview URL** (or www after cutover) with UTMs. Join CTAs already hand off to `https://www.macrosandmamas.com/join`.
+
+You need **both** tokens if you want homepage views *and* `/join` views before cutover (two hosts). After cutover, one www token still covers both if marketing is served on www — keep the marketing project token until that project is the www origin.
+
 ## Cloudflare Web Analytics setup
 
 1. Cloudflare dashboard → **Web Analytics** → **Add a site** (or enable for `macrosandmamas.com`).
-2. Copy the **beacon token**.
+2. Copy the **beacon token** (you can use one site/token for both projects, or separate — either is fine).
 3. Set env vars (Preview + Production):
 
 | Env var | Project |
@@ -32,7 +46,7 @@ So: you will **not** see a table of anonymous landers. You **will** see `anon_id
 | `PUBLIC_CF_WEB_ANALYTICS_TOKEN` | Marketing Pages (`macrosandmamas-marketing`) |
 | `VITE_CF_WEB_ANALYTICS_TOKEN` | SPA Pages (`macros-and-mamas`) |
 
-4. Redeploy. Confirm the beacon loads on `/` and `/join` (Network → `beacon.min.js`), not on coaching tabs.
+4. Redeploy. Confirm the beacon loads on marketing `/` and www `/join` (Network → `beacon.min.js`), not on coaching tabs.
 
 Optional: zone-level auto-inject can work once www is orange-clouded; the env token still helps on `*.pages.dev` previews.
 
