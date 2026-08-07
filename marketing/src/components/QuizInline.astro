@@ -3,7 +3,7 @@
  * Inline Q1 embed — after sample ranges card.
  * Tapping navigates to /quiz?q1=<value>&placement=inline
  */
-import { fullPrice, waitlistPrice } from '../config';
+import { waitlistPrice } from '../config';
 
 const options = [
   { v: 'still_pregnant', l: 'Still pregnant' },
@@ -13,18 +13,16 @@ const options = [
   { v: '2_plus_years', l: '2+ years' },
   { v: 'not_postpartum', l: 'Not postpartum' },
 ];
-const saveAmount = fullPrice - waitlistPrice;
 ---
 
 <section class="quiz-inline" id="see-ranges">
   <div class="wrap">
     <div class="qi-card">
-      <h2>Unlock ${waitlistPrice} · see your ranges</h2>
+      <h2>Want to see your macro ranges?</h2>
       <p class="lede"
-        >Answer a few questions for a free preview — built the same way Callie
-        builds them. Finish the quiz to unlock the exclusive ${waitlistPrice}{' '}
-        early rate (${saveAmount} off ${fullPrice}). Pre-pay after to lock your
-        cohort spot. Tap where you are to start.</p
+        >Answer a few questions and get your ranges free, the way Callie
+        calculates them. Finishing also unlocks the ${waitlistPrice} early rate.
+        Tap where you are to start.</p
       >
       <div class="qi-choices pills grid-2">
         {
