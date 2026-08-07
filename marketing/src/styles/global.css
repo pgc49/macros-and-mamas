@@ -359,6 +359,7 @@ footer{padding:36px 0 118px;font-size:14px;color:var(--ink-soft)}
 /* ================= QUIZ ================= */
 .quiz-page{padding:18px 0 72px;min-height:70vh}
 .quiz-wrap{max-width:480px}
+.quiz-wrap:has(.q-app-preview){max-width:520px}
 .q-progress{height:3px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:16px}
 .q-progress span{display:block;height:100%;background:var(--accent);border-radius:99px}
 .q-title{font-family:var(--display);font-size:clamp(24px,5.2vw,34px);line-height:1.18;margin:0 0 14px;font-weight:400}
@@ -383,7 +384,36 @@ footer{padding:36px 0 118px;font-size:14px;color:var(--ink-soft)}
 .q-copy{font-size:15px;line-height:1.5;color:var(--ink-soft);margin:14px 0}
 .q-copy.muted{font-size:14px}
 .q-banner{background:rgba(196,140,60,.12);border:1px solid rgba(196,140,60,.35);border-radius:16px;padding:12px 14px;font-size:14.5px;line-height:1.45;color:var(--ink);margin-bottom:14px}
-.q-result-card{margin:8px 0 18px}
+.q-banner-preview{background:var(--sage-soft);border-color:rgba(95,129,104,.35)}
+.q-result-card{margin:8px 0 18px;position:relative}
+.q-card-badge{display:inline-block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--accent-deep);background:var(--accent-soft);border-radius:999px;padding:5px 10px;margin-bottom:10px}
+.q-app-preview{margin:8px 0 20px}
+.q-preview-kicker{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;color:var(--accent);margin:0 0 10px}
+.q-log-card{padding:16px 14px}
+.q-day-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.q-day-title{font-family:var(--display);font-size:20px}
+.q-day-title span{font-family:var(--body);font-size:12.5px;color:var(--ink-soft);font-weight:700}
+.q-day-strip{display:flex;gap:6px;margin-bottom:14px}
+.q-day-chip{flex:1;height:36px;border-radius:99px;border:1.5px solid var(--border);background:#fff;color:var(--ink-soft);font:inherit;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.q-day-chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+button.mode{font:inherit;cursor:pointer;background:#fff;color:inherit;-webkit-appearance:none;appearance:none}
+button.mode:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.q-log-panel{margin-top:4px}
+.q-log-demo{margin-top:10px}
+.q-log-hint{font-size:13px;color:var(--ink-soft);line-height:1.45;margin:10px 0 0}
+.q-snap-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.q-snap-pill{display:inline-flex;align-items:center;padding:8px 12px;border-radius:999px;background:var(--accent);color:#fff;font-size:13px;font-weight:700}
+.q-snap-pill.ghost{background:#fff;color:var(--ink);border:1.5px solid var(--border)}
+.q-log-label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:var(--ink)}
+.q-log-textarea{font:inherit;font-weight:400;font-size:15px;line-height:1.4;padding:12px 14px;border:1.5px solid var(--border);border-radius:16px;background:var(--bg);color:var(--ink);resize:none;width:100%;box-sizing:border-box}
+.q-log-demo-btn{width:100%;margin-top:10px;opacity:.55;cursor:default}
+.q-plan-row{display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:10px 0;border-bottom:1px dashed var(--border);font-size:14.5px;font-weight:700}
+.q-plan-row:last-of-type{border-bottom:none}
+.q-plan-meta{font-size:12px;font-weight:600;color:var(--ink-soft)}
+.q-macro-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.q-macro-grid div{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px 6px;text-align:center}
+.q-macro-grid span{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px}
+.q-macro-grid strong{font-family:var(--display);font-size:22px;font-weight:400}
 .quiz-inline{padding:48px 0;background:var(--wash, #f7f1f3);text-align:center}
 .quiz-inline .qi-card{max-width:520px;margin:0 auto;background:var(--card,#fff);border-radius:22px;padding:28px 20px 24px;box-shadow:0 10px 36px rgba(70,30,45,.06)}
 .quiz-inline h2{font-size:clamp(26px,5vw,34px);margin:0 0 10px}

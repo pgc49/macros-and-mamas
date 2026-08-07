@@ -34,9 +34,11 @@ Marketing-only lead magnet (`/quiz`) using Callie's band math from the quiz sour
 
 Six pills: Still pregnant · 0–3 months · 3–12 months · 1–2 years · 2+ years · Not postpartum.
 
-- **Still pregnant** → nurture gate (no cut ranges)
+- **Still pregnant** → nurture gate (no cut ranges; no product preview)
 - **Not postpartum** → skip feeding; go straight to height/weight
 - Other PP options → feeding question, then height/weight
+
+Successful (non-pregnant / non-vegan / non-review) results show an **app-style product preview**: ranges card with band motif + interactive Log a meal carousel (Snap / Describe / My plan / Macros). Copy qualifies the numbers as a preview — final ranges require Callie’s approval if they join.
 
 No baby birthday and no mama DOB on the free calculator — postpartum stage from Q1 is enough.
 

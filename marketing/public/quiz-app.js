@@ -64,6 +64,8 @@
     busy: false,
     error: '',
     source: 'quiz_page',
+    /** Interactive log demo on the product-preview result screen */
+    previewLogMode: 'snap',
   };
 
   function afterQ1(v) {
@@ -259,6 +261,131 @@
     bind();
   }
 
+  function bandMotif() {
+    return `<div class="band" aria-hidden="true"><div class="fill"></div></div>
+      <div class="band-labels"><span>slower day → aim low</span><span>active day → aim high</span></div>`;
+  }
+
+  function rangeRowHtml(label, lo, hi, unit) {
+    return `<div class="range-row">
+      <div class="range-head"><span class="label">${label}</span><span class="val">${lo}–${hi} <small>${unit}</small></span></div>
+      ${bandMotif()}
+    </div>`;
+  }
+
+  function logPanelHtml(mode) {
+    if (mode === 'describe') {
+      return `<div class="q-log-demo">
+        <label class="q-log-label">What did you eat?
+          <textarea class="q-log-textarea" rows="3" readonly>Leftover mac and cheese and a handful of grapes</textarea>
+        </label>
+        <button type="button" class="btn q-log-demo-btn" disabled>Estimate</button>
+        <p class="q-log-hint">In the app you type it, tap Estimate, and it lands in your day — no weighing every bite.</p>
+      </div>`;
+    }
+    if (mode === 'recipes') {
+      return `<div class="q-log-demo">
+        <div class="q-plan-row"><span>Turkey taco bowls</span><span class="q-plan-meta">planned · dinner</span></div>
+        <div class="q-plan-row"><span>Greek yogurt + berries</span><span class="q-plan-meta">planned · snack</span></div>
+        <p class="q-log-hint">Your week planner meals log in one tap — exact macros, no re-typing.</p>
+      </div>`;
+    }
+    if (mode === 'manual') {
+      return `<div class="q-log-demo">
+        <div class="q-macro-grid" aria-hidden="true">
+          <div><span>Cal</span><strong>480</strong></div>
+          <div><span>P</span><strong>32</strong></div>
+          <div><span>C</span><strong>35</strong></div>
+          <div><span>F</span><strong>24</strong></div>
+        </div>
+        <p class="q-log-hint">Already know the numbers? Enter them straight — useful for packaged food or a known recipe.</p>
+      </div>`;
+    }
+    // snap (default)
+    return `<div class="q-log-demo">
+      <div class="q-snap-actions" aria-hidden="true">
+        <span class="q-snap-pill">Open camera</span>
+        <span class="q-snap-pill ghost">Photo library</span>
+        <span class="q-snap-pill ghost">Menu</span>
+      </div>
+      <div class="meal-res">
+        <img class="mr-photo" src="/meal-bowl.jpg" alt="Example logged plate: chicken meatballs, rice, and Caesar salad" width="640" height="400" loading="lazy" />
+        <div class="mr-name">Chicken meatballs, rice &amp; Caesar</div>
+        <div class="mr-sub">Recognized from one photo, portions and all</div>
+        <div class="mp"><span>480 <small>cal</small></span><span>32 <small>P</small></span><span>35 <small>C</small></span><span>24 <small>F</small></span></div>
+      </div>
+      <p class="q-log-hint">Snap a plate or a restaurant menu. The app estimates and logs it against your ranges.</p>
+    </div>`;
+  }
+
+  function logPreviewHtml() {
+    const mode = state.previewLogMode || 'snap';
+    const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const todayIdx = (new Date().getDay() + 6) % 7; // Mon = 0
+    const modes = [
+      { v: 'snap', mi: '📸', ml: 'Snap', ms: 'plate or menu' },
+      { v: 'describe', mi: '✏️', ml: 'Describe', ms: 'type it' },
+      { v: 'recipes', mi: '🍳', ml: 'My plan', ms: 'exact' },
+      { v: 'manual', mi: '#', ml: 'Macros', ms: 'I know them', hash: true },
+    ];
+    return `<div class="q-app-preview">
+      <div class="q-preview-kicker">How logging works in the app</div>
+      <div class="mini q-log-card">
+        <div class="q-day-head">
+          <div class="q-day-title">Today <span>· preview</span></div>
+        </div>
+        <div class="q-day-strip" aria-hidden="true">
+          ${labels
+            .map(
+              (d, i) =>
+                `<span class="q-day-chip${i === todayIdx ? ' on' : ''}">${d}</span>`,
+            )
+            .join('')}
+        </div>
+        <div class="m-kicker">Log a meal · four ways</div>
+        <div class="modes" id="qLogModes">
+          ${modes
+            .map(
+              (m) =>
+                `<button type="button" class="mode${mode === m.v ? ' act' : ''}" data-log-mode="${m.v}">
+                  <span class="mi${m.hash ? ' mi-hash' : ''}">${m.mi}</span>
+                  <span class="ml">${m.ml}</span>
+                  <span class="ms">${m.ms}</span>
+                </button>`,
+            )
+            .join('')}
+        </div>
+        <div class="q-log-panel" id="qLogPanel">${logPanelHtml(mode)}</div>
+      </div>
+    </div>`;
+  }
+
+  function rangesCardHtml(r) {
+    const bands = r.ranges || {};
+    const fmt = (n) => (n == null ? '' : Number(n).toLocaleString('en-US'));
+    const name = escapeHtml(state.contact.first_name);
+    return `<div class="ui-card q-result-card" aria-label="Preview of your macro ranges in the app">
+      <div class="q-card-badge">App preview</div>
+      <div class="greet">Hi ${name}.</div>
+      <div class="greet-sub">Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win.</div>
+      ${rangeRowHtml('Protein', bands.protein_low_g, bands.protein_high_g, 'g')}
+      ${rangeRowHtml('Carbs', bands.carbs_low_g, bands.carbs_high_g, 'g')}
+      ${rangeRowHtml('Fat', bands.fat_low_g, bands.fat_high_g, 'g')}
+      <div class="cal-line"><span class="label">Calories land around</span><span class="val">${fmt(bands.calories_low)}–${fmt(bands.calories_high)}</span></div>
+      <div class="human-note"><span class="dot"></span>${escapeHtml(r.feeding_line || 'Built from your answers the same way Callie builds program ranges.')}</div>
+    </div>`;
+  }
+
+  function previewDisclaimer(r) {
+    const early = r.early_pp
+      ? ` You're early postpartum — some women are ready within 0 to 3 months; it depends on how your body feels.`
+      : '';
+    return `<div class="q-banner q-banner-preview">
+      <strong>This is a preview — not your final numbers.</strong>
+      Bands below are estimated from your answers. If you join the 8 weeks, Callie builds and approves your ranges herself before you start.${early}
+    </div>`;
+  }
+
   function renderResult() {
     const r = state.result;
     if (!r) return '<p>Something went wrong. Refresh and try again.</p>';
@@ -286,26 +413,14 @@
       );
     }
 
-    const bands = r.ranges || {};
-    const fmt = (n) => (n == null ? '' : Number(n).toLocaleString('en-US'));
+    // Product-style preview for anyone who got computed bands (not pregnant / vegan / review).
     return screenShell(
-      `${state.contact.first_name}, your ranges`,
-      `${
-        r.early_pp
-          ? `<div class="q-banner"><strong>Here's a preview based on your answers.</strong> You're early postpartum, so if you decide to join the program, Callie will confirm your final ranges herself. Some women are ready to begin within 0 to 3 months; it depends on how your body feels.</div>`
-          : ''
-      }
-      <div class="ui-card q-result-card">
-        <div class="greet">Hi ${escapeHtml(state.contact.first_name)}.</div>
-        <div class="greet-sub">Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win.</div>
-        <div class="range-row"><div class="range-head"><span class="label">Protein</span><span class="val">${bands.protein_low_g}–${bands.protein_high_g} <small>g</small></span></div></div>
-        <div class="range-row"><div class="range-head"><span class="label">Carbs</span><span class="val">${bands.carbs_low_g}–${bands.carbs_high_g} <small>g</small></span></div></div>
-        <div class="range-row"><div class="range-head"><span class="label">Fat</span><span class="val">${bands.fat_low_g}–${bands.fat_high_g} <small>g</small></span></div></div>
-        <div class="cal-line"><span class="label">Calories land around</span><span class="val">${fmt(bands.calories_low)}–${fmt(bands.calories_high)}</span></div>
-        <div class="human-note"><span class="dot"></span>${escapeHtml(r.feeding_line || '')}</div>
-      </div>
+      `${escapeHtml(state.contact.first_name)}, your ranges`,
+      `${previewDisclaimer(r)}
+      ${rangesCardHtml(r)}
+      ${logPreviewHtml()}
       <p class="q-copy"><strong>Why a range?</strong> Tuesday happens. Start with protein — it's the anchor.</p>
-      <p class="q-copy muted">Your full breakdown is in your inbox.</p>
+      <p class="q-copy muted">A copy of this breakdown is in your inbox.</p>
       ${ctaBlock()}`,
     );
   }
@@ -417,6 +532,23 @@
 
     if (state.step === 'gate') {
       root.querySelector('#submit')?.addEventListener('click', submit);
+    }
+
+    if (state.step === 'result') {
+      const modes = root.querySelector('#qLogModes');
+      if (modes) {
+        modes.querySelectorAll('[data-log-mode]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const next = btn.getAttribute('data-log-mode') || 'snap';
+            state.previewLogMode = next;
+            modes.querySelectorAll('[data-log-mode]').forEach((b) => {
+              b.classList.toggle('act', b === btn);
+            });
+            const panel = root.querySelector('#qLogPanel');
+            if (panel) panel.innerHTML = logPanelHtml(next);
+          });
+        });
+      }
     }
   }
 
