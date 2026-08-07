@@ -7,20 +7,18 @@
  * Production cutover (main):
  *   - Keeps www on the SPA Pages project (homescreen / PWA safe)
  *   - `/`, `/quiz`, `/waitlist`, `/_astro/*` → Astro static files
- *   - App routes → SPA shell at `/spa/index.html` (explicit rewrites only)
+ *   - App routes get a real copy of the Vite shell at /{route}/index.html
+ *     (avoids CF turning 200 rewrites into 308 redirects to a shared /spa/)
+ *   - Nested app paths use same-folder rewrites (/dashboard/* → /dashboard/index.html)
  *   - Copies marketing Pages Functions into functions/ for /api/lead + /api/waitlist
  *
  * Do NOT move the www custom domain onto macrosandmamas-marketing.
- *
- * Important: never use `/* /app.html 200` — Cloudflare’s HTML extension
- * pretty-URLs turn that into a `/` → `/app` → `/app` redirect loop.
- * Prefer `/spa/index.html` over `/_app/` (underscore paths are reserved-ish on Pages).
  */
 import {
   cpSync,
   existsSync,
   mkdirSync,
-  renameSync,
+  readFileSync,
   writeFileSync,
   unlinkSync,
   rmSync,
@@ -60,26 +58,24 @@ const marketingDir = join(root, "marketing");
 const marketingDist = join(marketingDir, "dist");
 const out = join(root, "dist");
 const spaIndex = join(out, "index.html");
-const spaShellDir = join(out, "spa");
-const spaShell = join(spaShellDir, "index.html");
 
-/** SPA client routes from src/routing.js — do not include `/` or marketing paths. */
+/** Top-level SPA client routes from src/routing.js (not `/`, not marketing). */
 const SPA_ROUTES = [
-  "/home",
-  "/join",
-  "/welcome",
-  "/goodbye",
-  "/onboarding",
-  "/signin",
-  "/pending",
-  "/declined",
-  "/dashboard",
-  "/admin",
-  "/terms",
-  "/privacy",
-  "/reset-password",
-  "/support",
-  "/account",
+  "home",
+  "join",
+  "welcome",
+  "goodbye",
+  "onboarding",
+  "signin",
+  "pending",
+  "declined",
+  "dashboard",
+  "admin",
+  "terms",
+  "privacy",
+  "reset-password",
+  "support",
+  "account",
 ];
 
 const install = spawnSync("npm", ["install", "--no-fund", "--no-audit"], {
@@ -113,54 +109,61 @@ if (!existsSync(spaIndex)) {
   process.exit(1);
 }
 
-// Preserve Vite shell under /spa/index.html (not app.html — CF pretty-URLs loop).
-rmSync(spaShellDir, { recursive: true, force: true });
-try {
-  unlinkSync(join(out, "app.html")); // leftover from broken cutover attempt
-} catch {
-  /* ok */
+const spaShellHtml = readFileSync(spaIndex, "utf8");
+
+// Remove broken cutover leftovers before overlay.
+for (const stale of ["app.html", "spa", "_app"]) {
+  const p = join(out, stale);
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    try {
+      unlinkSync(p);
+    } catch {
+      /* ok */
+    }
+  }
 }
-mkdirSync(spaShellDir, { recursive: true });
-renameSync(spaIndex, spaShell);
-console.log("[overlay-marketing] SPA shell → dist/spa/index.html");
 
 cpSync(marketingDist, out, { recursive: true });
 console.log("[overlay-marketing] Astro site overlaid onto dist/");
 
-// Drop any app.html Astro/Vite might not create but a prior artifact could leave.
 try {
   unlinkSync(join(out, "app.html"));
 } catch {
   /* ok */
 }
 
-if (!existsSync(spaShell)) {
-  console.error("[overlay-marketing] dist/spa/index.html missing after overlay");
-  process.exit(1);
-}
 if (!existsSync(join(out, "index.html"))) {
   console.error("[overlay-marketing] marketing index.html missing after overlay");
   process.exit(1);
 }
 
+// Plant SPA shell at each app route so /dashboard stays /dashboard (no 308 to /spa/).
+for (const route of SPA_ROUTES) {
+  const dir = join(out, route);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "index.html"), spaShellHtml);
+}
+console.log(
+  `[overlay-marketing] planted SPA shell in ${SPA_ROUTES.length} route folders`,
+);
+
 copyMarketingFunctions();
 
 const redirectLines = [
-  "# www cutover: Astro for / + /quiz; SPA shell for app routes only.",
-  "# No /* catch-all — that rewrote / into a Cloudflare HTML pretty-URL loop.",
+  "# www cutover: Astro at /; SPA shells planted per app route folder.",
+  "# Nested paths rewrite to the same-folder index (keeps URL prefix).",
   "https://macrosandmamas.com/* https://www.macrosandmamas.com/:splat 301",
 ];
 for (const route of SPA_ROUTES) {
-  redirectLines.push(`${route} /spa/index.html 200`);
-  redirectLines.push(`${route}/ /spa/index.html 200`);
-  redirectLines.push(`${route}/* /spa/index.html 200`);
+  // Only nested paths need rewrites — /dashboard is already a real folder index.
+  redirectLines.push(`/${route}/* /${route}/index.html 200`);
 }
 redirectLines.push("");
 
 writeFileSync(join(out, "_redirects"), redirectLines.join("\n"));
-console.log(
-  `[overlay-marketing] wrote dist/_redirects (${SPA_ROUTES.length} SPA route groups → /spa/)`,
-);
+console.log("[overlay-marketing] wrote dist/_redirects (nested SPA rewrites only)");
 
 console.log(`[overlay-marketing] done (${mode})`);
 
