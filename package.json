@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "VITE_APP_BUILD_ID=${CF_PAGES_COMMIT_SHA:-${VITE_APP_BUILD_ID:-dev}} vite build",
+    "build": "VITE_APP_BUILD_ID=${CF_PAGES_COMMIT_SHA:-${VITE_APP_BUILD_ID:-dev}} vite build && node scripts/maybe-preview-marketing.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

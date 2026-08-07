@@ -34,6 +34,7 @@ import { Shell } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
 import { isStandaloneDisplay, registerMessageServiceWorker, syncAppBadge } from "./lib/push";
+import { ensureMetaPixel } from "./lib/metaPixel";
 import { ageFromDateOfBirth } from "./db/db";
 
 /* Admin is a separate chunk — never loaded on customer marketing/dashboard paths. */
@@ -101,6 +102,11 @@ export default function App() {
     registerMessageServiceWorker();
     return undefined;
   }, [user?.id]);
+
+  // Meta Pixel + UTM capture on public routes only (env-gated).
+  useEffect(() => {
+    ensureMetaPixel(location.pathname);
+  }, [location.pathname]);
 
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState(() => ({ ...EMPTY_PROFILE }));
@@ -1373,7 +1379,9 @@ export default function App() {
                   location.state?.from === PATHS.support
                   || (location.state?.from && String(location.state.from).startsWith("/account"))
                     ? "signin"
-                    : authMode
+                    : location.state?.from === PATHS.join
+                      ? (CONFIG.ENROLLMENT_OPEN ? "create" : "signin")
+                      : authMode
                 }
                 onSwitchMode={switchAuthMode}
                 onBack={() => navigate(PATHS.home)}
@@ -1386,7 +1394,13 @@ export default function App() {
         path={PATHS.join}
         element={
           !user
-            ? <Navigate to={PATHS.signin} replace />
+            ? (
+              <Navigate
+                to={PATHS.signin}
+                replace
+                state={{ from: PATHS.join }}
+              />
+            )
             : refunded
               ? <Navigate to={PATHS.goodbye} replace />
               : paid || isAdmin

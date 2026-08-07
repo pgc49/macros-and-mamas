@@ -55,13 +55,19 @@ export const CONFIG = {
   FULLSCRIPT_SLEEP: envUrl("VITE_FULLSCRIPT_SLEEP_URL"),
   FULLSCRIPT_DIGESTION: envUrl("VITE_FULLSCRIPT_DIGESTION_URL"),
 
-  // Founding group closed — homepage captures waitlist for the next cohort.
-  // Flip ENROLLMENT_OPEN back to true when cohort two opens for checkout.
-  // Mirror ENROLLMENT_OPEN + ENROLLMENT_CLOSED_AT on Cloudflare for /api/checkout.
-  ENROLLMENT_OPEN: false,
+  // Cohort 2 checkout open at early ($249) rate — see functions/_shared/pricing.js.
+  // Mirror ENROLLMENT_OPEN=true on Cloudflare Pages (SPA) Preview + Production.
+  ENROLLMENT_OPEN: true,
   /** ISO cutoff: accounts created before this may still finish paying while closed. */
   ENROLLMENT_CLOSED_AT: "2026-07-26T02:00:00.000Z",
   WAITLIST_COHORT: "cohort_2",
+
+  /**
+   * Meta Pixel (browser). Set VITE_META_PIXEL_ID in Cloudflare Pages.
+   * Pixel script loads only on public routes — never on coaching tabs.
+   * Leave empty until privacy update is live and Pixel ID is ready.
+   */
+  META_PIXEL_ID: envUrl("VITE_META_PIXEL_ID"),
 };
 
 /** True when public checkout / new signups are open. */

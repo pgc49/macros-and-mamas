@@ -1,0 +1,84 @@
+---
+import { Image } from 'astro:assets';
+import heroImg from '../assets/callie-family-hero.jpg';
+import {
+  cohortStartDate,
+  doorsCloseDate,
+  enrollUrl,
+  isWaitlist,
+  offerPrice,
+} from '../config';
+import WaitlistForm from './WaitlistForm.astro';
+---
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="kicker">8-week coaching · for the season after birth</span>
+      <h1
+        >Lose the weight. <span class="l2">Keep the muscle.</span>
+        <span class="l3">Eat like a mother.</span></h1
+      >
+      <p class="sub"
+        >Getting your body back after a baby is hard. You want to feel like
+        yourself again, and most plans are either generic or extreme. This is
+        neither: <strong
+          >an 8-week coaching program that meets you where you are postpartum</strong
+        > and adjusts to your life. Ranges, not rules.</p
+      >
+
+      {
+        isWaitlist ? (
+          <WaitlistForm id="top-form" variant="hero" />
+        ) : (
+          <div class="open-cta">
+            <a class="btn" href={enrollUrl}>
+              Join now · ${offerPrice}
+            </a>
+            <p class="price-note">
+              <strong>Starts {cohortStartDate}.</strong> Doors close{' '}
+              {doorsCloseDate} so Callie can build your ranges before day one.
+              Pay now, start with the group.
+            </p>
+          </div>
+        )
+      }
+
+      <div class="hero-note">
+        <svg
+          class="arrow"
+          viewBox="0 0 40 40"
+          fill="none"
+          aria-hidden="true"
+          ><path
+            d="M6 8 C14 26, 24 30, 33 28 M33 28 l-7 -3 M33 28 l-4 6"
+            stroke="#B4416B"
+            stroke-width="2.5"
+            stroke-linecap="round"></path></svg
+        >
+        <span class="script">Coached by a mama of two boys, not an algorithm.</span>
+      </div>
+    </div>
+
+    <div class="hero-photo rv">
+      <div class="frame">
+        <Image
+          src={heroImg}
+          alt="Callie, Patrick, and their two boys hiking in the redwoods"
+          widths={[400, 600, 800, 1200]}
+          sizes="(max-width: 880px) 90vw, 470px"
+          fetchpriority="high"
+          loading="eager"
+        />
+      </div>
+      <div class="hero-badge">
+        <span class="script">This is us</span>
+        <span class="who">Callie, certified holistic nutritionist</span>
+        <span class="what"
+          >Your coach for the next 8 weeks. The app? Her husband “The Tech Guy”
+          built it.</span
+        >
+      </div>
+    </div>
+  </div>
+</section>

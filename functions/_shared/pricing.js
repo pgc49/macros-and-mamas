@@ -5,19 +5,29 @@
  *   STRIPE_PRICE_ID_FOUNDING  — $149 (falls back to legacy STRIPE_PRICE_ID)
  *   STRIPE_PRICE_ID_WAITLIST  — $249 early waitlist
  *   STRIPE_PRICE_ID_FULL      — $299 full price
+ *   STRIPE_PRICE_ID_LAB_ADDON — $299 The Lab Review (optional line item)
  *
  * Resolution order:
- *   1. Account created before ENROLLMENT_CLOSED_AT → founding
- *   2. Email on cohort_waitlist for current cohort → waitlist
- *   3. ENROLLMENT_OPEN=true → full
- *   4. else → closed (no checkout)
+ *   1. ENROLLMENT_OPEN=true → waitlist early ($249) for everyone
+ *   2. else if account created before ENROLLMENT_CLOSED_AT → founding ($149)
+ *   3. else → closed (no checkout)
+ *
+ * Flip open enrollments to `full` ($299) when you retire the early rate.
  */
 
 export const PRICE_TIERS = {
   founding: { tier: "founding", amount: 149, label: "Founding" },
-  waitlist: { tier: "waitlist", amount: 249, label: "Waitlist early" },
+  waitlist: { tier: "waitlist", amount: 249, label: "Early rate" },
   full: { tier: "full", amount: 299, label: "Full" },
 };
+
+/** Optional Lab Review add-on (one-time). */
+export const LAB_ADDON_AMOUNT = 299;
+export const LAB_ADDON_LABEL = "The Lab Review";
+
+export function labAddonPriceId(env) {
+  return String(env.STRIPE_PRICE_ID_LAB_ADDON || "").trim();
+}
 
 export function enrollmentIsOpen(env) {
   return String(env.ENROLLMENT_OPEN || "").toLowerCase() === "true";
@@ -56,20 +66,14 @@ export function priceIdForTier(env, tier) {
  * @returns {{ ok: true, tier, amount, label, priceId } | { ok: false, error: string, status: number }}
  */
 export async function resolveCheckoutOffer(env, { email, createdAt }) {
-  if (isFoundingAccount(createdAt, env)) {
-    return offerOrMissing(env, "founding");
-  }
-
-  const onWaitlist = await emailOnCohortWaitlist(env, email);
-  if (onWaitlist) {
-    if (!enrollmentIsOpen(env)) {
-      return { ok: false, error: "enrollment closed", status: 403 };
-    }
+  if (enrollmentIsOpen(env)) {
+    // Early open rate ($249). Uses STRIPE_PRICE_ID_WAITLIST.
     return offerOrMissing(env, "waitlist");
   }
 
-  if (enrollmentIsOpen(env)) {
-    return offerOrMissing(env, "full");
+  // Enrollment closed: only founding accounts may finish paying.
+  if (isFoundingAccount(createdAt, env)) {
+    return offerOrMissing(env, "founding");
   }
 
   return { ok: false, error: "enrollment closed", status: 403 };

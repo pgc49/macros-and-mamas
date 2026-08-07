@@ -1,0 +1,60 @@
+---
+import { Image } from 'astro:assets';
+import kitchenImg from '../assets/callie-kitchen.jpg';
+---
+
+<section id="callie">
+  <div class="wrap letter-grid">
+    <div class="letter-photo rv">
+      <div class="tape"></div>
+      <div class="frame">
+        <Image
+          src={kitchenImg}
+          alt="Callie in her kitchen"
+          widths={[400, 600, 860]}
+          sizes="(max-width: 880px) 90vw, 430px"
+          loading="lazy"
+        />
+      </div>
+    </div>
+    <div class="letter-body">
+      <span class="kicker">A note from your coach</span>
+      <h2>She's not a bot. She's been there.</h2>
+      <div class="creds">
+        <span>Holistic Nutritionist</span>
+        <span>Blood Chemistry Certified</span>
+        <span>Mom of Two</span>
+      </div>
+      <p
+        >I'm Callie. I've done the 2am math on milk supply and calories. I've
+        lived the 4pm snack spiral. And professionally, I've watched the advice
+        women get after birth swing between starvation dressed up as discipline
+        and vague permission with no plan.</p
+      >
+      <p
+        ><strong>Macros and Mamas is the program I needed and couldn't find.</strong
+        > I read your intake myself. I build your ranges myself. I'm in the group
+        coaching thread Monday through Friday, usually in voice notes, and when
+        your week blows up, I answer your 1:1 myself. Not a chatbot wearing my
+        name.</p
+      >
+      <p
+        >And this really is a family thing. The app was built at our kitchen
+        table by my husband, or as the mamas in the group call him, The Tech
+        Guy. We're a young family figuring it out like you are, which is exactly
+        why the program bends around real life instead of pretending you don't
+        have one.</p
+      >
+      <p
+        >Eight weeks with me, and you won't just weigh less. You'll know what
+        your plate looks like for the rest of your life.</p
+      >
+      <div class="letter-sig">
+        <span class="script">Callie</span>
+        <span class="role"
+          >Founder &amp; your coach<br />Macros and Mamas</span
+        >
+      </div>
+    </div>
+  </div>
+</section>

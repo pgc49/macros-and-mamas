@@ -1,0 +1,122 @@
+---
+import {
+  cohortStartDate,
+  foundingPrice,
+  fullPrice,
+  waitlistPrice,
+} from '../config';
+
+interface Props {
+  id?: string;
+  variant?: 'hero' | 'final' | 'page';
+  ariaLabel?: string;
+  source?: string;
+}
+
+const {
+  id,
+  variant = 'hero',
+  ariaLabel = 'Join the cohort 2 waitlist',
+  source = 'homepage',
+} = Astro.props;
+
+const isFinal = variant === 'final';
+const isPage = variant === 'page';
+---
+
+<form
+  class="wl-form"
+  id={id}
+  action="/api/waitlist"
+  method="post"
+  aria-label={ariaLabel}
+  data-waitlist-form
+  data-source={source}
+>
+  {/* Honeypot — clipped, not focusable; never uses left:-9999px (mobile scroll bleed) */}
+  <div class="hp" aria-hidden="true">
+    <input
+      type="text"
+      name="website_url"
+      tabindex="-1"
+      autocomplete="off"
+      aria-hidden="true"
+    />
+  </div>
+  {/* Attribution — filled by inline script when JS is available */}
+  <input type="hidden" name="utm_source" value="" />
+  <input type="hidden" name="utm_medium" value="" />
+  <input type="hidden" name="utm_campaign" value="" />
+  <input type="hidden" name="utm_content" value="" />
+  <input type="hidden" name="fbclid" value="" />
+  <input type="hidden" name="fbp" value="" />
+  <input type="hidden" name="fbc" value="" />
+  <input type="hidden" name="event_id" value="" />
+
+  <div class="fields">
+    <input
+      type="text"
+      name="first_name"
+      placeholder="First name"
+      autocomplete="given-name"
+      required
+    />
+    <input
+      type="text"
+      name="last_name"
+      placeholder="Last name"
+      autocomplete="family-name"
+      required
+    />
+    <input
+      type="email"
+      name="email"
+      placeholder="Email"
+      autocomplete="email"
+      required
+      style="grid-column:1/-1"
+    />
+    <input
+      type="tel"
+      name="phone"
+      placeholder="Phone"
+      autocomplete="tel"
+      required
+      style="grid-column:1/-1"
+    />
+    {
+      (isFinal || isPage) && (
+        <select name="season" aria-label="Your season (optional)">
+          <option value="" selected>
+            Your season (optional, helps Callie)
+          </option>
+          <option>Pregnant, planning ahead</option>
+          <option>0–3 months postpartum</option>
+          <option>3–12 months postpartum</option>
+          <option>1–3 years postpartum</option>
+          <option>Not postpartum, still my people</option>
+        </select>
+      )
+    }
+    <button
+      class="btn"
+      type="submit"
+      style="grid-column:1/-1"
+    >
+      Save my spot · lock ${waitlistPrice}
+    </button>
+  </div>
+  {
+    isFinal || isPage ? (
+      <p class="price-note">
+        No charge today · Founding cohort sold out at ${foundingPrice}
+      </p>
+    ) : (
+      <p class="price-note">
+        No charge today. Locks the <strong>${waitlistPrice}</strong> rate ($50
+        off the full ${fullPrice}). Cohort 2 starts {cohortStartDate}; enrollment
+        email comes first to the waitlist.
+      </p>
+    )
+  }
+</form>

@@ -11,6 +11,7 @@ import {
   loadUserContact,
   sendWelcomeEmails,
 } from "../_shared/supabaseEmail.js";
+import { sendMetaCapiEvent } from "../_shared/metaCapi.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -43,6 +44,38 @@ export async function onRequestPost({ request, env }) {
 
       await markPaid(env, userId, session);
 
+      // Purchase CAPI — idempotent event_id = Stripe session.id (dedupe with browser)
+      try {
+        const contact = await loadUserContact(env, userId);
+        const email =
+          contact.email ||
+          session.customer_email ||
+          session.customer_details?.email ||
+          "";
+        const amount =
+          Number(session.metadata?.amount_usd) ||
+          (session.amount_total != null ? Number(session.amount_total) / 100 : 0);
+        const purchaseEventId = String(session.metadata?.event_id || session.id);
+        await sendMetaCapiEvent(env, {
+          eventName: "Purchase",
+          eventId: purchaseEventId,
+          email,
+          fbp: session.metadata?.fbp || "",
+          fbc: session.metadata?.fbc || "",
+          clientIp: session.metadata?.client_ip || "",
+          clientUa: session.metadata?.client_ua || "",
+          eventSourceUrl: "https://www.macrosandmamas.com/welcome",
+          customData: {
+            currency: "USD",
+            value: amount,
+            content_name: `purchase_${session.metadata?.price_tier || "unknown"}`,
+            order_id: String(session.id),
+          },
+        });
+      } catch (metaErr) {
+        console.error("Purchase CAPI failed", metaErr);
+      }
+
       // Email #2 + Callie A — best-effort (don't fail the webhook)
       try {
         const contact = await loadUserContact(env, userId);
@@ -70,14 +103,22 @@ async function markPaid(env, userId, session) {
 
   // Do NOT set status=active here — that means Callie approved.
   // Payment only flips paid + stores Stripe ids for refunds.
+  const paidAt = new Date().toISOString();
   const patch = {
     paid: true,
     refunded: false,
-    paid_at: new Date().toISOString(),
+    paid_at: paidAt,
   };
   if (session.customer) patch.stripe_customer_id = String(session.customer);
   const pi = session.payment_intent;
   if (pi) patch.stripe_payment_intent = String(pi);
+
+  const labReview =
+    String(session.metadata?.lab_review || "").toLowerCase() === "true";
+  if (labReview) {
+    patch.lab_review_purchased = true;
+    patch.lab_review_purchased_at = paidAt;
+  }
 
   const resp = await fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
     method: "PATCH",

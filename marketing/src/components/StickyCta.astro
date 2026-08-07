@@ -1,0 +1,36 @@
+---
+import {
+  cohortStartDateCompact,
+  doorsCloseDate,
+  enrollUrl,
+  fullPrice,
+  isWaitlist,
+  offerPrice,
+  waitlistPrice,
+} from '../config';
+---
+
+<div class="sticky-cta" id="stickyCta" aria-hidden="true">
+  {
+    isWaitlist ? (
+      <>
+        <div class="s-price">
+          <strong>Lock ${waitlistPrice}</strong>Cohort 2 waitlist · full ${fullPrice}
+        </div>
+        <a class="btn" href="#top-form">
+          Save my spot
+        </a>
+      </>
+    ) : (
+      <>
+        <div class="s-price">
+          <strong>${offerPrice} · starts {cohortStartDateCompact}</strong>
+          Enrollment open · doors close {doorsCloseDate}
+        </div>
+        <a class="btn" href={enrollUrl}>
+          Join now
+        </a>
+      </>
+    )
+  }
+</div>

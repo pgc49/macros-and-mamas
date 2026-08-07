@@ -1,0 +1,250 @@
+---
+import '@fontsource/marcellus/400.css';
+import '@fontsource/karla/400.css';
+import '@fontsource/karla/500.css';
+import '@fontsource/karla/700.css';
+import '@fontsource/karla/400-italic.css';
+import '@fontsource/karla/700-italic.css';
+import '@fontsource/caveat/600.css';
+import '../styles/global.css';
+import {
+  dashboardUrl,
+  offerAvailability,
+  offerPrice,
+  siteUrl,
+} from '../config';
+
+interface Props {
+  title: string;
+  description: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  /** Sync redirect for standalone PWA / logged-in members (homepage). */
+  memberGuard?: boolean;
+}
+
+const {
+  title,
+  description,
+  ogTitle = 'Macros and Mamas — Ranges, Not Rules',
+  ogDescription = description,
+  memberGuard = false,
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, siteUrl).href;
+const noindex =
+  import.meta.env.PUBLIC_NOINDEX === 'true' ||
+  import.meta.env.PUBLIC_NOINDEX === '1';
+const metaPixelId = (import.meta.env.PUBLIC_META_PIXEL_ID || '').trim();
+const metaDomainVerify = (import.meta.env.PUBLIC_META_DOMAIN_VERIFY || '').trim();
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: 'Macros and Mamas — 8-Week Macro Coaching Program',
+  description:
+    'An 8-week postpartum-aware macro coaching program with hand-built macro ranges, app-based logging and planning, and direct coaching from certified holistic nutritionist Callie.',
+  brand: { '@type': 'Brand', name: 'Macros and Mamas' },
+  offers: {
+    '@type': 'Offer',
+    price: String(offerPrice),
+    priceCurrency: 'USD',
+    availability: offerAvailability,
+    url: siteUrl + '/',
+  },
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex,nofollow" />}
+    <link rel="canonical" href={canonical} />
+    <meta property="og:title" content={ogTitle} />
+    <meta property="og:description" content={ogDescription} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={`${siteUrl}/og-image.jpg`} />
+    <meta name="twitter:card" content="summary_large_image" />
+    {
+      metaDomainVerify && (
+        <meta name="facebook-domain-verification" content={metaDomainVerify} />
+      )
+    }
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link
+      rel="preload"
+      href="/fonts/marcellus-latin-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/karla-latin-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    <script is:inline>document.documentElement.classList.add("js")</script>
+    {
+      memberGuard && (
+        <script is:inline define:vars={{ dashboardUrl }}>
+          /* Sync member / PWA guard — must run before paint when possible.
+             Absolute www URL so marketing *.pages.dev previews send members
+             to the product app, not a missing path on the marketing host. */
+          (function () {
+            try {
+              var standalone =
+                (window.matchMedia &&
+                  window.matchMedia('(display-mode: standalone)').matches) ||
+                navigator.standalone === true;
+              var authed = false;
+              for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i) || '';
+                if (k.indexOf('sb-') === 0 && k.indexOf('-auth-token') !== -1) {
+                  var raw = localStorage.getItem(k);
+                  if (raw && raw.indexOf('access_token') !== -1) {
+                    authed = true;
+                    break;
+                  }
+                }
+              }
+              if (standalone || authed) {
+                location.replace(dashboardUrl);
+              }
+            } catch (e) {}
+          })();
+        </script>
+      )
+    }
+    {
+      metaPixelId && (
+        <script is:inline define:vars={{ metaPixelId }}>
+          !(function (f, b, e, v, n, t, s) {
+            if (f.fbq) return;
+            n = f.fbq = function () {
+              n.callMethod
+                ? n.callMethod.apply(n, arguments)
+                : n.queue.push(arguments);
+            };
+            if (!f._fbq) f._fbq = n;
+            n.push = n;
+            n.loaded = !0;
+            n.version = '2.0';
+            n.queue = [];
+            t = b.createElement(e);
+            t.async = !0;
+            t.src = v;
+            s = b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t, s);
+          })(
+            window,
+            document,
+            'script',
+            'https://connect.facebook.net/en_US/fbevents.js',
+          );
+          fbq('init', metaPixelId);
+          fbq('track', 'PageView');
+        </script>
+      )
+    }
+  </head>
+  <body>
+    <slot />
+    <script is:inline>
+      /* Attribution capture → waitlist hidden fields */
+      (function () {
+        try {
+          var KEY = 'mm_attribution_v1';
+          var params = new URLSearchParams(location.search);
+          var fbclid = (params.get('fbclid') || '').trim();
+          function cookie(n) {
+            var m = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)'));
+            return m ? decodeURIComponent(m[1]) : '';
+          }
+          var data = {
+            utm_source: (params.get('utm_source') || '').trim(),
+            utm_medium: (params.get('utm_medium') || '').trim(),
+            utm_campaign: (params.get('utm_campaign') || '').trim(),
+            utm_content: (params.get('utm_content') || '').trim(),
+            fbclid: fbclid,
+            fbp: cookie('_fbp'),
+            fbc: cookie('_fbc') || (fbclid ? 'fb.1.' + Date.now() + '.' + fbclid : ''),
+          };
+          var prev = {};
+          try {
+            prev = JSON.parse(sessionStorage.getItem(KEY) || '{}') || {};
+          } catch (e) {}
+          var merged = Object.assign({}, prev);
+          Object.keys(data).forEach(function (k) {
+            if (data[k]) merged[k] = data[k];
+          });
+          sessionStorage.setItem(KEY, JSON.stringify(merged));
+          document.querySelectorAll('[data-waitlist-form]').forEach(function (form) {
+            ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'fbclid', 'fbp', 'fbc'].forEach(
+              function (name) {
+                var input = form.querySelector('input[name="' + name + '"]');
+                if (input && merged[name]) input.value = merged[name];
+              },
+            );
+            var eid = form.querySelector('input[name="event_id"]');
+            if (eid && !eid.value) {
+              eid.value =
+                'lead_' +
+                (crypto.randomUUID
+                  ? crypto.randomUUID()
+                  : Date.now() + '_' + Math.random().toString(36).slice(2));
+            }
+          });
+        } catch (e) {}
+      })();
+    </script>
+    <script is:inline>
+      /* Sticky CTA + scroll reveals */
+      (function () {
+        var hero = document.querySelector('.hero');
+        var bar = document.getElementById('stickyCta');
+        if ('IntersectionObserver' in window) {
+          if (hero && bar) {
+            new IntersectionObserver(
+              function (e) {
+                var out = !e[0].isIntersecting && e[0].boundingClientRect.top < 0;
+                bar.classList.toggle('on', out);
+                bar.setAttribute('aria-hidden', String(!out));
+              },
+              { threshold: 0 },
+            ).observe(hero);
+          }
+          var rvObs = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (en) {
+                if (en.isIntersecting) {
+                  en.target.classList.add('in');
+                  rvObs.unobserve(en.target);
+                }
+              });
+            },
+            { threshold: 0.15, rootMargin: '0px 0px -6% 0px' },
+          );
+          document.querySelectorAll('.rv').forEach(function (el) {
+            rvObs.observe(el);
+          });
+        } else {
+          document.querySelectorAll('.rv').forEach(function (el) {
+            el.classList.add('in');
+          });
+          if (bar) {
+            bar.classList.add('on');
+            bar.setAttribute('aria-hidden', 'false');
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

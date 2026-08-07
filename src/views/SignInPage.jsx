@@ -5,6 +5,7 @@ import { Shell, Card, Btn, Field, inputStyle } from "../components/ui";
 import { useAuth } from "../auth/useAuth.jsx";
 import { PATHS } from "../routing";
 import { TERMS_VERSION } from "../content/terms";
+import { isEnrollmentOpen } from "../config";
 
 /**
  * One auth screen. Mode comes from the entry point:
@@ -94,7 +95,9 @@ export function SignInPage({
           {forgotMode
             ? "Enter the email you enrolled with. We’ll send a link to choose a new password."
             : isCreate
-              ? "New spots aren’t open for checkout yet. Prefer the cohort two waitlist on the homepage — we’ll email you a join link when it’s time. Only create an account here if Callie invited you to finish joining."
+              ? (isEnrollmentOpen()
+                ? "Create your account to reserve your spot, then you’ll pay and complete a short intake so Callie can build your macros."
+                : "New spots aren’t open for checkout yet. Prefer the cohort two waitlist on the homepage — we’ll email you a join link when it’s time. Only create an account here if Callie invited you to finish joining.")
               : "Sign in with the email you used when you enrolled."}
         </p>
 

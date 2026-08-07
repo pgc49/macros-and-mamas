@@ -1,0 +1,121 @@
+---
+import {
+  cohortStartDate,
+  cohortStartDateCompact,
+  cohortStartDateShort,
+  enrollUrl,
+  foundingPrice,
+  fullPrice,
+  isWaitlist,
+  labAddonPrice,
+  labPanelPrice,
+  labStandalonePrice,
+  openPrice,
+  waitlistPrice,
+} from '../config';
+import RangeBand from './RangeBand.astro';
+---
+
+<section id="pricing">
+  <div class="wrap">
+    <div style="text-align:center">
+      <span class="kicker">One price · everything included</span>
+      <h2>Cohort 2 starts {cohortStartDateShort}.</h2>
+    </div>
+    <div class="price-card rv">
+      {
+        isWaitlist ? (
+          <span class="cohort">Waitlist rate, locked when you join</span>
+        ) : (
+          <span class="cohort">Enrollment open · starts {cohortStartDate}</span>
+        )
+      }
+      {
+        isWaitlist ? (
+          <div class="big-price">
+            <small>$</small>
+            {waitlistPrice}
+          </div>
+        ) : (
+          <div class="big-price">
+            <small>$</small>
+            {openPrice}
+          </div>
+        )
+      }
+      {
+        isWaitlist ? (
+          <p class="price-history">
+            Full price <s>${fullPrice}</s> · Founding rate ${foundingPrice}{' '}
+            closed with cohort 1
+          </p>
+        ) : (
+          <p class="price-history">
+            Early rate · Full <s>${fullPrice}</s> · Founding ${foundingPrice}{' '}
+            closed with cohort 1
+          </p>
+        )
+      }
+      <div class="price-band"><RangeBand sage /></div>
+      <ul class="includes">
+        <li
+          ><strong>8 weeks of coaching with Callie,</strong> Monday through
+          Friday</li
+        >
+        <li
+          ><strong>Macro ranges built by hand,</strong> adjusted as your season
+          changes</li
+        >
+        <li
+          ><strong>The full app:</strong> photo and menu logging, week planner,
+          grocery lists, habits, water, weigh-ins</li
+        >
+        <li
+          ><strong>Group coaching and 1:1 Messages,</strong> built into the app</li
+        >
+        <li><strong>Monday voice note,</strong> every week</li>
+        <li
+          ><strong>Zero product costs.</strong> No shakes or supplements, just
+          groceries you'd buy anyway</li
+        >
+      </ul>
+      {
+        isWaitlist ? (
+          <a class="btn" href="#top-form">
+            Save my spot · lock ${waitlistPrice}
+          </a>
+        ) : (
+          <a class="btn" href={enrollUrl}>
+            Join now · starts {cohortStartDateCompact}
+          </a>
+        )
+      }
+      <p class="disclosure"
+        >Everything lives in one app: coaching, logging, planning, groceries.
+        Nothing extra to install, and your phone number stays yours.</p
+      >
+    </div>
+    <div class="addon rv">
+      <span class="a-kicker">Optional add-on · limited spots per cohort</span>
+      <div class="a-row">
+        <h3>The Lab Review</h3>
+        <div class="a-price"
+          >${labAddonPrice}{' '}
+          <small>${labStandalonePrice} as a standalone review</small></div
+        >
+      </div>
+      <p
+        >Told your labs are normal, but you still feel off? Callie is blood
+        chemistry certified. She personally reads your bloodwork, records you a
+        voice memo walking through what it says, answers your questions in
+        Messages, and tunes your ranges to match. Add it at enrollment or
+        anytime during your 8 weeks.</p
+      >
+      <p class="a-fine"
+        >Use recent labs, order bloodwork through Callie (${labPanelPrice},
+        separate), or get a panel through your GP, often covered by insurance.
+        Educational analysis, not medical diagnosis or treatment.</p
+      >
+    </div>
+  </div>
+</section>

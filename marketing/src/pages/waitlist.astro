@@ -1,0 +1,29 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import WaitlistForm from '../components/WaitlistForm.astro';
+import { fullPrice, waitlistPrice } from '../config';
+---
+
+<BaseLayout
+  title="Join the waitlist — Macros and Mamas"
+  description={`Lock $${waitlistPrice} for cohort 2 ($${fullPrice} full price). No charge today. Callie emails waitlist mamas first when enrollment opens.`}
+  memberGuard={false}
+>
+  <Header />
+  <section class="hero" style="padding-bottom:100px">
+    <div class="wrap" style="max-width:560px;margin:0 auto">
+      <span class="kicker">Cohort 2 waitlist</span>
+      <h1 style="font-size:clamp(36px,6vw,56px);margin:18px 0 14px"
+        >Save your spot. Lock ${waitlistPrice}.</h1
+      >
+      <p class="sub" style="margin:0 0 28px"
+        >No charge today. When enrollment opens, waitlist mamas hear first — and
+        your early rate is waiting.</p
+      >
+      <WaitlistForm id="waitlist-page-form" variant="page" source="waitlist_page" />
+    </div>
+  </section>
+  <Footer />
+</BaseLayout>

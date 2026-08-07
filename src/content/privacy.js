@@ -1,5 +1,5 @@
 /** Privacy Policy — mirrored from launch legal copy. */
-export const PRIVACY_EFFECTIVE_DATE = "July 18, 2026";
+export const PRIVACY_EFFECTIVE_DATE = "August 2, 2026";
 
 export const PRIVACY_INTRO = [
   'This Privacy Policy explains how C&C Health Coaching LLC ("we," "us," or "our") collects, uses, and shares information when you use the Macros and Mamas program, website (macrosandmamas.com), and web application (the "Program"). It is incorporated into our Terms and Conditions.',
@@ -17,6 +17,7 @@ export const PRIVACY_SECTIONS = [
       "Communications — messages you send us by email or in the group chat, and any testimonials or progress photos you choose to share with us.",
       "Information collected automatically:",
       "Basic technical and usage data such as IP address, browser and device type, pages viewed, and timestamps, used to operate and secure the site.",
+      "Advertising measurement data — when you arrive from a Meta (Facebook/Instagram) ad or interact with a tracked conversion (for example joining the waitlist or completing checkout), we may collect Meta cookie identifiers (_fbp / _fbc), click IDs (fbclid), and UTM campaign parameters, and we may hash your email and phone for ads measurement. See Section 4.",
       "Information we do not collect: we never see or store your full payment card details. Payments are processed by Stripe.",
     ],
   },
@@ -30,9 +31,10 @@ export const PRIVACY_SECTIONS = [
       "send program emails (welcome, intake reminders, approval, check-ins, graduation) and coach communications;",
       "invite you to and administer the private group chat;",
       "process payments and, where applicable, refunds;",
+      "measure and improve advertising performance (for example, whether a waitlist signup or purchase came from a Meta ad) using Meta Pixel and Conversions API;",
       "improve the Program and troubleshoot problems;",
       "comply with legal obligations and enforce our Terms.",
-      "We do not sell your personal information, and we do not share it with advertisers.",
+      "We do not sell your personal information for money. We may share limited information with Meta for advertising measurement as described in Section 4.",
     ],
   },
   {
@@ -51,6 +53,7 @@ export const PRIVACY_SECTIONS = [
       "Resend — email delivery",
       "AI provider(s) — meal photo and description estimates",
       "WhatsApp (Meta) — group communication",
+      "Meta Platforms, Inc. — advertising measurement via Meta Pixel (browser) and Conversions API (server). Data may include hashed email and phone, IP address, user agent, cookie identifiers (_fbp / _fbc), click IDs, and event details such as Lead, InitiateCheckout, and Purchase. Meta uses this to measure ad performance and may use it under Meta's own policies. This is a \"share\" for cross-context behavioral advertising measurement under CCPA/CPRA language.",
       "We may also disclose information if required by law or legal process, to protect our rights or someone's safety, or in connection with a sale or reorganization of our business.",
       "A note on the group chat: the private WhatsApp group is operated by Meta under its own terms and privacy policy. Other members of the group can see your phone number and anything you post there. Please share only what you're comfortable sharing with the group.",
     ],
@@ -82,7 +85,8 @@ export const PRIVACY_SECTIONS = [
       "delete your account and associated information;",
       "opt out of marketing emails using the unsubscribe link — note that transactional emails about your active program will still be sent;",
       "leave the group chat at any time.",
-      "If you are a California resident, the CCPA/CPRA gives you rights to know what personal information we collect, to request deletion or correction, and not to be discriminated against for exercising those rights. We do not sell or share personal information for cross-context behavioral advertising.",
+      "If you are a California resident, the CCPA/CPRA gives you rights to know what personal information we collect, to request deletion or correction, to opt out of the \"sale\" or \"sharing\" of personal information for cross-context behavioral advertising, and not to be discriminated against for exercising those rights.",
+      "We do not sell personal information for money. We share limited data with Meta for advertising measurement (Pixel / Conversions API) as described in Section 4. To opt out of that sharing, email calista@nourishwithcalista.com with the subject \"Do Not Share My Info\" and we will honor your request as required by law. You may also use browser or platform controls (for example Meta ad settings) to limit ad tracking.",
       "To make a request, email calista@nourishwithcalista.com. We will verify your identity and respond within the timeframe required by law.",
     ],
   },

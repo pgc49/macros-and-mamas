@@ -629,15 +629,27 @@ export const db = {
     phone,
     cohort = "cohort_2",
     source = "homepage",
+    attribution = null,
   }) {
-    const { error } = await supabase.from("cohort_waitlist").insert({
+    const row = {
       first_name: String(firstName || "").trim().slice(0, 80),
       last_name: String(lastName || "").trim().slice(0, 80),
       email: String(email || "").trim().toLowerCase().slice(0, 200),
       phone: String(phone || "").trim().slice(0, 40),
       cohort: String(cohort || "cohort_2").slice(0, 40),
       source: String(source || "homepage").slice(0, 40),
-    });
+    };
+    if (attribution && typeof attribution === "object") {
+      if (attribution.utm_source) row.utm_source = String(attribution.utm_source).slice(0, 120);
+      if (attribution.utm_medium) row.utm_medium = String(attribution.utm_medium).slice(0, 120);
+      if (attribution.utm_campaign) row.utm_campaign = String(attribution.utm_campaign).slice(0, 120);
+      if (attribution.utm_content) row.utm_content = String(attribution.utm_content).slice(0, 120);
+      if (attribution.fbclid) row.fbclid = String(attribution.fbclid).slice(0, 200);
+      if (attribution.fbp) row.fbp = String(attribution.fbp).slice(0, 128);
+      if (attribution.fbc) row.fbc = String(attribution.fbc).slice(0, 128);
+      if (attribution.event_id) row.event_id = String(attribution.event_id).slice(0, 120);
+    }
+    const { error } = await supabase.from("cohort_waitlist").insert(row);
     if (error) throw error;
   },
 

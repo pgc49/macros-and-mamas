@@ -1,0 +1,164 @@
+---
+import { Image } from 'astro:assets';
+import mealBowl from '../assets/meal-bowl.jpg';
+---
+
+<section class="system" id="app">
+  <div class="wrap">
+    <span class="kicker">The system</span>
+    <h2 style="max-width:15ch"
+      >Coaching is the heart. The app is the hands.</h2
+    >
+    <p class="lede"
+      >A real app on your home screen, personalized from your intake. It knows
+      your ranges and what you actually like to eat, then does the thinking: at
+      home, at the restaurant you didn't pick, over your kids' leftovers. Snap
+      it, and it's handled.</p
+    >
+
+    <div class="collage">
+      <div class="mini c-menu rv">
+        <div class="m-kicker">Log a meal · four ways</div>
+        <div class="modes" aria-hidden="true">
+          <div class="mode act"
+            ><span class="mi">📸</span><span class="ml">Snap</span><span
+              class="ms">plate or menu</span
+            ></div
+          >
+          <div class="mode"
+            ><span class="mi">✏️</span><span class="ml">Describe</span><span
+              class="ms">type it</span
+            ></div
+          >
+          <div class="mode"
+            ><span class="mi">🍳</span><span class="ml">My plan</span><span
+              class="ms">exact</span
+            ></div
+          >
+          <div class="mode"
+            ><span class="mi mi-hash">#</span><span class="ml">Macros</span><span
+              class="ms">I know them</span
+            ></div
+          >
+        </div>
+        <div class="meal-res">
+          <Image
+            class="mr-photo"
+            src={mealBowl}
+            alt="Logged meal photo: chicken meatballs, rice, and Caesar salad on a white plate"
+            widths={[320, 480, 640]}
+            sizes="(max-width: 880px) 80vw, 360px"
+            loading="lazy"
+          />
+          <div class="mr-name">Chicken meatballs, rice &amp; Caesar</div>
+          <div class="mr-sub">Recognized from one photo, portions and all</div>
+          <div class="mp"
+            ><span>480 <small>cal</small></span><span
+              >32 <small>P</small></span
+            ><span>35 <small>C</small></span><span>24 <small>F</small></span></div
+          >
+        </div>
+        <h3>Snap the plate. Or just say it.</h3>
+        <p class="m-desc"
+          >Photograph your food and it's recognized and logged. No time for
+          photos? Describe it: “leftover mac and cheese and a handful of
+          grapes,” done. Eating out? Snap the menu and get dishes ranked to fit
+          the room left in your day.</p
+        >
+      </div>
+
+      <div class="mini c-voice rv">
+        <div class="m-kicker">Monday voice note</div>
+        <div class="vn">
+          <span class="play" aria-hidden="true"></span>
+          <span class="wave" aria-hidden="true"
+            ><i style="height:10px"></i><i style="height:18px"></i><i
+              style="height:26px"></i
+            ><i style="height:14px"></i><i style="height:30px"></i><i
+              style="height:20px"></i
+            ><i style="height:8px"></i><i style="height:24px"></i><i
+              style="height:16px"></i
+            ><i style="height:28px"></i><i style="height:12px"></i><i
+              style="height:22px"></i
+            ><i style="height:9px"></i><i style="height:19px"></i><i
+              style="height:27px"></i
+            ><i style="height:13px"></i></span
+          >
+          <span class="dur">0:58</span>
+        </div>
+        <p class="vn-meta"
+          ><strong>Week 3, from Callie:</strong> this week we anchor protein at
+          breakfast. And we let go of weighing in on Fridays.</p
+        >
+        <h3>Callie in your ears, every Monday.</h3>
+        <p class="m-desc"
+          >One focus. One skill. One thing to let go. A weekly reset from a
+          coach who knows Monday is a fresh start, not a judgment day.</p
+        >
+      </div>
+
+      <div class="mini c-groc rv">
+        <div class="m-kicker">Plan → Groceries</div>
+        <div class="g-item done"
+          ><span class="box"></span><span>Chicken thighs, 2 lb</span></div
+        >
+        <div class="g-item done"
+          ><span class="box"></span><span>Greek yogurt, full fat</span></div
+        >
+        <div class="g-item"><span class="box"></span><span>Eggs, 18 ct</span></div>
+        <div class="g-item"
+          ><span class="box"></span><span>Frozen berries</span></div
+        >
+        <h3>A week planned around your kitchen.</h3>
+        <p class="m-desc"
+          >Your intake covers what you love to eat. The app suggests meals and
+          recipes that fit your ranges and your tastes, then writes the grocery
+          list. And meals you eat on repeat get saved, so logging them takes one
+          tap.</p
+        >
+      </div>
+
+      <div class="mini c-msg rv">
+        <div class="m-kicker">Messages · 1:1 with Callie</div>
+        <div class="bubble you"
+          >Week fell apart. Birthday cake for dinner Tuesday. Do I start over?</div
+        >
+        <div class="bubble callie"
+          >You don't start over, you just start logging again. One meal today
+          with protein first. That's the whole assignment.</div
+        >
+        <h3>A real answer when the week blows up.</h3>
+        <p class="m-desc"
+          >1:1 Messages with push notifications, plus the group coaching thread
+          where Callie answers all week. All inside the app, nothing extra to
+          download, and your phone number stays yours.</p
+        >
+      </div>
+
+      <div class="mini c-habits rv">
+        <div class="m-kicker">Daily rhythm</div>
+        <div class="habit done"
+          ><span class="ring"></span><span>Water + electrolytes</span></div
+        >
+        <div class="habit done"
+          ><span class="ring"></span><span>Morning sunlight</span></div
+        >
+        <div class="habit done"
+          ><span class="ring"></span><span>Walk or strength</span></div
+        >
+        <div class="habit"><span class="ring"></span><span>Meals at home</span></div>
+        <h3>Habits that fit a nap schedule.</h3>
+        <p class="m-desc"
+          >Water, walks, sunlight, strength. A checklist that meets your season,
+          no gym required.</p
+        >
+      </div>
+    </div>
+    <p
+      style="text-align:center;margin-top:40px;font-size:15px;color:var(--ink-soft)"
+      ><strong style="color:var(--ink)">No App Store download.</strong> Add it to
+      your home screen from the link we send. Twenty seconds, and it lives next to
+      your camera. And the word members use most for it? Easy.</p
+    >
+  </div>
+</section>

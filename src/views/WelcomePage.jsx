@@ -3,6 +3,7 @@ import { FD, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
+import { trackPixel } from "../lib/attribution";
 
 /**
  * Stripe success landing. Never trust the URL alone — poll until webhook
@@ -12,6 +13,7 @@ export function WelcomePage({ onPaid, navigate }) {
   const [status, setStatus] = useState("confirming"); // confirming | ready | stuck
   const [tries, setTries] = useState(0);
   const onPaidRef = useRef(onPaid);
+  const purchaseTracked = useRef(false);
   onPaidRef.current = onPaid;
 
   useEffect(() => {
@@ -19,6 +21,26 @@ export function WelcomePage({ onPaid, navigate }) {
     let attempt = 0;
     const maxAttempts = 20;
     let timer;
+
+    const firePurchasePixel = () => {
+      if (purchaseTracked.current) return;
+      purchaseTracked.current = true;
+      let storedId = "";
+      try {
+        storedId = sessionStorage.getItem("mm_purchase_event_id") || "";
+      } catch {
+        storedId = "";
+      }
+      const sessionId = new URLSearchParams(window.location.search).get("session_id") || "";
+      // Must match webhook: metadata.event_id || session.id
+      const eventId = storedId || sessionId;
+      if (!eventId) return;
+      trackPixel(
+        "Purchase",
+        { currency: "USD", content_name: "enrollment", order_id: sessionId || eventId },
+        eventId,
+      );
+    };
 
     const tick = async () => {
       attempt += 1;
@@ -31,6 +53,7 @@ export function WelcomePage({ onPaid, navigate }) {
           return;
         }
         if (s?.paid) {
+          firePurchasePixel();
           setStatus("ready");
           onPaidRef.current?.(s);
           return;
