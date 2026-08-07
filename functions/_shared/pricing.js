@@ -5,7 +5,7 @@
  *   STRIPE_PRICE_ID_FOUNDING  — $149 (falls back to legacy STRIPE_PRICE_ID)
  *   STRIPE_PRICE_ID_WAITLIST  — $249 early / quiz-unlock rate
  *   STRIPE_PRICE_ID_FULL      — $299 full price
- *   STRIPE_PRICE_ID_LAB_ADDON — $299 The Lab Review (optional line item)
+ *   STRIPE_PRICE_ID_LAB_ADDON — $349 The Lab Review (optional line item)
  *
  * Resolution order:
  *   1. Account created before ENROLLMENT_CLOSED_AT → founding ($149)
@@ -23,7 +23,7 @@ export const PRICE_TIERS = {
 };
 
 /** Optional Lab Review add-on (one-time). */
-export const LAB_ADDON_AMOUNT = 299;
+export const LAB_ADDON_AMOUNT = 349;
 export const LAB_ADDON_LABEL = "The Lab Review";
 
 /** Segments that may unlock the $249 early rate after the quiz. */

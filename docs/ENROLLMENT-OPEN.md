@@ -24,7 +24,7 @@ Required Price IDs:
 
 ```
 STRIPE_PRICE_ID_WAITLIST=<your $249 price id>
-STRIPE_PRICE_ID_LAB_ADDON=price_…
+STRIPE_PRICE_ID_LAB_ADDON=price_1U1vfzRyN0PahoiM6AVgkMYh   # $349 Lab Review
 SUPABASE_SERVICE_ROLE_KEY=…   # needed to look up marketing_leads
 ```
 

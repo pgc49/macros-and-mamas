@@ -437,8 +437,8 @@
       : `${enrollUrl}?from=quiz`;
     return `<div class="q-offer-card">
       <div class="q-offer-kicker">Exclusive · unlocked by your quiz</div>
-      <h2 class="q-offer-title">Ready to lock your spot?</h2>
-      <p class="q-offer-lede">Cohort 2 starts <strong>${escapeHtml(cohortStart)}</strong>. Pre-pay now to guarantee your seat — and keep the early rate you just unlocked.</p>
+      <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
+      <p class="q-offer-lede">You’re signing up for <strong>Cohort 2</strong>, starting <strong>${escapeHtml(cohortStart)}</strong>. Create your account, then pre-pay to guarantee your seat at the early rate you just unlocked.</p>
       <div class="q-offer-price-row">
         <span class="q-offer-now">$${offerPrice}</span>
         <span class="q-offer-was">$${fullPrice}</span>

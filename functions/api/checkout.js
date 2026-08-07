@@ -6,7 +6,7 @@
      STRIPE_PRICE_ID_FOUNDING  ($149; falls back to STRIPE_PRICE_ID)
      STRIPE_PRICE_ID_WAITLIST  ($249)
      STRIPE_PRICE_ID_FULL      ($299)
-     STRIPE_PRICE_ID_LAB_ADDON ($299 The Lab Review; optional)
+     STRIPE_PRICE_ID_LAB_ADDON ($349 The Lab Review; optional)
      SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
      ENROLLMENT_OPEN / ENROLLMENT_CLOSED_AT / WAITLIST_COHORT
    ================================================================== */

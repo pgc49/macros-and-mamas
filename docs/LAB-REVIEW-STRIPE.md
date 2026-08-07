@@ -5,18 +5,20 @@
 | | |
 | --- | --- |
 | Product | `prod_V0wP87f6etTxHb` — **The Lab Review** |
-| Price | `price_1U0uX1RyN0PahoiMMckCnYMR` — **$299** one-time |
+| Price (current) | `price_1U1vfzRyN0PahoiM6AVgkMYh` — **$349** one-time |
+| Lookup key | `lab_review_addon_349` |
 | Metadata | `sku=lab_review` |
+| Prior price | `price_1U0uX1RyN0PahoiMMckCnYMR` — $299 (retired; do not use for new checkouts) |
 
 ## Cloudflare Pages (SPA project `macros-and-mamas`)
 
-Add **runtime** secret / variable:
+Set **runtime** variable on Preview + Production:
 
 ```
-STRIPE_PRICE_ID_LAB_ADDON=price_1U0uX1RyN0PahoiMMckCnYMR
+STRIPE_PRICE_ID_LAB_ADDON=price_1U1vfzRyN0PahoiM6AVgkMYh
 ```
 
-Without this, checkout with the Lab Review toggle returns `lab add-on unavailable`.
+Without this (or if the old $299 id is left in place), display says $349 but Stripe may charge the wrong Price ID — keep them matched.
 
 ## Database
 

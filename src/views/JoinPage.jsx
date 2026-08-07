@@ -5,9 +5,11 @@ import { Shell, Card, Btn } from "../components/ui";
 import { fetchCheckoutQuote, startCheckout } from "../lib/checkout";
 import { PATHS } from "../routing";
 
-const LAB_ADDON_PRICE = 299;
+const LAB_ADDON_PRICE = 349;
 /** Marketing quiz on www — unlocks the $249 early rate. */
 const QUIZ_URL = "https://www.macrosandmamas.com/quiz";
+/** Cohort 2 start — keep in sync with marketing/src/config.ts */
+const COHORT_START = "Monday, Aug 31";
 
 /** Unpaid signed-in users finish joining here before intake. */
 export function JoinPage({ onRefresh, profileCreatedAt = null }) {
@@ -184,16 +186,28 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
   const openBlurb = isFounding
     ? `Founding rate $${amount}. After checkout you’ll complete a short intake so Callie can build your macros.`
     : amount != null
-      ? `Quiz unlock: $${amount} for 8 weeks ($50 off the full $299). Pre-pay now to lock your cohort spot. After checkout you’ll complete a short intake — Callie approves your final ranges before you start.`
-      : "Pre-pay to lock your cohort spot. After checkout you’ll complete a short intake so Callie can build your macros.";
+      ? `You’re locking Cohort 2 — starts ${COHORT_START}. Quiz unlock: $${amount} for 8 weeks ($50 off the full $299). After checkout you’ll complete a short intake; Callie approves your final ranges before day one.`
+      : `You’re locking Cohort 2 — starts ${COHORT_START}. After checkout you’ll complete a short intake so Callie can build your macros.`;
 
   return (
     <Shell>
       <Card style={{ marginTop: 30, textAlign: "center", padding: 30 }}>
+        <div
+          style={{
+            fontSize: 11.5,
+            fontWeight: 700,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: T.accentDeep || T.accent,
+            marginBottom: 6,
+          }}
+        >
+          Cohort 2 · starts {COHORT_START}
+        </div>
         <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "10px 0" }}>
           {isFounding
             ? (total != null ? `Finish joining — $${total}` : "Finish joining")
-            : (total != null ? `Lock your spot — $${total}` : "Lock your spot")}
+            : (total != null ? `Lock your Aug 31 spot — $${total}` : "Lock your Aug 31 spot")}
         </h2>
         <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft }}>
           {quoteLoading ? "Loading your price…" : openBlurb}
@@ -214,6 +228,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
         {!isFounding && (
           <p style={{ marginTop: 14, fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
             Use the same email you used on the quiz so we can keep your early rate.
+            You’re signing up for the <strong style={{ color: T.ink }}>August 31</strong> cohort.
           </p>
         )}
         {refreshBtn}

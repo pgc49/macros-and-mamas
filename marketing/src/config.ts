@@ -29,7 +29,7 @@ export const programWeeks = 8;
 export const weeklyPrice = Math.round(waitlistPrice / programWeeks);
 
 /** Optional Lab Review add-on (pricing section + FAQ). */
-export const labAddonPrice = 299;
+export const labAddonPrice = 349;
 export const labStandalonePrice = 600;
 export const labPanelPrice = 200;
 
