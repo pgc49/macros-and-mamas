@@ -26,7 +26,7 @@ import RangeBand from './RangeBand.astro';
     <div class="price-card rv">
       {
         isWaitlist ? (
-          <span class="cohort">Waitlist rate, locked when you join</span>
+          <span class="cohort">Next cohort opening soon · waitlist locks this rate</span>
         ) : (
           <span class="cohort">Enrollment open · starts {cohortStartDate}</span>
         )
@@ -83,7 +83,7 @@ import RangeBand from './RangeBand.astro';
       {
         isWaitlist ? (
           <a class="btn" href={quizUrl}>
-            See your ranges · lock ${waitlistPrice}
+            Get your ranges · lock ${waitlistPrice}
           </a>
         ) : (
           <a class="btn" href={enrollUrl}>
