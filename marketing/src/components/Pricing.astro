@@ -5,7 +5,6 @@ import {
   cohortStartDateShort,
   enrollUrl,
   quizUrl,
-  foundingPrice,
   fullPrice,
   isWaitlist,
   labAddonPrice,
@@ -17,6 +16,8 @@ import {
   weeklyPrice,
 } from '../config';
 import RangeBand from './RangeBand.astro';
+
+const saveAmount = fullPrice - waitlistPrice;
 ---
 
 <section id="pricing">
@@ -32,7 +33,7 @@ import RangeBand from './RangeBand.astro';
       {
         isWaitlist ? (
           <span class="cohort"
-            >Next cohort opening soon · join the list to hold this rate</span
+            >Exclusive early rate · unlocks after the free quiz</span
           >
         ) : (
           <span class="cohort">Enrollment open · starts {cohortStartDate}</span>
@@ -52,19 +53,10 @@ import RangeBand from './RangeBand.astro';
         )
       }
       <p class="price-week">${weeklyPrice}/week for {programWeeks} weeks</p>
-      {
-        isWaitlist ? (
-          <p class="price-history">
-            Full price <s>${fullPrice}</s> · Founding rate ${foundingPrice}{' '}
-            closed with cohort 1
-          </p>
-        ) : (
-          <p class="price-history">
-            Early rate · Full <s>${fullPrice}</s> · Founding ${foundingPrice}{' '}
-            closed with cohort 1
-          </p>
-        )
-      }
+      <p class="price-history">
+        Full price <s>${fullPrice}</s> · save ${saveAmount} when you finish the
+        quiz
+      </p>
       <div class="price-band"><RangeBand sage /></div>
       <ul class="includes">
         <li
@@ -91,7 +83,7 @@ import RangeBand from './RangeBand.astro';
       {
         isWaitlist ? (
           <a class="btn" href={quizUrl}>
-            Get your free ranges · hold ${waitlistPrice}
+            Take the quiz · unlock ${waitlistPrice}
           </a>
         ) : (
           <a class="btn" href={enrollUrl}>

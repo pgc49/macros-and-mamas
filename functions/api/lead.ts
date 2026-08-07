@@ -257,6 +257,7 @@ async function sendRangesEmail(
     subject = `${name}, Callie wants to look at your ranges personally`;
     html = `<p>Hi ${name},</p>
 <p>Your ranges need Callie's eyes on them. A couple of your answers mean an automated band isn't the right call. Callie will review this herself and send your ranges within 24 hours.</p>
+<p>You still unlocked the early rate — pre-pay $249 to lock your cohort spot anytime: <a href="https://www.macrosandmamas.com/join?from=quiz">macrosandmamas.com/join</a> (use this same email).</p>
 <p>— The Macros and Mamas team</p>`;
   } else if (opts.ranges) {
     subject = `Your ranges, ${name}`;
@@ -275,7 +276,8 @@ ${early}
 </ul>
 <p>${feed}</p>
 <p>Why a range? Busy, active day → eat the top. Slow day → the bottom. Both count as a win. Start with protein; it's the anchor.</p>
-<p>When you're ready for the full 8 weeks with Callie in your corner, join here: <a href="https://www.macrosandmamas.com/join">macrosandmamas.com/join</a></p>
+<p><strong>You unlocked the early rate.</strong> Pre-pay $249 ($50 off full price) to lock your spot for the next cohort: <a href="https://www.macrosandmamas.com/join?from=quiz">macrosandmamas.com/join</a> — use this same email at checkout.</p>
+<p>Ranges above are a preview. If you join, Callie builds and approves your final numbers before you start.</p>
 <p>— Callie</p>`;
   } else {
     subject = `Thanks, ${name}`;

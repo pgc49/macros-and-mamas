@@ -109,13 +109,13 @@ const isPage = variant === 'page';
   {
     isFinal || isPage ? (
       <p class="price-note">
-        No charge today · Founding cohort sold out at ${foundingPrice}
+        Prefer the free ranges quiz to unlock ${waitlistPrice} and pre-pay.
       </p>
     ) : (
       <p class="price-note">
-        No charge today. Holds the <strong>${waitlistPrice}</strong> early rate
-        for 8 weeks ($50 off the full ${fullPrice}). Cohort 2 starts{' '}
-        {cohortStartDate}; enrollment email comes first to the waitlist.
+        Or take the free quiz to unlock <strong>${waitlistPrice}</strong> ($50
+        off ${fullPrice}) and pre-pay to lock your spot. Cohort 2 starts{' '}
+        {cohortStartDate}.
       </p>
     )
   }

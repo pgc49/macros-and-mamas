@@ -7,6 +7,11 @@
 
   const isWaitlist = root.dataset.waitlist === 'true';
   const enrollUrl = root.dataset.enrollUrl || 'https://www.macrosandmamas.com/join';
+  const offerPrice = Number(root.dataset.offerPrice || 249);
+  const fullPrice = Number(root.dataset.fullPrice || 299);
+  const weeklyPrice = Number(root.dataset.weeklyPrice || Math.round(offerPrice / 8));
+  const cohortStart = root.dataset.cohortStart || 'Monday, Aug 31';
+  const saveAmount = Math.max(0, fullPrice - offerPrice);
   const ATTR_KEY = 'mm_attribution_v1';
 
   const Q1 = [
@@ -408,8 +413,8 @@
       return screenShell(
         "Callie wants eyes on this",
         `<div class="q-banner">Your ranges need Callie's eyes on them. A couple of your answers mean an automated band isn't the right call. Callie will review this herself and send your ranges within 24 hours.</div>
-         <p class="q-copy">Check your inbox — confirmation is on the way.</p>
-         ${ctaBlock()}`,
+         <p class="q-copy">Check your inbox — confirmation is on the way. You can still lock your cohort spot below while she looks.</p>
+         ${offerBlock()}`,
       );
     }
 
@@ -421,16 +426,33 @@
       ${logPreviewHtml()}
       <p class="q-copy"><strong>Why a range?</strong> Tuesday happens. Start with protein — it's the anchor.</p>
       <p class="q-copy muted">A copy of this breakdown is in your inbox.</p>
-      ${ctaBlock()}`,
+      ${offerBlock()}`,
     );
   }
 
-  function ctaBlock() {
-    if (isWaitlist) {
-      return `<a class="btn" href="/quiz">You're on the list — ranges are in your inbox</a>
-        <p class="q-copy muted">We'll email you when cohort doors open.</p>`;
-    }
-    return `<a class="btn" href="${enrollUrl}">See how the 8 weeks work → join</a>`;
+  /** Quiz-gated exclusive pre-pay — shown for eligible non-pregnant / non-vegan finishes. */
+  function offerBlock() {
+    const joinHref = enrollUrl.includes('?')
+      ? `${enrollUrl}&from=quiz`
+      : `${enrollUrl}?from=quiz`;
+    return `<div class="q-offer-card">
+      <div class="q-offer-kicker">Exclusive · unlocked by your quiz</div>
+      <h2 class="q-offer-title">Ready to lock your spot?</h2>
+      <p class="q-offer-lede">Cohort 2 starts <strong>${escapeHtml(cohortStart)}</strong>. Pre-pay now to guarantee your seat — and keep the early rate you just unlocked.</p>
+      <div class="q-offer-price-row">
+        <span class="q-offer-now">$${offerPrice}</span>
+        <span class="q-offer-was">$${fullPrice}</span>
+        <span class="q-offer-save">Save $${saveAmount}</span>
+      </div>
+      <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks · everything included</p>
+      <a class="btn q-offer-btn" href="${joinHref}">Pre-pay $${offerPrice} — lock my spot</a>
+      <p class="q-offer-fine">Use the <strong>same email</strong> you just entered so checkout unlocks this rate. Ranges above are a preview — Callie approves your final numbers if you join.</p>
+      ${
+        isWaitlist
+          ? `<p class="q-copy muted" style="margin-bottom:0">Not ready to pay? You're on the list — we'll also email you when doors are fully open.</p>`
+          : ''
+      }
+    </div>`;
   }
 
   function escapeHtml(s) {

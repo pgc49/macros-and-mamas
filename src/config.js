@@ -55,8 +55,9 @@ export const CONFIG = {
   FULLSCRIPT_SLEEP: envUrl("VITE_FULLSCRIPT_SLEEP_URL"),
   FULLSCRIPT_DIGESTION: envUrl("VITE_FULLSCRIPT_DIGESTION_URL"),
 
-  // Cohort 2 checkout open at early ($249) rate — see functions/_shared/pricing.js.
-  // Mirror ENROLLMENT_OPEN=true on Cloudflare Pages (SPA) Preview + Production.
+  // Client: allow create-account + /join routing (pre-sales open).
+  // Server price still requires a marketing quiz lead for $249 unless
+  // OPEN_WITHOUT_QUIZ=true — see functions/_shared/pricing.js.
   ENROLLMENT_OPEN: true,
   /** ISO cutoff: accounts created before this may still finish paying while closed. */
   ENROLLMENT_CLOSED_AT: "2026-07-26T02:00:00.000Z",

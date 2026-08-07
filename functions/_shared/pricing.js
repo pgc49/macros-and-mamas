@@ -3,16 +3,17 @@
  *
  * Cloudflare env (Price IDs from Stripe Dashboard):
  *   STRIPE_PRICE_ID_FOUNDING  — $149 (falls back to legacy STRIPE_PRICE_ID)
- *   STRIPE_PRICE_ID_WAITLIST  — $249 early waitlist
+ *   STRIPE_PRICE_ID_WAITLIST  — $249 early / quiz-unlock rate
  *   STRIPE_PRICE_ID_FULL      — $299 full price
  *   STRIPE_PRICE_ID_LAB_ADDON — $299 The Lab Review (optional line item)
  *
  * Resolution order:
- *   1. ENROLLMENT_OPEN=true → waitlist early ($249) for everyone
- *   2. else if account created before ENROLLMENT_CLOSED_AT → founding ($149)
- *   3. else → closed (no checkout)
+ *   1. Account created before ENROLLMENT_CLOSED_AT → founding ($149)
+ *   2. Email completed the ranges quiz (eligible segment on marketing_leads) → early ($249)
+ *   3. else → 403 `quiz_required` (pre-sales stay open; price unlocks only after the quiz)
  *
- * Flip open enrollments to `full` ($299) when you retire the early rate.
+ * To sell without the quiz gate later, set OPEN_WITHOUT_QUIZ=true (uses waitlist Price ID).
+ * Flip the open tier to `full` ($299) when you retire the early rate.
  */
 
 export const PRICE_TIERS = {
@@ -24,6 +25,12 @@ export const PRICE_TIERS = {
 /** Optional Lab Review add-on (one-time). */
 export const LAB_ADDON_AMOUNT = 299;
 export const LAB_ADDON_LABEL = "The Lab Review";
+
+/** Segments that may unlock the $249 early rate after the quiz. */
+const QUIZ_UNLOCK_SEGMENTS = new Set([
+  "main",
+  "early_pp_nurture",
+]);
 
 export function labAddonPriceId(env) {
   return String(env.STRIPE_PRICE_ID_LAB_ADDON || "").trim();
@@ -66,17 +73,22 @@ export function priceIdForTier(env, tier) {
  * @returns {{ ok: true, tier, amount, label, priceId } | { ok: false, error: string, status: number }}
  */
 export async function resolveCheckoutOffer(env, { email, createdAt }) {
-  if (enrollmentIsOpen(env)) {
-    // Early open rate ($249). Uses STRIPE_PRICE_ID_WAITLIST.
-    return offerOrMissing(env, "waitlist");
-  }
-
-  // Enrollment closed: only founding accounts may finish paying.
+  // Founding finish-pay path (accounts started before the close cutoff).
   if (isFoundingAccount(createdAt, env)) {
     return offerOrMissing(env, "founding");
   }
 
-  return { ok: false, error: "enrollment closed", status: 403 };
+  // Quiz unlock: completed ranges quiz with an eligible segment.
+  if (await emailHasQuizUnlock(env, email)) {
+    return offerOrMissing(env, "waitlist");
+  }
+
+  // Escape hatch: public checkout with no quiz (off by default).
+  if (String(env.OPEN_WITHOUT_QUIZ || "").toLowerCase() === "true") {
+    return offerOrMissing(env, "waitlist");
+  }
+
+  return { ok: false, error: "quiz_required", status: 403 };
 }
 
 function offerOrMissing(env, tier) {
@@ -95,7 +107,12 @@ function offerOrMissing(env, tier) {
   };
 }
 
-async function emailOnCohortWaitlist(env, email) {
+/**
+ * True when this email completed the marketing quiz and is eligible to pay
+ * the early rate (not pregnant nurture / vegan hold).
+ * needs_review rows still unlock pay — Callie reviews ranges separately.
+ */
+export async function emailHasQuizUnlock(env, email) {
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized) return false;
 
@@ -103,12 +120,10 @@ async function emailOnCohortWaitlist(env, email) {
   const key = env.SUPABASE_SERVICE_ROLE_KEY || "";
   if (!base || !key) return false;
 
-  const cohort = waitlistCohort(env);
   const url =
-    `${base}/rest/v1/cohort_waitlist`
-    + `?select=id`
-    + `&email=eq.${encodeURIComponent(normalized)}`
-    + `&cohort=eq.${encodeURIComponent(cohort)}`
+    `${base}/rest/v1/marketing_leads`
+    + `?select=segment,needs_review`
+    + `&email=ilike.${encodeURIComponent(normalized)}`
     + `&limit=1`;
 
   try {
@@ -116,13 +131,18 @@ async function emailOnCohortWaitlist(env, email) {
       headers: { apikey: key, authorization: `Bearer ${key}` },
     });
     if (!resp.ok) {
-      console.error("waitlist lookup failed", resp.status, await resp.text());
+      console.error("marketing_leads lookup failed", resp.status, await resp.text());
       return false;
     }
     const rows = await resp.json().catch(() => []);
-    return Array.isArray(rows) && rows.length > 0;
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row) return false;
+    const segment = String(row.segment || "");
+    // Allow needs_review on an otherwise eligible path (segment still main/early_pp).
+    if (QUIZ_UNLOCK_SEGMENTS.has(segment)) return true;
+    return false;
   } catch (e) {
-    console.error("waitlist lookup error", e);
+    console.error("marketing_leads lookup error", e);
     return false;
   }
 }

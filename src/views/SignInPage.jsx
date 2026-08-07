@@ -96,7 +96,7 @@ export function SignInPage({
             ? "Enter the email you enrolled with. We’ll send a link to choose a new password."
             : isCreate
               ? (isEnrollmentOpen()
-                ? "Create your account to reserve your spot, then you’ll pay and complete a short intake so Callie can build your macros."
+                ? "Create your account with the same email you used on the ranges quiz, then pre-pay to lock your spot and complete a short intake so Callie can build your macros."
                 : "New spots aren’t open for checkout yet. Prefer the cohort two waitlist on the homepage — we’ll email you a join link when it’s time. Only create an account here if Callie invited you to finish joining.")
               : "Sign in with the email you used when you enrolled."}
         </p>
