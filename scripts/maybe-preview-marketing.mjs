@@ -22,6 +22,7 @@ import {
   mkdirSync,
   renameSync,
   writeFileSync,
+  unlinkSync,
   rmSync,
 } from "node:fs";
 import { dirname, join } from "node:path";

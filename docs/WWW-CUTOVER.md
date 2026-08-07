@@ -14,7 +14,7 @@ Serve the Astro marketing site on `www.macrosandmamas.com` **without** moving th
 | Path | Serves |
 | --- | --- |
 | `/`, `/quiz`, `/waitlist`, `/thanks`, `/_astro/*` | Astro static files from overlay |
-| `/dashboard`, `/join`, `/signin`, `/admin`, … | SPA shell → `/_app/index.html` (explicit rewrites only) |
+| `/dashboard`, `/join`, `/signin`, `/admin`, … | SPA shell → `/spa/index.html` (explicit rewrites only) |
 | `/api/lead`, `/api/waitlist` | Copied marketing Functions |
 | `/api/checkout`, webhooks, … | Existing SPA Functions |
 | Homescreen icon | `/dashboard` on `www` (unchanged) |
@@ -26,10 +26,10 @@ Serve the Astro marketing site on `www.macrosandmamas.com` **without** moving th
 `npm run build` → Vite SPA → `scripts/maybe-preview-marketing.mjs` when `CF_PAGES_BRANCH=main`:
 
 1. Build `marketing/` (enrollment mode from `marketing/wrangler.toml`; **no** `PUBLIC_NOINDEX`)
-2. Move SPA `dist/index.html` → `dist/_app/index.html`
+2. Move SPA `dist/index.html` → `dist/spa/index.html`
 3. Overlay `marketing/dist` (Astro `index.html`, quiz, assets)
 4. Copy `lead.ts` / `waitlist.ts` / `rangesEngine.mjs` into `functions/`
-5. Write `_redirects`: apex→www + explicit SPA route → `/_app/index.html` rewrites
+5. Write `_redirects`: apex→www + explicit SPA route → `/spa/index.html` rewrites
 
 ## SPA project secrets (required for quiz email)
 
@@ -77,9 +77,8 @@ Do **not** attach `www` to `macrosandmamas-marketing` as a “fix.”
 
 ```bash
 MARKETING_WWW_CUTOVER=1 npm run build
-test -f dist/_app/index.html && test -f dist/index.html && test -f dist/quiz/index.html
-grep '_app/index.html' dist/_redirects
+test -f dist/spa/index.html && test -f dist/index.html && test -f dist/quiz/index.html
+! test -f dist/app.html
+grep '/spa/index.html' dist/_redirects
 test -f functions/api/lead.ts
-# / must NOT rewrite to the SPA shell
-! grep -E '^/\s' dist/_redirects
 ```
