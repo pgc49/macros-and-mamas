@@ -1,13 +1,8 @@
 ---
 import {
-  fullPrice,
-  foundingPrice,
-  isWaitlist,
   labAddonPrice,
   labPanelPrice,
   labStandalonePrice,
-  waitlistPrice,
-  weeklyPrice,
 } from '../config';
 ---
 
@@ -100,31 +95,6 @@ import {
           ${labStandalonePrice}.</p
         ></details
       >
-      <details
-        ><summary
-          >How much does it cost? What does joining the list do?</summary
-        >
-        {
-          isWaitlist ? (
-            <p>
-              The program is ${waitlistPrice} for the full 8 weeks — about $
-              {weeklyPrice}/week, everything included. The ${foundingPrice}{' '}
-              founding rate closed with cohort 1. Joining the list holds the $
-              {waitlistPrice} early rate for cohort 2 ($50 off the full $
-              {fullPrice}) and gets you first dibs when enrollment opens. You're
-              not charged anything until you choose to join.
-            </p>
-          ) : (
-            <p>
-              The program is ${waitlistPrice} for the full 8 weeks — about $
-              {weeklyPrice}/week, everything included. The ${foundingPrice}{' '}
-              founding rate closed with cohort 1. Enrollment is open now at the
-              early rate (full rate ${fullPrice}). Doors close a few days before
-              each start date so Callie can build every member's ranges by hand.
-            </p>
-          )
-        }
-      </details>
     </div>
   </div>
 </section>
