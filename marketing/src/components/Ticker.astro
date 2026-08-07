@@ -6,12 +6,22 @@ const items = [
   'No shakes, no supplements',
   'A human coach, Mon–Fri',
   'Bad weeks are built in',
-  'Eight weeks, then plate intuition',
+  'Eight weeks, then you can eyeball a plate',
 ];
 ---
 
+{
+  /*
+    Marquee duplicates items for a seamless loop. Under prefers-reduced-motion
+    we hide the animated track and show a single static list — otherwise iOS
+    "Reduce Motion" wraps the duplicated track into a broken stacked block.
+  */
+}
 <div class="ticker" aria-hidden="true">
   <div class="ticker-track">
     {[...items, ...items].map((t) => <span>{t}</span>)}
+  </div>
+  <div class="ticker-static">
+    {items.map((t) => <span>{t}</span>)}
   </div>
 </div>

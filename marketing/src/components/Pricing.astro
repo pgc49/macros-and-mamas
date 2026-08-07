@@ -12,7 +12,9 @@ import {
   labPanelPrice,
   labStandalonePrice,
   openPrice,
+  programWeeks,
   waitlistPrice,
+  weeklyPrice,
 } from '../config';
 import RangeBand from './RangeBand.astro';
 ---
@@ -22,11 +24,16 @@ import RangeBand from './RangeBand.astro';
     <div style="text-align:center">
       <span class="kicker">One price · everything included</span>
       <h2>Cohort 2 starts {cohortStartDateShort}.</h2>
+      <p class="lede" style="margin-inline:auto">
+        ${waitlistPrice} for {programWeeks} weeks · about ${weeklyPrice}/week
+      </p>
     </div>
     <div class="price-card rv">
       {
         isWaitlist ? (
-          <span class="cohort">Next cohort opening soon · waitlist locks this rate</span>
+          <span class="cohort"
+            >Next cohort opening soon · join the list to hold this rate</span
+          >
         ) : (
           <span class="cohort">Enrollment open · starts {cohortStartDate}</span>
         )
@@ -44,6 +51,7 @@ import RangeBand from './RangeBand.astro';
           </div>
         )
       }
+      <p class="price-week">${weeklyPrice}/week for {programWeeks} weeks</p>
       {
         isWaitlist ? (
           <p class="price-history">
@@ -83,7 +91,7 @@ import RangeBand from './RangeBand.astro';
       {
         isWaitlist ? (
           <a class="btn" href={quizUrl}>
-            Get your ranges · lock ${waitlistPrice}
+            Get your free ranges · hold ${waitlistPrice}
           </a>
         ) : (
           <a class="btn" href={enrollUrl}>

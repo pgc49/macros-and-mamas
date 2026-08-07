@@ -19,15 +19,15 @@ import Faq from '../components/Faq.astro';
 import FinalCta from '../components/FinalCta.astro';
 import Footer from '../components/Footer.astro';
 import StickyCta from '../components/StickyCta.astro';
-import { isWaitlist, waitlistPrice } from '../config';
+import { isWaitlist, waitlistPrice, weeklyPrice } from '../config';
 
 const title =
   'Macros and Mamas — Feel like yourself again. 8-week postpartum macro coaching with Callie.';
 const description = isWaitlist
-  ? `Lose the weight. Keep the muscle. Eat like a mother. An 8-week coaching program from Callie, certified holistic nutritionist and mom of two boys. Hand-built macro ranges, a real app, and a real human in your corner. Waitlist locks $${waitlistPrice}.`
+  ? `Lose the weight. Keep the muscle. Eat like a mother. An 8-week coaching program ($${waitlistPrice}, about $${weeklyPrice}/week) from Callie, certified holistic nutritionist and mom of two boys. Hand-built macro ranges, a real app, and a real human in your corner. Free ranges while you wait.`
   : 'Lose the weight. Keep the muscle. Eat like a mother. An 8-week coaching program from Callie, certified holistic nutritionist and mom of two boys. Hand-built macro ranges, a real app, and a real human in your corner.';
 const ogDescription = isWaitlist
-  ? `An 8-week postpartum-aware macro coaching program. Hand-built ranges, a real app, and Callie every step of the way. Waitlist locks $${waitlistPrice}.`
+  ? `An 8-week postpartum-aware macro coaching program ($${waitlistPrice}, about $${weeklyPrice}/week). Hand-built ranges, a real app, and Callie every step of the way.`
   : 'An 8-week postpartum-aware macro coaching program. Hand-built ranges, a real app, and Callie every step of the way.';
 ---
 

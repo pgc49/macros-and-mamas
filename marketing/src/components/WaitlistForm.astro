@@ -103,7 +103,7 @@ const isPage = variant === 'page';
       type="submit"
       style="grid-column:1/-1"
     >
-      Save my spot · lock ${waitlistPrice}
+      Save my spot · hold ${waitlistPrice}
     </button>
   </div>
   {
@@ -113,9 +113,9 @@ const isPage = variant === 'page';
       </p>
     ) : (
       <p class="price-note">
-        No charge today. Locks the <strong>${waitlistPrice}</strong> rate ($50
-        off the full ${fullPrice}). Cohort 2 starts {cohortStartDate}; enrollment
-        email comes first to the waitlist.
+        No charge today. Holds the <strong>${waitlistPrice}</strong> early rate
+        for 8 weeks ($50 off the full ${fullPrice}). Cohort 2 starts{' '}
+        {cohortStartDate}; enrollment email comes first to the waitlist.
       </p>
     )
   }

@@ -3,11 +3,11 @@ import {
   cohortStartDateCompact,
   doorsCloseDate,
   enrollUrl,
-  fullPrice,
   isWaitlist,
   offerPrice,
   quizUrl,
   waitlistPrice,
+  weeklyPrice,
 } from '../config';
 ---
 
@@ -16,8 +16,8 @@ import {
     isWaitlist ? (
       <>
         <div class="s-price">
-          <strong>Cohort opening soon</strong>Free ranges · lock $
-          {waitlistPrice}
+          <strong>${waitlistPrice} for 8 weeks</strong>
+          About ${weeklyPrice}/week · free ranges while you wait
         </div>
         <a class="btn" href={quizUrl}>
           Get your ranges
@@ -26,8 +26,8 @@ import {
     ) : (
       <>
         <div class="s-price">
-          <strong>${offerPrice} · starts {cohortStartDateCompact}</strong>
-          Enrollment open · doors close {doorsCloseDate}
+          <strong>${offerPrice} for 8 weeks · starts {cohortStartDateCompact}</strong>
+          About ${weeklyPrice}/week · doors close {doorsCloseDate}
         </div>
         <a class="btn" href={enrollUrl}>
           Join now

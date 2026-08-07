@@ -41,7 +41,8 @@ Reusable pieces: `RangeBand` (the pill-with-end-ticks motif, used in Ranges card
 
 - Scroll reveals: `.rv` elements animate in via IntersectionObserver. Keep the pattern where animation styles are gated behind a `.js` class on `<html>` (added by an inline script) so content is never hidden without JS. Keep `prefers-reduced-motion` handling.
 - Sticky mobile CTA bar: appears after the hero scrolls out of view (IntersectionObserver on the hero section). Hidden ≥880px.
-- Ticker: pure CSS keyframe marquee; static wrapped row under `prefers-reduced-motion`.
+- Ticker: pure CSS keyframe marquee (duplicated track). Under `prefers-reduced-motion`, hide the marquee and show a single static list — never wrap the duplicated track (iOS Reduce Motion used to stack it).
+- Sticky CTA: show/hide with opacity + visibility (not offscreen `translateY`), solid white background — avoids iOS fixed+transform ghosting.
 - FAQ: native `<details>/<summary>`, no JS.
 - Total JS budget: the two IntersectionObservers and the `.js` class snippet. Nothing else.
 

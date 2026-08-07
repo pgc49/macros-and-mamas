@@ -24,6 +24,9 @@ export const fullPrice = 299;
 export const foundingPrice = 149;
 /** Public checkout price while enrollment is open at the early rate. */
 export const openPrice = waitlistPrice;
+/** Rounded per-week figure for the 8-week program (marketing copy). */
+export const programWeeks = 8;
+export const weeklyPrice = Math.round(waitlistPrice / programWeeks);
 
 /** Optional Lab Review add-on (pricing section + FAQ). */
 export const labAddonPrice = 299;

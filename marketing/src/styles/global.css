@@ -96,12 +96,21 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
   .wl-form .fields select,.wl-form .fields .btn{grid-column:1/-1}
 }
 
-/* ================= TICKER ================= */
+/* ================= TICKER =================
+   Animated track always stays nowrap + overflow hidden.
+   Reduced-motion: hide the duplicated marquee; show .ticker-static once.
+   (iOS "Reduce Motion" used to wrap the duplicated track into a broken stack.) */
 .ticker{border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--card);padding:16px 0;overflow:hidden}
-.ticker-track{display:flex;gap:0;width:max-content;animation:tick 36s linear infinite}
-@media(prefers-reduced-motion:reduce){.ticker-track{animation:none;flex-wrap:wrap;width:auto;justify-content:center}}
+.ticker-track{display:flex;flex-wrap:nowrap;gap:0;width:max-content;animation:tick 36s linear infinite;will-change:transform}
+.ticker-static{display:none;flex-wrap:wrap;justify-content:center;gap:0;width:100%;max-width:40rem;margin-inline:auto;padding:0 12px}
+@media(prefers-reduced-motion:reduce){
+  .ticker-track{display:none;animation:none}
+  .ticker-static{display:flex}
+}
 .ticker span{font-family:var(--display);font-size:17px;white-space:nowrap;padding:0 26px;position:relative;color:var(--ink-soft)}
+.ticker-static span{white-space:normal;text-align:center;padding:4px 14px}
 .ticker span::after{content:"·";position:absolute;right:-6px;color:var(--accent)}
+.ticker-static span:last-child::after{content:none}
 @keyframes tick{to{transform:translateX(-50%)}}
 
 /* ================= 2AM (dark plum) ================= */
@@ -285,6 +294,7 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .price-card .cohort{font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:700}
 .big-price{font-family:var(--display);font-size:clamp(56px,16vw,74px);line-height:1;margin:16px 0 4px}
 .big-price small{font-size:clamp(20px,5vw,26px);vertical-align:super}
+.price-week{font-family:var(--display);font-size:clamp(20px,4vw,26px);color:var(--accent-deep);margin:0 0 10px;line-height:1.2}
 .price-history{font-size:14.5px;color:var(--ink-soft);margin-bottom:10px}
 .price-history s{opacity:.7}
 .price-band{max-width:280px;margin:20px auto}
@@ -337,13 +347,15 @@ footer{padding:36px 0 118px;font-size:14px;color:var(--ink-soft)}
 
 .open-cta .btn{font-size:17.5px;padding:17px 34px}
 
-/* ================= STICKY CTA ================= */
-.sticky-cta{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--card);border-top:1px solid var(--border);padding:12px 18px calc(12px + env(safe-area-inset-bottom));display:flex;gap:12px;align-items:center;justify-content:space-between;transform:translateY(110%);transition:transform .25s}
+/* ================= STICKY CTA =================
+   Hide with opacity/visibility (not translateY). Fixed+transform offscreen
+   can ghost-composite on some iOS Safari builds; visibility avoids that. */
+.sticky-cta{position:fixed;left:0;right:0;bottom:0;z-index:70;background:#fff;border-top:1px solid var(--border);padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:12px;align-items:center;justify-content:space-between;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility .2s;isolation:isolate;-webkit-transform:translateZ(0);transform:translateZ(0)}
 @media(prefers-reduced-motion:reduce){.sticky-cta{transition:none}}
-.sticky-cta.on{transform:translateY(0)}
-.sticky-cta .s-price{font-size:13px;color:var(--ink-soft);line-height:1.3}
+.sticky-cta.on{opacity:1;visibility:visible;pointer-events:auto}
+.sticky-cta .s-price{font-size:13px;color:var(--ink-soft);line-height:1.3;min-width:0;flex:1}
 .sticky-cta .s-price strong{color:var(--ink);font-size:15px;display:block}
-.sticky-cta .btn{padding:13px 24px;font-size:15px;flex:none}
+.sticky-cta .btn{padding:13px 18px;font-size:15px;flex:none;white-space:nowrap}
 @media(min-width:880px){.sticky-cta{display:none}footer{padding-bottom:36px}}
 
 /* ================= QUIZ ================= */

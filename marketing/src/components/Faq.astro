@@ -7,6 +7,7 @@ import {
   labPanelPrice,
   labStandalonePrice,
   waitlistPrice,
+  weeklyPrice,
 } from '../config';
 ---
 
@@ -58,9 +59,10 @@ import {
       >
       <details
         ><summary>Will I have to track food forever?</summary><p
-          >No, and that's the point. Eight weeks of honest logging builds plate
-          intuition: you learn what your portions look like so you can eyeball a
-          plate and get on with your life.</p
+          >No, and that's the point. Eight weeks of honest logging teaches you
+          what your portions look like — so you can eyeball a plate without the
+          app and get on with your life. That's the skill. You won't need the
+          tracker forever.</p
         ></details
       >
       <details
@@ -100,22 +102,25 @@ import {
       >
       <details
         ><summary
-          >Is founding pricing still open? What does the waitlist lock?</summary
+          >How much does it cost? What does joining the list do?</summary
         >
         {
           isWaitlist ? (
             <p>
-              The ${foundingPrice} founding rate closed with cohort 1. Joining
-              the waitlist locks ${waitlistPrice} for cohort 2, which is $50 off
-              the full ${fullPrice}. You're not charged anything until
-              enrollment opens and you choose to join.
+              The program is ${waitlistPrice} for the full 8 weeks — about $
+              {weeklyPrice}/week, everything included. The ${foundingPrice}{' '}
+              founding rate closed with cohort 1. Joining the list holds the $
+              {waitlistPrice} early rate for cohort 2 ($50 off the full $
+              {fullPrice}) and gets you first dibs when enrollment opens. You're
+              not charged anything until you choose to join.
             </p>
           ) : (
             <p>
-              The ${foundingPrice} founding rate closed with cohort 1.
-              Enrollment is open now at the early rate of ${waitlistPrice}
-              (full rate ${fullPrice}). Doors close a few days before each start
-              date so Callie can build every member's ranges by hand.
+              The program is ${waitlistPrice} for the full 8 weeks — about $
+              {weeklyPrice}/week, everything included. The ${foundingPrice}{' '}
+              founding rate closed with cohort 1. Enrollment is open now at the
+              early rate (full rate ${fullPrice}). Doors close a few days before
+              each start date so Callie can build every member's ranges by hand.
             </p>
           )
         }
