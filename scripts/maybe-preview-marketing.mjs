@@ -7,13 +7,14 @@
  * Production cutover (main):
  *   - Keeps www on the SPA Pages project (homescreen / PWA safe)
  *   - `/`, `/quiz`, `/waitlist`, `/_astro/*` → Astro static files
- *   - App routes → SPA shell at `/_app/index.html` (explicit rewrites only)
+ *   - App routes → SPA shell at `/spa/index.html` (explicit rewrites only)
  *   - Copies marketing Pages Functions into functions/ for /api/lead + /api/waitlist
  *
  * Do NOT move the www custom domain onto macrosandmamas-marketing.
  *
  * Important: never use `/* /app.html 200` — Cloudflare’s HTML extension
  * pretty-URLs turn that into a `/` → `/app` → `/app` redirect loop.
+ * Prefer `/spa/index.html` over `/_app/` (underscore paths are reserved-ish on Pages).
  */
 import {
   cpSync,
@@ -58,7 +59,7 @@ const marketingDir = join(root, "marketing");
 const marketingDist = join(marketingDir, "dist");
 const out = join(root, "dist");
 const spaIndex = join(out, "index.html");
-const spaShellDir = join(out, "_app");
+const spaShellDir = join(out, "spa");
 const spaShell = join(spaShellDir, "index.html");
 
 /** SPA client routes from src/routing.js — do not include `/` or marketing paths. */
@@ -111,17 +112,29 @@ if (!existsSync(spaIndex)) {
   process.exit(1);
 }
 
-// Preserve Vite shell under /_app/index.html (avoids CF /app.html → /app redirects).
+// Preserve Vite shell under /spa/index.html (not app.html — CF pretty-URLs loop).
 rmSync(spaShellDir, { recursive: true, force: true });
+try {
+  unlinkSync(join(out, "app.html")); // leftover from broken cutover attempt
+} catch {
+  /* ok */
+}
 mkdirSync(spaShellDir, { recursive: true });
 renameSync(spaIndex, spaShell);
-console.log("[overlay-marketing] SPA shell → dist/_app/index.html");
+console.log("[overlay-marketing] SPA shell → dist/spa/index.html");
 
 cpSync(marketingDist, out, { recursive: true });
 console.log("[overlay-marketing] Astro site overlaid onto dist/");
 
+// Drop any app.html Astro/Vite might not create but a prior artifact could leave.
+try {
+  unlinkSync(join(out, "app.html"));
+} catch {
+  /* ok */
+}
+
 if (!existsSync(spaShell)) {
-  console.error("[overlay-marketing] dist/_app/index.html missing after overlay");
+  console.error("[overlay-marketing] dist/spa/index.html missing after overlay");
   process.exit(1);
 }
 if (!existsSync(join(out, "index.html"))) {
@@ -137,15 +150,15 @@ const redirectLines = [
   "https://macrosandmamas.com/* https://www.macrosandmamas.com/:splat 301",
 ];
 for (const route of SPA_ROUTES) {
-  redirectLines.push(`${route} /_app/index.html 200`);
-  redirectLines.push(`${route}/ /_app/index.html 200`);
-  redirectLines.push(`${route}/* /_app/index.html 200`);
+  redirectLines.push(`${route} /spa/index.html 200`);
+  redirectLines.push(`${route}/ /spa/index.html 200`);
+  redirectLines.push(`${route}/* /spa/index.html 200`);
 }
 redirectLines.push("");
 
 writeFileSync(join(out, "_redirects"), redirectLines.join("\n"));
 console.log(
-  `[overlay-marketing] wrote dist/_redirects (${SPA_ROUTES.length} SPA route groups → /_app/)`,
+  `[overlay-marketing] wrote dist/_redirects (${SPA_ROUTES.length} SPA route groups → /spa/)`,
 );
 
 console.log(`[overlay-marketing] done (${mode})`);
