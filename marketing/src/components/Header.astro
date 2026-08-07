@@ -35,7 +35,7 @@ import { enrollUrl, isWaitlist, quizUrl, signInUrl } from '../config';
       >
     </a>
     <div class="nav-cta">
-      <a class="signin" href={signInUrl}>Sign in</a>
+      <a class="signin" href={`${signInUrl}?auth=signin`}>Sign in</a>
       {
         isWaitlist ? (
           <a class="btn sm" href={quizUrl}>

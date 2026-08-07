@@ -128,6 +128,23 @@ for (const stale of ["app.html", "spa", "_app"]) {
 cpSync(marketingDist, out, { recursive: true });
 console.log("[overlay-marketing] Astro site overlaid onto dist/");
 
+// Marketing ships a default Astro favicon.svg — restore brand icons from SPA public/.
+for (const icon of [
+  "favicon.svg",
+  "favicon.ico",
+  "favicon.png",
+  "favicon-16.png",
+  "favicon-32.png",
+  "apple-touch-icon-v6.png",
+]) {
+  const from = join(root, "public", icon);
+  const to = join(out, icon);
+  if (existsSync(from)) {
+    cpSync(from, to);
+  }
+}
+console.log("[overlay-marketing] restored brand favicons from public/");
+
 try {
   unlinkSync(join(out, "app.html"));
 } catch {

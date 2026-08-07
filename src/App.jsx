@@ -1395,10 +1395,12 @@ export default function App() {
             : (
               <SignInPage
                 mode={
-                  location.state?.from === PATHS.support
+                  new URLSearchParams(location.search).get("auth") === "signin"
+                  || location.state?.from === PATHS.support
                   || (location.state?.from && String(location.state.from).startsWith("/account"))
                     ? "signin"
                     : location.state?.from === PATHS.join
+                      || new URLSearchParams(location.search).get("auth") === "create"
                       ? (CONFIG.ENROLLMENT_OPEN ? "create" : "signin")
                       : authMode
                 }
