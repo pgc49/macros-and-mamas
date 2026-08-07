@@ -7,19 +7,21 @@
  * Production cutover (main):
  *   - Keeps www on the SPA Pages project (homescreen / PWA safe)
  *   - `/`, `/quiz`, `/waitlist`, `/_astro/*` → Astro static files
- *   - App routes (`/dashboard`, `/join`, …) → SPA shell at /app.html
+ *   - App routes → SPA shell at `/_app/index.html` (explicit rewrites only)
  *   - Copies marketing Pages Functions into functions/ for /api/lead + /api/waitlist
  *
  * Do NOT move the www custom domain onto macrosandmamas-marketing.
+ *
+ * Important: never use `/* /app.html 200` — Cloudflare’s HTML extension
+ * pretty-URLs turn that into a `/` → `/app` → `/app` redirect loop.
  */
 import {
   cpSync,
   existsSync,
   mkdirSync,
-  readFileSync,
   renameSync,
   writeFileSync,
-  unlinkSync,
+  rmSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -55,8 +57,28 @@ console.log(
 const marketingDir = join(root, "marketing");
 const marketingDist = join(marketingDir, "dist");
 const out = join(root, "dist");
-const spaShell = join(out, "app.html");
 const spaIndex = join(out, "index.html");
+const spaShellDir = join(out, "_app");
+const spaShell = join(spaShellDir, "index.html");
+
+/** SPA client routes from src/routing.js — do not include `/` or marketing paths. */
+const SPA_ROUTES = [
+  "/home",
+  "/join",
+  "/welcome",
+  "/goodbye",
+  "/onboarding",
+  "/signin",
+  "/pending",
+  "/declined",
+  "/dashboard",
+  "/admin",
+  "/terms",
+  "/privacy",
+  "/reset-password",
+  "/support",
+  "/account",
+];
 
 const install = spawnSync("npm", ["install", "--no-fund", "--no-audit"], {
   cwd: marketingDir,
@@ -67,7 +89,6 @@ if (install.status !== 0) process.exit(install.status ?? 1);
 
 const buildEnv = { ...process.env };
 if (runCutover) {
-  // www should be indexable; enrollment mode comes from marketing/wrangler.toml
   delete buildEnv.PUBLIC_NOINDEX;
 } else {
   buildEnv.PUBLIC_NOINDEX = "true";
@@ -90,21 +111,17 @@ if (!existsSync(spaIndex)) {
   process.exit(1);
 }
 
-// Preserve the Vite SPA shell under /app.html before Astro replaces index.html.
-try {
-  unlinkSync(spaShell);
-} catch {
-  /* ok */
-}
+// Preserve Vite shell under /_app/index.html (avoids CF /app.html → /app redirects).
+rmSync(spaShellDir, { recursive: true, force: true });
+mkdirSync(spaShellDir, { recursive: true });
 renameSync(spaIndex, spaShell);
-console.log("[overlay-marketing] SPA shell → dist/app.html");
+console.log("[overlay-marketing] SPA shell → dist/_app/index.html");
 
 cpSync(marketingDist, out, { recursive: true });
 console.log("[overlay-marketing] Astro site overlaid onto dist/");
 
-// Ensure SPA shell survived the overlay (Astro should not emit app.html).
 if (!existsSync(spaShell)) {
-  console.error("[overlay-marketing] dist/app.html missing after overlay");
+  console.error("[overlay-marketing] dist/_app/index.html missing after overlay");
   process.exit(1);
 }
 if (!existsSync(join(out, "index.html"))) {
@@ -112,23 +129,24 @@ if (!existsSync(join(out, "index.html"))) {
   process.exit(1);
 }
 
-// Marketing quiz + waitlist APIs must run on the SPA project (www origin).
 copyMarketingFunctions();
 
-// Static assets win over plain 200 rewrites on Pages: `/` and `/quiz` stay Astro.
-// Unknown paths ( /dashboard, /join, … ) rewrite to the SPA shell.
-const redirectsPath = join(out, "_redirects");
-writeFileSync(
-  redirectsPath,
-  [
-    "# www cutover: marketing static files + SPA shell for app routes",
-    "# Do NOT use /* → /index.html — index.html is the Astro homepage.",
-    "https://macrosandmamas.com/* https://www.macrosandmamas.com/:splat 301",
-    "/*    /app.html   200",
-    "",
-  ].join("\n"),
+const redirectLines = [
+  "# www cutover: Astro for / + /quiz; SPA shell for app routes only.",
+  "# No /* catch-all — that rewrote / into a Cloudflare HTML pretty-URL loop.",
+  "https://macrosandmamas.com/* https://www.macrosandmamas.com/:splat 301",
+];
+for (const route of SPA_ROUTES) {
+  redirectLines.push(`${route} /_app/index.html 200`);
+  redirectLines.push(`${route}/ /_app/index.html 200`);
+  redirectLines.push(`${route}/* /_app/index.html 200`);
+}
+redirectLines.push("");
+
+writeFileSync(join(out, "_redirects"), redirectLines.join("\n"));
+console.log(
+  `[overlay-marketing] wrote dist/_redirects (${SPA_ROUTES.length} SPA route groups → /_app/)`,
 );
-console.log("[overlay-marketing] wrote dist/_redirects (SPA → /app.html)");
 
 console.log(`[overlay-marketing] done (${mode})`);
 
@@ -154,14 +172,13 @@ function copyMarketingFunctions() {
       `[overlay-marketing] functions ← ${from.replace(root + "/", "")}`,
     );
   }
-  // marketing/functions/_shared re-exports ../../src/lib (marketing-relative).
-  // On the SPA project the engine lives under marketing/src/lib — write the
-  // correct re-export for root functions/.
   const engineShim = join(root, "functions/_shared/rangesEngine.mjs");
   writeFileSync(
     engineShim,
     "/** Re-export canonical quiz engine for SPA Pages Functions (www cutover). */\n" +
       "export * from '../../marketing/src/lib/rangesEngine.mjs';\n",
   );
-  console.log("[overlay-marketing] functions/_shared/rangesEngine.mjs → marketing/src/lib");
+  console.log(
+    "[overlay-marketing] functions/_shared/rangesEngine.mjs → marketing/src/lib",
+  );
 }
