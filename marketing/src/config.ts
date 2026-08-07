@@ -1,11 +1,12 @@
 export type EnrollmentMode = 'waitlist' | 'open';
 
-const rawMode = String(import.meta.env.PUBLIC_ENROLLMENT_MODE ?? 'open')
+const rawMode = String(import.meta.env.PUBLIC_ENROLLMENT_MODE ?? 'waitlist')
   .trim()
   .toLowerCase();
 
+/** Explicit `open` only; anything else (including unset) → waitlist. */
 export const enrollmentMode: EnrollmentMode =
-  rawMode === 'waitlist' ? 'waitlist' : 'open';
+  rawMode === 'open' ? 'open' : 'waitlist';
 
 export const isWaitlist = enrollmentMode === 'waitlist';
 export const isOpen = enrollmentMode === 'open';

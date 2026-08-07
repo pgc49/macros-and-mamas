@@ -5,14 +5,16 @@ import sitemap from '@astrojs/sitemap';
 // Static output + marketing/functions for Cloudflare Pages.
 // Adapter omitted for now: @astrojs/cloudflare was emitting a reserved ASSETS
 // binding that broke the build. Revisit at www cutover if needed.
+// Default waitlist when unset so CF builds stay closed unless explicitly opened.
+// Dashboard var still wins: set PUBLIC_ENROLLMENT_MODE=open to flip CTAs.
 const enrollmentMode = String(
-  process.env.PUBLIC_ENROLLMENT_MODE || 'open',
+  process.env.PUBLIC_ENROLLMENT_MODE || 'waitlist',
 )
   .trim()
   .toLowerCase();
 
 console.log(
-  `[marketing] PUBLIC_ENROLLMENT_MODE=${process.env.PUBLIC_ENROLLMENT_MODE ?? '(unset)'} → ${enrollmentMode}`,
+  `[marketing] PUBLIC_ENROLLMENT_MODE=${process.env.PUBLIC_ENROLLMENT_MODE ?? '(unset)'} → ${enrollmentMode === 'open' ? 'open' : 'waitlist'}`,
 );
 
 export default defineConfig({
@@ -28,7 +30,9 @@ export default defineConfig({
     // Explicitly bake CF Pages build env into the client bundle.
     // Vite's automatic PUBLIC_* injection is easy to miss on subdirectory builds.
     define: {
-      'import.meta.env.PUBLIC_ENROLLMENT_MODE': JSON.stringify(enrollmentMode),
+      'import.meta.env.PUBLIC_ENROLLMENT_MODE': JSON.stringify(
+        enrollmentMode === 'open' ? 'open' : 'waitlist',
+      ),
     },
   },
 });
