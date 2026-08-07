@@ -6,4 +6,4 @@ pages_build_output_dir = "dist"
 # Plaintext vars are managed here (CF dashboard secrets-only when wrangler.toml is present).
 # Flip enrollment CTAs: "open" | "waitlist" — then merge to main / redeploy.
 [vars]
-PUBLIC_ENROLLMENT_MODE = "open"
+PUBLIC_ENROLLMENT_MODE = "waitlist"
