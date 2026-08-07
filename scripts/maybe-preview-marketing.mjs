@@ -155,13 +155,13 @@ const redirectLines = [
   "# www cutover: Astro at /; SPA shells planted per app route folder.",
   "# Nested paths rewrite to the same-folder index (keeps URL prefix).",
   "https://macrosandmamas.com/* https://www.macrosandmamas.com/:splat 301",
-  "# Clean up broken cutover leftovers (cached /spa 308s from an earlier deploy).",
-  "/spa /dashboard/ 302",
-  "/spa/ /dashboard/ 302",
-  "/spa/* /dashboard/ 302",
-  "/app /dashboard/ 302",
-  "/app/ /dashboard/ 302",
-  "/app.html /dashboard/ 302",
+  "# Clean up broken cutover leftovers (force over any stale static /spa).",
+  "/spa /dashboard/ 302!",
+  "/spa/ /dashboard/ 302!",
+  "/spa/* /dashboard/ 302!",
+  "/app /dashboard/ 302!",
+  "/app/ /dashboard/ 302!",
+  "/app.html /dashboard/ 302!",
 ];
 for (const route of SPA_ROUTES) {
   // Prefer /dashboard/ folder indexes; help clear bad edge redirects.
