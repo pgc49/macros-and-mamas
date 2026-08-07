@@ -81,7 +81,10 @@ export async function onRequestPost({ request, env }) {
         const contact = await loadUserContact(env, userId);
         const email = contact.email || session.customer_email || session.customer_details?.email;
         const name = contact.name || session.customer_details?.name || null;
-        await sendWelcomeEmails(env, { email, name, userId });
+        const amountUsd =
+          Number(session.metadata?.amount_usd) ||
+          (session.amount_total != null ? Number(session.amount_total) / 100 : null);
+        await sendWelcomeEmails(env, { email, name, userId, amountUsd });
       } catch (mailErr) {
         console.error("welcome email failed", mailErr);
       }

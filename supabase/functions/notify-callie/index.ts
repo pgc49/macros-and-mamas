@@ -14,7 +14,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { type, name, email, reason, stats } = body;
+    const { type, name, email, reason, stats, amountUsd } = body;
     if (!type) return jsonResponse({ error: "missing type" }, 400);
 
     const display = name || email || "Mama";
@@ -22,9 +22,18 @@ serve(async (req) => {
     let text = "";
 
     if (type === "payment") {
-      subject = `💰 New mama: ${display} — paid $149`;
+      const amountNum = Number(amountUsd);
+      const paidLabel =
+        Number.isFinite(amountNum) && amountNum > 0
+          ? `$${Math.round(amountNum)}`
+          : null;
+      subject = paidLabel
+        ? `💰 New mama: ${display} — paid ${paidLabel}`
+        : `💰 New mama: ${display} — paid`;
       text = [
-        `${display} just paid $149.`,
+        paidLabel
+          ? `${display} just paid ${paidLabel}.`
+          : `${display} just paid.`,
         email ? `Email: ${email}` : "",
         `If intake stalls, nudge her from admin.`,
         `${APP_URL}/admin`,

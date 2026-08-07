@@ -4,7 +4,8 @@
  *
  * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY,
  *      META_PIXEL_ID, META_CAPI_ACCESS_TOKEN (optional),
- *      LEAD_FROM_EMAIL (optional, default Callie address)
+ *      LEAD_FROM_EMAIL (optional, default Callie address),
+ *      WAITLIST KV (optional rate limit — same binding as /api/waitlist)
  */
 
 import {
@@ -14,6 +15,7 @@ import {
 } from '../_shared/rangesEngine.mjs';
 
 interface Env {
+  WAITLIST?: KVNamespace;
   SUPABASE_URL?: string;
   VITE_SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
@@ -25,6 +27,8 @@ interface Env {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const RATE_LIMIT_MAX = 8;
 const DISPOSABLE = new Set([
   'mailinator.com',
   'guerrillamail.com',
@@ -56,6 +60,27 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+async function rateLimited(env: Env, ip: string): Promise<boolean> {
+  if (!env.WAITLIST) return false;
+  const key = `lead-rl:${ip}`;
+  const raw = await env.WAITLIST.get(key);
+  const now = Date.now();
+  let hits: number[] = [];
+  if (raw) {
+    try {
+      hits = (JSON.parse(raw) as number[]).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+    } catch {
+      hits = [];
+    }
+  }
+  if (hits.length >= RATE_LIMIT_MAX) return true;
+  hits.push(now);
+  await env.WAITLIST.put(key, JSON.stringify(hits), {
+    expirationTtl: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000),
+  });
+  return false;
 }
 
 async function sha256(value: string): Promise<string | null> {
@@ -316,6 +341,15 @@ ${early}
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
+
+  const ip =
+    request.headers.get('cf-connecting-ip') ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'unknown';
+  if (await rateLimited(env, ip)) {
+    return json({ error: 'rate_limited' }, 429);
+  }
+
   let body: LeadBody;
   try {
     body = (await request.json()) as LeadBody;
@@ -428,10 +462,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return json({ error: 'save_failed' }, 502);
   }
 
-  const ip =
-    request.headers.get('cf-connecting-ip') ||
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    '';
   const ua = request.headers.get('user-agent') || '';
   const sourceUrl = 'https://www.macrosandmamas.com/quiz';
 

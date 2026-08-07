@@ -14,12 +14,13 @@ Serve the Astro marketing site on `www.macrosandmamas.com` **without** moving th
 | Path | Serves |
 | --- | --- |
 | `/`, `/quiz`, `/waitlist`, `/thanks`, `/_astro/*` | Astro static files from overlay |
-| `/dashboard`, `/join`, `/signin`, `/admin`, … | SPA shell → `/spa/index.html` (explicit rewrites only) |
-| `/api/lead`, `/api/waitlist` | Copied marketing Functions |
+| `/dashboard`, `/join`, `/signin`, `/admin`, … | SPA shell → `/spa/index.html` (**per-route rewrites only**) |
+| `/api/lead`, `/api/waitlist` | Copied marketing Functions (KV rate-limited when `WAITLIST` binding is set) |
 | `/api/checkout`, webhooks, … | Existing SPA Functions |
+| Unknown paths | Astro `404.html` (not the homepage) |
 | Homescreen icon | `/dashboard` on `www` (unchanged) |
 
-**Do not** use `/* → /app.html` — Cloudflare’s HTML pretty-URLs caused a `/` → `/app` redirect loop in production.
+**Do not** use `/* → /app.html` or a catch-all SPA rewrite — Cloudflare’s HTML pretty-URLs caused a `/` → `/app` redirect loop in production. Keep explicit SPA paths in `_redirects`.
 
 ## What the build does (`main`)
 
@@ -54,6 +55,12 @@ On Cloudflare → **`macros-and-mamas`** (SPA) → Settings → Variables:
 
 `macrosandmamas-marketing` can stay as staging; no domain change.
 
+## After every cutover-related deploy
+
+1. **Purge Cloudflare cache** for `/spa`, `/spa/`, `/spa/*`, `/app*` (stale shells cause blank app loads).
+2. Confirm Production secrets: `RESEND_API_KEY`, `STRIPE_PRICE_ID_LAB_ADDON`, `SUPABASE_SERVICE_ROLE_KEY`.
+3. Keep `OPEN_WITHOUT_QUIZ` unset unless intentionally opening checkout without the quiz.
+
 ## Smoke checklist (after `main` deploy)
 
 Do these **before** sending paid traffic:
@@ -61,10 +68,12 @@ Do these **before** sending paid traffic:
 1. **Homescreen** — tap icon → dashboard, still signed in (no reinstall).
 2. **Cold `/`** — `https://www.macrosandmamas.com/` → Astro marketing (quiz CTA), not SPA loader.
 3. **`/dashboard`** — SPA app shell loads.
-4. **`/join`** — SPA join still works.
-5. **`/quiz`** — complete submit → email + `marketing_leads` row.
-6. **Sign in** — existing members OK.
-7. **View source on `/`** — Astro HTML (Marcellus / `_astro/`), not `Couldn’t load the app`.
+4. **`/join`** without quiz email → unlock CTA (`quiz_required`), not a blank pay button.
+5. **`/quiz`** — complete submit → ranges / Pre-pay offer + email + `marketing_leads` row.
+6. **`/nope`** — real 404 page, not the homepage.
+7. **Sign in** — existing members OK.
+8. **View source on `/`** — Astro HTML (Marcellus / `_astro/`), not `Couldn’t load the app`.
+9. **Footer Instagram** — links to `https://www.instagram.com/nourishwithcalista`.
 
 ## Rollback
 

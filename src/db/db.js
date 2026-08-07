@@ -621,7 +621,10 @@ export const db = {
     if (error) throw error;
   },
 
-  /** Homepage cohort waitlist (founding closed → next cohort priority). */
+  /**
+   * Cohort waitlist — goes through POST /api/waitlist (rate-limited, service-role insert).
+   * Do not insert with the anon key; RLS no longer allows public inserts.
+   */
   async joinCohortWaitlist({
     firstName,
     lastName,
@@ -631,7 +634,7 @@ export const db = {
     source = "homepage",
     attribution = null,
   }) {
-    const row = {
+    const body = {
       first_name: String(firstName || "").trim().slice(0, 80),
       last_name: String(lastName || "").trim().slice(0, 80),
       email: String(email || "").trim().toLowerCase().slice(0, 200),
@@ -640,17 +643,30 @@ export const db = {
       source: String(source || "homepage").slice(0, 40),
     };
     if (attribution && typeof attribution === "object") {
-      if (attribution.utm_source) row.utm_source = String(attribution.utm_source).slice(0, 120);
-      if (attribution.utm_medium) row.utm_medium = String(attribution.utm_medium).slice(0, 120);
-      if (attribution.utm_campaign) row.utm_campaign = String(attribution.utm_campaign).slice(0, 120);
-      if (attribution.utm_content) row.utm_content = String(attribution.utm_content).slice(0, 120);
-      if (attribution.fbclid) row.fbclid = String(attribution.fbclid).slice(0, 200);
-      if (attribution.fbp) row.fbp = String(attribution.fbp).slice(0, 128);
-      if (attribution.fbc) row.fbc = String(attribution.fbc).slice(0, 128);
-      if (attribution.event_id) row.event_id = String(attribution.event_id).slice(0, 120);
+      if (attribution.utm_source) body.utm_source = String(attribution.utm_source).slice(0, 120);
+      if (attribution.utm_medium) body.utm_medium = String(attribution.utm_medium).slice(0, 120);
+      if (attribution.utm_campaign) body.utm_campaign = String(attribution.utm_campaign).slice(0, 120);
+      if (attribution.utm_content) body.utm_content = String(attribution.utm_content).slice(0, 120);
+      if (attribution.fbclid) body.fbclid = String(attribution.fbclid).slice(0, 200);
+      if (attribution.fbp) body.fbp = String(attribution.fbp).slice(0, 128);
+      if (attribution.fbc) body.fbc = String(attribution.fbc).slice(0, 128);
+      if (attribution.event_id) body.event_id = String(attribution.event_id).slice(0, 120);
     }
-    const { error } = await supabase.from("cohort_waitlist").insert(row);
-    if (error) throw error;
+    const resp = await fetch("/api/waitlist", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.status === 429 || data?.error === "rate_limited") {
+      throw new Error("rate_limited");
+    }
+    if (!resp.ok || data?.ok === false) {
+      throw new Error(data?.error || `waitlist_failed_${resp.status}`);
+    }
   },
 
 

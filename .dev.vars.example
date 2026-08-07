@@ -13,6 +13,7 @@ STRIPE_SECRET_KEY=replace-me
 STRIPE_PRICE_ID_FOUNDING=price_...149
 STRIPE_PRICE_ID_WAITLIST=price_...249
 STRIPE_PRICE_ID_FULL=price_...299
+STRIPE_PRICE_ID_LAB_ADDON=price_...349
 STRIPE_WEBHOOK_SECRET=replace-me
 # Optional — Stripe Customer Portal configuration id (Payments → Manage card)
 # STRIPE_BILLING_PORTAL_CONFIGURATION=bpc_...
@@ -22,7 +23,11 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-publishable-or-anon-key
 SUPABASE_SERVICE_ROLE_KEY=replace-me
 # Service role also invokes Supabase Edge Functions (welcome / approve / refund emails).
-# RESEND_API_KEY lives in Supabase secrets — not here.
+
+# Quiz lead email (/api/lead on www) — also set RESEND_API_KEY in Supabase secrets for Edge Functions
+RESEND_API_KEY=replace-me
+# Optional From override (default Callie at Macros and Mamas <calista@nourishwithcalista.com>)
+# LEAD_FROM_EMAIL=Callie at Macros and Mamas <calista@nourishwithcalista.com>
 
 # Hourly email cron (#1 finish joining, #3 intake reminder) — same value in GitHub Actions
 CRON_SECRET=replace-with-long-random-string
@@ -31,6 +36,8 @@ CRON_SECRET=replace-with-long-random-string
 # Also used by /api/cohort-waitlist-blast (manual) when opening the next cohort.
 ENROLLMENT_OPEN=false
 ENROLLMENT_CLOSED_AT=2026-07-26T02:00:00.000Z
+# Escape hatch: sell $249 without a quiz lead (leave unset in production)
+# OPEN_WITHOUT_QUIZ=true
 
 # Mama → Callie push/email: Callie only (never Tech Guy / other admins).
 # Comma-separated OK. Must match profiles.email for the coach admin row.

@@ -4,7 +4,7 @@ Production app for [macrosandmamas.com](https://macrosandmamas.com) — an 8-wee
 
 **Stack:** Vite + React SPA on Cloudflare Pages · Pages Functions (`/functions`) · Supabase Auth + Postgres (RLS) · Stripe Checkout · OpenRouter (meal photo AI)
 
-**Flow:** create account → pay $149 (Stripe) → intake → Callie approves in admin → dashboard unlocks.
+**Flow:** take the ranges quiz (unlocks $249) → create account → pay Stripe → intake → Callie approves in admin → dashboard unlocks. Founding finish-pay ($149) still works for accounts created before the close cutoff.
 
 ## Local development
 
@@ -64,12 +64,16 @@ The app also has project fallbacks for Supabase URL/publishable key in `src/conf
 | `OPENROUTER_API_KEY` | Meal photo AI | Cloudflare secret |
 | `STRIPE_SECRET_KEY` | Create Checkout Sessions | Cloudflare secret (`sk_test_…` first) |
 | `STRIPE_PRICE_ID_FOUNDING` | $149 founding Price ID (`price_…`) | Cloudflare env (legacy `STRIPE_PRICE_ID` still works as fallback) |
-| `STRIPE_PRICE_ID_WAITLIST` | $249 waitlist early Price ID | Cloudflare env |
+| `STRIPE_PRICE_ID_WAITLIST` | $249 early / quiz-unlock Price ID | Cloudflare env |
 | `STRIPE_PRICE_ID_FULL` | $299 full Price ID | Cloudflare env |
+| `STRIPE_PRICE_ID_LAB_ADDON` | $349 Lab Review add-on Price ID | Cloudflare env |
 | `STRIPE_WEBHOOK_SECRET` | Verify webhook signatures (`whsec_…`) | Cloudflare secret |
 | `SUPABASE_URL` | Used by `/api/checkout`, `/api/analyze`, webhook | Cloudflare env |
 | `SUPABASE_ANON_KEY` | Validate JWTs in functions | Cloudflare env/secret |
 | `SUPABASE_SERVICE_ROLE_KEY` | Webhook marks `profiles.paid` (**server only**) | Cloudflare secret |
+| `RESEND_API_KEY` | Quiz ranges email (`/api/lead`) | Cloudflare secret |
+| `LEAD_FROM_EMAIL` | Optional From override for quiz email | Cloudflare env |
+| `OPEN_WITHOUT_QUIZ` | Escape hatch: sell $249 without quiz (default unset) | Cloudflare env |
 
 Local copies live in `.dev.vars` (gitignored). See `.dev.vars.example`.
 
@@ -94,11 +98,12 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 2. Webhook endpoint: `https://YOUR_DOMAIN/api/stripe-webhook`  
    Event: `checkout.session.completed` → copy signing secret (`whsec_…`).
 3. Set in Cloudflare: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID_FOUNDING`, `STRIPE_PRICE_ID_WAITLIST`, `STRIPE_PRICE_ID_FULL`, `STRIPE_WEBHOOK_SECRET`.
-4. Checkout picks the tier automatically:
+4. Checkout picks the tier automatically (`functions/_shared/pricing.js`):
    - Account created before `ENROLLMENT_CLOSED_AT` → founding $149  
-   - Email on `cohort_waitlist` (when enrollment open) → waitlist $249  
-   - Otherwise when enrollment open → full $299  
+   - Email has an eligible `marketing_leads` row (quiz unlock) → early $249  
+   - Else → `403 quiz_required` (set `OPEN_WITHOUT_QUIZ=true` to sell $249 without the quiz)  
 5. Before real charges: switch to live keys, live prices, and a live webhook.
+6. See `docs/ENROLLMENT-OPEN.md` and `docs/WWW-CUTOVER.md` for www marketing cutover.
 
 ## App URLs
 

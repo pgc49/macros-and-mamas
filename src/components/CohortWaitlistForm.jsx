@@ -80,26 +80,8 @@ export function CohortWaitlistForm({ source = "waitlist_page" }) {
         source,
         attribution: attr,
       });
+      // Browser pixel; server CAPI is handled inside /api/waitlist (same event_id).
       trackPixel("Lead", { content_name: "cohort_waitlist", currency: "USD", value: 249 }, eventId);
-      // Server CAPI Lead (best-effort; deduped via shared event_id)
-      try {
-        await fetch("/api/meta-capi", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event_name: "Lead",
-            event_id: eventId,
-            email: em,
-            phone: ph,
-            fbp: attr.fbp || "",
-            fbc: attr.fbc || "",
-            event_source_url: window.location.href,
-            custom_data: { content_name: "cohort_waitlist", currency: "USD", value: 249 },
-          }),
-        });
-      } catch {
-        /* ignore */
-      }
       setDone(true);
     } catch (err) {
       console.error("cohort waitlist failed", err);
@@ -107,6 +89,8 @@ export function CohortWaitlistForm({ source = "waitlist_page" }) {
       if (/duplicate|unique|already/i.test(msg)) {
         trackPixel("Lead", { content_name: "cohort_waitlist", currency: "USD", value: 249 }, eventId);
         setDone(true);
+      } else if (/rate_limited/i.test(msg)) {
+        setError("Too many tries from this network — wait a bit and try again.");
       } else {
         setError("Couldn't save that — try again in a moment.");
       }

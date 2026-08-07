@@ -30,6 +30,8 @@ type WaitlistBody = {
   last_name: string;
   phone: string;
   season?: string;
+  source?: string;
+  cohort?: string;
   /** Honeypot — reject when non-empty. */
   website_url?: string;
   utm_source?: string;
@@ -71,6 +73,8 @@ async function parseBody(request: Request): Promise<WaitlistBody> {
       last_name: String(body.last_name ?? "").trim(),
       phone: String(body.phone ?? "").trim(),
       season: body.season ? String(body.season).trim() : undefined,
+      source: body.source ? String(body.source).trim() : undefined,
+      cohort: body.cohort ? String(body.cohort).trim() : undefined,
       website_url: body.website_url ? String(body.website_url).trim() : undefined,
       utm_source: body.utm_source ? String(body.utm_source).trim() : undefined,
       utm_medium: body.utm_medium ? String(body.utm_medium).trim() : undefined,
@@ -89,6 +93,8 @@ async function parseBody(request: Request): Promise<WaitlistBody> {
     last_name: pick(form, "last_name"),
     phone: pick(form, "phone"),
     season: pick(form, "season") || undefined,
+    source: pick(form, "source") || undefined,
+    cohort: pick(form, "cohort") || undefined,
     website_url: pick(form, "website_url") || undefined,
     utm_source: pick(form, "utm_source") || undefined,
     utm_medium: pick(form, "utm_medium") || undefined,
@@ -258,8 +264,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       first_name: body.first_name.slice(0, 80),
       last_name: body.last_name.slice(0, 80),
       phone: body.phone.slice(0, 40),
-      cohort: (env.WAITLIST_COHORT || "cohort_2").slice(0, 40),
-      source: "astro_waitlist",
+      cohort: (body.cohort || env.WAITLIST_COHORT || "cohort_2").slice(0, 40),
+      source: (body.source || "astro_waitlist").slice(0, 40),
       event_id: eventId.slice(0, 120),
     };
     if (body.season) row.notes = `season: ${body.season}`.slice(0, 500);

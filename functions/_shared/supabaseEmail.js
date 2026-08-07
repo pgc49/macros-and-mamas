@@ -129,35 +129,48 @@ export async function loadUserContact(env, userId) {
   };
 }
 
-export async function sendWelcomeEmails(env, { email, name, userId }) {
+export async function sendWelcomeEmails(env, { email, name, userId, amountUsd }) {
   if (!email) return;
-  const subject = "You're in, mama 🤍 (here's what happens next)";
-  const result = await invokeEdgeFunction(env, "welcome-email", { email, name, userId });
-  await logEmailEvent(env, {
-    profileId: userId,
-    emailType: "welcome",
-    toEmail: email,
-    subject,
-    resendId: resendIdFrom(result),
-    status: result.ok ? "sent" : "failed",
-    meta: { slug: "welcome-email" },
-  });
 
-  const callie = await invokeEdgeFunction(env, "notify-callie", {
-    type: "payment",
-    email,
-    name: name || email,
-    userId,
-  });
-  await logEmailEvent(env, {
-    profileId: userId,
-    emailType: "callie_payment",
-    toEmail: "callie",
-    subject: `💰 New mama: ${name || email} — paid $149`,
-    resendId: resendIdFrom(callie),
-    status: callie.ok ? "sent" : "failed",
-    meta: { slug: "notify-callie", type: "payment" },
-  });
+  const amountNum = Number(amountUsd);
+  const amountLabel =
+    Number.isFinite(amountNum) && amountNum > 0 ? Math.round(amountNum) : null;
+
+  // Idempotent — Stripe may retry checkout.session.completed.
+  if (!(await hasEmailEvent(env, userId, "welcome"))) {
+    const subject = "You're in, mama 🤍 (here's what happens next)";
+    const result = await invokeEdgeFunction(env, "welcome-email", { email, name, userId });
+    await logEmailEvent(env, {
+      profileId: userId,
+      emailType: "welcome",
+      toEmail: email,
+      subject,
+      resendId: resendIdFrom(result),
+      status: result.ok ? "sent" : "failed",
+      meta: { slug: "welcome-email" },
+    });
+  }
+
+  if (!(await hasEmailEvent(env, userId, "callie_payment"))) {
+    const callie = await invokeEdgeFunction(env, "notify-callie", {
+      type: "payment",
+      email,
+      name: name || email,
+      userId,
+      amountUsd: amountLabel,
+    });
+    await logEmailEvent(env, {
+      profileId: userId,
+      emailType: "callie_payment",
+      toEmail: "callie",
+      subject: amountLabel != null
+        ? `💰 New mama: ${name || email} — paid $${amountLabel}`
+        : `💰 New mama: ${name || email} — paid`,
+      resendId: resendIdFrom(callie),
+      status: callie.ok ? "sent" : "failed",
+      meta: { slug: "notify-callie", type: "payment", amount_usd: amountLabel },
+    });
+  }
 }
 
 export async function sendIntakeEmails(env, { email, name, userId, stats }) {
