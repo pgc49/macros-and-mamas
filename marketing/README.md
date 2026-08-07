@@ -85,4 +85,10 @@ That overlay is for a quick visual URL; waitlist API and proper Astro
 asset hosting still belong on the separate Pages project above.
 
 See `../docs/META-SETUP.md` for Pixel / CAPI secrets.  
-See `../docs/ANALYTICS.md` for Cloudflare Web Analytics + profile attribution.
+See `../docs/ANALYTICS.md` for Cloudflare Web Analytics + profile attribution.  
+See `../docs/RANGES-QUIZ.md` for the free ranges quiz lead magnet.
+
+### Ranges quiz (`/quiz`)
+
+Requires `SUPABASE_SERVICE_ROLE_KEY` + `RESEND_API_KEY` on the marketing Pages project.
+In waitlist mode the quiz is the primary CTA; in open mode it is secondary to Join.

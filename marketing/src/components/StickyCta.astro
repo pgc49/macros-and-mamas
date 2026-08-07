@@ -6,6 +6,7 @@ import {
   fullPrice,
   isWaitlist,
   offerPrice,
+  quizUrl,
   waitlistPrice,
 } from '../config';
 ---
@@ -15,10 +16,10 @@ import {
     isWaitlist ? (
       <>
         <div class="s-price">
-          <strong>Lock ${waitlistPrice}</strong>Cohort 2 waitlist · full ${fullPrice}
+          <strong>Free ranges</strong>Lock ${waitlistPrice} · full ${fullPrice}
         </div>
-        <a class="btn" href="#top-form">
-          Save my spot
+        <a class="btn" href={quizUrl}>
+          See your ranges
         </a>
       </>
     ) : (

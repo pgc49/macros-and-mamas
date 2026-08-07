@@ -37,6 +37,8 @@ export const signInUrl = `${siteUrl}/signin`;
 export const termsUrl = `${siteUrl}/terms`;
 export const privacyUrl = `${siteUrl}/privacy`;
 export const dashboardUrl = `${siteUrl}/dashboard`;
+/** Lead magnet — same origin on marketing host (preview or www after cutover). */
+export const quizUrl = '/quiz';
 
 export const offerPrice = isWaitlist ? waitlistPrice : openPrice;
 export const offerAvailability = isWaitlist

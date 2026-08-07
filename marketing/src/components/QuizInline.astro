@@ -1,0 +1,32 @@
+---
+/**
+ * Inline Q1 embed — after sample ranges card.
+ * Tapping navigates to /quiz?q1=<value>&placement=inline
+ */
+const options = [
+  { v: 'still_pregnant', l: 'Still pregnant' },
+  { v: '0_3_months', l: '0–3 months postpartum' },
+  { v: '3_12_months', l: '3–12 months postpartum' },
+  { v: '1_2_years', l: '1–2 years postpartum' },
+  { v: '2_plus_years', l: '2+ years / not postpartum' },
+];
+---
+
+<section class="quiz-inline" id="see-ranges">
+  <div class="wrap">
+    <span class="kicker">Free ranges</span>
+    <h2>Want to see yours?</h2>
+    <p class="lede"
+      >Ninety seconds. Built the same way Callie builds them, and free.</p
+    >
+    <div class="qi-choices">
+      {
+        options.map((o) => (
+          <a class="q-choice link" href={`/quiz?q1=${o.v}&placement=inline`}>
+            {o.l}
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</section>
