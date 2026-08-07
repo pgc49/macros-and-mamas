@@ -12,7 +12,8 @@
     "build:open": "PUBLIC_ENROLLMENT_MODE=open astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "generate-types": "wrangler types"
+    "generate-types": "wrangler types",
+    "test": "node --test src/lib/rangesEngine.test.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.7",

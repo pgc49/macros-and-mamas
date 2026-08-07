@@ -12,7 +12,9 @@ const force = process.env.PREVIEW_MARKETING === "1";
 const match =
   force ||
   branch.startsWith("cursor/full-marketing-execution") ||
-  branch.startsWith("cursor/astro-marketing-homepage");
+  branch.startsWith("cursor/astro-marketing-homepage") ||
+  branch.startsWith("cursor/ranges-quiz-lead") ||
+  branch.startsWith("cursor/web-analytics-supabase");
 
 if (!match) {
   console.log(`[preview-marketing] skip (branch=${branch || "local"})`);

@@ -7,8 +7,9 @@ import {
   enrollUrl,
   isWaitlist,
   offerPrice,
+  quizUrl,
+  waitlistPrice,
 } from '../config';
-import WaitlistForm from './WaitlistForm.astro';
 ---
 
 <section class="hero">
@@ -29,7 +30,18 @@ import WaitlistForm from './WaitlistForm.astro';
 
       {
         isWaitlist ? (
-          <WaitlistForm id="top-form" variant="hero" />
+          <div class="quiz-primary open-cta">
+            <a class="btn" href={quizUrl}>
+              See your ranges free
+            </a>
+            <p class="price-note">
+              Ninety seconds. Built the same way Callie builds them. Join the
+              list for cohort 2 — waitlist locks ${waitlistPrice}.
+            </p>
+            <a class="btn-secondary" href={enrollUrl}>
+              Or create an account when doors open →
+            </a>
+          </div>
         ) : (
           <div class="open-cta">
             <a class="btn" href={enrollUrl}>
@@ -40,6 +52,9 @@ import WaitlistForm from './WaitlistForm.astro';
               {doorsCloseDate} so Callie can build your ranges before day one.
               Pay now, start with the group.
             </p>
+            <a class="btn-secondary" href={quizUrl}>
+              See your ranges free
+            </a>
           </div>
         )
       }
