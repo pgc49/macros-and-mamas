@@ -1,7 +1,7 @@
 ---
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
@@ -17,8 +17,9 @@ import {
 const title = 'Get your macro ranges — Macros and Mamas';
 const description = `Ninety seconds. See your ranges, then unlock the exclusive $${waitlistPrice} early rate ($50 off $${fullPrice}) for the next cohort.`;
 
-/** Bust CDN/browser cache when quiz-app.js changes (CF was caching ~4h). */
-const quizJsPath = fileURLToPath(new URL('../../public/quiz-app.js', import.meta.url));
+/** Bust CDN/browser cache when quiz-app.js changes (CF was caching ~4h).
+ *  Read from cwd/public — Astro prerender rewrites import.meta.url paths. */
+const quizJsPath = path.join(process.cwd(), 'public', 'quiz-app.js');
 const quizJsV = createHash('sha256')
   .update(readFileSync(quizJsPath))
   .digest('hex')
