@@ -120,10 +120,11 @@ export async function emailHasQuizUnlock(env, email) {
   const key = env.SUPABASE_SERVICE_ROLE_KEY || "";
   if (!base || !key) return false;
 
+  // Use eq (not ilike) — PostgREST ilike treats _/% as wildcards.
   const url =
     `${base}/rest/v1/marketing_leads`
     + `?select=segment,needs_review`
-    + `&email=ilike.${encodeURIComponent(normalized)}`
+    + `&email=eq.${encodeURIComponent(normalized)}`
     + `&limit=1`;
 
   try {

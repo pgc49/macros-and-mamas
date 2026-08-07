@@ -128,6 +128,20 @@ for (const stale of ["app.html", "spa", "_app"]) {
 cpSync(marketingDist, out, { recursive: true });
 console.log("[overlay-marketing] Astro site overlaid onto dist/");
 
+if (!existsSync(join(out, "404.html"))) {
+  console.warn("[overlay-marketing] missing 404.html — CF may SPA-fallback unknown URLs to /");
+} else {
+  console.log("[overlay-marketing] 404.html present (disables CF SPA fallback)");
+}
+
+// Belt-and-suspenders: tiny redirect shell so stale /spa caches can't linger as app HTML.
+mkdirSync(join(out, "spa"), { recursive: true });
+writeFileSync(
+  join(out, "spa", "index.html"),
+  `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/dashboard/"><link rel="canonical" href="/dashboard/"><title>Redirecting…</title><script>location.replace("/dashboard/")</script><p><a href="/dashboard/">Continue to dashboard</a></p>\n`,
+);
+console.log("[overlay-marketing] planted /spa/index.html redirect shim");
+
 // Marketing ships a default Astro favicon.svg — restore brand icons from SPA public/.
 for (const icon of [
   "favicon.svg",

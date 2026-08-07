@@ -91,7 +91,7 @@ async function upsertLead(
 
   const email = String(row.email || '').toLowerCase();
   const find = await fetch(
-    `${base}/rest/v1/marketing_leads?email=eq.${encodeURIComponent(email)}&select=id`,
+    `${base}/rest/v1/marketing_leads?email=eq.${encodeURIComponent(email)}&select=id,segment`,
     {
       headers: {
         apikey: key,
@@ -102,8 +102,16 @@ async function upsertLead(
   if (!find.ok) {
     throw new Error(`supabase_find_${find.status}: ${await find.text()}`);
   }
-  const existing = (await find.json()) as { id: string }[];
+  const existing = (await find.json()) as { id: string; segment?: string }[];
   if (existing[0]?.id) {
+    // Sticky exit segments — do not let a re-submit unlock $249 after nurture/vegan.
+    const prevSeg = String(existing[0].segment || '');
+    if (
+      prevSeg === 'pregnancy_nurture' ||
+      prevSeg === 'waitlist_plantbased'
+    ) {
+      row.segment = prevSeg;
+    }
     const patch = await fetch(
       `${base}/rest/v1/marketing_leads?id=eq.${encodeURIComponent(existing[0].id)}`,
       {

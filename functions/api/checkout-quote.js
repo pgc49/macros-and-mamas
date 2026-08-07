@@ -23,7 +23,7 @@ export async function onRequestGet({ request, env }) {
 
     const offer = await resolveCheckoutOffer(env, {
       email: user.email,
-      createdAt: profile?.created_at,
+      createdAt: user.created_at || profile?.created_at,
     });
     if (!offer.ok) {
       return json({ error: offer.error }, offer.status || 403);

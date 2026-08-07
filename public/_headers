@@ -31,3 +31,10 @@
 # Marketing quiz client — must pick up offer/CTA deploys immediately
 /quiz-app.js
   Cache-Control: no-cache, must-revalidate
+
+# Hashed Astro assets + self-hosted fonts (long cache)
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable

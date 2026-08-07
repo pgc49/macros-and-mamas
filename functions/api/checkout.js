@@ -36,9 +36,10 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "already paid" }, 409);
     }
 
+    // Prefer auth.users.created_at (immutable) over profiles.created_at.
     const offer = await resolveCheckoutOffer(env, {
       email: user.email,
-      createdAt: profile?.created_at,
+      createdAt: user.created_at || profile?.created_at,
     });
     if (!offer.ok) {
       return json({ error: offer.error }, offer.status || 403);

@@ -1,0 +1,27 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { quizUrl } from '../config';
+
+const title = 'Page not found — Macros and Mamas';
+const description = 'That page isn’t here. Head home or get your macro ranges.';
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  <main class="quiz-page">
+    <div class="wrap quiz-wrap" style="text-align:center;padding:48px 0 72px">
+      <span class="kicker">404</span>
+      <h1 class="q-title">Page not found</h1>
+      <p class="q-copy">That link doesn’t go anywhere. Try home, or get your ranges.</p>
+      <p style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:18px">
+        <a class="btn" href="/">Back home</a>
+        <a class="btn-secondary" href={quizUrl} style="display:inline-block;padding:13px 22px;font-weight:700;color:var(--accent-deep);text-decoration:underline"
+          >Get your macro ranges</a
+        >
+      </p>
+    </div>
+  </main>
+  <Footer />
+</BaseLayout>
