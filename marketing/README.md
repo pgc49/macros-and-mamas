@@ -72,8 +72,8 @@ Workers & Pages → Create → Pages → Connect to Git → `pgc49/macros-and-ma
 - Optional: `META_PIXEL_ID`, `META_CAPI_ACCESS_TOKEN`
 - Optional: `PUBLIC_CF_WEB_ANALYTICS_TOKEN` (Cloudflare Web Analytics beacon)
 
-Do **not** attach a custom domain until cutover review. Share the
-`*.pages.dev` preview URL with Callie.
+Do **not** attach `www` to this project. www cutover overlays Astro onto the
+SPA Pages project instead — see `../docs/WWW-CUTOVER.md`.
 
 ### Why not `@astrojs/cloudflare` yet
 
