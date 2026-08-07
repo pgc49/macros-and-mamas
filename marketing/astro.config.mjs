@@ -1,22 +1,41 @@
 // @ts-check
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
+
+/**
+ * Enrollment mode source of truth: marketing/wrangler.toml `[vars]`.
+ * CF Pages manages plaintext vars from wrangler.toml (dashboard = secrets only).
+ * Flip PUBLIC_ENROLLMENT_MODE there between "open" and "waitlist", then deploy.
+ */
+function readEnrollmentMode() {
+  const fromEnv = process.env.PUBLIC_ENROLLMENT_MODE;
+  if (fromEnv != null && String(fromEnv).trim() !== '') {
+    return String(fromEnv).trim().toLowerCase() === 'open' ? 'open' : 'waitlist';
+  }
+  try {
+    const dir = dirname(fileURLToPath(import.meta.url));
+    const toml = readFileSync(join(dir, 'wrangler.toml'), 'utf8');
+    const match = toml.match(
+      /^\s*PUBLIC_ENROLLMENT_MODE\s*=\s*"([^"]+)"/m,
+    );
+    const fromToml = match?.[1]?.trim().toLowerCase();
+    if (fromToml === 'open' || fromToml === 'waitlist') return fromToml;
+  } catch {
+    /* fall through */
+  }
+  return 'open';
+}
+
+const enrollmentMode = readEnrollmentMode();
+
+console.log(`[marketing] PUBLIC_ENROLLMENT_MODE → ${enrollmentMode}`);
 
 // Static output + marketing/functions for Cloudflare Pages.
 // Adapter omitted for now: @astrojs/cloudflare was emitting a reserved ASSETS
 // binding that broke the build. Revisit at www cutover if needed.
-// Default waitlist when unset so CF builds stay closed unless explicitly opened.
-// Dashboard var still wins: set PUBLIC_ENROLLMENT_MODE=open to flip CTAs.
-const enrollmentMode = String(
-  process.env.PUBLIC_ENROLLMENT_MODE || 'waitlist',
-)
-  .trim()
-  .toLowerCase();
-
-console.log(
-  `[marketing] PUBLIC_ENROLLMENT_MODE=${process.env.PUBLIC_ENROLLMENT_MODE ?? '(unset)'} → ${enrollmentMode === 'open' ? 'open' : 'waitlist'}`,
-);
-
 export default defineConfig({
   site: 'https://www.macrosandmamas.com',
   output: 'static',
@@ -27,12 +46,8 @@ export default defineConfig({
     },
   },
   vite: {
-    // Explicitly bake CF Pages build env into the client bundle.
-    // Vite's automatic PUBLIC_* injection is easy to miss on subdirectory builds.
     define: {
-      'import.meta.env.PUBLIC_ENROLLMENT_MODE': JSON.stringify(
-        enrollmentMode === 'open' ? 'open' : 'waitlist',
-      ),
+      'import.meta.env.PUBLIC_ENROLLMENT_MODE': JSON.stringify(enrollmentMode),
     },
   },
 });

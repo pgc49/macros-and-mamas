@@ -14,7 +14,13 @@ npm run preview
 
 ## Enrollment mode
 
-`PUBLIC_ENROLLMENT_MODE` = `waitlist` | `open` (default `open`). Build-time only.
+`PUBLIC_ENROLLMENT_MODE` = `waitlist` | `open`. Build-time only.
+
+**Source of truth:** `wrangler.toml` → `[vars] PUBLIC_ENROLLMENT_MODE`.  
+Cloudflare Pages manages plaintext vars from that file (dashboard is secrets-only).  
+To flip CTAs: edit the value, merge to `main`, wait for Production deploy.
+
+Local overrides still work: `PUBLIC_ENROLLMENT_MODE=waitlist npm run build`.
 
 Dates/prices: `src/config.ts`.
 

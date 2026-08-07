@@ -23,7 +23,7 @@ Marketing-only lead magnet (`/quiz`) using Callie's band math from the quiz sour
 | `RESEND_API_KEY` | Delivery email |
 | `LEAD_FROM_EMAIL` | Optional From (default Callie address) |
 | `META_PIXEL_ID` / `META_CAPI_ACCESS_TOKEN` | Optional Lead CAPI |
-| `PUBLIC_ENROLLMENT_MODE` | `waitlist` \| `open` (CTA prominence) |
+| `PUBLIC_ENROLLMENT_MODE` | `waitlist` \| `open` — set in `marketing/wrangler.toml` `[vars]` (CTA prominence) |
 
 ## Modes
 
