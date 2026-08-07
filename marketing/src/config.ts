@@ -1,12 +1,12 @@
 export type EnrollmentMode = 'waitlist' | 'open';
 
-const rawMode = String(import.meta.env.PUBLIC_ENROLLMENT_MODE ?? 'waitlist')
+const rawMode = String(import.meta.env.PUBLIC_ENROLLMENT_MODE ?? 'open')
   .trim()
   .toLowerCase();
 
-/** Explicit `open` only; anything else (including unset) → waitlist. */
+/** Baked at build from wrangler.toml / PUBLIC_ENROLLMENT_MODE. */
 export const enrollmentMode: EnrollmentMode =
-  rawMode === 'open' ? 'open' : 'waitlist';
+  rawMode === 'waitlist' ? 'waitlist' : 'open';
 
 export const isWaitlist = enrollmentMode === 'waitlist';
 export const isOpen = enrollmentMode === 'open';
