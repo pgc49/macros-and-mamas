@@ -120,6 +120,9 @@ async function markPaid(env, userId, session) {
     patch.lab_review_purchased_at = paidAt;
   }
 
+  // First-touch backfill from Checkout metadata if the client stamp missed.
+  Object.assign(patch, await attributionBackfill(env, userId, session.metadata || {}));
+
   const resp = await fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
     method: "PATCH",
     headers: {
@@ -134,6 +137,56 @@ async function markPaid(env, userId, session) {
   if (!resp.ok) {
     const detail = await resp.text();
     throw new Error(`supabase update failed: ${resp.status} ${detail}`);
+  }
+}
+
+/** Fill empty profile attribution columns from Stripe session metadata. */
+async function attributionBackfill(env, userId, metadata) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const keys = [
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_content",
+    "utm_term",
+    "fbclid",
+    "anon_id",
+    "landing_path",
+    "referrer_host",
+  ];
+  const fromMeta = {};
+  for (const k of keys) {
+    const v = String(metadata[k] || "").trim();
+    if (v) fromMeta[k] = v.slice(0, k === "anon_id" ? 64 : 200);
+  }
+  if (!Object.keys(fromMeta).length) return {};
+
+  try {
+    const sel = ["attributed_at", ...keys].join(",");
+    const resp = await fetch(
+      `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=${encodeURIComponent(sel)}`,
+      {
+        headers: {
+          apikey: key,
+          authorization: `Bearer ${key}`,
+        },
+      },
+    );
+    if (!resp.ok) return {};
+    const rows = await resp.json();
+    const existing = rows?.[0] || {};
+    const patch = {};
+    for (const [k, v] of Object.entries(fromMeta)) {
+      if (!existing[k]) patch[k] = v;
+    }
+    if (Object.keys(patch).length && !existing.attributed_at) {
+      patch.attributed_at = new Date().toISOString();
+    }
+    return patch;
+  } catch (e) {
+    console.error("attribution backfill skipped", e);
+    return {};
   }
 }
 

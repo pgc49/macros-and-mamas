@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import * as Sentry from "@sentry/react";
 import { supabase } from "../lib/supabase";
+import { persistAttributionToProfile } from "../lib/attribution";
 
 function syncSentryUser(nextUser) {
   if (nextUser?.id) {
@@ -129,6 +130,12 @@ export function AuthProvider({ children }) {
         })
         .eq("id", data.session.user.id);
       if (stampErr) console.error("terms stamp failed", stampErr);
+      // First-touch UTMs / anon_id → profiles (best-effort).
+      try {
+        await persistAttributionToProfile(data.session.user.id);
+      } catch (attrErr) {
+        console.error("attribution stamp failed", attrErr);
+      }
     }
 
     return { error, needsEmailConfirm };

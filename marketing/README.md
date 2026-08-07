@@ -64,6 +64,7 @@ Workers & Pages → Create → Pages → Connect to Git → `pgc49/macros-and-ma
 - `SUPABASE_URL` (or `VITE_SUPABASE_URL`)
 - `SUPABASE_SERVICE_ROLE_KEY` (preferred) or anon key
 - Optional: `META_PIXEL_ID`, `META_CAPI_ACCESS_TOKEN`
+- Optional: `PUBLIC_CF_WEB_ANALYTICS_TOKEN` (Cloudflare Web Analytics beacon)
 
 Do **not** attach a custom domain until cutover review. Share the
 `*.pages.dev` preview URL with Callie.
@@ -83,4 +84,5 @@ the SPA `dist/` **for that branch only**. Production/`main` skips it.
 That overlay is for a quick visual URL; waitlist API and proper Astro
 asset hosting still belong on the separate Pages project above.
 
-See `../docs/META-SETUP.md` for Pixel / CAPI secrets.
+See `../docs/META-SETUP.md` for Pixel / CAPI secrets.  
+See `../docs/ANALYTICS.md` for Cloudflare Web Analytics + profile attribution.
