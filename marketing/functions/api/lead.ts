@@ -38,7 +38,6 @@ type LeadBody = {
   email?: string;
   first_name?: string;
   last_name?: string;
-  baby_birthday?: string;
   source?: string;
   answers?: Record<string, unknown>;
   fbp?: string;
@@ -365,7 +364,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }
       : {};
 
-  const babyBirthday = String(body.baby_birthday || '').trim();
   const row: Record<string, unknown> = {
     email,
     first_name: firstName,
@@ -384,10 +382,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     goal: answers.goal || null,
     activity_level: answers.activity_level || null,
     flags: answers.flags,
-    baby_birthday:
-      babyBirthday && /^\d{4}-\d{2}-\d{2}$/.test(babyBirthday)
-        ? babyBirthday
-        : null,
+    baby_birthday: null,
     needs_review: Boolean(engine.needs_review),
     review_reason: engine.review_reason,
     segment,

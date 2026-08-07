@@ -11,10 +11,11 @@
 
   const Q1 = [
     { v: 'still_pregnant', l: 'Still pregnant' },
-    { v: '0_3_months', l: '0–3 months postpartum' },
-    { v: '3_12_months', l: '3–12 months postpartum' },
-    { v: '1_2_years', l: '1–2 years postpartum' },
-    { v: '2_plus_years', l: '2+ years / not postpartum' },
+    { v: '0_3_months', l: '0–3 months' },
+    { v: '3_12_months', l: '3–12 months' },
+    { v: '1_2_years', l: '1–2 years' },
+    { v: '2_plus_years', l: '2+ years' },
+    { v: 'not_postpartum', l: 'Not postpartum' },
   ];
   const Q2 = [
     { v: 'exclusive', l: 'Exclusive breast milk' },
@@ -24,22 +25,22 @@
   ];
   const Q5 = [
     { v: 'lose_sustainable', l: 'Lose fat sustainably' },
-    { v: 'lose_efficient', l: 'Lose fat as efficiently as I can without crashing' },
+    { v: 'lose_efficient', l: 'Lose efficiently (no crash)' },
     { v: 'maintain', l: 'Maintain where I am' },
     { v: 'gain', l: 'Gain / rebuild' },
   ];
   const Q6 = [
     { v: 'minimal', l: 'Minimal — survival mode' },
     { v: 'light', l: 'Light walks most days' },
-    { v: 'moderate', l: 'Moderate — some strength or longer walks' },
-    { v: 'high', l: 'High — training consistently' },
+    { v: 'moderate', l: 'Moderate movement' },
+    { v: 'high', l: 'Training consistently' },
   ];
   const Q7 = [
     { v: 'vegetarian', l: 'Vegetarian / pescatarian' },
     { v: 'vegan', l: 'Fully vegan' },
     { v: 'blood_sugar', l: 'Blood sugar concerns' },
     { v: 'thyroid', l: 'Thyroid' },
-    { v: 'c_section', l: 'Recent C-section recovery' },
+    { v: 'c_section', l: 'Recent C-section' },
     { v: 'none', l: 'Nothing to add' },
   ];
 
@@ -58,19 +59,38 @@
       activity_level: '',
       flags: [],
     },
-    contact: { first_name: '', last_name: '', email: '', baby_birthday: '' },
+    contact: { first_name: '', last_name: '', email: '' },
     result: null,
     busy: false,
     error: '',
     source: 'quiz_page',
   };
 
+  function afterQ1(v) {
+    state.answers.months_postpartum = v;
+    if (v === 'still_pregnant') {
+      setStep('gate');
+      return;
+    }
+    if (v === 'not_postpartum') {
+      state.answers.feeding = 'not_feeding';
+      setStep('q3');
+      return;
+    }
+    setStep('q2');
+  }
+
   const params = new URLSearchParams(location.search);
   const q1 = (params.get('q1') || '').trim();
   if (Q1.some((o) => o.v === q1)) {
-    state.answers.months_postpartum = q1;
-    state.step = q1 === 'still_pregnant' ? 'gate' : 'q2';
     state.source = params.get('placement') === 'modal' ? 'modal' : 'inline';
+    // Defer step until after helpers exist — set answers now, step after render funcs
+    state.answers.months_postpartum = q1;
+    if (q1 === 'still_pregnant') state.step = 'gate';
+    else if (q1 === 'not_postpartum') {
+      state.answers.feeding = 'not_feeding';
+      state.step = 'q3';
+    } else state.step = 'q2';
   }
   try {
     if (typeof window.fbq === 'function') {
@@ -115,13 +135,14 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function choiceButtons(options, selected, onPick) {
-    return options
+  function choiceButtons(options, selected, gridClass) {
+    const cls = gridClass || 'q-choices pills';
+    return `<div class="${cls}" id="pick">${options
       .map(
         (o) =>
-          `<button type="button" class="q-choice${selected === o.v ? ' on' : ''}" data-v="${o.v}">${o.l}</button>`,
+          `<button type="button" class="q-choice pill${selected === o.v ? ' on' : ''}" data-v="${o.v}">${o.l}</button>`,
       )
-      .join('');
+      .join('')}</div>`;
   }
 
   function screenShell(title, body, footer = '') {
@@ -141,48 +162,49 @@
     if (state.step === 'q1') {
       html = screenShell(
         'Where are you right now?',
-        `<div class="q-choices" id="pick">${choiceButtons(Q1, a.months_postpartum)}</div>`,
+        choiceButtons(Q1, a.months_postpartum, 'q-choices pills grid-2'),
       );
     } else if (state.step === 'q2') {
       html = screenShell(
         'Are you feeding your baby breast milk right now?',
-        `<div class="q-choices" id="pick">${choiceButtons(Q2, a.feeding)}</div>
+        `${choiceButtons(Q2, a.feeding, 'q-choices pills grid-2')}
          <button type="button" class="q-back" data-back="q1">Back</button>`,
       );
     } else if (state.step === 'q3') {
+      const backStep = a.months_postpartum === 'not_postpartum' ? 'q1' : 'q2';
       html = screenShell(
         'Your height and current weight',
-        `<div class="q-fields">
+        `<div class="q-fields compact">
           <label>Height
             <span class="q-row">
-              <select id="ft">${[4, 5, 6].map((n) => `<option value="${n}" ${a.height_ft == n ? 'selected' : ''}>${n} ft</option>`).join('')}</select>
-              <select id="inin">${[...Array(12)].map((_, n) => `<option value="${n}" ${a.height_in_part == n ? 'selected' : ''}>${n} in</option>`).join('')}</select>
+              <select id="ft" class="pill-input">${[4, 5, 6].map((n) => `<option value="${n}" ${a.height_ft == n ? 'selected' : ''}>${n} ft</option>`).join('')}</select>
+              <select id="inin" class="pill-input">${[...Array(12)].map((_, n) => `<option value="${n}" ${a.height_in_part == n ? 'selected' : ''}>${n} in</option>`).join('')}</select>
             </span>
           </label>
           ${
             a.weight_prefer_not
               ? `<label>Weight range
-                  <select id="wband">
+                  <select id="wband" class="pill-input">
                     <option value="">Choose a range</option>
                     ${['110-120','120-130','130-140','140-150','150-160','160-170','170-180','180-190','190-200','200-220','220-240','240-260'].map((b) => `<option value="${b}" ${a.weight_band === b ? 'selected' : ''}>${b} lb</option>`).join('')}
                   </select>
                 </label>
                 <button type="button" class="q-link" id="showWeight">Enter an exact weight instead</button>`
               : `<label>Current weight (lb)
-                  <input id="cw" type="number" inputmode="decimal" min="80" max="400" value="${a.current_weight_lbs}" />
+                  <input id="cw" class="pill-input" type="number" inputmode="decimal" min="80" max="400" value="${a.current_weight_lbs}" />
                 </label>
                 <button type="button" class="q-link" id="preferNot">Prefer not to say — use a range</button>`
           }
         </div>
         <button type="button" class="btn q-next" id="next">Continue</button>
-        <button type="button" class="q-back" data-back="q2">Back</button>`,
+        <button type="button" class="q-back" data-back="${backStep}">Back</button>`,
       );
     } else if (state.step === 'q4') {
       html = screenShell(
         'What weight do you feel like yourself at?',
-        `<div class="q-fields">
+        `<div class="q-fields compact">
           <label>Weight (lb)
-            <input id="gw" type="number" inputmode="decimal" min="80" max="400" value="${a.goal_weight_lbs}" />
+            <input id="gw" class="pill-input" type="number" inputmode="decimal" min="80" max="400" value="${a.goal_weight_lbs}" />
           </label>
         </div>
         <button type="button" class="btn q-next" id="next">Continue</button>
@@ -191,27 +213,26 @@
     } else if (state.step === 'q5') {
       html = screenShell(
         'What are you actually after?',
-        `<div class="q-choices" id="pick">${choiceButtons(Q5, a.goal)}</div>
+        `${choiceButtons(Q5, a.goal, 'q-choices pills grid-2')}
          <button type="button" class="q-back" data-back="q4">Back</button>`,
       );
     } else if (state.step === 'q6') {
       html = screenShell(
         'How much are you moving right now?',
-        `<div class="q-choices" id="pick">${choiceButtons(Q6, a.activity_level)}</div>
+        `${choiceButtons(Q6, a.activity_level, 'q-choices pills grid-2')}
          <button type="button" class="q-back" data-back="q5">Back</button>`,
       );
     } else if (state.step === 'q7') {
       html = screenShell(
         'Anything we should know?',
         `<p class="q-hint">Optional. Pick all that apply.</p>
-         <div class="q-choices multi" id="pick">
-           ${Q7.map((o) => `<button type="button" class="q-choice${a.flags.includes(o.v) ? ' on' : ''}" data-v="${o.v}">${o.l}</button>`).join('')}
+         <div class="q-choices pills grid-2 multi" id="pick">
+           ${Q7.map((o) => `<button type="button" class="q-choice pill${a.flags.includes(o.v) ? ' on' : ''}" data-v="${o.v}">${o.l}</button>`).join('')}
          </div>
          <button type="button" class="btn q-next" id="next">Continue</button>
          <button type="button" class="q-back" data-back="q6">Back</button>`,
       );
     } else if (state.step === 'gate') {
-      const early = a.months_postpartum === '0_3_months';
       const pregnant = a.months_postpartum === 'still_pregnant';
       const vegan = a.flags.includes('vegan');
       let title = 'Your ranges are ready. Where should Callie send them?';
@@ -219,15 +240,10 @@
       if (vegan) title = 'Leave your email for an honest note.';
       html = screenShell(
         title,
-        `<div class="q-fields">
-          <label>First name<input id="fn" autocomplete="given-name" value="${state.contact.first_name}" /></label>
-          <label>Last name<input id="ln" autocomplete="family-name" value="${state.contact.last_name}" /></label>
-          <label>Email<input id="em" type="email" autocomplete="email" value="${state.contact.email}" /></label>
-          ${
-            early
-              ? `<label>Baby's birthday<input id="bb" type="date" value="${state.contact.baby_birthday}" /></label>`
-              : ''
-          }
+        `<div class="q-fields compact">
+          <label>First name<input id="fn" class="pill-input" autocomplete="given-name" value="${state.contact.first_name}" /></label>
+          <label>Last name<input id="ln" class="pill-input" autocomplete="family-name" value="${state.contact.last_name}" /></label>
+          <label>Email<input id="em" class="pill-input" type="email" autocomplete="email" value="${state.contact.email}" /></label>
           <input type="text" name="website_url" id="hp" class="hp" tabindex="-1" autocomplete="off" />
         </div>
         <button type="button" class="btn q-next" id="submit" ${state.busy ? 'disabled' : ''}>
@@ -321,9 +337,7 @@
         btn.addEventListener('click', () => {
           const v = btn.getAttribute('data-v');
           if (state.step === 'q1') {
-            state.answers.months_postpartum = v;
-            if (v === 'still_pregnant') setStep('gate');
-            else setStep('q2');
+            afterQ1(v);
           } else if (state.step === 'q2') {
             state.answers.feeding = v;
             setStep('q3');
@@ -355,12 +369,7 @@
           render();
         });
       });
-      root.querySelector('#next')?.addEventListener('click', () => {
-        if (state.answers.flags.includes('vegan')) {
-          /* continue to gate with vegan segment */
-        }
-        setStep('gate');
-      });
+      root.querySelector('#next')?.addEventListener('click', () => setStep('gate'));
     }
 
     if (state.step === 'q3') {
@@ -415,18 +424,9 @@
     state.contact.first_name = (root.querySelector('#fn')?.value || '').trim();
     state.contact.last_name = (root.querySelector('#ln')?.value || '').trim();
     state.contact.email = (root.querySelector('#em')?.value || '').trim();
-    state.contact.baby_birthday = (root.querySelector('#bb')?.value || '').trim();
     const hp = (root.querySelector('#hp')?.value || '').trim();
     if (!state.contact.first_name || !state.contact.last_name || !state.contact.email) {
       state.error = 'First name, last name, and email are required.';
-      render();
-      return;
-    }
-    if (
-      state.answers.months_postpartum === '0_3_months' &&
-      !state.contact.baby_birthday
-    ) {
-      state.error = "Add baby's birthday so we can check in at the right time.";
       render();
       return;
     }
@@ -457,7 +457,6 @@
       email: state.contact.email,
       first_name: state.contact.first_name,
       last_name: state.contact.last_name,
-      baby_birthday: state.contact.baby_birthday || undefined,
       source: state.source,
       website_url: hp || undefined,
       event_id: eventId,
@@ -480,7 +479,6 @@
       },
     };
 
-    // Pregnant exit: minimal answers
     if (state.answers.months_postpartum === 'still_pregnant') {
       payload.answers = {
         months_postpartum: 'still_pregnant',

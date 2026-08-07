@@ -30,6 +30,16 @@ Marketing-only lead magnet (`/quiz`) using Callie's band math from the quiz sour
 - **Waitlist:** hero / sticky / final / header → “See your ranges free”
 - **Open:** Join now primary; quiz as secondary text link + inline embed
 
+## Q1 flow
+
+Six pills: Still pregnant · 0–3 months · 3–12 months · 1–2 years · 2+ years · Not postpartum.
+
+- **Still pregnant** → nurture gate (no cut ranges)
+- **Not postpartum** → skip feeding; go straight to height/weight
+- Other PP options → feeding question, then height/weight
+
+No baby birthday and no mama DOB on the free calculator — postpartum stage from Q1 is enough.
+
 ## Privacy / Meta
 
 Never send feeding, postpartum months, or Q7 flags in Pixel/CAPI `custom_data`. Only `content_name: "ranges_quiz"`.
