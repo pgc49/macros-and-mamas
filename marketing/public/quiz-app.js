@@ -15,7 +15,7 @@
   const calliePhoto = root.dataset.calliePhoto || '/callie-kitchen.jpg';
   const postPayCopy =
     root.dataset.postPayCopy
-    || "After you pre-pay, you'll fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.";
+    || "After you pre-pay, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.";
   const ATTR_KEY = 'mm_attribution_v1';
   /** Segments that may enroll Aug 31 — only these fire Meta Lead. */
   const ENROLLABLE_SEGMENTS = { main: 1, early_pp_nurture: 1 };
@@ -570,9 +570,9 @@
       </div>
       <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks · everything included</p>
       <a class="btn q-offer-btn" href="${joinHref}">Pre-pay $${offerPrice} — lock my spot</a>
+      ${email ? `<p class="q-offer-continuing">Continuing as ${escapeHtml(email)}</p>` : ''}
       <p class="q-offer-after">${escapeHtml(postPayCopy)}</p>
-      <p class="q-offer-fine">Next: set a password${email ? ` for <strong>${escapeHtml(email)}</strong>` : ''}, then pre-pay at the early rate from your quiz. Ranges above are a preview — Callie approves your final numbers if you join.</p>
-      <p class="q-copy muted" style="margin-bottom:0">Not ready to pay yet? No problem — your ranges stay in your inbox either way.</p>
+      <p class="q-offer-skip">Not ready yet? Your ranges stay in your inbox either way.</p>
     </div>`;
   }
 
