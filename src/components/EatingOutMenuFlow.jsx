@@ -176,7 +176,9 @@ export function EatingOutMenuFlow({
         </div>
       ) : (
         <>
-          <div style={{
+          <div
+            className="mam-h-scroll"
+            style={{
             display: "flex",
             gap: 8,
             overflowX: "auto",

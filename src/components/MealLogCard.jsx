@@ -782,7 +782,9 @@ export function MealLogCard({
                   </div>
                 ) : !snapItems.length ? null : (
                   <>
-                    <div style={{
+                    <div
+                      className="mam-h-scroll"
+                      style={{
                       display: "flex",
                       gap: 8,
                       overflowX: "auto",
@@ -1230,7 +1232,9 @@ export function MealLogCard({
               Review &amp; edit, then save
             </div>
             {snapItems.length > 0 && (
-              <div style={{
+              <div
+                className="mam-h-scroll"
+                style={{
                 display: "flex",
                 gap: 8,
                 overflowX: "auto",
