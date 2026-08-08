@@ -375,8 +375,8 @@
   function progressVignetteHtml() {
     const min = 100;
     const max = 180;
-    // 6 in-range, 3 under (85–95% of 150), 1 slightly over — humanly imperfect.
-    const barsG = [154, 136, 158, 152, 129, 160, 155, 141, 168, 151];
+    // Interleaved week: 5 in-band, 2 just under, 1 low bad day, 1 over, 1 kiss.
+    const barsG = [155, 138, 158, 125, 152, 172, 143, 150, 157, 154];
     const bars = barsG
       .map((g) => `<i style="height:${(((g - min) / (max - min)) * 100).toFixed(1)}%"></i>`)
       .join('');
@@ -429,7 +429,7 @@
       <div class="q-include-card">
         <div class="m-kicker">Progress · ranges &amp; weight</div>
         ${progressVignetteHtml()}
-        <p class="q-include-copy">See how you're landing in your macro ranges and how weight moves over weeks. Under mid-day is normal — the pattern is what you and Callie coach from.</p>
+        <p class="q-include-copy">See how you're landing in your macro ranges and how weight moves over weeks. Landing under the band some days is normal, and one rough day doesn't undo a good week. The picture over weeks is what you and Callie coach from.</p>
       </div>
     </div>`;
   }

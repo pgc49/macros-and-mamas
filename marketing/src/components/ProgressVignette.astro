@@ -5,11 +5,13 @@
  * meaning lives in visible captions (not chart nodes).
  *
  * Y zoom 100–180g so the sage band reads on mobile; bars stay proportional.
- * Bars (g): 6 in-range, 3 under (85–95% of band bottom), 1 slightly over.
+ * Demo week (g), interleaved — not a tidy trend:
+ * 5 in-band (150–160), 2 just under (~90–96% of band bottom),
+ * 1 clearly low “bad day,” 1 over (~105–110% of band top), 1 kissing bottom.
  */
 const PROG_MIN = 100;
 const PROG_MAX = 180;
-const barsG = [154, 136, 158, 152, 129, 160, 155, 141, 168, 151];
+const barsG = [155, 138, 158, 125, 152, 172, 143, 150, 157, 154];
 const barPct = (g: number) =>
   `${(((g - PROG_MIN) / (PROG_MAX - PROG_MIN)) * 100).toFixed(1)}%`;
 ---
