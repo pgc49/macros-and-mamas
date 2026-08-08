@@ -56,7 +56,8 @@ export const CONFIG = {
   FULLSCRIPT_DIGESTION: envUrl("VITE_FULLSCRIPT_DIGESTION_URL"),
 
   // Client: allow create-account + /join routing (pre-sales open).
-  // Server Strategy A: keep OPEN_WITHOUT_QUIZ unset/false so $249 requires quiz.
+  // Server: quiz unlocks early $249; without quiz they can still pay full $299.
+  // OPEN_WITHOUT_QUIZ=true would give everyone $249 (usually leave false).
   ENROLLMENT_OPEN: true,
   /** ISO cutoff: accounts created before this may still finish paying while closed. */
   ENROLLMENT_CLOSED_AT: "2026-07-26T02:00:00.000Z",

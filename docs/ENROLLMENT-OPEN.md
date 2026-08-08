@@ -6,16 +6,17 @@
 
 1. **Founding finish** — account `created_at` before `ENROLLMENT_CLOSED_AT` → **$149**
 2. **Quiz lead** — email has an eligible row on `marketing_leads` (`main` or `early_pp_nurture`) → **$249**
-3. **`OPEN_WITHOUT_QUIZ=true`** — anyone signed in can pay **$249** (off for Strategy A)
-4. Else → **403 `quiz_required`**
+3. **`OPEN_WITHOUT_QUIZ=true`** — early **$249** even without a quiz lead
+4. Else → **full $299** (anyone can enroll without the quiz)
 
 Payment is always for the **next named cohort** (start date in copy). Intake → Callie approve still happens before day one.
 
 ## Strategy A (current — paid traffic)
 
 - Homepage / public: show **full rate $299**
-- After eligible quiz: reveal **early $249** and unlock checkout
-- Cloudflare: **`OPEN_WITHOUT_QUIZ` unset or `false`**
+- After eligible quiz: **early $249** at checkout
+- Without quiz: still can create account and pay **$299**
+- Cloudflare: **`OPEN_WITHOUT_QUIZ` unset or `false`** (so skippers pay full, not early)
 - Meta **Lead** fires only for enrollable segments (`main`, `early_pp_nurture`) — not pregnant / vegan nurture
 - Cold ads → `/quiz` (optionally `?q1=…` per season); homepage for organic / retargeting
 
@@ -33,8 +34,9 @@ SUPABASE_SERVICE_ROLE_KEY=…
 | Var | Role |
 | --- | --- |
 | `ENROLLMENT_OPEN=true` | Client allows create-account + `/join` |
-| `OPEN_WITHOUT_QUIZ=false` | Server requires quiz lead for $249 |
-| Quiz | Lead magnet + price unlock |
+| `OPEN_WITHOUT_QUIZ=false` | No quiz → full $299; quiz → early $249 |
+| `OPEN_WITHOUT_QUIZ=true` | Everyone gets $249 (rarely wanted) |
+| Quiz | Lead magnet + early-rate unlock |
 
 ## Always set a next cohort start date
 

@@ -199,7 +199,18 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
           <p style={{ marginTop: 14, fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
             You’re pre-paying for <strong style={{ color: T.ink }}>{COHORT_LABEL}</strong>
             {" "}— starts <strong style={{ color: T.ink }}>{COHORT_START_SHORT}</strong>.
-            Took the quiz? Use that same email here so we can keep your ranges attached.
+            {isFull ? (
+              <>
+                {" "}
+                <a href={QUIZ_URL} style={{ color: T.accent, fontWeight: 700 }}>
+                  Take the free quiz
+                </a>
+                {" "}
+                with this email to unlock $249 instead.
+              </>
+            ) : (
+              <> Took the quiz? Keep using this same email so your ranges stay attached.</>
+            )}
           </p>
         )}
         {refreshBtn}
