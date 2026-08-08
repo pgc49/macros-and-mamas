@@ -98,12 +98,10 @@ export function computeRanges(answers, opts = {}) {
     return review('carbs_under_100');
   }
 
-  const calories_low = round25(
-    protein_low_g * 4 + carbs_low_g * 4 + fat_low_g * 9,
-  );
-  const calories_high = round25(
-    protein_high_g * 4 + carbs_high_g * 4 + fat_high_g * 9,
-  );
+  // Exact from displayed macros — do not round25 here or P/C/F won't sum to calories
+  // (skeptical users check this; the pitch is that calculators get the math wrong).
+  const calories_low = protein_low_g * 4 + carbs_low_g * 4 + fat_low_g * 9;
+  const calories_high = protein_high_g * 4 + carbs_high_g * 4 + fat_high_g * 9;
 
   return {
     needs_review: false,

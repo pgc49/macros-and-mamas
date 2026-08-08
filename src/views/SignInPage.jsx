@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { FD, T, F } from "../theme/tokens";
 import { Shell, Card, Btn, Field, inputStyle } from "../components/ui";
 import { useAuth } from "../auth/useAuth.jsx";
@@ -18,7 +18,10 @@ export function SignInPage({
   onSwitchMode,
 }) {
   const { signInWithPassword, signUpWithPassword, resetPasswordForEmail } = useAuth();
-  const [email, setEmail] = useState("");
+  const [searchParams] = useSearchParams();
+  const prefillEmail = String(searchParams.get("email") || "").trim();
+  const fromQuiz = searchParams.get("from") === "quiz";
+  const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -96,7 +99,9 @@ export function SignInPage({
             ? "Enter the email you enrolled with. We’ll send a link to choose a new password."
             : isCreate
               ? (isEnrollmentOpen()
-                ? "Create your account with the same email you used on the ranges quiz, then pre-pay to lock your Cohort 2 spot (starts Monday, Aug 31) and complete a short intake so Callie can build your macros."
+                ? (fromQuiz && prefillEmail
+                  ? "Set a password for the email from your ranges quiz, then pre-pay to lock your Cohort 2 spot (starts Monday, Aug 31)."
+                  : "Create your account with the same email you used on the ranges quiz, then pre-pay to lock your Cohort 2 spot (starts Monday, Aug 31) and complete a short intake so Callie can build your macros.")
                 : "New spots aren’t open for checkout yet. Prefer the cohort two waitlist on the homepage — we’ll email you a join link when it’s time. Only create an account here if Callie invited you to finish joining.")
               : "Sign in with the email you used when you enrolled."}
         </p>
@@ -109,6 +114,7 @@ export function SignInPage({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@email.com"
+            readOnly={Boolean(fromQuiz && prefillEmail && isCreate)}
           />
         </Field>
         {!forgotMode && (

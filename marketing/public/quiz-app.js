@@ -474,21 +474,29 @@
 
   /** Quiz-gated exclusive pre-pay — shown for eligible non-pregnant / non-vegan finishes. */
   function offerBlock() {
-    const joinHref = enrollUrl.includes('?')
-      ? `${enrollUrl}&from=quiz`
-      : `${enrollUrl}?from=quiz`;
+    const email = String(state.contact.email || '').trim().toLowerCase();
+    // Prefill create-account with the quiz email so they don't retype at the pay gate.
+    const signInBase = String(enrollUrl || '')
+      .replace(/\/join\/?(\?.*)?$/i, '/signin')
+      .replace(/\?.*$/, '');
+    const params = new URLSearchParams({
+      auth: 'create',
+      from: 'quiz',
+    });
+    if (email) params.set('email', email);
+    const createHref = `${signInBase || 'https://www.macrosandmamas.com/signin'}?${params.toString()}`;
     return `<div class="q-offer-card">
       <div class="q-offer-kicker">Exclusive · unlocked by your quiz</div>
       <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
-      <p class="q-offer-lede">You’re signing up for <strong>Cohort 2</strong>, starting <strong>${escapeHtml(cohortStart)}</strong>. <strong>Doors close ${escapeHtml(doorsClose)}</strong> so Callie can build ranges before day one. Create your account, then pre-pay at the early rate you just unlocked.</p>
+      <p class="q-offer-lede">You’re signing up for <strong>Cohort 2</strong>, starting <strong>${escapeHtml(cohortStart)}</strong>. <strong>Doors close ${escapeHtml(doorsClose)}</strong> so Callie can build ranges before day one. Next: set a password${email ? ` for <strong>${escapeHtml(email)}</strong>` : ''}, then pre-pay at the early rate you just unlocked.</p>
       <div class="q-offer-price-row">
         <span class="q-offer-now">$${offerPrice}</span>
         <span class="q-offer-full">Full rate $${fullPrice}</span>
         <span class="q-offer-save">Save $${saveAmount}</span>
       </div>
       <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks · everything included</p>
-      <a class="btn q-offer-btn" href="${joinHref}">Pre-pay $${offerPrice} — lock my spot</a>
-      <p class="q-offer-fine">Use the <strong>same email</strong> you just entered so checkout unlocks this rate. Ranges above are a preview — Callie approves your final numbers if you join.</p>
+      <a class="btn q-offer-btn" href="${createHref}">Pre-pay $${offerPrice} — lock my spot</a>
+      <p class="q-offer-fine">Ranges above are a preview — Callie approves your final numbers if you join.</p>
       <p class="q-copy muted" style="margin-bottom:0">Not ready to pay yet? No problem — your ranges stay in your inbox either way.</p>
     </div>`;
   }

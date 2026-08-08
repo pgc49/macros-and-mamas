@@ -1417,7 +1417,14 @@ export default function App() {
           !user
             ? (
               <Navigate
-                to={PATHS.signin}
+                to={{
+                  pathname: PATHS.signin,
+                  search: (() => {
+                    const p = new URLSearchParams(location.search);
+                    p.set("auth", "create");
+                    return `?${p.toString()}`;
+                  })(),
+                }}
                 replace
                 state={{ from: PATHS.join }}
               />
