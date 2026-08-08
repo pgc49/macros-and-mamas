@@ -10,12 +10,11 @@
  * Resolution order:
  *   1. Account created before ENROLLMENT_CLOSED_AT → founding ($149)
  *   2. Email completed the ranges quiz (eligible segment on marketing_leads) → early ($249)
- *   3. OPEN_WITHOUT_QUIZ=true → early ($249) without a quiz lead (off for Strategy A)
- *   4. else → 403 `quiz_required`
+ *   3. OPEN_WITHOUT_QUIZ=true → early ($249) even without a quiz lead
+ *   4. else → full ($299) — anyone can enroll; quiz unlocks the discount, not the right to pay
  *
- * Strategy A (paid traffic): homepage shows full $299; quiz unlocks $249.
- * Keep OPEN_WITHOUT_QUIZ unset/false. Always advertise next cohort start + doors-close
- * in marketing/src/config.ts + src/config.js.
+ * Strategy A (paid traffic): homepage shows full $299; quiz unlocks early $249.
+ * Always advertise next cohort start + doors-close in marketing/src/config.ts + src/config.js.
  */
 
 export const PRICE_TIERS = {
@@ -80,17 +79,18 @@ export async function resolveCheckoutOffer(env, { email, createdAt }) {
     return offerOrMissing(env, "founding");
   }
 
-  // Quiz unlock: completed ranges quiz with an eligible segment.
+  // Quiz unlock: completed ranges quiz with an eligible segment → early $249.
   if (await emailHasQuizUnlock(env, email)) {
     return offerOrMissing(env, "waitlist");
   }
 
-  // Escape hatch: public checkout with no quiz (off by default).
+  // Escape hatch: sell early rate without a quiz lead.
   if (String(env.OPEN_WITHOUT_QUIZ || "").toLowerCase() === "true") {
     return offerOrMissing(env, "waitlist");
   }
 
-  return { ok: false, error: "quiz_required", status: 403 };
+  // No quiz → full rate. Enrollment stays open; quiz only unlocks the discount.
+  return offerOrMissing(env, "full");
 }
 
 function offerOrMissing(env, tier) {

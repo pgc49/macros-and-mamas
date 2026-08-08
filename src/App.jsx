@@ -358,8 +358,16 @@ export default function App() {
   }, [authLoading, loaded, user, isAdmin, approved, paid, macros, refunded, location.pathname, location.state, navigate]);
 
   const authMode = signInNext === "intake" ? "create" : "signin";
+  /** Toggle create/signin and keep ?auth= in sync (URL was winning over button clicks). */
   const switchAuthMode = (next) => {
-    setSignInNext(next === "create" ? "intake" : "app");
+    const create = next === "create";
+    setSignInNext(create ? "intake" : "app");
+    const p = new URLSearchParams(location.search);
+    p.set("auth", create ? "create" : "signin");
+    navigate(
+      { pathname: PATHS.signin, search: `?${p.toString()}` },
+      { replace: true, state: location.state },
+    );
   };
 
   const applyClientState = (s) => {
@@ -1204,7 +1212,7 @@ export default function App() {
     }
     if (!user) {
       setSignInNext("intake");
-      navigate(PATHS.signin);
+      navigate(`${PATHS.signin}?auth=create`);
       return;
     }
     navigate(homePathFor({ isAdmin, approved, paid, macros, refunded }));

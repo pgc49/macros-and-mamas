@@ -127,45 +127,6 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
     </button>
   ) : null;
 
-  // Quiz gate: no quote until they finish the ranges quiz with this email.
-  if (!quoteLoading && !quote && (quoteError.includes("quiz_required") || quoteError.includes("enrollment closed"))) {
-    return (
-      <Shell>
-        <Card style={{ marginTop: 30, textAlign: "center", padding: 30 }}>
-          <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "0 0 10px" }}>
-            Unlock your $249 rate
-          </h2>
-          <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft, margin: "0 0 16px" }}>
-            The early rate ($50 off full price) is exclusive to women who finish the free
-            ranges quiz. Take it with <strong style={{ color: T.ink }}>this same email</strong>,
-            see your preview, then come back here to pre-pay and lock your cohort spot.
-          </p>
-          <a
-            href={QUIZ_URL}
-            style={{
-              display: "inline-block",
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "14px 18px",
-              borderRadius: 999,
-              background: T.accent,
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 15,
-              textDecoration: "none",
-            }}
-          >
-            Take the free quiz
-          </a>
-          <p style={{ marginTop: 14, fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
-            Already finished? Refresh this page — checkout unlocks once your quiz email matches.
-          </p>
-          {refreshBtn}
-        </Card>
-      </Shell>
-    );
-  }
-
   if (!quoteLoading && !quote && quoteError) {
     return (
       <Shell>
@@ -174,7 +135,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
             Couldn&apos;t load your price
           </h2>
           <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft, margin: "0 0 16px" }}>
-            Try refresh in a moment. If it keeps happening, take the ranges quiz first, then return to pay.
+            Try refresh in a moment. If it keeps happening, take the free ranges quiz, then return to pay.
           </p>
           <a href={QUIZ_URL} style={{ color: T.accent, fontWeight: 700 }}>
             Get your macro ranges
@@ -186,11 +147,15 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
   }
 
   const isFounding = quote?.tier === "founding";
+  const isEarly = quote?.tier === "waitlist";
+  const isFull = quote?.tier === "full";
   const openBlurb = isFounding
     ? `Founding rate $${amount}. After checkout you’ll complete a short intake so Callie can build your macros.`
-    : amount != null
-      ? `You’re locking ${COHORT_LABEL} — starts ${COHORT_START}. $${amount} for 8 weeks ($50 off the full $299). After checkout you’ll complete a short intake; Callie approves your final ranges before day one.`
-      : `You’re locking ${COHORT_LABEL} — starts ${COHORT_START}. After checkout you’ll complete a short intake so Callie can build your macros.`;
+    : isEarly && amount != null
+      ? `You’re locking ${COHORT_LABEL} — starts ${COHORT_START}. Early rate $${amount} for 8 weeks ($50 off). After checkout you’ll complete a short intake; Callie approves your final ranges before day one.`
+      : isFull && amount != null
+        ? `You’re locking ${COHORT_LABEL} — starts ${COHORT_START}. Full rate $${amount} for 8 weeks. Want the $249 early rate? Take the free ranges quiz with this email, then come back.`
+        : `You’re locking ${COHORT_LABEL} — starts ${COHORT_START}. After checkout you’ll complete a short intake so Callie can build your macros.`;
 
   return (
     <Shell>
