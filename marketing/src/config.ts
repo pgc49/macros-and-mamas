@@ -25,6 +25,10 @@ export const doorsCloseReason =
 export const queuePositionCopy =
   `Pre-pay and you're in Callie's queue. She builds and approves ranges in the order they come in, so the earlier you're in, the earlier your app opens and the more time you have to get comfortable before ${cohortStartDateCompact}.`;
 
+/** Quiz offer + join — what happens after pre-pay (same queue promise, post-purchase framing). */
+export const postPayQueueCopy =
+  `After you pre-pay, you'll fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.`;
+
 /** Early rate — revealed only after an eligible quiz finish (Strategy A). */
 export const waitlistPrice = 249;
 /**

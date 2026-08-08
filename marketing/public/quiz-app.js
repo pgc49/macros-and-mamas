@@ -12,9 +12,19 @@
   const cohortStart = root.dataset.cohortStart || 'Monday, Aug 31';
   const doorsClose = root.dataset.doorsClose || 'Aug 27';
   const saveAmount = Math.max(0, fullPrice - offerPrice);
+  const calliePhoto = root.dataset.calliePhoto || '/callie-kitchen.jpg';
+  const postPayCopy =
+    root.dataset.postPayCopy
+    || "After you pre-pay, you'll fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.";
   const ATTR_KEY = 'mm_attribution_v1';
   /** Segments that may enroll Aug 31 — only these fire Meta Lead. */
   const ENROLLABLE_SEGMENTS = { main: 1, early_pp_nurture: 1 };
+  /**
+   * Offer-card social proof. Empty = hidden in prod.
+   * Fill when Cohort 1 quotes are approved:
+   *   { quote: '...', who: 'First · 6 months postpartum' }
+   */
+  const QUIZ_OFFER_TESTIMONIALS = [];
 
   const Q1 = [
     { v: 'still_pregnant', l: 'Still pregnant' },
@@ -195,11 +205,29 @@
     return `<p class="q-trust">About 90 seconds. Free ranges from Callie — certified holistic nutritionist and mama of two — built the same way she builds them for the program.</p>`;
   }
 
-  function coachNoteHtml() {
-    return `<div class="q-coach-note">
-      <strong>Your coach is Callie</strong>
-      <span>Certified holistic nutritionist · blood chemistry certified · mama of two. This preview uses her method — if you join, she builds and approves your final ranges before day one.</span>
+  /** Face + voice above the ask — quiz-only markup (not the homepage CallieLetter). */
+  function coachBlockHtml() {
+    return `<div class="q-coach-card">
+      <div class="q-coach-photo">
+        <img src="${escapeHtml(calliePhoto)}" alt="Callie in her kitchen" width="640" height="800" loading="lazy" />
+      </div>
+      <div class="q-coach-body">
+        <strong>Your coach is Callie</strong>
+        <span class="q-coach-creds">Certified holistic nutritionist · blood chemistry certified · mama of two</span>
+        <p class="q-coach-voice">“I've done the 2am math on milk supply and calories. Macros and Mamas is the program I needed and couldn't find.”</p>
+      </div>
     </div>`;
+  }
+
+  /** Hidden until QUIZ_OFFER_TESTIMONIALS has real quotes. */
+  function testimonialSlotHtml() {
+    if (!QUIZ_OFFER_TESTIMONIALS.length) return '';
+    const t = QUIZ_OFFER_TESTIMONIALS[0];
+    if (!t || !t.quote) return '';
+    return `<figure class="q-offer-quote">
+      <blockquote>${escapeHtml(t.quote)}</blockquote>
+      <figcaption>${escapeHtml(t.who || '')}</figcaption>
+    </figure>`;
   }
 
   function render() {
@@ -362,7 +390,8 @@
     </div>`;
   }
 
-  function logPreviewHtml() {
+  function logPreviewHtml(opts) {
+    const hideKicker = opts && opts.hideKicker;
     const mode = state.previewLogMode || 'snap';
     const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
     const todayIdx = (new Date().getDay() + 6) % 7; // Mon = 0
@@ -373,7 +402,7 @@
       { v: 'manual', mi: '#', ml: 'Macros', ms: 'I know them', hash: true },
     ];
     return `<div class="q-app-preview">
-      <div class="q-preview-kicker">How logging works in the app</div>
+      ${hideKicker ? '' : '<div class="q-preview-kicker">How logging works in the app</div>'}
       <div class="mini q-log-card">
         <div class="q-day-head">
           <div class="q-day-title">Today <span>· preview</span></div>
@@ -407,10 +436,8 @@
   function rangesCardHtml(r) {
     const bands = r.ranges || {};
     const fmt = (n) => (n == null ? '' : Number(n).toLocaleString('en-US'));
-    const name = escapeHtml(state.contact.first_name);
     return `<div class="ui-card q-result-card" aria-label="Preview of your macro ranges in the app">
       <div class="q-card-badge">App preview</div>
-      <div class="greet">Hi ${name}.</div>
       <div class="greet-sub">Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win.</div>
       ${rangeRowHtml('Protein', bands.protein_low_g, bands.protein_high_g, 'g')}
       ${rangeRowHtml('Carbs', bands.carbs_low_g, bands.carbs_high_g, 'g')}
@@ -422,14 +449,22 @@
 
   function previewDisclaimer(r) {
     const early = r.early_pp
-      ? ` You're early postpartum — that's welcome here. If you join, Callie builds your final ranges gently and supply-aware for this season.`
-      : '';
-    const review = r.needs_review
-      ? ` Callie will still review your finals personally before day one.`
+      ? `<p class="q-copy" style="margin-top:10px;margin-bottom:0">You're early postpartum — that's welcome here. If you join, Callie builds your final ranges gently and supply-aware for this season.</p>`
       : '';
     return `<div class="q-banner q-banner-preview">
       <strong>This is a preview — not your final numbers.</strong>
-      Bands below are estimated from your answers. If you join the 8 weeks, Callie builds and approves your ranges herself before you start.${early}${review}
+      Bands below are estimated from your answers. If you join the 8 weeks, Callie builds and approves your ranges herself before you start.
+      ${early}
+    </div>`;
+  }
+
+  /** One proof the app is real — snap-a-plate only (full logger sits below the offer). */
+  function snapProofHtml() {
+    return `<div class="q-app-preview q-snap-proof">
+      <div class="q-preview-kicker">In the app</div>
+      <div class="mini q-log-card">
+        ${logPanelHtml('snap')}
+      </div>
     </div>`;
   }
 
@@ -499,20 +534,24 @@
     const veganNote = r.segment === 'waitlist_plantbased' ? veganNoteHtml() : '';
     const rangesBlock = hasRanges
       ? `${rangesCardHtml(r)}
-      ${logPreviewHtml()}
-      <p class="q-copy">These are bands, not one rigid number. Busier day → eat toward the top. Quieter day → the bottom. Both count as a win. Lead with protein; the rest gets easier.</p>
-      <p class="q-copy muted">We emailed these ranges to you so you can keep them.</p>`
-      : `<p class="q-copy">Check your inbox — Callie is sending next steps. You can still lock your cohort spot below.</p>
-      ${logPreviewHtml()}`;
+      <p class="q-copy">These are bands, not one rigid number. Busier day → eat toward the top. Quieter day → the bottom. Both count as a win. Lead with protein; the rest gets easier.</p>`
+      : `<p class="q-copy">Check your inbox — Callie is sending next steps. You can still lock your spot below.</p>`;
 
     return screenShell(
       `${escapeHtml(state.contact.first_name)}, your ranges`,
       `${veganNote}
       ${previewDisclaimer(r)}
       ${rangesBlock}
-      ${coachNoteHtml()}
+      ${snapProofHtml()}
+      ${coachBlockHtml()}
+      ${testimonialSlotHtml()}
       ${offerBlock()}
-      ${stickyCheckoutHtml()}`,
+      ${stickyCheckoutHtml()}
+      <div class="q-app-tour-below">
+        <p class="q-preview-kicker">More of how the app works</p>
+        ${logPreviewHtml({ hideKicker: true })}
+      </div>
+      <p class="q-copy muted">We emailed these ranges to you so you can keep them.</p>`,
     );
   }
 
@@ -523,7 +562,7 @@
     return `<div class="q-offer-card" id="qOfferCard">
       <div class="q-offer-kicker">Exclusive · early rate from your quiz</div>
       <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
-      <p class="q-offer-lede">You’re signing up for the group starting <strong>${escapeHtml(cohortStart)}</strong>. Doors close ${escapeHtml(doorsClose)}. Callie hand-builds every set of ranges in the days before day one, and the whole group starts week one together on Aug 31. Next: set a password${email ? ` for <strong>${escapeHtml(email)}</strong>` : ''}, then pre-pay at the early rate from your quiz.</p>
+      <p class="q-offer-lede">You’re joining the group that starts <strong>${escapeHtml(cohortStart)}</strong>. Doors close ${escapeHtml(doorsClose)} so Callie can hand-build every set of ranges before day one, and so the whole group starts week one together.</p>
       <div class="q-offer-price-row">
         <span class="q-offer-now">$${offerPrice}</span>
         <span class="q-offer-full">Full rate $${fullPrice}</span>
@@ -531,7 +570,8 @@
       </div>
       <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks · everything included</p>
       <a class="btn q-offer-btn" href="${joinHref}">Pre-pay $${offerPrice} — lock my spot</a>
-      <p class="q-offer-fine">Ranges above are a preview — Callie approves your final numbers if you join.</p>
+      <p class="q-offer-after">${escapeHtml(postPayCopy)}</p>
+      <p class="q-offer-fine">Next: set a password${email ? ` for <strong>${escapeHtml(email)}</strong>` : ''}, then pre-pay at the early rate from your quiz. Ranges above are a preview — Callie approves your final numbers if you join.</p>
       <p class="q-copy muted" style="margin-bottom:0">Not ready to pay yet? No problem — your ranges stay in your inbox either way.</p>
     </div>`;
   }

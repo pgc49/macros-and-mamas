@@ -2,21 +2,31 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { getImage } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import kitchenImg from '../assets/callie-kitchen.jpg';
 import {
   cohortStartDate,
   doorsCloseDate,
   enrollUrl,
   fullPrice,
   isWaitlist,
+  postPayQueueCopy,
   waitlistPrice,
   weeklyPrice,
 } from '../config';
 
 const title = 'Get your macro ranges — Macros and Mamas';
-const description = `About 90 seconds. Free ranges from Callie, then the exclusive $${waitlistPrice} early rate (full rate $${fullPrice}) for the next cohort.`;
+const description = `About 90 seconds. Free ranges from Callie, then the exclusive $${waitlistPrice} early rate (full rate $${fullPrice}) for the next group.`;
+
+/** Optimized kitchen photo for quiz payoff Callie block (passed into quiz-app.js). */
+const kitchenOptimized = await getImage({
+  src: kitchenImg,
+  width: 720,
+  format: 'webp',
+});
 
 /** Bust CDN/browser cache when quiz-app.js changes (CF was caching ~4h).
  *  Read from cwd/public — Astro prerender rewrites import.meta.url paths. */
@@ -46,6 +56,8 @@ const quizJsV = createHash('sha256')
         data-weekly-price={String(weeklyPrice)}
         data-cohort-start={cohortStartDate}
         data-doors-close={doorsCloseDate}
+        data-callie-photo={kitchenOptimized.src}
+        data-post-pay-copy={postPayQueueCopy}
       >
         <p class="q-copy">Loading your quiz…</p>
       </div>
