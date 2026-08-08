@@ -62,6 +62,7 @@ export function mapLeadToIntakePatch(lead) {
     }
   }
 
+  // lose_efficient kept for leads captured before the quiz collapsed to one lose option.
   if (goal === "lose_sustainable" || goal === "lose_efficient") {
     patch.goal = "lose";
   } else if (goal === "maintain" || goal === "gain") {
