@@ -10,15 +10,30 @@
   --maxw:1120px; --r:22px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth;overflow-x:hidden;max-width:100%}
+/* Mobile Safari: lock the document to vertical scroll only.
+   overflow-x:clip (with hidden fallback) + no 100vw full-bleeds. */
+html{
+  scroll-behavior:smooth;
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+  overscroll-behavior-x:none;
+}
 @supports (overflow:clip){html{overflow-x:clip}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;max-width:100%;overscroll-behavior-x:none}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  width:100%;max-width:100%;position:relative;
+  overflow-x:hidden;overscroll-behavior-x:none;
+  /* Prefer vertical pans; intentional h-scroll regions keep touch-action:auto. */
+  touch-action:pan-y;
+}
 @supports (overflow:clip){body{overflow-x:clip}}
 img{display:block;max-width:100%}
 a{color:var(--accent-deep)}
 h1,h2,h3,.display{font-family:var(--display);font-weight:400;line-height:1.08}
-.wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px;width:100%}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px;width:100%;min-width:0;box-sizing:border-box}
 /* Honeypot: keep in DOM, never expand scroll width (avoid left:-9999px). */
 .hp{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
 .kicker{font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:700}
@@ -433,10 +448,10 @@ footer{padding:36px 0 118px;font-size:14px;color:var(--ink-soft)}
 .quiz-wrap:has(.q-app-preview){max-width:520px}
 .q-result-sticky{z-index:80}
 @media(min-width:880px){.q-result-sticky{display:none}.quiz-page:has(.q-result-sticky){padding-bottom:72px}}
-/* Full-bleed under header: accent fill on accent-soft track. */
+/* Full-bleed under header: undo .wrap’s 22px padding — never 100vw (Safari sideways pan). */
 .q-progress{
   height:4px;background:var(--accent-soft);border-radius:0;overflow:hidden;margin:0 0 14px;
-  width:100vw;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);
+  width:calc(100% + 44px);max-width:none;margin-left:-22px;margin-right:-22px;
 }
 .q-progress span{display:block;height:100%;background:var(--accent);border-radius:0;transition:width .2s ease}
 @media(prefers-reduced-motion:reduce){.q-progress span{transition:none}}
@@ -573,7 +588,6 @@ button.mode:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .quiz-inline h2{font-size:clamp(26px,5vw,34px);margin:0 0 10px}
 .quiz-inline .lede{margin:0 auto 18px;font-size:15px;max-width:36ch}
 .qi-choices{display:flex;flex-direction:column;gap:8px;max-width:100%;margin:0 auto;text-align:left}
-.hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;overflow:hidden}
 .hero .open-cta .btn-secondary,.hero .quiz-primary .btn-secondary{display:inline-block;margin-top:12px;background:transparent;color:var(--accent-deep);border:0;padding:0;font-size:15.5px;text-decoration:underline;font-weight:600}
 .hero .quiz-primary .btn{margin-bottom:6px}
 @media(min-width:640px){

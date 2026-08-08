@@ -368,6 +368,7 @@ export function WeekPlanner({
 
       {wide ? (
         <div
+          className="mam-h-scroll"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(7, minmax(150px, 1fr))",
@@ -398,7 +399,7 @@ export function WeekPlanner({
         </div>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
+          <div className="mam-h-scroll" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
             {PLAN_DAYS.map((d) => {
               const dayRow = planned.find((x) => x.day === d) || { meals: [] };
               const count = dayRow.meals?.length || 0;

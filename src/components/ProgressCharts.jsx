@@ -222,7 +222,7 @@ export function ProgressCharts({
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 10, overflowX: "auto" }}>
+            <div className="mam-h-scroll" style={{ display: "flex", gap: 8, marginTop: 10, overflowX: "auto" }}>
               {habitHistory.map((h) => (
                 <div
                   key={h.week}

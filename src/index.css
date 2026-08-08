@@ -1,5 +1,41 @@
-/* App styles are inline (approved design tokens). Keep a minimal reset. */
-html, body, #root {
+/* App styles are inline (approved design tokens). Keep a minimal reset.
+   Mobile Safari: lock the document to vertical scroll only. */
+html {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+@supports (overflow: clip) {
+  html {
+    overflow-x: clip;
+  }
+}
+body {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  min-height: 100%;
+  position: relative;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+@supports (overflow: clip) {
+  body {
+    overflow-x: clip;
+  }
+}
+#root {
   margin: 0;
   min-height: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+/* Intentional horizontal scrollers (meal chips, week planner, etc.). */
+.mam-h-scroll {
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
 }
