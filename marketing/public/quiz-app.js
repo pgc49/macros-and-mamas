@@ -40,9 +40,10 @@
     { v: 'weaning', l: 'Weaning' },
     { v: 'not_feeding', l: 'Not feeding breast milk' },
   ];
+  // One lose option — lose_sustainable and lose_efficient used to both mean
+  // “lose” in the engine/intake; two near-identical labels just confused mamas.
   const Q5 = [
-    { v: 'lose_sustainable', l: 'Lose fat sustainably' },
-    { v: 'lose_efficient', l: 'Lose efficiently (no crash)' },
+    { v: 'lose_sustainable', l: 'Lose fat — keep muscle and milk' },
     { v: 'maintain', l: 'Maintain where I am' },
     { v: 'gain', l: 'Gain / rebuild' },
   ];
