@@ -208,8 +208,8 @@
 
   /** Q1 only — signature band + length promise under the pills. */
   function q1MotifHtml() {
-    return `<div class="q-intro-motif" aria-hidden="true">
-      <div class="band"><div class="fill"></div></div>
+    return `<div class="q-intro-motif">
+      <div class="band" aria-hidden="true"><div class="fill"></div></div>
       <p class="q-intro-caption">Six taps, two typed numbers, then your ranges.</p>
     </div>`;
   }
