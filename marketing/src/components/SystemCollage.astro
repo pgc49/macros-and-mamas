@@ -1,6 +1,7 @@
 ---
 import { Image } from 'astro:assets';
 import mealBowl from '../assets/meal-bowl.jpg';
+import ProgressVignette from './ProgressVignette.astro';
 ---
 
 <section class="system" id="app">
@@ -135,22 +136,14 @@ import mealBowl from '../assets/meal-bowl.jpg';
         >
       </div>
 
-      <div class="mini c-habits rv">
-        <div class="m-kicker">Daily rhythm</div>
-        <div class="habit done"
-          ><span class="ring"></span><span>Water + electrolytes</span></div
-        >
-        <div class="habit done"
-          ><span class="ring"></span><span>Morning sunlight</span></div
-        >
-        <div class="habit done"
-          ><span class="ring"></span><span>Walk or strength</span></div
-        >
-        <div class="habit"><span class="ring"></span><span>Meals at home</span></div>
-        <h3>Habits that fit a nap schedule.</h3>
+      <div class="mini c-progress rv">
+        <div class="m-kicker">Progress tab</div>
+        <ProgressVignette />
+        <h3>See the pattern, not one bad day.</h3>
         <p class="m-desc"
-          >Water, walks, sunlight, strength. A checklist that meets your season,
-          no gym required.</p
+          >Macros against your ranges and weight over weeks — so you and Callie
+          can see what's working. Under mid-day is normal; the picture over weeks
+          is what matters.</p
         >
       </div>
     </div>

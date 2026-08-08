@@ -368,9 +368,34 @@
     </div>`;
   }
 
+  /** Progress-tab vignette — macros vs sage ranges + weight trend (anonymized demo). */
+  function progressVignetteHtml() {
+    const bars = [52, 58, 71, 64, 78, 69, 74, 61, 80, 67, 73, 76]
+      .map((h) => `<i style="height:${h}%"></i>`)
+      .join('');
+    return `<div class="prog-demo" aria-hidden="true">
+      <div class="prog-macro">
+        <div class="prog-macro-head"><strong>Protein</strong><span>range 130–140g</span></div>
+        <div class="prog-bars-wrap"><div class="prog-sage-band"></div><div class="prog-bars">${bars}</div></div>
+      </div>
+      <div class="prog-wt">
+        <div class="prog-macro-head"><strong>Weight</strong><span>over weeks</span></div>
+        <svg class="prog-wt-svg" viewBox="0 0 240 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="presentation">
+          <line x1="0" y1="18" x2="240" y2="18" stroke="#ECDEE2" stroke-width="1"></line>
+          <line x1="0" y1="36" x2="240" y2="36" stroke="#ECDEE2" stroke-width="1"></line>
+          <line x1="0" y1="54" x2="240" y2="54" stroke="#ECDEE2" stroke-width="1"></line>
+          <path d="M8 22 C40 28, 70 34, 100 36 S160 48, 232 54" stroke="#B4416B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <circle cx="8" cy="22" r="3.5" fill="#B4416B"></circle>
+          <circle cx="100" cy="36" r="3.5" fill="#B4416B"></circle>
+          <circle cx="232" cy="54" r="3.5" fill="#B4416B"></circle>
+        </svg>
+      </div>
+    </div>`;
+  }
+
   /**
-   * Cold-traffic product proof — homepage beats Facebook never saw:
-   * 1:1 Messages + My meals / recipes. Sits after Callie, before the ask.
+   * Cold-traffic product proof — homepage beats Facebook never saw.
+   * Sits after Callie, before the ask.
    */
   function includesBlockHtml() {
     return `<div class="q-includes">
@@ -389,6 +414,11 @@
           <span>Eggs &amp; toast</span>
         </div>
         <p class="q-include-copy">Meals and recipes that fit your ranges and what your family already eats. Save the ones you repeat for one-tap logging, with a week planner and grocery list built in.</p>
+      </div>
+      <div class="q-include-card">
+        <div class="m-kicker">Progress · ranges &amp; weight</div>
+        ${progressVignetteHtml()}
+        <p class="q-include-copy">See how you're landing in your macro ranges and how weight moves over weeks. Under mid-day is normal — the pattern is what you and Callie coach from.</p>
       </div>
     </div>`;
   }

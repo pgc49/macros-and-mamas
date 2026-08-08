@@ -1,0 +1,58 @@
+---
+/**
+ * Marketing vignette of the Progress tab — macros vs ranges + weight trend.
+ * Inspired by real client charts; anonymized demo data (not a named client).
+ */
+---
+
+<div class="prog-demo" aria-hidden="true">
+  <div class="prog-macro">
+    <div class="prog-macro-head">
+      <strong>Protein</strong>
+      <span>range 130–140g</span>
+    </div>
+    <div class="prog-bars-wrap">
+      <div class="prog-sage-band"></div>
+      <div class="prog-bars">
+        <i style="height:52%"></i>
+        <i style="height:58%"></i>
+        <i style="height:71%"></i>
+        <i style="height:64%"></i>
+        <i style="height:78%"></i>
+        <i style="height:69%"></i>
+        <i style="height:74%"></i>
+        <i style="height:61%"></i>
+        <i style="height:80%"></i>
+        <i style="height:67%"></i>
+        <i style="height:73%"></i>
+        <i style="height:76%"></i>
+      </div>
+    </div>
+  </div>
+  <div class="prog-wt">
+    <div class="prog-macro-head">
+      <strong>Weight</strong>
+      <span>over weeks</span>
+    </div>
+    <svg
+      class="prog-wt-svg"
+      viewBox="0 0 240 72"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="presentation"
+    >
+      <line x1="0" y1="18" x2="240" y2="18" stroke="#ECDEE2" stroke-width="1"></line>
+      <line x1="0" y1="36" x2="240" y2="36" stroke="#ECDEE2" stroke-width="1"></line>
+      <line x1="0" y1="54" x2="240" y2="54" stroke="#ECDEE2" stroke-width="1"></line>
+      <path
+        d="M8 22 C40 28, 70 34, 100 36 S160 48, 232 54"
+        stroke="#B4416B"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"></path>
+      <circle cx="8" cy="22" r="3.5" fill="#B4416B"></circle>
+      <circle cx="100" cy="36" r="3.5" fill="#B4416B"></circle>
+      <circle cx="232" cy="54" r="3.5" fill="#B4416B"></circle>
+    </svg>
+  </div>
+</div>
