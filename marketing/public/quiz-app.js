@@ -439,8 +439,8 @@
       `${previewDisclaimer(r)}
       ${rangesCardHtml(r)}
       ${logPreviewHtml()}
-      <p class="q-copy"><strong>Why a range?</strong> Tuesday happens. Start with protein — it's the anchor.</p>
-      <p class="q-copy muted">A copy of this breakdown is in your inbox.</p>
+      <p class="q-copy">These are bands, not one rigid number. Busier day → eat toward the top. Quieter day → the bottom. Both count as a win. Lead with protein; the rest gets easier.</p>
+      <p class="q-copy muted">We emailed these ranges to you so you can keep them.</p>
       ${coachNoteHtml()}
       ${offerBlock()}`,
     );

@@ -308,7 +308,7 @@ ${early}
 <li><strong>Calories land around:</strong> ${opts.ranges.calories}</li>
 </ul>
 <p>${feed}</p>
-<p>Why a range? Busy, active day → eat the top. Slow day → the bottom. Both count as a win. Start with protein; it's the anchor.</p>
+<p>These are bands, not one rigid number. Busier day → eat toward the top. Quieter day → the bottom. Both count as a win. Lead with protein; the rest gets easier.</p>
 <p><strong>You unlocked the early rate.</strong> Pre-pay $249 ($50 off full price) to lock your spot for the next cohort: <a href="https://www.macrosandmamas.com/join?from=quiz">macrosandmamas.com/join</a> — use this same email at checkout.</p>
 <p>Ranges above are a preview. If you join, Callie builds and approves your final numbers before you start.</p>
 <p>— Callie</p>`;
