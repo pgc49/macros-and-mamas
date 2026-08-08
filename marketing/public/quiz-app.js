@@ -5,7 +5,6 @@
   const root = document.getElementById('quiz-root');
   if (!root) return;
 
-  const isWaitlist = root.dataset.waitlist === 'true';
   const enrollUrl = root.dataset.enrollUrl || 'https://www.macrosandmamas.com/join';
   const offerPrice = Number(root.dataset.offerPrice || 249);
   const fullPrice = Number(root.dataset.fullPrice || 299);
