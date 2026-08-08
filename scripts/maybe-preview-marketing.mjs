@@ -39,7 +39,9 @@ const isPreviewBranch =
   branch.startsWith("cursor/web-analytics-supabase") ||
   branch.startsWith("cursor/waitlist-cta-copy") ||
   branch.startsWith("cursor/enrollment-open") ||
-  branch.startsWith("cursor/www-marketing-cutover");
+  branch.startsWith("cursor/www-marketing-cutover") ||
+  // Quiz / homepage marketing polish PRs need Astro overlaid on SPA previews.
+  branch.startsWith("cursor/quiz-");
 
 const runCutover = forceCutover || isMain;
 const runPreview = forcePreview || isPreviewBranch;
