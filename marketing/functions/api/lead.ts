@@ -363,8 +363,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   const email = String(body.email || '').trim().toLowerCase();
   const firstName = String(body.first_name || '').trim();
+  // Last name optional at quiz gate — collected later at account/checkout.
   const lastName = String(body.last_name || '').trim();
-  if (!EMAIL_RE.test(email) || !firstName || !lastName) {
+  if (!EMAIL_RE.test(email) || !firstName) {
     return json({ error: 'invalid_fields' }, 400);
   }
   const domain = email.split('@')[1] || '';

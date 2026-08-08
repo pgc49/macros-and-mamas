@@ -135,7 +135,8 @@
 
   function progress() {
     const i = Math.max(0, STEP_ORDER.indexOf(state.step));
-    return Math.round((i / (STEP_ORDER.length - 1)) * 100);
+    // Start ~15% so Q1 doesn't feel like "zero of a long quiz."
+    return Math.round(15 + (i / (STEP_ORDER.length - 1)) * 85);
   }
 
   /** Hash + Meta custom events so partial quiz progress is retargetable. */
@@ -289,7 +290,6 @@
         title,
         `<div class="q-fields compact">
           <label>First name<input id="fn" class="pill-input" autocomplete="given-name" value="${state.contact.first_name}" /></label>
-          <label>Last name<input id="ln" class="pill-input" autocomplete="family-name" value="${state.contact.last_name}" /></label>
           <label>Email<input id="em" class="pill-input" type="email" autocomplete="email" value="${state.contact.email}" /></label>
           <input type="text" name="website_url" id="hp" class="hp" tabindex="-1" autocomplete="off" />
         </div>
@@ -622,11 +622,11 @@
 
   async function submit() {
     state.contact.first_name = (root.querySelector('#fn')?.value || '').trim();
-    state.contact.last_name = (root.querySelector('#ln')?.value || '').trim();
+    state.contact.last_name = '';
     state.contact.email = (root.querySelector('#em')?.value || '').trim();
     const hp = (root.querySelector('#hp')?.value || '').trim();
-    if (!state.contact.first_name || !state.contact.last_name || !state.contact.email) {
-      state.error = 'First name, last name, and email are required.';
+    if (!state.contact.first_name || !state.contact.email) {
+      state.error = 'First name and email are required.';
       render();
       return;
     }
