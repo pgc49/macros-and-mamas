@@ -159,6 +159,35 @@ async function requireUserId() {
   return user.id;
 }
 
+/**
+ * Page a PostgREST select past the default 1000-row cap.
+ * `buildQuery` must return a fresh filter builder each call (no prior .range).
+ */
+async function fetchAllRows(buildQuery, { pageSize = 1000 } = {}) {
+  const rows = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) return { data: rows, error };
+    const batch = data || [];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+  return { data: rows, error: null };
+}
+
+/** Fold { profile_id, date } rows into max date per profile. */
+function maxDateByProfile(rows, into = {}) {
+  (rows || []).forEach((r) => {
+    if (!r?.profile_id || !r?.date) return;
+    if (!into[r.profile_id] || r.date > into[r.profile_id]) {
+      into[r.profile_id] = r.date;
+    }
+  });
+  return into;
+}
+
 function emptyAdminStats() {
   return {
     signups: 0,
@@ -1109,26 +1138,40 @@ export const db = {
     const curWk = wkStartOf();
     const today = localDateIso();
     // Enough history to know if she has logged within ~48h (yesterday or today).
-    const mealSince = addDaysIso(today, -14);
+    // Page past PostgREST’s 1000-row default — meal/water volume exceeds that in a cohort.
+    const activitySince = addDaysIso(today, -14);
     const [
       { data: macrosRows, error: mErr },
       { data: weighRows, error: wErr },
       { data: checkRows, error: cErr },
-      { data: mealRows, error: mealErr },
+      mealPage,
+      waterPage,
     ] = await Promise.all([
       supabase.from("macros").select("*").in("profile_id", ids),
       supabase.from("weighins").select("profile_id, date, weight").in("profile_id", ids).order("date", { ascending: true }),
       supabase.from("checkins").select("profile_id, week_start, item_id, day").in("profile_id", ids).eq("week_start", curWk),
-      supabase
-        .from("meal_logs")
-        .select("profile_id, date")
-        .in("profile_id", ids)
-        .gte("date", mealSince),
+      fetchAllRows(() =>
+        supabase
+          .from("meal_logs")
+          .select("profile_id, date")
+          .in("profile_id", ids)
+          .gte("date", activitySince)
+          .order("date", { ascending: false }),
+      ),
+      fetchAllRows(() =>
+        supabase
+          .from("water_logs")
+          .select("profile_id, date")
+          .in("profile_id", ids)
+          .gte("date", activitySince)
+          .order("date", { ascending: false }),
+      ),
     ]);
     if (mErr) throw mErr;
     if (wErr) throw wErr;
     if (cErr) throw cErr;
-    if (mealErr) console.warn("roster meal_logs lookup failed", mealErr);
+    if (mealPage.error) console.warn("roster meal_logs lookup failed", mealPage.error);
+    if (waterPage.error) console.warn("roster water_logs lookup failed", waterPage.error);
 
     const macrosBy = Object.fromEntries((macrosRows || []).map((m) => [m.profile_id, m]));
     const weighBy = {};
@@ -1141,11 +1184,21 @@ export const db = {
       if (!checksBy[c.profile_id]) checksBy[c.profile_id] = [];
       checksBy[c.profile_id].push(c);
     });
-    const lastMealBy = {};
-    (mealRows || []).forEach((r) => {
-      if (!lastMealBy[r.profile_id] || r.date > lastMealBy[r.profile_id]) {
-        lastMealBy[r.profile_id] = r.date;
-      }
+    const lastMealBy = maxDateByProfile(mealPage.data);
+    const lastWaterBy = maxDateByProfile(waterPage.data);
+    // Any logging event (meal / water / weigh-in) counts as active — not auth login.
+    const lastActiveBy = { ...lastMealBy };
+    maxDateByProfile(
+      Object.entries(lastWaterBy).map(([profile_id, date]) => ({ profile_id, date })),
+      lastActiveBy,
+    );
+    Object.entries(weighBy).forEach(([profileId, list]) => {
+      (list || []).forEach((w) => {
+        if (!w?.date || w.date < activitySince) return;
+        if (!lastActiveBy[profileId] || w.date > lastActiveBy[profileId]) {
+          lastActiveBy[profileId] = w.date;
+        }
+      });
     });
 
     const clients = allProfiles.map((p) => {
@@ -1213,6 +1266,11 @@ export const db = {
         adherence: adherenceFromChecks(checksBy[p.id] || [], curWk),
         /** YYYY-MM-DD of most recent meal log in the last 14 days, or null. */
         lastMealDate: lastMealBy[p.id] || null,
+        /**
+         * YYYY-MM-DD of most recent meal, water, or weigh-in in the last 14 days.
+         * Used for the roster “quiet” flag — not auth last_sign_in.
+         */
+        lastActiveDate: lastActiveBy[p.id] || null,
       };
     });
 

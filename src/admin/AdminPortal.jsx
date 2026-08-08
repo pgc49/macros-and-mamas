@@ -407,13 +407,15 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
     }
     if (c.diet && c.diet !== "none") flags.push(`diet: ${c.diet} — connect before approving`);
     if (r !== null && r > 1.5) flags.push("losing too fast");
-    // Quiet week-1 noise: don't flag checklist %. Flag silence — no meal in ~48h.
+    // Quiet week-1 noise: don't flag checklist %. Flag silence — no app logs in ~48h.
+    // lastActiveDate = meals / water / weigh-ins (not auth login).
     const active = c.status === "active" || c.stage === "active";
     if (active) {
       const today = localDateIso();
       const okIfOnOrAfter = addDaysIso(today, -1); // yesterday or today = fine
-      if (!c.lastMealDate || c.lastMealDate < okIfOnOrAfter) {
-        flags.push("no meal log in 48h — check in");
+      const lastActive = c.lastActiveDate || c.lastMealDate || null;
+      if (!lastActive || lastActive < okIfOnOrAfter) {
+        flags.push("no logs in 48h — check in");
       }
     }
     return flags;
@@ -627,7 +629,11 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           <Card style={{ marginTop: 12 }}>
             <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>Progress</div>
             <div style={{ fontSize: 13.5, color: T.inkSoft, marginBottom: 8 }}>
-              Last meal log:{" "}
+              Last active:{" "}
+              <b style={{ color: T.ink }}>
+                {sel.lastActiveDate || sel.lastMealDate || "none yet"}
+              </b>
+              {" · "}last meal:{" "}
               <b style={{ color: T.ink }}>
                 {sel.lastMealDate || "none yet"}
               </b>
@@ -640,8 +646,8 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                   <div key={f} style={{ fontSize: 13, color: T.amber, lineHeight: 1.5 }}>
                     ⚠ {f === "losing too fast"
                       ? "Losing faster than 1.5 lb/wk — voice-note her to eat the top of her ranges."
-                      : f === "no meal log in 48h — check in"
-                        ? "No meal logged yesterday or today — a quick WhatsApp check-in usually helps."
+                      : f === "no logs in 48h — check in"
+                        ? "No meals, water, or weigh-ins yesterday or today — a quick WhatsApp check-in usually helps."
                         : f}
                   </div>
                 ))}
