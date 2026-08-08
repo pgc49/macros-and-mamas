@@ -317,15 +317,15 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .price-history{font-size:14.5px;color:var(--ink-soft);margin-bottom:10px}
 .price-history s{opacity:.7}
 .includes{list-style:none;text-align:left;max-width:400px;margin:24px auto;font-size:15.5px}
-.includes li{padding:9px 0 9px 30px;position:relative;color:var(--ink-soft)}
+.includes li{padding:9px 0 9px 30px;position:relative;color:var(--ink-soft);line-height:1.45}
 .includes li strong{color:var(--ink)}
 .includes li::before{
   content:"✓";
   position:absolute;
   left:0;
-  top:10px;
+  top:9px;
   width:18px;
-  height:18px;
+  height:calc(15.5px * 1.45);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -333,6 +333,8 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
   font-weight:700;
   line-height:1;
   color:var(--accent-deep);
+  padding-top:2px;
+  box-sizing:border-box;
 }
 .disclosure{font-size:13px;color:var(--ink-soft);margin-top:18px;max-width:420px;margin-left:auto;margin-right:auto}
 .addon{max-width:580px;margin:18px auto 0;background:var(--card);border:1.5px dashed var(--accent);border-radius:20px;padding:18px 16px}
