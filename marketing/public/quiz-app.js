@@ -191,9 +191,10 @@
       .join('')}</div>`;
   }
 
-  function screenShell(title, body, footer = '') {
+  function screenShell(title, body, footer = '', kicker = '') {
     return `
       <div class="q-progress" aria-hidden="true"><span style="width:${progress()}%"></span></div>
+      ${kicker ? `<span class="kicker q-step-kicker">${kicker}</span>` : ''}
       <h1 class="q-title">${title}</h1>
       <div class="q-body">${body}</div>
       ${footer}
@@ -202,7 +203,15 @@
   }
 
   function quizIntroHtml() {
-    return `<p class="q-trust">About 90 seconds. Free ranges from Callie — certified holistic nutritionist and mama of two — built the same way she builds them for the program.</p>`;
+    return `<p class="q-trust">About 90 seconds. Free ranges from Callie, certified holistic nutritionist and mama of two, built the same way she builds them for the program.</p>`;
+  }
+
+  /** Q1 only — signature band + length promise under the pills. */
+  function q1MotifHtml() {
+    return `<div class="q-intro-motif" aria-hidden="true">
+      <div class="band"><div class="fill"></div></div>
+      <p class="q-intro-caption">Six taps, two typed numbers, then your ranges.</p>
+    </div>`;
   }
 
   /** Face + voice above the ask — quiz-only markup (not the homepage CallieLetter). */
@@ -238,7 +247,10 @@
       html = screenShell(
         'Where are you right now?',
         `${quizIntroHtml()}
-         ${choiceButtons(Q1, a.months_postpartum, 'q-choices pills grid-2')}`,
+         ${choiceButtons(Q1, a.months_postpartum, 'q-choices pills grid-2')}
+         ${q1MotifHtml()}`,
+        '',
+        'Your free macro ranges · Question 1 of 7',
       );
     } else if (state.step === 'q2') {
       html = screenShell(
