@@ -721,5 +721,6 @@
     }
   }
 
+  trackStep(state.step);
   render();
 })();
