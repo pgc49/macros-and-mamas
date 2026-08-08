@@ -468,7 +468,7 @@ footer{padding:36px 0 36px;font-size:14px;color:var(--ink-soft)}
 
 /* ================= QUIZ ================= */
 .quiz-page{padding:18px 0 72px;min-height:70vh}
-.quiz-page:has(.q-result-sticky){padding-bottom:118px}
+.quiz-page:has(.q-result-sticky){padding-bottom:calc(118px + env(safe-area-inset-bottom,0px))}
 .quiz-wrap{max-width:480px}
 .quiz-wrap:has(.q-app-preview){max-width:520px}
 .q-result-sticky{z-index:80}
