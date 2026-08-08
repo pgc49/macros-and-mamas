@@ -370,6 +370,31 @@
     </div>`;
   }
 
+  /**
+   * Cold-traffic product proof — homepage beats Facebook never saw:
+   * 1:1 Messages + My meals / recipes. Sits after Callie, before the ask.
+   */
+  function includesBlockHtml() {
+    return `<div class="q-includes">
+      <div class="q-preview-kicker">What you get in the 8 weeks</div>
+      <div class="q-include-card">
+        <div class="m-kicker">Messages · 1:1 with Callie</div>
+        <div class="bubble you">Week fell apart. Birthday cake for dinner Tuesday. Do I start over?</div>
+        <div class="bubble callie">You don't start over, you just start logging again. One meal today with protein first. That's the whole assignment.</div>
+        <p class="q-include-copy">When the week blows up, she answers your 1:1 herself — plus group coaching Mon–Fri, all in the app. Not a chatbot wearing her name.</p>
+      </div>
+      <div class="q-include-card">
+        <div class="m-kicker">My meals · recipes</div>
+        <div class="q-meal-chips" aria-hidden="true">
+          <span>Greek yogurt bowl</span>
+          <span>Chicken meatballs + rice</span>
+          <span>Eggs &amp; toast</span>
+        </div>
+        <p class="q-include-copy">Meals and recipes that fit your ranges and what your family already eats. Save the ones you repeat for one-tap logging, with a week planner and grocery list built in.</p>
+      </div>
+    </div>`;
+  }
+
   /** Hidden until QUIZ_OFFER_TESTIMONIALS has real quotes. */
   function testimonialSlotHtml() {
     if (!QUIZ_OFFER_TESTIMONIALS.length) return '';
@@ -705,6 +730,7 @@
       ${rangesBlock}
       ${snapProofHtml()}
       ${coachBlockHtml()}
+      ${includesBlockHtml()}
       ${testimonialSlotHtml()}
       ${offerBlock()}
       ${stickyCheckoutHtml()}
