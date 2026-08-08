@@ -3,6 +3,7 @@ import {
   cohortStartDate,
   doorsCloseDate,
   enrollUrl,
+  fullPrice,
   isWaitlist,
   offerPrice,
   quizUrl,
@@ -20,8 +21,9 @@ import {
         <div class="open-cta" style="position:relative;z-index:2">
           <p class="lede">
             Take the free quiz to see your ranges — and unlock the exclusive $
-            {waitlistPrice} early rate ($50 off). Pre-pay after the quiz to lock
-            your spot for cohort 2 (about ${weeklyPrice}/week for 8 weeks).
+            {waitlistPrice} early rate (full rate ${fullPrice}). Pre-pay after
+            the quiz to lock cohort 2 (about ${weeklyPrice}/week for 8 weeks).
+            <strong> Doors close {doorsCloseDate}.</strong>
           </p>
           <a
             class="btn"

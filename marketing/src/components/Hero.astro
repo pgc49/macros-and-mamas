@@ -5,6 +5,7 @@ import {
   cohortStartDate,
   doorsCloseDate,
   enrollUrl,
+  fullPrice,
   isWaitlist,
   offerPrice,
   quizUrl,
@@ -36,9 +37,10 @@ import {
               Get your macro ranges
             </a>
             <p class="price-note">
-              <strong>Take the quiz to unlock ${waitlistPrice}</strong> — $50
-              off full price, exclusive after you see your ranges. Next cohort
-              starts {cohortStartDate}. About ${weeklyPrice}/week for 8 weeks.
+              <strong>Free ranges + unlock ${waitlistPrice}</strong> (full rate
+              ${fullPrice}). Exclusive early rate after you finish the quiz.
+              Doors close {doorsCloseDate} · cohort starts {cohortStartDate}.
+              About ${weeklyPrice}/week at the early rate.
             </p>
           </div>
         ) : (

@@ -10,6 +10,7 @@
 | Unknown URLs returned marketing `/` as 200 (CF SPA fallback) | Astro `404.astro` → `dist/404.html` |
 | Stale `/spa/` shell | Overlay plants redirect shim + force `_redirects`; purge CF cache for `/spa*` |
 | Open `/api/lead` abuse | KV rate limit (`lead-rl:{ip}`, same `WAITLIST` binding as waitlist) |
+| Meta Lead on pregnant/vegan quiz finishes | Lead CAPI + pixel only for `main` / `early_pp_nurture`; nurture → `QuizNurture` custom |
 | Callie notify hardcoded `$149` | Webhook passes real `amount_usd`; `notify-callie` uses `amountUsd` |
 | Welcome email double-send on Stripe retry | `hasEmailEvent` gates welcome + `callie_payment` |
 | Anon insert on `cohort_waitlist` | Migration `041_cohort_waitlist_no_anon_insert`; SPA uses `POST /api/waitlist` |
@@ -27,6 +28,6 @@
 
 1. After deploy: purge Cloudflare cache for `/spa`, `/spa/`, `/spa/*`, `/app*`
 2. Confirm Production secrets: `RESEND_API_KEY`, `STRIPE_PRICE_ID_WAITLIST`, `STRIPE_PRICE_ID_LAB_ADDON=price_1U1vfzRyN0PahoiM6AVgkMYh`
-3. For open pre-sales: set `OPEN_WITHOUT_QUIZ=true` so `/join` can charge $249 without a quiz (still cohort-dated). Leave unset only if you want quiz-gated pay.
+3. Strategy A (quiz-gated $249): keep `OPEN_WITHOUT_QUIZ` unset/`false`. Meta Lead fires only for enrollable quiz segments.
 4. Unknown path smoke: `/nope` should be a real 404 page, not the homepage
 5. Confirm Pages has a `WAITLIST` KV binding (rate limits for `/api/lead` + `/api/waitlist`)

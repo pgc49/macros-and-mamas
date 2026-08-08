@@ -56,8 +56,7 @@ export const CONFIG = {
   FULLSCRIPT_DIGESTION: envUrl("VITE_FULLSCRIPT_DIGESTION_URL"),
 
   // Client: allow create-account + /join routing (pre-sales open).
-  // Server: set Cloudflare OPEN_WITHOUT_QUIZ=true so /join can charge $249
-  // without a quiz lead (still Cohort-gated by copy + start date below).
+  // Server Strategy A: keep OPEN_WITHOUT_QUIZ unset/false so $249 requires quiz.
   ENROLLMENT_OPEN: true,
   /** ISO cutoff: accounts created before this may still finish paying while closed. */
   ENROLLMENT_CLOSED_AT: "2026-07-26T02:00:00.000Z",

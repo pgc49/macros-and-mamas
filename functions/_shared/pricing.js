@@ -10,12 +10,12 @@
  * Resolution order:
  *   1. Account created before ENROLLMENT_CLOSED_AT → founding ($149)
  *   2. Email completed the ranges quiz (eligible segment on marketing_leads) → early ($249)
- *   3. OPEN_WITHOUT_QUIZ=true → early ($249) without a quiz lead (recommended for open pre-sales)
+ *   3. OPEN_WITHOUT_QUIZ=true → early ($249) without a quiz lead (off for Strategy A)
  *   4. else → 403 `quiz_required`
  *
- * Pre-sales practice: keep OPEN_WITHOUT_QUIZ=true and always advertise a next cohort
- * start date in marketing/src/config.ts + src/config.js. Flip open tier to `full` ($299)
- * when you retire the early rate.
+ * Strategy A (paid traffic): homepage shows full $299; quiz unlocks $249.
+ * Keep OPEN_WITHOUT_QUIZ unset/false. Always advertise next cohort start + doors-close
+ * in marketing/src/config.ts + src/config.js.
  */
 
 export const PRICE_TIERS = {

@@ -18,15 +18,20 @@ export const cohortStartDateShort = 'August 31';
 export const cohortStartDateCompact = 'Aug 31';
 export const doorsCloseDate = 'Aug 27';
 
+/** Early rate — revealed only after an eligible quiz finish (Strategy A). */
 export const waitlistPrice = 249;
-/** Later full rate (shown as reference while early $249 is live). */
+/**
+ * Public / full rate shown on the homepage before the quiz.
+ * Do not present as a former “was” price until it has actually been charged.
+ */
 export const fullPrice = 299;
 export const foundingPrice = 149;
-/** Public checkout price while enrollment is open at the early rate. */
-export const openPrice = waitlistPrice;
-/** Rounded per-week figure for the 8-week program (marketing copy). */
+/** Public checkout price when marketing mode is `open` (no quiz gate). */
+export const openPrice = fullPrice;
+/** Rounded per-week figures for marketing copy. */
 export const programWeeks = 8;
 export const weeklyPrice = Math.round(waitlistPrice / programWeeks);
+export const fullWeeklyPrice = Math.round(fullPrice / programWeeks);
 
 /** Optional Lab Review add-on (pricing section + FAQ). */
 export const labAddonPrice = 349;
@@ -46,7 +51,8 @@ export const dashboardUrl = `${siteUrl}/dashboard`;
 /** Lead magnet — same origin on marketing host (preview or www after cutover). */
 export const quizUrl = '/quiz';
 
-export const offerPrice = isWaitlist ? waitlistPrice : openPrice;
+/** Public listed price (schema + open CTAs). Early $249 is quiz-gated. */
+export const offerPrice = isWaitlist ? fullPrice : openPrice;
 export const offerAvailability = isWaitlist
   ? 'https://schema.org/PreOrder'
   : 'https://schema.org/LimitedAvailability';

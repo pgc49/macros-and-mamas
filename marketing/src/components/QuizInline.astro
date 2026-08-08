@@ -3,7 +3,7 @@
  * Inline Q1 embed — after sample ranges card.
  * Tapping navigates to /quiz?q1=<value>&placement=inline
  */
-import { waitlistPrice } from '../config';
+import { fullPrice, waitlistPrice } from '../config';
 
 const options = [
   { v: 'still_pregnant', l: 'Still pregnant' },
@@ -21,8 +21,8 @@ const options = [
       <h2>Want to see your macro ranges?</h2>
       <p class="lede"
         >Answer a few questions and get your ranges free, the way Callie
-        calculates them. Finishing also unlocks the ${waitlistPrice} early rate.
-        Tap where you are to start.</p
+        calculates them. Finishing unlocks the ${waitlistPrice} early rate
+        (full rate ${fullPrice}). Tap where you are to start.</p
       >
       <div class="qi-choices pills grid-2">
         {

@@ -11,8 +11,11 @@
   const fullPrice = Number(root.dataset.fullPrice || 299);
   const weeklyPrice = Number(root.dataset.weeklyPrice || Math.round(offerPrice / 8));
   const cohortStart = root.dataset.cohortStart || 'Monday, Aug 31';
+  const doorsClose = root.dataset.doorsClose || 'Aug 27';
   const saveAmount = Math.max(0, fullPrice - offerPrice);
   const ATTR_KEY = 'mm_attribution_v1';
+  /** Segments that may enroll Aug 31 — only these fire Meta Lead. */
+  const ENROLLABLE_SEGMENTS = { main: 1, early_pp_nurture: 1 };
 
   const Q1 = [
     { v: 'still_pregnant', l: 'Still pregnant' },
@@ -162,6 +165,17 @@
     `;
   }
 
+  function quizIntroHtml() {
+    return `<p class="q-trust">About 90 seconds. Free ranges from Callie — certified holistic nutritionist and mama of two — built the same way she builds them for the program.</p>`;
+  }
+
+  function coachNoteHtml() {
+    return `<div class="q-coach-note">
+      <strong>Your coach is Callie</strong>
+      <span>Certified holistic nutritionist · blood chemistry certified · mama of two. This preview uses her method — if you join, she builds and approves your final ranges before day one.</span>
+    </div>`;
+  }
+
   function render() {
     const a = state.answers;
     let html = '';
@@ -169,7 +183,8 @@
     if (state.step === 'q1') {
       html = screenShell(
         'Where are you right now?',
-        choiceButtons(Q1, a.months_postpartum, 'q-choices pills grid-2'),
+        `${quizIntroHtml()}
+         ${choiceButtons(Q1, a.months_postpartum, 'q-choices pills grid-2')}`,
       );
     } else if (state.step === 'q2') {
       html = screenShell(
@@ -414,6 +429,7 @@
         "Callie wants eyes on this",
         `<div class="q-banner">Your ranges need Callie's eyes on them. A couple of your answers mean an automated band isn't the right call. Callie will review this herself and send your ranges within 24 hours.</div>
          <p class="q-copy">Check your inbox — confirmation is on the way. You can still lock your cohort spot below while she looks.</p>
+         ${coachNoteHtml()}
          ${offerBlock()}`,
       );
     }
@@ -426,6 +442,7 @@
       ${logPreviewHtml()}
       <p class="q-copy"><strong>Why a range?</strong> Tuesday happens. Start with protein — it's the anchor.</p>
       <p class="q-copy muted">A copy of this breakdown is in your inbox.</p>
+      ${coachNoteHtml()}
       ${offerBlock()}`,
     );
   }
@@ -438,10 +455,10 @@
     return `<div class="q-offer-card">
       <div class="q-offer-kicker">Exclusive · unlocked by your quiz</div>
       <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
-      <p class="q-offer-lede">You’re signing up for <strong>Cohort 2</strong>, starting <strong>${escapeHtml(cohortStart)}</strong>. Create your account, then pre-pay to guarantee your seat at the early rate you just unlocked.</p>
+      <p class="q-offer-lede">You’re signing up for <strong>Cohort 2</strong>, starting <strong>${escapeHtml(cohortStart)}</strong>. <strong>Doors close ${escapeHtml(doorsClose)}</strong> so Callie can build ranges before day one. Create your account, then pre-pay at the early rate you just unlocked.</p>
       <div class="q-offer-price-row">
         <span class="q-offer-now">$${offerPrice}</span>
-        <span class="q-offer-was">$${fullPrice}</span>
+        <span class="q-offer-full">Full rate $${fullPrice}</span>
         <span class="q-offer-save">Save $${saveAmount}</span>
       </div>
       <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks · everything included</p>
@@ -592,17 +609,6 @@
         ? crypto.randomUUID()
         : Date.now() + '_' + Math.random().toString(36).slice(2));
 
-    try {
-      if (typeof window.fbq === 'function') {
-        window.fbq(
-          'track',
-          'Lead',
-          { content_name: 'ranges_quiz' },
-          { eventID: eventId },
-        );
-      }
-    } catch (e) {}
-
     const payload = {
       email: state.contact.email,
       first_name: state.contact.first_name,
@@ -658,6 +664,28 @@
       try {
         localStorage.setItem('mm_lead_email', '1');
       } catch (e) {}
+
+      // Meta: fire Lead only for segments who can enroll this cohort.
+      // Pregnant / vegan nurture paths must not train delivery on cheap "leads."
+      try {
+        if (typeof window.fbq === 'function') {
+          const seg = String(data.segment || '');
+          if (ENROLLABLE_SEGMENTS[seg]) {
+            window.fbq(
+              'track',
+              'Lead',
+              { content_name: 'ranges_quiz', content_category: seg },
+              { eventID: eventId },
+            );
+          } else {
+            window.fbq('trackCustom', 'QuizNurture', {
+              content_name: 'ranges_quiz',
+              content_category: seg || 'nurture',
+            });
+          }
+        }
+      } catch (e) {}
+
       state.result = data;
       state.busy = false;
       setStep('result');

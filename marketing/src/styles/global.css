@@ -423,8 +423,12 @@ button.mode:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .q-offer-lede strong{color:var(--ink)}
 .q-offer-price-row{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:10px;margin-bottom:4px}
 .q-offer-now{font-family:var(--display);font-size:clamp(42px,10vw,54px);line-height:1;color:var(--accent-deep)}
-.q-offer-was{font-size:20px;color:var(--ink-soft);text-decoration:line-through}
+.q-offer-was,.q-offer-full{font-size:16px;color:var(--ink-soft);font-weight:600}
 .q-offer-save{font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--accent);border-radius:999px;padding:5px 10px}
+.q-trust{font-size:15px;line-height:1.5;color:var(--ink-soft);margin:0 0 18px;max-width:36em}
+.q-coach-note{margin:18px 0 6px;padding:14px 16px;border-radius:16px;background:var(--card);border:1px solid var(--border)}
+.q-coach-note strong{display:block;font-size:14px;font-weight:700;color:var(--ink);margin-bottom:4px}
+.q-coach-note span{display:block;font-size:13.5px;line-height:1.45;color:var(--ink-soft)}
 .q-offer-week{font-family:var(--display);font-size:18px;color:var(--ink);margin:6px 0 16px}
 .q-offer-btn{width:100%;display:block;box-sizing:border-box}
 .q-offer-fine{font-size:13.5px;line-height:1.45;color:var(--ink-soft);margin:14px 0 0}

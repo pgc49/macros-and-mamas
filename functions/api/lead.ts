@@ -471,19 +471,26 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       ? formatBands(rangesPayload as Parameters<typeof formatBands>[0])
       : null;
 
+  // Meta Lead only for segments who can enroll this cohort.
+  // Pregnant / vegan nurture must not optimize delivery toward non-buyers.
+  const enrollableLead =
+    segment === 'main' || segment === 'early_pp_nurture';
+
   context.waitUntil(
     Promise.all([
-      sendLeadCapi(env, {
-        eventId,
-        email,
-        firstName,
-        lastName,
-        fbp: body.fbp,
-        fbc: body.fbc,
-        ip,
-        ua,
-        sourceUrl,
-      }),
+      enrollableLead
+        ? sendLeadCapi(env, {
+            eventId,
+            email,
+            firstName,
+            lastName,
+            fbp: body.fbp,
+            fbc: body.fbc,
+            ip,
+            ua,
+            sourceUrl,
+          })
+        : Promise.resolve(),
       sendRangesEmail(env, {
         email,
         firstName,
