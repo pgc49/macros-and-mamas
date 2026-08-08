@@ -475,16 +475,17 @@
   /** Quiz-gated exclusive pre-pay — shown for eligible non-pregnant / non-vegan finishes. */
   function offerBlock() {
     const email = String(state.contact.email || '').trim().toLowerCase();
-    // Prefill create-account with the quiz email so they don't retype at the pay gate.
-    const signInBase = String(enrollUrl || '')
-      .replace(/\/join\/?(\?.*)?$/i, '/signin')
-      .replace(/\?.*$/, '');
-    const params = new URLSearchParams({
-      auth: 'create',
-      from: 'quiz',
-    });
+    // Land on /join with the quiz email. Matching signed-in users go straight to
+    // checkout; everyone else is sent to create-account with that email prefilled.
+    const joinBase = String(enrollUrl || 'https://www.macrosandmamas.com/join')
+      .replace(/\?.*$/, '')
+      .replace(/\/signin\/?$/i, '/join');
+    const params = new URLSearchParams({ from: 'quiz' });
     if (email) params.set('email', email);
-    const createHref = `${signInBase || 'https://www.macrosandmamas.com/signin'}?${params.toString()}`;
+    const joinHref = `${joinBase || 'https://www.macrosandmamas.com/join'}?${params.toString()}`;
+    try {
+      if (email) sessionStorage.setItem('mm_quiz_email', email);
+    } catch (e) { /* private mode */ }
     return `<div class="q-offer-card">
       <div class="q-offer-kicker">Exclusive · unlocked by your quiz</div>
       <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
@@ -495,7 +496,7 @@
         <span class="q-offer-save">Save $${saveAmount}</span>
       </div>
       <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks · everything included</p>
-      <a class="btn q-offer-btn" href="${createHref}">Pre-pay $${offerPrice} — lock my spot</a>
+      <a class="btn q-offer-btn" href="${joinHref}">Pre-pay $${offerPrice} — lock my spot</a>
       <p class="q-offer-fine">Ranges above are a preview — Callie approves your final numbers if you join.</p>
       <p class="q-copy muted" style="margin-bottom:0">Not ready to pay yet? No problem — your ranges stay in your inbox either way.</p>
     </div>`;
@@ -696,6 +697,10 @@
       }
       try {
         localStorage.setItem('mm_lead_email', '1');
+      } catch (e) {}
+      try {
+        const leadEmail = String(state.contact.email || '').trim().toLowerCase();
+        if (leadEmail) sessionStorage.setItem('mm_quiz_email', leadEmail);
       } catch (e) {}
 
       // Meta: fire Lead only for segments who can enroll this cohort.

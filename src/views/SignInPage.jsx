@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { FD, T, F } from "../theme/tokens";
 import { Shell, Card, Btn, Field, inputStyle } from "../components/ui";
@@ -6,6 +6,7 @@ import { useAuth } from "../auth/useAuth.jsx";
 import { PATHS } from "../routing";
 import { TERMS_VERSION } from "../content/terms";
 import { isEnrollmentOpen } from "../config";
+import { rememberQuizEmail } from "../lib/quizCheckout";
 
 /**
  * One auth screen. Mode comes from the entry point:
@@ -22,6 +23,10 @@ export function SignInPage({
   const prefillEmail = String(searchParams.get("email") || "").trim();
   const fromQuiz = searchParams.get("from") === "quiz";
   const [email, setEmail] = useState(prefillEmail);
+
+  useEffect(() => {
+    if (fromQuiz && prefillEmail) rememberQuizEmail(prefillEmail);
+  }, [fromQuiz, prefillEmail]);
   const [password, setPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [busy, setBusy] = useState(false);

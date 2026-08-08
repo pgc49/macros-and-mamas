@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
-import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { CONFIG } from "./config";
 import { useAuth } from "./auth/useAuth.jsx";
 import { db } from "./db/db";
@@ -30,7 +30,7 @@ import { ResetPasswordPage } from "./views/ResetPasswordPage";
 import { TermsPage } from "./views/TermsPage";
 import { PrivacyPage } from "./views/PrivacyPage";
 import { ClientApp } from "./views/ClientApp";
-import { Shell } from "./components/ui";
+import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
 import { isStandaloneDisplay, registerMessageServiceWorker, syncAppBadge } from "./lib/push";
@@ -40,7 +40,90 @@ import {
   isPublicTrackingPath,
   persistAttributionToProfile,
 } from "./lib/attribution";
+import { emailsMatch, resolveQuizEmail } from "./lib/quizCheckout";
 import { ageFromDateOfBirth } from "./db/db";
+
+/**
+ * /signin entry: quiz Pre-pay carries ?from=quiz&email=.
+ * If another account is already signed in, sign out so checkout can use the quiz email.
+ */
+function SignInGate({
+  authMode,
+  onSwitchMode,
+  onBack,
+  isAdmin,
+  approved,
+  paid,
+  macros,
+  refunded,
+}) {
+  const { user, signOut, loading: authLoading } = useAuth();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const [switching, setSwitching] = useState(false);
+  const fromQuiz = searchParams.get("from") === "quiz";
+  const quizEmail = resolveQuizEmail(searchParams);
+  const mismatch = Boolean(
+    user && fromQuiz && quizEmail && !emailsMatch(user.email, quizEmail),
+  );
+
+  useEffect(() => {
+    if (authLoading || !mismatch) return undefined;
+    let cancelled = false;
+    setSwitching(true);
+    signOut()
+      .catch((err) => console.error("quiz checkout account switch failed", err))
+      .finally(() => {
+        if (!cancelled) setSwitching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, mismatch, signOut]);
+
+  if (authLoading || switching || mismatch) {
+    return (
+      <Shell>
+        <Card style={{ marginTop: 30, textAlign: "center", padding: 28 }}>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: T.inkSoft }}>
+            {mismatch || switching
+              ? "Switching to your quiz email so checkout can unlock…"
+              : "Loading…"}
+          </p>
+        </Card>
+      </Shell>
+    );
+  }
+
+  if (user) {
+    const joinQuiz = fromQuiz ? `${PATHS.join}?from=quiz` : null;
+    const deepAccount = location.state?.from && String(location.state.from).startsWith("/account")
+      ? location.state.from
+      : null;
+    const to = deepAccount
+      || (location.state?.from === PATHS.support ? PATHS.support : null)
+      || joinQuiz
+      || homePathFor({ isAdmin, approved, paid, macros, refunded });
+    return <Navigate to={to} replace />;
+  }
+
+  return (
+    <SignInPage
+      mode={
+        new URLSearchParams(location.search).get("auth") === "signin"
+        || location.state?.from === PATHS.support
+        || (location.state?.from && String(location.state.from).startsWith("/account"))
+          ? "signin"
+          : location.state?.from === PATHS.join
+            || new URLSearchParams(location.search).get("auth") === "create"
+            ? (CONFIG.ENROLLMENT_OPEN ? "create" : "signin")
+            : authMode
+      }
+      onSwitchMode={onSwitchMode}
+      onBack={onBack}
+    />
+  );
+}
 
 /* Admin is a separate chunk — never loaded on customer marketing/dashboard paths. */
 const AdminPortal = lazy(() =>
@@ -343,6 +426,20 @@ export default function App() {
       return;
     }
 
+    // Quiz Pre-pay → /signin?from=quiz&email=…
+    // Keep them on create/sign-in when another account is still signed in;
+    // SignInGate signs that session out. Matching email → join with early rate.
+    if (location.pathname === PATHS.signin) {
+      const params = new URLSearchParams(location.search);
+      if (params.get("from") === "quiz") {
+        const quizEmail = resolveQuizEmail(params);
+        if (quizEmail && !emailsMatch(user.email, quizEmail)) return;
+        routedAfterLoad.current = true;
+        navigate(`${PATHS.join}?from=quiz`, { replace: true });
+        return;
+      }
+    }
+
     const dest = homePathFor({ isAdmin, approved, paid, macros, refunded });
     // Signed-in visitors may still browse marketing at `/` — only auto-route
     // from `/signin` and legacy `/home`. From `/`, route enrolled clients + admins.
@@ -355,7 +452,7 @@ export default function App() {
     }
     routedAfterLoad.current = true;
     navigate(dest, { replace: true });
-  }, [authLoading, loaded, user, isAdmin, approved, paid, macros, refunded, location.pathname, location.state, navigate]);
+  }, [authLoading, loaded, user, isAdmin, approved, paid, macros, refunded, location.pathname, location.search, location.state, navigate]);
 
   const authMode = signInNext === "intake" ? "create" : "signin";
   /** Toggle create/signin and keep ?auth= in sync (URL was winning over button clicks). */
@@ -1386,36 +1483,16 @@ export default function App() {
       <Route
         path={PATHS.signin}
         element={
-          user
-            ? (
-              <Navigate
-                to={
-                  location.state?.from
-                  && String(location.state.from).startsWith("/account")
-                    ? location.state.from
-                    : location.state?.from === PATHS.support
-                      ? PATHS.support
-                      : homePathFor({ isAdmin, approved, paid, macros, refunded })
-                }
-                replace
-              />
-            )
-            : (
-              <SignInPage
-                mode={
-                  new URLSearchParams(location.search).get("auth") === "signin"
-                  || location.state?.from === PATHS.support
-                  || (location.state?.from && String(location.state.from).startsWith("/account"))
-                    ? "signin"
-                    : location.state?.from === PATHS.join
-                      || new URLSearchParams(location.search).get("auth") === "create"
-                      ? (CONFIG.ENROLLMENT_OPEN ? "create" : "signin")
-                      : authMode
-                }
-                onSwitchMode={switchAuthMode}
-                onBack={() => navigate(PATHS.home)}
-              />
-            )
+          <SignInGate
+            authMode={authMode}
+            onSwitchMode={switchAuthMode}
+            onBack={() => navigate(PATHS.home)}
+            isAdmin={isAdmin}
+            approved={approved}
+            paid={paid}
+            macros={macros}
+            refunded={refunded}
+          />
         }
       />
 
@@ -1430,6 +1507,10 @@ export default function App() {
                   search: (() => {
                     const p = new URLSearchParams(location.search);
                     p.set("auth", "create");
+                    if (!p.get("from") && p.get("email")) p.set("from", "quiz");
+                    // Persist quiz email for the create → pay handoff.
+                    const quizEmail = resolveQuizEmail(p);
+                    if (quizEmail && !p.get("email")) p.set("email", quizEmail);
                     return `?${p.toString()}`;
                   })(),
                 }}

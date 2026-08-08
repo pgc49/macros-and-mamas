@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { FD, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
 import { CONFIG } from "../config";
 import { fetchCheckoutQuote, startCheckout } from "../lib/checkout";
+import { useAuth } from "../auth/useAuth.jsx";
+import {
+  emailsMatch,
+  normalizeEmail,
+  rememberQuizEmail,
+  resolveQuizEmail,
+} from "../lib/quizCheckout";
 import { PATHS } from "../routing";
 
 const LAB_ADDON_PRICE = 349;
@@ -16,12 +23,25 @@ const COHORT_START_COMPACT = CONFIG.COHORT_START_COMPACT || "Aug 31";
 
 /** Unpaid signed-in users finish joining here before intake. */
 export function JoinPage({ onRefresh, profileCreatedAt = null }) {
+  const { user, signOut } = useAuth();
+  const [searchParams] = useSearchParams();
+  const quizEmail = resolveQuizEmail(searchParams);
+  const sessionEmail = normalizeEmail(user?.email);
+  const emailMismatch = Boolean(
+    quizEmail && sessionEmail && !emailsMatch(sessionEmail, quizEmail),
+  );
+
   const [busy, setBusy] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [error, setError] = useState("");
   const [quote, setQuote] = useState(null);
   const [quoteLoading, setQuoteLoading] = useState(true);
   const [quoteError, setQuoteError] = useState("");
   const [labReview, setLabReview] = useState(false);
+
+  useEffect(() => {
+    if (quizEmail) rememberQuizEmail(quizEmail);
+  }, [quizEmail]);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +65,27 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
         if (!cancelled) setQuoteLoading(false);
       });
     return () => { cancelled = true; };
-  }, [profileCreatedAt]);
+  }, [profileCreatedAt, sessionEmail]);
+
+  const switchToQuizEmail = async () => {
+    if (!quizEmail) return;
+    setSwitching(true);
+    setError("");
+    try {
+      rememberQuizEmail(quizEmail);
+      await signOut();
+      const params = new URLSearchParams({
+        auth: "create",
+        from: "quiz",
+        email: quizEmail,
+      });
+      window.location.assign(`${PATHS.signin}?${params.toString()}`);
+    } catch (e) {
+      console.error("switch to quiz email failed", e);
+      setError("Couldn't switch accounts. Sign out from the menu, then sign in with your quiz email.");
+      setSwitching(false);
+    }
+  };
 
   const amount = quote?.amount;
   const total =
@@ -127,6 +167,32 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
     </button>
   ) : null;
 
+  if (emailMismatch) {
+    return (
+      <Shell>
+        <Card style={{ marginTop: 30, textAlign: "center", padding: 30 }}>
+          <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "0 0 10px" }}>
+            Use your quiz email to checkout
+          </h2>
+          <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft, margin: "0 0 16px" }}>
+            Your early $249 rate is unlocked for{" "}
+            <strong style={{ color: T.ink }}>{quizEmail}</strong>.
+            {" "}You’re signed in as{" "}
+            <strong style={{ color: T.ink }}>{sessionEmail}</strong>
+            {" "}— switch accounts to pre-pay at the rate you unlocked.
+          </p>
+          <Btn style={{ width: "100%" }} disabled={switching} onClick={switchToQuizEmail}>
+            {switching ? "Switching…" : "Continue with quiz email"}
+          </Btn>
+          {error && (
+            <div style={{ marginTop: 12, fontSize: 13.5, color: T.amber, lineHeight: 1.5 }}>{error}</div>
+          )}
+          {refreshBtn}
+        </Card>
+      </Shell>
+    );
+  }
+
   if (!quoteLoading && !quote && quoteError) {
     return (
       <Shell>
@@ -179,6 +245,11 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
               ? `Lock your ${COHORT_START_COMPACT} spot — $${total}`
               : `Lock your ${COHORT_START_COMPACT} spot`)}
         </h2>
+        {sessionEmail && (
+          <p style={{ fontSize: 13.5, lineHeight: 1.45, color: T.inkSoft, margin: "0 0 8px" }}>
+            Signed in as <strong style={{ color: T.ink }}>{sessionEmail}</strong>
+          </p>
+        )}
         <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft }}>
           {quoteLoading ? "Loading your price…" : openBlurb}
         </p>
