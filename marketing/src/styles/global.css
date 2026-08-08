@@ -228,20 +228,21 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .habit .ring{flex:none;width:18px;height:18px;border-radius:99px;border:2.5px solid var(--border)}
 .habit.done .ring{border-color:var(--sage);background:var(--sage-soft)}
 /* Progress tab vignette — macros vs sage range + weight trend.
-   Scale: max 180g; band 150–160g (matches philosophy card persona). */
+   Y zoom 100–180g so the 150–160 band (~12% of chart) reads on mobile;
+   persona matches philosophy card (protein 150–160g). */
 .prog-demo{display:grid;gap:12px}
 .prog-macro-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:12.5px}
 .prog-macro-head strong{color:var(--ink);font-weight:700}
 .prog-macro-head span{color:var(--ink-soft);font-weight:600;font-size:11.5px}
 .prog-bars-wrap{
-  --prog-max:180;--band-lo:150;--band-hi:160;
-  position:relative;height:84px;background:var(--bg);border:1px solid var(--border);
+  --prog-min:100;--prog-max:180;--band-lo:150;--band-hi:160;
+  position:relative;height:88px;background:var(--bg);border:1px solid var(--border);
   border-radius:12px;padding:8px 10px 6px;overflow:hidden;
 }
 .prog-sage-band{
   position:absolute;left:8px;right:8px;top:auto;
-  bottom:calc(var(--band-lo) / var(--prog-max) * 100%);
-  height:calc((var(--band-hi) - var(--band-lo)) / var(--prog-max) * 100%);
+  bottom:calc((var(--band-lo) - var(--prog-min)) / (var(--prog-max) - var(--prog-min)) * 100%);
+  height:calc((var(--band-hi) - var(--band-lo)) / (var(--prog-max) - var(--prog-min)) * 100%);
   background:var(--sage-soft);opacity:1;
   border-top:1.5px dashed var(--sage);border-bottom:1.5px dashed var(--sage);
   pointer-events:none;z-index:0;
@@ -250,7 +251,7 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .prog-bars i{flex:1;display:block;min-width:0;background:var(--accent);border-radius:4px 4px 0 0;opacity:.9}
 .prog-wt-svg{display:block;width:100%;height:56px;background:var(--bg);border:1px solid var(--border);border-radius:12px}
 .prog-wt-caption{margin:7px 0 0;font-size:12.5px;line-height:1.4;color:var(--ink-soft)}
-/* Desktop row 3: Progress is taller than groceries — stretch keeps the pair even. */
+/* Desktop row 3: stretch so Progress + groceries share height after the taller swap. */
 @media(min-width:880px){
   .collage{align-items:stretch}
   .c-progress .prog-demo{gap:10px}

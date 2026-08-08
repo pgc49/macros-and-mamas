@@ -373,11 +373,12 @@
    * Charts decorative (aria-hidden); weight caption carries the meaning.
    */
   function progressVignetteHtml() {
+    const min = 100;
     const max = 180;
     // 6 in-range, 3 under (85–95% of 150), 1 slightly over — humanly imperfect.
     const barsG = [154, 136, 158, 152, 129, 160, 155, 141, 168, 151];
     const bars = barsG
-      .map((g) => `<i style="height:${((g / max) * 100).toFixed(1)}%"></i>`)
+      .map((g) => `<i style="height:${(((g - min) / (max - min)) * 100).toFixed(1)}%"></i>`)
       .join('');
     return `<div class="prog-demo">
       <div class="prog-macro" aria-hidden="true">

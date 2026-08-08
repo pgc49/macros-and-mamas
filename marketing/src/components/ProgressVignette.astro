@@ -4,12 +4,14 @@
  * Demo persona matches philosophy card (protein 150–160g). Charts decorative;
  * meaning lives in visible captions (not chart nodes).
  *
- * Scale: chart max 180g so 150–160 band + slight overshoot read clearly.
+ * Y zoom 100–180g so the sage band reads on mobile; bars stay proportional.
  * Bars (g): 6 in-range, 3 under (85–95% of band bottom), 1 slightly over.
  */
+const PROG_MIN = 100;
 const PROG_MAX = 180;
 const barsG = [154, 136, 158, 152, 129, 160, 155, 141, 168, 151];
-const barPct = (g: number) => `${((g / PROG_MAX) * 100).toFixed(1)}%`;
+const barPct = (g: number) =>
+  `${(((g - PROG_MIN) / (PROG_MAX - PROG_MIN)) * 100).toFixed(1)}%`;
 ---
 
 <div class="prog-demo">
