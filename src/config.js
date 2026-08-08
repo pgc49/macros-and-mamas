@@ -24,6 +24,7 @@ export const CONFIG = {
   // Server picks Price ID: founding $149 / waitlist $249 / full $299.
   CHECKOUT_ENDPOINT: "/api/checkout",
   CHECKOUT_QUOTE_ENDPOINT: "/api/checkout-quote",
+  QUIZ_LEAD_ENDPOINT: "/api/quiz-lead",
   BILLING_ENDPOINT: "/api/billing",
   REFUND_ENDPOINT: "/api/refund",
   INTAKE_SUBMITTED_ENDPOINT: "/api/intake-submitted",
@@ -66,7 +67,8 @@ export const CONFIG = {
    * Next cohort — keep in sync with marketing/src/config.ts.
    * Always set an expected start date before selling seats.
    */
-  COHORT_LABEL: "Cohort 2",
+  /** Customer-facing label — no numbered “Cohort 2”; dates carry the meaning. */
+  COHORT_LABEL: "your spot",
   COHORT_START: "Monday, Aug 31",
   COHORT_START_SHORT: "August 31",
   COHORT_START_COMPACT: "Aug 31",

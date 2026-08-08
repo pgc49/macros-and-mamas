@@ -1581,6 +1581,7 @@ export default function App() {
                       step={step}
                       setStep={setStep}
                       set={set}
+                      setProfile={setProfile}
                       onSubmit={submitIntake}
                     />
                   )

@@ -16,7 +16,6 @@ import { PATHS } from "../routing";
 const LAB_ADDON_PRICE = 349;
 /** Marketing quiz on www — still the preferred path; not required when OPEN_WITHOUT_QUIZ=true. */
 const QUIZ_URL = "https://www.macrosandmamas.com/quiz";
-const COHORT_LABEL = CONFIG.COHORT_LABEL || "Cohort 2";
 const COHORT_START = CONFIG.COHORT_START || "Monday, Aug 31";
 const COHORT_START_SHORT = CONFIG.COHORT_START_SHORT || "August 31";
 const COHORT_START_COMPACT = CONFIG.COHORT_START_COMPACT || "Aug 31";
@@ -218,10 +217,10 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
   const openBlurb = isFounding
     ? `Founding rate $${amount}. After checkout you’ll complete a short intake so Callie can build your macros.`
     : isEarly && amount != null
-      ? `You’re locking ${COHORT_LABEL} — starts ${COHORT_START}. Early rate $${amount} for 8 weeks ($50 off). After checkout you’ll complete a short intake; Callie approves your final ranges before day one.`
+      ? `You’re locking your spot — starts ${COHORT_START}. Early rate $${amount} for 8 weeks ($50 off). After checkout you’ll complete a short intake; Callie approves your final ranges before day one.`
       : isFull && amount != null
-        ? `You’re locking ${COHORT_LABEL} — starts ${COHORT_START}. Full rate $${amount} for 8 weeks. Want the $249 early rate? Take the free ranges quiz with this email, then come back.`
-        : `You’re locking ${COHORT_LABEL} — starts ${COHORT_START}. After checkout you’ll complete a short intake so Callie can build your macros.`;
+        ? `You’re locking your spot — starts ${COHORT_START}. Full rate $${amount} for 8 weeks. Want the $249 early rate? Take the free ranges quiz with this email, then come back.`
+        : `You’re locking your spot — starts ${COHORT_START}. After checkout you’ll complete a short intake so Callie can build your macros.`;
 
   return (
     <Shell>
@@ -236,7 +235,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
             marginBottom: 6,
           }}
         >
-          {COHORT_LABEL} · starts {COHORT_START}
+          Starts {COHORT_START}
         </div>
         <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "10px 0" }}>
           {isFounding
@@ -268,7 +267,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
         )}
         {!isFounding && (
           <p style={{ marginTop: 14, fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
-            You’re pre-paying for <strong style={{ color: T.ink }}>{COHORT_LABEL}</strong>
+            You’re pre-paying for your spot
             {" "}— starts <strong style={{ color: T.ink }}>{COHORT_START_SHORT}</strong>.
             {isFull ? (
               <>

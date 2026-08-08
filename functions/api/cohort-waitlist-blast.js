@@ -19,7 +19,7 @@
 import { invokeEdgeFunction, logEmailEvent } from "../_shared/supabaseEmail.js";
 
 const EMAIL_TYPE = "cohort_open";
-const SUBJECT = "Cohort two is open — your waitlist rate $249";
+const SUBJECT = "Spots are open — your waitlist rate $249";
 
 export async function onRequestPost({ request, env }) {
   try {

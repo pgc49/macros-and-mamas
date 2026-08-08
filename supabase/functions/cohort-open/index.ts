@@ -23,7 +23,7 @@ serve(async (req) => {
       from: FROM_CALLIE,
       to: [email],
       reply_to: "calista@nourishwithcalista.com",
-      subject: "Cohort two is open — your waitlist rate $249",
+      subject: "Spots are open — your waitlist rate $249",
       html: renderEmail({
         header: `Hi ${first},`,
         body: `
@@ -31,7 +31,7 @@ serve(async (req) => {
           <p>Because you joined the waitlist early, your rate is <b>$249</b> (full price is $299). Create your account (or sign in), then lock in that waitlist price. Inside: macros I build myself, our moms WhatsApp group Mon–Fri, and a short Monday voice note to keep the week simple.</p>
           <p>Tap below when you're ready. I'd love to have you.</p>
           <p>Callie</p>
-          <p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you joined the cohort two waitlist. Reply and ask me to stop anytime.</p>
+          <p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you joined the waitlist. Reply and ask me to stop anytime.</p>
         `,
         cta_text: "Create account & join — $249",
         // /signin defaults to create for cold visitors; unpaid users land on /join to pay.

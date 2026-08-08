@@ -18,6 +18,13 @@ export const cohortStartDateShort = 'August 31';
 export const cohortStartDateCompact = 'Aug 31';
 export const doorsCloseDate = 'Aug 27';
 
+/** Shared doors-close reasoning — pricing card, final CTA, quiz offer stay in sync. */
+export const doorsCloseReason =
+  `Doors close ${doorsCloseDate}. Callie hand-builds every set of ranges in the days before day one, and the whole group starts week one together on ${cohortStartDateCompact}.`;
+
+export const queuePositionCopy =
+  `Pre-pay and you're in Callie's queue. She builds and approves ranges in the order they come in, so the earlier you're in, the earlier your app opens and the more time you have to get comfortable before ${cohortStartDateCompact}.`;
+
 /** Early rate — revealed only after an eligible quiz finish (Strategy A). */
 export const waitlistPrice = 249;
 /**

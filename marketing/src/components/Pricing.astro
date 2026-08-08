@@ -3,7 +3,7 @@ import {
   cohortStartDate,
   cohortStartDateCompact,
   cohortStartDateShort,
-  doorsCloseDate,
+  doorsCloseReason,
   enrollUrl,
   fullPrice,
   isWaitlist,
@@ -12,6 +12,7 @@ import {
   labStandalonePrice,
   openPrice,
   programWeeks,
+  queuePositionCopy,
   quizUrl,
   waitlistPrice,
   weeklyPrice,
@@ -24,7 +25,7 @@ const saveAmount = fullPrice - waitlistPrice;
   <div class="wrap">
     <div style="text-align:center">
       <span class="kicker">One price · everything included</span>
-      <h2>Cohort 2 starts {cohortStartDateShort}.</h2>
+      <h2>Starts {cohortStartDateShort}.</h2>
       <p class="lede" style="margin-inline:auto">
         {
           isWaitlist ? (
@@ -78,8 +79,7 @@ const saveAmount = fullPrice - waitlistPrice;
         )
       }
       <p class="price-history" style="margin-top:6px">
-        <strong>Doors close {doorsCloseDate}</strong> · cohort starts{' '}
-        {cohortStartDate}
+        {doorsCloseReason}
       </p>
       <ul class="includes">
         <li
@@ -102,6 +102,7 @@ const saveAmount = fullPrice - waitlistPrice;
           ><strong>Zero product costs.</strong> No shakes or supplements, just
           groceries you'd buy anyway</li
         >
+        <li>{queuePositionCopy}</li>
       </ul>
       {
         isWaitlist ? (
@@ -120,7 +121,7 @@ const saveAmount = fullPrice - waitlistPrice;
       >
     </div>
     <div class="addon rv">
-      <span class="a-kicker">Optional add-on · limited spots per cohort</span>
+      <span class="a-kicker">Optional add-on · limited spots per group</span>
       <div class="a-row">
         <h3>The Lab Review</h3>
         <div class="a-price"

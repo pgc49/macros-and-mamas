@@ -1,11 +1,13 @@
 ---
 import {
   cohortStartDate,
+  cohortStartDateCompact,
   doorsCloseDate,
   enrollUrl,
   fullPrice,
   isWaitlist,
   offerPrice,
+  queuePositionCopy,
   quizUrl,
   waitlistPrice,
   weeklyPrice,
@@ -22,8 +24,13 @@ import {
           <p class="lede">
             Take the free quiz to see your ranges — and get the exclusive $
             {waitlistPrice} early rate (full rate ${fullPrice}). Pre-pay after
-            the quiz to lock cohort 2 (about ${weeklyPrice}/week for 8 weeks).
-            <strong> Doors close {doorsCloseDate}.</strong>
+            the quiz to lock your spot for {cohortStartDateCompact} (about $
+            {weeklyPrice}/week for 8 weeks). Doors close {doorsCloseDate} so
+            Callie can build your ranges before the group starts together{' '}
+            {cohortStartDateCompact}.
+          </p>
+          <p class="lede" style="margin-top:14px">
+            {queuePositionCopy}
           </p>
           <a
             class="btn"
@@ -43,7 +50,7 @@ import {
             Join now · starts {cohortStartDate}
           </a>
           <p class="price-note">
-            ${offerPrice} · doors close {doorsCloseDate} or when the cohort fills
+            ${offerPrice} · doors close {doorsCloseDate} or when the group fills
           </p>
           <p class="price-note" style="margin-top:10px">
             <a href={quizUrl} style="color:inherit;text-decoration:underline"

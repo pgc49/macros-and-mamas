@@ -150,10 +150,10 @@ Callie`,
   {
     id: "cohort_open",
     number: "W",
-    name: "Cohort two open (waitlist blast)",
+    name: "Waitlist open (blast)",
     status: "ready",
     trigger: "Manual one-shot when enrollment reopens — POST /api/cohort-waitlist-blast (CRON_SECRET). Pulls cohort_waitlist; CTA → create account & pay.",
-    subject: "Cohort two is open — your waitlist rate $249",
+    subject: "Spots are open — your waitlist rate $249",
     audience: "Waitlist",
     cta: "Create account & join — $249",
     bodyPreview: `Hi [First name],
@@ -166,7 +166,7 @@ Tap below when you're ready. I'd love to have you.
 
 Callie
 
-(You're getting this because you joined the cohort two waitlist. Reply to stop anytime.)`,
+(You're getting this because you joined the waitlist. Reply to stop anytime.)`,
   },
   {
     id: "callie_payment",

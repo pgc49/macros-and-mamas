@@ -1,10 +1,55 @@
+import { useEffect, useRef, useState } from "react";
 import { FD, T, F } from "../theme/tokens";
 import { Shell, Card, Btn, Field, Chip, inputStyle } from "../components/ui";
 import { ageFromDateOfBirth } from "../db/db";
+import { supabase } from "../lib/supabase";
+import { CONFIG } from "../config";
+import { mapLeadToIntakePatch, mergeQuizPrefill } from "../lib/quizLeadPrefill";
 
 /** Full intake — no eligibility denials. Callie reviews flags in admin. */
-export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
+export function IntakeFlow({ profile, step, setStep, set, setProfile, onSubmit }) {
   const steps = ["About you", "You right now", "Your goal", "Your tastes"];
+  const [quizPrefillNote, setQuizPrefillNote] = useState("");
+  const prefillTried = useRef(false);
+
+  useEffect(() => {
+    if (prefillTried.current) return undefined;
+    prefillTried.current = true;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const resp = await fetch(CONFIG.QUIZ_LEAD_ENDPOINT, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!resp.ok) return;
+        const data = await resp.json().catch(() => ({}));
+        if (cancelled || !data?.lead) return;
+        const { patch } = mapLeadToIntakePatch(data.lead);
+        if (setProfile) {
+          let appliedKeys = [];
+          setProfile((prev) => {
+            const merged = mergeQuizPrefill(prev, patch);
+            appliedKeys = merged.appliedKeys;
+            return merged.next;
+          });
+          if (!cancelled && appliedKeys.length) {
+            setQuizPrefillNote(
+              "We pulled these from your quiz — change anything that's different now.",
+            );
+          }
+        }
+      } catch (e) {
+        console.error("quiz lead prefill failed", e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setProfile]);
 
   const monthsNum = Number(profile.monthsPP);
   const monthsValid = profile.monthsPP !== "" && !Number.isNaN(monthsNum);
@@ -40,6 +85,22 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
     setStep(2);
   };
 
+  const prefillBanner = quizPrefillNote ? (
+    <div
+      style={{
+        background: T.sageSoft || "rgba(95,129,104,0.12)",
+        borderRadius: 14,
+        padding: "12px 14px",
+        marginBottom: 14,
+        fontSize: 13.5,
+        lineHeight: 1.5,
+        color: T.ink,
+      }}
+    >
+      {quizPrefillNote}
+    </div>
+  ) : null;
+
   return (
     <Shell>
       <div style={{ display: "flex", gap: 6, margin: "10px 0 20px" }}>
@@ -51,6 +112,7 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
 
       {step === 0 && (
         <Card>
+          {prefillBanner}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Field label="First name">
               <input
@@ -113,6 +175,7 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
 
       {step === 1 && (
         <Card>
+          {prefillBanner}
           <Field label="Are you currently pregnant?">
             <div style={{ display: "flex", gap: 8 }}>
               <Chip active={profile.pregnant === true} onClick={() => setPregnant(true)}>Yes</Chip>
@@ -160,6 +223,7 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
 
       {step === 2 && (
         <Card>
+          {prefillBanner}
           <Field label="What's your main goal?">
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <Chip active={profile.goal === "lose"} onClick={() => set("goal", "lose")}>Lose fat</Chip>
@@ -203,6 +267,7 @@ export function IntakeFlow({ profile, step, setStep, set, onSubmit }) {
 
       {step === 3 && (
         <Card>
+          {prefillBanner}
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, marginBottom: 14 }}>
             Last one, and it&apos;s the fun one. Tell Callie what you actually love to eat — your meal plan gets adapted to your tastes, not the other way around.
           </div>

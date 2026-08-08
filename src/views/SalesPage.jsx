@@ -610,7 +610,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
                 Join the waitlist
               </Link>
               <div className="mm-footer-cta-note">
-                Lock in $249 — $50 off $299 when cohort two opens.
+                Lock in $249 — $50 off $299 when the next group opens.
               </div>
             </>
           )}

@@ -15,7 +15,7 @@ interface Props {
 const {
   id,
   variant = 'hero',
-  ariaLabel = 'Join the cohort 2 waitlist',
+  ariaLabel = 'Join the waitlist',
   source = 'homepage',
 } = Astro.props;
 
@@ -114,7 +114,7 @@ const isPage = variant === 'page';
     ) : (
       <p class="price-note">
         Or take the free quiz for the <strong>${waitlistPrice}</strong> early
-        rate ($50 off ${fullPrice}) and pre-pay to lock your spot. Cohort 2
+        rate ($50 off ${fullPrice}) and pre-pay to lock your spot. The group
         starts {cohortStartDate}.
       </p>
     )
