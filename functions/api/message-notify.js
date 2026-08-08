@@ -4,9 +4,10 @@
    Auth required (sender).
 
    Routing (tight — no cross-thread / no extra-admin fanout):
-   - Mama → Callie: push + email ONLY Callie (coach notify emails), never
-     other admins (e.g. Tech Guy).
-   - Callie/admin → mama: push/email ONLY that mama (client_id).
+   - Mama → Callie: push ONLY (Callie already gets web push; no duplicate
+     email). Never other admins (e.g. Tech Guy).
+   - Callie/admin → mama: push, with email fallback ONLY that mama
+     (client_id) when she has no push subscription.
    - Admin ↔ admin test DM: push/email ONLY the other admin(s) in that
      thread (never the sender; never mamas).
    ================================================================== */
@@ -51,7 +52,7 @@ export async function onRequestPost({ request, env }) {
     let route = "unknown";
 
     if (!senderIsAdmin && !clientIsAdmin) {
-      // Mama → Callie (thread owned by mama). Coach only.
+      // Mama → Callie (thread owned by mama). Push only — no ops email.
       route = "mama_to_callie";
       const coachIds = await listCallieAdminIds(env);
       for (const coachId of coachIds) {
@@ -62,31 +63,6 @@ export async function onRequestPost({ request, env }) {
           body: preview || "Open Messages in admin",
           url: `/admin?tab=messages&client=${encodeURIComponent(msg.client_id)}`,
           unreadCount: unreadCount || 1,
-        });
-      }
-      const edge = await invokeEdgeFunction(env, "notify-callie", {
-        type: "message",
-        name: client.name || "Mama",
-        email: client.email || "",
-        stats: {
-          message: preview,
-          clientId: msg.client_id,
-        },
-      });
-      if (edge.ok) {
-        emailSent = true;
-      } else {
-        emailSent = await sendOpsEmailDirect(env, {
-          subject: `💬 Message from ${client.name || "Mama"}`,
-          text: [
-            `${client.name || "Mama"} sent you a message in the app.`,
-            client.email ? `Email: ${client.email}` : "",
-            "",
-            "Preview:",
-            preview || "(empty)",
-            "",
-            "Reply in admin → Messages.",
-          ].filter(Boolean).join("\n"),
         });
       }
     } else if (senderIsAdmin && !clientIsAdmin) {
@@ -208,7 +184,7 @@ async function listCallieAdminIds(env) {
   const admins = await listAdminProfiles(env);
   const matched = admins.filter((a) => emails.includes(String(a.email || "").toLowerCase()));
   if (matched.length) return matched.map((a) => a.id);
-  // Fail closed: if emails don't match any admin, push nobody (email path still uses CALLIE_NOTIFY_EMAIL).
+  // Fail closed: if emails don't match any admin, push nobody.
   console.warn("listCallieAdminIds: no admin matched CALLIE_NOTIFY_EMAIL", emails);
   return [];
 }
@@ -295,31 +271,6 @@ async function sendMamaEmailDirect(env, { email, name, preview }) {
   });
   if (!resp.ok) {
     console.error("resend mama email failed", resp.status, await resp.text().catch(() => ""));
-    return false;
-  }
-  return true;
-}
-
-async function sendOpsEmailDirect(env, { subject, text }) {
-  const key = String(env.RESEND_API_KEY || "").trim();
-  if (!key) return false;
-  const unique = [...new Set(callieNotifyEmails(env))];
-  if (!unique.length) return false;
-  const resp = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${key}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "Callie · Macros and Mamas <calista@nourishwithcalista.com>",
-      to: unique,
-      subject,
-      text,
-    }),
-  });
-  if (!resp.ok) {
-    console.error("resend ops email failed", resp.status, await resp.text().catch(() => ""));
     return false;
   }
   return true;

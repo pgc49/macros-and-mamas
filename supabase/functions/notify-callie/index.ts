@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { APP_URL, FROM_CALLIE, notifyRecipients, CALLIE_NOTIFY_EMAIL, OWNER_NOTIFY_EMAIL } from "../_shared/emailTemplates.ts";
+import { APP_URL, FROM_CALLIE, notifyRecipients, OWNER_NOTIFY_EMAIL } from "../_shared/emailTemplates.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { assertServiceRole } from "../_shared/assertServiceRole.ts";
 
@@ -96,20 +96,8 @@ serve(async (req) => {
         .filter(Boolean)
         .join("\n");
     } else if (type === "message") {
-      const s = stats || {};
-      subject = `💬 Message from ${display}`;
-      text = [
-        `${display} sent you a message in the app.`,
-        email ? `Email: ${email}` : "",
-        s.clientId ? `Client id: ${s.clientId}` : "",
-        "",
-        "Preview:",
-        s.message || "(empty)",
-        "",
-        `Reply in admin → Messages: ${APP_URL}/admin?tab=messages`,
-      ]
-        .filter((line) => line !== undefined)
-        .join("\n");
+      // Retired: mama → Callie 1:1 alerts are push-only (see /api/message-notify).
+      return jsonResponse({ ok: true, skipped: "message_email_disabled" });
     } else if (type === "support") {
       // Tech/support fallback when GitHub issue create fails — owner only (not Callie).
       const s = stats || {};
@@ -135,8 +123,7 @@ serve(async (req) => {
       return jsonResponse({ error: "unknown type" }, 400);
     }
 
-    // Support fallback → owner only. Message alerts → Callie only (not Patrick).
-    // Everything else → Callie + owner.
+    // Support fallback → owner only. Everything else → Callie + owner.
     const to = type === "support"
       ? [...new Set(
           String(OWNER_NOTIFY_EMAIL || "")
@@ -144,13 +131,6 @@ serve(async (req) => {
             .map((s) => s.trim().toLowerCase())
             .filter(Boolean),
         )]
-      : type === "message"
-        ? [...new Set(
-            String(CALLIE_NOTIFY_EMAIL || "")
-              .split(",")
-              .map((s) => s.trim().toLowerCase())
-              .filter(Boolean),
-          )]
       : notifyRecipients();
     if (!to.length) return jsonResponse({ error: "no notify recipients" }, 500);
 
