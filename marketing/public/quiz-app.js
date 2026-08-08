@@ -368,27 +368,37 @@
     </div>`;
   }
 
-  /** Progress-tab vignette — macros vs sage ranges + weight trend (anonymized demo). */
+  /**
+   * Progress-tab vignette — matches philosophy card persona (protein 150–160g).
+   * Charts decorative (aria-hidden); weight caption carries the meaning.
+   */
   function progressVignetteHtml() {
-    const bars = [52, 58, 71, 64, 78, 69, 74, 61, 80, 67, 73, 76]
-      .map((h) => `<i style="height:${h}%"></i>`)
+    const max = 180;
+    // 6 in-range, 3 under (85–95% of 150), 1 slightly over — humanly imperfect.
+    const barsG = [154, 136, 158, 152, 129, 160, 155, 141, 168, 151];
+    const bars = barsG
+      .map((g) => `<i style="height:${((g / max) * 100).toFixed(1)}%"></i>`)
       .join('');
-    return `<div class="prog-demo" aria-hidden="true">
-      <div class="prog-macro">
-        <div class="prog-macro-head"><strong>Protein</strong><span>range 130–140g</span></div>
+    return `<div class="prog-demo">
+      <div class="prog-macro" aria-hidden="true">
+        <div class="prog-macro-head"><strong>Protein</strong><span>range 150–160g</span></div>
         <div class="prog-bars-wrap"><div class="prog-sage-band"></div><div class="prog-bars">${bars}</div></div>
       </div>
       <div class="prog-wt">
-        <div class="prog-macro-head"><strong>Weight</strong><span>over weeks</span></div>
-        <svg class="prog-wt-svg" viewBox="0 0 240 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="presentation">
-          <line x1="0" y1="18" x2="240" y2="18" stroke="#ECDEE2" stroke-width="1"></line>
-          <line x1="0" y1="36" x2="240" y2="36" stroke="#ECDEE2" stroke-width="1"></line>
-          <line x1="0" y1="54" x2="240" y2="54" stroke="#ECDEE2" stroke-width="1"></line>
-          <path d="M8 22 C40 28, 70 34, 100 36 S160 48, 232 54" stroke="#B4416B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
-          <circle cx="8" cy="22" r="3.5" fill="#B4416B"></circle>
-          <circle cx="100" cy="36" r="3.5" fill="#B4416B"></circle>
-          <circle cx="232" cy="54" r="3.5" fill="#B4416B"></circle>
-        </svg>
+        <div class="prog-wt-chart" aria-hidden="true">
+          <div class="prog-macro-head"><strong>Weight</strong><span>over weeks</span></div>
+          <svg class="prog-wt-svg" viewBox="0 0 240 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="presentation">
+            <line x1="0" y1="16" x2="240" y2="16" stroke="#ECDEE2" stroke-width="1"></line>
+            <line x1="0" y1="32" x2="240" y2="32" stroke="#ECDEE2" stroke-width="1"></line>
+            <line x1="0" y1="48" x2="240" y2="48" stroke="#ECDEE2" stroke-width="1"></line>
+            <path d="M16 20 L88 28 L160 36 L224 44" stroke="#B4416B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            <circle cx="16" cy="20" r="3.5" fill="#B4416B"></circle>
+            <circle cx="88" cy="28" r="3.5" fill="#B4416B"></circle>
+            <circle cx="160" cy="36" r="3.5" fill="#B4416B"></circle>
+            <circle cx="224" cy="44" r="3.5" fill="#B4416B"></circle>
+          </svg>
+        </div>
+        <p class="prog-wt-caption">Trending about a pound a week, the pace that protects muscle and milk.</p>
       </div>
     </div>`;
   }
