@@ -42,7 +42,9 @@ function review(reason) {
 
 /**
  * Compute macro bands from raw answers.
- * Review triggers show NO numbers — unless skipReview (early-PP preview path).
+ * Review triggers show NO numbers — unless skipReview (UI / email preview path).
+ * skipReview still returns estimated cut-style bands so the app preview can
+ * render; Callie approves finals after join. Incomplete inputs still fail.
  * @param {object} answers
  * @param {{ skipReview?: boolean }} [opts]
  */
@@ -58,8 +60,8 @@ export function computeRanges(answers, opts = {}) {
     return review('incomplete_inputs');
   }
 
-  // Maintain / gain still need Callie's eyes — no honest cut-band preview.
-  if (answers.goal === 'maintain' || answers.goal === 'gain') {
+  // Maintain / gain still need Callie's eyes — unless soft preview for the quiz payoff.
+  if (!skipReview && (answers.goal === 'maintain' || answers.goal === 'gain')) {
     return review(answers.goal === 'maintain' ? 'goal_maintain' : 'goal_gain');
   }
 

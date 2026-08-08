@@ -378,8 +378,11 @@ footer{padding:36px 0 118px;font-size:14px;color:var(--ink-soft)}
 
 /* ================= QUIZ ================= */
 .quiz-page{padding:18px 0 72px;min-height:70vh}
+.quiz-page:has(.q-result-sticky){padding-bottom:118px}
 .quiz-wrap{max-width:480px}
 .quiz-wrap:has(.q-app-preview){max-width:520px}
+.q-result-sticky{z-index:80}
+@media(min-width:880px){.q-result-sticky{display:none}.quiz-page:has(.q-result-sticky){padding-bottom:72px}}
 .q-progress{height:3px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:16px}
 .q-progress span{display:block;height:100%;background:var(--accent);border-radius:99px}
 .q-title{font-family:var(--display);font-size:clamp(24px,5.2vw,34px);line-height:1.18;margin:0 0 14px;font-weight:400}

@@ -148,10 +148,18 @@ describe('review triggers', () => {
     assert.equal(r.review_reason, 'goal_gain');
   });
 
-  it('skipReview returns bands for thyroid (early-PP preview path)', () => {
+  it('skipReview returns bands for thyroid (quiz payoff preview path)', () => {
     const blocked = computeRanges(base({ flags: ['thyroid'] }));
     assert.equal(blocked.needs_review, true);
     const soft = computeRanges(base({ flags: ['thyroid'] }), { skipReview: true });
+    assert.equal(soft.needs_review, false);
+    assert.ok(soft.protein_low_g > 0);
+  });
+
+  it('skipReview returns bands for maintain / gain', () => {
+    const blocked = computeRanges(base({ goal: 'maintain' }));
+    assert.equal(blocked.needs_review, true);
+    const soft = computeRanges(base({ goal: 'maintain' }), { skipReview: true });
     assert.equal(soft.needs_review, false);
     assert.ok(soft.protein_low_g > 0);
   });

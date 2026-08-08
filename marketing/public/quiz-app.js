@@ -282,10 +282,8 @@
       );
     } else if (state.step === 'gate') {
       const pregnant = a.months_postpartum === 'still_pregnant';
-      const vegan = a.flags.includes('vegan');
       let title = 'Your ranges are ready. Where should Callie send them?';
       if (pregnant) title = 'Leave your email — pregnancy season first.';
-      if (vegan) title = 'Leave your email for an honest note.';
       html = screenShell(
         title,
         `<div class="q-fields compact">
@@ -294,7 +292,7 @@
           <input type="text" name="website_url" id="hp" class="hp" tabindex="-1" autocomplete="off" />
         </div>
         <button type="button" class="btn q-next" id="submit" ${state.busy ? 'disabled' : ''}>
-          ${state.busy ? 'Working…' : pregnant || vegan ? 'Submit' : 'Show me my ranges'}
+          ${state.busy ? 'Working…' : pregnant ? 'Submit' : 'Show me my ranges'}
         </button>
         <button type="button" class="q-back" data-back="${pregnant ? 'q1' : 'q7'}">Back</button>`,
       );
@@ -304,6 +302,7 @@
 
     root.innerHTML = html;
     bind();
+    if (state.step === 'result') syncQuizSticky();
   }
 
   function bandMotif() {
@@ -425,16 +424,69 @@
     const early = r.early_pp
       ? ` You're early postpartum — that's welcome here. If you join, Callie builds your final ranges gently and supply-aware for this season.`
       : '';
+    const review = r.needs_review
+      ? ` Callie will still review your finals personally before day one.`
+      : '';
     return `<div class="q-banner q-banner-preview">
       <strong>This is a preview — not your final numbers.</strong>
-      Bands below are estimated from your answers. If you join the 8 weeks, Callie builds and approves your ranges herself before you start.${early}
+      Bands below are estimated from your answers. If you join the 8 weeks, Callie builds and approves your ranges herself before you start.${early}${review}
     </div>`;
+  }
+
+  function veganNoteHtml() {
+    return `<div class="q-banner">Our playbook leans on animal protein. Fully vegan kitchens usually aren't a fit — here's an app preview anyway, and you can still reach out if you want to talk through it.</div>`;
+  }
+
+  function checkoutHref() {
+    const email = String(state.contact.email || '').trim().toLowerCase();
+    const joinBase = String(enrollUrl || 'https://www.macrosandmamas.com/join')
+      .replace(/\?.*$/, '')
+      .replace(/\/signin\/?$/i, '/join');
+    const params = new URLSearchParams({ from: 'quiz' });
+    if (email) params.set('email', email);
+    try {
+      if (email) sessionStorage.setItem('mm_quiz_email', email);
+    } catch (e) { /* private mode */ }
+    return `${joinBase || 'https://www.macrosandmamas.com/join'}?${params.toString()}`;
+  }
+
+  function stickyCheckoutHtml() {
+    const href = checkoutHref();
+    return `<div class="sticky-cta q-result-sticky on" id="quizStickyCta" aria-hidden="false">
+      <div class="s-price"><strong>Doors close ${escapeHtml(doorsClose)}</strong></div>
+      <a class="btn" href="${href}">Pre-pay $${offerPrice}</a>
+    </div>`;
+  }
+
+  function syncQuizSticky() {
+    const bar = document.getElementById('quizStickyCta');
+    const offer = document.querySelector('.q-offer-card');
+    if (!bar) return;
+    if (!offer || !('IntersectionObserver' in window)) {
+      bar.classList.add('on');
+      bar.setAttribute('aria-hidden', 'false');
+      return;
+    }
+    if (bar._mmOfferObs) {
+      try { bar._mmOfferObs.disconnect(); } catch (e) { /* ignore */ }
+    }
+    const obs = new IntersectionObserver(
+      function (entries) {
+        const offerInView = entries[0] && entries[0].isIntersecting;
+        bar.classList.toggle('on', !offerInView);
+        bar.setAttribute('aria-hidden', String(!!offerInView));
+      },
+      { threshold: 0.35 },
+    );
+    obs.observe(offer);
+    bar._mmOfferObs = obs;
   }
 
   function renderResult() {
     const r = state.result;
     if (!r) return '<p>Something went wrong. Refresh and try again.</p>';
 
+    // Only pregnancy skips the app preview + checkout payoff.
     if (r.segment === 'pregnancy_nurture') {
       return screenShell(
         "You're in an abundance season.",
@@ -442,51 +494,33 @@
          <a class="btn" href="/">Back home</a>`,
       );
     }
-    if (r.segment === 'waitlist_plantbased') {
-      return screenShell(
-        'Honest fit note',
-        `<p class="q-copy">Our playbook leans on animal protein. Fully vegan kitchens aren't a fit for this program. You're on a holding list — no hard sell.</p>
-         <a class="btn" href="/">Back home</a>`,
-      );
-    }
-    if (r.needs_review) {
-      return screenShell(
-        "Callie wants eyes on this",
-        `<div class="q-banner">Your ranges need Callie's eyes on them. A couple of your answers mean an automated band isn't the right call. Callie will review this herself and send your ranges within 24 hours.</div>
-         <p class="q-copy">Check your inbox — confirmation is on the way. You can still lock your cohort spot below while she looks.</p>
-         ${coachNoteHtml()}
-         ${offerBlock()}`,
-      );
-    }
 
-    // Product-style preview for anyone who got computed bands (not pregnant / vegan / review).
-    return screenShell(
-      `${escapeHtml(state.contact.first_name)}, your ranges`,
-      `${previewDisclaimer(r)}
-      ${rangesCardHtml(r)}
+    const hasRanges = r.ranges && r.ranges.protein_low_g != null;
+    const veganNote = r.segment === 'waitlist_plantbased' ? veganNoteHtml() : '';
+    const rangesBlock = hasRanges
+      ? `${rangesCardHtml(r)}
       ${logPreviewHtml()}
       <p class="q-copy">These are bands, not one rigid number. Busier day → eat toward the top. Quieter day → the bottom. Both count as a win. Lead with protein; the rest gets easier.</p>
-      <p class="q-copy muted">We emailed these ranges to you so you can keep them.</p>
+      <p class="q-copy muted">We emailed these ranges to you so you can keep them.</p>`
+      : `<p class="q-copy">Check your inbox — Callie is sending next steps. You can still lock your cohort spot below.</p>
+      ${logPreviewHtml()}`;
+
+    return screenShell(
+      `${escapeHtml(state.contact.first_name)}, your ranges`,
+      `${veganNote}
+      ${previewDisclaimer(r)}
+      ${rangesBlock}
       ${coachNoteHtml()}
-      ${offerBlock()}`,
+      ${offerBlock()}
+      ${stickyCheckoutHtml()}`,
     );
   }
 
-  /** Quiz-gated exclusive pre-pay — shown for eligible non-pregnant / non-vegan finishes. */
+  /** Quiz-gated exclusive pre-pay — shown for every non-pregnant finish. */
   function offerBlock() {
     const email = String(state.contact.email || '').trim().toLowerCase();
-    // Land on /join with the quiz email. Matching signed-in users go straight to
-    // checkout; everyone else is sent to create-account with that email prefilled.
-    const joinBase = String(enrollUrl || 'https://www.macrosandmamas.com/join')
-      .replace(/\?.*$/, '')
-      .replace(/\/signin\/?$/i, '/join');
-    const params = new URLSearchParams({ from: 'quiz' });
-    if (email) params.set('email', email);
-    const joinHref = `${joinBase || 'https://www.macrosandmamas.com/join'}?${params.toString()}`;
-    try {
-      if (email) sessionStorage.setItem('mm_quiz_email', email);
-    } catch (e) { /* private mode */ }
-    return `<div class="q-offer-card">
+    const joinHref = checkoutHref();
+    return `<div class="q-offer-card" id="qOfferCard">
       <div class="q-offer-kicker">Exclusive · early rate from your quiz</div>
       <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
       <p class="q-offer-lede">You’re signing up for <strong>Cohort 2</strong>, starting <strong>${escapeHtml(cohortStart)}</strong>. <strong>Doors close ${escapeHtml(doorsClose)}</strong> so Callie can build ranges before day one. Next: set a password${email ? ` for <strong>${escapeHtml(email)}</strong>` : ''}, then pre-pay at the early rate from your quiz.</p>
