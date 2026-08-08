@@ -247,7 +247,7 @@
       html = screenShell(
         'Where are you right now?',
         `${quizIntroHtml()}
-         ${choiceButtons(Q1, a.months_postpartum, 'q-choices pills')}
+         ${choiceButtons(Q1, a.months_postpartum)}
          ${q1MotifHtml()}`,
         '',
         'Your free macro ranges · Question 1 of 7',
@@ -255,7 +255,7 @@
     } else if (state.step === 'q2') {
       html = screenShell(
         'Are you feeding your baby breast milk right now?',
-        `${choiceButtons(Q2, a.feeding, 'q-choices pills grid-2')}
+        `${choiceButtons(Q2, a.feeding)}
          <button type="button" class="q-back" data-back="q1">Back</button>`,
       );
     } else if (state.step === 'q3') {
@@ -301,20 +301,20 @@
     } else if (state.step === 'q5') {
       html = screenShell(
         'What are you actually after?',
-        `${choiceButtons(Q5, a.goal, 'q-choices pills grid-2')}
+        `${choiceButtons(Q5, a.goal)}
          <button type="button" class="q-back" data-back="q4">Back</button>`,
       );
     } else if (state.step === 'q6') {
       html = screenShell(
         'How much are you moving right now?',
-        `${choiceButtons(Q6, a.activity_level, 'q-choices pills grid-2')}
+        `${choiceButtons(Q6, a.activity_level)}
          <button type="button" class="q-back" data-back="q5">Back</button>`,
       );
     } else if (state.step === 'q7') {
       html = screenShell(
         'Anything we should know?',
         `<p class="q-hint">Optional. Pick all that apply.</p>
-         <div class="q-choices pills grid-2 multi" id="pick">
+         <div class="q-choices pills multi" id="pick">
            ${Q7.map((o) => `<button type="button" class="q-choice pill${a.flags.includes(o.v) ? ' on' : ''}" data-v="${o.v}">${o.l}</button>`).join('')}
          </div>
          <button type="button" class="btn q-next" id="next">Continue</button>
