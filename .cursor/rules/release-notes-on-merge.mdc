@@ -1,0 +1,14 @@
+---
+description: Ask about update-banner release notes before merging to main
+alwaysApply: true
+---
+
+# Release notes on merge
+
+When the user asks to **merge** a PR (or “ship it”) to `main`:
+
+1. **Ask first** whether this ship should include home-screen **update banner release notes** (`functions/_shared/releaseNotes.js`).
+2. Only significant UI / UX changes get notes. Small fixes, copy tweaks, Sentry filters, and quiet deploys → keep `bullets: []`.
+3. If they want notes: draft short mom-friendly bullets, confirm copy, set/bump `id`, then merge.
+4. If they do not: ensure `bullets: []` before merge so old notes do not resurface.
+5. Preview notes with `?demoUpdateBanner=1` / `?demoWhatsNew=1` when notes are included.
