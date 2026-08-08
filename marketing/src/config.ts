@@ -18,9 +18,9 @@ export const cohortStartDateShort = 'August 31';
 export const cohortStartDateCompact = 'Aug 31';
 export const doorsCloseDate = 'Aug 27';
 
-/** Shared doors-close reasoning — pricing card, final CTA, quiz offer stay in sync. */
+/** Pricing-card doors line — soft cap in copy only; no counters or remaining-spot math. */
 export const doorsCloseReason =
-  `Doors close ${doorsCloseDate}. Callie hand-builds every set of ranges in the days before day one, and the whole group starts week one together on ${cohortStartDateCompact}.`;
+  `Doors close ${doorsCloseDate}, or when the 50 spots fill · starts ${cohortStartDate}`;
 
 export const queuePositionCopy =
   `Pre-pay and you're in Callie's queue. She builds and approves ranges in the order they come in, so the earlier you're in, the earlier your app opens and the more time you have to get comfortable before ${cohortStartDateCompact}.`;

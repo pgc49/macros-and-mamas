@@ -260,6 +260,8 @@ async function sendRangesEmail(
     needsReview: boolean;
     earlyPp: boolean;
     feeding: string;
+    /** When not_postpartum, skip the postpartum “still rebuilding” feeding callout. */
+    monthsPostpartum: string;
     ranges: ReturnType<typeof formatBands> | null;
   },
 ) {
@@ -294,7 +296,7 @@ async function sendRangesEmail(
     html = `<p>Hi ${name},</p>
 <p>Thank you for taking the quiz. Our coaching playbook leans on animal protein (and pescatarian / vegetarian patterns). Fully vegan kitchens aren't usually a fit — we'd rather be honest up front.</p>
 ${veganBands}
-<p>If you still want to talk through cohort fit, reply to this email. No hard sell.</p>
+<p>If you still want to talk through whether it's a fit, reply to this email. No hard sell.</p>
 <p>— Callie</p>`;
   } else if (opts.ranges) {
     subject = `Your ranges, ${name}`;
@@ -304,7 +306,11 @@ ${veganBands}
     const reviewNote = opts.needsReview
       ? `<p><strong>Callie will still review your finals personally</strong> — a couple of your answers mean she wants eyes on them before day one. The bands below are a preview so you can see how the app works.</p>`
       : '';
-    const feed = feedingLine(opts.feeding as 'exclusive');
+    const feed =
+      opts.monthsPostpartum === 'not_postpartum'
+        ? ''
+        : feedingLine(opts.feeding as 'exclusive');
+    const feedHtml = feed ? `<p>${feed}</p>` : '';
     html = `<p>Hi ${name},</p>
 ${early}
 ${reviewNote}
@@ -315,16 +321,16 @@ ${reviewNote}
 <li><strong>Fat:</strong> ${opts.ranges.fat}</li>
 <li><strong>Calories land around:</strong> ${opts.ranges.calories}</li>
 </ul>
-<p>${feed}</p>
+${feedHtml}
 <p>These are bands, not one rigid number. Busier day → eat toward the top. Quieter day → the bottom. Both count as a win. Lead with protein; the rest gets easier.</p>
-<p><strong>You unlocked the early rate.</strong> Pre-pay $249 ($50 off full price) to lock your spot for the next cohort: <a href="https://www.macrosandmamas.com/join?from=quiz">macrosandmamas.com/join</a> — use this same email at checkout.</p>
+<p><strong>You unlocked the early rate.</strong> Pre-pay $249 ($50 off full price) to lock your spot in the August 31 group: <a href="https://www.macrosandmamas.com/join?from=quiz">macrosandmamas.com/join</a> — use this same email at checkout.</p>
 <p>Ranges above are a preview. If you join, Callie builds and approves your final numbers before you start.</p>
 <p>— Callie</p>`;
   } else if (opts.needsReview) {
     subject = `${name}, Callie wants to look at your ranges personally`;
     html = `<p>Hi ${name},</p>
 <p>Your ranges need Callie's eyes on them. A couple of your answers mean an automated band isn't the right call. Callie will review this herself and send your ranges within 24 hours.</p>
-<p>You still unlocked the early rate — pre-pay $249 to lock your cohort spot anytime: <a href="https://www.macrosandmamas.com/join?from=quiz">macrosandmamas.com/join</a> (use this same email).</p>
+<p>You still unlocked the early rate — pre-pay $249 to lock your spot anytime: <a href="https://www.macrosandmamas.com/join?from=quiz">macrosandmamas.com/join</a> (use this same email).</p>
 <p>— The Macros and Mamas team</p>`;
   } else {
     subject = `Thanks, ${name}`;
@@ -512,10 +518,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         needsReview,
         earlyPp,
         feeding: answers.feeding,
+        monthsPostpartum: answers.months_postpartum,
         ranges: formatted,
       }),
     ]),
   );
+
+  // not_postpartum auto-sets feeding=not_feeding; don't show the postpartum
+  // “still rebuilding” sage callout on that path (payoff + email).
+  const showFeedingLine =
+    rangesPayload.protein_low_g != null &&
+    answers.months_postpartum !== 'not_postpartum';
 
   return json({
     ok: true,
@@ -525,9 +538,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     review_reason: reviewReason,
     early_pp: earlyPp,
     ranges: rangesPayload.protein_low_g != null ? rangesPayload : null,
-    feeding_line:
-      rangesPayload.protein_low_g != null
-        ? feedingLine(answers.feeding as 'exclusive')
-        : null,
+    feeding_line: showFeedingLine
+      ? feedingLine(answers.feeding as 'exclusive')
+      : null,
   });
 };

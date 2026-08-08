@@ -1,7 +1,7 @@
 ---
 import {
   cohortStartDate,
-  cohortStartDateCompact,
+  cohortStartDateShort,
   doorsCloseDate,
   enrollUrl,
   fullPrice,
@@ -10,7 +10,6 @@ import {
   queuePositionCopy,
   quizUrl,
   waitlistPrice,
-  weeklyPrice,
 } from '../config';
 ---
 
@@ -24,10 +23,8 @@ import {
           <p class="lede">
             Take the free quiz to see your ranges — and get the exclusive $
             {waitlistPrice} early rate (full rate ${fullPrice}). Pre-pay after
-            the quiz to lock your spot for {cohortStartDateCompact} (about $
-            {weeklyPrice}/week for 8 weeks). Doors close {doorsCloseDate} so
-            Callie can build your ranges before the group starts together{' '}
-            {cohortStartDateCompact}.
+            the quiz to lock your spot in the {cohortStartDateShort} group,
+            capped at 50 mamas. Doors close {doorsCloseDate}.
           </p>
           <p class="lede" style="margin-top:14px">
             {queuePositionCopy}

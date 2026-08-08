@@ -598,7 +598,11 @@
       ${rangeRowHtml('Carbs', bands.carbs_low_g, bands.carbs_high_g, 'g')}
       ${rangeRowHtml('Fat', bands.fat_low_g, bands.fat_high_g, 'g')}
       <div class="cal-line"><span class="label">Calories land around</span><span class="val">${fmt(bands.calories_low)}–${fmt(bands.calories_high)}</span></div>
-      <div class="human-note"><span class="dot"></span>${escapeHtml(r.feeding_line || 'Built from your answers the same way Callie builds program ranges.')}</div>
+      ${
+        r.feeding_line
+          ? `<div class="human-note"><span class="dot"></span>${escapeHtml(r.feeding_line)}</div>`
+          : ''
+      }
     </div>`;
   }
 
@@ -643,7 +647,7 @@
   function stickyCheckoutHtml() {
     const href = checkoutHref();
     return `<div class="sticky-cta q-result-sticky on" id="quizStickyCta" aria-hidden="false">
-      <div class="s-price"><strong>Doors close ${escapeHtml(doorsClose)}</strong></div>
+      <div class="s-price"><strong>Doors close ${escapeHtml(doorsClose)} · capped at 50</strong></div>
       <a class="btn" href="${href}">Pre-pay $${offerPrice}</a>
     </div>`;
   }
@@ -714,7 +718,7 @@
     return `<div class="q-offer-card" id="qOfferCard">
       <div class="q-offer-kicker">Exclusive · early rate from your quiz</div>
       <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
-      <p class="q-offer-lede">You’re joining the group that starts <strong>${escapeHtml(cohortStart)}</strong>. Doors close ${escapeHtml(doorsClose)} so Callie can hand-build every set of ranges before day one, and so the whole group starts week one together.</p>
+      <p class="q-offer-lede">You’re joining the group that starts <strong>${escapeHtml(cohortStart)}</strong>. Doors close ${escapeHtml(doorsClose)} so Callie can hand-build every set of ranges before day one, and so the whole group starts week one together. The group is capped at 50 mamas.</p>
       <div class="q-offer-price-row">
         <span class="q-offer-now">$${offerPrice}</span>
         <span class="q-offer-full">Full rate $${fullPrice}</span>

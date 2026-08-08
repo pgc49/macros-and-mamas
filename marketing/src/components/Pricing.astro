@@ -24,19 +24,20 @@ const saveAmount = fullPrice - waitlistPrice;
 <section id="pricing">
   <div class="wrap">
     <div style="text-align:center">
-      <span class="kicker">One price · everything included</span>
-      <h2>Starts {cohortStartDateShort}.</h2>
+      <span class="kicker">One price · capped at 50 mamas</span>
+      <h2>The {cohortStartDateShort} group is forming.</h2>
       <p class="lede" style="margin-inline:auto">
         {
           isWaitlist ? (
             <>
-              Full rate ${fullPrice}. Finish the free quiz for the $
-              {waitlistPrice} early rate (about ${weeklyPrice}/week).
+              Full rate ${fullPrice} · ${waitlistPrice} after the free quiz ·
+              capped at 50 so Callie can build every set of ranges by hand.
             </>
           ) : (
             <>
               ${openPrice} for {programWeeks} weeks · about $
-              {Math.round(openPrice / programWeeks)}/week
+              {Math.round(openPrice / programWeeks)}/week · capped at 50 so
+              Callie can build every set of ranges by hand.
             </>
           )
         }
