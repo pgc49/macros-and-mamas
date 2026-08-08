@@ -55,11 +55,17 @@ On Cloudflare → **`macros-and-mamas`** (SPA) → Settings → Variables:
 
 `macrosandmamas-marketing` can stay as staging; no domain change.
 
+## Canonical host
+
+**Always use `https://www.macrosandmamas.com` in ads and links.**  
+`functions/_middleware.js` 301s apex → www and preserves query strings (`fbclid`, UTMs).
+
 ## After every cutover-related deploy
 
 1. **Purge Cloudflare cache** for `/spa`, `/spa/`, `/spa/*`, `/app*` (stale shells cause blank app loads).
 2. Confirm Production secrets: `RESEND_API_KEY`, `STRIPE_PRICE_ID_LAB_ADDON`, `SUPABASE_SERVICE_ROLE_KEY`.
 3. Strategy A: keep `OPEN_WITHOUT_QUIZ` unset/`false` so $249 requires the quiz; homepage shows full rate $299.
+4. Smoke: `curl -sI "https://macrosandmamas.com/quiz?fbclid=test"` → `301` to `www` with `fbclid` intact.
 
 ## Smoke checklist (after `main` deploy)
 

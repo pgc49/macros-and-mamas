@@ -131,15 +131,41 @@
     return Number(state.answers.current_weight_lbs);
   }
 
+  const STEP_ORDER = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'gate', 'result'];
+
   function progress() {
-    const order = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'gate', 'result'];
-    const i = Math.max(0, order.indexOf(state.step));
-    return Math.round((i / (order.length - 1)) * 100);
+    const i = Math.max(0, STEP_ORDER.indexOf(state.step));
+    return Math.round((i / (STEP_ORDER.length - 1)) * 100);
+  }
+
+  /** Hash + Meta custom events so partial quiz progress is retargetable. */
+  function trackStep(s) {
+    try {
+      const nextHash = s === 'q1' ? '' : `#${s}`;
+      const path = `${location.pathname}${location.search}${nextHash}`;
+      if (`${location.pathname}${location.search}${location.hash}` !== path) {
+        history.replaceState(null, '', path);
+      }
+    } catch (e) {}
+    try {
+      if (typeof window.fbq === 'function') {
+        const pct = progress();
+        window.fbq('trackCustom', 'QuizStep', { step: s, progress: pct });
+        // Cheapest retarget pool: started but stalled mid-quiz.
+        if (s === 'q4' || s === 'q5') {
+          window.fbq('trackCustom', 'QuizHalfway', { step: s, progress: pct });
+        }
+        if (s === 'gate') {
+          window.fbq('trackCustom', 'QuizEmailGate', { step: s, progress: pct });
+        }
+      }
+    } catch (e) {}
   }
 
   function setStep(s) {
     state.step = s;
     state.error = '';
+    trackStep(s);
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
