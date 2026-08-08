@@ -59,7 +59,7 @@ On Cloudflare → **`macros-and-mamas`** (SPA) → Settings → Variables:
 
 1. **Purge Cloudflare cache** for `/spa`, `/spa/`, `/spa/*`, `/app*` (stale shells cause blank app loads).
 2. Confirm Production secrets: `RESEND_API_KEY`, `STRIPE_PRICE_ID_LAB_ADDON`, `SUPABASE_SERVICE_ROLE_KEY`.
-3. Keep `OPEN_WITHOUT_QUIZ` unset unless intentionally opening checkout without the quiz.
+3. For open pre-sales: set `OPEN_WITHOUT_QUIZ=true` so random signups can pay $249 for the next cohort without the quiz.
 
 ## Smoke checklist (after `main` deploy)
 
@@ -68,7 +68,7 @@ Do these **before** sending paid traffic:
 1. **Homescreen** — tap icon → dashboard, still signed in (no reinstall).
 2. **Cold `/`** — `https://www.macrosandmamas.com/` → Astro marketing (quiz CTA), not SPA loader.
 3. **`/dashboard`** — SPA app shell loads.
-4. **`/join`** without quiz email → unlock CTA (`quiz_required`), not a blank pay button.
+4. **`/join`** — with `OPEN_WITHOUT_QUIZ=true`, shows $249 pay for the dated cohort (quiz optional).
 5. **`/quiz`** — complete submit → ranges / Pre-pay offer + email + `marketing_leads` row.
 6. **`/nope`** — real 404 page, not the homepage.
 7. **Sign in** — existing members OK.

@@ -36,8 +36,9 @@ CRON_SECRET=replace-with-long-random-string
 # Also used by /api/cohort-waitlist-blast (manual) when opening the next cohort.
 ENROLLMENT_OPEN=false
 ENROLLMENT_CLOSED_AT=2026-07-26T02:00:00.000Z
-# Escape hatch: sell $249 without a quiz lead (leave unset in production)
-# OPEN_WITHOUT_QUIZ=true
+# Recommended for open pre-sales: sell $249 without requiring a quiz lead
+# (payment is still for the next dated cohort — see src/config.js COHORT_*)
+OPEN_WITHOUT_QUIZ=true
 
 # Mama → Callie push/email: Callie only (never Tech Guy / other admins).
 # Comma-separated OK. Must match profiles.email for the coach admin row.

@@ -27,6 +27,6 @@
 
 1. After deploy: purge Cloudflare cache for `/spa`, `/spa/`, `/spa/*`, `/app*`
 2. Confirm Production secrets: `RESEND_API_KEY`, `STRIPE_PRICE_ID_WAITLIST`, `STRIPE_PRICE_ID_LAB_ADDON=price_1U1vfzRyN0PahoiM6AVgkMYh`
-3. Keep `OPEN_WITHOUT_QUIZ` unset unless intentionally opening $249 without quiz
+3. For open pre-sales: set `OPEN_WITHOUT_QUIZ=true` so `/join` can charge $249 without a quiz (still cohort-dated). Leave unset only if you want quiz-gated pay.
 4. Unknown path smoke: `/nope` should be a real 404 page, not the homepage
 5. Confirm Pages has a `WAITLIST` KV binding (rate limits for `/api/lead` + `/api/waitlist`)

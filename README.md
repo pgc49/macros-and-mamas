@@ -73,7 +73,7 @@ The app also has project fallbacks for Supabase URL/publishable key in `src/conf
 | `SUPABASE_SERVICE_ROLE_KEY` | Webhook marks `profiles.paid` (**server only**) | Cloudflare secret |
 | `RESEND_API_KEY` | Quiz ranges email (`/api/lead`) | Cloudflare secret |
 | `LEAD_FROM_EMAIL` | Optional From override for quiz email | Cloudflare env |
-| `OPEN_WITHOUT_QUIZ` | Escape hatch: sell $249 without quiz (default unset) | Cloudflare env |
+| `OPEN_WITHOUT_QUIZ` | `true` = sell $249 without quiz (recommended for open pre-sales) | Cloudflare env |
 
 Local copies live in `.dev.vars` (gitignored). See `.dev.vars.example`.
 
@@ -101,7 +101,8 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 4. Checkout picks the tier automatically (`functions/_shared/pricing.js`):
    - Account created before `ENROLLMENT_CLOSED_AT` → founding $149  
    - Email has an eligible `marketing_leads` row (quiz unlock) → early $249  
-   - Else → `403 quiz_required` (set `OPEN_WITHOUT_QUIZ=true` to sell $249 without the quiz)  
+   - `OPEN_WITHOUT_QUIZ=true` → early $249 without quiz (recommended while pre-selling)  
+   - Else → `403 quiz_required`  
 5. Before real charges: switch to live keys, live prices, and a live webhook.
 6. See `docs/ENROLLMENT-OPEN.md` and `docs/WWW-CUTOVER.md` for www marketing cutover.
 

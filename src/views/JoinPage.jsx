@@ -2,14 +2,17 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { FD, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
+import { CONFIG } from "../config";
 import { fetchCheckoutQuote, startCheckout } from "../lib/checkout";
 import { PATHS } from "../routing";
 
 const LAB_ADDON_PRICE = 349;
-/** Marketing quiz on www — unlocks the $249 early rate. */
+/** Marketing quiz on www — still the preferred path; not required when OPEN_WITHOUT_QUIZ=true. */
 const QUIZ_URL = "https://www.macrosandmamas.com/quiz";
-/** Cohort 2 start — keep in sync with marketing/src/config.ts */
-const COHORT_START = "Monday, Aug 31";
+const COHORT_LABEL = CONFIG.COHORT_LABEL || "Cohort 2";
+const COHORT_START = CONFIG.COHORT_START || "Monday, Aug 31";
+const COHORT_START_SHORT = CONFIG.COHORT_START_SHORT || "August 31";
+const COHORT_START_COMPACT = CONFIG.COHORT_START_COMPACT || "Aug 31";
 
 /** Unpaid signed-in users finish joining here before intake. */
 export function JoinPage({ onRefresh, profileCreatedAt = null }) {
@@ -186,8 +189,8 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
   const openBlurb = isFounding
     ? `Founding rate $${amount}. After checkout you’ll complete a short intake so Callie can build your macros.`
     : amount != null
-      ? `You’re locking Cohort 2 — starts ${COHORT_START}. Quiz unlock: $${amount} for 8 weeks ($50 off the full $299). After checkout you’ll complete a short intake; Callie approves your final ranges before day one.`
-      : `You’re locking Cohort 2 — starts ${COHORT_START}. After checkout you’ll complete a short intake so Callie can build your macros.`;
+      ? `You’re locking ${COHORT_LABEL} — starts ${COHORT_START}. $${amount} for 8 weeks ($50 off the full $299). After checkout you’ll complete a short intake; Callie approves your final ranges before day one.`
+      : `You’re locking ${COHORT_LABEL} — starts ${COHORT_START}. After checkout you’ll complete a short intake so Callie can build your macros.`;
 
   return (
     <Shell>
@@ -202,12 +205,14 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
             marginBottom: 6,
           }}
         >
-          Cohort 2 · starts {COHORT_START}
+          {COHORT_LABEL} · starts {COHORT_START}
         </div>
         <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "10px 0" }}>
           {isFounding
             ? (total != null ? `Finish joining — $${total}` : "Finish joining")
-            : (total != null ? `Lock your Aug 31 spot — $${total}` : "Lock your Aug 31 spot")}
+            : (total != null
+              ? `Lock your ${COHORT_START_COMPACT} spot — $${total}`
+              : `Lock your ${COHORT_START_COMPACT} spot`)}
         </h2>
         <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft }}>
           {quoteLoading ? "Loading your price…" : openBlurb}
@@ -227,8 +232,9 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
         )}
         {!isFounding && (
           <p style={{ marginTop: 14, fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
-            Use the same email you used on the quiz so we can keep your early rate.
-            You’re signing up for the <strong style={{ color: T.ink }}>August 31</strong> cohort.
+            You’re pre-paying for <strong style={{ color: T.ink }}>{COHORT_LABEL}</strong>
+            {" "}— starts <strong style={{ color: T.ink }}>{COHORT_START_SHORT}</strong>.
+            Took the quiz? Use that same email here so we can keep your ranges attached.
           </p>
         )}
         {refreshBtn}

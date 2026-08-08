@@ -56,12 +56,20 @@ export const CONFIG = {
   FULLSCRIPT_DIGESTION: envUrl("VITE_FULLSCRIPT_DIGESTION_URL"),
 
   // Client: allow create-account + /join routing (pre-sales open).
-  // Server price still requires a marketing quiz lead for $249 unless
-  // OPEN_WITHOUT_QUIZ=true — see functions/_shared/pricing.js.
+  // Server: set Cloudflare OPEN_WITHOUT_QUIZ=true so /join can charge $249
+  // without a quiz lead (still Cohort-gated by copy + start date below).
   ENROLLMENT_OPEN: true,
   /** ISO cutoff: accounts created before this may still finish paying while closed. */
   ENROLLMENT_CLOSED_AT: "2026-07-26T02:00:00.000Z",
   WAITLIST_COHORT: "cohort_2",
+  /**
+   * Next cohort — keep in sync with marketing/src/config.ts.
+   * Always set an expected start date before selling seats.
+   */
+  COHORT_LABEL: "Cohort 2",
+  COHORT_START: "Monday, Aug 31",
+  COHORT_START_SHORT: "August 31",
+  COHORT_START_COMPACT: "Aug 31",
 
   /**
    * Meta Pixel (browser). Set VITE_META_PIXEL_ID in Cloudflare Pages.
