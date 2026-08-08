@@ -81,8 +81,6 @@
     busy: false,
     error: '',
     source: 'quiz_page',
-    /** Interactive log demo on the product-preview result screen */
-    previewLogMode: 'snap',
   };
 
   /** Guard against double-taps during the 140ms selected-state flash. */
@@ -531,35 +529,8 @@
     </div>`;
   }
 
-  function logPanelHtml(mode) {
-    if (mode === 'describe') {
-      return `<div class="q-log-demo">
-        <label class="q-log-label">What did you eat?
-          <textarea class="q-log-textarea" rows="3" readonly>Leftover mac and cheese and a handful of grapes</textarea>
-        </label>
-        <button type="button" class="btn q-log-demo-btn" disabled>Estimate</button>
-        <p class="q-log-hint">In the app you type it, tap Estimate, and it lands in your day — no weighing every bite.</p>
-      </div>`;
-    }
-    if (mode === 'recipes') {
-      return `<div class="q-log-demo">
-        <div class="q-plan-row"><span>Turkey taco bowls</span><span class="q-plan-meta">planned · dinner</span></div>
-        <div class="q-plan-row"><span>Greek yogurt + berries</span><span class="q-plan-meta">planned · snack</span></div>
-        <p class="q-log-hint">Your week planner meals log in one tap — exact macros, no re-typing.</p>
-      </div>`;
-    }
-    if (mode === 'manual') {
-      return `<div class="q-log-demo">
-        <div class="q-macro-grid" aria-hidden="true">
-          <div><span>Cal</span><strong>480</strong></div>
-          <div><span>P</span><strong>32</strong></div>
-          <div><span>C</span><strong>35</strong></div>
-          <div><span>F</span><strong>24</strong></div>
-        </div>
-        <p class="q-log-hint">Already know the numbers? Enter them straight — useful for packaged food or a known recipe.</p>
-      </div>`;
-    }
-    // snap (default)
+  /** One logging vignette for the payoff — snap + describe covered in the hint. */
+  function snapLogHtml() {
     return `<div class="q-log-demo">
       <div class="q-snap-actions" aria-hidden="true">
         <span class="q-snap-pill">Open camera</span>
@@ -572,50 +543,7 @@
         <div class="mr-sub">Recognized from one photo, portions and all</div>
         <div class="mp"><span>480 <small>cal</small></span><span>32 <small>P</small></span><span>35 <small>C</small></span><span>24 <small>F</small></span></div>
       </div>
-      <p class="q-log-hint">Snap a plate or a restaurant menu. The app estimates and logs it against your ranges.</p>
-    </div>`;
-  }
-
-  function logPreviewHtml(opts) {
-    const hideKicker = opts && opts.hideKicker;
-    const mode = state.previewLogMode || 'snap';
-    const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    const todayIdx = (new Date().getDay() + 6) % 7; // Mon = 0
-    const modes = [
-      { v: 'snap', mi: '📸', ml: 'Snap', ms: 'plate or menu' },
-      { v: 'describe', mi: '✏️', ml: 'Describe', ms: 'type it' },
-      { v: 'recipes', mi: '🍳', ml: 'My plan', ms: 'exact' },
-      { v: 'manual', mi: '#', ml: 'Macros', ms: 'I know them', hash: true },
-    ];
-    return `<div class="q-app-preview">
-      ${hideKicker ? '' : '<div class="q-preview-kicker">How logging works in the app</div>'}
-      <div class="mini q-log-card">
-        <div class="q-day-head">
-          <div class="q-day-title">Today <span>· preview</span></div>
-        </div>
-        <div class="q-day-strip" aria-hidden="true">
-          ${labels
-            .map(
-              (d, i) =>
-                `<span class="q-day-chip${i === todayIdx ? ' on' : ''}">${d}</span>`,
-            )
-            .join('')}
-        </div>
-        <div class="m-kicker">Log a meal · four ways</div>
-        <div class="modes" id="qLogModes">
-          ${modes
-            .map(
-              (m) =>
-                `<button type="button" class="mode${mode === m.v ? ' act' : ''}" data-log-mode="${m.v}">
-                  <span class="mi${m.hash ? ' mi-hash' : ''}">${m.mi}</span>
-                  <span class="ml">${m.ml}</span>
-                  <span class="ms">${m.ms}</span>
-                </button>`,
-            )
-            .join('')}
-        </div>
-        <div class="q-log-panel" id="qLogPanel">${logPanelHtml(mode)}</div>
-      </div>
+      <p class="q-log-hint">Snap a plate or a restaurant menu. No photo? Type it — leftover mac and cheese and a handful of grapes, done.</p>
     </div>`;
   }
 
@@ -644,12 +572,12 @@
     </div>`;
   }
 
-  /** One proof the app is real — snap-a-plate only (full logger sits below the offer). */
+  /** One proof the app is real — before the ask; no second logger below. */
   function snapProofHtml() {
     return `<div class="q-app-preview q-snap-proof">
       <div class="q-preview-kicker">In the app</div>
       <div class="mini q-log-card">
-        ${logPanelHtml('snap')}
+        ${snapLogHtml()}
       </div>
     </div>`;
   }
@@ -734,10 +662,6 @@
       ${testimonialSlotHtml()}
       ${offerBlock()}
       ${stickyCheckoutHtml()}
-      <div class="q-app-tour-below">
-        <p class="q-preview-kicker">More of how the app works</p>
-        ${logPreviewHtml({ hideKicker: true })}
-      </div>
       <p class="q-copy muted">We emailed these ranges to you so you can keep them.</p>`,
     );
   }
@@ -875,23 +799,6 @@
 
     if (state.step === 'gate') {
       root.querySelector('#submit')?.addEventListener('click', submit);
-    }
-
-    if (state.step === 'result') {
-      const modes = root.querySelector('#qLogModes');
-      if (modes) {
-        modes.querySelectorAll('[data-log-mode]').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            const next = btn.getAttribute('data-log-mode') || 'snap';
-            state.previewLogMode = next;
-            modes.querySelectorAll('[data-log-mode]').forEach((b) => {
-              b.classList.toggle('act', b === btn);
-            });
-            const panel = root.querySelector('#qLogPanel');
-            if (panel) panel.innerHTML = logPanelHtml(next);
-          });
-        });
-      }
     }
   }
 
