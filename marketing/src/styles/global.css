@@ -275,15 +275,16 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
 .fit-card.notyet{border-top:5px solid var(--amber)}
 .fit-card h3{font-size:23px;margin-bottom:16px}
 .fit-card ul{list-style:none}
-.fit-card li{padding:10px 0 10px 30px;position:relative;font-size:15.5px;color:var(--ink-soft);border-bottom:1px dashed var(--border)}
+.fit-card li{padding:10px 0 10px 30px;position:relative;font-size:15.5px;line-height:1.45;color:var(--ink-soft);border-bottom:1px dashed var(--border)}
 .fit-card li:last-child{border-bottom:none}
 .fit-card li strong{color:var(--ink)}
+/* Center marks on the first text line (padding-top + one line-box). */
 .fit-card.yes li::before,.fit-card.notyet li::before{
   position:absolute;
   left:0;
   top:10px;
   width:18px;
-  height:18px;
+  height:calc(15.5px * 1.45);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -293,6 +294,9 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,245,242,.9);backdrop
   border-radius:0;
   background:transparent;
   border:none;
+  /* Check/X glyphs sit high in the font box — nudge to the x-height. */
+  padding-top:2px;
+  box-sizing:border-box;
 }
 .fit-card.yes li::before{content:"✓";color:var(--sage)}
 .fit-card.notyet li::before{content:"✕";color:var(--amber);font-size:12px}
