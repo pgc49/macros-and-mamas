@@ -647,7 +647,7 @@
   function stickyCheckoutHtml() {
     const href = checkoutHref();
     return `<div class="sticky-cta q-result-sticky on" id="quizStickyCta" aria-hidden="false">
-      <div class="s-price"><strong>Doors close ${escapeHtml(doorsClose)} · capped at 50</strong></div>
+      <div class="s-price"><strong>Doors close ${escapeHtml(doorsClose)} · 50 mamas max</strong></div>
       <a class="btn" href="${href}">Pre-pay $${offerPrice}</a>
     </div>`;
   }
