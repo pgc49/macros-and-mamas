@@ -247,7 +247,7 @@
       html = screenShell(
         'Where are you right now?',
         `${quizIntroHtml()}
-         ${choiceButtons(Q1, a.months_postpartum, 'q-choices pills grid-2')}
+         ${choiceButtons(Q1, a.months_postpartum, 'q-choices pills')}
          ${q1MotifHtml()}`,
         '',
         'Your free macro ranges · Question 1 of 7',
