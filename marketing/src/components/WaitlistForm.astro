@@ -108,13 +108,14 @@ const isPage = variant === 'page';
   {
     isFinal || isPage ? (
       <p class="price-note">
-        Prefer the free ranges quiz to unlock ${waitlistPrice} and pre-pay.
+        Prefer the free ranges quiz for the ${waitlistPrice} early rate and
+        pre-pay.
       </p>
     ) : (
       <p class="price-note">
-        Or take the free quiz to unlock <strong>${waitlistPrice}</strong> ($50
-        off ${fullPrice}) and pre-pay to lock your spot. Cohort 2 starts{' '}
-        {cohortStartDate}.
+        Or take the free quiz for the <strong>${waitlistPrice}</strong> early
+        rate ($50 off ${fullPrice}) and pre-pay to lock your spot. Cohort 2
+        starts {cohortStartDate}.
       </p>
     )
   }

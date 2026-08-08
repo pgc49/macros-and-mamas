@@ -277,7 +277,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
                   Take the free quiz
                 </a>
                 {" "}
-                with this email to unlock $249 instead.
+                with this email for the $249 early rate.
               </>
             ) : (
               <> Took the quiz? Keep using this same email so your ranges stay attached.</>

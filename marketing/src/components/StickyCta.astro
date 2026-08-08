@@ -6,8 +6,6 @@ import {
   isWaitlist,
   offerPrice,
   quizUrl,
-  waitlistPrice,
-  weeklyPrice,
 } from '../config';
 ---
 
@@ -16,8 +14,7 @@ import {
     isWaitlist ? (
       <>
         <div class="s-price">
-          <strong>Full ${offerPrice} · unlock ${waitlistPrice} in the quiz</strong>
-          Doors close {doorsCloseDate} · about ${weeklyPrice}/week early
+          <strong>Doors close {doorsCloseDate}</strong>
         </div>
         <a class="btn" href={quizUrl}>
           Take the quiz
@@ -26,8 +23,8 @@ import {
     ) : (
       <>
         <div class="s-price">
-          <strong>${offerPrice} for 8 weeks · starts {cohortStartDateCompact}</strong>
-          About ${weeklyPrice}/week · doors close {doorsCloseDate}
+          <strong>Doors close {doorsCloseDate}</strong>
+          Starts {cohortStartDateCompact} · ${offerPrice}
         </div>
         <a class="btn" href={enrollUrl}>
           Join now

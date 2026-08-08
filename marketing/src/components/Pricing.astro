@@ -6,7 +6,6 @@ import {
   doorsCloseDate,
   enrollUrl,
   fullPrice,
-  fullWeeklyPrice,
   isWaitlist,
   labAddonPrice,
   labPanelPrice,
@@ -15,8 +14,8 @@ import {
   programWeeks,
   quizUrl,
   waitlistPrice,
+  weeklyPrice,
 } from '../config';
-import RangeBand from './RangeBand.astro';
 
 const saveAmount = fullPrice - waitlistPrice;
 ---
@@ -30,8 +29,8 @@ const saveAmount = fullPrice - waitlistPrice;
         {
           isWaitlist ? (
             <>
-              Full rate ${fullPrice} · about ${fullWeeklyPrice}/week. Finish the
-              free quiz for the ${waitlistPrice} early rate.
+              Full rate ${fullPrice}. Finish the free quiz for the $
+              {waitlistPrice} early rate (about ${weeklyPrice}/week).
             </>
           ) : (
             <>
@@ -65,31 +64,23 @@ const saveAmount = fullPrice - waitlistPrice;
           </div>
         )
       }
-      <p class="price-week">
-        {
-          isWaitlist ? (
-            <>${fullWeeklyPrice}/week for {programWeeks} weeks</>
-          ) : (
-            <>
-              ${Math.round(openPrice / programWeeks)}/week for {programWeeks}{' '}
-              weeks
-            </>
-          )
-        }
-      </p>
       {
         isWaitlist ? (
           <p class="price-history">
-            Early rate ${waitlistPrice} · save ${saveAmount} when you finish the
-            free quiz
+            Early rate ${waitlistPrice} · about ${weeklyPrice}/week for{' '}
+            {programWeeks} weeks · save ${saveAmount} when you finish the free
+            quiz
           </p>
-        ) : null
+        ) : (
+          <p class="price-week">
+            ${Math.round(openPrice / programWeeks)}/week for {programWeeks} weeks
+          </p>
+        )
       }
       <p class="price-history" style="margin-top:6px">
         <strong>Doors close {doorsCloseDate}</strong> · cohort starts{' '}
         {cohortStartDate}
       </p>
-      <div class="price-band"><RangeBand sage /></div>
       <ul class="includes">
         <li
           ><strong>8 weeks of coaching with Callie,</strong> Monday through
@@ -115,7 +106,7 @@ const saveAmount = fullPrice - waitlistPrice;
       {
         isWaitlist ? (
           <a class="btn" href={quizUrl}>
-            Take the quiz · unlock ${waitlistPrice}
+            Get my ranges · save ${saveAmount}
           </a>
         ) : (
           <a class="btn" href={enrollUrl}>

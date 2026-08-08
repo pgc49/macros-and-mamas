@@ -295,17 +295,35 @@ const jsonLd = {
       /* Sticky CTA + scroll reveals */
       (function () {
         var hero = document.querySelector('.hero');
+        var pricing = document.getElementById('pricing');
         var bar = document.getElementById('stickyCta');
         if ('IntersectionObserver' in window) {
-          if (hero && bar) {
-            new IntersectionObserver(
-              function (e) {
-                var out = !e[0].isIntersecting && e[0].boundingClientRect.top < 0;
-                bar.classList.toggle('on', out);
-                bar.setAttribute('aria-hidden', String(!out));
-              },
-              { threshold: 0 },
-            ).observe(hero);
+          if (bar) {
+            var pastHero = !hero;
+            var pricingInView = false;
+            function syncSticky() {
+              var show = pastHero && !pricingInView;
+              bar.classList.toggle('on', show);
+              bar.setAttribute('aria-hidden', String(!show));
+            }
+            if (hero) {
+              new IntersectionObserver(
+                function (e) {
+                  pastHero = !e[0].isIntersecting && e[0].boundingClientRect.top < 0;
+                  syncSticky();
+                },
+                { threshold: 0 },
+              ).observe(hero);
+            }
+            if (pricing) {
+              new IntersectionObserver(
+                function (e) {
+                  pricingInView = e[0].isIntersecting;
+                  syncSticky();
+                },
+                { threshold: 0, rootMargin: '0px 0px -12% 0px' },
+              ).observe(pricing);
+            }
           }
           var rvObs = new IntersectionObserver(
             function (entries) {
@@ -325,7 +343,7 @@ const jsonLd = {
           document.querySelectorAll('.rv').forEach(function (el) {
             el.classList.add('in');
           });
-          if (bar) {
+          if (bar && !pricing) {
             bar.classList.add('on');
             bar.setAttribute('aria-hidden', 'false');
           }

@@ -487,9 +487,9 @@
       if (email) sessionStorage.setItem('mm_quiz_email', email);
     } catch (e) { /* private mode */ }
     return `<div class="q-offer-card">
-      <div class="q-offer-kicker">Exclusive · unlocked by your quiz</div>
+      <div class="q-offer-kicker">Exclusive · early rate from your quiz</div>
       <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
-      <p class="q-offer-lede">You’re signing up for <strong>Cohort 2</strong>, starting <strong>${escapeHtml(cohortStart)}</strong>. <strong>Doors close ${escapeHtml(doorsClose)}</strong> so Callie can build ranges before day one. Next: set a password${email ? ` for <strong>${escapeHtml(email)}</strong>` : ''}, then pre-pay at the early rate you just unlocked.</p>
+      <p class="q-offer-lede">You’re signing up for <strong>Cohort 2</strong>, starting <strong>${escapeHtml(cohortStart)}</strong>. <strong>Doors close ${escapeHtml(doorsClose)}</strong> so Callie can build ranges before day one. Next: set a password${email ? ` for <strong>${escapeHtml(email)}</strong>` : ''}, then pre-pay at the early rate from your quiz.</p>
       <div class="q-offer-price-row">
         <span class="q-offer-now">$${offerPrice}</span>
         <span class="q-offer-full">Full rate $${fullPrice}</span>
