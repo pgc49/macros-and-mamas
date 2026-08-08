@@ -58,7 +58,7 @@
     { v: 'blood_sugar', l: 'Blood sugar concerns' },
     { v: 'thyroid', l: 'Thyroid' },
     { v: 'c_section', l: 'Recent C-section' },
-    { v: 'none', l: 'Nothing to add' },
+    { v: 'none', l: 'None of these' },
   ];
 
   const state = {
@@ -85,7 +85,19 @@
     previewLogMode: 'snap',
   };
 
-  function afterQ1(v) {
+  /** Guard against double-taps during the 140ms selected-state flash. */
+  let selectLock = false;
+
+  function prefersReducedMotion() {
+    try {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Route after Q1 — re-runs when an earlier answer changes. */
+  function routeAfterQ1(v) {
     state.answers.months_postpartum = v;
     if (v === 'still_pregnant') {
       setStep('gate');
@@ -142,27 +154,40 @@
   }
 
   const STEP_ORDER = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'gate', 'result'];
+  const QUESTION_NUM = { q1: 1, q2: 2, q3: 3, q4: 4, q5: 5, q6: 6, q7: 7 };
 
+  /** Progress = step/9 (q1…result). */
   function progress() {
     const i = Math.max(0, STEP_ORDER.indexOf(state.step));
-    // Start ~15% so Q1 doesn't feel like "zero of a long quiz."
-    return Math.round(15 + (i / (STEP_ORDER.length - 1)) * 85);
+    return Math.round(((i + 1) / STEP_ORDER.length) * 100);
   }
 
-  /** Hash + Meta custom events so partial quiz progress is retargetable. */
-  function trackStep(s) {
+  function stepUrl(s) {
+    const nextHash = s === 'q1' ? '' : `#${s}`;
+    return `${location.pathname}${location.search}${nextHash}`;
+  }
+
+  function quizStack() {
+    return (history.state && Array.isArray(history.state.quizStack)
+      ? history.state.quizStack.slice()
+      : []);
+  }
+
+  function pushQuizHistory(s, { replace = false, stack = null } = {}) {
     try {
-      const nextHash = s === 'q1' ? '' : `#${s}`;
-      const path = `${location.pathname}${location.search}${nextHash}`;
-      if (`${location.pathname}${location.search}${location.hash}` !== path) {
-        history.replaceState(null, '', path);
-      }
+      const data = { quizStep: s, quizStack: stack || [s] };
+      const url = stepUrl(s);
+      if (replace) history.replaceState(data, '', url);
+      else history.pushState(data, '', url);
     } catch (e) {}
+  }
+
+  /** Meta custom events so partial quiz progress is retargetable. */
+  function trackMeta(s) {
     try {
       if (typeof window.fbq === 'function') {
         const pct = progress();
         window.fbq('trackCustom', 'QuizStep', { step: s, progress: pct });
-        // Cheapest retarget pool: started but stalled mid-quiz.
         if (s === 'q4' || s === 'q5') {
           window.fbq('trackCustom', 'QuizHalfway', { step: s, progress: pct });
         }
@@ -173,27 +198,144 @@
     } catch (e) {}
   }
 
-  function setStep(s) {
+  function setStep(s, { fromPop = false } = {}) {
     state.step = s;
     state.error = '';
-    trackStep(s);
+    selectLock = false;
+    if (!fromPop) {
+      const stack = quizStack();
+      const priorIdx = stack.lastIndexOf(s);
+      if (priorIdx >= 0) stack.length = priorIdx + 1;
+      else stack.push(s);
+      if (!stack.length) stack.push(s);
+      // Forward (or re-route) always pushState so device back unwinds the path taken.
+      pushQuizHistory(s, { replace: false, stack });
+    }
+    trackMeta(s);
     render();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   }
 
-  function choiceButtons(options, selected, gridClass) {
-    const cls = gridClass || 'q-choices pills';
-    return `<div class="${cls}" id="pick">${options
+  /** Path-aware previous step (respects not_postpartum Q2 skip + pregnant gate). */
+  function previousStepFor(step) {
+    const a = state.answers;
+    switch (step) {
+      case 'q2':
+        return 'q1';
+      case 'q3':
+        return a.months_postpartum === 'not_postpartum' ? 'q1' : 'q2';
+      case 'q4':
+        return 'q3';
+      case 'q5':
+        return 'q4';
+      case 'q6':
+        return 'q5';
+      case 'q7':
+        return 'q6';
+      case 'gate':
+        return a.months_postpartum === 'still_pregnant' ? 'q1' : 'q7';
+      default:
+        return null;
+    }
+  }
+
+  /** Build the stack a deep-linked visitor should be able to rewind through. */
+  function pathStackTo(step) {
+    const a = state.answers;
+    if (step === 'q1') return ['q1'];
+    if (a.months_postpartum === 'still_pregnant') {
+      const path = ['q1'];
+      if (STEP_ORDER.indexOf(step) >= STEP_ORDER.indexOf('gate')) path.push('gate');
+      if (step === 'result') path.push('result');
+      return path;
+    }
+    const path = ['q1'];
+    if (a.months_postpartum !== 'not_postpartum') path.push('q2');
+    for (const s of ['q3', 'q4', 'q5', 'q6', 'q7', 'gate', 'result']) {
+      if (STEP_ORDER.indexOf(step) >= STEP_ORDER.indexOf(s)) path.push(s);
+    }
+    return path;
+  }
+
+  function seedHistory() {
+    const path = pathStackTo(state.step);
+    pushQuizHistory(path[0], { replace: true, stack: [path[0]] });
+    for (let i = 1; i < path.length; i++) {
+      pushQuizHistory(path[i], { replace: false, stack: path.slice(0, i + 1) });
+    }
+  }
+
+  function goBack() {
+    if (state.step === 'q1' || state.step === 'result') return;
+    const stack = quizStack();
+    if (stack.length > 1) {
+      history.back();
+      return;
+    }
+    const prev = previousStepFor(state.step);
+    if (!prev) return;
+    pushQuizHistory(prev, { replace: true, stack: [prev] });
+    state.step = prev;
+    state.error = '';
+    selectLock = false;
+    trackMeta(prev);
+    render();
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  }
+
+  function onPopState(e) {
+    const step = e.state && e.state.quizStep;
+    if (!step || STEP_ORDER.indexOf(step) < 0) return;
+    state.step = step;
+    state.error = '';
+    selectLock = false;
+    trackMeta(step);
+    render();
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  }
+
+  function questionKicker(step) {
+    const n = QUESTION_NUM[step];
+    if (!n) return '';
+    if (n === 1) return 'Your free macro ranges · Question 1 of 7';
+    return `Question ${n} of 7`;
+  }
+
+  function choiceButtons(options, selected) {
+    return `<div class="q-choices" id="pick">${options
       .map(
         (o) =>
-          `<button type="button" class="q-choice pill${selected === o.v ? ' on' : ''}" data-v="${o.v}">${o.l}</button>`,
+          `<button type="button" class="q-choice${selected === o.v ? ' on' : ''}" data-v="${escapeHtml(o.v)}"><span class="q-choice-label">${escapeHtml(o.l)}</span>${
+            o.sub ? `<span class="q-choice-sub">${escapeHtml(o.sub)}</span>` : ''
+          }</button>`,
       )
       .join('')}</div>`;
   }
 
+  /** Selected-state flash, then advance. No Next on single-select screens. */
+  function flashSelectAndGo(btn, applyFn, goFn) {
+    if (selectLock) return;
+    selectLock = true;
+    const pick = root.querySelector('#pick');
+    if (pick) {
+      pick.querySelectorAll('.q-choice').forEach((b) => {
+        b.classList.toggle('on', b === btn);
+      });
+    }
+    applyFn();
+    const advance = () => {
+      selectLock = false;
+      goFn();
+    };
+    if (prefersReducedMotion()) advance();
+    else setTimeout(advance, 140);
+  }
+
   function screenShell(title, body, footer = '', kicker = '') {
+    const showBack = state.step !== 'q1' && state.step !== 'result';
     return `
       <div class="q-progress" aria-hidden="true"><span style="width:${progress()}%"></span></div>
+      ${showBack ? `<button type="button" class="q-back" id="qBack">← Back</button>` : ''}
       ${kicker ? `<span class="kicker q-step-kicker">${kicker}</span>` : ''}
       <h1 class="q-title">${title}</h1>
       <div class="q-body">${body}</div>
@@ -250,16 +392,16 @@
          ${choiceButtons(Q1, a.months_postpartum)}
          ${q1MotifHtml()}`,
         '',
-        'Your free macro ranges · Question 1 of 7',
+        questionKicker('q1'),
       );
     } else if (state.step === 'q2') {
       html = screenShell(
         'Are you feeding your baby breast milk right now?',
-        `${choiceButtons(Q2, a.feeding)}
-         <button type="button" class="q-back" data-back="q1">Back</button>`,
+        `${choiceButtons(Q2, a.feeding)}`,
+        '',
+        questionKicker('q2'),
       );
     } else if (state.step === 'q3') {
-      const backStep = a.months_postpartum === 'not_postpartum' ? 'q1' : 'q2';
       html = screenShell(
         'Your height and current weight',
         `<div class="q-fields compact">
@@ -284,8 +426,9 @@
                 <button type="button" class="q-link" id="preferNot">Prefer not to say — use a range</button>`
           }
         </div>
-        <button type="button" class="btn q-next" id="next">Continue</button>
-        <button type="button" class="q-back" data-back="${backStep}">Back</button>`,
+        <button type="button" class="btn q-next" id="next">Continue</button>`,
+        '',
+        questionKicker('q3'),
       );
     } else if (state.step === 'q4') {
       html = screenShell(
@@ -295,30 +438,37 @@
             <input id="gw" class="pill-input" type="number" inputmode="decimal" min="80" max="400" value="${a.goal_weight_lbs}" />
           </label>
         </div>
-        <button type="button" class="btn q-next" id="next">Continue</button>
-        <button type="button" class="q-back" data-back="q3">Back</button>`,
+        <button type="button" class="btn q-next" id="next">Continue</button>`,
+        '',
+        questionKicker('q4'),
       );
     } else if (state.step === 'q5') {
       html = screenShell(
         'What are you actually after?',
-        `${choiceButtons(Q5, a.goal)}
-         <button type="button" class="q-back" data-back="q4">Back</button>`,
+        `${choiceButtons(Q5, a.goal)}`,
+        '',
+        questionKicker('q5'),
       );
     } else if (state.step === 'q6') {
       html = screenShell(
         'How much are you moving right now?',
-        `${choiceButtons(Q6, a.activity_level)}
-         <button type="button" class="q-back" data-back="q5">Back</button>`,
+        `${choiceButtons(Q6, a.activity_level)}`,
+        '',
+        questionKicker('q6'),
       );
     } else if (state.step === 'q7') {
       html = screenShell(
         'Anything we should know?',
         `<p class="q-hint">Optional. Pick all that apply.</p>
-         <div class="q-choices pills multi" id="pick">
-           ${Q7.map((o) => `<button type="button" class="q-choice pill${a.flags.includes(o.v) ? ' on' : ''}" data-v="${o.v}">${o.l}</button>`).join('')}
+         <div class="q-choices multi" id="pick">
+           ${Q7.map(
+             (o) =>
+               `<button type="button" class="q-choice${a.flags.includes(o.v) ? ' on' : ''}" data-v="${escapeHtml(o.v)}"><span class="q-choice-label">${escapeHtml(o.l)}</span></button>`,
+           ).join('')}
          </div>
-         <button type="button" class="btn q-next" id="next">Continue</button>
-         <button type="button" class="q-back" data-back="q6">Back</button>`,
+         <button type="button" class="btn q-next" id="next">Continue</button>`,
+        '',
+        questionKicker('q7'),
       );
     } else if (state.step === 'gate') {
       const pregnant = a.months_postpartum === 'still_pregnant';
@@ -333,8 +483,7 @@
         </div>
         <button type="button" class="btn q-next" id="submit" ${state.busy ? 'disabled' : ''}>
           ${state.busy ? 'Working…' : pregnant ? 'Submit' : 'Show me my ranges'}
-        </button>
-        <button type="button" class="q-back" data-back="${pregnant ? 'q1' : 'q7'}">Back</button>`,
+        </button>`,
       );
     } else if (state.step === 'result') {
       html = renderResult();
@@ -597,9 +746,7 @@
   }
 
   function bind() {
-    root.querySelectorAll('[data-back]').forEach((b) => {
-      b.addEventListener('click', () => setStep(b.getAttribute('data-back')));
-    });
+    root.querySelector('#qBack')?.addEventListener('click', goBack);
 
     const pick = root.querySelector('#pick');
     if (pick && state.step !== 'q7') {
@@ -607,16 +754,31 @@
         btn.addEventListener('click', () => {
           const v = btn.getAttribute('data-v');
           if (state.step === 'q1') {
-            afterQ1(v);
+            flashSelectAndGo(btn, () => {}, () => routeAfterQ1(v));
           } else if (state.step === 'q2') {
-            state.answers.feeding = v;
-            setStep('q3');
+            flashSelectAndGo(
+              btn,
+              () => {
+                state.answers.feeding = v;
+              },
+              () => setStep('q3'),
+            );
           } else if (state.step === 'q5') {
-            state.answers.goal = v;
-            setStep('q6');
+            flashSelectAndGo(
+              btn,
+              () => {
+                state.answers.goal = v;
+              },
+              () => setStep('q6'),
+            );
           } else if (state.step === 'q6') {
-            state.answers.activity_level = v;
-            setStep('q7');
+            flashSelectAndGo(
+              btn,
+              () => {
+                state.answers.activity_level = v;
+              },
+              () => setStep('q7'),
+            );
           }
         });
       });
@@ -820,6 +982,11 @@
     }
   }
 
-  trackStep(state.step);
+  try {
+    window.addEventListener('popstate', onPopState);
+    // Seed history so device back / edge-swipe steps one question (Q1 leaves normally).
+    seedHistory();
+  } catch (e) {}
+  trackMeta(state.step);
   render();
 })();

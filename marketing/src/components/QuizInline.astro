@@ -24,11 +24,11 @@ const options = [
         calculates them. Finish for the ${waitlistPrice} early rate (full rate
         ${fullPrice}). Tap where you are to start.</p
       >
-      <div class="qi-choices pills grid-2">
+      <div class="qi-choices">
         {
           options.map((o) => (
-            <a class="q-choice pill link" href={`/quiz?q1=${o.v}&placement=inline`}>
-              {o.l}
+            <a class="q-choice link" href={`/quiz?q1=${o.v}&placement=inline`}>
+              <span class="q-choice-label">{o.l}</span>
             </a>
           ))
         }
