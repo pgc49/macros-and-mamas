@@ -283,9 +283,9 @@ async function sendRangesEmail(
 <p>When you're ready postpartum, come back for your ranges. We'll keep a light note in your inbox with what to expect when the time is right.</p>
 <p>With care,<br/>Callie</p>`;
   } else if (opts.segment === 'waitlist_plantbased') {
-    subject = `${name}, an honest note about our playbook`;
+    subject = opts.ranges ? `Your ranges, ${name}` : `${name}, an honest note about our playbook`;
     const veganBands = opts.ranges
-      ? `<p>Here's a preview of how bands look in the app anyway:</p>
+      ? `<p>Here are your bands — built the same way Callie builds them for the program:</p>
 <ul>
 <li><strong>Protein:</strong> ${opts.ranges.protein}</li>
 <li><strong>Carbs:</strong> ${opts.ranges.carbs}</li>
@@ -294,9 +294,9 @@ async function sendRangesEmail(
 </ul>`
       : '';
     html = `<p>Hi ${name},</p>
-<p>Thank you for taking the quiz. Our coaching playbook leans on animal protein (and pescatarian / vegetarian patterns). Fully vegan kitchens aren't usually a fit — we'd rather be honest up front.</p>
+<p><strong>A note on protein.</strong> Callie's program emphasizes animal protein — meat, dairy, and eggs. Hitting these protein targets on a fully vegan diet can be challenging. We'd rather be honest up front.</p>
 ${veganBands}
-<p>If you still want to talk through whether it's a fit, reply to this email. No hard sell.</p>
+<p>If you still want to talk through whether the program is a fit, reply to this email. No hard sell.</p>
 <p>— Callie</p>`;
   } else if (opts.ranges) {
     subject = `Your ranges, ${name}`;
@@ -491,14 +491,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       ? formatBands(rangesPayload as Parameters<typeof formatBands>[0])
       : null;
 
-  // Meta Lead only for segments who can enroll this cohort.
-  // Pregnant / vegan nurture must not optimize delivery toward non-buyers.
-  const enrollableLead =
-    segment === 'main' || segment === 'early_pp_nurture';
+  // Meta Lead only for enrollable, non-vegan finishes.
+  // Fully vegan + pregnant must not optimize delivery toward non-buyers.
+  const flaggedVegan = answers.flags.includes('vegan');
+  const qualifiedLead =
+    !flaggedVegan &&
+    (segment === 'main' || segment === 'early_pp_nurture');
 
   context.waitUntil(
     Promise.all([
-      enrollableLead
+      qualifiedLead
         ? sendLeadCapi(env, {
             eventId,
             email,
@@ -534,6 +536,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ok: true,
     event_id: eventId,
     segment,
+    qualified_lead: qualifiedLead,
     needs_review: needsReview,
     review_reason: reviewReason,
     early_pp: earlyPp,

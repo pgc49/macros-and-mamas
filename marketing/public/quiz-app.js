@@ -629,7 +629,7 @@
   }
 
   function veganNoteHtml() {
-    return `<div class="q-banner">Our playbook leans on animal protein. Fully vegan kitchens usually aren't a fit — here's an app preview anyway, and you can still reach out if you want to talk through it.</div>`;
+    return `<div class="q-banner"><strong>A note on protein.</strong> Callie’s program emphasizes animal protein — meat, dairy, and eggs. Hitting these protein targets on a fully vegan diet can be challenging. Your ranges are below as a preview; if you want to talk through whether the program is a fit, reply to the email we send.</div>`;
   }
 
   function checkoutHref() {
@@ -930,12 +930,15 @@
         if (leadEmail) sessionStorage.setItem('mm_quiz_email', leadEmail);
       } catch (e) {}
 
-      // Meta: fire Lead only for segments who can enroll this cohort.
-      // Pregnant / vegan nurture paths must not train delivery on cheap "leads."
+      // Meta Lead only for enrollable segments. Fully vegan + pregnant
+      // fire QuizNurture instead — never train delivery on non-qualified leads.
       try {
         if (typeof window.fbq === 'function') {
           const seg = String(data.segment || '');
-          if (ENROLLABLE_SEGMENTS[seg]) {
+          const qualified =
+            data.qualified_lead === true ||
+            (data.qualified_lead == null && ENROLLABLE_SEGMENTS[seg]);
+          if (qualified) {
             window.fbq(
               'track',
               'Lead',
