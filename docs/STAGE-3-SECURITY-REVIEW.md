@@ -49,6 +49,8 @@ protect triggers, or JWT/CRON_SECRET on Functions. Notify fanout is claim-before
     trigger helpers from `anon`/`authenticated` (`051_revoke_channel_trigger_rpc.sql`).
 13. **Orphan attachment on failed insert (low)** — client removes uploaded object
     if the `conversation_messages` insert fails.
+14. **Client could suppress push via `notified_at` (medium)** — protect trigger now
+    freezes `notified_at` for non-service (`053_freeze_channel_notified_at.sql`).
 
 ### Accepted residual
 - Compromised **admin session** can moderate any enrolled channel (by design).

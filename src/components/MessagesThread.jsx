@@ -591,8 +591,10 @@ export function MessagesThread({
                   lineHeight: 1.45,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
-                  userSelect: canManage(m) ? "none" : "text",
-                  WebkitUserSelect: canManage(m) ? "none" : "text",
+                  // Keep copy/select for reply-only bubbles; suppress selection when
+                  // edit/delete long-press would fight iOS text handles.
+                  userSelect: (canEditMsg(m) || canDeleteMsg(m)) ? "none" : "text",
+                  WebkitUserSelect: (canEditMsg(m) || canDeleteMsg(m)) ? "none" : "text",
                   cursor: canManage(m) ? "default" : undefined,
                 }}
               >

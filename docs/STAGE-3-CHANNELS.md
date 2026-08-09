@@ -38,13 +38,18 @@ Migrations `047`–`051` (`channels`, stamp founding, prompts seed, harden, revo
 ## Acceptance (manual)
 
 - [ ] Founding mama sees `[Callie] [Founding Members]` only; can post; guidelines pin
+- [ ] Admin/Callie same pills (no Alumni/August); Notify defaults to Highlights
 - [ ] Group default highlights: peer posts no push; Callie post pushes
+- [ ] Reply-to-you on highlights pushes the original author only
+- [ ] Long-press → Reply quotes correctly in the sent bubble
 - [ ] Mute / All settings work
 - [ ] Callie pill has count; group pill has dot
+- [ ] Push notification tap opens Founding Members (`?channel=`)
 - [ ] New C2 paid test joins August Group, not Founding
 - [ ] C1 never sees August Group
 - [ ] read_only hides composer
 - [ ] Removed member loses channel (RLS)
+- [ ] Admin can delete another mama’s group message from dashboard Messages
 
 Security review: `docs/STAGE-3-SECURITY-REVIEW.md`.
 

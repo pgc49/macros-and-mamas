@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessagesThread } from "./MessagesThread";
 import { db } from "../db/db";
 import { supabase } from "../lib/supabase";
@@ -50,6 +50,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   const [notifyChannelId, setNotifyChannelId] = useState(null);
   const [notifyBusy, setNotifyBusy] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const deepLinkedChannel = useRef(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -111,12 +112,13 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   }, [refreshDm, refreshChannels]);
 
   useEffect(() => {
-    if (!channels.length || activePill !== "callie") return;
+    if (!channels.length || deepLinkedChannel.current) return;
     const requested = new URLSearchParams(window.location.search).get("channel");
     if (requested && channels.some((item) => item.conversation.id === requested)) {
       setActivePill(requested);
+      deepLinkedChannel.current = true;
     }
-  }, [channels, activePill]);
+  }, [channels]);
 
   useEffect(() => {
     if (!userId) return undefined;
@@ -375,7 +377,8 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           banner={activeChannel.conversation.read_only ? <ReadOnlyBanner /> : null}
           hideComposer={!!activeChannel.conversation.read_only}
           emptyState="No group messages yet — say hi when you’re ready."
-          showPushPrompt={false}
+          showPushPrompt
+          onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
           onComposerFocusChange={onComposerFocusChange}
         />
       ) : (
