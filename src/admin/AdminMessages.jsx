@@ -385,6 +385,7 @@ export function AdminMessages({
               peerName={activeName}
               senderNameById={senderNameById}
               threadClientId={activeIsAdmin ? null : activeId}
+              showSenderNames
               busy={busy}
               onSend={send}
               onEdit={edit}

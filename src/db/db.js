@@ -356,6 +356,7 @@ function mapCustomMeal(r) {
 }
 
 const MESSAGE_ATTACHMENT_BUCKET = "message-attachments";
+const CHANNEL_ATTACHMENT_BUCKET = "channel-attachments";
 const MESSAGE_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 const MESSAGE_AUDIO_MIME = new Set([
   "audio/webm",
@@ -449,6 +450,176 @@ async function hydrateMessageAttachments(rows) {
       return m;
     }
   }));
+}
+
+async function uploadChannelAttachment({ conversationId, file, allowAudio = false }) {
+  if (!file) return null;
+  if (!conversationId) throw new Error("channel required");
+  const uid = await requireUserId();
+  const mime = String(file.type || "").toLowerCase().split(";")[0].trim();
+  if (isAudioMime(mime) && !allowAudio) {
+    throw new Error("Only Callie can send voice memos.");
+  }
+  if (!MESSAGE_ATTACHMENT_MIME.has(mime) && !(allowAudio && isAudioMime(mime))) {
+    throw new Error(
+      allowAudio
+        ? "Attachments must be a photo, PDF, or voice memo."
+        : "Attachments must be a photo (JPG/PNG/WebP) or PDF.",
+    );
+  }
+  if (file.size > MESSAGE_ATTACHMENT_MAX_BYTES) {
+    throw new Error(
+      isAudioMime(mime)
+        ? "That voice memo is over 10 MB — try a shorter recording."
+        : "That file is over 10 MB — try a smaller photo.",
+    );
+  }
+  const id = (typeof crypto !== "undefined" && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  // {conversationId}/{userId}/{file} — storage delete scoped to own folder.
+  const path = `${conversationId}/${uid}/${id}-${safeAttachmentName(file.name)}`;
+  const { error } = await supabase.storage
+    .from(CHANNEL_ATTACHMENT_BUCKET)
+    .upload(path, file, {
+      contentType: mime,
+      upsert: false,
+    });
+  if (error) {
+    console.error("channel attachment upload failed", error);
+    throw new Error("Couldn’t upload that attachment — try again.");
+  }
+  return {
+    path,
+    name: String(file.name || "attachment").slice(0, 120),
+    mime,
+    bytes: Number(file.size) || null,
+  };
+}
+
+async function hydrateChannelAttachments(rows) {
+  const list = rows || [];
+  return Promise.all(list.map(async (m) => {
+    if (!m?.attachment_path) return m;
+    try {
+      const { data, error } = await supabase.storage
+        .from(CHANNEL_ATTACHMENT_BUCKET)
+        .createSignedUrl(m.attachment_path, 60 * 60);
+      if (error) {
+        console.warn("channel attachment signed url failed", error);
+        return m;
+      }
+      return { ...m, attachmentUrl: data?.signedUrl || null };
+    } catch (e) {
+      console.warn("channel attachment signed url failed", e);
+      return m;
+    }
+  }));
+}
+
+async function loadChannelSenderLabels(conversationId, userIds) {
+  if (!conversationId || !userIds?.length) return {};
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return {};
+    const resp = await fetch("/api/channel-members", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        conversationId,
+        userIds,
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data?.ok === false) {
+      console.warn("channel sender label lookup failed", data);
+      return {};
+    }
+    return data.labels || {};
+  } catch (e) {
+    console.warn("channel sender label lookup failed", e);
+    return {};
+  }
+}
+
+async function hydrateChannelSenders(rows, conversationId = null) {
+  const list = rows || [];
+  const ids = [...new Set(list.map((m) => m?.sender_id).filter(Boolean))];
+  if (!ids.length) return list;
+  let byId = new Map();
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, name, last_name, email, role")
+      .in("id", ids);
+    if (error) {
+      console.warn("channel sender profile lookup failed", error);
+    } else {
+      byId = new Map((data || []).map((p) => [p.id, p]));
+    }
+  } catch (e) {
+    console.warn("channel sender profile lookup failed", e);
+  }
+  const missingIds = ids.filter((id) => !byId.has(id));
+  const labels = await loadChannelSenderLabels(conversationId, missingIds);
+  return list.map((m) => {
+    const profile = byId.get(m.sender_id)
+      || (labels[m.sender_id] ? { id: m.sender_id, name: labels[m.sender_id] } : null);
+    return { ...m, sender_profile: profile };
+  });
+}
+
+const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
+
+/** Attach in-thread reply preview objects from the loaded window. */
+function attachChannelReplyPreviews(rows) {
+  const list = rows || [];
+  const byId = new Map(list.map((m) => [m.id, m]));
+  return list.map((m) => {
+    if (!m?.reply_to_id) return m;
+    const parent = byId.get(m.reply_to_id);
+    if (!parent) {
+      return {
+        ...m,
+        reply_to: {
+          id: m.reply_to_id,
+          body: "",
+          missing: true,
+          deleted_at: null,
+          sender_id: null,
+        },
+      };
+    }
+    return {
+      ...m,
+      reply_to: {
+        id: parent.id,
+        body: parent.deleted_at ? "" : (parent.body || ""),
+        deleted_at: parent.deleted_at || null,
+        sender_id: parent.sender_id || null,
+        sender_profile: parent.sender_profile || null,
+        attachment_name: parent.deleted_at ? null : (parent.attachment_name || null),
+        missing: false,
+      },
+    };
+  });
+}
+
+export function channelHasUnread(_conversation, membership, messages = []) {
+  const userId = membership?.user_id;
+  if (!userId) return false;
+  const lastReadMs = membership?.last_read_at
+    ? new Date(membership.last_read_at).getTime()
+    : 0;
+  return (messages || []).some((m) => {
+    if (!m || m.deleted_at || m.sender_id === userId) return false;
+    const createdMs = m.created_at ? new Date(m.created_at).getTime() : 0;
+    return createdMs > (Number.isFinite(lastReadMs) ? lastReadMs : 0);
+  });
 }
 
 export const db = {
@@ -1428,6 +1599,271 @@ export const db = {
     if (error) throw error;
     return { homescreenTipDismissedAt: at };
   },
+
+  async listMyChannels() {
+    const uid = await requireUserId();
+    const [{ data: profile, error: profileErr }, { data, error }] = await Promise.all([
+      supabase.from("profiles").select("id, tier, role, cohort_label").eq("id", uid).maybeSingle(),
+      supabase
+        .from("conversation_members")
+        .select(`
+          conversation_id,
+          user_id,
+          joined_at,
+          removed_at,
+          notify_level,
+          last_read_at,
+          conversations (
+            id,
+            type,
+            cohort_label,
+            label,
+            read_only,
+            guidelines,
+            created_at
+          )
+        `)
+        .eq("user_id", uid)
+        .is("removed_at", null),
+    ]);
+    if (profileErr) throw profileErr;
+    if (error) throw error;
+    const tier = String(profile?.tier || "none");
+    const isAdmin = String(profile?.role || "").toLowerCase() === "admin";
+    const myCohort = String(profile?.cohort_label || "");
+    // Live cohort pills for admins/Callie. Mamas always see only their own cohort.
+    // C1 beta = Founding Members only; add 2026-08 when August Group goes live.
+    const liveAdminCohorts = new Set(
+      String(import.meta.env.VITE_LIVE_CHANNEL_COHORTS || "2026-07")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
+    return (data || [])
+      .map((row) => {
+        const { conversations, ...membership } = row;
+        return {
+          conversation: conversations || null,
+          membership,
+        };
+      })
+      .filter(({ conversation }) => {
+        if (!conversation) return false;
+        // Alumni pill only when the mama is actually alumni (stage 4) — not for admin empty rooms.
+        if (conversation.type === "alumni") return tier === "alumni_49";
+        if (conversation.type !== "cohort") return false;
+        if (!isAdmin) return !!myCohort && conversation.cohort_label === myCohort;
+        // Admins: live cohorts + any cohort stamped on this admin profile (test accounts).
+        return liveAdminCohorts.has(String(conversation.cohort_label || ""))
+          || (!!myCohort && conversation.cohort_label === myCohort);
+      })
+      .sort((a, b) => String(a.conversation?.label || "").localeCompare(
+        String(b.conversation?.label || ""),
+        undefined,
+        { sensitivity: "base" },
+      ));
+  },
+
+  async loadChannelMessages(conversationId, { limit = 150 } = {}) {
+    if (!conversationId) return [];
+    const { data, error } = await supabase
+      .from("conversation_messages")
+      .select(CHANNEL_MESSAGE_SELECT)
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true })
+      .limit(Math.min(300, Math.max(1, limit)));
+    if (error) throw error;
+    const withAttachments = await hydrateChannelAttachments(data || []);
+    const withSenders = await hydrateChannelSenders(withAttachments, conversationId);
+    return attachChannelReplyPreviews(withSenders);
+  },
+
+  async sendChannelMessage({
+    conversationId,
+    body,
+    file = null,
+    replyToId = null,
+  }) {
+    const uid = await requireUserId();
+    if (!conversationId) throw new Error("channel required");
+    const text = String(body || "").trim().slice(0, 2000);
+    let attachment = null;
+    if (file) {
+      let allowAudio = false;
+      if (isAudioMime(file.type)) {
+        const { data: me, error: roleErr } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", uid)
+          .maybeSingle();
+        if (roleErr) throw roleErr;
+        allowAudio = String(me?.role || "").toLowerCase() === "admin";
+        if (!allowAudio) throw new Error("Only Callie can send voice memos.");
+      }
+      attachment = await uploadChannelAttachment({ conversationId, file, allowAudio });
+    }
+    if (text.length < 1 && !attachment) throw new Error("Message is empty");
+    const { data, error } = await supabase
+      .from("conversation_messages")
+      .insert({
+        conversation_id: conversationId,
+        sender_id: uid,
+        body: text,
+        kind: "chat",
+        ...(replyToId ? { reply_to_id: replyToId } : {}),
+        ...(attachment
+          ? {
+            attachment_path: attachment.path,
+            attachment_name: attachment.name,
+            attachment_mime: attachment.mime,
+            attachment_bytes: attachment.bytes,
+          }
+          : {}),
+      })
+      .select(CHANNEL_MESSAGE_SELECT)
+      .single();
+    if (error) {
+      // Avoid orphan storage objects when the row insert fails after upload.
+      if (attachment?.path) {
+        try {
+          await supabase.storage.from(CHANNEL_ATTACHMENT_BUCKET).remove([attachment.path]);
+        } catch (cleanupErr) {
+          console.warn("channel attachment orphan cleanup failed", cleanupErr);
+        }
+      }
+      throw error;
+    }
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) {
+        fetch("/api/channel-notify", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ messageId: data.id }),
+        }).catch((e) => console.warn("channel-notify failed", e));
+      }
+    } catch (e) {
+      console.warn("channel-notify invoke failed", e);
+    }
+    const [hydrated] = await hydrateChannelSenders(
+      await hydrateChannelAttachments([data]),
+      conversationId,
+    );
+    const withReply = attachChannelReplyPreviews(
+      hydrated ? [hydrated] : [data],
+      // Parent may already be on-screen; caller merges. Best-effort from row alone.
+    )[0];
+    return withReply || hydrated || data;
+  },
+
+  async editChannelMessage(messageId, body) {
+    const uid = await requireUserId();
+    if (!messageId) throw new Error("message required");
+    const text = String(body || "").trim().slice(0, 2000);
+    if (text.length < 1) throw new Error("Message is empty");
+    const { data, error } = await supabase
+      .from("conversation_messages")
+      .update({
+        body: text,
+        edited_at: new Date().toISOString(),
+      })
+      .eq("id", messageId)
+      .eq("sender_id", uid)
+      .is("deleted_at", null)
+      .select(CHANNEL_MESSAGE_SELECT)
+      .single();
+    if (error) throw error;
+    const [hydrated] = await hydrateChannelSenders(
+      await hydrateChannelAttachments([data]),
+      data.conversation_id,
+    );
+    return hydrated || data;
+  },
+
+  async deleteChannelMessage(messageId) {
+    const uid = await requireUserId();
+    if (!messageId) throw new Error("message required");
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", uid)
+      .maybeSingle();
+    const isAdmin = String(me?.role || "").toLowerCase() === "admin";
+
+    let existingQuery = supabase
+      .from("conversation_messages")
+      .select("id, attachment_path, sender_id")
+      .eq("id", messageId)
+      .is("deleted_at", null);
+    if (!isAdmin) existingQuery = existingQuery.eq("sender_id", uid);
+    const { data: existing } = await existingQuery.maybeSingle();
+    if (!existing) throw new Error("Message not found.");
+    const attachmentPath = existing.attachment_path || null;
+
+    let delQuery = supabase
+      .from("conversation_messages")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", messageId)
+      .is("deleted_at", null);
+    if (!isAdmin) delQuery = delQuery.eq("sender_id", uid);
+    const { data, error } = await delQuery.select(CHANNEL_MESSAGE_SELECT).single();
+    if (error) throw error;
+
+    // Only remove storage if we own the file folder (or admin).
+    if (attachmentPath) {
+      const parts = String(attachmentPath).split("/");
+      const ownerFolder = parts[1] || "";
+      if (isAdmin || ownerFolder === uid) {
+        try {
+          await supabase.storage.from(CHANNEL_ATTACHMENT_BUCKET).remove([attachmentPath]);
+        } catch (e) {
+          console.warn("channel attachment cleanup failed", e);
+        }
+      }
+    }
+    return data;
+  },
+
+  async markChannelRead(conversationId) {
+    const uid = await requireUserId();
+    if (!conversationId) return null;
+    const at = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("conversation_members")
+      .update({ last_read_at: at })
+      .eq("conversation_id", conversationId)
+      .eq("user_id", uid)
+      .is("removed_at", null)
+      .select("conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at")
+      .maybeSingle();
+    if (error) throw error;
+    return data || { conversation_id: conversationId, user_id: uid, last_read_at: at };
+  },
+
+  async updateChannelNotifyLevel(conversationId, level) {
+    const uid = await requireUserId();
+    if (!conversationId) throw new Error("channel required");
+    const normalized = String(level || "").toLowerCase();
+    if (!["all", "highlights", "mute"].includes(normalized)) {
+      throw new Error("Invalid notification setting");
+    }
+    const { data, error } = await supabase
+      .from("conversation_members")
+      .update({ notify_level: normalized })
+      .eq("conversation_id", conversationId)
+      .eq("user_id", uid)
+      .is("removed_at", null)
+      .select("conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at")
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  channelHasUnread,
 
   /** Load 1:1 thread for a mama (self or admin viewing client). */
   async loadMessages(clientId, { limit = 100 } = {}) {
