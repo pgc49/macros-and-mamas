@@ -116,6 +116,7 @@ function labelColor(name) {
   if (name === "bug") return "d73a4a";
   if (name === "feedback") return "0E8A16";
   if (name === "support") return "B4416B";
+  if (name === "from-callie") return "5319E7";
   return "6E5D66";
 }
 
@@ -124,6 +125,7 @@ function labelDescription(name) {
   if (name === "feedback") return "Product idea / suggestion (not a break)";
   if (name === "support") return "Mama report from /support";
   if (name === "from-app") return "Submitted from the Macros and Mamas app";
+  if (name === "from-callie") return "Submitted by Callie / admin (recipes, content, product)";
   return name;
 }
 
