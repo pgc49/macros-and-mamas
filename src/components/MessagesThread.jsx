@@ -20,7 +20,8 @@ const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,ima
 
 /**
  * Shared chat thread UI (mama Messages tab + admin per-client thread).
- * onSend(body, file?) — body may be empty when sending a photo/PDF/voice alone.
+ * onSend(body, file?, opts?) — body may be empty when sending a photo/PDF/voice alone.
+ * opts.replyToId — channel reply target when enableReply is on.
  * allowVoiceMemo — admin-only record control; mamas can only play voice memos.
  */
 export function MessagesThread({
@@ -40,6 +41,8 @@ export function MessagesThread({
   showReadReceipts = false,
   /** Admin-only: show mic to record / send voice memos. */
   allowVoiceMemo = false,
+  /** Channel threads: long-press → Reply (stores reply_to_id). */
+  enableReply = false,
   busy = false,
   onSend,
   onEdit,
@@ -67,6 +70,7 @@ export function MessagesThread({
   const [editDraft, setEditDraft] = useState("");
   const [editBusy, setEditBusy] = useState(false);
   const [menuId, setMenuId] = useState(null);
+  const [replyTo, setReplyTo] = useState(null);
   const [recording, setRecording] = useState(false);
   const [recordMs, setRecordMs] = useState(0);
   const [voicePreview, setVoicePreview] = useState(null); // { file, url, durationMs }
@@ -220,14 +224,17 @@ export function MessagesThread({
     const keptText = text;
     const keptFile = file;
     const keptVoice = voicePreview;
+    const keptReply = replyTo;
     setDraft("");
     clearFile();
     clearVoicePreview();
+    setReplyTo(null);
     try {
-      await onSend(keptText, attach);
+      await onSend(keptText, attach, keptReply?.id ? { replyToId: keptReply.id } : undefined);
     } catch (e) {
       console.error(e);
       setDraft(keptText);
+      if (keptReply) setReplyTo(keptReply);
       if (keptVoice) {
         setVoicePreview(keptVoice);
       } else if (keptFile) {
@@ -338,7 +345,40 @@ export function MessagesThread({
     && (m.sender_id === selfId || canModerate)
   );
 
-  const canManage = (m) => canEditMsg(m) || canDeleteMsg(m);
+  const canReplyMsg = (m) => (
+    enableReply
+    && !hideComposer
+    && !m.deleted_at
+    && m.kind !== "system"
+  );
+
+  const canManage = (m) => canEditMsg(m) || canDeleteMsg(m) || canReplyMsg(m);
+
+  const startReply = (m) => {
+    if (!canReplyMsg(m)) return;
+    setMenuId(null);
+    setEditingId(null);
+    setReplyTo(m);
+    window.setTimeout(() => draftRef.current?.focus?.(), 50);
+  };
+
+  const replyAuthorLabel = (m) => {
+    if (!m) return "Mama";
+    if (m.sender_id === selfId) return "You";
+    if (senderNameById && m.sender_id && senderNameById[m.sender_id]) {
+      return senderNameById[m.sender_id];
+    }
+    return incomingSenderLabel(m);
+  };
+
+  const replySnippet = (m) => {
+    if (!m) return "";
+    if (m.deleted_at || m.missing) return "Original message";
+    const body = String(m.body || "").trim();
+    if (body) return body.length > 90 ? `${body.slice(0, 90)}…` : body;
+    if (m.attachment_name) return m.attachment_name;
+    return "Attachment";
+  };
 
   /** Label for bubbles that aren't "mine" — always from the real sender, never a single peerName blanket. */
   const incomingSenderLabel = (m) => {
@@ -561,6 +601,32 @@ export function MessagesThread({
                     {incomingSenderLabel(m)}
                   </div>
                 )}
+                {!deleted && m.reply_to && (
+                  <div
+                    style={{
+                      marginBottom: 8,
+                      padding: "6px 8px",
+                      borderRadius: 8,
+                      borderLeft: `3px solid ${T.accent}`,
+                      background: mine ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.65)",
+                      fontSize: 12.5,
+                      lineHeight: 1.35,
+                      color: T.inkSoft,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: T.accentDeep, marginBottom: 2 }}>
+                      {replyAuthorLabel(m.reply_to)}
+                    </div>
+                    <div style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    >
+                      {replySnippet(m.reply_to)}
+                    </div>
+                  </div>
+                )}
                 {deleted ? (
                   <div style={{ fontSize: 13.5, color: T.inkSoft, fontStyle: "italic" }}>
                     Message deleted
@@ -712,6 +778,26 @@ export function MessagesThread({
                     boxShadow: "0 6px 18px rgba(51,39,46,0.12)",
                   }}
                 >
+                  {canReplyMsg(m) && (
+                    <button
+                      type="button"
+                      onClick={() => startReply(m)}
+                      disabled={editBusy || busy}
+                      style={{
+                        border: "none",
+                        background: T.sageSoft,
+                        color: T.accentDeep,
+                        fontWeight: 700,
+                        fontSize: 13,
+                        fontFamily: F,
+                        cursor: "pointer",
+                        borderRadius: 999,
+                        padding: "8px 12px",
+                      }}
+                    >
+                      Reply
+                    </button>
+                  )}
                   {canEditMsg(m) && (
                     <button
                       type="button"
@@ -760,6 +846,61 @@ export function MessagesThread({
         })()}
         <div ref={bottomRef} />
       </div>
+
+      {!hideComposer && replyTo && !recording && (
+        <div style={{
+          marginTop: 10,
+          padding: "10px 12px",
+          borderRadius: 12,
+          border: `1.5px solid ${T.border}`,
+          background: T.sageSoft,
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-start",
+        }}
+        >
+          <div style={{
+            width: 3,
+            alignSelf: "stretch",
+            borderRadius: 999,
+            background: T.accent,
+            flexShrink: 0,
+          }}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.accentDeep }}>
+              Replying to {replyAuthorLabel(replyTo)}
+            </div>
+            <div style={{
+              fontSize: 13,
+              color: T.inkSoft,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              marginTop: 2,
+            }}
+            >
+              {replySnippet(replyTo)}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReplyTo(null)}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: T.inkSoft,
+              fontWeight: 700,
+              fontFamily: F,
+              cursor: "pointer",
+              fontSize: 13,
+              flexShrink: 0,
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {!hideComposer && recording && (
         <div style={{

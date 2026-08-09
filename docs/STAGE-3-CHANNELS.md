@@ -12,7 +12,10 @@ Requires stages 0–2. C1 **Founding Members** migrates off WhatsApp as a live b
 | C1 backfill | Paid cluster `2026-07-20` … `2026-07-27` (42 mamas) + Callie/Patrick |
 | UI | Messages tab pills: Callie (default) + her group |
 | Group notify default | `highlights` (Callie/system + replies to you) |
-| Alumni | Empty room seeded; pill only when `tier=alumni_49` (stage 4) |
+| Alumni | Empty room seeded; pill only when `tier=alumni_49` (stage 4) — not for admin empty rooms |
+| Admin pills | Live cohorts only (`VITE_LIVE_CHANNEL_COHORTS`, default `2026-07`) until August launches |
+| Notify default | `highlights` for mamas **and** admins (admins can switch to All) |
+| Reply | Long-press / menu → Reply on group messages (`reply_to_id`) |
 
 ## Schema
 

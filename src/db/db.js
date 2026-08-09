@@ -575,6 +575,40 @@ async function hydrateChannelSenders(rows, conversationId = null) {
 
 const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
 
+/** Attach in-thread reply preview objects from the loaded window. */
+function attachChannelReplyPreviews(rows) {
+  const list = rows || [];
+  const byId = new Map(list.map((m) => [m.id, m]));
+  return list.map((m) => {
+    if (!m?.reply_to_id) return m;
+    const parent = byId.get(m.reply_to_id);
+    if (!parent) {
+      return {
+        ...m,
+        reply_to: {
+          id: m.reply_to_id,
+          body: "",
+          missing: true,
+          deleted_at: null,
+          sender_id: null,
+        },
+      };
+    }
+    return {
+      ...m,
+      reply_to: {
+        id: parent.id,
+        body: parent.deleted_at ? "" : (parent.body || ""),
+        deleted_at: parent.deleted_at || null,
+        sender_id: parent.sender_id || null,
+        sender_profile: parent.sender_profile || null,
+        attachment_name: parent.deleted_at ? null : (parent.attachment_name || null),
+        missing: false,
+      },
+    };
+  });
+}
+
 export function channelHasUnread(_conversation, membership, messages = []) {
   const userId = membership?.user_id;
   if (!userId) return false;
@@ -1597,6 +1631,14 @@ export const db = {
     const tier = String(profile?.tier || "none");
     const isAdmin = String(profile?.role || "").toLowerCase() === "admin";
     const myCohort = String(profile?.cohort_label || "");
+    // Live cohort pills for admins/Callie. Mamas always see only their own cohort.
+    // C1 beta = Founding Members only; add 2026-08 when August Group goes live.
+    const liveAdminCohorts = new Set(
+      String(import.meta.env.VITE_LIVE_CHANNEL_COHORTS || "2026-07")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
     return (data || [])
       .map((row) => {
         const { conversations, ...membership } = row;
@@ -1607,11 +1649,13 @@ export const db = {
       })
       .filter(({ conversation }) => {
         if (!conversation) return false;
-        if (conversation.type === "alumni") return tier === "alumni_49" || isAdmin;
+        // Alumni pill only when the mama is actually alumni (stage 4) — not for admin empty rooms.
+        if (conversation.type === "alumni") return tier === "alumni_49";
         if (conversation.type !== "cohort") return false;
-        // Mamas only see their own cohort room; admins see every room they're in.
-        if (isAdmin) return true;
-        return !!myCohort && conversation.cohort_label === myCohort;
+        if (!isAdmin) return !!myCohort && conversation.cohort_label === myCohort;
+        // Admins: live cohorts + any cohort stamped on this admin profile (test accounts).
+        return liveAdminCohorts.has(String(conversation.cohort_label || ""))
+          || (!!myCohort && conversation.cohort_label === myCohort);
       })
       .sort((a, b) => String(a.conversation?.label || "").localeCompare(
         String(b.conversation?.label || ""),
@@ -1630,7 +1674,8 @@ export const db = {
       .limit(Math.min(300, Math.max(1, limit)));
     if (error) throw error;
     const withAttachments = await hydrateChannelAttachments(data || []);
-    return hydrateChannelSenders(withAttachments, conversationId);
+    const withSenders = await hydrateChannelSenders(withAttachments, conversationId);
+    return attachChannelReplyPreviews(withSenders);
   },
 
   async sendChannelMessage({
@@ -1708,7 +1753,11 @@ export const db = {
       await hydrateChannelAttachments([data]),
       conversationId,
     );
-    return hydrated || data;
+    const withReply = attachChannelReplyPreviews(
+      hydrated ? [hydrated] : [data],
+      // Parent may already be on-screen; caller merges. Best-effort from row alone.
+    )[0];
+    return withReply || hydrated || data;
   },
 
   async editChannelMessage(messageId, body) {

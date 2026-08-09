@@ -512,9 +512,10 @@ where c.type = 'cohort'
   and p.paid_at < '2026-07-27T00:00:00Z'
 on conflict (conversation_id, user_id) do nothing;
 
--- Callie + Patrick in every channel (moderation / coaching)
+-- Callie + Patrick in every channel (moderation / coaching).
+-- Default highlights (same as mamas); admins can switch to All in the UI.
 insert into public.conversation_members (conversation_id, user_id, notify_level)
-select c.id, a.id, 'all'
+select c.id, a.id, 'highlights'
 from public.conversations c
 cross join public.profiles a
 where a.role = 'admin'

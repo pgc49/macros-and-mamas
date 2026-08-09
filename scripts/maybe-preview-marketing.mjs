@@ -32,16 +32,10 @@ const branch = process.env.CF_PAGES_BRANCH || "";
 const forceCutover = process.env.MARKETING_WWW_CUTOVER === "1";
 const forcePreview = process.env.PREVIEW_MARKETING === "1";
 const isMain = branch === "main" || branch === "master";
-const isPreviewBranch =
-  branch.startsWith("cursor/full-marketing-execution") ||
-  branch.startsWith("cursor/astro-marketing-homepage") ||
-  branch.startsWith("cursor/ranges-quiz-lead") ||
-  branch.startsWith("cursor/web-analytics-supabase") ||
-  branch.startsWith("cursor/waitlist-cta-copy") ||
-  branch.startsWith("cursor/enrollment-open") ||
-  branch.startsWith("cursor/www-marketing-cutover") ||
-  // Quiz / homepage marketing polish PRs need Astro overlaid on SPA previews.
-  branch.startsWith("cursor/quiz-");
+// All feature-branch previews should match production's Astro landing page.
+// (Previously only marketing-named branches got the overlay, so app PRs showed
+// the old Vite SPA homepage at `/` — confusing when testing against prod UX.)
+const isPreviewBranch = branch.startsWith("cursor/");
 
 const runCutover = forceCutover || isMain;
 const runPreview = forcePreview || isPreviewBranch;

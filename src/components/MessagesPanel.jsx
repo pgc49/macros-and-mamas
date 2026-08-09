@@ -15,6 +15,29 @@ function friendlyError(e, fallback) {
   return fallback;
 }
 
+/** Re-attach reply previews after appending a just-sent row. */
+function attachReplyPreviewLocal(list) {
+  const byId = new Map((list || []).map((m) => [m.id, m]));
+  return (list || []).map((m) => {
+    if (!m?.reply_to_id) return m;
+    if (m.reply_to && !m.reply_to.missing) return m;
+    const parent = byId.get(m.reply_to_id);
+    if (!parent) return m;
+    return {
+      ...m,
+      reply_to: {
+        id: parent.id,
+        body: parent.deleted_at ? "" : (parent.body || ""),
+        deleted_at: parent.deleted_at || null,
+        sender_id: parent.sender_id || null,
+        sender_profile: parent.sender_profile || null,
+        attachment_name: parent.deleted_at ? null : (parent.attachment_name || null),
+        missing: false,
+      },
+    };
+  });
+}
+
 /** Mama Messages tab — Callie 1:1 plus cohort channels. */
 export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange }) {
   const [dmMessages, setDmMessages] = useState([]);
@@ -199,17 +222,23 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     )));
   };
 
-  const sendChannel = async (body, file = null) => {
+  const sendChannel = async (body, file = null, opts = {}) => {
     if (!activeChannel) return;
     const conversationId = activeChannel.conversation.id;
     setBusy(true);
     setError("");
     try {
-      const row = await db.sendChannelMessage({ conversationId, body, file });
-      setChannelMessages((all) => ({
-        ...all,
-        [conversationId]: [...(all[conversationId] || []), row],
-      }));
+      const row = await db.sendChannelMessage({
+        conversationId,
+        body,
+        file,
+        replyToId: opts.replyToId || null,
+      });
+      setChannelMessages((all) => {
+        const prev = all[conversationId] || [];
+        const next = attachReplyPreviewLocal([...prev, row]);
+        return { ...all, [conversationId]: next };
+      });
     } catch (e) {
       console.error(e);
       setError(friendlyError(e, "Couldn’t send."));
@@ -335,6 +364,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           onMarkRead={markChannelRead}
           canModerate={isAdmin}
           allowVoiceMemo={isAdmin}
+          enableReply
           headerExtra={(
             <ChannelHeader
               conversation={activeChannel.conversation}
