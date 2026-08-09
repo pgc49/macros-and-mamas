@@ -11,8 +11,8 @@ import QuizInline from '../components/QuizInline.astro';
 import SystemCollage from '../components/SystemCollage.astro';
 import Guardrail from '../components/Guardrail.astro';
 import WeeksArc from '../components/WeeksArc.astro';
-// Hidden until real testimonials are ready — component kept at Quotes.astro
-// import Quotes from '../components/Quotes.astro';
+import Quotes from '../components/Quotes.astro';
+import QuoteEcho from '../components/QuoteEcho.astro';
 import FitCheck from '../components/FitCheck.astro';
 import Pricing from '../components/Pricing.astro';
 import Faq from '../components/Faq.astro';
@@ -41,6 +41,7 @@ const ogDescription = isWaitlist
   <Hero />
   <Ticker />
   <TwoAm />
+  <Quotes />
   <CallieLetter />
   <StatsStrip />
   <Ranges />
@@ -48,8 +49,8 @@ const ogDescription = isWaitlist
   <SystemCollage />
   <Guardrail />
   <WeeksArc />
-  {/* <Quotes /> — re-enable when cohort quotes are approved */}
   <FitCheck />
+  <QuoteEcho />
   <Pricing />
   <Faq />
   <FinalCta />

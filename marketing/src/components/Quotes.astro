@@ -1,31 +1,37 @@
-<section class="quotes">
+---
+/**
+ * Homepage testimonials. Add a third object here when the next quote arrives —
+ * the grid picks up 3 columns on desktop automatically.
+ */
+const testimonials = [
+  {
+    pull: "I've never been able to lose weight while nursing — with any of my children — until now.",
+    body: "And I'm not worried about my milk supply. I had been under-eating, prioritizing my children over myself, running on coffee and my kids' leftovers — and still holding weight. Callie taught me how to fuel my body properly instead of restricting, and the results followed. This is the first time in over a year I've seen the scale go down. Since day three I've stopped waking up puffy and bloated, I'm not shaky and starving in fight-or-flight mode, I'm less irritable, and I have more energy. Best thing I've done for myself in such a long time — and I have zero desire to quit.",
+    who: "— Coti, nursing mama of three",
+  },
+  {
+    pull: "If I didn't lose another pound, this would still be the best investment I've made in myself in years.",
+    body: "I was worried tracking macros would feel like a second job — that between kids and paid work, I wouldn't stick with it. But the app has made it so simple. Logging meals takes me two minutes, and I always know exactly what I need for the day. It's honestly become second nature. I'm happy to see the weight coming off, but the bigger thing is how I feel: no brain fog, consistent energy throughout the day. I feel like a new person.",
+    who: "— Lauren, mama of two",
+  },
+];
+---
+
+<section class="quotes" id="stories">
   <div class="wrap">
-    <span class="kicker">From the group chat</span>
-    <h2>Mamas who've done the 8 weeks</h2>
+    <span class="kicker">What the mamas say</span>
+    <h2>Real words from the program</h2>
     <div class="q-grid">
-      <div class="q-card rv"
-        ><span class="q-mark">"</span><p
-          >[Real cohort 1 quote. Pull from the group thread with permission. Best
-          pick: a supply or "finally eating enough" moment.]</p
-        ><div class="q-who">First name · months postpartum</div></div
-      >
-      <div class="q-card rv"
-        ><span class="q-mark">"</span><p
-          >[Real cohort 1 quote. Best pick: a restaurant menu or "I ate cake and
-          didn't spiral" moment.]</p
-        ><div class="q-who">First name · months postpartum</div></div
-      >
-      <div class="q-card rv"
-        ><span class="q-mark">"</span><p
-          >[Real cohort 1 quote. Best pick: "Callie actually answered me" or a
-          strength/energy win.]</p
-        ><div class="q-who">First name · months postpartum</div></div
-      >
+      {
+        testimonials.map((t) => (
+          <article class="q-card rv">
+            <p class="q-pull">{t.pull}</p>
+            <p class="q-body">{t.body}</p>
+            <div class="q-who">{t.who}</div>
+          </article>
+        ))
+      }
     </div>
-    <p class="q-note"
-      >Placeholder, deliberately. These slots need three real member quotes with
-      permission before launch. Screenshot-style captures from the group thread
-      would be even stronger than styled cards.</p
-    >
+    <p class="q-note">Every mama&apos;s results are her own.</p>
   </div>
 </section>
