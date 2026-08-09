@@ -114,6 +114,12 @@ function rowToProfile(row) {
     week: row.week ?? 0,
     role: row.role,
     createdAt: row.created_at || null,
+    cohort_label: row.cohort_label || null,
+    tier: row.tier || "none",
+    subscription_status: row.subscription_status || null,
+    subscription_current_period_end: row.subscription_current_period_end || null,
+    subscription_trial_end: row.subscription_trial_end || null,
+    stripe_subscription_id: row.stripe_subscription_id || null,
   };
 }
 

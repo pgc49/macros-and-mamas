@@ -28,6 +28,10 @@ import {
   getCohortConversation,
   handlePaidEnrollmentChannel,
 } from "../_shared/channels.js";
+import {
+  fetchStripeSubscription,
+  syncSubscriptionToProfile,
+} from "../_shared/membership.js";
 
 /** Event types we expect to receive; handlers land in later stages. */
 const KNOWN_EVENT_TYPES = new Set([
@@ -36,6 +40,8 @@ const KNOWN_EVENT_TYPES = new Set([
   "charge.refunded",
   "invoice.paid",
   "invoice.payment_failed",
+  "customer.subscription.created",
+  "customer.subscription.updated",
   "customer.subscription.deleted",
 ]);
 
@@ -92,12 +98,52 @@ export async function onRequestPost({ request, env }) {
         const invoice = event.data?.object || {};
         const result = await handleInvoicePaidCredits(env, invoice);
         console.log("invoice.paid credits", eventId, result);
+        // Keep subscription period/status fresh when membership invoices pay.
+        try {
+          const subId = typeof invoice.subscription === "string"
+            ? invoice.subscription
+            : invoice.subscription?.id;
+          if (subId) {
+            const sub = await fetchStripeSubscription(env, subId);
+            if (sub) {
+              const sync = await syncSubscriptionToProfile(env, sub);
+              console.log("invoice.paid subscription sync", eventId, sync);
+            }
+          }
+        } catch (subErr) {
+          console.error("invoice.paid subscription sync failed", eventId, subErr);
+        }
+      } else if (
+        eventType === "customer.subscription.created"
+        || eventType === "customer.subscription.updated"
+        || eventType === "customer.subscription.deleted"
+      ) {
+        const subscription = event.data?.object || {};
+        const sync = await syncSubscriptionToProfile(env, subscription);
+        console.log("subscription sync", eventType, eventId, sync);
+      } else if (eventType === "invoice.payment_failed") {
+        const invoice = event.data?.object || {};
+        const subId = typeof invoice.subscription === "string"
+          ? invoice.subscription
+          : invoice.subscription?.id;
+        if (subId) {
+          const sub = await fetchStripeSubscription(env, subId);
+          if (sub) {
+            // Mirror past_due / unpaid onto the profile for in-app banners.
+            const sync = await syncSubscriptionToProfile(env, {
+              ...sub,
+              status: sub.status || "past_due",
+            });
+            console.log("invoice.payment_failed sync", eventId, sync);
+          }
+        } else {
+          console.log("invoice.payment_failed no subscription", eventId);
+        }
       } else if (eventType === "charge.refunded") {
         const charge = event.data?.object || {};
         const result = await handleChargeRefundedReferral(env, charge);
         console.log("charge.refunded referral", eventId, result);
       } else if (KNOWN_EVENT_TYPES.has(eventType)) {
-        // Shell only — real handlers in later stages.
         console.log("stripe webhook unhandled (registered)", eventType, eventId);
       } else {
         console.log("stripe webhook unhandled", eventType, eventId);
@@ -129,6 +175,34 @@ async function handleCheckoutSessionCompleted(env, event) {
   if (!userId) {
     console.error("checkout.session.completed missing user id", session.id);
     throw new Error("missing user");
+  }
+
+  // Alumni membership Checkout — do not re-run 8-week paid enrollment.
+  const kind = String(session.metadata?.kind || "");
+  const mode = String(session.mode || "");
+  if (mode === "subscription" || kind === "alumni_membership") {
+    const subId = typeof session.subscription === "string"
+      ? session.subscription
+      : session.subscription?.id;
+    if (!subId) {
+      console.log("membership checkout completed without subscription id yet", session.id);
+      return;
+    }
+    const sub = await fetchStripeSubscription(env, subId);
+    if (!sub) throw new Error("subscription fetch failed");
+    // Ensure metadata carries the mama id even if Stripe omitted it on the sub.
+    if (!sub.metadata) sub.metadata = {};
+    if (!sub.metadata.supabase_user_id) sub.metadata.supabase_user_id = userId;
+    const sync = await syncSubscriptionToProfile(env, sub, { userId });
+    console.log("membership checkout sync", session.id, sync);
+    // Persist customer id if checkout created one and profile lacked it.
+    const customerId = typeof session.customer === "string"
+      ? session.customer
+      : session.customer?.id;
+    if (customerId) {
+      await patchCustomerIdIfMissing(env, userId, customerId);
+    }
+    return;
   }
 
   // Defense-in-depth: only unlock paid when Stripe says the session is paid.
@@ -364,6 +438,27 @@ async function fetchProfilePaymentFields(env, userId) {
     return Array.isArray(rows) ? rows[0] || null : null;
   } catch {
     return null;
+  }
+}
+
+async function patchCustomerIdIfMissing(env, userId, customerId) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key || !userId || !customerId) return;
+  const existing = await fetchProfilePaymentFields(env, userId);
+  if (existing?.stripe_customer_id) return;
+  const resp = await fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+      apikey: key,
+      authorization: `Bearer ${key}`,
+      prefer: "return=minimal",
+    },
+    body: JSON.stringify({ stripe_customer_id: customerId }),
+  });
+  if (!resp.ok) {
+    console.error("patchCustomerIdIfMissing failed", resp.status, await resp.text());
   }
 }
 

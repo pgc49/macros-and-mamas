@@ -21,24 +21,43 @@ export const PATHS = {
   accountProfile: "/account/profile",
   accountPayments: "/account/payments",
   accountShare: "/account/share",
+  /** Post–free-month paywall when monthly membership is required. */
+  membership: "/membership",
 };
 
 /**
  * Where a signed-in user should land after auth / cold load.
  * Pay-first: account → pay → intake → Callie approve → dashboard.
+ * After founding free month without a sub → membership gate.
  */
-export function homePathFor({ isAdmin, approved, paid, macros, refunded }) {
+export function homePathFor({
+  isAdmin,
+  approved,
+  paid,
+  macros,
+  refunded,
+  membershipPaywall = false,
+}) {
   if (isAdmin) return PATHS.admin;
   if (refunded) return PATHS.goodbye;
   if (!paid) return PATHS.join;
   if (!macros) return PATHS.onboarding;
   if (!approved) return PATHS.pending;
+  if (membershipPaywall) return PATHS.membership;
   return PATHS.dashboard;
 }
 
 /** Dashboard access: approve + pay, or admin dogfooding an approved intake. */
-export function canAccessDashboard({ isAdmin, approved, paid, macros, refunded }) {
+export function canAccessDashboard({
+  isAdmin,
+  approved,
+  paid,
+  macros,
+  refunded,
+  membershipPaywall = false,
+}) {
   if (refunded) return false;
+  if (membershipPaywall && !isAdmin) return false;
   return !!(macros && approved && (paid || isAdmin));
 }
 

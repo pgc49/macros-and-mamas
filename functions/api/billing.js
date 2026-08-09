@@ -1,18 +1,19 @@
 /* ==================================================================
-   /functions/api/billing.js — Client billing summary (past + upcoming shell)
+   /functions/api/billing.js — Client billing summary + portal
    ==================================================================
-   GET  → payment history from Stripe + program / subscription shell
-   POST { action: "portal" } → Stripe Customer Portal URL (when configured)
-
-   Env: STRIPE_SECRET_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-        SUPABASE_ANON_KEY / VITE_SUPABASE_ANON_KEY,
-        optional STRIPE_BILLING_PORTAL_CONFIGURATION
+   GET  → payment history, program (week from cohort dates), membership
+   POST { action: "portal" } → Stripe Customer Portal URL
    ================================================================== */
 
 import {
   creditsPayloadForUi,
   listLedgerForUser,
 } from "../_shared/credits.js";
+import {
+  buildProgramSummaryFromCohort,
+  buildSubscriptionPayload,
+  membershipAccess,
+} from "../_shared/membership.js";
 
 export async function onRequestGet({ request, env }) {
   try {
@@ -27,8 +28,9 @@ export async function onRequestGet({ request, env }) {
     }
 
     const payments = await listCustomerPayments(env, profile);
-    const program = buildProgramSummary(profile, payments);
-    const subscription = buildSubscriptionShell(profile);
+    const program = buildProgramSummaryFromCohort(profile, payments);
+    const subscription = await buildSubscriptionPayload(env, profile);
+    const access = membershipAccess(profile);
     let credits = null;
     try {
       const ledger = await listLedgerForUser(env, user.id);
@@ -42,6 +44,7 @@ export async function onRequestGet({ request, env }) {
       program,
       payments,
       subscription,
+      access,
       credits,
       portalAvailable: !!env.STRIPE_SECRET_KEY && !!profile.stripe_customer_id,
     });
@@ -101,65 +104,61 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-function buildProgramSummary(profile, payments) {
-  const latest = payments.find((p) => p.status === "succeeded") || payments[0] || null;
-  const paidAt = profile.paid_at || latest?.created || null;
-  const week = Number(profile.week) || 0;
-  let phase = "not_started";
-  if (profile.paid) {
-    phase = week >= 8 ? "program_complete" : "in_program";
-  }
-  return {
-    paid: !!profile.paid,
-    paidAt,
-    week,
-    phase,
-    label: latest?.description || "8-week program",
-    amount: latest?.amount ?? null,
-    currency: latest?.currency || "usd",
-    receiptUrl: latest?.receiptUrl || null,
-  };
-}
-
-/** Shell only — discounted monthly membership after the 8-week program (not live yet). */
-function buildSubscriptionShell(_profile) {
-  return {
-    status: "coming_soon",
-    priceLabel: null,
-    amount: null,
-    currency: "usd",
-    renewsAt: null,
-    cancelAtPeriodEnd: false,
-    note: "As an 8-week member, you’ll get access to a discounted monthly membership to keep using the app. Coming soon — nothing charges automatically.",
-  };
-}
-
 async function listCustomerPayments(env, profile) {
   const secret = env.STRIPE_SECRET_KEY;
   if (!secret) return fallbackFromProfile(profile);
 
   const out = [];
   const customerId = profile.stripe_customer_id;
+  const seen = new Set();
 
   if (customerId) {
-    const url =
+    // One-time charges (program checkout)
+    const chargeUrl =
       `https://api.stripe.com/v1/charges`
       + `?customer=${encodeURIComponent(customerId)}`
       + `&limit=20`;
-    const resp = await fetch(url, {
+    const chargeResp = await fetch(chargeUrl, {
       headers: { authorization: `Bearer ${secret}` },
     });
-    if (resp.ok) {
-      const data = await resp.json().catch(() => ({}));
+    if (chargeResp.ok) {
+      const data = await chargeResp.json().catch(() => ({}));
       for (const ch of data.data || []) {
-        out.push(mapCharge(ch));
+        const row = mapCharge(ch);
+        if (row.id && !seen.has(row.id)) {
+          seen.add(row.id);
+          out.push(row);
+        }
       }
     } else {
-      console.error("stripe charges list failed", resp.status, await resp.text());
+      console.error("stripe charges list failed", chargeResp.status, await chargeResp.text());
+    }
+
+    // Subscription invoices (membership)
+    const invUrl =
+      `https://api.stripe.com/v1/invoices`
+      + `?customer=${encodeURIComponent(customerId)}`
+      + `&limit=20`
+      + `&status=paid`;
+    const invResp = await fetch(invUrl, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    if (invResp.ok) {
+      const data = await invResp.json().catch(() => ({}));
+      for (const inv of data.data || []) {
+        // Skip $0 trial invoices cluttering history
+        if (!inv.amount_paid && !inv.amount_due) continue;
+        const row = mapInvoice(inv);
+        if (row.id && !seen.has(row.id)) {
+          seen.add(row.id);
+          out.push(row);
+        }
+      }
+    } else {
+      console.error("stripe invoices list failed", invResp.status, await invResp.text());
     }
   }
 
-  // Fallback: single PI from checkout if charges list empty
   if (!out.length && profile.stripe_payment_intent) {
     const piUrl = `https://api.stripe.com/v1/payment_intents/${encodeURIComponent(profile.stripe_payment_intent)}`;
     const resp = await fetch(piUrl, {
@@ -172,6 +171,11 @@ async function listCustomerPayments(env, profile) {
   }
 
   if (!out.length) return fallbackFromProfile(profile);
+  out.sort((a, b) => {
+    const ta = a.created ? Date.parse(a.created) : 0;
+    const tb = b.created ? Date.parse(b.created) : 0;
+    return tb - ta;
+  });
   return out;
 }
 
@@ -202,6 +206,27 @@ function mapCharge(ch) {
     receiptUrl: ch.receipt_url || null,
     brand: ch.payment_method_details?.card?.brand || null,
     last4: ch.payment_method_details?.card?.last4 || null,
+  };
+}
+
+function mapInvoice(inv) {
+  const amount = typeof inv.amount_paid === "number" ? inv.amount_paid / 100 : null;
+  const lines = inv.lines?.data || [];
+  const firstDesc = lines[0]?.description || "";
+  const isMembership = /alumni|membership|macros and mamas/i.test(firstDesc)
+    || String(inv.subscription || "").startsWith("sub_");
+  return {
+    id: inv.id,
+    created: inv.created ? new Date(inv.created * 1000).toISOString() : null,
+    amount,
+    currency: inv.currency || "usd",
+    status: inv.status === "paid" ? "succeeded" : inv.status,
+    description: isMembership
+      ? (firstDesc || "Monthly membership")
+      : (firstDesc || inv.description || "Invoice"),
+    receiptUrl: inv.hosted_invoice_url || inv.invoice_pdf || null,
+    brand: null,
+    last4: null,
   };
 }
 
@@ -249,7 +274,7 @@ async function fetchBillingProfile(env, userId) {
   const url =
     `${base}/rest/v1/profiles`
     + `?id=eq.${encodeURIComponent(userId)}`
-    + `&select=id,role,paid,refunded,paid_at,week,stripe_customer_id,stripe_payment_intent`;
+    + `&select=id,role,paid,refunded,paid_at,week,cohort_label,tier,stripe_customer_id,stripe_payment_intent,stripe_subscription_id,subscription_status,subscription_current_period_end,subscription_trial_end`;
   const resp = await fetch(url, {
     headers: { apikey: key, authorization: `Bearer ${key}` },
   });

@@ -45,3 +45,21 @@ export async function openBillingPortal() {
   if (data.url) window.location.assign(data.url);
   return data;
 }
+
+/** Start alumni membership Checkout (subscription + free-month trial when eligible). */
+export async function startMembershipCheckout() {
+  const headers = await authHeaders();
+  const resp = await fetch(CONFIG.MEMBERSHIP_CHECKOUT_ENDPOINT, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({}),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const err = new Error(data.error || "Couldn't start membership checkout.");
+    err.status = resp.status;
+    throw err;
+  }
+  if (data.url) window.location.assign(data.url);
+  return data;
+}
