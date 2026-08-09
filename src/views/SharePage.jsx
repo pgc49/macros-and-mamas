@@ -123,6 +123,9 @@ export function SharePage() {
             <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: T.inkSoft }}>
               Share text
             </div>
+            <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "8px 0 0" }}>
+              Feel free to personalize this copy when sharing with friends or mom groups.
+            </p>
             <p style={{ fontSize: 14.5, lineHeight: 1.55, margin: "10px 0 0", color: T.ink, fontFamily: F }}>
               {data.blurb}
             </p>

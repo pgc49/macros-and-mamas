@@ -99,9 +99,8 @@ export function normalizeReferralCode(raw) {
 export function shareBlurb(code) {
   const c = normalizeReferralCode(code);
   return (
-    `I did the 8-week Macros and Mamas program and it actually fit around my kids. `
-    + `Full disclosure — I get a credit if you enroll with my code, and you save $25 on top of the quiz rate. `
-    + `When you sign up, use my code ${c} for $25 off → macrosandmamas.com/quiz`
+    `Use code ${c} to join Callie in her Macros and Mamas 8-week transformation program! `
+    + `www.macrosandmamas.com`
   );
 }
 
