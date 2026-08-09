@@ -33,7 +33,7 @@ Customer Balance applies to **invoices**, not one-time Checkout. Membership invo
 ## Env
 
 ```
-VESTING_DAYS=14
+VESTING_DAYS=3
 CRON_SECRET=...   # already used by email-cron
 ```
 
@@ -54,4 +54,4 @@ Payments page Credits card between Monthly membership and Payment history. Hidde
 5. Payments shows balance / pending / lines; hidden at zero rows.
 6. RLS: user A cannot read B; client cannot insert.
 
-Open item (README): confirm 14-day vest vs public no-refund policy before stage 2 goes live.
+Vesting default is **3 days** after the payment that earns the credit (not tied to macros approval). Pending credits already show on Payments for Mama A.
