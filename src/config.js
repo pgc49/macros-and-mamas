@@ -27,6 +27,7 @@ export const CONFIG = {
   QUIZ_LEAD_ENDPOINT: "/api/quiz-lead",
   BILLING_ENDPOINT: "/api/billing",
   MEMBERSHIP_CHECKOUT_ENDPOINT: "/api/membership-checkout",
+  MEMBERSHIP_CANCEL_ENDPOINT: "/api/membership-cancel",
   REFUND_ENDPOINT: "/api/refund",
   INTAKE_SUBMITTED_ENDPOINT: "/api/intake-submitted",
   MACROS_APPROVED_ENDPOINT: "/api/macros-approved",

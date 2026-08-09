@@ -21,6 +21,10 @@ import {
 } from "../_shared/openrouter.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
+import {
+  appAccessDeniedResponse,
+  fetchProfileForAccess,
+} from "../_shared/membership.js";
 
 const MAX_PER_DAY = 5;
 const SUGGEST_RETRY_COPY = "AI was slow starting up — tap Suggest my week once more.";
@@ -43,6 +47,16 @@ export async function onRequestPost({ request, env }) {
 
     // Admins (Callie / Tech Guy) — unlimited AI for coaching + QA. Mamas stay capped.
     const isAdmin = access.role === "admin";
+    if (!isAdmin) {
+      try {
+        const profile = await fetchProfileForAccess(env, user.id);
+        const denied = appAccessDeniedResponse(profile);
+        if (denied) return json({ error: denied.error }, denied.status);
+      } catch (e) {
+        console.error("membership access check failed", e);
+        return json({ error: "membership required" }, 403);
+      }
+    }
     if (!isAdmin) {
       const limit = await checkSuggestLimit(env, user.id);
       if (!limit.ok) {

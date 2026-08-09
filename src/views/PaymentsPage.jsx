@@ -5,6 +5,7 @@ import { Shell, Card, Btn } from "../components/ui";
 import { PATHS } from "../routing";
 import { useAuth } from "../auth/useAuth.jsx";
 import {
+  cancelMembership,
   fetchBillingSummary,
   openBillingPortal,
   startMembershipCheckout,
@@ -56,6 +57,9 @@ export function PaymentsPage() {
   const [portalNote, setPortalNote] = useState("");
   const [subBusy, setSubBusy] = useState(false);
   const [subNote, setSubNote] = useState("");
+  const [cancelStep, setCancelStep] = useState(null); // null | "offer" | "done"
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -129,6 +133,23 @@ export function PaymentsPage() {
     } catch (e) {
       setSubNote(e?.message || "Couldn't start membership checkout.");
       setSubBusy(false);
+    }
+  };
+
+  const runCancel = async (action) => {
+    setCancelMsg("");
+    setCancelBusy(true);
+    try {
+      const result = await cancelMembership(action);
+      setCancelMsg(result.message || "Done.");
+      setCancelStep("done");
+      await refreshProfile?.();
+      const summary = await fetchBillingSummary();
+      setData(summary);
+    } catch (e) {
+      setCancelMsg(e?.message || "Couldn't update membership.");
+    } finally {
+      setCancelBusy(false);
     }
   };
 
@@ -279,8 +300,79 @@ export function PaymentsPage() {
             </div>
           </>
         )}
-        {subNote && (
-          <div style={{ fontSize: 13.5, color: T.amber, marginTop: 10, lineHeight: 1.45 }}>{subNote}</div>
+        {subscription?.canCancel && cancelStep !== "offer" && cancelStep !== "done" && (
+          <button
+            type="button"
+            onClick={() => setCancelStep("offer")}
+            style={{
+              marginTop: 14,
+              background: "none",
+              border: "none",
+              color: T.inkSoft,
+              fontSize: 13.5,
+              fontWeight: 600,
+              textDecoration: "underline",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            Cancel membership
+          </button>
+        )}
+        {cancelStep === "offer" && (
+          <div
+            style={{
+              marginTop: 14,
+              padding: "14px 14px",
+              borderRadius: 12,
+              background: T.bg,
+              border: `1px solid ${T.border}`,
+            }}
+          >
+            <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 8 }}>Before you go</div>
+            <p style={{ fontSize: 14.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
+              Keep the app, your ranges, and your full history for <strong style={{ color: T.ink }}>$19/mo</strong>?
+              That’s <strong style={{ color: T.ink }}>app-only</strong> — meal logging and progress tracking.
+              No Callie 1:1 and no group chats.
+            </p>
+            <Btn
+              style={{ width: "100%", marginBottom: 8 }}
+              disabled={cancelBusy}
+              onClick={() => runCancel("save_offer")}
+            >
+              {cancelBusy ? "Saving…" : "Yes — keep app-only for $19/mo"}
+            </Btn>
+            <Btn
+              style={{ width: "100%", marginBottom: 8, background: T.bg, color: T.ink, border: `1px solid ${T.border}` }}
+              disabled={cancelBusy}
+              onClick={() => runCancel("confirm_cancel")}
+            >
+              No thanks — cancel at period end
+            </Btn>
+            <button
+              type="button"
+              disabled={cancelBusy}
+              onClick={() => setCancelStep(null)}
+              style={{
+                display: "block",
+                width: "100%",
+                background: "none",
+                border: "none",
+                color: T.inkSoft,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                padding: 8,
+              }}
+            >
+              Never mind
+            </button>
+          </div>
+        )}
+        {(cancelMsg || subNote) && (
+          <div style={{ fontSize: 13.5, color: T.amber, marginTop: 10, lineHeight: 1.45 }}>
+            {cancelMsg || subNote}
+          </div>
         )}
       </Card>
 
@@ -372,7 +464,7 @@ export function PaymentsPage() {
           Manage card
         </h2>
         <p style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
-          Update your card and view invoices in Stripe’s secure portal. Cancellation stays in-app.
+          Update your card and view invoices in Stripe’s secure portal. To cancel membership, use Cancel above — not the portal.
         </p>
         <Btn
           style={{ width: "100%" }}

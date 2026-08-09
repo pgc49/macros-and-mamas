@@ -2,37 +2,44 @@
    Cohort calendar — enrollment windows + program period dates
    ==================================================================
    windowStart/windowEnd: when paid checkouts stamp this cohort_label.
-   programStart/programEnd: the 8-week coaching period for that group.
+   programStart: first day of the 8-week coaching period.
+   programEnd: always programStart + 56 days (do not hand-edit ends).
    Alumni free month starts at programEnd; freeMonthEnds = programEnd + 30d.
    ================================================================== */
 
-/** Canonical cohorts. Add a new row when doors open for the next group. */
+/** 8 weeks in days. */
+export const PROGRAM_LENGTH_DAYS = 56;
+
+/** Free alumni month length after programEnd. */
+export const FREE_MONTH_DAYS = 30;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Canonical cohorts. Set programStart; end is derived. */
 export const COHORT_CALENDAR = [
   {
     label: "2026-07",
     displayName: "Founding Members",
-    /** Inclusive start (UTC) for stamping this cohort on payment */
     windowStart: "2026-07-01T00:00:00.000Z",
-    /** Exclusive end */
     windowEnd: "2026-08-10T00:00:00.000Z",
-    /** 8-week program Mondays (UTC date anchors) */
+    /** Program Mondays (UTC date anchors) */
     programStart: "2026-07-20T00:00:00.000Z",
-    /** End of week 8 / start of alumni free month */
-    programEnd: "2026-09-14T00:00:00.000Z",
   },
   {
     label: "2026-08",
     displayName: "August Group",
     windowStart: "2026-08-10T00:00:00.000Z",
     windowEnd: "2026-09-21T00:00:00.000Z",
-    // Set when C2 program dates are locked.
-    programStart: null,
-    programEnd: null,
+    /** Week 1 Monday → end = Oct 26 */
+    programStart: "2026-08-31T00:00:00.000Z",
   },
 ];
 
-/** Free alumni month length after programEnd (founding: Sept 14 → Oct 14). */
-export const FREE_MONTH_DAYS = 30;
+function addDaysIso(iso, days) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  return new Date(t + days * DAY_MS).toISOString();
+}
 
 /** Currently enrolling cohort for new paid checkouts (C2). */
 export function openEnrollmentCohort(env) {
@@ -46,7 +53,6 @@ export function openEnrollmentCohort(env) {
       windowStart: null,
       windowEnd: null,
       programStart: null,
-      programEnd: null,
     };
   }
   return COHORT_CALENDAR.find((c) => c.label === "2026-08") || COHORT_CALENDAR[COHORT_CALENDAR.length - 1];
@@ -76,15 +82,20 @@ export function displayNameForCohortLabel(label) {
   return hit?.displayName || label || "Group";
 }
 
-/** programEnd + FREE_MONTH_DAYS, or null if programEnd unset. */
-export function freeMonthEndsAt(cohortOrLabel) {
+/** programStart + 56 days, or null if programStart unset. */
+export function programEndAt(cohortOrLabel) {
   const cohort = typeof cohortOrLabel === "string"
     ? cohortByLabel(cohortOrLabel)
     : cohortOrLabel;
-  if (!cohort?.programEnd) return null;
-  const start = Date.parse(cohort.programEnd);
-  if (!Number.isFinite(start)) return null;
-  return new Date(start + FREE_MONTH_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  if (!cohort?.programStart) return null;
+  return addDaysIso(cohort.programStart, PROGRAM_LENGTH_DAYS);
+}
+
+/** programEnd + FREE_MONTH_DAYS, or null if programStart unset. */
+export function freeMonthEndsAt(cohortOrLabel) {
+  const end = programEndAt(cohortOrLabel);
+  if (!end) return null;
+  return addDaysIso(end, FREE_MONTH_DAYS);
 }
 
 /**
@@ -100,16 +111,14 @@ export function programWeekNumber(cohortOrLabel, now = new Date()) {
   const t = now instanceof Date ? now.getTime() : Date.parse(now);
   if (!Number.isFinite(start) || !Number.isFinite(t)) return null;
   if (t < start) return 1;
-  const week = Math.floor((t - start) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  const week = Math.floor((t - start) / (7 * DAY_MS)) + 1;
   return Math.min(Math.max(week, 1), 8);
 }
 
 export function isProgramComplete(cohortOrLabel, now = new Date()) {
-  const cohort = typeof cohortOrLabel === "string"
-    ? cohortByLabel(cohortOrLabel)
-    : cohortOrLabel;
-  if (!cohort?.programEnd) return false;
-  const end = Date.parse(cohort.programEnd);
+  const endIso = programEndAt(cohortOrLabel);
+  if (!endIso) return false;
+  const end = Date.parse(endIso);
   const t = now instanceof Date ? now.getTime() : Date.parse(now);
   return Number.isFinite(end) && Number.isFinite(t) && t >= end;
 }

@@ -22,6 +22,10 @@ import {
   resolveModels,
 } from "../_shared/openrouter.js";
 import { sanitizeEstimate } from "../_shared/estimateShape.js";
+import {
+  appAccessDeniedResponse,
+  fetchProfileForAccess,
+} from "../_shared/membership.js";
 
 const MAX_BODY_CHARS = 2_500_000; // ~2MB guard on base64 payload
 const MAX_NOTE_CHARS = 800;
@@ -73,6 +77,8 @@ export async function onRequestPost({ request, env }) {
     if (!access || access.refunded || (!access.paid && access.role !== "admin")) {
       return json({ error: "payment required" }, 403);
     }
+    const membershipDeny = await denyIfMembershipRequired(env, user.id, access);
+    if (membershipDeny) return membershipDeny;
 
     const rawLen = Number(request.headers.get("content-length") || 0);
     if (rawLen > MAX_BODY_CHARS) return json({ error: "payload too large" }, 413);
@@ -349,6 +355,20 @@ async function fetchEnrollment(env, userId, authHeader) {
   if (!resp.ok) return null;
   const rows = await resp.json().catch(() => []);
   return rows[0] || null;
+}
+
+async function denyIfMembershipRequired(env, userId, access) {
+  if (access?.role === "admin") return null;
+  try {
+    const profile = await fetchProfileForAccess(env, userId);
+    if (!profile) return json({ error: "membership required" }, 403);
+    const denied = appAccessDeniedResponse(profile);
+    if (!denied) return null;
+    return json({ error: denied.error }, denied.status);
+  } catch (e) {
+    console.error("membership access check failed", e);
+    return json({ error: "membership required" }, 403);
+  }
 }
 
 function json(obj, status = 200) {

@@ -25,6 +25,8 @@ export async function onRequestPost({ request, env }) {
     if (
       profile.subscription_status === "trialing"
       || profile.subscription_status === "active"
+      || profile.subscription_status === "past_due"
+      || profile.subscription_status === "incomplete"
     ) {
       return json({ error: "already subscribed" }, 409);
     }
@@ -106,7 +108,7 @@ async function fetchProfile(env, userId) {
   const url =
     `${base}/rest/v1/profiles`
     + `?id=eq.${encodeURIComponent(userId)}`
-    + `&select=id,role,paid,refunded,paid_at,week,cohort_label,tier,stripe_customer_id,stripe_subscription_id,subscription_status,subscription_current_period_end,subscription_trial_end`;
+    + `&select=id,role,paid,refunded,paid_at,week,cohort_label,tier,stripe_customer_id,stripe_subscription_id,subscription_status,subscription_current_period_end,subscription_trial_end,subscription_cancel_at_period_end`;
   const resp = await fetch(url, {
     headers: { apikey: key, authorization: `Bearer ${key}` },
   });

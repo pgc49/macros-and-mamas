@@ -27,6 +27,10 @@ import {
 } from "../_shared/openrouter.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
+import {
+  appAccessDeniedResponse,
+  fetchProfileForAccess,
+} from "../_shared/membership.js";
 
 const MAX_PER_DAY = 20;
 const MAX_IMAGES = 3;
@@ -52,6 +56,16 @@ export async function onRequestPost({ request, env }) {
     const access = await fetchEnrollment(env, user.id, authHeader);
     if (!access || access.refunded || (!access.paid && access.role !== "admin")) {
       return json({ error: "payment required" }, 403);
+    }
+    if (access.role !== "admin") {
+      try {
+        const profile = await fetchProfileForAccess(env, user.id);
+        const denied = appAccessDeniedResponse(profile);
+        if (denied) return json({ error: denied.error }, denied.status);
+      } catch (e) {
+        console.error("membership access check failed", e);
+        return json({ error: "membership required" }, 403);
+      }
     }
 
     const body = await request.json().catch(() => ({}));

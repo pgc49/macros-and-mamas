@@ -1,4 +1,4 @@
-import { cohortByLabel, freeMonthEndsAt, isProgramComplete } from "./cohorts";
+import { cohortByLabel, freeMonthEndsAt, isProgramComplete, programEndAt } from "./cohorts";
 
 const ACTIVE_SUB_STATUSES = new Set(["trialing", "active", "past_due"]);
 
@@ -20,10 +20,11 @@ export function membershipAccess(profile, now = new Date()) {
   if (!profile.paid) return { allowed: false, reason: "unpaid", paywall: false };
 
   const cohort = cohortByLabel(profile.cohort_label);
+  const programEnd = programEndAt(cohort);
   const freeEndIso = freeMonthEndsAt(cohort);
   const t = now instanceof Date ? now.getTime() : Date.parse(now);
 
-  if (!cohort?.programEnd || !freeEndIso) {
+  if (!programEnd || !freeEndIso) {
     return { allowed: true, reason: "program_dates_unset", paywall: false };
   }
 

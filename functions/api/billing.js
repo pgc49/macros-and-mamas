@@ -124,6 +124,8 @@ async function listCustomerPayments(env, profile) {
     if (chargeResp.ok) {
       const data = await chargeResp.json().catch(() => ({}));
       for (const ch of data.data || []) {
+        // Prefer invoices for subscription payments — skip invoice-backed charges to avoid doubles.
+        if (ch.invoice) continue;
         const row = mapCharge(ch);
         if (row.id && !seen.has(row.id)) {
           seen.add(row.id);
@@ -274,7 +276,7 @@ async function fetchBillingProfile(env, userId) {
   const url =
     `${base}/rest/v1/profiles`
     + `?id=eq.${encodeURIComponent(userId)}`
-    + `&select=id,role,paid,refunded,paid_at,week,cohort_label,tier,stripe_customer_id,stripe_payment_intent,stripe_subscription_id,subscription_status,subscription_current_period_end,subscription_trial_end`;
+    + `&select=id,role,paid,refunded,paid_at,week,cohort_label,tier,stripe_customer_id,stripe_payment_intent,stripe_subscription_id,subscription_status,subscription_current_period_end,subscription_trial_end,subscription_cancel_at_period_end`;
   const resp = await fetch(url, {
     headers: { apikey: key, authorization: `Bearer ${key}` },
   });
