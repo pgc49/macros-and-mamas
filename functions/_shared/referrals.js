@@ -295,7 +295,8 @@ export async function buildSharePayload(env, userId, opts = {}) {
   const payload = {
     code: codeRow?.code || null,
     blurb: codeRow ? shareBlurb(codeRow.code) : null,
-    quizUrl: "https://www.macrosandmamas.com/quiz",
+    homeUrl: "https://www.macrosandmamas.com",
+    quizUrl: "https://www.macrosandmamas.com",
     friendsEnrolled,
     availableCents,
     pendingCents,
