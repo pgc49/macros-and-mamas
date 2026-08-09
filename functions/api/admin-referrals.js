@@ -46,8 +46,9 @@ export async function onRequestPost({ request, env }) {
     if (action === "ensure") {
       const userId = String(body.userId || "").trim();
       const name = String(body.name || "").trim();
+      const lastName = String(body.lastName || body.last_name || "").trim();
       if (!userId) return json({ error: "userId required" }, 400);
-      const row = await ensureReferralCode(env, { userId, name });
+      const row = await ensureReferralCode(env, { userId, name, lastName });
       return json({ ok: true, row }, 200);
     }
 

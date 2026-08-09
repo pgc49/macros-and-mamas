@@ -53,11 +53,42 @@ async function sbFetch(env, path, init = {}) {
   return data;
 }
 
-/** FIRSTNAME25 → SARAH25; collisions → SARAH252, SARAH253… */
+function cleanNameToken(raw, maxLen = 12) {
+  return String(raw || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, maxLen);
+}
+
+/** FIRSTNAME25 → SARAH25 (first token of name / email local-part). */
 export function baseCodeFromName(name) {
   const first = String(name || "").trim().split(/\s+/)[0] || "MAMA";
-  const cleaned = first.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "MAMA";
+  const cleaned = cleanNameToken(first) || "MAMA";
   return `${cleaned}25`;
+}
+
+/**
+ * Ordered code candidates for an advocate.
+ * 1) SARAH25
+ * 2) SARAHJ25 (first letter of last name) when available
+ * 3) SARAH252, SARAH253… numeric fallback
+ */
+export function referralCodeCandidates({ name, lastName } = {}) {
+  const firstRaw = String(name || "").trim().split(/\s+/)[0] || "MAMA";
+  const first = cleanNameToken(firstRaw) || "MAMA";
+  const lastInitial = cleanNameToken(lastName, 1);
+  const primary = `${first}25`;
+  const withLast = lastInitial ? `${first}${lastInitial}25` : "";
+  const out = [];
+  const seen = new Set();
+  const push = (code) => {
+    if (!code || seen.has(code)) return;
+    seen.add(code);
+    out.push(code);
+  };
+  push(primary);
+  push(withLast);
+  for (let n = 2; n <= 25; n += 1) {
+    push(`${primary}${n}`);
+  }
+  return out;
 }
 
 export function normalizeReferralCode(raw) {
@@ -159,20 +190,17 @@ async function findReferralCodeByCodeAny(env, code) {
   return Array.isArray(rows) ? rows[0] || null : null;
 }
 
-export async function ensureReferralCode(env, { userId, name }) {
+export async function ensureReferralCode(env, { userId, name, lastName }) {
   const existing = await getReferralCodeForUser(env, userId);
   if (existing) return existing;
 
-  // Prefer SARAH25, then SARAH252, SARAH253… on collisions.
-  const base = baseCodeFromName(name);
-  let attempt = 0;
+  // Prefer SARAH25 → SARAHJ25 (last initial) → SARAH252… numeric fallback.
+  const candidates = referralCodeCandidates({ name, lastName });
   let lastErr = null;
-  while (attempt < 25) {
-    const codeToUse = attempt === 0 ? base : `${base}${attempt + 1}`;
+  for (const codeToUse of candidates) {
     const taken = await findReferralCodeByCodeAny(env, codeToUse);
     if (taken) {
       if (taken.user_id === userId) return taken;
-      attempt += 1;
       continue;
     }
     try {
@@ -188,7 +216,6 @@ export async function ensureReferralCode(env, { userId, name }) {
         ) {
           promo = recovered;
         } else if (/already|exists|duplicate/i.test(msg) || stripeErr?.status === 400) {
-          attempt += 1;
           lastErr = stripeErr;
           continue;
         } else {
@@ -212,7 +239,6 @@ export async function ensureReferralCode(env, { userId, name }) {
         // Concurrent insert for this user — re-read.
         const raced = await getReferralCodeForUser(env, userId);
         if (raced) return raced;
-        attempt += 1;
         continue;
       }
       throw e;
@@ -224,7 +250,7 @@ export async function ensureReferralCode(env, { userId, name }) {
 export async function buildSharePayload(env, userId) {
   const profileRows = await sbFetch(
     env,
-    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,name,email,paid,ambassador&limit=1`,
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,name,last_name,email,paid,ambassador&limit=1`,
     { method: "GET" },
   );
   const profile = Array.isArray(profileRows) ? profileRows[0] : null;
@@ -233,6 +259,7 @@ export async function buildSharePayload(env, userId) {
   const codeRow = await ensureReferralCode(env, {
     userId,
     name: profile.name || profile.email,
+    lastName: profile.last_name,
   });
 
   const referrals = await sbFetch(
@@ -573,7 +600,7 @@ export async function handleChargeRefundedReferral(env, charge) {
 export async function backfillReferralCodes(env) {
   const rows = await sbFetch(
     env,
-    `/rest/v1/profiles?role=eq.client&paid=eq.true&refunded=eq.false&status=eq.active&select=id,name,email&order=created_at.asc&limit=500`,
+    `/rest/v1/profiles?role=eq.client&paid=eq.true&refunded=eq.false&status=eq.active&select=id,name,last_name,email&order=created_at.asc&limit=500`,
     { method: "GET" },
   );
   const list = Array.isArray(rows) ? rows : [];
@@ -581,7 +608,11 @@ export async function backfillReferralCodes(env) {
   for (const p of list) {
     try {
       const before = await getReferralCodeForUser(env, p.id);
-      const row = await ensureReferralCode(env, { userId: p.id, name: p.name || p.email });
+      const row = await ensureReferralCode(env, {
+        userId: p.id,
+        name: p.name || p.email,
+        lastName: p.last_name,
+      });
       if (before) stats.existed += 1;
       else if (row) stats.created += 1;
     } catch (e) {
