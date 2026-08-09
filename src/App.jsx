@@ -17,6 +17,7 @@ import {
   weekKeysFromChecks,
 } from "./utils/progressSeries";
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
+import { needsMembershipPaywall } from "./lib/membershipAccess";
 import { SalesPage } from "./views/SalesPage";
 import { WaitlistPage } from "./views/WaitlistPage";
 import { SupportPage } from "./views/SupportPage";
@@ -56,6 +57,7 @@ function SignInGate({
   paid,
   macros,
   refunded,
+  membershipPaywall = false,
 }) {
   const { user, signOut, loading: authLoading } = useAuth();
   const location = useLocation();
@@ -103,7 +105,7 @@ function SignInGate({
     const to = deepAccount
       || (location.state?.from === PATHS.support ? PATHS.support : null)
       || joinQuiz
-      || homePathFor({ isAdmin, approved, paid, macros, refunded });
+      || homePathFor({ isAdmin, approved, paid, macros, refunded, membershipPaywall });
     return <Navigate to={to} replace />;
   }
 
@@ -140,6 +142,9 @@ const ProfilePage = lazy(() =>
 const PaymentsPage = lazy(() =>
   import("./views/PaymentsPage").then((m) => ({ default: m.PaymentsPage })),
 );
+const MembershipGatePage = lazy(() =>
+  import("./views/MembershipGatePage").then((m) => ({ default: m.MembershipGatePage })),
+);
 const SharePage = lazy(() =>
   import("./views/SharePage").then((m) => ({ default: m.SharePage })),
 );
@@ -167,7 +172,13 @@ const EMPTY_PROFILE = {
 };
 
 export default function App() {
-  const { user, isAdmin, loading: authLoading, refreshProfile } = useAuth();
+  const {
+    user,
+    isAdmin,
+    loading: authLoading,
+    refreshProfile,
+    profile: authProfile,
+  } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [signInNext, setSignInNext] = useState("intake"); // "intake" → create; "app" → returning
@@ -406,6 +417,18 @@ export default function App() {
     refreshWeekPlan();
   }, [tab, location.pathname, user?.id, authLoading, loaded]);
 
+  /* Membership fields may arrive from db load or auth profile refresh. */
+  const membershipProfile = {
+    role: isAdmin ? "admin" : (profile?.role || authProfile?.role || "client"),
+    paid: paid || !!profile?.paid || !!authProfile?.paid,
+    refunded: refunded || !!profile?.refunded || !!authProfile?.refunded,
+    cohort_label: profile?.cohort_label ?? authProfile?.cohort_label ?? null,
+    tier: profile?.tier ?? authProfile?.tier ?? "none",
+    subscription_status:
+      profile?.subscription_status ?? authProfile?.subscription_status ?? null,
+  };
+  const membershipPaywall = needsMembershipPaywall(membershipProfile);
+
   /* After load / sign-in: send users from entry paths to the right home. */
   useEffect(() => {
     if (authLoading || !loaded || !user) return;
@@ -428,6 +451,11 @@ export default function App() {
       navigate(location.state.from, { replace: true });
       return;
     }
+    if (location.pathname === PATHS.signin && location.state?.from === PATHS.membership) {
+      routedAfterLoad.current = true;
+      navigate(PATHS.membership, { replace: true });
+      return;
+    }
 
     // Quiz Pre-pay → /signin?from=quiz&email=…
     // Keep them on create/sign-in when another account is still signed in;
@@ -443,7 +471,14 @@ export default function App() {
       }
     }
 
-    const dest = homePathFor({ isAdmin, approved, paid, macros, refunded });
+    const dest = homePathFor({
+      isAdmin,
+      approved,
+      paid,
+      macros,
+      refunded,
+      membershipPaywall,
+    });
     // Signed-in visitors may still browse marketing at `/` — only auto-route
     // from `/signin` and legacy `/home`. From `/`, route enrolled clients + admins.
     if (location.pathname === PATHS.home) {
@@ -455,7 +490,7 @@ export default function App() {
     }
     routedAfterLoad.current = true;
     navigate(dest, { replace: true });
-  }, [authLoading, loaded, user, isAdmin, approved, paid, macros, refunded, location.pathname, location.search, location.state, navigate]);
+  }, [authLoading, loaded, user, isAdmin, approved, paid, macros, refunded, membershipPaywall, location.pathname, location.search, location.state, navigate]);
 
   const authMode = signInNext === "intake" ? "create" : "signin";
   /** Toggle create/signin and keep ?auth= in sync (URL was winning over button clicks). */
@@ -1315,7 +1350,14 @@ export default function App() {
       navigate(`${PATHS.signin}?auth=create`);
       return;
     }
-    navigate(homePathFor({ isAdmin, approved, paid, macros, refunded }));
+    navigate(homePathFor({
+      isAdmin,
+      approved,
+      paid,
+      macros,
+      refunded,
+      membershipPaywall,
+    }));
   };
 
   const backToStart = () => {
@@ -1328,7 +1370,14 @@ export default function App() {
 
   // Clients need approve + pay. Admins with an approved intake can dogfood
   // /dashboard without a Stripe payment on their own account.
-  const dashboardUnlocked = canAccessDashboard({ isAdmin, approved, paid, macros, refunded });
+  const dashboardUnlocked = canAccessDashboard({
+    isAdmin,
+    approved,
+    paid,
+    macros,
+    refunded,
+    membershipPaywall,
+  });
 
   const clientApp = (
     <ClientApp
@@ -1483,15 +1532,29 @@ export default function App() {
         }
       />
       <Route
+        path={PATHS.membership}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.membership }} />
+            : (
+              <Suspense fallback={<AccountRouteFallback />}>
+                <MembershipGatePage />
+              </Suspense>
+            )
+        }
+      />
+      <Route
         path={PATHS.accountShare}
         element={
           !user
             ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.accountShare }} />
-            : (
-              <Suspense fallback={<AccountRouteFallback />}>
-                <SharePage />
-              </Suspense>
-            )
+            : membershipPaywall
+              ? <Navigate to={PATHS.membership} replace />
+              : (
+                <Suspense fallback={<AccountRouteFallback />}>
+                  <SharePage />
+                </Suspense>
+              )
         }
       />
 
@@ -1507,6 +1570,7 @@ export default function App() {
             paid={paid}
             macros={macros}
             refunded={refunded}
+            membershipPaywall={membershipPaywall}
           />
         }
       />
@@ -1536,7 +1600,19 @@ export default function App() {
             : refunded
               ? <Navigate to={PATHS.goodbye} replace />
               : paid || isAdmin
-                ? <Navigate to={homePathFor({ isAdmin, approved, paid, macros, refunded })} replace />
+                ? (
+                  <Navigate
+                    to={homePathFor({
+                      isAdmin,
+                      approved,
+                      paid,
+                      macros,
+                      refunded,
+                      membershipPaywall,
+                    })}
+                    replace
+                  />
+                )
                 : (
                   <JoinPage
                     onRefresh={refreshClientState}
@@ -1567,9 +1643,21 @@ export default function App() {
         element={
           !user
             ? <Navigate to={PATHS.signin} replace />
-            : refunded
+              : refunded
               ? <GoodbyePage onBack={backToStart} />
-              : <Navigate to={homePathFor({ isAdmin, approved, paid, macros, refunded })} replace />
+              : (
+                <Navigate
+                  to={homePathFor({
+                    isAdmin,
+                    approved,
+                    paid,
+                    macros,
+                    refunded,
+                    membershipPaywall,
+                  })}
+                  replace
+                />
+              )
         }
       />
 
@@ -1632,9 +1720,23 @@ export default function App() {
             ? <Navigate to={PATHS.signin} replace />
             : refunded
               ? <Navigate to={PATHS.goodbye} replace />
-              : dashboardUnlocked
-                ? clientApp
-                : <Navigate to={homePathFor({ isAdmin, approved, paid, macros, refunded })} replace />
+              : membershipPaywall
+                ? <Navigate to={PATHS.membership} replace />
+                : dashboardUnlocked
+                  ? clientApp
+                  : (
+                    <Navigate
+                      to={homePathFor({
+                        isAdmin,
+                        approved,
+                        paid,
+                        macros,
+                        refunded,
+                        membershipPaywall,
+                      })}
+                      replace
+                    />
+                  )
         }
       />
 

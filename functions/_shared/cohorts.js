@@ -1,5 +1,9 @@
 /* ==================================================================
-   Cohort calendar — maps activation/payment windows → cohort_label
+   Cohort calendar — enrollment windows + program period dates
+   ==================================================================
+   windowStart/windowEnd: when paid checkouts stamp this cohort_label.
+   programStart/programEnd: the 8-week coaching period for that group.
+   Alumni free month starts at programEnd; freeMonthEnds = programEnd + 30d.
    ================================================================== */
 
 /** Canonical cohorts. Add a new row when doors open for the next group. */
@@ -7,26 +11,43 @@ export const COHORT_CALENDAR = [
   {
     label: "2026-07",
     displayName: "Founding Members",
-    /** Inclusive start (UTC) for stamping this cohort */
+    /** Inclusive start (UTC) for stamping this cohort on payment */
     windowStart: "2026-07-01T00:00:00.000Z",
     /** Exclusive end */
     windowEnd: "2026-08-10T00:00:00.000Z",
+    /** 8-week program Mondays (UTC date anchors) */
+    programStart: "2026-07-20T00:00:00.000Z",
+    /** End of week 8 / start of alumni free month */
+    programEnd: "2026-09-14T00:00:00.000Z",
   },
   {
     label: "2026-08",
     displayName: "August Group",
     windowStart: "2026-08-10T00:00:00.000Z",
     windowEnd: "2026-09-21T00:00:00.000Z",
+    // Set when C2 program dates are locked.
+    programStart: null,
+    programEnd: null,
   },
 ];
 
+/** Free alumni month length after programEnd (founding: Sept 14 → Oct 14). */
+export const FREE_MONTH_DAYS = 30;
+
 /** Currently enrolling cohort for new paid checkouts (C2). */
 export function openEnrollmentCohort(env) {
-  const fromEnv = String(env.OPEN_COHORT_LABEL || "").trim();
+  const fromEnv = String(env?.OPEN_COHORT_LABEL || "").trim();
   if (fromEnv) {
     const hit = COHORT_CALENDAR.find((c) => c.label === fromEnv);
     if (hit) return hit;
-    return { label: fromEnv, displayName: fromEnv, windowStart: null, windowEnd: null };
+    return {
+      label: fromEnv,
+      displayName: fromEnv,
+      windowStart: null,
+      windowEnd: null,
+      programStart: null,
+      programEnd: null,
+    };
   }
   return COHORT_CALENDAR.find((c) => c.label === "2026-08") || COHORT_CALENDAR[COHORT_CALENDAR.length - 1];
 }
@@ -40,12 +61,55 @@ export function cohortForDate(isoOrDate) {
     const end = Date.parse(c.windowEnd);
     if (t >= start && t < end) return c;
   }
-  // After last window → latest cohort; before first → first.
   if (t < Date.parse(COHORT_CALENDAR[0].windowStart)) return COHORT_CALENDAR[0];
   return COHORT_CALENDAR[COHORT_CALENDAR.length - 1];
 }
 
+export function cohortByLabel(label) {
+  const key = String(label || "").trim();
+  if (!key) return null;
+  return COHORT_CALENDAR.find((c) => c.label === key) || null;
+}
+
 export function displayNameForCohortLabel(label) {
-  const hit = COHORT_CALENDAR.find((c) => c.label === label);
+  const hit = cohortByLabel(label);
   return hit?.displayName || label || "Group";
+}
+
+/** programEnd + FREE_MONTH_DAYS, or null if programEnd unset. */
+export function freeMonthEndsAt(cohortOrLabel) {
+  const cohort = typeof cohortOrLabel === "string"
+    ? cohortByLabel(cohortOrLabel)
+    : cohortOrLabel;
+  if (!cohort?.programEnd) return null;
+  const start = Date.parse(cohort.programEnd);
+  if (!Number.isFinite(start)) return null;
+  return new Date(start + FREE_MONTH_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/**
+ * Program week 1–8 from programStart.
+ * week = min(floor((today − programStart)/7) + 1, 8)
+ */
+export function programWeekNumber(cohortOrLabel, now = new Date()) {
+  const cohort = typeof cohortOrLabel === "string"
+    ? cohortByLabel(cohortOrLabel)
+    : cohortOrLabel;
+  if (!cohort?.programStart) return null;
+  const start = Date.parse(cohort.programStart);
+  const t = now instanceof Date ? now.getTime() : Date.parse(now);
+  if (!Number.isFinite(start) || !Number.isFinite(t)) return null;
+  if (t < start) return 1;
+  const week = Math.floor((t - start) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  return Math.min(Math.max(week, 1), 8);
+}
+
+export function isProgramComplete(cohortOrLabel, now = new Date()) {
+  const cohort = typeof cohortOrLabel === "string"
+    ? cohortByLabel(cohortOrLabel)
+    : cohortOrLabel;
+  if (!cohort?.programEnd) return false;
+  const end = Date.parse(cohort.programEnd);
+  const t = now instanceof Date ? now.getTime() : Date.parse(now);
+  return Number.isFinite(end) && Number.isFinite(t) && t >= end;
 }

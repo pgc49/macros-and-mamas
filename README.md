@@ -67,7 +67,7 @@ The app also has project fallbacks for Supabase URL/publishable key in `src/conf
 | `STRIPE_PRICE_ID_WAITLIST` / `PRICE_QUIZ_RATE` | $249 early / quiz-unlock Price ID | Cloudflare env |
 | `STRIPE_PRICE_ID_FULL` / `PRICE_FULL_RATE` | $299 full Price ID | Cloudflare env |
 | `STRIPE_PRICE_ID_LAB_ADDON` / `PRICE_LAB_REVIEW` | $349 Lab Review add-on Price ID | Cloudflare env |
-| `PRICE_ALUMNI_49` | $49/mo Alumni Membership Price ID (stage 4) | Cloudflare env |
+| `PRICE_ALUMNI_49` | $49/mo Alumni Membership Price ID (stage 4; Checkout opt-in) | Cloudflare env |
 | `COUPON_REFERRAL_25` | Referral $25-off coupon id (stage 2) | Cloudflare env |
 | `REFERRAL_COHORT_LABEL` | Optional cohort stamp on referrals (default `2026-08`) | Cloudflare env |
 | `STRIPE_BILLING_PORTAL_CONFIGURATION` | Optional Customer Portal config (`bpc_…`) | Cloudflare env |
@@ -98,7 +98,7 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 
 1. Use **Price IDs** (never amounts) — live inventory and stage-0 notes: `docs/STAGE-0-STRIPE-FOUNDATION.md`. Credits: `docs/STAGE-1-CREDITS.md`. Referrals: `docs/STAGE-2-REFERRALS.md`.
 2. Webhook endpoint: `https://YOUR_DOMAIN/api/stripe-webhook`  
-   Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted` → copy signing secret (`whsec_…`). Idempotency table: `stripe_events`.
+   Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted` → copy signing secret (`whsec_…`). Idempotency table: `stripe_events`.
 3. Set in Cloudflare: `STRIPE_SECRET_KEY`, price ids (`STRIPE_PRICE_ID_*` and/or `PRICE_*` aliases), `STRIPE_WEBHOOK_SECRET`. Optional: `STRIPE_BILLING_PORTAL_CONFIGURATION`, `PRICE_ALUMNI_49`, `COUPON_REFERRAL_25`.
 4. Checkout picks the tier automatically (`functions/_shared/pricing.js`):
    - Account created before `ENROLLMENT_CLOSED_AT` → founding $149  
@@ -163,6 +163,7 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 - `012_water_log.sql` — **required for water log** (`water_logs` + `bottle_oz`)
 - `013_custom_meals.sql` — **required for My meals** (saved custom meals for one-tap logging)
 - `021_support_reports.sql` — **required for `/support`** (rate limit log + private screenshot bucket)
+- `054_alumni_membership.sql` — **required for monthly membership** (subscription fields on `profiles`)
 
 ### Support → GitHub (WhatsApp link)
 

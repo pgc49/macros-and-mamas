@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { FD, F, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
 import { PATHS } from "../routing";
 import { useAuth } from "../auth/useAuth.jsx";
-import { fetchBillingSummary, openBillingPortal } from "../lib/billing";
+import {
+  fetchBillingSummary,
+  openBillingPortal,
+  startMembershipCheckout,
+} from "../lib/billing";
 
 function money(amount, currency = "usd") {
   if (amount == null || Number.isNaN(Number(amount))) return "—";
@@ -40,16 +44,18 @@ function when(iso) {
 }
 
 /**
- * Payments shell — past Stripe charges + upcoming membership placeholder.
- * Monthly post-program billing is not live yet; cancel/opt-out is stubbed.
+ * Payments — 8-week program history + alumni membership opt-in / status.
  */
 export function PaymentsPage() {
-  const { user, profile, loading: authLoading, isAdmin } = useAuth();
+  const { user, profile, loading: authLoading, isAdmin, refreshProfile } = useAuth();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalNote, setPortalNote] = useState("");
+  const [subBusy, setSubBusy] = useState(false);
+  const [subNote, setSubNote] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +65,9 @@ export function PaymentsPage() {
         return;
       }
       try {
+        if (searchParams.get("membership") === "success") {
+          await refreshProfile?.();
+        }
         const summary = await fetchBillingSummary();
         if (!cancelled) setData(summary);
       } catch (e) {
@@ -69,7 +78,7 @@ export function PaymentsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [user, authLoading]);
+  }, [user, authLoading, searchParams, refreshProfile]);
 
   if (authLoading || loading) {
     return (
@@ -112,6 +121,27 @@ export function PaymentsPage() {
     }
   };
 
+  const subscribe = async () => {
+    setSubNote("");
+    setSubBusy(true);
+    try {
+      await startMembershipCheckout();
+    } catch (e) {
+      setSubNote(e?.message || "Couldn't start membership checkout.");
+      setSubBusy(false);
+    }
+  };
+
+  const benefits = subscription?.benefits || [
+    "Keep your macros, meal logging, and full progress history",
+    "Alumni community chat with Callie and other grads",
+    "Founding Mama rate: $49/mo locked in while you stay subscribed",
+    "Q&A Library (monthly audio + weekly notes) as it rolls out",
+  ];
+
+  const showOptIn = subscription?.canSubscribe
+    && (subscription.status === "available" || subscription.status === "required");
+
   return (
     <Shell>
       <div style={{ marginTop: 18, marginBottom: 8 }}>
@@ -126,8 +156,17 @@ export function PaymentsPage() {
         Payments
       </h1>
       <p style={{ fontSize: 14.5, color: T.inkSoft, margin: "0 0 18px", lineHeight: 1.5 }}>
-        Your 8-week program purchase — and monthly membership when it launches.
+        Your 8-week program purchase and monthly membership.
       </p>
+
+      {searchParams.get("membership") === "success" && (
+        <Card style={{ marginBottom: 14, background: T.accentSoft, border: "none" }}>
+          <div style={{ fontSize: 14.5, color: T.accentDeep, lineHeight: 1.5 }}>
+            Membership checkout complete. If status hasn’t updated yet, refresh in a moment —
+            Stripe webhooks usually land within a few seconds.
+          </div>
+        </Card>
+      )}
 
       {err && (
         <Card style={{ marginBottom: 14, background: T.accentSoft, border: "none" }}>
@@ -144,7 +183,12 @@ export function PaymentsPage() {
         </div>
         <div style={{ fontSize: 14.5, color: T.inkSoft, marginTop: 4 }}>
           {phaseLabel}
-          {program?.paidAt ? ` · started ${when(program.paidAt)}` : ""}
+          {program?.cohortName ? ` · ${program.cohortName}` : ""}
+          {program?.programStart && program?.programEnd
+            ? ` · ${when(program.programStart)} – ${when(program.programEnd)}`
+            : program?.paidAt
+              ? ` · started ${when(program.paidAt)}`
+              : ""}
         </div>
         {program?.amount != null && (
           <div style={{ fontSize: 15, fontWeight: 700, marginTop: 10 }}>
@@ -163,30 +207,81 @@ export function PaymentsPage() {
 
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: T.inkSoft }}>
-          After your 8 weeks
-        </div>
-        <div style={{ fontFamily: FD, fontSize: 22, marginTop: 6 }}>
           Monthly membership
         </div>
-        <p style={{ fontSize: 14.5, color: T.inkSoft, lineHeight: 1.55, margin: "8px 0 0" }}>
-          {subscription?.note
-            || "As an 8-week member, you’ll get access to a discounted monthly membership to keep using the app. Coming soon — nothing charges automatically."}
-        </p>
-        <div
-          style={{
-            marginTop: 14,
-            padding: "12px 14px",
-            borderRadius: 12,
-            background: T.bg,
-            border: `1px solid ${T.border}`,
-            fontSize: 13.5,
-            color: T.inkSoft,
-            lineHeight: 1.5,
-          }}
-        >
-          <div style={{ fontWeight: 700, color: T.ink, marginBottom: 4 }}>Coming soon</div>
-          You’ll opt in here when it launches. No charge until you do.
+        <div style={{ fontFamily: FD, fontSize: 22, marginTop: 6 }}>
+          {subscription?.priceLabel || "Founding Mama membership"}
         </div>
+        <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}>
+          {subscription?.amount != null ? `${money(subscription.amount, subscription.currency)}/mo` : "$49/mo"}
+        </div>
+        <p style={{ fontSize: 14.5, color: T.inkSoft, lineHeight: 1.55, margin: "10px 0 0" }}>
+          {subscription?.note}
+        </p>
+        {subscription?.periodLabel && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: "10px 12px",
+              borderRadius: 12,
+              background: T.bg,
+              border: `1px solid ${T.border}`,
+              fontSize: 13.5,
+              color: T.ink,
+              lineHeight: 1.45,
+              fontWeight: 600,
+            }}
+          >
+            {subscription.periodLabel}
+          </div>
+        )}
+        {(subscription?.status === "trialing" || subscription?.status === "active") && (
+          <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 10, lineHeight: 1.45 }}>
+            {subscription.status === "trialing" && subscription.trialEndsAt
+              ? `Trial / free month ends ${when(subscription.trialEndsAt)}.`
+              : null}
+            {subscription.status === "active" && subscription.renewsAt
+              ? `Renews ${when(subscription.renewsAt)}.`
+              : null}
+          </div>
+        )}
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 6 }}>
+            What monthly membership includes
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, color: T.inkSoft, lineHeight: 1.55 }}>
+            {benefits.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
+        </div>
+        {showOptIn && (
+          <>
+            <Btn
+              style={{ width: "100%", marginTop: 16 }}
+              disabled={subBusy || !subscription?.priceConfigured}
+              onClick={subscribe}
+            >
+              {subBusy
+                ? "Starting checkout…"
+                : subscription.status === "required"
+                  ? "Subscribe to continue — $49/mo"
+                  : "Start free month — then $49/mo"}
+            </Btn>
+            {!subscription?.priceConfigured && (
+              <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8 }}>
+                Membership checkout isn’t configured on this environment yet.
+              </div>
+            )}
+            <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
+              You’ll confirm in Stripe. Nothing charges until you opt in — and for Founding Members,
+              the first charge waits until your free month ends.
+            </div>
+          </>
+        )}
+        {subNote && (
+          <div style={{ fontSize: 13.5, color: T.amber, marginTop: 10, lineHeight: 1.45 }}>{subNote}</div>
+        )}
       </Card>
 
       {credits && (
