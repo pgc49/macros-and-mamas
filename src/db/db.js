@@ -1677,7 +1677,17 @@ export const db = {
       })
       .select(CHANNEL_MESSAGE_SELECT)
       .single();
-    if (error) throw error;
+    if (error) {
+      // Avoid orphan storage objects when the row insert fails after upload.
+      if (attachment?.path) {
+        try {
+          await supabase.storage.from(CHANNEL_ATTACHMENT_BUCKET).remove([attachment.path]);
+        } catch (cleanupErr) {
+          console.warn("channel attachment orphan cleanup failed", cleanupErr);
+        }
+      }
+      throw error;
+    }
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;

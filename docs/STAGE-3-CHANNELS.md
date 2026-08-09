@@ -16,13 +16,14 @@ Requires stages 0–2. C1 **Founding Members** migrates off WhatsApp as a live b
 
 ## Schema
 
-Migrations `047`–`050` (`channels`, stamp founding, prompts seed, harden):
+Migrations `047`–`051` (`channels`, stamp founding, prompts seed, harden, revoke trigger RPC):
 
 - `conversations`, `conversation_members`, `conversation_messages`, `channel_prompts`
 - Separate from 1:1 `messages` (DM RLS stays thread-by-`client_id`)
 - `profiles.tier` locked from client writes (same triggers as ambassador / cohort_label)
 - Storage bucket `channel-attachments` — path `{conversationId}/{userId}/…`
 - Harden (`050`): sticky soft-delete, reply same-conversation, attachment path CHECK, storage delete scoped to own folder
+- `051`: revoke EXECUTE on channel trigger helpers from anon/authenticated
 
 ## Hooks
 

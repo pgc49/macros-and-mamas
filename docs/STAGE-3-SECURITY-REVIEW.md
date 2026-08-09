@@ -45,6 +45,10 @@ protect triggers, or JWT/CRON_SECRET on Functions. Notify fanout is claim-before
 10. **Admin moderation UX (low)** — admins can delete others’ channel messages in
     the app; edit remains own-only.
 11. **Error leakage (low)** — Messages panel maps errors to friendly copy.
+12. **Trigger RPC exposure (low)** — revoked EXECUTE on channel protect/enforce
+    trigger helpers from `anon`/`authenticated` (`051_revoke_channel_trigger_rpc.sql`).
+13. **Orphan attachment on failed insert (low)** — client removes uploaded object
+    if the `conversation_messages` insert fails.
 
 ### Accepted residual
 - Compromised **admin session** can moderate any enrolled channel (by design).
