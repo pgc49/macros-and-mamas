@@ -99,6 +99,43 @@ export async function createSupportIssue(env, {
   };
 }
 
+/**
+ * List open from-app support issues (newest first).
+ * @returns {{ ok: true, issues: object[] } | { ok: false, error: string }}
+ */
+export async function listOpenSupportIssues(env, { lookbackHours = 26 } = {}) {
+  const repo = githubRepo(env);
+  const token = githubToken(env);
+  if (!repo || !token) {
+    return { ok: false, error: "missing GITHUB_TOKEN" };
+  }
+  const resp = await fetch(
+    `https://api.github.com/repos/${repo.full}/issues`
+      + "?state=open&labels=from-app&per_page=50&sort=created&direction=desc",
+    { headers: ghHeaders(token) },
+  );
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
+    return { ok: false, error: `github ${resp.status}: ${detail.slice(0, 200)}` };
+  }
+  const rows = await resp.json().catch(() => []);
+  const list = Array.isArray(rows) ? rows : [];
+  // Exclude PRs (Issues API can include them).
+  const issues = list.filter((row) => row && !row.pull_request);
+  const cutoffMs = Date.now() - Math.max(1, lookbackHours) * 3600 * 1000;
+  const recent = issues.filter((row) => {
+    const created = Date.parse(row.created_at || "");
+    return Number.isFinite(created) && created >= cutoffMs;
+  });
+  return {
+    ok: true,
+    issues: recent,
+    openTotal: issues.length,
+    lookbackHours,
+    repo: repo.full,
+  };
+}
+
 function postIssue(repo, token, title, body, labels) {
   const payload = {
     title: String(title || "Support report").slice(0, 200),
