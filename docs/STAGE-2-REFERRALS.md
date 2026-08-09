@@ -2,6 +2,8 @@
 
 Requires stages 0–1. Advocates get a personal code; friends save $25 on the quiz rate; advocate earns a $25 pending credit (vests per `VESTING_DAYS`).
 
+Security review: `docs/STAGE-2-SECURITY-REVIEW.md`.
+
 ## Adjustments vs the stage-2 brief
 
 | Brief | What we did | Why |
