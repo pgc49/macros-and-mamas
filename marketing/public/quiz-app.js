@@ -77,7 +77,7 @@
       activity_level: '',
       flags: [],
     },
-    contact: { first_name: '', last_name: '', email: '' },
+    contact: { first_name: '', last_name: '', email: '', referred_by: '' },
     result: null,
     busy: false,
     error: '',
@@ -539,11 +539,17 @@
       const pregnant = a.months_postpartum === 'still_pregnant';
       let title = 'Your ranges are ready. Where should Callie send them?';
       if (pregnant) title = 'Leave your email — pregnancy season first.';
+      const referredField = pregnant
+        ? ''
+        : `<label>Did a mama send you? <span class="q-optional">(optional)</span>
+            <input id="refby" class="pill-input" autocomplete="off" placeholder="Her code or name" value="${escapeHtml(state.contact.referred_by || '')}" />
+          </label>`;
       html = screenShell(
         title,
         `<div class="q-fields compact">
           <label>First name<input id="fn" class="pill-input" autocomplete="given-name" value="${state.contact.first_name}" /></label>
           <label>Email<input id="em" class="pill-input" type="email" autocomplete="email" value="${state.contact.email}" /></label>
+          ${referredField}
           <input type="text" name="website_url" id="hp" class="hp" tabindex="-1" autocomplete="off" />
         </div>
         <button type="button" class="btn q-next" id="submit" ${state.busy ? 'disabled' : ''}>
@@ -852,6 +858,7 @@
     state.contact.first_name = (root.querySelector('#fn')?.value || '').trim();
     state.contact.last_name = '';
     state.contact.email = (root.querySelector('#em')?.value || '').trim();
+    state.contact.referred_by = (root.querySelector('#refby')?.value || '').trim();
     const hp = (root.querySelector('#hp')?.value || '').trim();
     if (!state.contact.first_name || !state.contact.email) {
       state.error = 'First name and email are required.';
@@ -874,6 +881,7 @@
       email: state.contact.email,
       first_name: state.contact.first_name,
       last_name: state.contact.last_name,
+      referred_by: state.contact.referred_by || undefined,
       source: state.source,
       website_url: hp || undefined,
       event_id: eventId,

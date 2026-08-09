@@ -42,6 +42,8 @@ type LeadBody = {
   email?: string;
   first_name?: string;
   last_name?: string;
+  /** Optional quiz attribution — code or name; manual recon only. */
+  referred_by?: string;
   source?: string;
   answers?: Record<string, unknown>;
   fbp?: string;
@@ -438,10 +440,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }
       : {};
 
+  const referredBy = String(body.referred_by || '')
+    .trim()
+    .slice(0, 120);
+
   const row: Record<string, unknown> = {
     email,
     first_name: firstName,
     last_name: lastName,
+    referred_by: referredBy || null,
     source: String(body.source || 'quiz_page').slice(0, 40),
     quiz_version: 1,
     months_postpartum: answers.months_postpartum || null,
