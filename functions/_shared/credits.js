@@ -13,6 +13,16 @@ export function vestingDays(env) {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 3;
 }
 
+/** Hard cap for admin/manual grants (cents). Referrals are $25; keep headroom. */
+export const MAX_MANUAL_GRANT_CENTS = 50_000; // $500
+export const MAX_NOTE_CHARS = 500;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isUuid(value) {
+  return UUID_RE.test(String(value || "").trim());
+}
+
 export function supabaseConfig(env) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -134,17 +144,29 @@ export async function grantCredit(env, {
   vestsAt,
   relatedReferralId = null,
 }) {
+  if (!isUuid(userId)) throw new Error("invalid grant");
   const cents = Math.round(Number(amountCents));
-  if (!userId || !Number.isFinite(cents) || cents <= 0) {
+  if (!Number.isFinite(cents) || cents <= 0) {
     throw new Error("invalid grant");
   }
-  const noteText = String(note || "").trim();
+  if (reason === "manual" && cents > MAX_MANUAL_GRANT_CENTS) {
+    throw new Error(`grant exceeds max $${MAX_MANUAL_GRANT_CENTS / 100}`);
+  }
+  const noteText = String(note || "").trim().slice(0, MAX_NOTE_CHARS);
   if (reason === "manual" && !noteText) {
     throw new Error("note required");
   }
-  const vestIso = vestsAt
-    ? new Date(vestsAt).toISOString()
-    : new Date(Date.now() + vestingDays(env) * 86400000).toISOString();
+  if (relatedReferralId != null && relatedReferralId !== "" && !isUuid(relatedReferralId)) {
+    throw new Error("invalid grant");
+  }
+  let vestIso;
+  if (vestsAt) {
+    const parsed = new Date(vestsAt);
+    if (Number.isNaN(parsed.getTime())) throw new Error("invalid grant");
+    vestIso = parsed.toISOString();
+  } else {
+    vestIso = new Date(Date.now() + vestingDays(env) * 86400000).toISOString();
+  }
 
   const rows = await sbFetch(env, "/rest/v1/credit_ledger", {
     method: "POST",
@@ -153,7 +175,7 @@ export async function grantCredit(env, {
       amount_cents: cents,
       status: "pending",
       reason,
-      related_referral_id: relatedReferralId,
+      related_referral_id: relatedReferralId || null,
       vests_at: vestIso,
       note: noteText || null,
     }),
@@ -162,7 +184,8 @@ export async function grantCredit(env, {
 }
 
 export async function reverseCredit(env, { ledgerId, note }) {
-  const noteText = String(note || "").trim();
+  if (!isUuid(ledgerId)) throw new Error("ledger row not found");
+  const noteText = String(note || "").trim().slice(0, MAX_NOTE_CHARS);
   if (!noteText) throw new Error("note required");
 
   const rows = await sbFetch(
