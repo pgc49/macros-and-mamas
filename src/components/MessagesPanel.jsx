@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MessagesThread } from "./MessagesThread";
 import { db } from "../db/db";
 import { supabase } from "../lib/supabase";
@@ -569,29 +570,39 @@ function NotifySettingsSheet({
     ["highlights", "Highlights", "Callie posts and replies to you."],
     ["mute", "Mute", "No push notifications from this group."],
   ];
-  return (
+  // Portal to body — Shell's overflow scroll traps position:fixed and the
+  // bottom tab bar otherwise clips Mute / Close.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
+      aria-label="Group notifications"
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 40,
-        background: "rgba(51,39,46,0.22)",
+        zIndex: 200,
+        background: "rgba(51,39,46,0.28)",
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "center",
-        padding: 14,
+        padding: 0,
+        boxSizing: "border-box",
       }}
       onClick={onClose}
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
     >
       <div
         style={{
-          width: "min(460px, 100%)",
+          width: "100%",
+          maxWidth: 560,
+          maxHeight: "min(88dvh, 640px)",
+          overflow: "auto",
+          WebkitOverflowScrolling: "touch",
           background: "#fff",
-          borderRadius: 18,
-          padding: 16,
-          boxShadow: "0 20px 60px rgba(51,39,46,0.24)",
+          borderRadius: "18px 18px 0 0",
+          padding: "16px 16px calc(24px + env(safe-area-inset-bottom, 0px))",
+          boxShadow: "0 -8px 40px rgba(51,39,46,0.2)",
+          boxSizing: "border-box",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -628,7 +639,8 @@ function NotifySettingsSheet({
           <Btn small ghost onClick={onClose} disabled={busy}>Close</Btn>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -467,8 +467,10 @@ export function MessagesThread({
     <div style={{
       display: "flex",
       flexDirection: "column",
-      minHeight: compact ? undefined : "62vh",
-      flex: compact ? undefined : 1,
+      minHeight: compact ? 0 : "62vh",
+      flex: 1,
+      height: compact ? "100%" : undefined,
+      minWidth: 0,
     }}
     >
       {(title || subtitle) && (
@@ -519,10 +521,10 @@ export function MessagesThread({
           border: `1.5px solid ${T.border}`,
           borderRadius: 14,
           padding: 12,
-          minHeight: compact ? 180 : 280,
-          /* Mama tab: a bit taller so less empty cream above the tab bar.
-             Keep a cap — don't fight keyboard/nav layout. */
-          maxHeight: compact ? "36vh" : "min(64vh, 520px)",
+          minHeight: compact ? 220 : 280,
+          minWidth: 0,
+          /* compact (admin fill): grow with parent. Mama tab keeps a viewport cap. */
+          maxHeight: compact ? "none" : "min(64vh, 520px)",
           WebkitOverflowScrolling: "touch",
         }}
       >
