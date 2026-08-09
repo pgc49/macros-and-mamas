@@ -99,9 +99,8 @@ export function normalizeReferralCode(raw) {
 export function shareBlurb(code) {
   const c = normalizeReferralCode(code);
   return (
-    `I did the 8-week Macros and Mamas program and it actually fit around my kids. `
-    + `Full disclosure — I get a credit if you enroll with my code, and you save $25 on top of the quiz rate. `
-    + `When you sign up, use my code ${c} for $25 off → macrosandmamas.com/quiz`
+    `Use code ${c} to join Callie in her Macros and Mamas 8-week transformation program! `
+    + `www.macrosandmamas.com`
   );
 }
 
@@ -296,7 +295,8 @@ export async function buildSharePayload(env, userId, opts = {}) {
   const payload = {
     code: codeRow?.code || null,
     blurb: codeRow ? shareBlurb(codeRow.code) : null,
-    quizUrl: "https://www.macrosandmamas.com/quiz",
+    homeUrl: "https://www.macrosandmamas.com",
+    quizUrl: "https://www.macrosandmamas.com",
     friendsEnrolled,
     availableCents,
     pendingCents,
