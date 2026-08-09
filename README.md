@@ -69,6 +69,7 @@ The app also has project fallbacks for Supabase URL/publishable key in `src/conf
 | `STRIPE_PRICE_ID_LAB_ADDON` / `PRICE_LAB_REVIEW` | $349 Lab Review add-on Price ID | Cloudflare env |
 | `PRICE_ALUMNI_49` | $49/mo Alumni Membership Price ID (stage 4) | Cloudflare env |
 | `COUPON_REFERRAL_25` | Referral $25-off coupon id (stage 2) | Cloudflare env |
+| `REFERRAL_COHORT_LABEL` | Optional cohort stamp on referrals (default `2026-08`) | Cloudflare env |
 | `STRIPE_BILLING_PORTAL_CONFIGURATION` | Optional Customer Portal config (`bpc_…`) | Cloudflare env |
 | `VESTING_DAYS` | Credit vesting window (default `3`) — stage 1 | Cloudflare env |
 | `STRIPE_WEBHOOK_SECRET` | Verify webhook signatures (`whsec_…`) | Cloudflare secret |
@@ -95,7 +96,7 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 
 ## Stripe setup (test mode first)
 
-1. Use **Price IDs** (never amounts) — live inventory and stage-0 notes: `docs/STAGE-0-STRIPE-FOUNDATION.md`.
+1. Use **Price IDs** (never amounts) — live inventory and stage-0 notes: `docs/STAGE-0-STRIPE-FOUNDATION.md`. Credits: `docs/STAGE-1-CREDITS.md`. Referrals: `docs/STAGE-2-REFERRALS.md`.
 2. Webhook endpoint: `https://YOUR_DOMAIN/api/stripe-webhook`  
    Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted` → copy signing secret (`whsec_…`). Idempotency table: `stripe_events`.
 3. Set in Cloudflare: `STRIPE_SECRET_KEY`, price ids (`STRIPE_PRICE_ID_*` and/or `PRICE_*` aliases), `STRIPE_WEBHOOK_SECRET`. Optional: `STRIPE_BILLING_PORTAL_CONFIGURATION`, `PRICE_ALUMNI_49`, `COUPON_REFERRAL_25`.

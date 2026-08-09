@@ -140,6 +140,9 @@ const ProfilePage = lazy(() =>
 const PaymentsPage = lazy(() =>
   import("./views/PaymentsPage").then((m) => ({ default: m.PaymentsPage })),
 );
+const SharePage = lazy(() =>
+  import("./views/SharePage").then((m) => ({ default: m.SharePage })),
+);
 
 function AccountRouteFallback() {
   return (
@@ -1475,6 +1478,18 @@ export default function App() {
             : (
               <Suspense fallback={<AccountRouteFallback />}>
                 <PaymentsPage />
+              </Suspense>
+            )
+        }
+      />
+      <Route
+        path={PATHS.accountShare}
+        element={
+          !user
+            ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.accountShare }} />
+            : (
+              <Suspense fallback={<AccountRouteFallback />}>
+                <SharePage />
               </Suspense>
             )
         }

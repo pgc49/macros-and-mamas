@@ -21,6 +21,7 @@ import {
   newEventId,
   sendMetaCapiEvent,
 } from "../_shared/metaCapi.js";
+import { resolvePromotionForCheckout } from "../_shared/referrals.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -71,6 +72,7 @@ export async function onRequestPost({ request, env }) {
     const landingPath = String(clientBody.landing_path || "").trim().slice(0, 200);
     const referrerHost = String(clientBody.referrer_host || "").trim().slice(0, 200);
     const wantLabReview = Boolean(clientBody.lab_review);
+    const referralCodeRaw = String(clientBody.referral_code || "").trim();
     const clientIp = clientIpFromRequest(request);
     const clientUa = (request.headers.get("user-agent") || "").slice(0, 480);
 
@@ -83,7 +85,31 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
+    // Referral $25 off only on quiz/early ($249) rate — not founding or full.
+    let referralPromo = null;
+    if (offer.tier === "waitlist") {
+      if (referralCodeRaw) {
+        try {
+          referralPromo = await resolvePromotionForCheckout(env, {
+            code: referralCodeRaw,
+            checkoutUserId: user.id,
+            checkoutEmail: user.email,
+          });
+        } catch (refErr) {
+          return json({ error: refErr.message || "invalid referral code" }, refErr.status || 400);
+        }
+      }
+    } else if (referralCodeRaw) {
+      return json({
+        error: "Referral codes apply to the $249 quiz rate only.",
+      }, 400);
+    }
+
     const totalAmount = offer.amount + (wantLabReview ? LAB_ADDON_AMOUNT : 0);
+    // Display/meta amount after referral (Stripe applies the real discount).
+    const amountUsdMeta = referralPromo
+      ? Math.max(0, offer.amount - 25) + (wantLabReview ? LAB_ADDON_AMOUNT : 0)
+      : totalAmount;
 
     const origin = new URL(request.url).origin;
     const body = new URLSearchParams();
@@ -101,11 +127,19 @@ export async function onRequestPost({ request, env }) {
       body.set("line_items[1][price]", labPriceId);
       body.set("line_items[1][quantity]", "1");
     }
+    // Stripe forbids discounts + allow_promotion_codes on the same session.
+    if (referralPromo) {
+      body.set("discounts[0][promotion_code]", referralPromo.stripe_promotion_code_id);
+      body.set("metadata[referral_code]", referralPromo.code);
+      body.set("metadata[referral_promo_id]", referralPromo.stripe_promotion_code_id);
+    } else if (offer.tier === "waitlist") {
+      body.set("allow_promotion_codes", "true");
+    }
     // TODO(lab-panel): optional Callie-ordered blood panel ($200) as a later
     // separate checkout or third line item when UI exists.
     body.set("metadata[supabase_user_id]", user.id);
     body.set("metadata[price_tier]", offer.tier);
-    body.set("metadata[amount_usd]", String(totalAmount));
+    body.set("metadata[amount_usd]", String(amountUsdMeta));
     body.set("metadata[lab_review]", wantLabReview ? "true" : "false");
     body.set("metadata[event_id]", eventId);
     if (fbp) body.set("metadata[fbp]", fbp);
@@ -150,7 +184,7 @@ export async function onRequestPost({ request, env }) {
         clientUa,
         customData: {
           currency: "USD",
-          value: Number(totalAmount) || 0,
+          value: Number(amountUsdMeta) || 0,
           content_name: wantLabReview
             ? `checkout_${offer.tier}_lab`
             : `checkout_${offer.tier}`,
@@ -167,6 +201,7 @@ export async function onRequestPost({ request, env }) {
       amount: offer.amount,
       label: offer.label,
       event_id: eventId,
+      referral_code: referralPromo?.code || null,
     }, 200);
   } catch (e) {
     console.error("checkout failed", e);

@@ -51,6 +51,8 @@ export function AdminCredits({ roster = [] }) {
   const [grantDollars, setGrantDollars] = useState("25");
   const [grantNote, setGrantNote] = useState("");
   const [vestNow, setVestNow] = useState(true);
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState("");
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -84,6 +86,31 @@ export function AdminCredits({ roster = [] }) {
       setErr(e?.message || "Load failed.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const backfillCodes = async () => {
+    setBackfillBusy(true);
+    setBackfillMsg("");
+    setErr("");
+    try {
+      const headers = await authHeaders();
+      const resp = await fetch("/api/admin-referrals", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "backfill" }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || "Backfill failed.");
+      setBackfillMsg(
+        `Referral codes: ${data.created || 0} created, ${data.existed || 0} already had one`
+        + (data.errors ? `, ${data.errors} errors` : "")
+        + ` (${data.total || 0} active paid clients).`,
+      );
+    } catch (e) {
+      setErr(e?.message || "Backfill failed.");
+    } finally {
+      setBackfillBusy(false);
     }
   };
 
@@ -148,9 +175,23 @@ export function AdminCredits({ roster = [] }) {
   return (
     <div>
       <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 14px" }}>
-        Stage 1 harness: grant/reverse credits. Vesting + Stripe Customer Balance mirror run on the hourly{" "}
+        Credits + referrals: grant/reverse ledger rows; backfill advocate codes. Vesting + Stripe Customer Balance mirror run on the hourly{" "}
         <code style={{ fontSize: 12 }}>credits-cron</code>. Never hand-edit customer balances in the Stripe Dashboard.
       </p>
+
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>Referral codes</div>
+        <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
+          Create a Stripe promotion code + Share code for every active paid client who doesn’t have one yet.
+          New members also get a code the first time they open Share.
+        </p>
+        <Btn disabled={backfillBusy || busy} onClick={backfillCodes}>
+          {backfillBusy ? "Backfilling…" : "Backfill referral codes"}
+        </Btn>
+        {backfillMsg && (
+          <div style={{ marginTop: 10, fontSize: 13.5, color: T.sage, lineHeight: 1.45 }}>{backfillMsg}</div>
+        )}
+      </Card>
 
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>Find mama</div>

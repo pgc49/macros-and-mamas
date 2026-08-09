@@ -19,6 +19,10 @@ import {
 } from "../_shared/supabaseEmail.js";
 import { sendMetaCapiEvent } from "../_shared/metaCapi.js";
 import { handleInvoicePaidCredits } from "../_shared/credits.js";
+import {
+  handleChargeRefundedReferral,
+  handleCheckoutReferral,
+} from "../_shared/referrals.js";
 
 /** Event types we expect to receive; handlers land in later stages. */
 const KNOWN_EVENT_TYPES = new Set([
@@ -65,10 +69,28 @@ export async function onRequestPost({ request, env }) {
         // Card: completed is paid. Klarna/Affirm/etc: completed may be unpaid,
         // then async_payment_succeeded fires when funds clear — same mark-paid path.
         await handleCheckoutSessionCompleted(env, event);
+        const session = event.data?.object || {};
+        const forcePaid = eventType === "checkout.session.async_payment_succeeded";
+        const payStatus = String(session.payment_status || "");
+        const sessionPaid = forcePaid
+          || payStatus === "paid"
+          || payStatus === "no_payment_required";
+        try {
+          const refResult = await handleCheckoutReferral(env, session, { forcePaid });
+          console.log("checkout referral", eventId, refResult);
+        } catch (refErr) {
+          console.error("checkout referral failed", eventId, refErr);
+          // Retry attribution when money cleared; don't spam unpaid completed retries.
+          if (sessionPaid) throw refErr;
+        }
       } else if (eventType === "invoice.paid") {
         const invoice = event.data?.object || {};
         const result = await handleInvoicePaidCredits(env, invoice);
         console.log("invoice.paid credits", eventId, result);
+      } else if (eventType === "charge.refunded") {
+        const charge = event.data?.object || {};
+        const result = await handleChargeRefundedReferral(env, charge);
+        console.log("charge.refunded referral", eventId, result);
       } else if (KNOWN_EVENT_TYPES.has(eventType)) {
         // Shell only — real handlers in later stages.
         console.log("stripe webhook unhandled (registered)", eventType, eventId);
@@ -275,12 +297,17 @@ async function markPaid(env, userId, session) {
   // Preserve original paid_at across completed → async retries.
   if (!existing?.paid_at) patch.paid_at = paidAt;
   // Fill Stripe ids when missing (do not clobber an existing customer id).
-  if (session.customer && !existing?.stripe_customer_id) {
-    patch.stripe_customer_id = String(session.customer);
+  const customerId = typeof session.customer === "string"
+    ? session.customer
+    : session.customer?.id;
+  if (customerId && !existing?.stripe_customer_id) {
+    patch.stripe_customer_id = customerId;
   }
-  const pi = session.payment_intent;
+  const pi = typeof session.payment_intent === "string"
+    ? session.payment_intent
+    : session.payment_intent?.id;
   if (pi && !existing?.stripe_payment_intent) {
-    patch.stripe_payment_intent = String(pi);
+    patch.stripe_payment_intent = pi;
   }
 
   const labReview =

@@ -37,6 +37,12 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
   const [quoteLoading, setQuoteLoading] = useState(true);
   const [quoteError, setQuoteError] = useState("");
   const [labReview, setLabReview] = useState(false);
+  const [referralCode, setReferralCode] = useState(() => {
+    const fromUrl = String(
+      searchParams.get("ref") || searchParams.get("code") || "",
+    ).trim().toUpperCase();
+    return fromUrl;
+  });
 
   useEffect(() => {
     if (quizEmail) rememberQuizEmail(quizEmail);
@@ -96,7 +102,10 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
     setBusy(true);
     setError("");
     try {
-      await startCheckout({ labReview });
+      await startCheckout({
+        labReview,
+        referralCode: referralCode.trim() || undefined,
+      });
     } catch (e) {
       console.error("checkout failed", e);
       const msg = String(e?.message || "");
@@ -105,7 +114,9 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
           ? "This early rate unlocks after the free ranges quiz. Take the quiz with this same email, then come back to pay."
           : msg.includes("lab add-on")
             ? "Lab Review isn’t available right now. Uncheck it or try again later."
-            : "Couldn't start checkout. Try again in a moment.",
+            : /referral|own code/i.test(msg)
+              ? msg
+              : "Couldn't start checkout. Try again in a moment.",
       );
       setBusy(false);
     }
@@ -252,6 +263,41 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
         <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft }}>
           {quoteLoading ? "Loading your price…" : openBlurb}
         </p>
+        {isEarly && (
+          <label
+            style={{
+              display: "block",
+              textAlign: "left",
+              marginTop: 16,
+              fontSize: 13.5,
+              color: T.inkSoft,
+            }}
+          >
+            Friend&apos;s referral code
+            <span style={{ fontWeight: 400, opacity: 0.8 }}> (optional — $25 off)</span>
+            <input
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+              placeholder="e.g. SARAH25"
+              autoComplete="off"
+              spellCheck={false}
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: 6,
+                padding: "12px 14px",
+                borderRadius: 12,
+                border: `1.5px solid ${T.border}`,
+                fontSize: 16,
+                fontFamily: FD,
+                letterSpacing: 0.5,
+                color: T.ink,
+                background: "#fff",
+                boxSizing: "border-box",
+              }}
+            />
+          </label>
+        )}
         {labToggle}
         <Btn style={{ width: "100%", marginTop: 14 }} disabled={busy || quoteLoading || !amount} onClick={pay}>
           {busy

@@ -17,6 +17,11 @@ const ROWS = [
     body: "Past charges and upcoming membership options.",
   },
   {
+    to: PATHS.accountShare,
+    title: "Share Macros and Mamas",
+    body: "Your referral code, share text, and friend tally.",
+  },
+  {
     to: PATHS.support,
     title: "Report a problem",
     body: "Bugs, glitches, or feedback for Tech Guy.",

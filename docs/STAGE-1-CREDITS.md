@@ -14,7 +14,7 @@ Requires stage 0. Referrals (stage 2) write `reason=referral` rows into this led
 | Brief | What we did | Why |
 | --- | --- | --- |
 | Daily scheduled function | Hourly GitHub Action → `POST /api/credits-cron` (same `CRON_SECRET` as email-cron) | Repo has no Workers cron; hourly pattern already exists; finer than daily for vesting UX |
-| `related_referral_id` uuid | Nullable **without FK** | `referrals` table does not exist until stage 2 |
+| `related_referral_id` uuid | Nullable **without FK** in stage 1; FK + unique index added in stage 2 (`045_referrals.sql`) | `referrals` table did not exist yet |
 | Status-only ledger | Added `mirrored_at` + `stripe_balance_transaction_id` | Idempotent Stripe Customer Balance sync; retry when `stripe_customer_id` missing |
 | Balance formula alone | Redemption also inserts audit row (`reason=redemption`) and FIFO-marks grants | Matches brief; partials split remainder into a new `available` row |
 | Lab Review via Invoice | Documented only — Checkout unchanged | Out of scope for stage 1; remember before Lab Review relies on credits |

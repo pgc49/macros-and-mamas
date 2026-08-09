@@ -36,10 +36,11 @@ export async function fetchCheckoutQuote() {
 
 /**
  * Start Stripe Checkout; redirects the browser on success.
- * @param {{ labReview?: boolean }} [opts]
+ * @param {{ labReview?: boolean, referralCode?: string }} [opts]
  */
 export async function startCheckout(opts = {}) {
   const labReview = Boolean(opts.labReview);
+  const referralCode = String(opts.referralCode || "").trim();
   const headers = await authHeaders();
   captureAttributionFromLocation();
   const attr = getStoredAttribution() || {};
@@ -69,6 +70,7 @@ export async function startCheckout(opts = {}) {
       landing_path: attr.landing_path || "",
       referrer_host: attr.referrer_host || "",
       lab_review: labReview,
+      referral_code: referralCode || undefined,
     }),
   });
   const data = await resp.json().catch(() => ({}));

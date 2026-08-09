@@ -20,6 +20,7 @@ export const PATHS = {
   account: "/account",
   accountProfile: "/account/profile",
   accountPayments: "/account/payments",
+  accountShare: "/account/share",
 };
 
 /**

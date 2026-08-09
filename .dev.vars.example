@@ -22,6 +22,8 @@ STRIPE_PRICE_ID_LAB_ADDON=price_...349
 # PRICE_ALUMNI_49=price_...4900
 # Stage 2 referral coupon ($25 once) — recorded in stage 0:
 # COUPON_REFERRAL_25=REFERRAL_25
+# Optional cohort label stamped on referrals rows (default 2026-08):
+# REFERRAL_COHORT_LABEL=2026-08
 # Stage 1 credit vesting window (days). Default 3 if unset.
 VESTING_DAYS=3
 STRIPE_WEBHOOK_SECRET=replace-me
