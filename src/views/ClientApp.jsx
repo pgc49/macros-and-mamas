@@ -64,6 +64,11 @@ export function ClientApp({
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
   const [composerFocused, setComposerFocused] = useState(false);
+  // $19 app-only: logging/tracking only — no Callie or group chats.
+  const appOnly = String(profile?.tier || "") === "alumni_19";
+  const tabs = appOnly
+    ? [["today", "Today"], ["meals", "Meals"], ["progress", "Progress"]]
+    : [["today", "Today"], ["meals", "Meals"], ["progress", "Progress"], ["messages", "Messages"]];
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
@@ -116,7 +121,7 @@ export function ClientApp({
       }}
       aria-label="Main"
     >
-      {[["today", "Today"], ["meals", "Meals"], ["progress", "Progress"], ["messages", "Messages"]].map(([k, l]) => (
+      {tabs.map(([k, l]) => (
         <button
           key={k}
           type="button"
@@ -136,7 +141,7 @@ export function ClientApp({
           }}
         >
           {l}
-          {k === "messages" && unreadMessages > 0 && (
+          {k === "messages" && !appOnly && unreadMessages > 0 && (
             <span style={{
               position: "absolute",
               top: 6,
@@ -511,7 +516,7 @@ export function ClientApp({
         </>
       )}
 
-      {tab === "messages" && (
+      {tab === "messages" && !appOnly && (
         <>
           <MessagesPanel
             userId={userId}

@@ -11,11 +11,13 @@ import {
   displayNameForCohortLabel,
   freeMonthEndsAt,
   isProgramComplete,
+  programEndAt,
   programWeekNumber,
 } from "./cohorts.js";
 import {
   ensureChannelMembership,
   getAlumniConversation,
+  getCohortConversation,
 } from "./channels.js";
 import { alumniPriceId } from "./pricing.js";
 
@@ -84,11 +86,12 @@ export function membershipAccess(profile, now = new Date()) {
   }
 
   const cohort = cohortByLabel(profile.cohort_label);
+  const programEnd = programEndAt(cohort);
   const freeEndIso = freeMonthEndsAt(cohort);
   const t = now instanceof Date ? now.getTime() : Date.parse(now);
 
-  // No program dates yet (e.g. C2) — do not block.
-  if (!cohort?.programEnd || !freeEndIso) {
+  // No program dates yet — do not block.
+  if (!programEnd || !freeEndIso) {
     return {
       allowed: true,
       reason: "program_dates_unset",
@@ -96,7 +99,7 @@ export function membershipAccess(profile, now = new Date()) {
       cohortLabel: cohort?.label || profile.cohort_label || null,
       cohortName: displayNameForCohortLabel(profile.cohort_label),
       programStart: cohort?.programStart || null,
-      programEnd: cohort?.programEnd || null,
+      programEnd: null,
       freeMonthEndsAt: null,
     };
   }
@@ -112,7 +115,7 @@ export function membershipAccess(profile, now = new Date()) {
       cohortLabel: cohort.label,
       cohortName: displayNameForCohortLabel(cohort.label),
       programStart: cohort.programStart,
-      programEnd: cohort.programEnd,
+      programEnd,
       freeMonthEndsAt: freeEndIso,
       programComplete: programEnded,
     };
@@ -127,7 +130,7 @@ export function membershipAccess(profile, now = new Date()) {
       cohortLabel: cohort.label,
       cohortName: displayNameForCohortLabel(cohort.label),
       programStart: cohort.programStart,
-      programEnd: cohort.programEnd,
+      programEnd,
       freeMonthEndsAt: freeEndIso,
       programComplete: false,
     };
@@ -142,7 +145,7 @@ export function membershipAccess(profile, now = new Date()) {
       cohortLabel: cohort.label,
       cohortName: displayNameForCohortLabel(cohort.label),
       programStart: cohort.programStart,
-      programEnd: cohort.programEnd,
+      programEnd,
       freeMonthEndsAt: freeEndIso,
       programComplete: true,
     };
@@ -156,7 +159,7 @@ export function membershipAccess(profile, now = new Date()) {
     cohortLabel: cohort.label,
     cohortName: displayNameForCohortLabel(cohort.label),
     programStart: cohort.programStart,
-    programEnd: cohort.programEnd,
+    programEnd,
     freeMonthEndsAt: freeEndIso,
     programComplete: true,
   };
@@ -191,7 +194,7 @@ export function buildProgramSummaryFromCohort(profile, payments = []) {
     cohortLabel: profile.cohort_label || null,
     cohortName: displayNameForCohortLabel(profile.cohort_label),
     programStart: cohort?.programStart || null,
-    programEnd: cohort?.programEnd || null,
+    programEnd: programEndAt(cohort),
     freeMonthEndsAt: freeMonthEndsAt(cohort),
     label: latest?.description || "8-week program",
     amount: latest?.amount ?? null,
@@ -213,6 +216,31 @@ export async function buildSubscriptionPayload(env, profile) {
     "Q&A Library (monthly audio + weekly notes) as it rolls out",
   ];
 
+  const cancelAtPeriodEnd = !!profile.subscription_cancel_at_period_end;
+
+  if (profile.tier === "alumni_19") {
+    return {
+      status: "alumni_19",
+      priceLabel: "App-only plan",
+      amount: 19,
+      currency: "usd",
+      renewsAt: profile.subscription_current_period_end || null,
+      trialEndsAt: null,
+      cancelAtPeriodEnd,
+      periodLabel: null,
+      canSubscribe: false,
+      canCancel: false,
+      benefits: [
+        "Keep logging meals, ranges, and progress history",
+        "App-only — no Callie 1:1 and no group chats",
+        "$19/mo (manual plan — Patrick confirms in Stripe)",
+      ],
+      note: "You're on the $19 app-only plan: logging and tracking stay on. Callie chat, cohort chat, and Alumni are off.",
+      access,
+      priceConfigured: !!priceId,
+    };
+  }
+
   if (active && (status === "trialing" || status === "active" || status === "past_due")) {
     const periodEnd = profile.subscription_current_period_end || profile.subscription_trial_end;
     const trialEnd = profile.subscription_trial_end;
@@ -228,37 +256,22 @@ export async function buildSubscriptionPayload(env, profile) {
       currency: "usd",
       renewsAt: periodEnd || null,
       trialEndsAt: status === "trialing" ? (trialEnd || null) : null,
-      cancelAtPeriodEnd: false,
+      cancelAtPeriodEnd,
       periodLabel: periodEnd
         ? (status === "trialing"
           ? `Free month through ${formatShortDate(trialEnd || periodEnd)} · first charge after that`
           : `Current period through ${formatShortDate(periodEnd)}`)
         : null,
       canSubscribe: false,
+      canCancel: (status === "trialing" || status === "active") && !cancelAtPeriodEnd,
       benefits,
-      note: status === "trialing"
-        ? "You're in your free month — nothing charges until the trial ends."
-        : status === "past_due"
-          ? "Your latest membership payment didn’t go through. Update your card — access stays open while Stripe retries."
-          : "Your monthly membership is active.",
-      access,
-      priceConfigured: !!priceId,
-    };
-  }
-
-  if (profile.tier === "alumni_19") {
-    return {
-      status: "alumni_19",
-      priceLabel: "App access ($19/mo)",
-      amount: 19,
-      currency: "usd",
-      renewsAt: profile.subscription_current_period_end || null,
-      trialEndsAt: null,
-      cancelAtPeriodEnd: false,
-      periodLabel: null,
-      canSubscribe: false,
-      benefits,
-      note: "You're on the $19 app-access save rate. Alumni chat and Library stay off this plan.",
+      note: cancelAtPeriodEnd
+        ? `Membership ends ${formatShortDate(periodEnd)}. You won’t be charged again unless you resubscribe.`
+        : status === "trialing"
+          ? "You're in your free month — nothing charges until the trial ends."
+          : status === "past_due"
+            ? "Your latest membership payment didn’t go through. Update your card — access stays open while Stripe retries."
+            : "Your monthly membership is active.",
       access,
       priceConfigured: !!priceId,
     };
@@ -293,6 +306,7 @@ export async function buildSubscriptionPayload(env, profile) {
       ? `Free month covers ${formatShortDate(access.programEnd)} – ${formatShortDate(freeEnd)}`
       : null,
     canSubscribe: !!priceId && !!profile.paid && !profile.refunded,
+    canCancel: false,
     benefits,
     note,
     access,
@@ -337,31 +351,33 @@ export async function syncSubscriptionToProfile(env, subscription, { userId: hin
     return { skipped: "no_profile" };
   }
 
+  const existingRows = await sbFetch(
+    env,
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=tier&limit=1`,
+    { method: "GET" },
+  );
+  const existingTier = Array.isArray(existingRows) ? existingRows[0]?.tier : null;
+
   const status = String(subscription.status || "").trim() || null;
   const patch = {
     stripe_subscription_id: subId,
     subscription_status: status,
     subscription_current_period_end: isoFromStripeSeconds(subscription.current_period_end),
     subscription_trial_end: isoFromStripeSeconds(subscription.trial_end),
+    subscription_cancel_at_period_end: !!subscription.cancel_at_period_end,
   };
   if (customerId) {
     patch.stripe_customer_id = customerId;
   }
 
   const active = ACTIVE_SUB_STATUSES.has(status);
-  if (active) {
+  // Preserve manual $19 app-only tier — never auto-promote back to alumni_49.
+  if (existingTier === "alumni_19") {
+    patch.tier = "alumni_19";
+  } else if (active) {
     patch.tier = "alumni_49";
   } else if (status === "canceled" || status === "unpaid" || status === "incomplete_expired") {
-    // Don't clobber manual alumni_19.
-    const rows = await sbFetch(
-      env,
-      `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=tier&limit=1`,
-      { method: "GET" },
-    );
-    const tier = Array.isArray(rows) ? rows[0]?.tier : null;
-    if (tier !== "alumni_19") {
-      patch.tier = "none";
-    }
+    patch.tier = "none";
   }
 
   await sbFetch(
@@ -374,9 +390,14 @@ export async function syncSubscriptionToProfile(env, subscription, { userId: hin
     },
   );
 
-  if (active) {
+  if (patch.tier === "alumni_49" && active) {
     await joinAlumniChannel(env, userId);
-  } else if (status === "canceled" || status === "unpaid" || status === "incomplete_expired") {
+  } else if (
+    patch.tier === "alumni_19"
+    || status === "canceled"
+    || status === "unpaid"
+    || status === "incomplete_expired"
+  ) {
     await removeAlumniMembership(env, userId);
   }
 
@@ -399,11 +420,28 @@ export async function joinAlumniChannel(env, userId) {
 export async function removeAlumniMembership(env, userId) {
   const conv = await getAlumniConversation(env);
   if (!conv || !userId) return;
+  await softRemoveMembership(env, conv.id, userId);
+}
+
+/** Remove mama from Alumni + their cohort room (app-only $19 path). */
+export async function removeAllGroupChats(env, userId, cohortLabel) {
+  await removeAlumniMembership(env, userId);
+  if (cohortLabel) {
+    try {
+      const cohortConv = await getCohortConversation(env, cohortLabel);
+      if (cohortConv) await softRemoveMembership(env, cohortConv.id, userId);
+    } catch (e) {
+      console.error("remove cohort membership failed", userId, e);
+    }
+  }
+}
+
+async function softRemoveMembership(env, conversationId, userId) {
   const now = new Date().toISOString();
   try {
     await sbFetch(
       env,
-      `/rest/v1/conversation_members?conversation_id=eq.${encodeURIComponent(conv.id)}&user_id=eq.${encodeURIComponent(userId)}&removed_at=is.null`,
+      `/rest/v1/conversation_members?conversation_id=eq.${encodeURIComponent(conversationId)}&user_id=eq.${encodeURIComponent(userId)}&removed_at=is.null`,
       {
         method: "PATCH",
         body: JSON.stringify({ removed_at: now }),
@@ -411,8 +449,61 @@ export async function removeAlumniMembership(env, userId) {
       },
     );
   } catch (e) {
-    console.error("removeAlumniMembership failed", userId, e);
+    console.error("softRemoveMembership failed", conversationId, userId, e);
   }
+}
+
+/** Stripe: set cancel_at_period_end on a subscription. */
+export async function stripeCancelAtPeriodEnd(env, subscriptionId) {
+  const secret = env.STRIPE_SECRET_KEY;
+  if (!secret || !subscriptionId) throw new Error("missing stripe config");
+  const body = new URLSearchParams();
+  body.set("cancel_at_period_end", "true");
+  const resp = await fetch(
+    `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${secret}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body,
+    },
+  );
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const err = new Error(data?.error?.message || "stripe cancel failed");
+    err.status = resp.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+/**
+ * Profile fields needed for membershipAccess — service role.
+ * Used by meal APIs so the paywall isn’t UI-only.
+ */
+export async function fetchProfileForAccess(env, userId) {
+  const rows = await sbFetch(
+    env,
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`
+      + `&select=id,name,role,paid,refunded,cohort_label,tier,subscription_status,subscription_current_period_end,subscription_trial_end,subscription_cancel_at_period_end,stripe_subscription_id&limit=1`,
+    { method: "GET" },
+  );
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+export function appAccessDeniedResponse(profile) {
+  const access = membershipAccess(profile);
+  if (access.allowed) return null;
+  if (access.paywall) {
+    return { error: "membership required", status: 403, access };
+  }
+  if (access.reason === "refunded") {
+    return { error: "enrollment refunded", status: 403, access };
+  }
+  return { error: "payment required", status: 403, access };
 }
 
 /** Fetch subscription from Stripe by id. */

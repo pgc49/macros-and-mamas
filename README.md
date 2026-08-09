@@ -164,6 +164,7 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 - `013_custom_meals.sql` — **required for My meals** (saved custom meals for one-tap logging)
 - `021_support_reports.sql` — **required for `/support`** (rate limit log + private screenshot bucket)
 - `054_alumni_membership.sql` — **required for monthly membership** (subscription fields on `profiles`)
+- `055_cancel_saves.sql` — **required for cancel / $19 save offer** (`cancel_saves` + `subscription_cancel_at_period_end`)
 
 ### Support → GitHub (WhatsApp link)
 

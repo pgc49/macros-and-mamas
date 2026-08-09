@@ -63,3 +63,20 @@ export async function startMembershipCheckout() {
   if (data.url) window.location.assign(data.url);
   return data;
 }
+
+/** Cancel membership: save_offer ($19 app-only) or confirm_cancel (end at period). */
+export async function cancelMembership(action) {
+  const headers = await authHeaders();
+  const resp = await fetch(CONFIG.MEMBERSHIP_CANCEL_ENDPOINT, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ action }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const err = new Error(data.error || "Couldn't cancel membership.");
+    err.status = resp.status;
+    throw err;
+  }
+  return data;
+}

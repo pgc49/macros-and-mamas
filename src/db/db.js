@@ -119,6 +119,7 @@ function rowToProfile(row) {
     subscription_status: row.subscription_status || null,
     subscription_current_period_end: row.subscription_current_period_end || null,
     subscription_trial_end: row.subscription_trial_end || null,
+    subscription_cancel_at_period_end: !!row.subscription_cancel_at_period_end,
     stripe_subscription_id: row.stripe_subscription_id || null,
   };
 }
@@ -1637,14 +1638,6 @@ export const db = {
     const tier = String(profile?.tier || "none");
     const isAdmin = String(profile?.role || "").toLowerCase() === "admin";
     const myCohort = String(profile?.cohort_label || "");
-    // Live cohort pills for admins/Callie. Mamas always see only their own cohort.
-    // C1 beta = Founding Members only; add 2026-08 when August Group goes live.
-    const liveAdminCohorts = new Set(
-      String(import.meta.env.VITE_LIVE_CHANNEL_COHORTS || "2026-07")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    );
     return (data || [])
       .map((row) => {
         const { conversations, ...membership } = row;
@@ -1655,13 +1648,14 @@ export const db = {
       })
       .filter(({ conversation }) => {
         if (!conversation) return false;
-        // Alumni pill only when the mama is actually alumni (stage 4) — not for admin empty rooms.
+        // Admins (Callie + Patrick): every room they're a member of, including Alumni.
+        if (isAdmin) return true;
+        // $19 app-only: no group chats.
+        if (tier === "alumni_19") return false;
+        // Alumni pill only for full $49 alumni.
         if (conversation.type === "alumni") return tier === "alumni_49";
         if (conversation.type !== "cohort") return false;
-        if (!isAdmin) return !!myCohort && conversation.cohort_label === myCohort;
-        // Admins: live cohorts + any cohort stamped on this admin profile (test accounts).
-        return liveAdminCohorts.has(String(conversation.cohort_label || ""))
-          || (!!myCohort && conversation.cohort_label === myCohort);
+        return !!myCohort && conversation.cohort_label === myCohort;
       })
       .sort((a, b) => String(a.conversation?.label || "").localeCompare(
         String(b.conversation?.label || ""),
