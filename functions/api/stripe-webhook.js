@@ -107,7 +107,18 @@ async function handleCheckoutSessionCompleted(env, event) {
   // Defense-in-depth: only unlock paid when Stripe says the session is paid.
   const payStatus = String(session.payment_status || "");
   if (payStatus && payStatus !== "paid" && payStatus !== "no_payment_required") {
-    console.error("checkout.session.completed not paid", session.id, payStatus);
+    // Klarna/Affirm/etc: completed often arrives unpaid; async_payment_succeeded
+    // marks paid later. Ack with 200 and KEEP the stripe_events claim — do not
+    // 400/release (that spam-retries the unpaid completed event).
+    if (event.type === "checkout.session.completed") {
+      console.log(
+        "checkout.session.completed not paid yet; awaiting async",
+        session.id,
+        payStatus,
+      );
+      return;
+    }
+    console.error("checkout async event not paid", session.id, payStatus);
     throw new Error("not paid");
   }
 
@@ -255,21 +266,28 @@ async function markPaid(env, userId, session) {
 
   // Do NOT set status=active here — that means Callie approved.
   // Payment only flips paid + stores Stripe ids for refunds.
+  const existing = await fetchProfilePaymentFields(env, userId);
   const paidAt = new Date().toISOString();
   const patch = {
     paid: true,
     refunded: false,
-    paid_at: paidAt,
   };
-  if (session.customer) patch.stripe_customer_id = String(session.customer);
+  // Preserve original paid_at across completed → async retries.
+  if (!existing?.paid_at) patch.paid_at = paidAt;
+  // Fill Stripe ids when missing (do not clobber an existing customer id).
+  if (session.customer && !existing?.stripe_customer_id) {
+    patch.stripe_customer_id = String(session.customer);
+  }
   const pi = session.payment_intent;
-  if (pi) patch.stripe_payment_intent = String(pi);
+  if (pi && !existing?.stripe_payment_intent) {
+    patch.stripe_payment_intent = String(pi);
+  }
 
   const labReview =
     String(session.metadata?.lab_review || "").toLowerCase() === "true";
   if (labReview) {
     patch.lab_review_purchased = true;
-    patch.lab_review_purchased_at = paidAt;
+    if (!existing?.lab_review_purchased_at) patch.lab_review_purchased_at = existing?.paid_at || paidAt;
   }
 
   // First-touch backfill from Checkout metadata if the client stamp missed.
@@ -289,6 +307,24 @@ async function markPaid(env, userId, session) {
   if (!resp.ok) {
     const detail = await resp.text();
     throw new Error(`supabase update failed: ${resp.status} ${detail}`);
+  }
+}
+
+async function fetchProfilePaymentFields(env, userId) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key || !userId) return null;
+  try {
+    const resp = await fetch(
+      `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`
+        + `&select=paid,paid_at,stripe_customer_id,stripe_payment_intent,lab_review_purchased_at`,
+      { headers: { apikey: key, authorization: `Bearer ${key}` } },
+    );
+    if (!resp.ok) return null;
+    const rows = await resp.json().catch(() => []);
+    return Array.isArray(rows) ? rows[0] || null : null;
+  } catch {
+    return null;
   }
 }
 

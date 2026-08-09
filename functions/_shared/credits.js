@@ -380,17 +380,30 @@ export async function runCreditsCron(env) {
 }
 
 /**
+ * Cents of customer credit applied to an invoice.
+ * Stripe: negative customer balance = credit. Example: starting=-2500, ending=0 → 2500.
+ */
+export function creditConsumedFromInvoice(invoice) {
+  const starting = Number(invoice?.starting_balance);
+  const ending = Number(invoice?.ending_balance);
+  if (!Number.isFinite(starting) || !Number.isFinite(ending)) return 0;
+  return ending - starting;
+}
+
+/**
  * invoice.paid: if customer balance was consumed, FIFO-mark available credits redeemed
  * and insert an audit redemption row.
  */
 export async function handleInvoicePaidCredits(env, invoice) {
-  const starting = Number(invoice.starting_balance);
-  const ending = Number(invoice.ending_balance);
-  if (!Number.isFinite(starting) || !Number.isFinite(ending)) return { skipped: "no_balances" };
-  // Customer credit is negative balance. Applying $25 credit: starting=-2500, ending=0
-  // → credit used = ending - starting = +2500. (NOT starting - ending.)
-  const consumed = ending - starting;
-  if (consumed <= 0) return { skipped: "no_credit_applied" };
+  const consumed = creditConsumedFromInvoice(invoice);
+  if (consumed <= 0) {
+    const starting = Number(invoice?.starting_balance);
+    const ending = Number(invoice?.ending_balance);
+    if (!Number.isFinite(starting) || !Number.isFinite(ending)) {
+      return { skipped: "no_balances" };
+    }
+    return { skipped: "no_credit_applied" };
+  }
 
   const customerId = String(invoice.customer || "");
   if (!customerId) return { skipped: "no_customer" };
@@ -490,18 +503,18 @@ export async function handleInvoicePaidCredits(env, invoice) {
   }
 
   const applied = consumed - need;
-  if (applied > 0 || redeemedIds.length) {
-    await sbFetch(env, "/rest/v1/credit_ledger", {
-      method: "POST",
-      body: JSON.stringify({
-        user_id: userId,
-        amount_cents: -consumed,
-        status: "redeemed",
-        reason: "redemption",
-        note: `Applied to invoice ${invoiceId || "unknown"}`.trim(),
-      }),
-    });
-  }
+  // Always write the audit row once we know Stripe consumed credit (even if the
+  // ledger had no matching available rows — e.g. retry after grants already marked).
+  await sbFetch(env, "/rest/v1/credit_ledger", {
+    method: "POST",
+    body: JSON.stringify({
+      user_id: userId,
+      amount_cents: -consumed,
+      status: "redeemed",
+      reason: "redemption",
+      note: `Applied to invoice ${invoiceId || "unknown"}`.trim(),
+    }),
+  });
 
   return { consumed, applied, shortfall: need, redeemedIds, userId };
 }
