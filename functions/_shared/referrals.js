@@ -73,7 +73,8 @@ export function baseCodeFromName(name) {
 export function referralCodeCandidates({ name, lastName } = {}) {
   const firstRaw = String(name || "").trim().split(/\s+/)[0] || "MAMA";
   const first = cleanNameToken(firstRaw) || "MAMA";
-  const lastInitial = cleanNameToken(lastName, 1);
+  // Letters only — avoid odd codes like ANN225 when last_name starts with a digit.
+  const lastInitial = cleanNameToken(lastName, 1).replace(/[^A-Z]/g, "");
   const primary = `${first}25`;
   const withLast = lastInitial ? `${first}${lastInitial}25` : "";
   const out = [];
@@ -215,10 +216,12 @@ export async function ensureReferralCode(env, { userId, name, lastName }) {
           && String(recovered.metadata?.advocate_user_id || "") === String(userId)
         ) {
           promo = recovered;
-        } else if (/already|exists|duplicate/i.test(msg) || stripeErr?.status === 400) {
+        } else if (/already|exists|duplicate|resource_already_exists/i.test(msg)) {
+          // Code taken in Stripe by someone else — try next candidate.
           lastErr = stripeErr;
           continue;
         } else {
+          // Config / auth / coupon errors should fail loudly, not burn candidates.
           throw stripeErr;
         }
       }
@@ -554,6 +557,13 @@ async function extractPromotionCodeId(env, session) {
 }
 
 export async function handleChargeRefundedReferral(env, charge) {
+  // Only reverse on a full refund. Partial refunds keep the advocate credit.
+  const amount = Number(charge.amount) || 0;
+  const refundedAmt = Number(charge.amount_refunded) || 0;
+  if (amount > 0 && refundedAmt < amount) {
+    return { skipped: "partial_refund" };
+  }
+
   const pi = typeof charge.payment_intent === "string"
     ? charge.payment_intent
     : charge.payment_intent?.id;

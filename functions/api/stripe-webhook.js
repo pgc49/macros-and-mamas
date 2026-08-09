@@ -297,12 +297,17 @@ async function markPaid(env, userId, session) {
   // Preserve original paid_at across completed → async retries.
   if (!existing?.paid_at) patch.paid_at = paidAt;
   // Fill Stripe ids when missing (do not clobber an existing customer id).
-  if (session.customer && !existing?.stripe_customer_id) {
-    patch.stripe_customer_id = String(session.customer);
+  const customerId = typeof session.customer === "string"
+    ? session.customer
+    : session.customer?.id;
+  if (customerId && !existing?.stripe_customer_id) {
+    patch.stripe_customer_id = customerId;
   }
-  const pi = session.payment_intent;
+  const pi = typeof session.payment_intent === "string"
+    ? session.payment_intent
+    : session.payment_intent?.id;
   if (pi && !existing?.stripe_payment_intent) {
-    patch.stripe_payment_intent = String(pi);
+    patch.stripe_payment_intent = pi;
   }
 
   const labReview =
