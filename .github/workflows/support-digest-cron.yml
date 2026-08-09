@@ -1,8 +1,9 @@
-# Daily digest of new App help / feedback GitHub issues → email Patrick.
-# Surfaces only — does not open agents or change issues.
+# Daily triage of App help / feedback GitHub issues.
+# AI comments a plan; emails Patrick only when needs-approval.
+# Does not open agents or edit the codebase.
 # Requires GitHub Actions secret CRON_SECRET (same as Cloudflare Pages).
 
-name: Support feedback digest
+name: Support feedback triage
 
 on:
   schedule:

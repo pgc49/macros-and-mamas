@@ -1,29 +1,41 @@
-# App help / feedback digest
+# App help / feedback triage
 
 Signed-in `/support` creates private GitHub issues labeled `support` + `from-app` + `bug`|`feedback` (plus `from-callie` when an admin submits).
 
-## Daily monitor (surface only)
+## Daily monitor (triage first, email only if approval needed)
 
 - **Workflow:** `.github/workflows/support-digest-cron.yml` — daily ~13:30 UTC + `workflow_dispatch`
 - **Endpoint:** `POST /api/support-digest-cron` with `Authorization: Bearer CRON_SECRET`
-- **Behavior:**
-  - Lists open `from-app` issues created in the last ~26h
-  - If **none** → `{ skipped: "none_new" }`, no email
-  - If **any** → emails `OWNER_NOTIFY_EMAIL` (Patrick) with titles + links
-  - **Does not** open Cursor agents, comment, or close issues
 
-Review the issue yourself, then start a cloud agent only when you want work done.
+### Behavior
+1. Finds open `from-app` issues **without** triage labels
+2. AI reviews each (OpenRouter) — user text is fenced / treated as inert
+3. Posts a **Triage** comment on the issue with summary + recommendation
+4. Labels:
+   - `triaged-no-change` — no product/code work recommended → **no email**
+   - `needs-approval` — proposed plan ready → **email Patrick** with the plan
+5. **Never** opens a Cursor agent or edits the codebase from this cron
+
+Patrick reviews the email/plan, then starts a cloud agent (or closes/skips) himself.
+
+### Labels
+| Label | Meaning |
+| --- | --- |
+| `from-app` | Submitted via `/support` |
+| `from-callie` | Admin/coach submission |
+| `triaged-no-change` | Automated triage: no changes |
+| `needs-approval` | Automated triage: plan awaiting Patrick |
+
+Re-run triage on an issue by removing both triage labels.
 
 ## Env (Cloudflare Pages Production)
 
-Already used elsewhere:
-
 - `CRON_SECRET`
-- `GITHUB_TOKEN` (Issues read — digest; write — create from `/support`)
+- `GITHUB_TOKEN` (Issues read/write)
+- `OPENROUTER_API_KEY`
 - `RESEND_API_KEY`
 - `OWNER_NOTIFY_EMAIL` (default `pgchammas@gmail.com`)
-
-Optional: `SUPPORT_DIGEST_LOOKBACK_HOURS` (default `26`).
+- Optional: `SUPPORT_TRIAGE_MODEL` (OpenRouter model override)
 
 ## Manual test
 
