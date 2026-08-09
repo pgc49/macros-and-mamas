@@ -99,11 +99,19 @@ export async function createSupportIssue(env, {
   };
 }
 
+export const TRIAGE_NO_CHANGE = "triaged-no-change";
+export const TRIAGE_NEEDS_APPROVAL = "needs-approval";
+export const TRIAGE_MARKER = "<!-- mam-support-triage -->";
+
 /**
  * List open from-app support issues (newest first).
- * @returns {{ ok: true, issues: object[] } | { ok: false, error: string }}
+ * @param {{ lookbackHours?: number|null, untriagedOnly?: boolean }} [opts]
+ *   lookbackHours null/omit with untriagedOnly → all open untriaged
  */
-export async function listOpenSupportIssues(env, { lookbackHours = 26 } = {}) {
+export async function listOpenSupportIssues(env, {
+  lookbackHours = 26,
+  untriagedOnly = false,
+} = {}) {
   const repo = githubRepo(env);
   const token = githubToken(env);
   if (!repo || !token) {
@@ -121,19 +129,69 @@ export async function listOpenSupportIssues(env, { lookbackHours = 26 } = {}) {
   const rows = await resp.json().catch(() => []);
   const list = Array.isArray(rows) ? rows : [];
   // Exclude PRs (Issues API can include them).
-  const issues = list.filter((row) => row && !row.pull_request);
-  const cutoffMs = Date.now() - Math.max(1, lookbackHours) * 3600 * 1000;
-  const recent = issues.filter((row) => {
-    const created = Date.parse(row.created_at || "");
-    return Number.isFinite(created) && created >= cutoffMs;
-  });
+  let issues = list.filter((row) => row && !row.pull_request);
+  if (untriagedOnly) {
+    issues = issues.filter((row) => !hasIssueLabel(row, TRIAGE_NO_CHANGE)
+      && !hasIssueLabel(row, TRIAGE_NEEDS_APPROVAL));
+  } else if (lookbackHours != null) {
+    const cutoffMs = Date.now() - Math.max(1, lookbackHours) * 3600 * 1000;
+    issues = issues.filter((row) => {
+      const created = Date.parse(row.created_at || "");
+      return Number.isFinite(created) && created >= cutoffMs;
+    });
+  }
   return {
     ok: true,
-    issues: recent,
-    openTotal: issues.length,
+    issues,
+    openTotal: list.filter((row) => row && !row.pull_request).length,
     lookbackHours,
     repo: repo.full,
   };
+}
+
+export function hasIssueLabel(issue, name) {
+  const want = String(name || "").toLowerCase();
+  return (issue?.labels || []).some((l) => String(l?.name || l || "").toLowerCase() === want);
+}
+
+export async function addIssueLabels(env, issueNumber, labels) {
+  const repo = githubRepo(env);
+  const token = githubToken(env);
+  if (!repo || !token || !issueNumber) return { ok: false, error: "missing config" };
+  await ensureLabels(env, labels);
+  const resp = await fetch(
+    `https://api.github.com/repos/${repo.full}/issues/${encodeURIComponent(issueNumber)}/labels`,
+    {
+      method: "POST",
+      headers: ghHeaders(token),
+      body: JSON.stringify({ labels }),
+    },
+  );
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
+    return { ok: false, error: `label ${resp.status}: ${detail.slice(0, 200)}` };
+  }
+  return { ok: true };
+}
+
+export async function commentOnIssue(env, issueNumber, body) {
+  const repo = githubRepo(env);
+  const token = githubToken(env);
+  if (!repo || !token || !issueNumber) return { ok: false, error: "missing config" };
+  const resp = await fetch(
+    `https://api.github.com/repos/${repo.full}/issues/${encodeURIComponent(issueNumber)}/comments`,
+    {
+      method: "POST",
+      headers: ghHeaders(token),
+      body: JSON.stringify({ body: String(body || "").slice(0, 60000) }),
+    },
+  );
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
+    return { ok: false, error: `comment ${resp.status}: ${detail.slice(0, 200)}` };
+  }
+  const data = await resp.json().catch(() => ({}));
+  return { ok: true, url: data.html_url || null };
 }
 
 function postIssue(repo, token, title, body, labels) {
@@ -154,6 +212,8 @@ function labelColor(name) {
   if (name === "feedback") return "0E8A16";
   if (name === "support") return "B4416B";
   if (name === "from-callie") return "5319E7";
+  if (name === TRIAGE_NEEDS_APPROVAL) return "E4A11B";
+  if (name === TRIAGE_NO_CHANGE) return "CFD3D7";
   return "6E5D66";
 }
 
@@ -163,6 +223,8 @@ function labelDescription(name) {
   if (name === "support") return "Mama report from /support";
   if (name === "from-app") return "Submitted from the Macros and Mamas app";
   if (name === "from-callie") return "Submitted by Callie / admin (recipes, content, product)";
+  if (name === TRIAGE_NEEDS_APPROVAL) return "Triage recommends code/content changes — awaiting Patrick approval";
+  if (name === TRIAGE_NO_CHANGE) return "Triage: no code changes recommended";
   return name;
 }
 

@@ -139,8 +139,8 @@ Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboar
 | `/functions/api/intake-submitted.js` | Intake received email + Callie notify |
 | `/functions/api/macros-approved.js` | Approve + macros-live email |
 | `/functions/api/support.js` | Mama/coach tech report → GitHub issue (email fallback) |
-| `/functions/api/support-digest-cron.js` | Daily digests **new** `from-app` issues → OWNER email only (no auto-action) |
-| `.github/workflows/support-digest-cron.yml` | Schedules digest (~13:30 UTC); needs Actions `CRON_SECRET` |
+| `/functions/api/support-digest-cron.js` | Daily AI triage of `from-app` issues; emails OWNER **only** when a change plan needs approval |
+| `.github/workflows/support-digest-cron.yml` | Schedules triage (~13:30 UTC); needs Actions `CRON_SECRET` |
 | `/supabase/functions/` | Resend Edge Functions (deploy via Supabase CLI) |
 | `/supabase/migrations/021_support_reports.sql` | `support_reports` + private `support-screenshots` bucket |
 | `/supabase/schema.sql` | Tables + RLS |
