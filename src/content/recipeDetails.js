@@ -130,6 +130,29 @@ export const RECIPE_DETAILS = {
     ],
   },
 
+  "High protein einkorn pancakes": {
+    batch: [
+      { amount: "226g (1 cup)", item: "2% cottage cheese (or plain full-fat Greek yogurt)" },
+      { amount: "4", item: "large eggs" },
+      { amount: "120g (1 cup)", item: "einkorn flour" },
+      { amount: "1 tbsp", item: "raw honey or maple syrup" },
+      { amount: "1 tsp", item: "baking powder" },
+      { amount: "¼ tsp", item: "fine sea salt" },
+      { amount: "1 tsp", item: "vanilla extract" },
+      { amount: "2 tbsp", item: "butter or ghee for the pan (macros assume about half is absorbed)" },
+    ],
+    serving: [
+      { amount: "1 pancake", item: "from ¼ cup batter (batch makes about 8)" },
+    ],
+    steps: [
+      "Add cottage cheese (or Greek yogurt), eggs, honey or maple, vanilla, salt, and baking powder to a blender. Blend until mostly smooth — a few small curds are fine.",
+      "Add the einkorn flour and pulse or stir just until combined. Do not overmix; the batter should be thick but scoopable. Rest 2–3 minutes.",
+      "Heat a nonstick skillet or griddle over medium. Melt a little butter or ghee between batches.",
+      "Scoop exactly ¼ cup batter per pancake. Cook 2–3 minutes until bubbles form and the edges look set, then flip and cook 1–2 minutes more until golden.",
+      "Logged macros are for 1 pancake. A filling breakfast is usually 2–3 pancakes — scale the meal log to match what you eat. Optional berries or a light syrup drizzle are extras.",
+    ],
+  },
+
   "Chicken salad on sourdough": {
     batch: null,
     serving: [
