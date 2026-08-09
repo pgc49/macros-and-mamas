@@ -6,6 +6,23 @@ import { PATHS } from "../routing";
 import { useAuth } from "../auth/useAuth.jsx";
 import { supabase } from "../lib/supabase";
 
+function supportCopy({ fromAdmin, isAdmin, kind }) {
+  if (fromAdmin || isAdmin) {
+    return {
+      eyebrow: "Coach → Tech Guy",
+      title: "Feedback for Tech Guy",
+      blurb: kind === "feedback"
+        ? "Recipes, content, or product wishes — this opens a private GitHub issue tagged as Callie."
+        : "Something broken in admin or the app — this opens a private GitHub issue tagged as Callie.",
+    };
+  }
+  return {
+    eyebrow: "Tech help",
+    title: "App help & feedback",
+    blurb: "Tell Tech Guy here — Callie's WhatsApp stays for coaching. Pick whether it's a bug or feedback so it lands in the right place.",
+  };
+}
+
 const MAX_FILES = 4;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
@@ -34,10 +51,11 @@ const KINDS = [
  * Posts to /api/support → private GitHub issue (labels: bug|feedback + from-app).
  */
 export function SupportPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const initialKind = searchParams.get("kind") === "feedback" ? "feedback" : "bug";
+  const fromAdmin = searchParams.get("from") === "admin";
   const [kind, setKind] = useState(initialKind);
   const [message, setMessage] = useState("");
   const [files, setFiles] = useState([]);
@@ -199,21 +217,28 @@ export function SupportPage() {
     }
   };
 
+  const copy = supportCopy({ fromAdmin, isAdmin, kind });
+
   return (
     <Shell>
       <Card style={{ marginTop: 24, padding: 28 }}>
         <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: T.accentDeep, letterSpacing: "0.02em" }}>
-          Tech help
+          {copy.eyebrow}
         </p>
         <h1 style={{ fontFamily: FD, fontWeight: 400, fontSize: 28, margin: "0 0 10px", lineHeight: 1.2 }}>
-          App help & feedback
+          {copy.title}
         </h1>
         <p style={{ fontSize: 15, lineHeight: 1.55, color: T.inkSoft, margin: "0 0 8px" }}>
-          Tell Tech Guy here — Callie&apos;s WhatsApp stays for coaching.
-          Pick whether it&apos;s a bug or feedback so it lands in the right place.
+          {copy.blurb}
         </p>
         <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 20px" }}>
           Signed in as <b style={{ color: T.ink }}>{user.email}</b>
+          {fromAdmin ? (
+            <>
+              {" · "}
+              <Link to={PATHS.admin} style={{ color: T.accent, fontWeight: 700 }}>Back to admin</Link>
+            </>
+          ) : null}
         </p>
 
         {done ? (

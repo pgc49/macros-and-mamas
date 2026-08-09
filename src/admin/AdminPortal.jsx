@@ -767,6 +767,27 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
 
       <AppUpdateBanner />
 
+      <Link
+        to={`${PATHS.support}?kind=feedback&from=admin`}
+        style={{
+          display: "block",
+          textDecoration: "none",
+          marginBottom: 14,
+          padding: "14px 16px",
+          borderRadius: 14,
+          border: `1.5px solid ${T.border}`,
+          background: "#fff",
+          color: T.ink,
+        }}
+      >
+        <div style={{ fontWeight: 800, fontSize: 14.5, color: T.accentDeep }}>
+          Feedback for Tech Guy
+        </div>
+        <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 3, lineHeight: 1.45 }}>
+          Recipes, content ideas, bugs, or product wishes — same form as App help; tagged as Callie.
+        </div>
+      </Link>
+
       {tab === "overview" && (
         <>
           {unreadMessages > 0 && (
