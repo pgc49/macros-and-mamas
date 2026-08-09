@@ -536,6 +536,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ok: true,
     event_id: eventId,
     segment,
+    qualified_lead: qualifiedLead,
     needs_review: needsReview,
     review_reason: reviewReason,
     early_pp: earlyPp,
