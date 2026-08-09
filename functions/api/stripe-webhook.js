@@ -58,7 +58,12 @@ export async function onRequestPost({ request, env }) {
     }
 
     try {
-      if (eventType === "checkout.session.completed") {
+      if (
+        eventType === "checkout.session.completed"
+        || eventType === "checkout.session.async_payment_succeeded"
+      ) {
+        // Card: completed is paid. Klarna/Affirm/etc: completed may be unpaid,
+        // then async_payment_succeeded fires when funds clear — same mark-paid path.
         await handleCheckoutSessionCompleted(env, event);
       } else if (eventType === "invoice.paid") {
         const invoice = event.data?.object || {};
@@ -106,7 +111,15 @@ async function handleCheckoutSessionCompleted(env, event) {
     throw new Error("not paid");
   }
 
+  const wasPaid = await profileAlreadyPaid(env, userId);
   await markPaid(env, userId, session);
+
+  // Skip side effects if this session already unlocked paid (e.g. completed then
+  // async_payment_succeeded both succeed — avoid double welcome email).
+  if (wasPaid) {
+    console.log("checkout already paid; skipped welcome/CAPI", userId, session.id);
+    return;
+  }
 
   // Purchase CAPI — idempotent event_id = Stripe session.id (dedupe with browser)
   try {
@@ -151,6 +164,23 @@ async function handleCheckoutSessionCompleted(env, event) {
     await sendWelcomeEmails(env, { email, name, userId, amountUsd });
   } catch (mailErr) {
     console.error("welcome email failed", mailErr);
+  }
+}
+
+async function profileAlreadyPaid(env, userId) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key || !userId) return false;
+  try {
+    const resp = await fetch(
+      `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid`,
+      { headers: { apikey: key, authorization: `Bearer ${key}` } },
+    );
+    if (!resp.ok) return false;
+    const rows = await resp.json().catch(() => []);
+    return !!rows?.[0]?.paid;
+  } catch {
+    return false;
   }
 }
 

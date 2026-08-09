@@ -75,10 +75,11 @@ export async function onRequestPost({ request, env }) {
       const amountCents = body.amountCents != null
         ? Number(body.amountCents)
         : Math.round(Number(body.amountDollars) * 100);
+      // Admin harness only grants manual credits (referrals/milestones land via stage 2+).
       const row = await grantCredit(env, {
         userId,
         amountCents,
-        reason: body.reason || "manual",
+        reason: "manual",
         note: body.note,
         vestsAt: body.vestsAt || null,
       });

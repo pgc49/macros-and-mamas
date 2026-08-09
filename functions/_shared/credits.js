@@ -180,7 +180,7 @@ export async function reverseCredit(env, { ledgerId, note }) {
   if (row.status === "pending") {
     const updated = await sbFetch(
       env,
-      `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(ledgerId)}`,
+      `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(ledgerId)}&status=eq.pending`,
       {
         method: "PATCH",
         body: JSON.stringify({
@@ -189,25 +189,31 @@ export async function reverseCredit(env, { ledgerId, note }) {
         }),
       },
     );
-    return Array.isArray(updated) ? updated[0] : updated;
+    if (!Array.isArray(updated) || !updated[0]) {
+      throw new Error("cannot reverse — row changed status (retry)");
+    }
+    return updated[0];
   }
 
   // Available: offset Stripe if mirrored, then mark reversed.
   if (row.status === "available") {
     if (row.mirrored_at && row.amount_cents > 0) {
       const customerId = await stripeCustomerIdForUser(env, row.user_id);
-      if (customerId) {
-        // Debit = positive amount on customer balance transaction.
-        await postCustomerBalanceTransaction(env, customerId, {
-          amount: Math.abs(Number(row.amount_cents)),
-          description: `Credit reversal ${row.id}`,
-          metadata: { ledger_id: row.id, kind: "reversal" },
-        });
+      if (!customerId) {
+        // Refuse ledger-only reverse — would leave credit sitting on Stripe.
+        throw new Error("cannot reverse mirrored credit without stripe_customer_id");
       }
+      // Debit = positive amount on customer balance transaction.
+      await postCustomerBalanceTransaction(env, customerId, {
+        amount: Math.abs(Number(row.amount_cents)),
+        description: `Credit reversal ${row.id}`,
+        metadata: { ledger_id: row.id, kind: "reversal" },
+        idempotencyKey: `credit_rev_${row.id}`,
+      });
     }
     const updated = await sbFetch(
       env,
-      `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(ledgerId)}`,
+      `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(ledgerId)}&status=eq.available`,
       {
         method: "PATCH",
         body: JSON.stringify({
@@ -216,6 +222,9 @@ export async function reverseCredit(env, { ledgerId, note }) {
         }),
       },
     );
+    if (!Array.isArray(updated) || !updated[0]) {
+      throw new Error("cannot reverse — row changed status (retry)");
+    }
     // Audit row
     await sbFetch(env, "/rest/v1/credit_ledger", {
       method: "POST",
@@ -229,7 +238,7 @@ export async function reverseCredit(env, { ledgerId, note }) {
         mirrored_at: row.mirrored_at ? new Date().toISOString() : null,
       }),
     });
-    return Array.isArray(updated) ? updated[0] : updated;
+    return updated[0];
   }
 
   throw new Error(`cannot reverse ${row.status}`);
@@ -253,7 +262,12 @@ export async function stripeCustomerIdForUser(env, userId) {
   return id ? String(id) : "";
 }
 
-export async function postCustomerBalanceTransaction(env, customerId, { amount, description, metadata }) {
+export async function postCustomerBalanceTransaction(env, customerId, {
+  amount,
+  description,
+  metadata,
+  idempotencyKey,
+}) {
   const secret = env.STRIPE_SECRET_KEY;
   if (!secret) throw new Error("missing STRIPE_SECRET_KEY");
   const params = new URLSearchParams();
@@ -265,14 +279,19 @@ export async function postCustomerBalanceTransaction(env, customerId, { amount, 
       if (v != null && v !== "") params.set(`metadata[${k}]`, String(v).slice(0, 500));
     }
   }
+  const headers = {
+    authorization: `Bearer ${secret}`,
+    "content-type": "application/x-www-form-urlencoded",
+  };
+  // Prevent double-credit / double-debit if cron or reverse retries after a partial failure.
+  if (idempotencyKey) {
+    headers["Idempotency-Key"] = String(idempotencyKey).slice(0, 255);
+  }
   const resp = await fetch(
     `https://api.stripe.com/v1/customers/${encodeURIComponent(customerId)}/balance_transactions`,
     {
       method: "POST",
-      headers: {
-        authorization: `Bearer ${secret}`,
-        "content-type": "application/x-www-form-urlencoded",
-      },
+      headers,
       body: params,
     },
   );
@@ -305,7 +324,7 @@ export async function runCreditsCron(env) {
   );
   for (const row of Array.isArray(due) ? due : []) {
     try {
-      await sbFetch(
+      const updated = await sbFetch(
         env,
         `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(row.id)}&status=eq.pending`,
         {
@@ -313,7 +332,7 @@ export async function runCreditsCron(env) {
           body: JSON.stringify({ status: "available" }),
         },
       );
-      stats.vested += 1;
+      if (Array.isArray(updated) && updated[0]) stats.vested += 1;
     } catch (e) {
       console.error("vest failed", row.id, e);
       stats.errors += 1;
@@ -337,10 +356,11 @@ export async function runCreditsCron(env) {
         amount: -Math.abs(Number(row.amount_cents)),
         description: `Mama credit ${row.id}`,
         metadata: { ledger_id: row.id, reason: row.reason || "" },
+        idempotencyKey: `credit_mirror_${row.id}`,
       });
-      await sbFetch(
+      const patched = await sbFetch(
         env,
-        `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(row.id)}`,
+        `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(row.id)}&status=eq.available&mirrored_at=is.null`,
         {
           method: "PATCH",
           body: JSON.stringify({
@@ -349,7 +369,7 @@ export async function runCreditsCron(env) {
           }),
         },
       );
-      stats.mirrored += 1;
+      if (Array.isArray(patched) && patched[0]) stats.mirrored += 1;
     } catch (e) {
       console.error("mirror failed", row.id, e);
       stats.errors += 1;
@@ -367,11 +387,26 @@ export async function handleInvoicePaidCredits(env, invoice) {
   const starting = Number(invoice.starting_balance);
   const ending = Number(invoice.ending_balance);
   if (!Number.isFinite(starting) || !Number.isFinite(ending)) return { skipped: "no_balances" };
-  const consumed = starting - ending; // e.g. -2500 → 0 means 2500 credit applied
+  // Customer credit is negative balance. Applying $25 credit: starting=-2500, ending=0
+  // → credit used = ending - starting = +2500. (NOT starting - ending.)
+  const consumed = ending - starting;
   if (consumed <= 0) return { skipped: "no_credit_applied" };
 
   const customerId = String(invoice.customer || "");
   if (!customerId) return { skipped: "no_customer" };
+
+  const invoiceId = String(invoice.id || "").trim();
+  if (invoiceId) {
+    // Idempotent within a released/retried webhook: one redemption audit per invoice.
+    const existing = await sbFetch(
+      env,
+      `/rest/v1/credit_ledger?reason=eq.redemption&note=eq.${encodeURIComponent(`Applied to invoice ${invoiceId}`)}&select=id&limit=1`,
+      { method: "GET" },
+    );
+    if (Array.isArray(existing) && existing[0]) {
+      return { skipped: "already_recorded", invoiceId, redemptionId: existing[0].id };
+    }
+  }
 
   const profiles = await sbFetch(
     env,
@@ -397,29 +432,32 @@ export async function handleInvoicePaidCredits(env, invoice) {
     if (amt <= 0) continue;
 
     if (amt <= need) {
-      await sbFetch(
+      const patched = await sbFetch(
         env,
-        `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(row.id)}`,
+        `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(row.id)}&status=eq.available`,
         { method: "PATCH", body: JSON.stringify({ status: "redeemed" }) },
       );
-      redeemedIds.push(row.id);
-      need -= amt;
+      if (Array.isArray(patched) && patched[0]) {
+        redeemedIds.push(row.id);
+        need -= amt;
+      }
     } else {
-      // Partial: redeem `need` from this row; leave remainder available (unmirrored remainder
-      // stays in Stripe already — Stripe already took only `consumed` from balance).
+      // Partial: redeem `need` from this row; leave remainder available.
+      // Stripe already took only `consumed` from the customer balance.
       const remainder = amt - need;
-      await sbFetch(
+      const patched = await sbFetch(
         env,
-        `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(row.id)}`,
+        `/rest/v1/credit_ledger?id=eq.${encodeURIComponent(row.id)}&status=eq.available`,
         {
           method: "PATCH",
           body: JSON.stringify({
             amount_cents: need,
             status: "redeemed",
-            note: appendNote(row.note, `Partial redeem on ${invoice.id || "invoice"}`),
+            note: appendNote(row.note, `Partial redeem on ${invoiceId || "invoice"}`),
           }),
         },
       );
+      if (!Array.isArray(patched) || !patched[0]) continue;
       await sbFetch(env, "/rest/v1/credit_ledger", {
         method: "POST",
         body: JSON.stringify({
@@ -440,18 +478,32 @@ export async function handleInvoicePaidCredits(env, invoice) {
     }
   }
 
-  await sbFetch(env, "/rest/v1/credit_ledger", {
-    method: "POST",
-    body: JSON.stringify({
-      user_id: userId,
-      amount_cents: -consumed,
-      status: "redeemed",
-      reason: "redemption",
-      note: `Applied to invoice ${invoice.id || ""}`.trim(),
-    }),
-  });
+  if (need > 0) {
+    // Stripe consumed more credit than our available ledger (manual Dashboard edit, etc.).
+    console.warn("invoice.paid credit: ledger shortfall", {
+      invoiceId,
+      userId,
+      consumed,
+      shortfall: need,
+      redeemedIds,
+    });
+  }
 
-  return { consumed, redeemedIds, userId };
+  const applied = consumed - need;
+  if (applied > 0 || redeemedIds.length) {
+    await sbFetch(env, "/rest/v1/credit_ledger", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: userId,
+        amount_cents: -consumed,
+        status: "redeemed",
+        reason: "redemption",
+        note: `Applied to invoice ${invoiceId || "unknown"}`.trim(),
+      }),
+    });
+  }
+
+  return { consumed, applied, shortfall: need, redeemedIds, userId };
 }
 
 export async function findProfileByEmail(env, email) {

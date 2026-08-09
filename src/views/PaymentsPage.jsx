@@ -19,6 +19,19 @@ function money(amount, currency = "usd") {
   }
 }
 
+function moneyCents(cents) {
+  if (cents == null || Number.isNaN(Number(cents))) return "—";
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    }).format(Number(cents) / 100);
+  } catch {
+    return `$${(Number(cents) / 100).toFixed(2)}`;
+  }
+}
+
 function when(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -182,11 +195,11 @@ export function PaymentsPage() {
             Credits
           </div>
           <div style={{ fontFamily: FD, fontSize: 28, marginTop: 6 }}>
-            {money(credits.availableDollars)}
+            {moneyCents(credits.availableCents)}
           </div>
           <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 2 }}>
             available
-            {credits.pendingCents > 0 ? ` · ${money(credits.pendingDollars)} pending` : ""}
+            {credits.pendingCents > 0 ? ` · ${moneyCents(credits.pendingCents)} pending` : ""}
           </div>
           <p style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, margin: "10px 0 0" }}>
             {credits.copy || "Credits apply automatically to your membership or a Lab Review."}

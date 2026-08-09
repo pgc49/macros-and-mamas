@@ -2,6 +2,13 @@
 
 Requires stage 0. Referrals (stage 2) write `reason=referral` rows into this ledger.
 
+## Review fixes (pre-ship)
+
+- Invoice credit applied = `ending_balance - starting_balance` (credit balances are negative).
+- Stripe Customer Balance posts use `Idempotency-Key` so cron/reverse retries cannot double-credit.
+- `checkout.session.async_payment_succeeded` marks paid (Klarna/Affirm); skips welcome if already paid.
+- Reverse of a mirrored credit fails closed if `stripe_customer_id` is missing (no ledger/Stripe drift).
+
 ## Adjustments vs the stage-1 brief
 
 | Brief | What we did | Why |
