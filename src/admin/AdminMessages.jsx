@@ -508,7 +508,8 @@ export function AdminMessages({
       flexDirection: "column",
       minWidth: 0,
       minHeight: 0,
-      height: isWide ? "min(78vh, 820px)" : "auto",
+      // Mobile: fill the screen under admin chrome for an iMessage-like thread.
+      height: isWide ? "min(78vh, 820px)" : "calc(100dvh - 150px)",
       background: "#fff",
       border: `1.5px solid ${T.border}`,
       borderRadius: 16,
