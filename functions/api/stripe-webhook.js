@@ -1,10 +1,16 @@
 /* ==================================================================
-   /functions/api/stripe-webhook.js — mark profile paid after Checkout
+   /functions/api/stripe-webhook.js — Stripe event router + idempotency
    ==================================================================
    Secrets (Cloudflare Pages / .dev.vars — never commit real values):
      STRIPE_WEBHOOK_SECRET
      SUPABASE_URL
      SUPABASE_SERVICE_ROLE_KEY   (server-side only)
+
+   Stage 0: signature verify → claim event_id in stripe_events → route.
+   Handlers for credits/referrals/subscriptions arrive in later stages.
+   Subscribe (Dashboard / CLI): checkout.session.completed,
+     checkout.session.async_payment_succeeded, charge.refunded,
+     invoice.paid, invoice.payment_failed, customer.subscription.deleted
    ================================================================== */
 
 import {
@@ -12,6 +18,16 @@ import {
   sendWelcomeEmails,
 } from "../_shared/supabaseEmail.js";
 import { sendMetaCapiEvent } from "../_shared/metaCapi.js";
+
+/** Event types we expect to receive; handlers land in later stages. */
+const KNOWN_EVENT_TYPES = new Set([
+  "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
+  "charge.refunded",
+  "invoice.paid",
+  "invoice.payment_failed",
+  "customer.subscription.deleted",
+]);
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -24,76 +40,174 @@ export async function onRequestPost({ request, env }) {
     const event = await verifyStripeSignature(rawBody, sig, env.STRIPE_WEBHOOK_SECRET);
     if (!event) return json({ error: "invalid signature" }, 400);
 
-    if (event.type === "checkout.session.completed") {
-      const session = event.data?.object || {};
-      const userId =
-        session.metadata?.supabase_user_id ||
-        session.client_reference_id;
+    const eventId = String(event.id || "").trim();
+    const eventType = String(event.type || "").trim();
+    if (!eventId || !eventType) {
+      return json({ error: "invalid event" }, 400);
+    }
 
-      if (!userId) {
-        console.error("checkout.session.completed missing user id", session.id);
-        return json({ error: "missing user" }, 400);
+    // Idempotency: claim event_id first. Conflict → already processed → 200.
+    const claimed = await claimStripeEvent(env, eventId, eventType);
+    if (claimed === "duplicate") {
+      return json({ received: true, duplicate: true }, 200);
+    }
+    if (claimed === "error") {
+      // Fail closed so Stripe retries; do not mark paid twice without a row.
+      return json({ error: "idempotency unavailable" }, 500);
+    }
+
+    try {
+      if (eventType === "checkout.session.completed") {
+        await handleCheckoutSessionCompleted(env, event);
+      } else if (KNOWN_EVENT_TYPES.has(eventType)) {
+        // Shell only — real handlers in stages 1–4.
+        console.log("stripe webhook unhandled (registered)", eventType, eventId);
+      } else {
+        console.log("stripe webhook unhandled", eventType, eventId);
       }
-
-      // Defense-in-depth: only unlock paid when Stripe says the session is paid.
-      const payStatus = String(session.payment_status || "");
-      if (payStatus && payStatus !== "paid" && payStatus !== "no_payment_required") {
-        console.error("checkout.session.completed not paid", session.id, payStatus);
-        return json({ error: "not paid", payment_status: payStatus }, 400);
+    } catch (handlerErr) {
+      // Release claim so Stripe retries can re-process after a transient failure.
+      console.error("stripe webhook handler failed", eventType, eventId, handlerErr);
+      await releaseStripeEvent(env, eventId);
+      const msg = String(handlerErr?.message || "");
+      if (msg === "missing user" || msg === "not paid") {
+        return json({ error: msg }, 400);
       }
-
-      await markPaid(env, userId, session);
-
-      // Purchase CAPI — idempotent event_id = Stripe session.id (dedupe with browser)
-      try {
-        const contact = await loadUserContact(env, userId);
-        const email =
-          contact.email ||
-          session.customer_email ||
-          session.customer_details?.email ||
-          "";
-        const amount =
-          Number(session.metadata?.amount_usd) ||
-          (session.amount_total != null ? Number(session.amount_total) / 100 : 0);
-        const purchaseEventId = String(session.metadata?.event_id || session.id);
-        await sendMetaCapiEvent(env, {
-          eventName: "Purchase",
-          eventId: purchaseEventId,
-          email,
-          fbp: session.metadata?.fbp || "",
-          fbc: session.metadata?.fbc || "",
-          clientIp: session.metadata?.client_ip || "",
-          clientUa: session.metadata?.client_ua || "",
-          eventSourceUrl: "https://www.macrosandmamas.com/welcome",
-          customData: {
-            currency: "USD",
-            value: amount,
-            content_name: `purchase_${session.metadata?.price_tier || "unknown"}`,
-            order_id: String(session.id),
-          },
-        });
-      } catch (metaErr) {
-        console.error("Purchase CAPI failed", metaErr);
-      }
-
-      // Email #2 + Callie A — best-effort (don't fail the webhook)
-      try {
-        const contact = await loadUserContact(env, userId);
-        const email = contact.email || session.customer_email || session.customer_details?.email;
-        const name = contact.name || session.customer_details?.name || null;
-        const amountUsd =
-          Number(session.metadata?.amount_usd) ||
-          (session.amount_total != null ? Number(session.amount_total) / 100 : null);
-        await sendWelcomeEmails(env, { email, name, userId, amountUsd });
-      } catch (mailErr) {
-        console.error("welcome email failed", mailErr);
-      }
+      return json({ error: "webhook failed" }, 500);
     }
 
     return json({ received: true }, 200);
   } catch (e) {
     console.error("stripe webhook failed", e);
     return json({ error: "webhook failed" }, 500);
+  }
+}
+
+async function handleCheckoutSessionCompleted(env, event) {
+  const session = event.data?.object || {};
+  const userId =
+    session.metadata?.supabase_user_id ||
+    session.client_reference_id;
+
+  if (!userId) {
+    console.error("checkout.session.completed missing user id", session.id);
+    throw new Error("missing user");
+  }
+
+  // Defense-in-depth: only unlock paid when Stripe says the session is paid.
+  const payStatus = String(session.payment_status || "");
+  if (payStatus && payStatus !== "paid" && payStatus !== "no_payment_required") {
+    console.error("checkout.session.completed not paid", session.id, payStatus);
+    throw new Error("not paid");
+  }
+
+  await markPaid(env, userId, session);
+
+  // Purchase CAPI — idempotent event_id = Stripe session.id (dedupe with browser)
+  try {
+    const contact = await loadUserContact(env, userId);
+    const email =
+      contact.email ||
+      session.customer_email ||
+      session.customer_details?.email ||
+      "";
+    const amount =
+      Number(session.metadata?.amount_usd) ||
+      (session.amount_total != null ? Number(session.amount_total) / 100 : 0);
+    const purchaseEventId = String(session.metadata?.event_id || session.id);
+    await sendMetaCapiEvent(env, {
+      eventName: "Purchase",
+      eventId: purchaseEventId,
+      email,
+      fbp: session.metadata?.fbp || "",
+      fbc: session.metadata?.fbc || "",
+      clientIp: session.metadata?.client_ip || "",
+      clientUa: session.metadata?.client_ua || "",
+      eventSourceUrl: "https://www.macrosandmamas.com/welcome",
+      customData: {
+        currency: "USD",
+        value: amount,
+        content_name: `purchase_${session.metadata?.price_tier || "unknown"}`,
+        order_id: String(session.id),
+      },
+    });
+  } catch (metaErr) {
+    console.error("Purchase CAPI failed", metaErr);
+  }
+
+  // Email #2 + Callie A — best-effort (don't fail the webhook)
+  try {
+    const contact = await loadUserContact(env, userId);
+    const email = contact.email || session.customer_email || session.customer_details?.email;
+    const name = contact.name || session.customer_details?.name || null;
+    const amountUsd =
+      Number(session.metadata?.amount_usd) ||
+      (session.amount_total != null ? Number(session.amount_total) / 100 : null);
+    await sendWelcomeEmails(env, { email, name, userId, amountUsd });
+  } catch (mailErr) {
+    console.error("welcome email failed", mailErr);
+  }
+}
+
+/**
+ * Insert event_id. Returns "claimed" | "duplicate" | "error".
+ */
+async function claimStripeEvent(env, eventId, eventType) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key) {
+    console.error("claimStripeEvent missing SUPABASE_URL or service role");
+    return "error";
+  }
+
+  const resp = await fetch(`${base}/rest/v1/stripe_events`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      apikey: key,
+      authorization: `Bearer ${key}`,
+      prefer: "return=minimal",
+    },
+    body: JSON.stringify({
+      event_id: eventId,
+      type: eventType,
+      processed_at: new Date().toISOString(),
+    }),
+  });
+
+  if (resp.ok || resp.status === 201) return "claimed";
+
+  // Unique violation → already processed
+  const detail = await resp.text().catch(() => "");
+  if (resp.status === 409 || /duplicate|unique|23505/i.test(detail)) {
+    return "duplicate";
+  }
+
+  console.error("claimStripeEvent failed", resp.status, detail);
+  return "error";
+}
+
+async function releaseStripeEvent(env, eventId) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key || !eventId) return;
+  try {
+    const resp = await fetch(
+      `${base}/rest/v1/stripe_events?event_id=eq.${encodeURIComponent(eventId)}`,
+      {
+        method: "DELETE",
+        headers: {
+          apikey: key,
+          authorization: `Bearer ${key}`,
+          prefer: "return=minimal",
+        },
+      },
+    );
+    if (!resp.ok) {
+      console.error("releaseStripeEvent failed", resp.status, await resp.text());
+    }
+  } catch (e) {
+    console.error("releaseStripeEvent error", e);
   }
 }
 

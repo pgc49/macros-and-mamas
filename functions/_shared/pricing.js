@@ -1,11 +1,13 @@
 /**
  * Checkout price tiers.
  *
- * Cloudflare env (Price IDs from Stripe Dashboard):
+ * Cloudflare env (Price IDs from Stripe Dashboard — always reference by id):
  *   STRIPE_PRICE_ID_FOUNDING  — $149 (falls back to legacy STRIPE_PRICE_ID)
- *   STRIPE_PRICE_ID_WAITLIST  — $249 early / quiz-unlock rate
- *   STRIPE_PRICE_ID_FULL      — $299 full price
- *   STRIPE_PRICE_ID_LAB_ADDON — $349 The Lab Review (optional line item)
+ *   STRIPE_PRICE_ID_WAITLIST / PRICE_QUIZ_RATE — $249 early / quiz-unlock rate
+ *   STRIPE_PRICE_ID_FULL / PRICE_FULL_RATE     — $299 full price
+ *   STRIPE_PRICE_ID_LAB_ADDON / PRICE_LAB_REVIEW — $349 The Lab Review
+ *   PRICE_ALUMNI_49 — $49/mo Alumni Membership (stage 4; recorded in stage 0)
+ *   COUPON_REFERRAL_25 — $25 once coupon id (stage 2; recorded in stage 0)
  *
  * Resolution order:
  *   1. Account created before ENROLLMENT_CLOSED_AT → founding ($149)
@@ -34,7 +36,19 @@ const QUIZ_UNLOCK_SEGMENTS = new Set([
 ]);
 
 export function labAddonPriceId(env) {
-  return String(env.STRIPE_PRICE_ID_LAB_ADDON || "").trim();
+  return String(
+    env.STRIPE_PRICE_ID_LAB_ADDON || env.PRICE_LAB_REVIEW || "",
+  ).trim();
+}
+
+/** Alumni $49/mo recurring Price ID (stage 4). */
+export function alumniPriceId(env) {
+  return String(env.PRICE_ALUMNI_49 || env.STRIPE_PRICE_ID_ALUMNI || "").trim();
+}
+
+/** Referral $25-off coupon id (stage 2). */
+export function referralCouponId(env) {
+  return String(env.COUPON_REFERRAL_25 || "").trim();
 }
 
 export function enrollmentIsOpen(env) {
@@ -61,10 +75,10 @@ export function priceIdForTier(env, tier) {
     return env.STRIPE_PRICE_ID_FOUNDING || env.STRIPE_PRICE_ID || "";
   }
   if (tier === "waitlist") {
-    return env.STRIPE_PRICE_ID_WAITLIST || "";
+    return env.STRIPE_PRICE_ID_WAITLIST || env.PRICE_QUIZ_RATE || "";
   }
   if (tier === "full") {
-    return env.STRIPE_PRICE_ID_FULL || "";
+    return env.STRIPE_PRICE_ID_FULL || env.PRICE_FULL_RATE || "";
   }
   return "";
 }

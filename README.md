@@ -64,9 +64,12 @@ The app also has project fallbacks for Supabase URL/publishable key in `src/conf
 | `OPENROUTER_API_KEY` | Meal photo AI | Cloudflare secret |
 | `STRIPE_SECRET_KEY` | Create Checkout Sessions | Cloudflare secret (`sk_test_…` first) |
 | `STRIPE_PRICE_ID_FOUNDING` | $149 founding Price ID (`price_…`) | Cloudflare env (legacy `STRIPE_PRICE_ID` still works as fallback) |
-| `STRIPE_PRICE_ID_WAITLIST` | $249 early / quiz-unlock Price ID | Cloudflare env |
-| `STRIPE_PRICE_ID_FULL` | $299 full Price ID | Cloudflare env |
-| `STRIPE_PRICE_ID_LAB_ADDON` | $349 Lab Review add-on Price ID | Cloudflare env |
+| `STRIPE_PRICE_ID_WAITLIST` / `PRICE_QUIZ_RATE` | $249 early / quiz-unlock Price ID | Cloudflare env |
+| `STRIPE_PRICE_ID_FULL` / `PRICE_FULL_RATE` | $299 full Price ID | Cloudflare env |
+| `STRIPE_PRICE_ID_LAB_ADDON` / `PRICE_LAB_REVIEW` | $349 Lab Review add-on Price ID | Cloudflare env |
+| `PRICE_ALUMNI_49` | $49/mo Alumni Membership Price ID (stage 4) | Cloudflare env |
+| `COUPON_REFERRAL_25` | Referral $25-off coupon id (stage 2) | Cloudflare env |
+| `STRIPE_BILLING_PORTAL_CONFIGURATION` | Optional Customer Portal config (`bpc_…`) | Cloudflare env |
 | `STRIPE_WEBHOOK_SECRET` | Verify webhook signatures (`whsec_…`) | Cloudflare secret |
 | `SUPABASE_URL` | Used by `/api/checkout`, `/api/analyze`, webhook | Cloudflare env |
 | `SUPABASE_ANON_KEY` | Validate JWTs in functions | Cloudflare env/secret |
@@ -91,19 +94,17 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 
 ## Stripe setup (test mode first)
 
-1. On your Macros and Mamas product, create three **one-time** prices and copy each **Price ID** (`price_…`):
-   - **$149** founding  
-   - **$249** waitlist early  
-   - **$299** full  
+1. Use **Price IDs** (never amounts) — live inventory and stage-0 notes: `docs/STAGE-0-STRIPE-FOUNDATION.md`.
 2. Webhook endpoint: `https://YOUR_DOMAIN/api/stripe-webhook`  
-   Event: `checkout.session.completed` → copy signing secret (`whsec_…`).
-3. Set in Cloudflare: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID_FOUNDING`, `STRIPE_PRICE_ID_WAITLIST`, `STRIPE_PRICE_ID_FULL`, `STRIPE_WEBHOOK_SECRET`.
+   Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted` → copy signing secret (`whsec_…`). Idempotency table: `stripe_events`.
+3. Set in Cloudflare: `STRIPE_SECRET_KEY`, price ids (`STRIPE_PRICE_ID_*` and/or `PRICE_*` aliases), `STRIPE_WEBHOOK_SECRET`. Optional: `STRIPE_BILLING_PORTAL_CONFIGURATION`, `PRICE_ALUMNI_49`, `COUPON_REFERRAL_25`.
 4. Checkout picks the tier automatically (`functions/_shared/pricing.js`):
    - Account created before `ENROLLMENT_CLOSED_AT` → founding $149  
    - Email has an eligible `marketing_leads` row (quiz unlock) → early $249  
-   - Else → `403 quiz_required` (set `OPEN_WITHOUT_QUIZ=true` only to sell $249 without the quiz)  
-5. Before real charges: switch to live keys, live prices, and a live webhook.
-6. See `docs/ENROLLMENT-OPEN.md` and `docs/WWW-CUTOVER.md` for www marketing cutover.
+   - Else → full $299 (set `OPEN_WITHOUT_QUIZ=true` only to sell $249 without the quiz)  
+5. Customer Portal: Dashboard → enable card update + invoice history; **disable** cancel + plan switch. Payments → **Open billing portal**.
+6. Before real charges: switch to live keys, live prices, and a live webhook.
+7. See `docs/ENROLLMENT-OPEN.md` and `docs/WWW-CUTOVER.md` for www marketing cutover.
 
 ## App URLs
 

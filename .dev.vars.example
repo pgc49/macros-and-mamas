@@ -6,16 +6,25 @@
 # OpenRouter (meal photo AI)
 OPENROUTER_API_KEY=replace-me
 
-# Stripe Checkout — three one-time prices on the same (or separate) products
+# Stripe Checkout — price ids (never hardcode amounts in code)
 STRIPE_SECRET_KEY=replace-me
 # Legacy alias still works as founding fallback:
 # STRIPE_PRICE_ID=price_...149
 STRIPE_PRICE_ID_FOUNDING=price_...149
 STRIPE_PRICE_ID_WAITLIST=price_...249
+# Alias accepted by pricing.js (same as WAITLIST):
+# PRICE_QUIZ_RATE=price_...249
 STRIPE_PRICE_ID_FULL=price_...299
+# PRICE_FULL_RATE=price_...299
 STRIPE_PRICE_ID_LAB_ADDON=price_...349
+# PRICE_LAB_REVIEW=price_...349
+# Stage 4 alumni membership ($49/mo) — recorded in stage 0:
+# PRICE_ALUMNI_49=price_...4900
+# Stage 2 referral coupon ($25 once) — recorded in stage 0:
+# COUPON_REFERRAL_25=REFERRAL_25
 STRIPE_WEBHOOK_SECRET=replace-me
 # Optional — Stripe Customer Portal configuration id (Payments → Manage card)
+# Create in Dashboard: card update + invoice history ON; cancel + plan switch OFF.
 # STRIPE_BILLING_PORTAL_CONFIGURATION=bpc_...
 
 # Supabase — URL is public; the server key is webhook-only (never ship to the client)

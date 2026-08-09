@@ -227,7 +227,7 @@ export function PaymentsPage() {
           Manage card
         </h2>
         <p style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
-          Update your card in Stripe’s secure portal when it’s enabled for this account.
+          Update your card and view invoices in Stripe’s secure portal. Cancellation stays in-app.
         </p>
         <Btn
           style={{ width: "100%" }}
@@ -238,7 +238,7 @@ export function PaymentsPage() {
         </Btn>
         {!data?.portalAvailable && (
           <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8 }}>
-            Portal unlocks once Stripe Customer Portal is configured for Macros and Mamas.
+            Portal unlocks after checkout creates a Stripe customer for this account.
           </div>
         )}
         {portalNote && (

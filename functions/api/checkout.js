@@ -91,6 +91,9 @@ export async function onRequestPost({ request, env }) {
     body.set("success_url", `${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`);
     body.set("cancel_url", `${origin}/join`);
     body.set("client_reference_id", user.id);
+    // Always create a Stripe Customer so Payments portal + stage 4 have an id.
+    // Does NOT set setup_future_usage — cards are not saved for one-tap yet (stage 4).
+    body.set("customer_creation", "always");
     body.set("customer_email", user.email || "");
     body.set("line_items[0][price]", offer.priceId);
     body.set("line_items[0][quantity]", "1");
