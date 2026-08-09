@@ -109,7 +109,7 @@ COUPON_REFERRAL_25=REFERRAL_25
 
 ## Open items (README / Patrick)
 
-1. **Credits vesting window:** site says no refunds; build plan uses 14-day vest — confirm `VESTING_DAYS` before stage 1.
+1. **Credits vesting window:** decided at **3 days** (`VESTING_DAYS=3`); not gated on macros approval.
 2. **Customer Portal Dashboard config** (cancel off) — MCP could not create `bpc_…`.
 3. **Legacy checkouts** may lack `stripe_customer_id` until they re-checkout or we backfill Customers — portal stays disabled for those rows.
 4. **Payments week math bug** (Week 1 vs Week 3) — fix by stage 4; not this stage.

@@ -8,7 +8,9 @@
 
 export function vestingDays(env) {
   const n = Number(env.VESTING_DAYS);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 14;
+  // Default 3 days — enough for Callie to catch a bad enrollment without
+  // waiting on macros-approval as a hard trigger.
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 3;
 }
 
 export function supabaseConfig(env) {
