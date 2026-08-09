@@ -5,6 +5,7 @@
    Approves if not already, then sends "Your ranges are ready".
    ================================================================== */
 
+import { handleActivationCohort } from "../_shared/channels.js";
 import { loadUserContact, sendApprovedEmail } from "../_shared/supabaseEmail.js";
 
 export async function onRequestPost({ request, env }) {
@@ -21,6 +22,13 @@ export async function onRequestPost({ request, env }) {
 
     // Ensure approved in DB (idempotent)
     await approveClient(env, clientId);
+
+    // Stage 3: stamp cohort (if missing) + ensure channel membership.
+    try {
+      await handleActivationCohort(env, clientId);
+    } catch (channelErr) {
+      console.error("activation cohort failed", clientId, channelErr);
+    }
 
     const contact = await loadUserContact(env, clientId);
     await sendApprovedEmail(env, {

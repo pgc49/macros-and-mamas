@@ -47,6 +47,11 @@ export function MessagesThread({
   onMarkRead,
   showPushPrompt = false,
   onSavePushSubscription,
+  headerExtra = null,
+  banner = null,
+  hideComposer = false,
+  showSenderNames = false,
+  emptyState = "No messages yet — say hi or send a photo. Callie will reply here.",
   compact = false,
   onComposerFocusChange,
 }) {
@@ -260,7 +265,7 @@ export function MessagesThread({
     && pushSupported()
     && notificationPermission() !== "granted";
 
-  const canSend = !busy && !recording && (!!draft.trim() || !!file || !!voicePreview);
+  const canSend = !hideComposer && !busy && !recording && (!!draft.trim() || !!file || !!voicePreview);
 
   const startEdit = (m) => {
     if (!onEdit || m.deleted_at) return;
@@ -452,6 +457,9 @@ export function MessagesThread({
         <div style={{ fontSize: 12.5, color: "#3E5A46", marginBottom: 10 }}>{pushMsg}</div>
       )}
 
+      {headerExtra}
+      {banner}
+
       <div
         ref={listRef}
         style={{
@@ -470,7 +478,7 @@ export function MessagesThread({
       >
         {!messages.length && (
           <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, padding: "20px 8px", textAlign: "center" }}>
-            No messages yet — say hi or send a photo. Callie will reply here.
+            {emptyState}
           </div>
         )}
         {(() => {
@@ -538,7 +546,7 @@ export function MessagesThread({
                   cursor: canManage(m) ? "default" : undefined,
                 }}
               >
-                {!mine && !deleted && (
+                {!mine && !deleted && showSenderNames && (
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.accentDeep, marginBottom: 4 }}>
                     {incomingSenderLabel(m)}
                   </div>
@@ -743,7 +751,7 @@ export function MessagesThread({
         <div ref={bottomRef} />
       </div>
 
-      {recording && (
+      {!hideComposer && recording && (
         <div style={{
           marginTop: 10,
           padding: "12px 14px",
@@ -777,7 +785,7 @@ export function MessagesThread({
         </div>
       )}
 
-      {!recording && voicePreview && (
+      {!hideComposer && !recording && voicePreview && (
         <div style={{
           marginTop: 10,
           padding: "12px 14px",
@@ -825,7 +833,7 @@ export function MessagesThread({
         </div>
       )}
 
-      {(file || attachError) && !recording && (
+      {!hideComposer && (file || attachError) && !recording && (
         <div style={{
           marginTop: 10,
           padding: "10px 12px",
@@ -876,10 +884,11 @@ export function MessagesThread({
         </div>
       )}
 
-      {!file && attachError && !recording && voicePreview && (
+      {!hideComposer && !file && attachError && !recording && voicePreview && (
         <div style={{ fontSize: 13, color: T.amber, marginTop: 8 }}>{attachError}</div>
       )}
 
+      {!hideComposer && (
       <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-end" }}>
         <label
           style={iconBtn}
@@ -968,7 +977,8 @@ export function MessagesThread({
           {busy ? "…" : "Send"}
         </Btn>
       </div>
-      {allowVoiceMemo && !recording && !voicePreview && (
+      )}
+      {!hideComposer && allowVoiceMemo && !recording && !voicePreview && (
         <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6, lineHeight: 1.4 }}>
           Mic = voice memo (admins only). Mamas can play it in the thread — they can’t send voice back.
         </div>

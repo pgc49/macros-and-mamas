@@ -23,6 +23,11 @@ import {
   handleChargeRefundedReferral,
   handleCheckoutReferral,
 } from "../_shared/referrals.js";
+import {
+  ensureChannelMembership,
+  getCohortConversation,
+  handlePaidEnrollmentChannel,
+} from "../_shared/channels.js";
 
 /** Event types we expect to receive; handlers land in later stages. */
 const KNOWN_EVENT_TYPES = new Set([
@@ -146,6 +151,13 @@ async function handleCheckoutSessionCompleted(env, event) {
 
   const wasPaid = await profileAlreadyPaid(env, userId);
   await markPaid(env, userId, session);
+
+  // Stage 3: join open enrollment cohort channel (or ensure existing label membership).
+  try {
+    await ensureCohortChannelAfterPaid(env, userId);
+  } catch (channelErr) {
+    console.error("cohort channel join failed", userId, channelErr);
+  }
 
   // Skip side effects if this session already unlocked paid (e.g. completed then
   // async_payment_succeeded both succeed — avoid double welcome email).
@@ -451,6 +463,32 @@ function timingSafeEqual(a, b) {
   let out = 0;
   for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return out === 0;
+}
+
+/** Join the right cohort channel after paid unlock (idempotent). */
+async function ensureCohortChannelAfterPaid(env, userId) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!base || !key) return;
+  const resp = await fetch(
+    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,cohort_label&limit=1`,
+    { headers: { apikey: key, authorization: `Bearer ${key}` } },
+  );
+  if (!resp.ok) throw new Error(`profile read ${resp.status}`);
+  const rows = await resp.json().catch(() => []);
+  const label = rows[0]?.cohort_label || "";
+  if (label) {
+    const conv = await getCohortConversation(env, label);
+    if (conv) {
+      await ensureChannelMembership(env, {
+        conversationId: conv.id,
+        userId,
+        notifyLevel: "highlights",
+      });
+    }
+    return;
+  }
+  await handlePaidEnrollmentChannel(env, userId);
 }
 
 function json(obj, status = 200) {

@@ -1,0 +1,35 @@
+# Post due channel_prompts as system messages (weekly wins, etc.).
+# Uses the same CRON_SECRET as email / credits cron.
+
+name: Channel prompts cron
+
+on:
+  schedule:
+    - cron: "0 14 * * 5" # Fridays 14:00 UTC
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require CRON_SECRET
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Add GitHub Actions secret CRON_SECRET (match Cloudflare Pages CRON_SECRET)."
+            exit 1
+          fi
+
+      - name: Trigger channel-prompts-cron
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -e
+          resp=$(curl -sS -o /tmp/cron-out.json -w "%{http_code}" -X POST \
+            "https://www.macrosandmamas.com/api/channel-prompts-cron" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $resp"
+          cat /tmp/cron-out.json
+          test "$resp" = "200"
