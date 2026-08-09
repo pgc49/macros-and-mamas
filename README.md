@@ -70,6 +70,7 @@ The app also has project fallbacks for Supabase URL/publishable key in `src/conf
 | `PRICE_ALUMNI_49` | $49/mo Alumni Membership Price ID (stage 4) | Cloudflare env |
 | `COUPON_REFERRAL_25` | Referral $25-off coupon id (stage 2) | Cloudflare env |
 | `STRIPE_BILLING_PORTAL_CONFIGURATION` | Optional Customer Portal config (`bpc_…`) | Cloudflare env |
+| `VESTING_DAYS` | Credit vesting window (default `14`) — stage 1 | Cloudflare env |
 | `STRIPE_WEBHOOK_SECRET` | Verify webhook signatures (`whsec_…`) | Cloudflare secret |
 | `SUPABASE_URL` | Used by `/api/checkout`, `/api/analyze`, webhook | Cloudflare env |
 | `SUPABASE_ANON_KEY` | Validate JWTs in functions | Cloudflare env/secret |

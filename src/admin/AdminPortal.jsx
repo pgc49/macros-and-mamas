@@ -25,6 +25,7 @@ import { AdminMessages } from "./AdminMessages";
 import { AdminAnnouncements } from "./AdminAnnouncements";
 import { AdminClientTracking } from "./AdminClientTracking";
 import { AdminClientMessages } from "./AdminClientMessages";
+import { AdminCredits } from "./AdminCredits";
 import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
@@ -141,6 +142,7 @@ function TabBar({ tab, setTab, unreadMessages = 0 }) {
   const tabs = [
     ["overview", "Overview"],
     ["clients", "Clients"],
+    ["credits", "Credits"],
     ["messages", "Messages"],
     ["announcements", "Announcements"],
     ["emails", "Email templates"],
@@ -270,7 +272,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   const [tab, setTab] = useState(() => {
     if (typeof window === "undefined") return "overview";
     const q = new URLSearchParams(window.location.search).get("tab");
-    if (q === "messages" || q === "announcements" || q === "emails" || q === "clients") return q;
+    if (q === "messages" || q === "announcements" || q === "emails" || q === "clients" || q === "credits") return q;
     return "overview";
   });
   const [filter, setFilter] = useState("active");
@@ -1081,6 +1083,12 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             </div>
           )}
         </>
+      )}
+
+      {tab === "credits" && (
+        <ErrorBoundary message="Credits admin hit an error. Other admin tabs still work — refresh or switch tabs.">
+          <AdminCredits roster={all} />
+        </ErrorBoundary>
       )}
 
       {tab === "messages" && (

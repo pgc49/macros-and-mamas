@@ -18,6 +18,7 @@ import {
   sendWelcomeEmails,
 } from "../_shared/supabaseEmail.js";
 import { sendMetaCapiEvent } from "../_shared/metaCapi.js";
+import { handleInvoicePaidCredits } from "../_shared/credits.js";
 
 /** Event types we expect to receive; handlers land in later stages. */
 const KNOWN_EVENT_TYPES = new Set([
@@ -59,8 +60,12 @@ export async function onRequestPost({ request, env }) {
     try {
       if (eventType === "checkout.session.completed") {
         await handleCheckoutSessionCompleted(env, event);
+      } else if (eventType === "invoice.paid") {
+        const invoice = event.data?.object || {};
+        const result = await handleInvoicePaidCredits(env, invoice);
+        console.log("invoice.paid credits", eventId, result);
       } else if (KNOWN_EVENT_TYPES.has(eventType)) {
-        // Shell only — real handlers in stages 1–4.
+        // Shell only — real handlers in later stages.
         console.log("stripe webhook unhandled (registered)", eventType, eventId);
       } else {
         console.log("stripe webhook unhandled", eventType, eventId);

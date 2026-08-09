@@ -77,6 +77,7 @@ export function PaymentsPage() {
   const program = data?.program;
   const subscription = data?.subscription;
   const payments = data?.payments || [];
+  const credits = data?.credits;
 
   const phaseLabel = program?.phase === "program_complete"
     ? "8-week program complete"
@@ -174,6 +175,42 @@ export function PaymentsPage() {
           You’ll opt in here when it launches. No charge until you do.
         </div>
       </Card>
+
+      {credits && (
+        <Card style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: T.inkSoft }}>
+            Credits
+          </div>
+          <div style={{ fontFamily: FD, fontSize: 28, marginTop: 6 }}>
+            {money(credits.availableDollars)}
+          </div>
+          <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 2 }}>
+            available
+            {credits.pendingCents > 0 ? ` · ${money(credits.pendingDollars)} pending` : ""}
+          </div>
+          <p style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, margin: "10px 0 0" }}>
+            {credits.copy || "Credits apply automatically to your membership or a Lab Review."}
+          </p>
+          {(credits.lineItems || []).length > 0 && (
+            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 0 }}>
+              {credits.lineItems.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    padding: "10px 0",
+                    borderTop: `1px solid ${T.border}`,
+                    fontSize: 14,
+                    lineHeight: 1.45,
+                    color: T.ink,
+                  }}
+                >
+                  {item.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 12 }}>

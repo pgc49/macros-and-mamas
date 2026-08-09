@@ -9,6 +9,11 @@
         optional STRIPE_BILLING_PORTAL_CONFIGURATION
    ================================================================== */
 
+import {
+  creditsPayloadForUi,
+  listLedgerForUser,
+} from "../_shared/credits.js";
+
 export async function onRequestGet({ request, env }) {
   try {
     const user = await requireUser(request, env);
@@ -24,12 +29,20 @@ export async function onRequestGet({ request, env }) {
     const payments = await listCustomerPayments(env, profile);
     const program = buildProgramSummary(profile, payments);
     const subscription = buildSubscriptionShell(profile);
+    let credits = null;
+    try {
+      const ledger = await listLedgerForUser(env, user.id);
+      credits = creditsPayloadForUi(ledger);
+    } catch (creditErr) {
+      console.error("billing credits load failed", creditErr);
+    }
 
     return json({
       email: user.email || null,
       program,
       payments,
       subscription,
+      credits,
       portalAvailable: !!env.STRIPE_SECRET_KEY && !!profile.stripe_customer_id,
     });
   } catch (e) {
