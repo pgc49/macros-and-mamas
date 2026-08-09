@@ -9,6 +9,7 @@
     "build:www-cutover": "MARKETING_WWW_CUTOVER=1 npm run build",
     "lint": "oxlint",
     "qa:credits": "node scripts/qa-credits-math.mjs",
+    "qa:channels": "node scripts/qa-channels-notify.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

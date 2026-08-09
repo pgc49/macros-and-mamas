@@ -4,6 +4,8 @@
    Auth required; requester must be an active member or admin.
    ================================================================== */
 
+import { isUuid } from "../_shared/credits.js";
+
 export async function onRequestPost({ request, env }) {
   try {
     const user = await requireUser(request, env);
@@ -14,8 +16,12 @@ export async function onRequestPost({ request, env }) {
     const userIds = Array.isArray(body.userIds)
       ? [...new Set(body.userIds.map((id) => String(id || "").trim()).filter(Boolean))]
       : [];
-    if (!conversationId) return json({ error: "conversationId required" }, 400);
+    if (!conversationId || !isUuid(conversationId)) {
+      return json({ error: "conversationId required" }, 400);
+    }
     if (!userIds.length) return json({ ok: true, labels: {} });
+    if (userIds.length > 100) return json({ error: "too many userIds" }, 400);
+    if (userIds.some((id) => !isUuid(id))) return json({ error: "invalid userIds" }, 400);
 
     const requester = await loadProfile(env, user.id);
     const requesterIsAdmin = String(requester?.role || "").toLowerCase() === "admin";

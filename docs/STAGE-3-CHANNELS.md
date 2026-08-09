@@ -16,12 +16,13 @@ Requires stages 0–2. C1 **Founding Members** migrates off WhatsApp as a live b
 
 ## Schema
 
-Migrations `047_channels.sql`, `048_stamp_founding_cohort.sql`:
+Migrations `047`–`050` (`channels`, stamp founding, prompts seed, harden):
 
 - `conversations`, `conversation_members`, `conversation_messages`, `channel_prompts`
 - Separate from 1:1 `messages` (DM RLS stays thread-by-`client_id`)
 - `profiles.tier` locked from client writes (same triggers as ambassador / cohort_label)
-- Storage bucket `channel-attachments`
+- Storage bucket `channel-attachments` — path `{conversationId}/{userId}/…`
+- Harden (`050`): sticky soft-delete, reply same-conversation, attachment path CHECK, storage delete scoped to own folder
 
 ## Hooks
 
@@ -41,4 +42,6 @@ Migrations `047_channels.sql`, `048_stamp_founding_cohort.sql`:
 - [ ] read_only hides composer
 - [ ] Removed member loses channel (RLS)
 
-Security review: `docs/STAGE-3-SECURITY-REVIEW.md` (after QA pass).
+Security review: `docs/STAGE-3-SECURITY-REVIEW.md`.
+
+Unit checks: `npm run qa:channels`.

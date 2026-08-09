@@ -455,6 +455,7 @@ async function hydrateMessageAttachments(rows) {
 async function uploadChannelAttachment({ conversationId, file, allowAudio = false }) {
   if (!file) return null;
   if (!conversationId) throw new Error("channel required");
+  const uid = await requireUserId();
   const mime = String(file.type || "").toLowerCase().split(";")[0].trim();
   if (isAudioMime(mime) && !allowAudio) {
     throw new Error("Only Callie can send voice memos.");
@@ -476,7 +477,8 @@ async function uploadChannelAttachment({ conversationId, file, allowAudio = fals
   const id = (typeof crypto !== "undefined" && crypto.randomUUID)
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const path = `${conversationId}/${id}-${safeAttachmentName(file.name)}`;
+  // {conversationId}/{userId}/{file} — storage delete scoped to own folder.
+  const path = `${conversationId}/${uid}/${id}-${safeAttachmentName(file.name)}`;
   const { error } = await supabase.storage
     .from(CHANNEL_ATTACHMENT_BUCKET)
     .upload(path, file, {
@@ -1726,30 +1728,42 @@ export const db = {
   async deleteChannelMessage(messageId) {
     const uid = await requireUserId();
     if (!messageId) throw new Error("message required");
-    const { data: existing } = await supabase
-      .from("conversation_messages")
-      .select("id, attachment_path")
-      .eq("id", messageId)
-      .eq("sender_id", uid)
-      .is("deleted_at", null)
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", uid)
       .maybeSingle();
-    const attachmentPath = existing?.attachment_path || null;
+    const isAdmin = String(me?.role || "").toLowerCase() === "admin";
 
-    const { data, error } = await supabase
+    let existingQuery = supabase
+      .from("conversation_messages")
+      .select("id, attachment_path, sender_id")
+      .eq("id", messageId)
+      .is("deleted_at", null);
+    if (!isAdmin) existingQuery = existingQuery.eq("sender_id", uid);
+    const { data: existing } = await existingQuery.maybeSingle();
+    if (!existing) throw new Error("Message not found.");
+    const attachmentPath = existing.attachment_path || null;
+
+    let delQuery = supabase
       .from("conversation_messages")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", messageId)
-      .eq("sender_id", uid)
-      .is("deleted_at", null)
-      .select(CHANNEL_MESSAGE_SELECT)
-      .single();
+      .is("deleted_at", null);
+    if (!isAdmin) delQuery = delQuery.eq("sender_id", uid);
+    const { data, error } = await delQuery.select(CHANNEL_MESSAGE_SELECT).single();
     if (error) throw error;
 
+    // Only remove storage if we own the file folder (or admin).
     if (attachmentPath) {
-      try {
-        await supabase.storage.from(CHANNEL_ATTACHMENT_BUCKET).remove([attachmentPath]);
-      } catch (e) {
-        console.warn("channel attachment cleanup failed", e);
+      const parts = String(attachmentPath).split("/");
+      const ownerFolder = parts[1] || "";
+      if (isAdmin || ownerFolder === uid) {
+        try {
+          await supabase.storage.from(CHANNEL_ATTACHMENT_BUCKET).remove([attachmentPath]);
+        } catch (e) {
+          console.warn("channel attachment cleanup failed", e);
+        }
       }
     }
     return data;

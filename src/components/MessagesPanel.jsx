@@ -5,6 +5,16 @@ import { supabase } from "../lib/supabase";
 import { T, F, FD } from "../theme/tokens";
 import { Btn } from "./ui";
 
+function friendlyError(e, fallback) {
+  const msg = String(e?.message || "");
+  if (/network|fetch|Failed to fetch/i.test(msg)) return "Network hiccup — try again.";
+  if (/not enrolled|forbidden|JWT|unauthorized/i.test(msg)) return "Please sign in again.";
+  if (/empty/i.test(msg)) return "Message is empty.";
+  if (/voice memo|attachment|photo|PDF|10 MB/i.test(msg)) return msg;
+  if (/Invalid notification/i.test(msg)) return msg;
+  return fallback;
+}
+
 /** Mama Messages tab — Callie 1:1 plus cohort channels. */
 export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange }) {
   const [dmMessages, setDmMessages] = useState([]);
@@ -16,6 +26,25 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   const [error, setError] = useState("");
   const [notifyChannelId, setNotifyChannelId] = useState(null);
   const [notifyBusy, setNotifyBusy] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", userId)
+          .maybeSingle();
+        if (!cancelled) setIsAdmin(String(data?.role || "").toLowerCase() === "admin");
+      } catch {
+        if (!cancelled) setIsAdmin(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
 
   const refreshDm = useCallback(async () => {
     if (!userId) return;
@@ -27,7 +56,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       onUnreadChange?.(unread);
     } catch (e) {
       console.error(e);
-      setError(e.message || "Couldn’t load messages.");
+      setError(friendlyError(e, "Couldn’t load messages."));
     }
   }, [userId, onUnreadChange]);
 
@@ -49,7 +78,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       ));
     } catch (e) {
       console.error(e);
-      setError(e.message || "Couldn’t load group messages.");
+      setError(friendlyError(e, "Couldn’t load group messages."));
     }
   }, [userId]);
 
@@ -141,7 +170,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       setDmMessages((list) => [...list, row]);
     } catch (e) {
       console.error(e);
-      setError(e.message || "Couldn’t send.");
+      setError(friendlyError(e, "Couldn’t send."));
       throw e;
     } finally {
       setBusy(false);
@@ -183,7 +212,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       }));
     } catch (e) {
       console.error(e);
-      setError(e.message || "Couldn’t send.");
+      setError(friendlyError(e, "Couldn’t send."));
       throw e;
     } finally {
       setBusy(false);
@@ -248,7 +277,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       setNotifyChannelId(null);
     } catch (e) {
       console.error(e);
-      setError(e.message || "Couldn’t update notifications.");
+      setError(friendlyError(e, "Couldn’t update notifications."));
     } finally {
       setNotifyBusy(false);
     }
@@ -304,6 +333,8 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           onEdit={editChannel}
           onDelete={removeChannel}
           onMarkRead={markChannelRead}
+          canModerate={isAdmin}
+          allowVoiceMemo={isAdmin}
           headerExtra={(
             <ChannelHeader
               conversation={activeChannel.conversation}

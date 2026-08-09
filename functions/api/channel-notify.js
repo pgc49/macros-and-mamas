@@ -1,37 +1,56 @@
 /* ==================================================================
    /functions/api/channel-notify.js
    After a conversation_messages insert: web push to eligible channel members.
-   Auth required (sender).
+   Auth: sender JWT, OR Bearer CRON_SECRET for system prompts.
    ================================================================== */
 
+import { isUuid } from "../_shared/credits.js";
 import { invokeEdgeFunction } from "../_shared/supabaseEmail.js";
 
 export async function onRequestPost({ request, env }) {
   try {
-    const user = await requireUser(request, env);
-    if (!user) return json({ error: "unauthorized" }, 401);
-
     const body = await request.json().catch(() => ({}));
     const messageId = String(body.messageId || "").trim();
-    if (!messageId) return json({ error: "messageId required" }, 400);
+    if (!messageId || !isUuid(messageId)) {
+      return json({ error: "messageId required" }, 400);
+    }
+
+    const cronAuth = authorizeCron(request, env);
+    const user = cronAuth ? null : await requireUser(request, env);
+    if (!cronAuth && !user) return json({ error: "unauthorized" }, 401);
 
     const msg = await loadChannelMessage(env, messageId);
     if (!msg) return json({ error: "not found" }, 404);
-    if (msg.sender_id !== user.id) return json({ error: "forbidden" }, 403);
     if (msg.deleted_at) return json({ ok: true, skipped: "deleted", pushSent: 0 });
-    if (msg.notified_at) return json({ ok: true, skipped: "already_notified", pushSent: 0 });
+
+    if (!cronAuth) {
+      if (!msg.sender_id || msg.sender_id !== user.id) {
+        return json({ error: "forbidden" }, 403);
+      }
+    } else if (msg.kind !== "system" && msg.sender_id) {
+      // Cron path is only for system prompts.
+      return json({ error: "forbidden" }, 403);
+    }
+
+    // Claim notify slot first (idempotent under retries).
+    const claimed = await claimChannelMessageNotified(env, messageId);
+    if (!claimed) {
+      return json({ ok: true, skipped: "already_notified", pushSent: 0 });
+    }
 
     const [conversation, sender, members, replyTo] = await Promise.all([
       loadConversation(env, msg.conversation_id),
-      loadProfile(env, msg.sender_id),
+      msg.sender_id ? loadProfile(env, msg.sender_id) : Promise.resolve(null),
       listConversationMembers(env, msg.conversation_id),
       msg.reply_to_id ? loadChannelMessage(env, msg.reply_to_id) : Promise.resolve(null),
     ]);
-    if (!conversation || !sender) return json({ error: "channel missing" }, 400);
+    if (!conversation) return json({ error: "channel missing" }, 400);
 
-    const senderIsAdmin = String(sender.role || "").toLowerCase() === "admin";
+    const senderIsAdmin = String(sender?.role || "").toLowerCase() === "admin";
     const preview = messagePreview(msg);
-    const senderLabel = senderDisplayName(sender);
+    const senderLabel = msg.kind === "system"
+      ? "Macros and Mamas"
+      : senderDisplayName(sender);
     const recipients = members.filter((member) => shouldNotifyMember({
       member,
       senderId: msg.sender_id,
@@ -44,12 +63,13 @@ export async function onRequestPost({ request, env }) {
     for (const member of recipients) {
       pushSent += await sendPushToProfile(env, member.user_id, {
         title: conversation.label || "Group chat",
-        body: preview ? `${senderLabel}: ${preview}` : `${senderLabel} posted in the group`,
+        body: preview
+          ? (msg.kind === "system" ? preview : `${senderLabel}: ${preview}`)
+          : `${senderLabel} posted in the group`,
         url: `/dashboard?tab=messages&channel=${encodeURIComponent(msg.conversation_id)}`,
       });
     }
 
-    await markChannelMessageNotified(env, messageId);
     return json({
       ok: true,
       route: "channel",
@@ -63,6 +83,17 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
+function authorizeCron(request, env) {
+  const secret = String(env.CRON_SECRET || "");
+  if (!secret) return false;
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token || token.length !== secret.length) return false;
+  let out = 0;
+  for (let i = 0; i < token.length; i += 1) out |= token.charCodeAt(i) ^ secret.charCodeAt(i);
+  return out === 0;
+}
+
 function shouldNotifyMember({
   member,
   senderId,
@@ -70,12 +101,12 @@ function shouldNotifyMember({
   messageKind,
   replyTo,
 }) {
-  if (!member?.user_id || member.user_id === senderId || member.removed_at) return false;
+  if (!member?.user_id || member.removed_at) return false;
+  if (senderId && member.user_id === senderId) return false;
   const level = String(member.notify_level || "highlights").toLowerCase();
   if (level === "mute") return false;
   if (level === "all") return true;
   if (level === "highlights") {
-    // Callie/admin posts, system prompts, and direct replies to this member.
     return senderIsAdmin
       || String(messageKind || "") === "system"
       || (replyTo?.sender_id && replyTo.sender_id === member.user_id);
@@ -100,6 +131,7 @@ function firstName(name) {
 }
 
 function senderDisplayName(profile) {
+  if (!profile) return "Mama";
   const role = String(profile?.role || "").toLowerCase();
   const email = String(profile?.email || "").toLowerCase();
   const name = String(profile?.name || "").trim();
@@ -157,24 +189,30 @@ async function listConversationMembers(env, conversationId) {
   );
 }
 
-async function markChannelMessageNotified(env, messageId) {
+/** Returns true if this caller won the notify claim. */
+async function claimChannelMessageNotified(env, messageId) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!base || !key || !messageId) return;
-  try {
-    await fetch(`${base}/rest/v1/conversation_messages?id=eq.${encodeURIComponent(messageId)}`, {
+  if (!base || !key || !messageId) return false;
+  const resp = await fetch(
+    `${base}/rest/v1/conversation_messages?id=eq.${encodeURIComponent(messageId)}&notified_at=is.null`,
+    {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
         apikey: key,
         authorization: `Bearer ${key}`,
-        prefer: "return=minimal",
+        prefer: "return=representation",
       },
       body: JSON.stringify({ notified_at: new Date().toISOString() }),
-    });
-  } catch (e) {
-    console.warn("markChannelMessageNotified failed", e);
+    },
+  );
+  if (!resp.ok) {
+    console.warn("claim notified_at failed", resp.status, await resp.text().catch(() => ""));
+    return false;
   }
+  const rows = await resp.json().catch(() => []);
+  return Array.isArray(rows) && rows.length > 0;
 }
 
 async function sbGet(env, path) {

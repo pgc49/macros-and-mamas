@@ -143,7 +143,7 @@ export async function handlePaidEnrollmentChannel(env, userId) {
 export async function handleActivationCohort(env, userId) {
   const rows = await sbFetch(
     env,
-    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,cohort_label,tier,paid&limit=1`,
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,cohort_label,tier,paid,paid_at&limit=1`,
     { method: "GET" },
   );
   const profile = Array.isArray(rows) ? rows[0] : null;
@@ -170,5 +170,8 @@ export async function handleActivationCohort(env, userId) {
     }
     return { label: profile.cohort_label, existed: true };
   }
-  return assignCohortAndJoinChannel(env, userId, { at: new Date() });
+  // Prefer paid_at window so late activation still lands in the payment cohort.
+  return assignCohortAndJoinChannel(env, userId, {
+    at: profile.paid_at || new Date(),
+  });
 }

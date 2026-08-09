@@ -51,6 +51,8 @@ export function MessagesThread({
   banner = null,
   hideComposer = false,
   showSenderNames = false,
+  /** When true, selfId may delete/edit others' messages (admin moderation). */
+  canModerate = false,
   emptyState = "No messages yet — say hi or send a photo. Callie will reply here.",
   compact = false,
   onComposerFocusChange,
@@ -324,11 +326,19 @@ export function MessagesThread({
     }
   };
 
-  const canManage = (m) => (
-    m.sender_id === selfId
-    && !m.deleted_at
-    && (onEdit || onDelete)
+  const canEditMsg = (m) => (
+    !m.deleted_at
+    && !!onEdit
+    && m.sender_id === selfId
   );
+
+  const canDeleteMsg = (m) => (
+    !m.deleted_at
+    && !!onDelete
+    && (m.sender_id === selfId || canModerate)
+  );
+
+  const canManage = (m) => canEditMsg(m) || canDeleteMsg(m);
 
   /** Label for bubbles that aren't "mine" — always from the real sender, never a single peerName blanket. */
   const incomingSenderLabel = (m) => {
@@ -702,7 +712,7 @@ export function MessagesThread({
                     boxShadow: "0 6px 18px rgba(51,39,46,0.12)",
                   }}
                 >
-                  {onEdit && (
+                  {canEditMsg(m) && (
                     <button
                       type="button"
                       onClick={() => startEdit(m)}
@@ -722,7 +732,7 @@ export function MessagesThread({
                       Edit
                     </button>
                   )}
-                  {onDelete && (
+                  {canDeleteMsg(m) && (
                     <button
                       type="button"
                       onClick={() => removeMessage(m)}
