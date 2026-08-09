@@ -250,7 +250,15 @@ export async function ensureReferralCode(env, { userId, name, lastName }) {
   throw lastErr || new Error("could not allocate referral code");
 }
 
-export async function buildSharePayload(env, userId) {
+/**
+ * @param {{ ensureCode?: boolean, includeReferralDetails?: boolean }} [opts]
+ * ensureCode: create Stripe promo if missing (Share GET). Admin inspect should pass false.
+ * includeReferralDetails: include referred_email rows (admin only).
+ */
+export async function buildSharePayload(env, userId, opts = {}) {
+  const ensureCode = opts.ensureCode !== false;
+  const includeReferralDetails = opts.includeReferralDetails === true;
+
   const profileRows = await sbFetch(
     env,
     `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,name,last_name,email,paid,ambassador&limit=1`,
@@ -259,15 +267,23 @@ export async function buildSharePayload(env, userId) {
   const profile = Array.isArray(profileRows) ? profileRows[0] : null;
   if (!profile) throw new Error("profile not found");
 
-  const codeRow = await ensureReferralCode(env, {
-    userId,
-    name: profile.name || profile.email,
-    lastName: profile.last_name,
-  });
+  let codeRow = null;
+  if (ensureCode) {
+    codeRow = await ensureReferralCode(env, {
+      userId,
+      name: profile.name || profile.email,
+      lastName: profile.last_name,
+    });
+  } else {
+    codeRow = await getReferralCodeForUser(env, userId);
+  }
 
+  const detailSelect = includeReferralDetails
+    ? "id,status,referred_email,created_at,code"
+    : "id,status,created_at,code";
   const referrals = await sbFetch(
     env,
-    `/rest/v1/referrals?advocate_user_id=eq.${encodeURIComponent(userId)}&select=id,status,referred_email,created_at,code&order=created_at.desc`,
+    `/rest/v1/referrals?advocate_user_id=eq.${encodeURIComponent(userId)}&select=${detailSelect}&order=created_at.desc`,
     { method: "GET" },
   );
   const list = Array.isArray(referrals) ? referrals : [];
@@ -277,9 +293,9 @@ export async function buildSharePayload(env, userId) {
   const referralLedger = (ledger || []).filter((r) => r.reason === "referral");
   const { availableCents, pendingCents } = summarizeLedger(referralLedger);
 
-  return {
-    code: codeRow.code,
-    blurb: shareBlurb(codeRow.code),
+  const payload = {
+    code: codeRow?.code || null,
+    blurb: codeRow ? shareBlurb(codeRow.code) : null,
     quizUrl: "https://www.macrosandmamas.com/quiz",
     friendsEnrolled,
     availableCents,
@@ -288,8 +304,9 @@ export async function buildSharePayload(env, userId) {
     pendingDollars: pendingCents / 100,
     ambassador: !!profile.ambassador,
     vestingDays: vestingDays(env),
-    referrals: list,
   };
+  if (includeReferralDetails) payload.referrals = list;
+  return payload;
 }
 
 /** Resolve a typed code for checkout; throws on self-referral / unknown. */
@@ -371,11 +388,12 @@ async function notifyAmbassador(env, { name, email, paidCount }) {
     console.warn("ambassador notify skipped — missing RESEND_API_KEY or CALLIE_NOTIFY_EMAIL");
     return;
   }
-  const display = name || email || "Mama";
-  const subject = `🏆 Ambassador: ${display} hit ${paidCount} paid referrals`;
+  const safe = (s) => String(s || "").replace(/[\r\n\u0000]/g, " ").trim().slice(0, 120);
+  const display = safe(name) || safe(email) || "Mama";
+  const subject = `Ambassador: ${display} hit ${paidCount} paid referrals`;
   const text = [
     `${display} just hit ${paidCount} paid referrals.`,
-    email ? `Email: ${email}` : "",
+    email ? `Email: ${safe(email)}` : "",
     "Manual $100 ambassador payout — no automated cash-out.",
     "https://www.macrosandmamas.com/admin",
   ].filter(Boolean).join("\n");
@@ -428,17 +446,27 @@ export async function handleCheckoutReferral(env, session, { forcePaid = false }
     if (!codeRow && codeMeta) codeRow = await findReferralCodeByCode(env, codeMeta);
     if (!codeRow) return { skipped: "no_referral_promo" };
 
-    // Only credit for our REFERRAL_25 coupon family (code row implies that).
+    // Only credit for promos we issued (row in referral_codes). Self-referral: no credit.
     const referredUserId =
       session.metadata?.supabase_user_id || session.client_reference_id || null;
     if (referredUserId && referredUserId === codeRow.user_id) {
       return { skipped: "self_referral" };
     }
-
     const referredEmail =
       session.customer_email
       || session.customer_details?.email
       || null;
+    if (referredEmail) {
+      const adv = await sbFetch(
+        env,
+        `/rest/v1/profiles?id=eq.${encodeURIComponent(codeRow.user_id)}&select=email&limit=1`,
+        { method: "GET" },
+      );
+      const advEmail = String(Array.isArray(adv) ? adv[0]?.email || "" : "").toLowerCase();
+      if (advEmail && advEmail === String(referredEmail).toLowerCase()) {
+        return { skipped: "self_referral" };
+      }
+    }
 
     try {
       const inserted = await sbFetch(env, "/rest/v1/referrals", {

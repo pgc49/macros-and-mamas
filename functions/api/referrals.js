@@ -19,11 +19,15 @@ export async function onRequestGet({ request, env }) {
       return json({ error: "not enrolled" }, 403);
     }
 
-    const payload = await buildSharePayload(env, user.id);
+    // Client payload: no referred_email list (PII minimization).
+    const payload = await buildSharePayload(env, user.id, {
+      ensureCode: true,
+      includeReferralDetails: false,
+    });
     return json(payload, 200);
   } catch (e) {
     console.error("referrals get failed", e);
-    return json({ error: e?.message || "referrals unavailable" }, 500);
+    return json({ error: "referrals unavailable" }, 500);
   }
 }
 
