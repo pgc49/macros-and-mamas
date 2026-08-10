@@ -206,12 +206,17 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     return map;
   }, [activeChannelMessages, userId]);
 
-  const send = async (body, file = null) => {
+  const send = async (body, file = null, opts = {}) => {
     setBusy(true);
     setError("");
     try {
-      const row = await db.sendMessage({ clientId: userId, body, file });
-      setDmMessages((list) => [...list, row]);
+      const row = await db.sendMessage({
+        clientId: userId,
+        body,
+        file,
+        replyToId: opts.replyToId || null,
+      });
+      setDmMessages((list) => attachReplyPreviewLocal([...list, row]));
     } catch (e) {
       console.error(e);
       setError(friendlyError(e, "Couldn’t send."));
@@ -425,6 +430,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           onDelete={remove}
           onReact={reactDm}
           onMarkRead={markRead}
+          enableReply
           showPushPrompt
           onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
           onComposerFocusChange={onComposerFocusChange}

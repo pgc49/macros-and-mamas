@@ -62,12 +62,17 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     };
   }, [clientId, refresh]);
 
-  const send = async (body, file = null) => {
+  const send = async (body, file = null, opts = {}) => {
     if (!clientId) return;
     setBusy(true);
     setError("");
     try {
-      const row = await db.sendMessage({ clientId, body, file });
+      const row = await db.sendMessage({
+        clientId,
+        body,
+        file,
+        replyToId: opts.replyToId || null,
+      });
       setMessages((list) => [...list, row]);
       onActivity?.();
     } catch (e) {
@@ -130,6 +135,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
         onMarkRead={markRead}
         showReadReceipts
         allowVoiceMemo
+        enableReply
         showPushPrompt={false}
         compact
       />

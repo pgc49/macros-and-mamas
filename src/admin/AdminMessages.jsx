@@ -245,12 +245,17 @@ export function AdminMessages({
     setDmMessages([]);
   };
 
-  const sendDm = async (body, file = null) => {
+  const sendDm = async (body, file = null, opts = {}) => {
     if (active?.type !== "dm") return;
     setBusy(true);
     setError("");
     try {
-      const row = await db.sendMessage({ clientId: active.id, body, file });
+      const row = await db.sendMessage({
+        clientId: active.id,
+        body,
+        file,
+        replyToId: opts.replyToId || null,
+      });
       setDmMessages((list) => [...list, row]);
       refreshInbox();
     } catch (e) {
@@ -680,6 +685,7 @@ export function AdminMessages({
                 onMarkRead={markDmRead}
                 showReadReceipts
                 allowVoiceMemo
+                enableReply
                 showPushPrompt
                 onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
                 compact

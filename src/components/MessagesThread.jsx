@@ -22,7 +22,7 @@ const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,ima
 /**
  * Shared chat thread UI (mama Messages tab + admin per-client thread).
  * onSend(body, file?, opts?) — body may be empty when sending a photo/PDF/voice alone.
- * opts.replyToId — channel reply target when enableReply is on.
+ * opts.replyToId — reply/quote target when enableReply is on (DMs + channels).
  * allowVoiceMemo — admin-only record control; mamas can only play voice memos.
  * onReact(messageId, emoji) — iMessage-style tapback toggle.
  */
@@ -43,8 +43,8 @@ export function MessagesThread({
   showReadReceipts = false,
   /** Admin-only: show mic to record / send voice memos. */
   allowVoiceMemo = false,
-  /** Channel threads: long-press → Reply (stores reply_to_id). */
-  enableReply = false,
+  /** Long-press → Reply (stores reply_to_id). On for DMs + channels. */
+  enableReply = true,
   /** When false, hide tapback picker (default on when onReact is provided). */
   enableReactions = true,
   busy = false,
@@ -1212,7 +1212,7 @@ export function MessagesThread({
           onChange={(e) => setDraft(e.target.value.slice(0, 2000))}
           rows={1}
           placeholder={voicePreview ? "Optional note with voice memo…" : "Write a message…"}
-          enterKeyHint="send"
+          enterKeyHint="enter"
           autoComplete="off"
           autoCorrect="on"
           disabled={recording}
@@ -1220,12 +1220,6 @@ export function MessagesThread({
           onBlur={() => {
             // Delay so Send/attach taps still register before tabs return
             window.setTimeout(() => onComposerFocusChange?.(false), 180);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
           }}
           style={{
             flex: 1,
