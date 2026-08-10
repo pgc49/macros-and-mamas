@@ -275,19 +275,23 @@ export function AdminVoiceDropCard({ activeMamaCount = 0, allMamaCount = 0 }) {
       await clearPreview({ wipeDraft: true });
       setCaption("");
       setMsg(
-        `Published`
-        + (result.notify
-          ? ` · ${result.pushSent || 0} push`
-            + (result.emailSent ? ` · ${result.emailSent} email` : "")
-          : " · banner only (no notify)")
-        + ".",
+        result.notifying
+          ? "Published — it’s live on Today. Push/email is finishing in the background."
+          : (`Published`
+            + (result.notify
+              ? ` · ${result.pushSent || 0} push`
+                + (result.emailSent ? ` · ${result.emailSent} email` : "")
+              : " · banner only (no notify)")
+            + "."),
       );
       refreshLatest();
     } catch (e) {
       console.error(e);
+      // Publish often succeeds before notify; refresh so "Live now" appears even on error.
+      refreshLatest();
       setError(
         (e.message || "Couldn’t publish voice drop.")
-        + " Your recording is still saved on this device — try Publish again, or Download a backup.",
+        + " Your recording is still saved on this device — check Live now above before publishing again. Use Download for a backup, or Resend push/email if it’s already live.",
       );
     } finally {
       setBusy(false);
@@ -298,6 +302,33 @@ export function AdminVoiceDropCard({ activeMamaCount = 0, allMamaCount = 0 }) {
     && latest.status === "published"
     && latest.expires_at
     && new Date(latest.expires_at).getTime() > Date.now();
+
+  const resendNotify = async () => {
+    if (!latest?.id || busy || !latestLive) return;
+    if (!window.confirm(
+      "Resend push/email for the live Monday voice drop? Mamas who already got the email won’t be emailed again.",
+    )) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setMsg("");
+    try {
+      const result = await db.resendVoiceDropNotify(latest.id);
+      setMsg(
+        result.notifying
+          ? "Resending push/email in the background."
+          : `Resent · ${result.pushSent || 0} push`
+            + (result.emailSent ? ` · ${result.emailSent} email` : "")
+            + ".",
+      );
+    } catch (e) {
+      console.error(e);
+      setError(e.message || "Couldn’t resend notifications.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <Card style={{ marginBottom: 14, padding: 14 }}>
@@ -342,6 +373,13 @@ export function AdminVoiceDropCard({ activeMamaCount = 0, allMamaCount = 0 }) {
               ? ` · expires ${new Date(latest.expires_at).toLocaleDateString()}`
               : ""}
           </div>
+          {latestLive && (
+            <div style={{ marginTop: 10 }}>
+              <Btn small ghost disabled={busy} onClick={resendNotify}>
+                Resend push / email
+              </Btn>
+            </div>
+          )}
         </div>
       )}
 
