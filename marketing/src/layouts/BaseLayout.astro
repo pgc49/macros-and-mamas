@@ -99,8 +99,8 @@ const jsonLd = {
       memberGuard && (
         <script is:inline define:vars={{ dashboardUrl }}>
           /* Sync member / PWA guard — must run before paint when possible.
-             Absolute www URL so marketing *.pages.dev previews send members
-             to the product app, not a missing path on the marketing host. */
+             Same-origin /dashboard so SPA preview overlays keep the session
+             on the preview host (not production www). */
           (function () {
             try {
               var standalone =
