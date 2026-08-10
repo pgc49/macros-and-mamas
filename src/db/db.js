@@ -2267,6 +2267,30 @@ export const db = {
     return data;
   },
 
+  /**
+   * Re-send push/email for an already-published voice drop (skips emails already logged).
+   * Use after a timed-out notify so the banner stays live and remaining mamas get pinged.
+   */
+  async resendVoiceDropNotify(dropId) {
+    await requireUserId();
+    const id = String(dropId || "").trim();
+    if (!id) throw new Error("dropId required");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error("Not signed in");
+    const resp = await fetch("/api/admin-voice-drop", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ resendNotify: true, dropId: id }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || "Couldn’t resend notifications");
+    return data;
+  },
+
   /** Current published, non-expired drop the signed-in user is allowed to see. */
   async loadCurrentVoiceDrop() {
     await requireUserId();

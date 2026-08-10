@@ -2,11 +2,21 @@
    /functions/api/admin-voice-drop.js
    Admin-only: publish a Monday voice drop (single Storage object).
    Does NOT fan out into Messages — Today banner PSA only.
-   Body JSON: {
+
+   Body JSON (publish): {
      caption?, audience?: "admins"|"active"|"all_mamas",
      audioPath, audioMime, audioBytes?, durationMs?,
      notify?: boolean  // push/email to audience (default false)
    }
+
+   Body JSON (finish/retry notify for an already-live drop): {
+     resendNotify: true, dropId
+   }
+
+   Designed for ~40+ recipients on Cloudflare Pages:
+   - insert/publish returns immediately
+   - notify runs in waitUntil (never fails the publish after the row exists)
+   - small concurrency so fan-out finishes under subrequest/time limits
    ================================================================== */
 
 import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/supabaseEmail.js";
@@ -14,13 +24,18 @@ import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/s
 const AUDIENCES = new Set(["admins", "active", "all_mamas"]);
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, waitUntil }) {
   try {
     const user = await requireUser(request, env);
     if (!user) return json({ error: "unauthorized" }, 401);
     if (!(await isAdmin(env, user.id))) return json({ error: "forbidden" }, 403);
 
     const payload = await request.json().catch(() => ({}));
+
+    if (payload.resendNotify === true) {
+      return resendNotify({ env, waitUntil, payload });
+    }
+
     const caption = String(payload.caption || "").trim().slice(0, 500);
     const audience = AUDIENCES.has(String(payload.audience || "").toLowerCase())
       ? String(payload.audience).toLowerCase()
@@ -56,18 +71,135 @@ export async function onRequestPost({ request, env }) {
     });
     if (!row?.id) return json({ error: "insert failed" }, 500);
 
+    if (!notify) {
+      return json({
+        ok: true,
+        drop: row,
+        audience,
+        notify: false,
+        recipients: 0,
+        pushSent: 0,
+        emailSent: 0,
+      });
+    }
+
+    const ids = await listNotifyIds(env, audience);
+    const preview = caption
+      ? caption.replace(/\s+/g, " ").trim().slice(0, 140)
+      : "Monday voice drop from Callie — open Today to listen.";
+    const notifyPromise = notifyRecipients(env, {
+      ids,
+      preview,
+      dropId: row.id,
+      skipEmailedProfileIds: new Set(),
+    });
+
+    if (typeof waitUntil === "function") {
+      waitUntil(notifyPromise.catch((e) => console.error("voice-drop notify failed", e)));
+      return json({
+        ok: true,
+        drop: row,
+        audience,
+        notify: true,
+        recipients: ids.length,
+        pushSent: null,
+        emailSent: null,
+        notifying: true,
+      });
+    }
+
+    const { pushSent, emailSent } = await notifyPromise;
+    return json({
+      ok: true,
+      drop: row,
+      audience,
+      notify: true,
+      recipients: ids.length,
+      pushSent,
+      emailSent,
+    });
+  } catch (e) {
+    console.error("admin-voice-drop failed", e);
+    return json({
+      error: "voice drop failed",
+      detail: String(e?.message || e).slice(0, 240),
+    }, 500);
+  }
+}
+
+async function resendNotify({ env, waitUntil, payload }) {
+  const dropId = String(payload.dropId || "").trim();
+  if (!dropId) return json({ error: "dropId required" }, 400);
+
+  const drop = await loadVoiceDrop(env, dropId);
+  if (!drop?.id) return json({ error: "drop not found" }, 404);
+  if (drop.status !== "published") {
+    return json({ error: "Only a live published drop can resend notifications." }, 400);
+  }
+  if (new Date(drop.expires_at).getTime() <= Date.now()) {
+    return json({ error: "This drop has expired." }, 400);
+  }
+
+  const audience = AUDIENCES.has(String(drop.audience || "").toLowerCase())
+    ? String(drop.audience).toLowerCase()
+    : "active";
+  const ids = await listNotifyIds(env, audience);
+  const alreadyEmailed = await emailedProfileIdsForDrop(env, drop.id);
+  const preview = String(drop.caption || "").trim()
+    ? String(drop.caption).replace(/\s+/g, " ").trim().slice(0, 140)
+    : "Monday voice drop from Callie — open Today to listen.";
+
+  const notifyPromise = notifyRecipients(env, {
+    ids,
+    preview,
+    dropId: drop.id,
+    skipEmailedProfileIds: alreadyEmailed,
+  });
+
+  if (typeof waitUntil === "function") {
+    waitUntil(notifyPromise.catch((e) => console.error("voice-drop resend notify failed", e)));
+    return json({
+      ok: true,
+      drop,
+      audience,
+      notify: true,
+      recipients: ids.length,
+      alreadyEmailed: alreadyEmailed.size,
+      pushSent: null,
+      emailSent: null,
+      notifying: true,
+      resent: true,
+    });
+  }
+
+  const { pushSent, emailSent } = await notifyPromise;
+  return json({
+    ok: true,
+    drop,
+    audience,
+    notify: true,
+    recipients: ids.length,
+    alreadyEmailed: alreadyEmailed.size,
+    pushSent,
+    emailSent,
+    resent: true,
+  });
+}
+
+async function notifyRecipients(env, {
+  ids,
+  preview,
+  dropId,
+  skipEmailedProfileIds = new Set(),
+}) {
+  const queue = [...ids];
+  const workers = Array.from({ length: Math.min(4, queue.length || 1) }, async () => {
     let pushSent = 0;
     let emailSent = 0;
-    let recipients = 0;
-
-    if (notify) {
-      const ids = await listNotifyIds(env, audience);
-      recipients = ids.length;
-      const preview = caption
-        ? caption.replace(/\s+/g, " ").trim().slice(0, 140)
-        : "Monday voice drop from Callie — open Today to listen.";
-
-      for (const profileId of ids) {
+    while (queue.length) {
+      const profileId = queue.shift();
+      if (!profileId) continue;
+      try {
         const n = await sendPushToProfile(env, profileId, {
           title: "Callie",
           body: preview,
@@ -76,6 +208,7 @@ export async function onRequestPost({ request, env }) {
         });
         pushSent += n;
         if (n > 0) continue;
+        if (skipEmailedProfileIds.has(profileId)) continue;
 
         const contact = await loadUserContact(env, profileId);
         const email = contact.email || "";
@@ -91,25 +224,20 @@ export async function onRequestPost({ request, env }) {
             profileId,
             emailType: "message",
             toEmail: email,
-            meta: { voiceDropId: row.id, voiceDrop: true },
+            meta: { voiceDropId: dropId, voiceDrop: true },
           });
         }
+      } catch (e) {
+        console.warn("voice-drop notify one failed", profileId, e);
       }
     }
-
-    return json({
-      ok: true,
-      drop: row,
-      audience,
-      notify,
-      recipients,
-      pushSent,
-      emailSent,
-    });
-  } catch (e) {
-    console.error("admin-voice-drop failed", e);
-    return json({ error: "voice drop failed" }, 500);
-  }
+    return { pushSent, emailSent };
+  });
+  const parts = await Promise.all(workers);
+  return parts.reduce(
+    (acc, p) => ({ pushSent: acc.pushSent + p.pushSent, emailSent: acc.emailSent + p.emailSent }),
+    { pushSent: 0, emailSent: 0 },
+  );
 }
 
 async function supersedeOpenDrops(env) {
@@ -163,6 +291,37 @@ async function insertVoiceDrop(env, row) {
   return rows[0] || null;
 }
 
+async function loadVoiceDrop(env, dropId) {
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const resp = await fetch(
+    `${base}/rest/v1/voice_drops?id=eq.${encodeURIComponent(dropId)}&select=id,caption,audience,status,published_at,expires_at,audio_path`,
+    { headers: { apikey: key, authorization: `Bearer ${key}` } },
+  );
+  if (!resp.ok) return null;
+  const rows = await resp.json().catch(() => []);
+  return rows[0] || null;
+}
+
+async function emailedProfileIdsForDrop(env, dropId) {
+  const out = new Set();
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  // Filter JSON meta in app code — PostgREST JSON path filters vary by project config.
+  const resp = await fetch(
+    `${base}/rest/v1/email_events?select=profile_id,meta&email_type=eq.message&order=created_at.desc&limit=500`,
+    { headers: { apikey: key, authorization: `Bearer ${key}` } },
+  );
+  if (!resp.ok) return out;
+  const rows = await resp.json().catch(() => []);
+  for (const row of rows || []) {
+    if (row?.meta?.voiceDropId === dropId && row.profile_id) {
+      out.add(row.profile_id);
+    }
+  }
+  return out;
+}
+
 async function listNotifyIds(env, audience) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -170,7 +329,10 @@ async function listNotifyIds(env, audience) {
     `${base}/rest/v1/profiles?select=id,role,status,refunded`,
     { headers: { apikey: key, authorization: `Bearer ${key}` } },
   );
-  if (!resp.ok) return [];
+  if (!resp.ok) {
+    console.error("listNotifyIds failed", resp.status, await resp.text().catch(() => ""));
+    return [];
+  }
   const rows = await resp.json().catch(() => []);
   return (rows || [])
     .filter((r) => {
