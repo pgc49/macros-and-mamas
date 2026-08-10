@@ -1615,7 +1615,6 @@ export default function App() {
                 )
                 : (
                   <JoinPage
-                    onRefresh={refreshClientState}
                     profileCreatedAt={profile?.createdAt || null}
                   />
                 )
@@ -1669,7 +1668,7 @@ export default function App() {
               <SignInPage
                 mode="create"
                 onSwitchMode={switchAuthMode}
-                onBack={() => navigate(PATHS.home)}
+                onBack={goMarketingHome}
               />
             )
             : refunded
