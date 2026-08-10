@@ -134,9 +134,17 @@ export function goalChecksThisWeek(checks, itemId, fromDayIndex = 0) {
 /** True when this day is before a custom goal existed (not tappable / not countable). */
 export function isBeforeGoalCreated(item, weekStart, dayKey) {
   if (!item || item.source !== "custom") return false;
-  const from = goalEligibleFromDayIndex(item, weekStart);
-  if (from <= 0 || from >= 7) return false;
-  return dayIndex(dayKey) < from;
+  const createdDate = goalCreatedDateIso(item.createdAt);
+  if (!createdDate) return false;
+  const wk = weekStart || wkStartOf();
+  const weekEnd = addDaysIso(wk, 6);
+  // Whole week is before the goal existed.
+  if (createdDate > weekEnd) return true;
+  // Created before this week → every day is eligible.
+  if (createdDate < wk) return false;
+  const createdIdx = dayIndex(weekdayKey(createdDate));
+  if (createdIdx < 0) return false;
+  return dayIndex(dayKey) < createdIdx;
 }
 
 /**
