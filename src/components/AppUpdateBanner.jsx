@@ -54,11 +54,11 @@ function NotesList({ notes }) {
 }
 
 /**
- * Two modes:
- * 1) Update ready — home-screen is on an older build than production.
- * 2) What’s new — already on the latest build, but these release notes
- *    haven’t been acknowledged yet (covers the “old app couldn’t show
- *    notes” case after someone taps Update).
+ * Two separate banners (do not mix):
+ * 1) Update ready (amber) — home-screen JS is behind production. Refresh only.
+ *    Never re-lists What’s new bullets here.
+ * 2) What’s new (sage) — already on the latest build; release notes once.
+ *    “Got it” persists in localStorage (mm_release_notes_seen).
  *
  * Preview: ?demoUpdateBanner=1  or  ?demoWhatsNew=1
  */
@@ -75,7 +75,7 @@ export function AppUpdateBanner() {
       const remote = await fetchRemoteAppVersion();
       setMode("update");
       setRemoteBuildId(remote?.buildId || "demo");
-      setNotes(remote?.notes || null);
+      setNotes(null); // update banner never carries release notes
       return;
     }
     if (queryFlag("demoWhatsNew")) {
@@ -88,7 +88,9 @@ export function AppUpdateBanner() {
     }
 
     setDemo(false);
-    const justUpdated = consumePostUpdateFlag();
+    // Consume reload flag from “Update app” (history cleanup); do not
+    // force-reshow notes if the mama already tapped Got it.
+    consumePostUpdateFlag();
 
     // Local vite — only demos above.
     if (!APP_BUILD_ID || APP_BUILD_ID === "dev") {
@@ -102,28 +104,24 @@ export function AppUpdateBanner() {
       return;
     }
 
-    // Behind production → update prompt (notes if this client can show them).
+    // Behind production → amber refresh prompt only (no What’s new copy).
     if (remote.buildId !== APP_BUILD_ID) {
       if (wasUpdateDismissedThisSession(remote.buildId)) {
         setMode(null);
         return;
       }
       setRemoteBuildId(remote.buildId);
-      setNotes(remote.notes || null);
+      setNotes(null);
       setMode("update");
       return;
     }
 
-    // Up to date — show What’s new once if notes exist and unread.
-    // justUpdated forces the card even if storage is flaky after reload.
-    if (remote.notes?.bullets?.length) {
-      const seen = hasSeenReleaseNotes(remote.notes.id);
-      if (!seen || justUpdated) {
-        setRemoteBuildId(remote.buildId);
-        setNotes(remote.notes);
-        setMode("whatsNew");
-        return;
-      }
+    // Up to date — sage What’s new once per notes id (Got it → localStorage).
+    if (remote.notes?.bullets?.length && !hasSeenReleaseNotes(remote.notes.id)) {
+      setRemoteBuildId(remote.buildId);
+      setNotes(remote.notes);
+      setMode("whatsNew");
+      return;
     }
 
     setMode(null);
@@ -226,11 +224,9 @@ export function AppUpdateBanner() {
       <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45, fontFamily: F }}>
         A newer version of Macros and Mamas is live. Tap Update so your home-screen app loads the latest.
       </p>
-      <NotesList notes={notes} />
       {demo ? (
         <p style={{ fontSize: 12.5, color: T.amber, margin: "0 0 10px", lineHeight: 1.4, fontFamily: F }}>
-          Demo preview — Update won’t reload the page.
-          {" "}Edit notes in <code style={{ fontSize: 11 }}>functions/_shared/releaseNotes.js</code>.
+          Demo preview — Update won’t reload the page. What’s new stays on the separate green card.
         </p>
       ) : null}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

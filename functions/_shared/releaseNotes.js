@@ -5,14 +5,13 @@
    what’s new on the newly deployed build.
 
    Policy:
-   - The reload banner still appears whenever the build id changes.
+   - Amber “App update ready” = refresh only (never lists these bullets).
+   - Sage “What’s new” = bullets below, shown once after she’s on the
+     latest build; Got it persists via localStorage (notes id).
    - Put bullets here ONLY for significant UI / UX ships.
-   - For small / quiet deploys, set bullets: [] so the banner is just
-     “App update ready” with no What’s new section.
-   - Do not leave old feature notes sitting around — they resurface on
-     every later update until cleared or replaced.
-   - When you do ship notes, bump `id` so “You’re up to date” can show
-     once to people who already refreshed.
+   - For quiet deploys, set bullets: [] so What’s new stays hidden.
+   - When you ship new notes, bump `id` so Got it from an older set
+     doesn’t suppress the new card.
 
    Preview:
      ?demoUpdateBanner=1  — “App update ready” (+ notes if any)

@@ -1,8 +1,11 @@
 /**
  * Home-screen / PWA update detection.
  * Client bakes a build id at Vite build time; /api/app-version returns the
- * currently deployed id (+ optional release notes). Mismatch → Update banner.
- * After update (or first open on a notes-capable build), What’s new can show once.
+ * currently deployed id (+ optional release notes).
+ *
+ * Mismatch → amber “App update ready” (refresh only — no release-note bullets).
+ * Matched + unread notes → sage “What’s new” once; Got it writes
+ * localStorage mm_release_notes_seen = notes.id.
  */
 
 export const APP_BUILD_ID = String(
