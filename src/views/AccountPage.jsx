@@ -50,14 +50,80 @@ export function AccountPage() {
     return <Navigate to={PATHS.goodbye} replace />;
   }
 
-  // Paid clients + admins. Unpaid still finishing join shouldn't manage account yet.
-  if (!profile?.paid && !isAdmin) {
-    return <Navigate to={PATHS.join} replace />;
-  }
-
   const display = fullName({ name: profile?.name, last_name: profile?.last_name })
     || user.email
     || "Your account";
+
+  const signOutBtn = (
+    <button
+      type="button"
+      onClick={async () => {
+        await signOut();
+        window.location.assign(PATHS.home);
+      }}
+      style={{
+        display: "block",
+        width: "100%",
+        marginTop: 22,
+        padding: "14px 18px",
+        borderRadius: 999,
+        border: `1.5px solid ${T.border}`,
+        background: "#fff",
+        fontWeight: 700,
+        fontSize: 15,
+        color: T.ink,
+        cursor: "pointer",
+      }}
+    >
+      Sign out
+    </button>
+  );
+
+  // Unpaid: avatar used to loop /account → /join. Offer escape + finish checkout.
+  if (!profile?.paid && !isAdmin) {
+    return (
+      <Shell>
+        <h1 style={{ fontFamily: FD, fontWeight: 400, fontSize: 28, margin: "18px 0 4px" }}>
+          Account
+        </h1>
+        <p style={{ fontSize: 14.5, color: T.inkSoft, margin: "0 0 18px", lineHeight: 1.5 }}>
+          Signed in as <strong style={{ color: T.ink }}>{user.email}</strong>.
+          {" "}Finish checkout to unlock your full account.
+        </p>
+        <Card style={{ padding: "16px 18px" }}>
+          <Link
+            to={PATHS.join}
+            style={{ textDecoration: "none", color: "inherit", display: "block" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Finish signing up</div>
+                <div style={{ fontSize: 13.5, color: T.inkSoft, marginTop: 3, lineHeight: 1.45 }}>
+                  Lock in your spot, then complete intake.
+                </div>
+              </div>
+              <span style={{ color: T.inkSoft, fontSize: 22, lineHeight: 1 }} aria-hidden>›</span>
+            </div>
+          </Link>
+        </Card>
+        <Link
+          to={PATHS.home}
+          style={{
+            display: "block",
+            marginTop: 18,
+            textAlign: "center",
+            fontSize: 14,
+            fontWeight: 700,
+            color: T.accent,
+            textDecoration: "underline",
+          }}
+        >
+          Back to homepage
+        </Link>
+        {signOutBtn}
+      </Shell>
+    );
+  }
 
   return (
     <Shell>
@@ -98,28 +164,7 @@ export function AccountPage() {
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={async () => {
-          await signOut();
-          window.location.assign(PATHS.home);
-        }}
-        style={{
-          display: "block",
-          width: "100%",
-          marginTop: 22,
-          padding: "14px 18px",
-          borderRadius: 999,
-          border: `1.5px solid ${T.border}`,
-          background: "#fff",
-          fontWeight: 700,
-          fontSize: 15,
-          color: T.ink,
-          cursor: "pointer",
-        }}
-      >
-        Sign out
-      </button>
+      {signOutBtn}
     </Shell>
   );
 }

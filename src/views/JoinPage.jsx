@@ -87,10 +87,55 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
       window.location.assign(`${PATHS.signin}?${params.toString()}`);
     } catch (e) {
       console.error("switch to quiz email failed", e);
-      setError("Couldn't switch accounts. Sign out from the menu, then sign in with your quiz email.");
+      setError("Couldn't switch accounts. Sign out below, then sign in with your quiz email.");
       setSwitching(false);
     }
   };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } finally {
+      window.location.assign(PATHS.home);
+    }
+  };
+
+  const escapeLinks = (
+    <>
+      <Link
+        to={PATHS.home}
+        style={{
+          display: "block",
+          marginTop: 16,
+          fontWeight: 700,
+          fontSize: 14,
+          color: T.accent,
+          textDecoration: "underline",
+        }}
+      >
+        Back to homepage
+      </Link>
+      <button
+        type="button"
+        onClick={handleSignOut}
+        style={{
+          display: "block",
+          width: "100%",
+          marginTop: 10,
+          background: "none",
+          border: "none",
+          color: T.inkSoft,
+          fontSize: 13.5,
+          fontWeight: 600,
+          cursor: "pointer",
+          textDecoration: "underline",
+          padding: 8,
+        }}
+      >
+        Sign out
+      </button>
+    </>
+  );
 
   const amount = quote?.amount;
   const total =
@@ -198,6 +243,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
             <div style={{ marginTop: 12, fontSize: 13.5, color: T.amber, lineHeight: 1.5 }}>{error}</div>
           )}
           {refreshBtn}
+          {escapeLinks}
         </Card>
       </Shell>
     );
@@ -217,6 +263,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
             Get your macro ranges
           </a>
           {refreshBtn}
+          {escapeLinks}
         </Card>
       </Shell>
     );
@@ -330,19 +377,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
           </p>
         )}
         {refreshBtn}
-        <Link
-          to={PATHS.dashboard}
-          style={{
-            display: "block",
-            marginTop: 16,
-            fontWeight: 700,
-            fontSize: 14,
-            color: T.accent,
-            textDecoration: "underline",
-          }}
-        >
-          Back
-        </Link>
+        {escapeLinks}
       </Card>
     </Shell>
   );

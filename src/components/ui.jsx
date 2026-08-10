@@ -135,7 +135,7 @@ export const RangeBand = ({ label, lo, hi, unit = "g", eaten }) => {
 };
 
 /* Shell — prototype's coach toggle and reset button removed.
-   Shows signed-in email + sign-out when a session exists.
+   Brand links home; avatar opens Account (unpaid get a minimal hub with sign-out).
    Optional bottomBar docks via flex (avoids iOS position:fixed mid-screen jumps). */
 function accountInitials(profile, email) {
   const first = String(profile?.name || "").trim();
@@ -199,10 +199,10 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
         }}
       >
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 2px 6px", gap: 12 }}>
-          <div>
+          <Link to={PATHS.home} style={{ textDecoration: "none", color: "inherit" }}>
             <div style={{ fontFamily: FD, fontSize: 24, letterSpacing: 0.3 }}>Macros and Mamas</div>
             <div style={{ fontSize: 12, color: T.accentDeep, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase" }}>ranges, not rules</div>
-          </div>
+          </Link>
           {user?.email && (
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {isAdmin && (
