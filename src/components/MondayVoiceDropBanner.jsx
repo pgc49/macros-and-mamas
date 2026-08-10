@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { db } from "../db/db";
 import { formatVoiceDuration } from "../lib/voiceMemo";
+import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 
 const STORAGE_KEY = "mm_voice_drop_dismissed";
 
@@ -129,15 +130,12 @@ export function MondayVoiceDropBanner() {
             {caption}
           </p>
         ) : null}
-        <audio
-          controls
-          preload="metadata"
+        <VoiceMemoPlayer
           src={drop.audioUrl}
-          controlsList="nodownload"
-          style={{ width: "100%", maxWidth: "100%", height: 40 }}
-        >
-          Your browser can’t play this voice drop.
-        </audio>
+          label="Listen"
+          durationMs={drop.durationMs || 0}
+          style={{ maxWidth: "100%" }}
+        />
       </div>
     </div>
   );
