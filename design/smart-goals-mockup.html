@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Goals — Interactive Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--cream:#FAF4EE;--card:#fff;--plum:#7E2A4F;--plumsoft:#F2D9E2;--ink:#3B2E36;--muted:#93818B;--line:#F0E3E8;--green:#E4F0DE;--greenink:#4a6b45;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFE6DE;font-family:'Nunito Sans',sans-serif;color:var(--ink);padding:16px 12px 48px;}
+  .viewer{max-width:430px;margin:0 auto;}
+  .viewer h1{font-family:'Playfair Display',serif;font-weight:600;font-size:25px;margin:4px 2px 6px;}
+  .try{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:13.5px;line-height:1.55;color:#5d4c55;margin-bottom:14px;}
+  .try b{color:var(--plum)}
+  .phone{background:var(--cream);border-radius:34px;border:1px solid #e5d7cd;box-shadow:0 18px 40px rgba(90,50,70,.14);overflow:hidden;position:relative;}
+  .inner{padding:22px 16px 26px;}
+  .weekhead{display:flex;align-items:baseline;gap:8px;padding:0 4px;}
+  .weekhead .wk{font-family:'Playfair Display',serif;font-size:28px;font-weight:500;}
+  .weekhead .range{color:#7c6b74;font-size:14px;}
+  .hint{color:#7c6b74;font-size:13.5px;padding:4px 4px 12px;}
+  .goalcard{background:#fff;border:1px solid var(--line);border-radius:24px;padding:18px 16px 6px;}
+  .goal{padding:6px 2px 14px;border-bottom:1px solid #f3eaee;}
+  .goal:last-of-type{border-bottom:none;}
+  .gtitle{font-weight:800;font-size:15.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .gtitle .sub{font-weight:600;color:#8a7680;font-size:13.5px;}
+  .chip-auto{background:var(--plumsoft);color:var(--plum);border-radius:8px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:.6px;}
+  .chip-cust{background:#EFE9F5;color:#5e4a78;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:.6px;}
+  .prog{font-size:12px;color:#8a7680;font-weight:700;margin-top:2px;}
+  .days{display:flex;gap:8px;margin-top:10px;}
+  .day{width:44px;height:44px;border-radius:50%;border:1.6px solid #E9DCE2;background:#fff;color:#6d5560;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;flex:0 0 auto;user-select:none;}
+  .day.today{border-color:var(--plum);border-width:2px;box-shadow:0 0 0 4px #f4dfe8;}
+  .day.on{background:var(--plum);border-color:var(--plum);color:#fff;}
+  .day.on.auto::after{content:"";position:absolute;bottom:-7px;width:4px;height:4px;border-radius:50%;background:var(--plum);}
+  .footer{display:flex;justify-content:space-between;align-items:center;padding:14px 4px 12px;color:#6d5c65;font-size:14px;}
+  .footer b{color:var(--ink)}
+  .addrow{display:flex;align-items:center;justify-content:space-between;border-top:1px dashed #E7D3DB;padding:14px 4px;cursor:pointer;}
+  .addrow .lbl{color:var(--plum);font-weight:800;font-size:14.5px;}
+  .addrow .cap{color:#a08fa0;font-size:12.5px;font-weight:700;}
+  .tip{background:var(--green);border-radius:18px;padding:15px 16px;margin-top:14px;font-size:14px;line-height:1.5;color:var(--greenink);}
+  .tip b{color:#3d5c38}
+  /* sheets */
+  .dim{position:absolute;inset:0;background:rgba(59,32,45,.30);display:none;}
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:26px 26px 34px 34px;padding:20px 20px 26px;display:none;}
+  .sheet h3{font-family:'Playfair Display',serif;font-size:20px;font-weight:600;margin-bottom:6px;}
+  .sheet p{font-size:13.5px;color:#7c6b74;line-height:1.5;margin-bottom:14px;}
+  .btn{display:block;width:100%;text-align:center;background:var(--plum);color:#fff;border:none;border-radius:999px;padding:14px;font-weight:800;font-size:15px;font-family:inherit;cursor:pointer;}
+  .btn.ghost{background:#fff;color:var(--plum);border:1.6px solid var(--plumsoft);margin-top:8px;}
+  .macrostat{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .ms{background:#FBF6F8;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:12.5px;font-weight:800;color:#6d5560;}
+  .ms.ok{color:#4a6b45;background:var(--green);border-color:#d8e8d1;}
+  /* water stepper */
+  .waterbar{height:14px;background:#F4EBF0;border-radius:999px;overflow:hidden;margin:6px 0 8px;}
+  .waterfill{height:100%;background:linear-gradient(90deg,#B85C82,var(--plum));border-radius:999px;transition:width .3s;}
+  .wnum{font-size:26px;font-family:'Playfair Display',serif;font-weight:600;}
+  .steppers{display:flex;gap:10px;margin:14px 0 16px;}
+  .stp{flex:1;border:1.6px solid var(--plumsoft);background:#fff;color:var(--plum);border-radius:16px;padding:12px;font-weight:800;font-size:15px;font-family:inherit;cursor:pointer;}
+  .done{background:var(--green);color:#3d5c38;border-radius:14px;padding:11px 14px;font-weight:800;font-size:14px;text-align:center;margin-bottom:14px;display:none;}
+  /* custom form */
+  .fld{margin-bottom:12px;}
+  .fld label{display:block;font-size:12px;font-weight:800;color:#8a7680;letter-spacing:.4px;margin-bottom:6px;}
+  .fld input{width:100%;border:1.6px solid #EAD9E0;border-radius:14px;padding:12px 14px;font-size:15px;font-family:inherit;color:var(--ink);background:#fff;outline:none;}
+  .freq{display:flex;gap:8px;}
+  .fq{flex:1;border:1.6px solid #EAD9E0;background:#fff;border-radius:999px;padding:10px;font-weight:800;font-size:13px;color:#6d5560;text-align:center;cursor:pointer;}
+  .fq.on{background:var(--plumsoft);border-color:var(--plumsoft);color:var(--plum);}
+  .guard{background:#FBF6F8;border:1px dashed #E3CBD6;border-radius:14px;padding:11px 13px;font-size:12.5px;color:#7a5a68;line-height:1.45;margin:4px 0 14px;}
+</style>
+</head>
+<body>
+<div class="viewer">
+  <h1>Smart goals — live demo</h1>
+  <div class="try"><b>Try it:</b> tap circles on <b>manual goals</b> (steps, sunlight) to toggle · tap <b>today (S)</b> on Water and add ounces until it checks itself · tap today on <b>Macros</b> to see why auto circles never toggle · tap <b>Add your own</b> to create a goal, then <b>tap its name (✎)</b> to edit or remove it. Week % updates live.</div>
+
+  <div class="phone">
+    <div class="inner">
+      <div class="weekhead"><span class="wk">Week 3</span><span class="range">· Aug 3 – Aug 9 · this week</span></div>
+      <div class="hint">Tap the days as you go. Goals marked <b style="color:var(--plum)">auto</b> check themselves from your log.</div>
+
+      <div class="goalcard" id="card"></div>
+
+      <div class="tip"><b>Morning sunlight + one or two walks</b> aren't extras — they steady your cortisol and your cravings. Ten minutes outside before scrolling.</div>
+    </div>
+
+    <div class="dim" id="dim"></div>
+
+    <!-- macro sheet -->
+    <div class="sheet" id="shMacro">
+      <h3>This one checks itself ✨</h3>
+      <p id="macroCopy">You're at <b>1,420 cal · P 96g</b> so far today. Log the rest of your day — when it lands in range, this checks off on its own.</p>
+      <div class="macrostat"><span class="ms ok">Cal 1420 / 1750–1900</span><span class="ms">P 96g / 140–150</span><span class="ms ok">C 152g</span><span class="ms ok">F 48g</span></div>
+      <button class="btn">Open Meals</button>
+      <button class="btn ghost" onclick="closeSheets()">Got it</button>
+    </div>
+
+    <!-- water sheet -->
+    <div class="sheet" id="shWater">
+      <h3>Water + electrolytes</h3>
+      <div class="wnum"><span id="oz">64</span> <span style="font-size:15px;color:#8a7680;">/ 88 oz today</span></div>
+      <div class="waterbar"><div class="waterfill" id="wfill" style="width:73%"></div></div>
+      <div class="done" id="wdone">88 oz — checked off for today 🎉</div>
+      <div class="steppers">
+        <button class="stp" onclick="addOz(8)">+8 oz</button>
+        <button class="stp" onclick="addOz(16)">+16 oz</button>
+        <button class="stp" onclick="addOz(24)">+24 oz</button>
+      </div>
+      <button class="btn ghost" style="margin-top:0" onclick="closeSheets()">Done</button>
+    </div>
+
+    <!-- past auto day sheet -->
+    <div class="sheet" id="shPast">
+      <h3>Auto days follow the log</h3>
+      <p>This day checks itself from what you logged. To change it, fix that day's log — the circle updates on its own.</p>
+      <button class="btn">Open Meals</button>
+      <button class="btn ghost" onclick="closeSheets()">Got it</button>
+    </div>
+
+    <!-- edit custom goal sheet -->
+    <div class="sheet" id="shEdit">
+      <h3>Edit your goal</h3>
+      <div class="fld"><label>GOAL NAME</label><input id="egName" maxlength="30"></div>
+      <div class="fld"><label>TARGET NOTE · OPTIONAL</label><input id="egSub" maxlength="20"></div>
+      <div class="fld"><label>HOW OFTEN</label>
+        <div class="freq" id="efreq">
+          <div class="fq" data-f="daily" onclick="pickFreqE(this)">Daily</div>
+          <div class="fq" data-f="3" onclick="pickFreqE(this)">3× a week</div>
+          <div class="fq" data-f="5" onclick="pickFreqE(this)">5× a week</div>
+        </div>
+      </div>
+      <button class="btn" onclick="saveEdit()">Save changes</button>
+      <button class="btn ghost" id="rmBtn" style="color:#a34a4a;border-color:#efd6d6;" onclick="removeGoal()">Remove goal</button>
+      <button class="btn ghost" onclick="closeSheets()">Cancel</button>
+    </div>
+
+    <!-- add custom sheet -->
+    <div class="sheet" id="shAdd">
+      <h3>Add your own goal</h3>
+      <div class="fld"><label>GOAL NAME</label><input id="cgName" maxlength="30" placeholder="10 min stretch before bed"></div>
+      <div class="fld"><label>TARGET NOTE · OPTIONAL</label><input id="cgSub" maxlength="20" placeholder="e.g. · 10 min"></div>
+      <div class="fld"><label>HOW OFTEN</label>
+        <div class="freq">
+          <div class="fq on" data-f="daily" onclick="pickFreq(this)">Daily</div>
+          <div class="fq" data-f="3" onclick="pickFreq(this)">3× a week</div>
+          <div class="fq" data-f="5" onclick="pickFreq(this)">5× a week</div>
+        </div>
+      </div>
+      <div class="guard">Goals here should <b>add</b> to your life — more water, more walks, more protein. Nothing restrictive. That's not how we do it. 🤍</div>
+      <button class="btn" onclick="saveCustom()">Add goal</button>
+      <button class="btn ghost" onclick="closeSheets()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TODAY = 6; // S (Sun Aug 9)
+let waterOz = 64;
+let goals = [
+ {t:'Hit my macro ranges', sub:null, type:'auto', kind:'macro', days:[1,1,1,0,1,1,0], target:7,
+  prog:()=>'Auto · in range 5 of 6 days so far'},
+ {t:'Water goal + electrolytes', sub:'· 88 oz', type:'auto', kind:'water', days:[1,1,0,1,1,0,0], target:7,
+  prog:()=>`Auto · today: ${waterOz} / 88 oz`},
+ {t:'8k+ steps or two walks', sub:null, type:'manual', days:[1,0,1,0,1,0,0], target:7},
+ {t:'Morning sunlight', sub:null, type:'manual', days:[1,1,1,1,0,0,0], target:7},
+ {t:'Ate my meals at home', sub:null, type:'manual', days:[1,1,1,0,1,1,0], target:7},
+ {t:'Strength / sculpt workout', sub:'· goal 3× a week', type:'manual', days:[0,1,0,1,0,0,0], target:3},
+];
+let customCount = 0;
+const $=id=>document.getElementById(id);
+
+function weekPct(){
+  let s=0;
+  goals.forEach(g=>{const c=g.days.reduce((a,b)=>a+b,0);s+=Math.min(c/g.target,1);});
+  return Math.round(s/goals.length*100);
+}
+function render(){
+  const card=$('card');
+  card.innerHTML='';
+  const labels=['M','T','W','T','F','S','S'];
+  goals.forEach((g,gi)=>{
+    const div=document.createElement('div');div.className='goal';
+    let chips = g.type==='auto' ? '<span class="chip-auto">✨ AUTO</span>' : (g.custom?'<span class="chip-cust">YOURS</span>':'');
+    let count = g.target<7 ? `<span class="sub">${g.days.reduce((a,b)=>a+b,0)} of ${g.target} this week</span>`:'';
+    div.innerHTML=`<div class="gtitle" ${g.custom?`onclick="openEdit(${gi})" style="cursor:pointer"`:''}>${g.t} ${g.sub?`<span class="sub">${g.sub}</span>`:''} ${chips}${g.custom?' <span style="color:#b39cad;font-size:14px;">✎</span>':''} ${count}</div>
+      ${g.type==='auto'?`<div class="prog">${g.prog()}</div>`:''}
+      <div class="days">${labels.map((l,i)=>`<div class="day ${g.days[i]?'on':''} ${g.type==='auto'?'auto':''} ${i===TODAY?'today':''}" onclick="tapDay(${gi},${i})">${l}</div>`).join('')}</div>`;
+    card.appendChild(div);
+  });
+  const add=document.createElement('div');add.className='addrow';add.onclick=openAdd;
+  add.innerHTML=`<span class="lbl">+ Add your own</span><span class="cap">${customCount} of 3 used</span>`;
+  card.appendChild(add);
+  const f=document.createElement('div');f.className='footer';
+  f.innerHTML=`<span>Week so far: <b>${weekPct()}%</b> — progress, not perfection.</span>`;
+  card.appendChild(f);
+}
+function tapDay(gi,di){
+  const g=goals[gi];
+  if(g.type==='manual'){ g.days[di]=g.days[di]?0:1; render(); return; }
+  // auto goals never toggle
+  if(g.kind==='water' && di===TODAY){ openSheet('shWater'); return; }
+  if(g.kind==='macro' && di===TODAY){ openSheet('shMacro'); return; }
+  openSheet('shPast');
+}
+function openSheet(id){ $('dim').style.display='block'; $(id).style.display='block'; }
+function closeSheets(){ $('dim').style.display='none'; ['shMacro','shWater','shPast','shAdd','shEdit'].forEach(i=>$(i).style.display='none'); $('rmBtn').textContent='Remove goal'; rmArmed=false; }
+$('dim').onclick=closeSheets;
+function addOz(n){
+  waterOz=Math.min(waterOz+n,120);
+  $('oz').textContent=waterOz;
+  $('wfill').style.width=Math.min(waterOz/88*100,100)+'%';
+  if(waterOz>=88){ $('wdone').style.display='block'; goals[1].days[TODAY]=1; render(); }
+}
+let freq='daily';
+function pickFreq(el){ document.querySelectorAll('.fq').forEach(x=>x.classList.remove('on')); el.classList.add('on'); freq=el.dataset.f; }
+function openAdd(){ if(customCount>=3){ alert('Cap of 3 custom goals reached — archive one to add another.'); return;} openSheet('shAdd'); }
+function saveCustom(){
+  const name=$('cgName').value.trim()||'10 min stretch before bed';
+  const sub=$('cgSub').value.trim()||null;
+  const target=freq==='daily'?7:parseInt(freq);
+  goals.push({t:name, sub:sub, type:'manual', custom:true, days:[0,0,0,0,0,0,0], target:target});
+  customCount++; closeSheets(); render();
+}
+let editIdx=null, efreqVal='daily', rmArmed=false;
+function openEdit(gi){
+  const g=goals[gi]; editIdx=gi;
+  $('egName').value=g.t; $('egSub').value=(g.sub||'').replace('· ','');
+  efreqVal = g.target===7?'daily':String(g.target);
+  document.querySelectorAll('#efreq .fq').forEach(x=>x.classList.toggle('on', x.dataset.f===efreqVal));
+  openSheet('shEdit');
+}
+function pickFreqE(el){ document.querySelectorAll('#efreq .fq').forEach(x=>x.classList.remove('on')); el.classList.add('on'); efreqVal=el.dataset.f; }
+function saveEdit(){
+  const g=goals[editIdx];
+  g.t=$('egName').value.trim()||g.t;
+  const s=$('egSub').value.trim(); g.sub = s?('· '+s):null;
+  g.target = efreqVal==='daily'?7:parseInt(efreqVal);
+  closeSheets(); render();
+}
+function removeGoal(){
+  if(!rmArmed){ rmArmed=true; $('rmBtn').textContent='Tap again to remove — history stays saved'; return; }
+  goals.splice(editIdx,1); customCount--; closeSheets(); render();
+}
+render();
+</script>
+</body>
+</html>

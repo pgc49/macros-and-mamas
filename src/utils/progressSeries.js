@@ -1,24 +1,10 @@
-import { DEFAULT_ITEMS, DAYS } from "../content/data";
+import { DAYS } from "../content/data";
+import { adherenceForItems, programGoalItems } from "../lib/goals";
 import { addDaysIso, fmtRange, localDateIso, wkStartOf } from "./dates";
 
-/** Checklist adherence % for one week of checkins. */
-export function adherenceForWeek(checksByWeek, wk) {
-  const ch = checksByWeek[wk] || {};
-  let done = 0;
-  let total = 0;
-  DEFAULT_ITEMS.forEach((it) => {
-    if (it.daily) {
-      DAYS.forEach((d) => {
-        total += 1;
-        if (ch[`${it.id}|${d}`]) done += 1;
-      });
-    } else {
-      total += 3;
-      const sc = DAYS.filter((d) => ch[`${it.id}|${d}`]).length;
-      done += Math.min(sc, 3);
-    }
-  });
-  return total ? Math.round((done / total) * 100) : 0;
+/** Checklist adherence % for one week of checkins (program + optional custom items). */
+export function adherenceForWeek(checksByWeek, wk, items = null) {
+  return adherenceForItems(checksByWeek, wk, items || programGoalItems());
 }
 
 export function weekKeysFromChecks(checksByWeek, curWk = wkStartOf()) {
@@ -83,30 +69,32 @@ export function buildWaterHistory(waterLogsByDate, goalOz, days = 28) {
 }
 
 /** Weekly habit adherence series for Progress chart. */
-export function buildHabitHistory(checksByWeek, curWk = wkStartOf()) {
+export function buildHabitHistory(checksByWeek, curWk = wkStartOf(), goalItems = null) {
+  const list = goalItems || programGoalItems();
   const wkKeys = weekKeysFromChecks(checksByWeek, curWk);
   const earliestWk = wkKeys[0];
   return wkKeys.map((w) => ({
     week: w,
     label: `W${progWeekNum(w, earliestWk)}`,
-    pct: adherenceForWeek(checksByWeek, w),
+    pct: adherenceForWeek(checksByWeek, w, list),
     rangeLabel: fmtRange(w),
   }));
 }
 
 /** 4-week trends summary used on the Progress tab. */
-export function buildTrends(checksByWeek, curWk = wkStartOf()) {
+export function buildTrends(checksByWeek, curWk = wkStartOf(), goalItems = null) {
+  const list = goalItems || programGoalItems();
   const wkKeys = weekKeysFromChecks(checksByWeek, curWk);
   const weeks = wkKeys.filter((w) => Object.keys(checksByWeek[w] || {}).length > 0 || w === curWk);
   const n = weeks.length;
   if (n < 4) return { locked: true, n };
 
-  const overall = weeks.map((w) => adherenceForWeek(checksByWeek, w));
+  const overall = weeks.map((w) => adherenceForWeek(checksByWeek, w, list));
   const half = Math.floor(n / 2);
   const avg = (a) => a.reduce((x, y) => x + y, 0) / (a.length || 1);
   const delta = avg(overall.slice(half)) - avg(overall.slice(0, half));
 
-  const items = DEFAULT_ITEMS.map((it) => {
+  const items = list.map((it) => {
     if (it.daily) {
       let hits = 0;
       weeks.forEach((w) => {

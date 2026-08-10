@@ -16,6 +16,7 @@ import {
 import { T, F, FD } from "../theme/tokens";
 import { addDaysIso, localDateIso, rateOf } from "../utils/dates";
 import { buildHabitHistory, buildMacroHistory, buildTrends, buildWaterHistory } from "../utils/progressSeries";
+import { mergeGoalItems } from "../lib/goals";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
 import { Shell, Card, Btn, inputStyle } from "../components/ui";
@@ -375,12 +376,14 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
         if (cancelled) return;
         const client = (roster || []).find((c) => c.id === adminSel);
         const waterGoal = client?.goalWeight != null ? Math.round(Number(client.goalWeight) / 2) : 0;
+        const goalItems = mergeGoalItems(payload.customGoals || []);
         setClientProgress({
           macroHistory: buildMacroHistory(payload.mealHistoryByDate),
-          habitHistory: buildHabitHistory(payload.checksByWeek),
+          habitHistory: buildHabitHistory(payload.checksByWeek, undefined, goalItems),
           waterHistory: buildWaterHistory(payload.waterLogsByDate || {}, waterGoal),
           waterGoalOz: waterGoal,
-          trends: buildTrends(payload.checksByWeek),
+          trends: buildTrends(payload.checksByWeek, undefined, goalItems),
+          customGoals: payload.customGoals || [],
         });
       })
       .catch((e) => {
@@ -688,6 +691,23 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           )}
           {clientProgress && (
             <>
+              {(clientProgress.customGoals || []).length > 0 && (
+                <Card style={{ marginTop: 12 }}>
+                  <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Her custom goals</div>
+                  <p style={{ fontSize: 13, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.5 }}>
+                    Coaching signal — what she added on top of the program checklist.
+                  </p>
+                  {clientProgress.customGoals.map((g) => (
+                    <div key={g.id} style={{ fontSize: 14, marginBottom: 8, lineHeight: 1.45 }}>
+                      <b style={{ color: T.ink }}>{g.title}</b>
+                      {g.subtitle ? <span style={{ color: T.inkSoft }}> · {g.subtitle}</span> : null}
+                      <span style={{ color: T.inkSoft, fontSize: 12.5 }}>
+                        {" "}· {g.frequency === "daily" ? "Daily" : `${g.n_target}× / week`}
+                      </span>
+                    </div>
+                  ))}
+                </Card>
+              )}
               <ProgressCharts
                 audience="admin"
                 macros={sel.macros}
