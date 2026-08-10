@@ -16,7 +16,7 @@ import {
   progWeekNum as weekNumberFromEarliest,
   weekKeysFromChecks,
 } from "./utils/progressSeries";
-import { PATHS, homePathFor, pathFromClientView, canAccessDashboard } from "./routing";
+import { PATHS, homePathFor, pathFromClientView, canAccessDashboard, goMarketingHome } from "./routing";
 import { needsMembershipPaywall } from "./lib/membershipAccess";
 import { SalesPage } from "./views/SalesPage";
 import { WaitlistPage } from "./views/WaitlistPage";
@@ -1365,7 +1365,7 @@ export default function App() {
     setProfile({ ...EMPTY_PROFILE });
     setMacros(null);
     setApproved(false);
-    navigate(PATHS.home);
+    goMarketingHome();
   };
 
   // Clients need approve + pay. Admins with an approved intake can dogfood
@@ -1564,7 +1564,7 @@ export default function App() {
           <SignInGate
             authMode={authMode}
             onSwitchMode={switchAuthMode}
-            onBack={() => navigate(PATHS.home)}
+            onBack={goMarketingHome}
             isAdmin={isAdmin}
             approved={approved}
             paid={paid}

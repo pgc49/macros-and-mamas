@@ -8,14 +8,14 @@ export function PrivacyPage() {
   return (
     <Shell>
       <div style={{ padding: "10px 0 8px" }}>
-        <Link
-          to={PATHS.home}
+        <a
+          href={PATHS.home}
           style={{
             fontFamily: F, fontSize: 13, fontWeight: 700, color: T.accent, textDecoration: "underline",
           }}
         >
           ← Back
-        </Link>
+        </a>
       </div>
 
       <Card style={{ padding: "22px 20px" }}>

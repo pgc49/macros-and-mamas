@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { FD, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
 import { CONFIG } from "../config";
@@ -11,7 +11,7 @@ import {
   rememberQuizEmail,
   resolveQuizEmail,
 } from "../lib/quizCheckout";
-import { PATHS } from "../routing";
+import { PATHS, goMarketingHome } from "../routing";
 
 const LAB_ADDON_PRICE = 349;
 /** Marketing quiz on www — still the preferred path; not required when OPEN_WITHOUT_QUIZ=true. */
@@ -96,14 +96,14 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
     try {
       await signOut();
     } finally {
-      window.location.assign(PATHS.home);
+      goMarketingHome();
     }
   };
 
   const escapeLinks = (
     <>
-      <Link
-        to={PATHS.home}
+      <a
+        href={PATHS.home}
         style={{
           display: "block",
           marginTop: 16,
@@ -114,7 +114,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
         }}
       >
         Back to homepage
-      </Link>
+      </a>
       <button
         type="button"
         onClick={handleSignOut}
