@@ -177,11 +177,14 @@ export function buildProgramSummaryFromCohort(profile, payments = []) {
   const latest = payments.find((p) => p.status === "succeeded") || payments[0] || null;
   const paidAt = profile.paid_at || latest?.created || null;
   const cohort = cohortByLabel(profile.cohort_label);
-  const week = programWeekNumber(cohort) ?? (Number(profile.week) || 0);
+  // Live calendar only — never fall back to stale profiles.week (often stuck at 1).
+  const week = programWeekNumber(cohort);
   const complete = isProgramComplete(cohort);
   let phase = "not_started";
   if (profile.paid) {
-    phase = complete ? "program_complete" : "in_program";
+    if (complete) phase = "program_complete";
+    else if (cohort?.programStart) phase = "in_program";
+    else phase = "paid_access"; // admin / test / missing cohort stamp
   }
   return {
     paid: !!profile.paid,
@@ -189,7 +192,9 @@ export function buildProgramSummaryFromCohort(profile, payments = []) {
     week,
     phase,
     cohortLabel: profile.cohort_label || null,
-    cohortName: displayNameForCohortLabel(profile.cohort_label),
+    cohortName: cohort
+      ? displayNameForCohortLabel(profile.cohort_label)
+      : (profile.cohort_label || null),
     programStart: cohort?.programStart || null,
     programEnd: cohort?.programEnd || null,
     freeMonthEndsAt: freeMonthEndsAt(cohort),

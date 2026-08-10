@@ -103,9 +103,11 @@ export function PaymentsPage() {
 
   const phaseLabel = program?.phase === "program_complete"
     ? "8-week program complete"
-    : program?.phase === "in_program"
-      ? `Week ${program.week || 1} of 8`
-      : "Program";
+    : program?.phase === "in_program" && program?.week
+      ? `Week ${program.week} of 8`
+      : program?.phase === "paid_access"
+        ? "Program access"
+        : "Program";
 
   const openPortal = async () => {
     setPortalNote("");
