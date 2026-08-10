@@ -1,5 +1,9 @@
 import { supabase } from "../lib/supabase";
 import { adherenceForItems, programGoalItems } from "../lib/goals";
+import {
+  aggregateReactions,
+  isAllowedReactionEmoji,
+} from "../lib/messageReactions";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
 
@@ -573,6 +577,7 @@ async function hydrateChannelSenders(rows, conversationId = null) {
 }
 
 const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
+const DM_MESSAGE_SELECT = "id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
 
 /** Attach in-thread reply preview objects from the loaded window. */
 function attachChannelReplyPreviews(rows) {
@@ -619,6 +624,120 @@ export function channelHasUnread(_conversation, membership, messages = []) {
     const createdMs = m.created_at ? new Date(m.created_at).getTime() : 0;
     return createdMs > (Number.isFinite(lastReadMs) ? lastReadMs : 0);
   });
+}
+
+async function loadReactionRows(table, messageIds) {
+  const ids = [...new Set((messageIds || []).filter(Boolean))];
+  if (!ids.length) return [];
+  const { data, error } = await supabase
+    .from(table)
+    .select("id, message_id, user_id, emoji, created_at")
+    .in("message_id", ids);
+  if (error) throw error;
+  return data || [];
+}
+
+function attachReactions(messages, rows, selfId) {
+  const byMessage = new Map();
+  for (const row of rows || []) {
+    if (!row?.message_id) continue;
+    const list = byMessage.get(row.message_id) || [];
+    list.push(row);
+    byMessage.set(row.message_id, list);
+  }
+  return (messages || []).map((m) => {
+    const reactionRows = byMessage.get(m.id) || [];
+    return {
+      ...m,
+      reaction_rows: reactionRows,
+      reactions: aggregateReactions(reactionRows, selfId),
+    };
+  });
+}
+
+async function hydrateDmReactions(messages) {
+  const list = messages || [];
+  if (!list.length) return list;
+  let selfId = null;
+  try {
+    selfId = await requireUserId();
+  } catch {
+    selfId = null;
+  }
+  try {
+    const rows = await loadReactionRows("message_reactions", list.map((m) => m.id));
+    return attachReactions(list, rows, selfId);
+  } catch (e) {
+    console.warn("dm reactions hydrate failed", e);
+    return list.map((m) => ({ ...m, reaction_rows: [], reactions: [] }));
+  }
+}
+
+async function hydrateChannelReactions(messages) {
+  const list = messages || [];
+  if (!list.length) return list;
+  let selfId = null;
+  try {
+    selfId = await requireUserId();
+  } catch {
+    selfId = null;
+  }
+  try {
+    const rows = await loadReactionRows(
+      "conversation_message_reactions",
+      list.map((m) => m.id),
+    );
+    return attachReactions(list, rows, selfId);
+  } catch (e) {
+    console.warn("channel reactions hydrate failed", e);
+    return list.map((m) => ({ ...m, reaction_rows: [], reactions: [] }));
+  }
+}
+
+/**
+ * Toggle / replace tapback. Same emoji clears; different emoji replaces.
+ * @param {"dm"|"channel"} scope
+ */
+async function toggleMessageReaction(scope, messageId, emoji) {
+  const uid = await requireUserId();
+  if (!messageId) throw new Error("message required");
+  if (!isAllowedReactionEmoji(emoji)) throw new Error("That reaction isn’t available.");
+  const table = scope === "channel"
+    ? "conversation_message_reactions"
+    : "message_reactions";
+
+  const { data: existing, error: findErr } = await supabase
+    .from(table)
+    .select("id, emoji")
+    .eq("message_id", messageId)
+    .eq("user_id", uid)
+    .maybeSingle();
+  if (findErr) throw findErr;
+
+  if (existing?.id && existing.emoji === emoji) {
+    const { error: delErr } = await supabase
+      .from(table)
+      .delete()
+      .eq("id", existing.id)
+      .eq("user_id", uid);
+    if (delErr) throw delErr;
+    return { messageId, emoji, cleared: true };
+  }
+
+  if (existing?.id) {
+    const { error: delErr } = await supabase
+      .from(table)
+      .delete()
+      .eq("id", existing.id)
+      .eq("user_id", uid);
+    if (delErr) throw delErr;
+  }
+
+  const { error: insErr } = await supabase
+    .from(table)
+    .insert({ message_id: messageId, user_id: uid, emoji });
+  if (insErr) throw insErr;
+  return { messageId, emoji, cleared: false };
 }
 
 export const db = {
@@ -1759,7 +1878,12 @@ export const db = {
     if (error) throw error;
     const withAttachments = await hydrateChannelAttachments(data || []);
     const withSenders = await hydrateChannelSenders(withAttachments, conversationId);
-    return attachChannelReplyPreviews(withSenders);
+    const withReplies = attachChannelReplyPreviews(withSenders);
+    return hydrateChannelReactions(withReplies);
+  },
+
+  async toggleChannelReaction(messageId, emoji) {
+    return toggleMessageReaction("channel", messageId, emoji);
   },
 
   async sendChannelMessage({
@@ -1954,12 +2078,17 @@ export const db = {
     if (!clientId) return [];
     const { data, error } = await supabase
       .from("messages")
-      .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select(DM_MESSAGE_SELECT)
       .eq("client_id", clientId)
       .order("created_at", { ascending: true })
       .limit(Math.min(200, Math.max(1, limit)));
     if (error) throw error;
-    return hydrateMessageAttachments(data || []);
+    const withAttachments = await hydrateMessageAttachments(data || []);
+    return hydrateDmReactions(withAttachments);
+  },
+
+  async toggleDmReaction(messageId, emoji) {
+    return toggleMessageReaction("dm", messageId, emoji);
   },
 
   async sendMessage({ clientId, body, file = null }) {

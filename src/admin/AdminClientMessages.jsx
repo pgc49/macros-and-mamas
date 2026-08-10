@@ -47,6 +47,15 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
         },
         () => { refresh(); },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "message_reactions",
+        },
+        () => { refresh(); },
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -82,6 +91,11 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     onActivity?.();
   };
 
+  const react = async (messageId, emoji) => {
+    await db.toggleDmReaction(messageId, emoji);
+    await refresh();
+  };
+
   const markRead = async () => {
     if (!clientId || !adminUserId) return;
     await db.markMessagesRead(clientId, adminUserId);
@@ -112,6 +126,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
         onSend={send}
         onEdit={edit}
         onDelete={remove}
+        onReact={react}
         onMarkRead={markRead}
         showReadReceipts
         allowVoiceMemo

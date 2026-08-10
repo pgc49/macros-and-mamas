@@ -8,6 +8,7 @@ import {
   pushSupported,
   registerMessageServiceWorker,
 } from "../lib/push";
+import { REACTION_EMOJIS } from "../lib/messageReactions";
 import {
   formatVoiceDuration,
   isAudioAttachmentMime,
@@ -23,6 +24,7 @@ const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,ima
  * onSend(body, file?, opts?) — body may be empty when sending a photo/PDF/voice alone.
  * opts.replyToId — channel reply target when enableReply is on.
  * allowVoiceMemo — admin-only record control; mamas can only play voice memos.
+ * onReact(messageId, emoji) — iMessage-style tapback toggle.
  */
 export function MessagesThread({
   title = "Callie",
@@ -43,10 +45,13 @@ export function MessagesThread({
   allowVoiceMemo = false,
   /** Channel threads: long-press → Reply (stores reply_to_id). */
   enableReply = false,
+  /** When false, hide tapback picker (default on when onReact is provided). */
+  enableReactions = true,
   busy = false,
   onSend,
   onEdit,
   onDelete,
+  onReact,
   onMarkRead,
   showPushPrompt = false,
   onSavePushSubscription,
@@ -71,6 +76,7 @@ export function MessagesThread({
   const [editBusy, setEditBusy] = useState(false);
   const [menuId, setMenuId] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
+  const [reactBusyId, setReactBusyId] = useState(null);
   const [recording, setRecording] = useState(false);
   const [recordMs, setRecordMs] = useState(0);
   const [voicePreview, setVoicePreview] = useState(null); // { file, url, durationMs }
@@ -352,7 +358,17 @@ export function MessagesThread({
     && m.kind !== "system"
   );
 
-  const canManage = (m) => canEditMsg(m) || canDeleteMsg(m) || canReplyMsg(m);
+  const canReactMsg = (m) => (
+    enableReactions
+    && typeof onReact === "function"
+    && !m.deleted_at
+    && m.kind !== "system"
+    && !!m.id
+  );
+
+  const canManage = (m) => (
+    canEditMsg(m) || canDeleteMsg(m) || canReplyMsg(m) || canReactMsg(m)
+  );
 
   const startReply = (m) => {
     if (!canReplyMsg(m)) return;
@@ -360,6 +376,21 @@ export function MessagesThread({
     setEditingId(null);
     setReplyTo(m);
     window.setTimeout(() => draftRef.current?.focus?.(), 50);
+  };
+
+  const reactToMessage = async (m, emoji) => {
+    if (!canReactMsg(m) || reactBusyId) return;
+    setMenuId(null);
+    setReactBusyId(m.id);
+    setAttachError("");
+    try {
+      await onReact(m.id, emoji);
+    } catch (e) {
+      console.error(e);
+      setAttachError(e.message || "Couldn’t save reaction.");
+    } finally {
+      setReactBusyId(null);
+    }
   };
 
   const replyAuthorLabel = (m) => {
@@ -763,6 +794,44 @@ export function MessagesThread({
                     </span>
                   ) : null}
                 </div>
+                {!deleted && Array.isArray(m.reactions) && m.reactions.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 4,
+                      marginTop: 8,
+                      justifyContent: mine ? "flex-end" : "flex-start",
+                    }}
+                  >
+                    {m.reactions.map((r) => (
+                      <button
+                        key={`${m.id}-${r.emoji}`}
+                        type="button"
+                        disabled={!canReactMsg(m) || reactBusyId === m.id || busy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          reactToMessage(m, r.emoji);
+                        }}
+                        title={r.mine ? "Remove your reaction" : "React"}
+                        aria-label={`${r.emoji} ${r.count}${r.mine ? ", including you" : ""}`}
+                        style={{
+                          border: `1.5px solid ${r.mine ? T.accent : T.border}`,
+                          background: r.mine ? T.accentSoft : "#fff",
+                          borderRadius: 999,
+                          padding: "2px 8px",
+                          fontSize: 13,
+                          lineHeight: 1.3,
+                          cursor: canReactMsg(m) ? "pointer" : "default",
+                          fontFamily: F,
+                          color: T.ink,
+                        }}
+                      >
+                        {r.emoji}{r.count > 1 ? ` ${r.count}` : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               {showMenu && (
                 <div
@@ -774,74 +843,117 @@ export function MessagesThread({
                     marginTop: 4,
                     zIndex: 5,
                     display: "flex",
+                    flexDirection: "column",
                     gap: 6,
                     background: "#fff",
                     border: `1.5px solid ${T.border}`,
                     borderRadius: 12,
                     padding: 6,
                     boxShadow: "0 6px 18px rgba(51,39,46,0.12)",
+                    minWidth: canReactMsg(m) ? 220 : undefined,
                   }}
                 >
-                  {canReplyMsg(m) && (
-                    <button
-                      type="button"
-                      onClick={() => startReply(m)}
-                      disabled={editBusy || busy}
+                  {canReactMsg(m) && (
+                    <div
                       style={{
-                        border: "none",
-                        background: T.sageSoft,
-                        color: T.accentDeep,
-                        fontWeight: 700,
-                        fontSize: 13,
-                        fontFamily: F,
-                        cursor: "pointer",
-                        borderRadius: 999,
-                        padding: "8px 12px",
+                        display: "flex",
+                        gap: 2,
+                        justifyContent: "space-between",
+                        padding: "2px 2px 4px",
+                        borderBottom: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m))
+                          ? `1px solid ${T.border}`
+                          : "none",
                       }}
                     >
-                      Reply
-                    </button>
+                      {REACTION_EMOJIS.map((emoji) => {
+                        const mineReact = (m.reactions || []).some((r) => r.mine && r.emoji === emoji);
+                        return (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => reactToMessage(m, emoji)}
+                            disabled={editBusy || busy || reactBusyId === m.id}
+                            title={mineReact ? "Remove" : "React"}
+                            aria-label={`React with ${emoji}`}
+                            style={{
+                              border: "none",
+                              background: mineReact ? T.accentSoft : "transparent",
+                              borderRadius: 10,
+                              fontSize: 22,
+                              lineHeight: 1,
+                              cursor: "pointer",
+                              padding: "6px 4px",
+                              minWidth: 34,
+                            }}
+                          >
+                            {emoji}
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
-                  {canEditMsg(m) && (
-                    <button
-                      type="button"
-                      onClick={() => startEdit(m)}
-                      disabled={editBusy || busy}
-                      style={{
-                        border: "none",
-                        background: T.accentSoft,
-                        color: T.accentDeep,
-                        fontWeight: 700,
-                        fontSize: 13,
-                        fontFamily: F,
-                        cursor: "pointer",
-                        borderRadius: 999,
-                        padding: "8px 12px",
-                      }}
-                    >
-                      Edit
-                    </button>
-                  )}
-                  {canDeleteMsg(m) && (
-                    <button
-                      type="button"
-                      onClick={() => removeMessage(m)}
-                      disabled={editBusy || busy}
-                      style={{
-                        border: "none",
-                        background: T.track,
-                        color: T.inkSoft,
-                        fontWeight: 700,
-                        fontSize: 13,
-                        fontFamily: F,
-                        cursor: "pointer",
-                        borderRadius: 999,
-                        padding: "8px 12px",
-                      }}
-                    >
-                      Delete
-                    </button>
-                  )}
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {canReplyMsg(m) && (
+                      <button
+                        type="button"
+                        onClick={() => startReply(m)}
+                        disabled={editBusy || busy}
+                        style={{
+                          border: "none",
+                          background: T.sageSoft,
+                          color: T.accentDeep,
+                          fontWeight: 700,
+                          fontSize: 13,
+                          fontFamily: F,
+                          cursor: "pointer",
+                          borderRadius: 999,
+                          padding: "8px 12px",
+                        }}
+                      >
+                        Reply
+                      </button>
+                    )}
+                    {canEditMsg(m) && (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(m)}
+                        disabled={editBusy || busy}
+                        style={{
+                          border: "none",
+                          background: T.accentSoft,
+                          color: T.accentDeep,
+                          fontWeight: 700,
+                          fontSize: 13,
+                          fontFamily: F,
+                          cursor: "pointer",
+                          borderRadius: 999,
+                          padding: "8px 12px",
+                        }}
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {canDeleteMsg(m) && (
+                      <button
+                        type="button"
+                        onClick={() => removeMessage(m)}
+                        disabled={editBusy || busy}
+                        style={{
+                          border: "none",
+                          background: T.track,
+                          color: T.inkSoft,
+                          fontWeight: 700,
+                          fontSize: 13,
+                          fontFamily: F,
+                          cursor: "pointer",
+                          borderRadius: 999,
+                          padding: "8px 12px",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
