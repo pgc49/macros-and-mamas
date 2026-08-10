@@ -11,6 +11,7 @@
     "qa:credits": "node scripts/qa-credits-math.mjs",
     "qa:channels": "node scripts/qa-channels-notify.mjs",
     "qa:reactions": "node scripts/qa-message-reactions.mjs",
+    "qa:messages-thread": "node scripts/smoke-messages-thread.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
