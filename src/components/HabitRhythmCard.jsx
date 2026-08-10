@@ -302,7 +302,7 @@ function ChipBtn({ on, onClick, children }) {
   );
 }
 
-function Swatch({ solid, hatched }) {
+function Swatch({ solid, hatched: _hatched }) {
   return (
     <span
       style={{
