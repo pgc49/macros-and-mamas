@@ -135,6 +135,15 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
         },
         () => { refreshDm(); },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "message_reactions",
+        },
+        () => { refreshDm(); },
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -151,6 +160,15 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           event: "*",
           schema: "public",
           table: "conversation_messages",
+        },
+        () => { refreshChannels(); },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversation_message_reactions",
         },
         () => { refreshChannels(); },
       )
@@ -213,6 +231,11 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     setDmMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row, attachmentUrl: null } : m)));
   };
 
+  const reactDm = async (messageId, emoji) => {
+    await db.toggleDmReaction(messageId, emoji);
+    await refreshDm();
+  };
+
   const markRead = async () => {
     if (!userId) return;
     await db.markMessagesRead(userId, userId);
@@ -271,6 +294,11 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
         m.id === row.id ? { ...m, ...row, attachmentUrl: null } : m
       )),
     }));
+  };
+
+  const reactChannel = async (messageId, emoji) => {
+    await db.toggleChannelReaction(messageId, emoji);
+    await refreshChannels();
   };
 
   const markChannelRead = async () => {
@@ -364,6 +392,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           onSend={sendChannel}
           onEdit={editChannel}
           onDelete={removeChannel}
+          onReact={reactChannel}
           onMarkRead={markChannelRead}
           canModerate={isAdmin}
           allowVoiceMemo={isAdmin}
@@ -394,6 +423,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           onSend={send}
           onEdit={edit}
           onDelete={remove}
+          onReact={reactDm}
           onMarkRead={markRead}
           showPushPrompt
           onSavePushSubscription={(sub) => db.savePushSubscription(sub)}

@@ -156,7 +156,21 @@ export function AdminMessages({
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "message_reactions" },
+        () => {
+          if (active?.type === "dm") refreshDmThread(active.id);
+        },
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "conversation_messages" },
+        () => {
+          refreshChannels();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "conversation_message_reactions" },
         () => {
           refreshChannels();
         },
@@ -306,6 +320,16 @@ export function AdminMessages({
         m.id === row.id ? { ...m, ...row, attachmentUrl: null } : m
       )),
     }));
+  };
+
+  const reactDm = async (messageId, emoji) => {
+    await db.toggleDmReaction(messageId, emoji);
+    if (active?.type === "dm") await refreshDmThread(active.id);
+  };
+
+  const reactChannel = async (messageId, emoji) => {
+    await db.toggleChannelReaction(messageId, emoji);
+    await refreshChannels();
   };
 
   const markDmRead = async () => {
@@ -614,6 +638,7 @@ export function AdminMessages({
                 onSend={sendChannel}
                 onEdit={editChannel}
                 onDelete={removeChannel}
+                onReact={reactChannel}
                 onMarkRead={markChannelRead}
                 canModerate
                 allowVoiceMemo
@@ -651,6 +676,7 @@ export function AdminMessages({
                 onSend={sendDm}
                 onEdit={editDm}
                 onDelete={removeDm}
+                onReact={reactDm}
                 onMarkRead={markDmRead}
                 showReadReceipts
                 allowVoiceMemo
