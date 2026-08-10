@@ -578,10 +578,10 @@ async function hydrateChannelSenders(rows, conversationId = null) {
 }
 
 const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
-const DM_MESSAGE_SELECT = "id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
+const DM_MESSAGE_SELECT = "id, client_id, sender_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
 
-/** Attach in-thread reply preview objects from the loaded window. */
-function attachChannelReplyPreviews(rows) {
+/** Attach in-thread reply preview objects from the loaded window (DMs + channels). */
+function attachReplyPreviews(rows) {
   const list = rows || [];
   const byId = new Map(list.map((m) => [m.id, m]));
   return list.map((m) => {
@@ -613,6 +613,8 @@ function attachChannelReplyPreviews(rows) {
     };
   });
 }
+
+const attachChannelReplyPreviews = attachReplyPreviews;
 
 export function channelHasUnread(_conversation, membership, messages = []) {
   const userId = membership?.user_id;
@@ -2093,14 +2095,15 @@ export const db = {
       .limit(Math.min(200, Math.max(1, limit)));
     if (error) throw error;
     const withAttachments = await hydrateMessageAttachments(data || []);
-    return hydrateDmReactions(withAttachments);
+    const withReplies = attachReplyPreviews(withAttachments);
+    return hydrateDmReactions(withReplies);
   },
 
   async toggleDmReaction(messageId, emoji) {
     return toggleMessageReaction("dm", messageId, emoji);
   },
 
-  async sendMessage({ clientId, body, file = null }) {
+  async sendMessage({ clientId, body, file = null, replyToId = null }) {
     const uid = await requireUserId();
     if (!clientId) throw new Error("client required");
     const text = String(body || "").trim().slice(0, 2000);
@@ -2127,6 +2130,7 @@ export const db = {
         sender_id: uid,
         body: text,
         kind: "chat",
+        ...(replyToId ? { reply_to_id: replyToId } : {}),
         ...(attachment
           ? {
             attachment_path: attachment.path,
@@ -2136,7 +2140,7 @@ export const db = {
           }
           : {}),
       })
-      .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select(DM_MESSAGE_SELECT)
       .single();
     if (error) throw error;
     try {
@@ -2156,7 +2160,8 @@ export const db = {
       console.warn("message-notify invoke failed", e);
     }
     const [hydrated] = await hydrateMessageAttachments([data]);
-    return hydrated || data;
+    const withReply = attachReplyPreviews(hydrated ? [hydrated] : [data])[0];
+    return withReply || hydrated || data;
   },
 
   /**
@@ -2323,7 +2328,7 @@ export const db = {
       .eq("id", messageId)
       .eq("sender_id", uid)
       .is("deleted_at", null)
-      .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select(DM_MESSAGE_SELECT)
       .single();
     if (error) throw error;
     const [hydrated] = await hydrateMessageAttachments([data]);
@@ -2351,7 +2356,7 @@ export const db = {
       .eq("id", messageId)
       .eq("sender_id", uid)
       .is("deleted_at", null)
-      .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+      .select(DM_MESSAGE_SELECT)
       .single();
     if (error) throw error;
 
