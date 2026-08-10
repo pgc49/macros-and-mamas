@@ -15,16 +15,16 @@ export const EMAIL_CATALOG = [
     trigger: "Account created, still unpaid — +1 hour, again +24 hours, then stop (hourly cron)",
     subject: "Your spot's waiting, mama",
     audience: "Client",
-    cta: "Finish joining — $149",
+    cta: "Finish signing up — lock in your spot",
     bodyPreview: `Hi [First name],
 
 You started joining Macros and Mamas — I'm glad you're here.
 
-When you're ready: personalized macros I build myself, our moms WhatsApp group, and a Monday voice note to keep it simple. One button and you're in.
+When you're ready: personalized macros I build myself, our moms WhatsApp group, and a Monday voice note to keep it simple. Finish signing up below to lock in your spot.
 
 Callie
 
-(24h follow-up adds founding-price scarcity. Reply to stop anytime.)`,
+(24h follow-up nudges again without a dollar amount — checkout shows the right rate. Reply to stop anytime.)`,
   },
   {
     id: "welcome",
@@ -140,7 +140,7 @@ Callie`,
 
 Warm decline copy for the specific reason (first person, from me).
 
-Your $149 has been fully refunded — it'll land back on your card in a few days.
+Your payment has been fully refunded — it'll land back on your card in a few days.
 
 If you left your email for the waitlist, I'll personally check in when the time is right.
 
@@ -153,14 +153,14 @@ Callie`,
     name: "Waitlist open (blast)",
     status: "ready",
     trigger: "Manual one-shot when enrollment reopens — POST /api/cohort-waitlist-blast (CRON_SECRET). Pulls cohort_waitlist; CTA → create account & pay.",
-    subject: "Spots are open — your waitlist rate $249",
+    subject: "Spots are open — lock in your spot",
     audience: "Waitlist",
-    cta: "Create account & join — $249",
+    cta: "Finish signing up — lock in your spot",
     bodyPreview: `Hi [First name],
 
 You asked to be first in line for the next Macros and Mamas group — and spots are open.
 
-Because you joined the waitlist early, your rate is $249 (full price is $299). Create your account (or sign in), then lock in that waitlist price. Inside: macros I build myself, our moms WhatsApp group Mon–Fri, and a short Monday voice note to keep the week simple.
+Create your account (or sign in), then finish checkout to lock in your spot. Inside: macros I build myself, our moms WhatsApp group Mon–Fri, and a short Monday voice note to keep the week simple.
 
 Tap below when you're ready. I'd love to have you.
 
@@ -169,15 +169,37 @@ Callie
 (You're getting this because you joined the waitlist. Reply to stop anytime.)`,
   },
   {
+    id: "quiz_ranges",
+    number: "Q",
+    name: "Quiz ranges",
+    status: "live",
+    trigger: "Ranges quiz completed (eligible segments)",
+    subject: "Your ranges, [First name]",
+    audience: "Lead",
+    cta: "Finish signing up — lock in your spot",
+    bodyPreview: `Hi [First name],
+
+Here are your bands — built the same way Callie builds them for the program:
+• Protein / Carbs / Fat / Calories (preview bands)
+
+These are bands, not one rigid number. Create your account and finish checkout to lock in your spot — use this same email so your ranges stay attached.
+
+Ranges above are a preview. If you join, Callie builds and approves your final numbers before you start.
+
+Callie
+
+(No dollar amount in email — checkout shows the rate for that email.)`,
+  },
+  {
     id: "callie_payment",
     number: "A",
     name: "Callie: new payment",
     status: "live",
     trigger: "Stripe payment succeeded",
-    subject: "💰 New mama: [name] — paid $149",
+    subject: "💰 New mama: [name] — paid $[amount]",
     audience: "Callie",
     cta: null,
-    bodyPreview: `Plain-text alert with name, email, and link to /admin.`,
+    bodyPreview: `Plain-text alert with name, email, actual Stripe amount, and link to /admin.`,
   },
   {
     id: "callie_intake",
@@ -224,6 +246,7 @@ export const EMAIL_TYPE_LABELS = {
   macros_live: "Macros live",
   eligibility_refund: "Refund confirm",
   cohort_open: "Cohort open (waitlist)",
+  quiz_ranges: "Quiz ranges",
   callie_payment: "Callie: new payment",
   callie_intake: "Callie: intake ready",
   callie_eligibility_hold: "Callie: eligibility hold",
