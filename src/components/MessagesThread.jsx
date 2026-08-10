@@ -838,10 +838,11 @@ export function MessagesThread({
                   data-msg-menu
                   style={{
                     position: "absolute",
-                    top: "100%",
+                    // Open upward — chats are bottom-heavy; downward menus clip under overflow.
+                    bottom: "100%",
                     [mine ? "right" : "left"]: 0,
-                    marginTop: 4,
-                    zIndex: 5,
+                    marginBottom: 4,
+                    zIndex: 20,
                     display: "flex",
                     flexDirection: "column",
                     gap: 6,
@@ -850,17 +851,83 @@ export function MessagesThread({
                     borderRadius: 12,
                     padding: 6,
                     boxShadow: "0 6px 18px rgba(51,39,46,0.12)",
-                    minWidth: canReactMsg(m) ? 220 : undefined,
+                    minWidth: canReactMsg(m) ? 228 : undefined,
                   }}
                 >
+                  {(canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m)) && (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {canReplyMsg(m) && (
+                        <button
+                          type="button"
+                          onClick={() => startReply(m)}
+                          disabled={editBusy || busy}
+                          style={{
+                            border: "none",
+                            background: T.sageSoft,
+                            color: T.accentDeep,
+                            fontWeight: 700,
+                            fontSize: 13,
+                            fontFamily: F,
+                            cursor: "pointer",
+                            borderRadius: 999,
+                            padding: "8px 12px",
+                          }}
+                        >
+                          Reply
+                        </button>
+                      )}
+                      {canEditMsg(m) && (
+                        <button
+                          type="button"
+                          onClick={() => startEdit(m)}
+                          disabled={editBusy || busy}
+                          style={{
+                            border: "none",
+                            background: T.accentSoft,
+                            color: T.accentDeep,
+                            fontWeight: 700,
+                            fontSize: 13,
+                            fontFamily: F,
+                            cursor: "pointer",
+                            borderRadius: 999,
+                            padding: "8px 12px",
+                          }}
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {canDeleteMsg(m) && (
+                        <button
+                          type="button"
+                          onClick={() => removeMessage(m)}
+                          disabled={editBusy || busy}
+                          style={{
+                            border: "none",
+                            background: T.track,
+                            color: T.inkSoft,
+                            fontWeight: 700,
+                            fontSize: 13,
+                            fontFamily: F,
+                            cursor: "pointer",
+                            borderRadius: 999,
+                            padding: "8px 12px",
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {canReactMsg(m) && (
                     <div
                       style={{
                         display: "flex",
                         gap: 2,
                         justifyContent: "space-between",
-                        padding: "2px 2px 4px",
-                        borderBottom: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m))
+                        padding: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m))
+                          ? "4px 2px 2px"
+                          : "2px",
+                        borderTop: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m))
                           ? `1px solid ${T.border}`
                           : "none",
                       }}
@@ -892,68 +959,6 @@ export function MessagesThread({
                       })}
                     </div>
                   )}
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {canReplyMsg(m) && (
-                      <button
-                        type="button"
-                        onClick={() => startReply(m)}
-                        disabled={editBusy || busy}
-                        style={{
-                          border: "none",
-                          background: T.sageSoft,
-                          color: T.accentDeep,
-                          fontWeight: 700,
-                          fontSize: 13,
-                          fontFamily: F,
-                          cursor: "pointer",
-                          borderRadius: 999,
-                          padding: "8px 12px",
-                        }}
-                      >
-                        Reply
-                      </button>
-                    )}
-                    {canEditMsg(m) && (
-                      <button
-                        type="button"
-                        onClick={() => startEdit(m)}
-                        disabled={editBusy || busy}
-                        style={{
-                          border: "none",
-                          background: T.accentSoft,
-                          color: T.accentDeep,
-                          fontWeight: 700,
-                          fontSize: 13,
-                          fontFamily: F,
-                          cursor: "pointer",
-                          borderRadius: 999,
-                          padding: "8px 12px",
-                        }}
-                      >
-                        Edit
-                      </button>
-                    )}
-                    {canDeleteMsg(m) && (
-                      <button
-                        type="button"
-                        onClick={() => removeMessage(m)}
-                        disabled={editBusy || busy}
-                        style={{
-                          border: "none",
-                          background: T.track,
-                          color: T.inkSoft,
-                          fontWeight: 700,
-                          fontSize: 13,
-                          fontFamily: F,
-                          cursor: "pointer",
-                          borderRadius: 999,
-                          padding: "8px 12px",
-                        }}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
