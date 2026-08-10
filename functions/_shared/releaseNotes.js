@@ -5,8 +5,9 @@
    what’s new on the newly deployed build.
 
    Policy:
+   - Before merging to main, ASK whether this ship needs banner notes.
    - The reload banner still appears whenever the build id changes.
-   - Put bullets here ONLY for significant UI / UX ships.
+   - Put bullets here ONLY for significant UI / UX ships (mom-friendly why + how).
    - For small / quiet deploys, set bullets: [] so the banner is just
      “App update ready” with no What’s new section.
    - Do not leave old feature notes sitting around — they resurface on
