@@ -20,8 +20,11 @@
    ================================================================== */
 
 export const APP_RELEASE_NOTES = {
-  id: "",
+  id: "2026-08-goals-rhythm-v1",
   headline: "What’s new",
-  // Quiet deploy — no feature notes until the next significant UI ship.
-  bullets: [],
+  bullets: [
+    "Custom goals in your rhythm tracker — add up to 3 of your own (YOURS), plus a clearer Progress tab to see how each habit is going week by week. Shout-out to Sheila for suggesting this!",
+    "Group messaging is live in the app — we’re slowly moving group-forum chat off WhatsApp so conversations live in one place. Give it a try!",
+    "A new referral system is on the way — Callie will share more about this soon!",
+  ],
 };
