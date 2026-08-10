@@ -118,27 +118,37 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
       {error && (
         <div style={{ fontSize: 13, color: T.amber, marginBottom: 8, fontFamily: F }}>{error}</div>
       )}
-      <MessagesThread
-        title=""
-        subtitle=""
-        messages={messages}
-        selfId={adminUserId}
-        peerName={first}
-        senderNameById={client?.id ? { [client.id]: first } : null}
-        threadClientId={clientId}
-        showSenderNames
-        busy={busy}
-        onSend={send}
-        onEdit={edit}
-        onDelete={remove}
-        onReact={react}
-        onMarkRead={markRead}
-        showReadReceipts
-        allowVoiceMemo
-        enableReply
-        showPushPrompt={false}
-        compact
-      />
+      <div style={{
+        height: "min(70vh, 640px)",
+        maxHeight: "min(70vh, 640px)",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+      >
+        <MessagesThread
+          title=""
+          subtitle=""
+          messages={messages}
+          selfId={adminUserId}
+          peerName={first}
+          senderNameById={client?.id ? { [client.id]: first } : null}
+          threadClientId={clientId}
+          showSenderNames
+          busy={busy}
+          onSend={send}
+          onEdit={edit}
+          onDelete={remove}
+          onReact={react}
+          onMarkRead={markRead}
+          showReadReceipts
+          allowVoiceMemo
+          enableReply
+          showPushPrompt={false}
+          compact
+        />
+      </div>
     </Card>
   );
 }
