@@ -45,7 +45,7 @@ serve(async (req) => {
         header: `Hi ${first},`,
         body: `
           <p>${lead}</p>
-          <p><b>Your $149 has been fully refunded</b> — it'll land back on your card in a few days.</p>
+          <p><b>Your payment has been fully refunded</b> — it'll land back on your card in a few days.</p>
           <p>If you left your email for the waitlist, I'll personally check in when the time is right.</p>
           <p>Take care of yourself, mama.<br/>Callie</p>
         `,

@@ -30,18 +30,18 @@ serve(async (req) => {
         body: isFollowUp
           ? `
           <p>Just checking in — your Macros and Mamas spot is still open, and I'd love to have you.</p>
-          <p>Inside: macros built by me (not a calculator), our WhatsApp group Mon–Fri, and a short Monday voice note to set the week. Founding rate is $149 — it ends when this group fills.</p>
-          <p>Whenever you're ready, finish joining below. No pressure either way.</p>
+          <p>Inside: macros built by me (not a calculator), our WhatsApp group Mon–Fri, and a short Monday voice note to set the week.</p>
+          <p>Whenever you're ready, finish signing up below to lock in your spot. No pressure either way.</p>
           <p>Callie</p>
           <p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you started an account. Reply and ask me to stop anytime.</p>
         `
           : `
           <p>You started joining Macros and Mamas — I'm glad you're here.</p>
-          <p>When you're ready: personalized macros I build myself, our moms WhatsApp group, and a Monday voice note to keep it simple. One button and you're in.</p>
+          <p>When you're ready: personalized macros I build myself, our moms WhatsApp group, and a Monday voice note to keep it simple. Finish signing up below to lock in your spot.</p>
           <p>Callie</p>
           <p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you started an account. Reply and ask me to stop anytime.</p>
         `,
-        cta_text: "Finish joining — $149",
+        cta_text: "Finish signing up — lock in your spot",
         cta_url: `${APP_URL}/join`,
       }),
     });

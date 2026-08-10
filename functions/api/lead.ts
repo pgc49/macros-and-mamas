@@ -13,6 +13,12 @@ import {
   feedingLine,
   segmentForAnswers,
 } from '../_shared/rangesEngine.mjs';
+import {
+  APP_URL,
+  FROM_CALLIE,
+  escapeHtml,
+  renderEmail,
+} from '../_shared/emailLayout.mjs';
 
 interface Env {
   WAITLIST?: KVNamespace;
@@ -271,16 +277,22 @@ async function sendRangesEmail(
     console.error('[lead] missing RESEND_API_KEY');
     return;
   }
-  const from =
-    env.LEAD_FROM_EMAIL || 'Callie at Macros and Mamas <calista@nourishwithcalista.com>';
+  const from = env.LEAD_FROM_EMAIL || FROM_CALLIE;
   const name = opts.firstName || 'Mama';
+  const joinUrl = `${APP_URL}/join?from=quiz`;
+  const signupCta = {
+    cta_text: 'Finish signing up — lock in your spot',
+    cta_url: joinUrl,
+  };
 
-  let html = '';
   let subject = '';
+  let header = `Hi ${name},`;
+  let body = '';
+  let cta: { cta_text?: string; cta_url?: string } = {};
 
   if (opts.segment === 'pregnancy_nurture') {
     subject = `${name}, a note for this season`;
-    html = `<p>Hi ${name},</p>
+    body = `
 <p>Congratulations. Pregnancy is an abundance season — not a cut. We're not sending macro ranges right now on purpose.</p>
 <p>When you're ready postpartum, come back for your ranges. We'll keep a light note in your inbox with what to expect when the time is right.</p>
 <p>With care,<br/>Callie</p>`;
@@ -289,17 +301,17 @@ async function sendRangesEmail(
     const veganBands = opts.ranges
       ? `<p>Here are your bands — built the same way Callie builds them for the program:</p>
 <ul>
-<li><strong>Protein:</strong> ${opts.ranges.protein}</li>
-<li><strong>Carbs:</strong> ${opts.ranges.carbs}</li>
-<li><strong>Fat:</strong> ${opts.ranges.fat}</li>
-<li><strong>Calories land around:</strong> ${opts.ranges.calories}</li>
+<li><strong>Protein:</strong> ${escapeHtml(opts.ranges.protein)}</li>
+<li><strong>Carbs:</strong> ${escapeHtml(opts.ranges.carbs)}</li>
+<li><strong>Fat:</strong> ${escapeHtml(opts.ranges.fat)}</li>
+<li><strong>Calories land around:</strong> ${escapeHtml(opts.ranges.calories)}</li>
 </ul>`
       : '';
-    html = `<p>Hi ${name},</p>
+    body = `
 <p><strong>A note on protein.</strong> Callie's program emphasizes animal protein — meat, dairy, and eggs. Hitting these protein targets on a fully vegan diet can be challenging. We'd rather be honest up front.</p>
 ${veganBands}
 <p>If you still want to talk through whether the program is a fit, reply to this email. No hard sell.</p>
-<p>— Callie</p>`;
+<p>Callie</p>`;
   } else if (opts.ranges) {
     subject = `Your ranges, ${name}`;
     const early = opts.earlyPp
@@ -312,32 +324,42 @@ ${veganBands}
       opts.monthsPostpartum === 'not_postpartum'
         ? ''
         : feedingLine(opts.feeding as 'exclusive');
-    const feedHtml = feed ? `<p>${feed}</p>` : '';
-    html = `<p>Hi ${name},</p>
+    const feedHtml = feed ? `<p>${escapeHtml(feed)}</p>` : '';
+    body = `
 ${early}
 ${reviewNote}
 <p>Here are your bands — built the same way Callie builds them for the program:</p>
 <ul>
-<li><strong>Protein:</strong> ${opts.ranges.protein}</li>
-<li><strong>Carbs:</strong> ${opts.ranges.carbs}</li>
-<li><strong>Fat:</strong> ${opts.ranges.fat}</li>
-<li><strong>Calories land around:</strong> ${opts.ranges.calories}</li>
+<li><strong>Protein:</strong> ${escapeHtml(opts.ranges.protein)}</li>
+<li><strong>Carbs:</strong> ${escapeHtml(opts.ranges.carbs)}</li>
+<li><strong>Fat:</strong> ${escapeHtml(opts.ranges.fat)}</li>
+<li><strong>Calories land around:</strong> ${escapeHtml(opts.ranges.calories)}</li>
 </ul>
 ${feedHtml}
 <p>These are bands, not one rigid number. Busier day → eat toward the top. Quieter day → the bottom. Both count as a win. Lead with protein; the rest gets easier.</p>
-<p><strong>You unlocked the early rate.</strong> Pre-pay $249 ($50 off full price) to lock your spot in the August 31 group: <a href="https://www.macrosandmamas.com/join?from=quiz">macrosandmamas.com/join</a> — use this same email at checkout.</p>
+<p><strong>Your next step:</strong> create your account and finish checkout to lock in your spot. Use this same email so your ranges stay attached.</p>
 <p>Ranges above are a preview. If you join, Callie builds and approves your final numbers before you start.</p>
-<p>— Callie</p>`;
+<p>Callie</p>
+<p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you took the ranges quiz. Reply anytime.</p>`;
+    cta = signupCta;
   } else if (opts.needsReview) {
     subject = `${name}, Callie wants to look at your ranges personally`;
-    html = `<p>Hi ${name},</p>
+    body = `
 <p>Your ranges need Callie's eyes on them. A couple of your answers mean an automated band isn't the right call. Callie will review this herself and send your ranges within 24 hours.</p>
-<p>You still unlocked the early rate — pre-pay $249 to lock your spot anytime: <a href="https://www.macrosandmamas.com/join?from=quiz">macrosandmamas.com/join</a> (use this same email).</p>
-<p>— The Macros and Mamas team</p>`;
+<p><strong>In the meantime:</strong> create your account and finish checkout to lock in your spot — use this same email so everything stays attached.</p>
+<p>Callie</p>
+<p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you took the ranges quiz. Reply anytime.</p>`;
+    cta = signupCta;
   } else {
     subject = `Thanks, ${name}`;
-    html = `<p>Hi ${name},</p><p>Thanks for checking in. We'll be in touch.</p><p>— Callie</p>`;
+    body = `<p>Thanks for checking in. We'll be in touch.</p><p>Callie</p>`;
   }
+
+  const html = renderEmail({
+    header,
+    body,
+    ...cta,
+  });
 
   try {
     const resp = await fetch('https://api.resend.com/emails', {
@@ -349,6 +371,7 @@ ${feedHtml}
       body: JSON.stringify({
         from,
         to: [opts.email],
+        reply_to: 'calista@nourishwithcalista.com',
         subject,
         html,
       }),

@@ -233,4 +233,13 @@ function copyMarketingFunctions() {
   console.log(
     "[overlay-marketing] functions/_shared/rangesEngine.mjs → marketing/src/lib",
   );
+  const emailShim = join(root, "functions/_shared/emailLayout.mjs");
+  writeFileSync(
+    emailShim,
+    "/** Re-export branded email layout for SPA Pages Functions (www cutover). */\n" +
+      "export * from '../../marketing/src/lib/emailLayout.mjs';\n",
+  );
+  console.log(
+    "[overlay-marketing] functions/_shared/emailLayout.mjs → marketing/src/lib",
+  );
 }
