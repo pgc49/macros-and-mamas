@@ -358,7 +358,14 @@ async function loadSelf(env, userId, authHeader) {
 async function checkIdeaLimit(env, userId) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!base || !key) return { ok: true };
+  if (!base || !key) {
+    console.error("meal-idea rate limit missing service role");
+    return {
+      ok: false,
+      message: "Meal ideas unavailable right now. Add from the bank or My meals, or try again shortly.",
+      retryAfterSeconds: 60,
+    };
+  }
 
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const url =
@@ -373,12 +380,17 @@ async function checkIdeaLimit(env, userId) {
       range: "0-0",
     },
   });
-  let dayCount = 0;
-  if (resp.ok) {
-    const contentRange = resp.headers.get("content-range") || "";
-    const m = contentRange.match(/\/(\d+|\*)/);
-    if (m && m[1] !== "*") dayCount = Number(m[1]) || 0;
+  if (!resp.ok) {
+    console.error("meal-idea rate limit count failed", resp.status);
+    return {
+      ok: false,
+      message: "Meal ideas unavailable right now. Add from the bank or My meals, or try again shortly.",
+      retryAfterSeconds: 60,
+    };
   }
+  const contentRange = resp.headers.get("content-range") || "";
+  const m = contentRange.match(/\/(\d+|\*)/);
+  const dayCount = m && m[1] !== "*" ? Number(m[1]) || 0 : 0;
   if (dayCount >= MAX_PER_DAY) {
     return {
       ok: false,
