@@ -16,7 +16,7 @@ import {
 import { T, F, FD } from "../theme/tokens";
 import { addDaysIso, localDateIso, rateOf } from "../utils/dates";
 import { buildMacroHistory, buildTrends, buildWaterHistory } from "../utils/progressSeries";
-import { programStartWeekIso } from "../lib/cohorts";
+import { resolveProgramStartWeekIso } from "../lib/cohorts";
 import { mergeGoalItems } from "../lib/goals";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
@@ -718,7 +718,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 waterGoalOz={clientProgress.waterGoalOz}
                 checksByWeek={clientProgress.checksByWeek}
                 goalItems={clientProgress.goalItems}
-                programStartWeek={programStartWeekIso(sel.cohort_label)}
+                programStartWeek={resolveProgramStartWeekIso(sel.cohort_label)}
               />
               {!clientProgress.trends.locked && clientProgress.trends.items?.length > 0 && (
                 <Card style={{ marginTop: 12 }}>
