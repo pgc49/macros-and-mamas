@@ -7,7 +7,7 @@ import { supabase } from "../lib/supabase";
 
 function displayName(c) {
   if (!c) return "Mama";
-  return fullName(c) || c.name || c.email || "Mama";
+  return fullName(c) || c.name || c.firstName || c.email || "Mama";
 }
 
 function isAdminProfile(c) {
