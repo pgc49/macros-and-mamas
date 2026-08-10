@@ -9,7 +9,6 @@ import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from ".
 import { resolveLogSlot } from "./utils/mealSlots";
 import {
   adherenceForWeek,
-  buildHabitHistory,
   buildMacroHistory,
   buildTrends,
   buildWaterHistory,
@@ -1446,7 +1445,6 @@ export default function App() {
       weeklyRate={weeklyRate}
       trends={trends}
       macroHistory={macroHistory}
-      habitHistory={habitHistory}
       waterHistory={waterHistory}
       mealFilter={mealFilter}
       setMealFilter={setMealFilter}

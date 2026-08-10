@@ -50,15 +50,17 @@ export const labStandalonePrice = 600;
 export const labPanelPrice = 200;
 
 /**
- * Absolute product-app URLs so marketing *.pages.dev previews can click
- * through to www without DNS cutover. At www cutover these still work.
+ * Canonical / OG base (always production www).
+ * App CTAs below are same-origin relative so SPA preview overlays
+ * (cursor-*.macros-and-mamas.pages.dev) stay on the preview host —
+ * absolute www URLs were kicking preview testers into production.
  */
 export const siteUrl = 'https://www.macrosandmamas.com';
-export const enrollUrl = `${siteUrl}/join`;
-export const signInUrl = `${siteUrl}/signin`;
-export const termsUrl = `${siteUrl}/terms`;
-export const privacyUrl = `${siteUrl}/privacy`;
-export const dashboardUrl = `${siteUrl}/dashboard`;
+export const enrollUrl = '/join';
+export const signInUrl = '/signin';
+export const termsUrl = '/terms';
+export const privacyUrl = '/privacy';
+export const dashboardUrl = '/dashboard';
 /** Lead magnet — same origin on marketing host (preview or www after cutover). */
 export const quizUrl = '/quiz';
 
