@@ -9,13 +9,13 @@ import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from ".
 import { resolveLogSlot } from "./utils/mealSlots";
 import {
   adherenceForWeek,
-  buildHabitHistory,
   buildMacroHistory,
   buildTrends,
   buildWaterHistory,
   progWeekNum as weekNumberFromEarliest,
   weekKeysFromChecks,
 } from "./utils/progressSeries";
+import { isBeforeGoalCreated, isFutureDayInWeek, mergeGoalItems } from "./lib/goals";
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard, goMarketingHome } from "./routing";
 import { needsMembershipPaywall } from "./lib/membershipAccess";
 import { SalesPage } from "./views/SalesPage";
@@ -262,6 +262,7 @@ export default function App() {
   const [waterLogsByDate, setWaterLogsByDate] = useState({});
   const [waterBusy, setWaterBusy] = useState(false);
   const [customMeals, setCustomMeals] = useState([]);
+  const [customGoals, setCustomGoals] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const routedAfterLoad = useRef(false);
 
@@ -345,6 +346,7 @@ export default function App() {
                 console.warn("loadWaterLogsWeek failed", wErr);
               }
             }
+            if (!cancelled) setCustomGoals(s.customGoals || []);
             try {
               const customs = await db.loadCustomMeals();
               if (!cancelled) setCustomMeals(customs);
@@ -374,6 +376,7 @@ export default function App() {
           setWeekPlanSource("manual");
           setWeekPlanWeekStart(wkStartOf());
           setCustomMeals([]);
+          setCustomGoals([]);
         }
       } catch (e) {
         console.error("initial load failed", e);
@@ -1282,8 +1285,13 @@ export default function App() {
     return ((first.w - last.w) / days) * 7;
   }, [weighins]);
 
+  const goalItems = useMemo(() => mergeGoalItems(customGoals), [customGoals]);
+
   const toggleCheck = async (itemId, day) => {
     if (viewWk !== curWk && !editPast) return;
+    if (viewWk === curWk && isFutureDayInWeek(viewWk, day, localDateIso())) return;
+    const goalItem = goalItems.find((g) => g.id === itemId);
+    if (goalItem && isBeforeGoalCreated(goalItem, viewWk, day)) return;
     const key = `${itemId}|${day}`;
     const prev = !!(checksByWeek[viewWk] || {})[key];
     const next = !prev;
@@ -1296,7 +1304,24 @@ export default function App() {
     }
   };
 
-  const adherenceFor = (wk) => adherenceForWeek(checksByWeek, wk);
+  const addCustomGoal = async (payload) => {
+    const row = await db.createCustomGoal(payload);
+    setCustomGoals((prev) => [...prev, row]);
+    return row;
+  };
+
+  const updateCustomGoal = async (id, payload) => {
+    const row = await db.updateCustomGoal(id, payload);
+    setCustomGoals((prev) => prev.map((g) => (g.id === id ? row : g)));
+    return row;
+  };
+
+  const archiveCustomGoal = async (id) => {
+    await db.archiveCustomGoal(id);
+    setCustomGoals((prev) => prev.filter((g) => g.id !== id));
+  };
+
+  const adherenceFor = (wk) => adherenceForWeek(checksByWeek, wk, goalItems);
 
   const wkKeys = useMemo(
     () => weekKeysFromChecks(checksByWeek, curWk),
@@ -1306,8 +1331,8 @@ export default function App() {
   const progWeekNum = (wk) => weekNumberFromEarliest(wk, earliestWk);
 
   const trends = useMemo(
-    () => buildTrends(checksByWeek, curWk),
-    [checksByWeek, curWk],
+    () => buildTrends(checksByWeek, curWk, goalItems),
+    [checksByWeek, curWk, goalItems],
   );
 
   /** Daily macro totals for Progress charts (logged days only, last ~28 days). */
@@ -1320,12 +1345,6 @@ export default function App() {
   const waterHistory = useMemo(
     () => buildWaterHistory(waterLogsByDate, waterOz),
     [waterLogsByDate, waterOz],
-  );
-
-  /** Weekly habit adherence series for Progress chart. */
-  const habitHistory = useMemo(
-    () => buildHabitHistory(checksByWeek, curWk),
-    [checksByWeek, curWk],
   );
 
   if (authLoading || (user && !loaded)) {
@@ -1415,6 +1434,10 @@ export default function App() {
       setEditPast={setEditPast}
       checksByWeek={checksByWeek}
       toggleCheck={toggleCheck}
+      goalItems={goalItems}
+      onAddCustomGoal={addCustomGoal}
+      onUpdateCustomGoal={updateCustomGoal}
+      onArchiveCustomGoal={archiveCustomGoal}
       adherenceFor={adherenceFor}
       progWeekNum={progWeekNum}
       earliestWk={earliestWk}
@@ -1424,7 +1447,6 @@ export default function App() {
       weeklyRate={weeklyRate}
       trends={trends}
       macroHistory={macroHistory}
-      habitHistory={habitHistory}
       waterHistory={waterHistory}
       mealFilter={mealFilter}
       setMealFilter={setMealFilter}

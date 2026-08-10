@@ -99,8 +99,8 @@ const jsonLd = {
       memberGuard && (
         <script is:inline define:vars={{ dashboardUrl }}>
           /* Sync member / PWA guard — must run before paint when possible.
-             Absolute www URL so marketing *.pages.dev previews send members
-             to the product app, not a missing path on the marketing host. */
+             Same-origin /dashboard so SPA preview overlays keep the session
+             on the preview host (not production www). */
           (function () {
             try {
               var standalone =
@@ -246,21 +246,19 @@ const jsonLd = {
             }
           });
 
-          /* Pre-cutover handoff: marketing may be on *.pages.dev while Join is on
-             www — sessionStorage does not cross origins, so append first-touch
-             params onto product-app links (/join, /signin). Safe after cutover too. */
+          /* Append first-touch attribution onto /join and /signin (same-origin
+             relative links on www + SPA previews; also absolute www if present). */
           function withAttr(href) {
             try {
               var u = new URL(href, location.href);
-              var host = (u.hostname || '').toLowerCase();
-              if (
-                host !== 'www.macrosandmamas.com' &&
-                host !== 'macrosandmamas.com'
-              ) {
-                return href;
-              }
               var path = (u.pathname || '').replace(/\/$/, '') || '/';
               if (path !== '/join' && path !== '/signin') return href;
+              var host = (u.hostname || '').toLowerCase();
+              var here = (location.hostname || '').toLowerCase();
+              var isProdApp =
+                host === 'www.macrosandmamas.com' || host === 'macrosandmamas.com';
+              var isSameOrigin = host === here;
+              if (!isProdApp && !isSameOrigin) return href;
               [
                 'utm_source',
                 'utm_medium',
@@ -278,6 +276,10 @@ const jsonLd = {
               }
               if (merged.landing_path && !u.searchParams.get('mm_lp')) {
                 u.searchParams.set('mm_lp', merged.landing_path);
+              }
+              // Prefer path+search on same origin so we never bounce previews to www.
+              if (isSameOrigin) {
+                return u.pathname + u.search + u.hash;
               }
               return u.toString();
             } catch (e) {

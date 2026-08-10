@@ -1,12 +1,13 @@
 import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
-import { SKELETONS, RECIPES, DEFAULT_ITEMS, DAYS, DAY_LABEL, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
+import { SKELETONS, RECIPES, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
 import { Shell, Card, Chip, RangeBand, rangeState } from "../components/ui";
 import { formatRangeProgress } from "../utils/rangeProgress";
 import { MealLogCard } from "../components/MealLogCard";
 import { MealRecipeCard } from "../components/MealRecipeCard";
 import { WaterLogCard } from "../components/WaterLogCard";
+import { GoalsCard } from "../components/GoalsCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
@@ -34,9 +35,11 @@ export function ClientApp({
   mealLogDate, mealLogWeekStart, mealLogsByDate, selectMealLogDate, changeMealWeek,
   waterLogsByDate, waterBusy, onAddWater, onUndoWater, onChangeBottleOz,
   viewWk, setViewWk, curWk, editPast, setEditPast,
-  checksByWeek, toggleCheck, adherenceFor, progWeekNum, earliestWk,
+  checksByWeek, toggleCheck, goalItems = [],
+  onAddCustomGoal, onUpdateCustomGoal, onArchiveCustomGoal,
+  adherenceFor, progWeekNum, earliestWk,
   weighins, logWeighin, deleteWeighin, weeklyRate, trends,
-  macroHistory, habitHistory, waterHistory = [],
+  macroHistory, waterHistory = [],
   mealFilter, setMealFilter,
   mealPlanMode = "default",
   publishedPlan = null,
@@ -290,7 +293,7 @@ export function ClientApp({
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 10px", gap: 10 }}>
                   <p style={{ fontSize: 13, color: T.inkSoft, margin: 0, flex: 1 }}>
                     {isCur
-                      ? "Tap the days as you go. Strength days are yours to move."
+                      ? "Tap the days as you go. Add your own goals below — Callie's stay put."
                       : editPast
                         ? "Unlocked — fill in what you actually did, then lock it back up."
                         : "A look back. Forgot to log a day? Unlock it below."}
@@ -304,49 +307,23 @@ export function ClientApp({
                   )}
                 </div>
 
-                <Card>
-                  {DEFAULT_ITEMS.map((it) => {
-                    const strengthDone = it.daily ? 0 : DAYS.filter((d) => vChecks[`${it.id}|${d}`]).length;
-                    return (
-                      <div key={it.id} style={{ padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
-                          {it.label}
-                          {it.id === "water" && waterOz ? <span style={{ color: T.inkSoft, fontWeight: 400 }}> · {waterOz} oz</span> : null}
-                          {it.id === "strength" && (
-                            <span style={{ color: T.inkSoft, fontWeight: 400 }}>
-                              {" "}· goal 3× a week{strengthDone >= 3 ? " · ✓ goal hit" : ""}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          {DAYS.map((d) => {
-                            const done = vChecks[`${it.id}|${d}`];
-                            const isTodayDot = isCur && d === todayWeekday;
-                            return (
-                              <button key={d}
-                                onClick={() => { if (editable) toggleCheck(it.id, d); }}
-                                title={isTodayDot ? "Today" : undefined}
-                                aria-current={isTodayDot ? "date" : undefined}
-                                style={{
-                                  width: 36, height: 36, borderRadius: "50%", fontSize: 12, fontWeight: 700,
-                                  cursor: editable ? "pointer" : "default",
-                                  border: `1.5px solid ${done ? T.sage : isTodayDot ? T.accent : T.border}`,
-                                  background: done ? T.sage : "#fff",
-                                  color: done ? "#fff" : isTodayDot ? T.accentDeep : T.ink,
-                                  boxShadow: isTodayDot && !done ? `0 0 0 3px ${T.accentSoft}` : "none",
-                                  opacity: editable ? 1 : 0.85,
-                                }}>{DAY_LABEL[d]}</button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div style={{ paddingTop: 12, fontSize: 13, color: T.inkSoft }}>
-                    {isCur ? "Week so far: " : "This week finished at: "}
-                    <b style={{ color: vAdh >= 70 ? T.sage : T.ink }}>{vAdh}%</b> — progress, not perfection.
-                  </div>
-                </Card>
+                <GoalsCard
+                  items={goalItems}
+                  weekStart={viewWk}
+                  isCurrentWeek={isCur}
+                  editable={editable}
+                  checks={vChecks}
+                  waterOz={waterOz}
+                  todayWeekday={todayWeekday}
+                  onToggle={toggleCheck}
+                  onAddCustom={onAddCustomGoal}
+                  onUpdateCustom={onUpdateCustomGoal}
+                  onArchiveCustom={onArchiveCustomGoal}
+                />
+                <div style={{ padding: "12px 4px 0", fontSize: 13, color: T.inkSoft }}>
+                  {isCur ? "Week so far: " : "This week finished at: "}
+                  <b style={{ color: vAdh >= 70 ? T.sage : T.ink }}>{vAdh}%</b> — progress, not perfection.
+                </div>
               </>
             );
           })()}
@@ -540,43 +517,44 @@ export function ClientApp({
           <ProgressCharts
             macros={macros}
             macroHistory={macroHistory}
-            habitHistory={habitHistory}
             waterHistory={waterHistory}
             waterGoalOz={waterOz}
+            checksByWeek={checksByWeek}
+            goalItems={goalItems}
+            curWk={curWk}
+            earliestWk={earliestWk}
           />
 
-          <Card style={{ marginTop: 12 }}>
-            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Your 4-week trends</div>
-            {trends.locked ? (
-              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6 }}>
-                Unlocks after four weeks of tracking so the patterns are real, not noise. You're at <b style={{ color: T.ink }}>{trends.n} of 4</b> — keep checking those boxes.
-              </div>
-            ) : (
-              <>
-                <div style={{ fontSize: 13.5, lineHeight: 1.6, color: T.inkSoft, marginBottom: 10 }}>
-                  Across your last {trends.n} weeks, your consistency is{" "}
-                  <b style={{ color: trends.delta >= 0 ? T.sage : T.amber }}>
-                    {trends.delta >= 3 ? "climbing" : trends.delta <= -3 ? "slipping" : "holding steady"}
-                  </b>
-                  {" "}({trends.overall.map((o) => `${o}%`).join(" → ")}).
-                </div>
-                {trends.items.map((i) => (
-                  <div key={i.label} style={{ marginBottom: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 3 }}>
-                      <span style={{ color: T.ink, fontWeight: 600 }}>{i.label}</span>
-                      <span style={{ color: T.inkSoft }}>{i.strength ? `${i.avgSessions.toFixed(1)}× / wk (goal 3)` : `${i.pct}%`}</span>
-                    </div>
-                    <div style={{ height: 6, background: T.track, borderRadius: 99 }}>
-                      <div style={{ height: 6, borderRadius: 99, width: `${i.strength ? Math.min((i.avgSessions / 3) * 100, 100) : i.pct}%`, background: (i.strength ? i.avgSessions >= 3 : i.pct >= 70) ? T.sage : T.accent }} />
-                    </div>
+          {!trends.locked && trends.items?.length > 0 && (
+            <Card style={{ marginTop: 12 }}>
+              <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>By goal</div>
+              <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
+                How each habit is landing across your finished weeks — including any YOURS goals you added.
+              </p>
+              {trends.items.map((i) => (
+                <div key={i.label} style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 3 }}>
+                    <span style={{ color: T.ink, fontWeight: 600 }}>{i.label}</span>
+                    <span style={{ color: T.inkSoft }}>
+                      {i.strength
+                        ? `${i.avgSessions.toFixed(1)}× / wk (goal ${i.nTarget || 3})`
+                        : `${i.pct}%`}
+                    </span>
                   </div>
-                ))}
-                <div style={{ background: T.accentSoft, borderRadius: 12, padding: "10px 14px", marginTop: 10, fontSize: 13, color: T.accentDeep, lineHeight: 1.55 }}>
-                  💬 Strongest habit: <b>{trends.best.label.toLowerCase()}</b> ({trends.best.pct}%). The one to love on next: <b>{trends.worst.label.toLowerCase()}</b> ({trends.worst.pct}%) — pick your easiest day and start there.
+                  <div style={{ height: 6, background: T.track, borderRadius: 99 }}>
+                    <div
+                      style={{
+                        height: 6,
+                        borderRadius: 99,
+                        width: `${i.strength ? Math.min((i.avgSessions / (i.nTarget || 3)) * 100, 100) : i.pct}%`,
+                        background: (i.strength ? i.avgSessions >= (i.nTarget || 3) : i.pct >= 70) ? T.sage : T.accent,
+                      }}
+                    />
+                  </div>
                 </div>
-              </>
-            )}
-          </Card>
+              ))}
+            </Card>
+          )}
 
           <Card style={{ marginTop: 12 }}>
             <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Before + after photos</div>

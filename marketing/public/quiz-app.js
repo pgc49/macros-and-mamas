@@ -5,7 +5,7 @@
   const root = document.getElementById('quiz-root');
   if (!root) return;
 
-  const enrollUrl = root.dataset.enrollUrl || 'https://www.macrosandmamas.com/join';
+  const enrollUrl = root.dataset.enrollUrl || '/join';
   const offerPrice = Number(root.dataset.offerPrice || 249);
   const fullPrice = Number(root.dataset.fullPrice || 299);
   const weeklyPrice = Number(root.dataset.weeklyPrice || Math.round(offerPrice / 8));
@@ -640,7 +640,7 @@
 
   function checkoutHref() {
     const email = String(state.contact.email || '').trim().toLowerCase();
-    const joinBase = String(enrollUrl || 'https://www.macrosandmamas.com/join')
+    const joinBase = String(enrollUrl || '/join')
       .replace(/\?.*$/, '')
       .replace(/\/signin\/?$/i, '/join');
     const params = new URLSearchParams({ from: 'quiz' });
@@ -648,7 +648,7 @@
     try {
       if (email) sessionStorage.setItem('mm_quiz_email', email);
     } catch (e) { /* private mode */ }
-    return `${joinBase || 'https://www.macrosandmamas.com/join'}?${params.toString()}`;
+    return `${joinBase || '/join'}?${params.toString()}`;
   }
 
   function stickyCheckoutHtml() {

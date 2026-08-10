@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase";
-import { DEFAULT_ITEMS, DAYS } from "../content/data";
+import { adherenceForItems, programGoalItems } from "../lib/goals";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
 
@@ -124,21 +124,14 @@ function rowToProfile(row) {
 }
 
 function adherenceFromChecks(checkRows, weekStart) {
-  const ch = {};
+  const checksByWeek = { [weekStart]: {} };
   (checkRows || []).forEach((r) => {
-    if (r.week_start === weekStart) ch[`${r.item_id}|${r.day}`] = true;
-  });
-  let done = 0, total = 0;
-  DEFAULT_ITEMS.forEach((it) => {
-    if (it.daily) {
-      DAYS.forEach((d) => { total += 1; if (ch[`${it.id}|${d}`]) done += 1; });
-    } else {
-      total += 3;
-      const sc = DAYS.filter((d) => ch[`${it.id}|${d}`]).length;
-      done += Math.min(sc, 3);
+    if (r.week_start === weekStart) {
+      checksByWeek[weekStart][`${r.item_id}|${r.day}`] = true;
     }
   });
-  return total ? Math.round((done / total) * 100) : 0;
+  // Roster % uses program goals only (custom goals are per-mama coaching signal).
+  return adherenceForItems(checksByWeek, weekStart, programGoalItems());
 }
 
 /** Approved = macros.approved, or profiles.status already flipped to active
@@ -641,17 +634,29 @@ export const db = {
       { data: macrosRow, error: mErr },
       { data: checkRows, error: cErr },
       { data: weighRows, error: wErr },
+      customGoalsRes,
     ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
       supabase.from("macros").select("*").eq("profile_id", uid).maybeSingle(),
       supabase.from("checkins").select("week_start, item_id, day").eq("profile_id", uid),
       supabase.from("weighins").select("date, weight").eq("profile_id", uid).order("date", { ascending: true }),
+      supabase
+        .from("custom_goals")
+        .select("id, title, subtitle, frequency, n_target, sort, archived_at, created_at")
+        .eq("profile_id", uid)
+        .is("archived_at", null)
+        .order("created_at", { ascending: true }),
     ]);
 
     if (pErr) throw pErr;
     if (mErr) throw mErr;
     if (cErr) throw cErr;
     if (wErr) throw wErr;
+    // Non-fatal if migration 056 not applied yet on a preview env.
+    const customGoals = customGoalsRes?.error ? [] : (customGoalsRes?.data || []);
+    if (customGoalsRes?.error) {
+      console.warn("custom_goals load failed", customGoalsRes.error);
+    }
 
     // Meal logs are non-fatal: missing via/source columns must not block dashboard.
     const weekStart = wkStartOf();
@@ -725,6 +730,7 @@ export const db = {
       mealLogWeekStart: weekStart,
       mealHistoryByDate: historyByDate,
       waterLogsByDate: waterByDate,
+      customGoals,
     };
   },
 
@@ -763,13 +769,19 @@ export const db = {
     const today = localDateIso();
     const start = addDaysIso(today, -(Math.max(1, days) - 1));
 
-    const [{ data: checkRows, error: cErr }, mealRows, waterByDate] = await Promise.all([
+    const [{ data: checkRows, error: cErr }, mealRows, waterByDate, customGoalsRes] = await Promise.all([
       supabase
         .from("checkins")
         .select("week_start, item_id, day")
         .eq("profile_id", clientId),
       loadMealLogsRange(clientId, start, today),
       loadWaterLogsRange(clientId, start, today),
+      supabase
+        .from("custom_goals")
+        .select("id, title, subtitle, frequency, n_target, sort, archived_at, created_at")
+        .eq("profile_id", clientId)
+        .is("archived_at", null)
+        .order("created_at", { ascending: true }),
     ]);
     if (cErr) throw cErr;
 
@@ -784,6 +796,7 @@ export const db = {
       mealHistoryByDate: groupMealRowsByDate(mealRows),
       waterLogsByDate: waterByDate,
       checksByWeek,
+      customGoals: customGoalsRes?.error ? [] : (customGoalsRes?.data || []),
       start,
       end: today,
     };
@@ -928,6 +941,69 @@ export const db = {
         .eq("day", day);
       if (error) throw error;
     }
+  },
+
+  async listCustomGoals(profileId = null) {
+    const uid = profileId || (await requireUserId());
+    const { data, error } = await supabase
+      .from("custom_goals")
+      .select("id, title, subtitle, frequency, n_target, sort, archived_at, created_at, profile_id")
+      .eq("profile_id", uid)
+      .is("archived_at", null)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async createCustomGoal({ title, subtitle = null, frequency = "daily", n_target = null }) {
+    const uid = await requireUserId();
+    const row = {
+      profile_id: uid,
+      title: String(title || "").trim().slice(0, 30),
+      subtitle: subtitle ? String(subtitle).trim().slice(0, 20) : null,
+      frequency: frequency === "n_per_week" ? "n_per_week" : "daily",
+      n_target: frequency === "n_per_week" ? Number(n_target) || 3 : null,
+      sort: 100,
+    };
+    const { data, error } = await supabase
+      .from("custom_goals")
+      .insert(row)
+      .select("id, title, subtitle, frequency, n_target, sort, archived_at, created_at")
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateCustomGoal(id, { title, subtitle = null, frequency = "daily", n_target = null }) {
+    const uid = await requireUserId();
+    const patch = {
+      title: String(title || "").trim().slice(0, 30),
+      subtitle: subtitle ? String(subtitle).trim().slice(0, 20) : null,
+      frequency: frequency === "n_per_week" ? "n_per_week" : "daily",
+      n_target: frequency === "n_per_week" ? Number(n_target) || 3 : null,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabase
+      .from("custom_goals")
+      .update(patch)
+      .eq("id", id)
+      .eq("profile_id", uid)
+      .is("archived_at", null)
+      .select("id, title, subtitle, frequency, n_target, sort, archived_at, created_at")
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async archiveCustomGoal(id) {
+    const uid = await requireUserId();
+    const { error } = await supabase
+      .from("custom_goals")
+      .update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("profile_id", uid)
+      .is("archived_at", null);
+    if (error) throw error;
   },
 
   async addWeighin(weight, date = localDateIso()) {

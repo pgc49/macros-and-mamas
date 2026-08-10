@@ -15,7 +15,8 @@ import {
 } from "recharts";
 import { T, F, FD } from "../theme/tokens";
 import { addDaysIso, localDateIso, rateOf } from "../utils/dates";
-import { buildHabitHistory, buildMacroHistory, buildTrends, buildWaterHistory } from "../utils/progressSeries";
+import { buildMacroHistory, buildTrends, buildWaterHistory } from "../utils/progressSeries";
+import { mergeGoalItems } from "../lib/goals";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
 import { Shell, Card, Btn, inputStyle } from "../components/ui";
@@ -375,12 +376,15 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
         if (cancelled) return;
         const client = (roster || []).find((c) => c.id === adminSel);
         const waterGoal = client?.goalWeight != null ? Math.round(Number(client.goalWeight) / 2) : 0;
+        const goalItems = mergeGoalItems(payload.customGoals || []);
         setClientProgress({
           macroHistory: buildMacroHistory(payload.mealHistoryByDate),
-          habitHistory: buildHabitHistory(payload.checksByWeek),
           waterHistory: buildWaterHistory(payload.waterLogsByDate || {}, waterGoal),
           waterGoalOz: waterGoal,
-          trends: buildTrends(payload.checksByWeek),
+          trends: buildTrends(payload.checksByWeek, undefined, goalItems),
+          customGoals: payload.customGoals || [],
+          checksByWeek: payload.checksByWeek || {},
+          goalItems,
         });
       })
       .catch((e) => {
@@ -688,48 +692,62 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           )}
           {clientProgress && (
             <>
+              {(clientProgress.customGoals || []).length > 0 && (
+                <Card style={{ marginTop: 12 }}>
+                  <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Her custom goals</div>
+                  <p style={{ fontSize: 13, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.5 }}>
+                    Coaching signal — what she added on top of the program checklist.
+                  </p>
+                  {clientProgress.customGoals.map((g) => (
+                    <div key={g.id} style={{ fontSize: 14, marginBottom: 8, lineHeight: 1.45 }}>
+                      <b style={{ color: T.ink }}>{g.title}</b>
+                      {g.subtitle ? <span style={{ color: T.inkSoft }}> · {g.subtitle}</span> : null}
+                      <span style={{ color: T.inkSoft, fontSize: 12.5 }}>
+                        {" "}· {g.frequency === "daily" ? "Daily" : `${g.n_target}× / week`}
+                      </span>
+                    </div>
+                  ))}
+                </Card>
+              )}
               <ProgressCharts
                 audience="admin"
                 macros={sel.macros}
                 macroHistory={clientProgress.macroHistory}
-                habitHistory={clientProgress.habitHistory}
                 waterHistory={clientProgress.waterHistory}
                 waterGoalOz={clientProgress.waterGoalOz}
+                checksByWeek={clientProgress.checksByWeek}
+                goalItems={clientProgress.goalItems}
               />
-              <Card style={{ marginTop: 12 }}>
-                <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Her 4-week trends</div>
-                {clientProgress.trends.locked ? (
-                  <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6 }}>
-                    Unlocks after four weeks of tracking. She&apos;s at{" "}
-                    <b style={{ color: T.ink }}>{clientProgress.trends.n} of 4</b>.
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ fontSize: 13.5, lineHeight: 1.6, color: T.inkSoft, marginBottom: 10 }}>
-                      Across her last {clientProgress.trends.n} weeks, consistency is{" "}
-                      <b style={{ color: clientProgress.trends.delta >= 0 ? T.sage : T.amber }}>
-                        {clientProgress.trends.delta >= 3 ? "climbing" : clientProgress.trends.delta <= -3 ? "slipping" : "holding steady"}
-                      </b>
-                      {" "}({clientProgress.trends.overall.map((o) => `${o}%`).join(" → ")}).
-                    </div>
-                    {clientProgress.trends.items.map((i) => (
-                      <div key={i.label} style={{ marginBottom: 8 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 3 }}>
-                          <span style={{ color: T.ink, fontWeight: 600 }}>{i.label}</span>
-                          <span style={{ color: T.inkSoft }}>{i.strength ? `${i.avgSessions.toFixed(1)}× / wk (goal 3)` : `${i.pct}%`}</span>
-                        </div>
-                        <div style={{ height: 6, background: T.track, borderRadius: 99 }}>
-                          <div style={{ height: 6, borderRadius: 99, width: `${i.strength ? Math.min((i.avgSessions / 3) * 100, 100) : i.pct}%`, background: (i.strength ? i.avgSessions >= 3 : i.pct >= 70) ? T.sage : T.accent }} />
-                        </div>
+              {!clientProgress.trends.locked && clientProgress.trends.items?.length > 0 && (
+                <Card style={{ marginTop: 12 }}>
+                  <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>By goal</div>
+                  <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
+                    Per-habit consistency across finished weeks (includes her YOURS goals).
+                  </p>
+                  {clientProgress.trends.items.map((i) => (
+                    <div key={i.label} style={{ marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 3 }}>
+                        <span style={{ color: T.ink, fontWeight: 600 }}>{i.label}</span>
+                        <span style={{ color: T.inkSoft }}>
+                          {i.strength
+                            ? `${i.avgSessions.toFixed(1)}× / wk (goal ${i.nTarget || 3})`
+                            : `${i.pct}%`}
+                        </span>
                       </div>
-                    ))}
-                    <div style={{ background: T.accentSoft, borderRadius: 12, padding: "10px 14px", marginTop: 10, fontSize: 13, color: T.accentDeep, lineHeight: 1.55 }}>
-                      Strongest habit: <b>{clientProgress.trends.best.label.toLowerCase()}</b> ({clientProgress.trends.best.pct}%).
-                      {" "}Worth a nudge: <b>{clientProgress.trends.worst.label.toLowerCase()}</b> ({clientProgress.trends.worst.pct}%).
+                      <div style={{ height: 6, background: T.track, borderRadius: 99 }}>
+                        <div
+                          style={{
+                            height: 6,
+                            borderRadius: 99,
+                            width: `${i.strength ? Math.min((i.avgSessions / (i.nTarget || 3)) * 100, 100) : i.pct}%`,
+                            background: (i.strength ? i.avgSessions >= (i.nTarget || 3) : i.pct >= 70) ? T.sage : T.accent,
+                          }}
+                        />
+                      </div>
                     </div>
-                  </>
-                )}
-              </Card>
+                  ))}
+                </Card>
+              )}
             </>
           )}
         </>
