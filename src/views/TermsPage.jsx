@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { FD, T, F } from "../theme/tokens";
 import { Shell, Card } from "../components/ui";
 import { PATHS } from "../routing";
@@ -8,14 +7,14 @@ export function TermsPage() {
   return (
     <Shell>
       <div style={{ padding: "10px 0 8px" }}>
-        <Link
-          to={PATHS.home}
+        <a
+          href={PATHS.home}
           style={{
             fontFamily: F, fontSize: 13, fontWeight: 700, color: T.accent, textDecoration: "underline",
           }}
         >
           ← Back
-        </Link>
+        </a>
       </div>
 
       <Card style={{ padding: "22px 20px" }}>

@@ -199,10 +199,10 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
         }}
       >
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 2px 6px", gap: 12 }}>
-          <Link to={PATHS.home} style={{ textDecoration: "none", color: "inherit" }}>
+          <a href={PATHS.home} style={{ textDecoration: "none", color: "inherit" }}>
             <div style={{ fontFamily: FD, fontSize: 24, letterSpacing: 0.3 }}>Macros and Mamas</div>
             <div style={{ fontSize: 12, color: T.accentDeep, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase" }}>ranges, not rules</div>
-          </Link>
+          </a>
           {user?.email && (
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {isAdmin && (

@@ -26,6 +26,14 @@ export const PATHS = {
 };
 
 /**
+ * Full document load of `/` so www serves the Astro marketing homepage.
+ * React Router <Link to="/"> stays inside the SPA and shows the old SalesPage.
+ */
+export function goMarketingHome() {
+  window.location.assign(PATHS.home);
+}
+
+/**
  * Where a signed-in user should land after auth / cold load.
  * Pay-first: account → pay → intake → Callie approve → dashboard.
  * After founding free month without a sub → membership gate.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { FD, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
 import { CONFIG } from "../config";
@@ -14,14 +14,12 @@ import {
 import { PATHS } from "../routing";
 
 const LAB_ADDON_PRICE = 349;
-/** Marketing quiz on www — still the preferred path; not required when OPEN_WITHOUT_QUIZ=true. */
-const QUIZ_URL = "https://www.macrosandmamas.com/quiz";
 const COHORT_START = CONFIG.COHORT_START || "Monday, Aug 31";
 const COHORT_START_SHORT = CONFIG.COHORT_START_SHORT || "August 31";
 const COHORT_START_COMPACT = CONFIG.COHORT_START_COMPACT || "Aug 31";
 
 /** Unpaid signed-in users finish joining here before intake. */
-export function JoinPage({ onRefresh, profileCreatedAt = null }) {
+export function JoinPage({ profileCreatedAt = null }) {
   const { user, signOut } = useAuth();
   const [searchParams] = useSearchParams();
   const quizEmail = resolveQuizEmail(searchParams);
@@ -87,55 +85,10 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
       window.location.assign(`${PATHS.signin}?${params.toString()}`);
     } catch (e) {
       console.error("switch to quiz email failed", e);
-      setError("Couldn't switch accounts. Sign out below, then sign in with your quiz email.");
+      setError("Couldn't switch accounts. Sign out from your profile icon, then sign in with your quiz email.");
       setSwitching(false);
     }
   };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } finally {
-      window.location.assign(PATHS.home);
-    }
-  };
-
-  const escapeLinks = (
-    <>
-      <Link
-        to={PATHS.home}
-        style={{
-          display: "block",
-          marginTop: 16,
-          fontWeight: 700,
-          fontSize: 14,
-          color: T.accent,
-          textDecoration: "underline",
-        }}
-      >
-        Back to homepage
-      </Link>
-      <button
-        type="button"
-        onClick={handleSignOut}
-        style={{
-          display: "block",
-          width: "100%",
-          marginTop: 10,
-          background: "none",
-          border: "none",
-          color: T.inkSoft,
-          fontSize: 13.5,
-          fontWeight: 600,
-          cursor: "pointer",
-          textDecoration: "underline",
-          padding: 8,
-        }}
-      >
-        Sign out
-      </button>
-    </>
-  );
 
   const amount = quote?.amount;
   const total =
@@ -156,7 +109,7 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
       const msg = String(e?.message || "");
       setError(
         msg.includes("quiz_required") || e?.status === 403
-          ? "This early rate unlocks after the free ranges quiz. Take the quiz with this same email, then come back to pay."
+          ? "Couldn't start checkout at this rate. Try again in a moment, or pay the listed price below."
           : msg.includes("lab add-on")
             ? "Lab Review isn’t available right now. Uncheck it or try again later."
             : /referral|own code/i.test(msg)
@@ -202,26 +155,6 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
     </label>
   );
 
-  const refreshBtn = onRefresh ? (
-    <button
-      type="button"
-      onClick={onRefresh}
-      style={{
-        display: "block",
-        margin: "14px auto 0",
-        background: "none",
-        border: "none",
-        color: T.inkSoft,
-        fontWeight: 700,
-        fontSize: 13,
-        cursor: "pointer",
-        textDecoration: "underline",
-      }}
-    >
-      I already paid — refresh
-    </button>
-  ) : null;
-
   if (emailMismatch) {
     return (
       <Shell>
@@ -230,11 +163,11 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
             Use your quiz email to checkout
           </h2>
           <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft, margin: "0 0 16px" }}>
-            Your early $249 rate is unlocked for{" "}
+            Your early rate is unlocked for{" "}
             <strong style={{ color: T.ink }}>{quizEmail}</strong>.
             {" "}You’re signed in as{" "}
             <strong style={{ color: T.ink }}>{sessionEmail}</strong>
-            {" "}— switch accounts to pre-pay at the rate you unlocked.
+            {" "}— switch accounts to check out with the email that took the quiz.
           </p>
           <Btn style={{ width: "100%" }} disabled={switching} onClick={switchToQuizEmail}>
             {switching ? "Switching…" : "Continue with quiz email"}
@@ -242,8 +175,6 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
           {error && (
             <div style={{ marginTop: 12, fontSize: 13.5, color: T.amber, lineHeight: 1.5 }}>{error}</div>
           )}
-          {refreshBtn}
-          {escapeLinks}
         </Card>
       </Shell>
     );
@@ -257,13 +188,8 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
             Couldn&apos;t load your price
           </h2>
           <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft, margin: "0 0 16px" }}>
-            Try refresh in a moment. If it keeps happening, take the free ranges quiz, then return to pay.
+            Try again in a moment. If it keeps happening, sign out from your profile icon and sign back in.
           </p>
-          <a href={QUIZ_URL} style={{ color: T.accent, fontWeight: 700 }}>
-            Get your macro ranges
-          </a>
-          {refreshBtn}
-          {escapeLinks}
         </Card>
       </Shell>
     );
@@ -275,9 +201,9 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
   const openBlurb = isFounding
     ? `Founding rate $${amount}. After checkout you’ll complete a short intake so Callie can build your macros.`
     : isEarly && amount != null
-      ? `You’re locking your spot — starts ${COHORT_START}. Early rate $${amount} for 8 weeks ($50 off). After checkout you’ll complete a short intake; Callie approves your final ranges before day one.`
+      ? `You’re locking your spot — starts ${COHORT_START}. Early rate $${amount} for 8 weeks. After checkout you’ll complete a short intake; Callie approves your final ranges before day one.`
       : isFull && amount != null
-        ? `You’re locking your spot — starts ${COHORT_START}. Full rate $${amount} for 8 weeks. Want the $249 early rate? Take the free ranges quiz with this email, then come back.`
+        ? `You’re locking your spot — starts ${COHORT_START}. Full rate $${amount} for 8 weeks. After checkout you’ll complete a short intake so Callie can build your macros.`
         : `You’re locking your spot — starts ${COHORT_START}. After checkout you’ll complete a short intake so Callie can build your macros.`;
 
   return (
@@ -362,22 +288,11 @@ export function JoinPage({ onRefresh, profileCreatedAt = null }) {
           <p style={{ marginTop: 14, fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
             You’re pre-paying for your spot
             {" "}— starts <strong style={{ color: T.ink }}>{COHORT_START_SHORT}</strong>.
-            {isFull ? (
-              <>
-                {" "}
-                <a href={QUIZ_URL} style={{ color: T.accent, fontWeight: 700 }}>
-                  Take the free quiz
-                </a>
-                {" "}
-                with this email for the $249 early rate.
-              </>
-            ) : (
-              <> Took the quiz? Keep using this same email so your ranges stay attached.</>
-            )}
+            {isEarly ? (
+              <> Keep using this same email so your quiz ranges stay attached.</>
+            ) : null}
           </p>
         )}
-        {refreshBtn}
-        {escapeLinks}
       </Card>
     </Shell>
   );

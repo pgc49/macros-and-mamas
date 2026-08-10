@@ -22,9 +22,9 @@ export function WaitlistPage() {
         </p>
         <CohortWaitlistForm source="waitlist_page" />
         <p style={{ margin: "18px 0 0", fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
-          <Link to={PATHS.home} style={{ color: T.accent, fontWeight: 700, textDecoration: "underline" }}>
+          <a href={PATHS.home} style={{ color: T.accent, fontWeight: 700, textDecoration: "underline" }}>
             ← Back to home
-          </Link>
+          </a>
           {" · "}
           <Link to={PATHS.signin} style={{ color: T.accent, fontWeight: 700, textDecoration: "underline" }}>
             Already enrolled? Sign in

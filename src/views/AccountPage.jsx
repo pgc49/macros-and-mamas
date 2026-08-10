@@ -1,7 +1,7 @@
 import { Link, Navigate } from "react-router-dom";
 import { FD, T } from "../theme/tokens";
 import { Shell, Card } from "../components/ui";
-import { PATHS } from "../routing";
+import { PATHS, goMarketingHome } from "../routing";
 import { useAuth } from "../auth/useAuth.jsx";
 import { fullName } from "../db/db";
 
@@ -59,7 +59,7 @@ export function AccountPage() {
       type="button"
       onClick={async () => {
         await signOut();
-        window.location.assign(PATHS.home);
+        goMarketingHome();
       }}
       style={{
         display: "block",
@@ -106,8 +106,8 @@ export function AccountPage() {
             </div>
           </Link>
         </Card>
-        <Link
-          to={PATHS.home}
+        <a
+          href={PATHS.home}
           style={{
             display: "block",
             marginTop: 18,
@@ -119,7 +119,7 @@ export function AccountPage() {
           }}
         >
           Back to homepage
-        </Link>
+        </a>
         {signOutBtn}
       </Shell>
     );
