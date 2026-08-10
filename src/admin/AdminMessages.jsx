@@ -222,6 +222,7 @@ export function AdminMessages({
   }, [roster, activeChannelMessages, adminUserId]);
 
   const openDm = (profileOrId) => {
+    try { window.scrollTo({ top: 0, behavior: "auto" }); } catch { /* ignore */ }
     if (typeof profileOrId === "string") {
       setActive({ type: "dm", id: profileOrId });
       return;
@@ -237,6 +238,7 @@ export function AdminMessages({
 
   const openChannel = (conversationId) => {
     if (!conversationId) return;
+    try { window.scrollTo({ top: 0, behavior: "auto" }); } catch { /* ignore */ }
     setActive({ type: "channel", id: conversationId });
   };
 
@@ -538,7 +540,9 @@ export function AdminMessages({
       minWidth: 0,
       minHeight: 0,
       // Mobile: fill the screen under admin chrome for an iMessage-like thread.
-      height: isWide ? "min(78vh, 820px)" : "calc(100dvh - 150px)",
+      // Fixed height + overflow hidden so long histories scroll inside, not the page.
+      height: isWide ? "min(78vh, 820px)" : "calc(100dvh - 132px)",
+      maxHeight: isWide ? "min(78vh, 820px)" : "calc(100dvh - 132px)",
       background: "#fff",
       border: `1.5px solid ${T.border}`,
       borderRadius: 16,

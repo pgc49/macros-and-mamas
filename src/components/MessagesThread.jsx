@@ -81,7 +81,6 @@ export function MessagesThread({
   const [recording, setRecording] = useState(false);
   const [recordMs, setRecordMs] = useState(0);
   const [voicePreview, setVoicePreview] = useState(null); // { file, url, durationMs }
-  const bottomRef = useRef(null);
   const listRef = useRef(null);
   const fileRef = useRef(null);
   const draftRef = useRef(null);
@@ -92,9 +91,23 @@ export function MessagesThread({
     registerMessageServiceWorker();
   }, []);
 
+  // Keep the latest message in view inside the list pane (iMessage-style).
+  // Do NOT use scrollIntoView — it scrolls the page and fights flex height.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView?.({ behavior: "smooth" });
-  }, [messages.length]);
+    const el = listRef.current;
+    if (!el) return undefined;
+    const jump = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    jump();
+    const t1 = window.setTimeout(jump, 50);
+    const t2 = window.setTimeout(jump, 250);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+    // Last id: new tip message; length: empty → first load.
+  }, [messages.length, messages[messages.length - 1]?.id]);
 
   useEffect(() => {
     onMarkRead?.();
@@ -503,6 +516,8 @@ export function MessagesThread({
       flex: 1,
       height: compact ? "100%" : undefined,
       minWidth: 0,
+      // Compact (admin fill): clip to parent so the list scrolls, not the page.
+      overflow: compact ? "hidden" : undefined,
     }}
     >
       {(title || subtitle) && (
@@ -553,11 +568,14 @@ export function MessagesThread({
           border: `1.5px solid ${T.border}`,
           borderRadius: 14,
           padding: 12,
-          minHeight: compact ? 220 : 280,
+          // Critical: default minHeight:auto prevents shrinking below content,
+          // which expands the whole thread instead of scrolling inside the pane.
+          minHeight: compact ? 0 : 280,
           minWidth: 0,
-          /* compact (admin fill): grow with parent. Mama tab keeps a viewport cap. */
+          /* compact (admin fill): fill parent. Mama tab keeps a viewport cap. */
           maxHeight: compact ? "none" : "min(64vh, 520px)",
           WebkitOverflowScrolling: "touch",
+          overscrollBehavior: "contain",
         }}
       >
         {!messages.length && (
