@@ -955,7 +955,6 @@ export function MessagesThread({
           );
           });
         })()}
-        <div ref={bottomRef} />
       </div>
 
       {!hideComposer && replyTo && !recording && (
