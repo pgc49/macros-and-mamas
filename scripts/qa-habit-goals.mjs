@@ -122,6 +122,24 @@ assert(current?.label === "W3", `Aug 10 labels as W3 (got ${current?.label})`);
 const wCheck = rhythm.allSeries.find((w) => w.week === wk);
 assert(wCheck && wCheck.pct > 0, `existing checkin week has pct > 0 (got ${wCheck?.pct})`);
 
+// Bundle cohorts helpers for anchor fallback (admin / missing cohort_label).
+const cohortsOut = join(outdir, "cohorts.mjs");
+bundle(join(root, "src/lib/cohorts.js"), cohortsOut);
+const cohorts = await import(pathToFileURL(cohortsOut).href);
+const anchored = cohorts.resolveProgramStartWeekIso(null);
+assert(anchored === "2026-07-27", `missing cohort still anchors to Jul 27 (got ${anchored})`);
+const fallbackRhythm = buildHabitRhythm({
+  checksByWeek,
+  goalItems: program,
+  curWk: "2026-08-10",
+  earliestWk: "2026-07-20",
+  programStartWeek: anchored,
+});
+assert(
+  fallbackRhythm.allSeries.find((w) => w.week === "2026-08-10")?.label === "W3",
+  "admin/no-cohort path still shows Aug 10 as W3",
+);
+
 process.env.TZ = prevTz;
 
 if (failed) {

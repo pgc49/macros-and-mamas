@@ -87,6 +87,22 @@ export function programStartWeekIso(cohortOrLabel) {
 }
 
 /**
+ * Resolve Week-1 Monday for Today / Progress labels.
+ * Prefer the mama's cohort; if missing (admin/test), use the in-flight
+ * cohort that has locked program dates so Aug 10 reads as Week 3, not 4.
+ */
+export function resolveProgramStartWeekIso(cohortLabel = null, now = new Date()) {
+  const fromProfile = programStartWeekIso(cohortLabel);
+  if (fromProfile) return fromProfile;
+  const live = COHORT_CALENDAR.find(
+    (c) => c.programStart && !isProgramComplete(c, now),
+  );
+  if (live) return programStartWeekIso(live);
+  const withDates = COHORT_CALENDAR.find((c) => c.programStart);
+  return withDates ? programStartWeekIso(withDates) : null;
+}
+
+/**
  * Rhythm / Today week label number relative to official programStart.
  * Jul 20 (early) → 0, Jul 27 → 1, Aug 10 → 3.
  * Falls back to earliestWk-based numbering when no program anchor.
