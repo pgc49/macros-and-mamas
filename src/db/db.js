@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { programWeekNumber } from "../lib/cohorts";
 import { adherenceForItems, programGoalItems } from "../lib/goals";
 import {
   aggregateReactions,
@@ -1617,7 +1618,15 @@ export const db = {
         coachNoteDismissedAt: p.coach_note_dismissed_at || null,
         status: p.status,
         // Live cohort calendar (profiles.week is often stuck at activate-time 1).
-        week: programWeekNumber(p.cohort_label) ?? p.week ?? 0,
+        // Guard so a calendar miss never blanks the whole admin roster / inbox names.
+        week: (() => {
+          try {
+            return programWeekNumber(p.cohort_label) ?? p.week ?? 0;
+          } catch (e) {
+            console.warn("programWeekNumber failed", p.cohort_label, e);
+            return p.week ?? 0;
+          }
+        })(),
         cohort_label: p.cohort_label || null,
         paid,
         refunded,
