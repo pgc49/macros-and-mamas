@@ -166,6 +166,7 @@ export function AdminVoiceDropCard({ activeMamaCount = 0, allMamaCount = 0 }) {
       <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>Monday voice drop</div>
       <p style={{ fontSize: 13, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45 }}>
         One audio PSA on Today for active listeners — not copied into Messages.
+        Recordings up to about 50 MB are fine (a full ~10 minute memo usually fits).
         Use <strong style={{ fontWeight: 700, color: T.ink }}>Admins only</strong> on Cloudflare preview
         so real mamas aren’t notified.
       </p>

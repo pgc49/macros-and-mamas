@@ -362,6 +362,8 @@ function mapCustomMeal(r) {
 const MESSAGE_ATTACHMENT_BUCKET = "message-attachments";
 const CHANNEL_ATTACHMENT_BUCKET = "channel-attachments";
 const MESSAGE_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+/** Monday voice drop PSA — longer than chat memos; keep in sync with migration 059. */
+const VOICE_DROP_MAX_BYTES = 50 * 1024 * 1024;
 const MESSAGE_AUDIO_MIME = new Set([
   "audio/webm",
   "audio/mp4",
@@ -2203,8 +2205,8 @@ export const db = {
     if (!MESSAGE_AUDIO_MIME.has(mime)) {
       throw new Error("Unsupported audio format — try again from Safari or Chrome.");
     }
-    if (file.size > MESSAGE_ATTACHMENT_MAX_BYTES) {
-      throw new Error("That voice drop is over 10 MB — try a shorter recording.");
+    if (file.size > VOICE_DROP_MAX_BYTES) {
+      throw new Error("That voice drop is over 50 MB — try a shorter recording.");
     }
     const id = (typeof crypto !== "undefined" && crypto.randomUUID)
       ? crypto.randomUUID()
