@@ -42,3 +42,20 @@ export function isProgramComplete(cohortOrLabel, now = new Date()) {
   const t = now instanceof Date ? now.getTime() : Date.parse(now);
   return Number.isFinite(end) && Number.isFinite(t) && t >= end;
 }
+
+/**
+ * Program week 1–8 from cohort programStart (live calendar math).
+ * Keep in sync with functions/_shared/cohorts.js.
+ */
+export function programWeekNumber(cohortOrLabel, now = new Date()) {
+  const cohort = typeof cohortOrLabel === "string"
+    ? cohortByLabel(cohortOrLabel)
+    : cohortOrLabel;
+  if (!cohort?.programStart) return null;
+  const start = Date.parse(cohort.programStart);
+  const t = now instanceof Date ? now.getTime() : Date.parse(now);
+  if (!Number.isFinite(start) || !Number.isFinite(t)) return null;
+  if (t < start) return 1;
+  const week = Math.floor((t - start) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  return Math.min(Math.max(week, 1), 8);
+}

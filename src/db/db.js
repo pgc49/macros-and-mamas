@@ -1497,7 +1497,9 @@ export const db = {
         coachNoteAt: p.coach_note_at || null,
         coachNoteDismissedAt: p.coach_note_dismissed_at || null,
         status: p.status,
-        week: p.week,
+        // Live cohort calendar (profiles.week is often stuck at activate-time 1).
+        week: programWeekNumber(p.cohort_label) ?? p.week ?? 0,
+        cohort_label: p.cohort_label || null,
         paid,
         refunded,
         paidAt: p.paid_at || null,
