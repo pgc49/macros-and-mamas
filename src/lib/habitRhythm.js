@@ -5,6 +5,8 @@
 import {
   dayIndex,
   goalChecksThisWeek,
+  goalCreatedDateIso,
+  goalEligibleFromDayIndex,
   goalWeekTarget,
   programGoalItems,
 } from "./goals";
@@ -44,7 +46,8 @@ export function earliestWeekFromChecks(checksByWeek, curWk) {
 /** False when a custom goal did not exist yet in that week. */
 export function goalActiveInWeek(item, weekStart) {
   if (!item || item.source !== "custom" || !item.createdAt) return true;
-  const created = String(item.createdAt).slice(0, 10);
+  const created = goalCreatedDateIso(item.createdAt);
+  if (!created) return true;
   const weekEnd = addDaysIso(weekStart, 6);
   return created <= weekEnd;
 }
@@ -68,7 +71,8 @@ export function goalWeekStats(item, checks, weekStart, { isCurrentWeek, elapsed 
   }
   const target = effectiveTarget(item, weekStart, { isCurrentWeek, elapsed });
   if (target <= 0) return { active: false, hits: 0, target: 0, pct: null };
-  const hits = goalChecksThisWeek(checks, item.id);
+  const from = item.daily ? goalEligibleFromDayIndex(item, weekStart) : 0;
+  const hits = goalChecksThisWeek(checks, item.id, from >= 7 ? 7 : from);
   const pct = Math.min(Math.round((hits / target) * 100), 100);
   return { active: true, hits, target, pct };
 }
@@ -92,7 +96,9 @@ export function buildHabitRhythm({
   // Custom goals created before first checkin still need a start week.
   items.forEach((it) => {
     if (it.source === "custom" && it.createdAt) {
-      const createdWk = wkStartOf(parseLocalDate(String(it.createdAt).slice(0, 10)));
+      const created = goalCreatedDateIso(it.createdAt);
+      if (!created) return;
+      const createdWk = wkStartOf(parseLocalDate(created));
       if (createdWk < earliest) earliest = createdWk;
     }
   });

@@ -9,7 +9,9 @@ import {
   formFreqFromItem,
   frequencyFromForm,
   goalChecksThisWeek,
+  goalEligibleFromDayIndex,
   goalWeekTarget,
+  isBeforeGoalCreated,
   isFutureDayInWeek,
 } from "../lib/goals";
 import { localDateIso } from "../utils/dates";
@@ -219,11 +221,14 @@ export function GoalsCard({
     <>
       <Card>
         {(items || []).map((it) => {
-          const hits = goalChecksThisWeek(checks, it.id);
           const target = goalWeekTarget(it, weekStart);
+          const fromDay = it.daily ? goalEligibleFromDayIndex(it, weekStart) : 0;
+          const hits = goalChecksThisWeek(checks, it.id, fromDay >= 7 ? 7 : fromDay);
           const isCustom = it.source === "custom";
           const waterNote = it.id === "water" && waterOz ? ` · ${waterOz} oz` : "";
           const sub = it.subtitle ? (it.subtitle.startsWith("·") ? ` ${it.subtitle}` : ` · ${it.subtitle}`) : "";
+          const showMidWeek =
+            isCustom && it.daily && target >= 1 && target < 7 && isCurrentWeek;
 
           return (
             <div key={it.id} style={{ padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
@@ -276,9 +281,9 @@ export function GoalsCard({
                   {hits >= target ? " · ✓ goal hit" : ""}
                 </div>
               )}
-              {isCustom && it.daily && target < 7 && isCurrentWeek && (
+              {showMidWeek && (
                 <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 700, marginBottom: 6 }}>
-                  Added mid-week · {hits} of {target} days left
+                  Added mid-week · {hits} of {target} this week
                 </div>
               )}
               <div style={{ display: "flex", gap: 6 }}>
@@ -286,14 +291,23 @@ export function GoalsCard({
                   const done = !!checks[`${it.id}|${d}`];
                   const isTodayDot = isCurrentWeek && d === todayWeekday;
                   const future = isCurrentWeek && isFutureDayInWeek(weekStart, d, today);
-                  const canTap = editable && !future;
+                  const beforeCreated = isBeforeGoalCreated(it, weekStart, d);
+                  const canTap = editable && !future && !beforeCreated;
                   return (
                     <button
                       key={d}
                       type="button"
                       disabled={!canTap}
                       onClick={() => { if (canTap) onToggle(it.id, d); }}
-                      title={future ? "Not yet" : isTodayDot ? "Today" : undefined}
+                      title={
+                        beforeCreated
+                          ? "Added later"
+                          : future
+                            ? "Not yet"
+                            : isTodayDot
+                              ? "Today"
+                              : undefined
+                      }
                       aria-current={isTodayDot ? "date" : undefined}
                       style={{
                         width: 36,
@@ -306,7 +320,7 @@ export function GoalsCard({
                         background: done ? T.sage : "#fff",
                         color: done ? "#fff" : isTodayDot ? T.accentDeep : T.ink,
                         boxShadow: isTodayDot && !done ? `0 0 0 3px ${T.accentSoft}` : "none",
-                        opacity: future ? 0.45 : editable ? 1 : 0.85,
+                        opacity: future || beforeCreated ? 0.45 : editable ? 1 : 0.85,
                       }}
                     >
                       {DAY_LABEL[d]}

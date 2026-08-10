@@ -15,7 +15,7 @@ import {
   progWeekNum as weekNumberFromEarliest,
   weekKeysFromChecks,
 } from "./utils/progressSeries";
-import { isFutureDayInWeek, mergeGoalItems } from "./lib/goals";
+import { isBeforeGoalCreated, isFutureDayInWeek, mergeGoalItems } from "./lib/goals";
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard, goMarketingHome } from "./routing";
 import { needsMembershipPaywall } from "./lib/membershipAccess";
 import { SalesPage } from "./views/SalesPage";
@@ -1290,6 +1290,8 @@ export default function App() {
   const toggleCheck = async (itemId, day) => {
     if (viewWk !== curWk && !editPast) return;
     if (viewWk === curWk && isFutureDayInWeek(viewWk, day, localDateIso())) return;
+    const goalItem = goalItems.find((g) => g.id === itemId);
+    if (goalItem && isBeforeGoalCreated(goalItem, viewWk, day)) return;
     const key = `${itemId}|${day}`;
     const prev = !!(checksByWeek[viewWk] || {})[key];
     const next = !prev;
