@@ -81,6 +81,7 @@ export function ProgressCharts({
   goalItems = [],
   curWk = null,
   earliestWk = null,
+  programStartWeek = null,
 }) {
   const hi = (n, d = 10) => n + d;
   const hasMacros = macros && macroHistory.length > 0;
@@ -199,6 +200,7 @@ export function ProgressCharts({
         goalItems={goalItems}
         curWk={curWk}
         earliestWk={earliestWk}
+        programStartWeek={programStartWeek}
         audience={audience}
       />
     </>

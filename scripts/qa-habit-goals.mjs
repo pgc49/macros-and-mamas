@@ -109,11 +109,18 @@ const rhythm = buildHabitRhythm({
   checksByWeek,
   goalItems: program,
   curWk: "2026-08-10",
-  earliestWk: "2026-08-03",
+  earliestWk: "2026-07-20",
+  programStartWeek: "2026-07-27",
 });
 assert(rhythm.weeks.length >= 2, "rhythm includes contiguous weeks");
-const w1 = rhythm.allSeries.find((w) => w.week === wk);
-assert(w1 && w1.pct > 0, `W1 from existing checkins has pct > 0 (got ${w1?.pct})`);
+const early = rhythm.allSeries.find((w) => w.week === "2026-07-20");
+assert(early?.label === "W0", `early-access week labels as W0 (got ${early?.label})`);
+const official = rhythm.allSeries.find((w) => w.week === "2026-07-27");
+assert(official?.label === "W1", `official start labels as W1 (got ${official?.label})`);
+const current = rhythm.allSeries.find((w) => w.week === "2026-08-10");
+assert(current?.label === "W3", `Aug 10 labels as W3 (got ${current?.label})`);
+const wCheck = rhythm.allSeries.find((w) => w.week === wk);
+assert(wCheck && wCheck.pct > 0, `existing checkin week has pct > 0 (got ${wCheck?.pct})`);
 
 process.env.TZ = prevTz;
 

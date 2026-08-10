@@ -10,6 +10,7 @@ import {
   goalWeekTarget,
   programGoalItems,
 } from "./goals";
+import { programWeekLabel } from "./cohorts";
 import { addDaysIso, localDateIso, parseLocalDate, weekdayKey, wkStartOf } from "../utils/dates";
 
 /** Mon=1 … through today; completed weeks = 7; future = 0. */
@@ -87,6 +88,8 @@ export function buildHabitRhythm({
   curWk = null,
   todayIso = null,
   earliestWk = null,
+  /** Monday of official Week 1 — early Jul 20 week labels as W0. */
+  programStartWeek = null,
 }) {
   const today = todayIso || localDateIso();
   const current = curWk || wkStartOf(parseLocalDate(today));
@@ -105,16 +108,17 @@ export function buildHabitRhythm({
 
   const weekStarts = weeksInclusive(earliest, current);
   const elapsed = daysElapsedInWeek(current, today);
+  const weekLabel = (wk) => programWeekLabel(wk, programStartWeek, earliest);
 
   const byGoalId = {};
   items.forEach((it) => {
-    byGoalId[it.id] = weekStarts.map((wk, wi) => {
+    byGoalId[it.id] = weekStarts.map((wk) => {
       const isCurrentWeek = wk === current;
       const ch = checksByWeek[wk] || {};
       const stats = goalWeekStats(it, ch, wk, { isCurrentWeek, elapsed });
       return {
         week: wk,
-        label: `W${wi + 1}`,
+        label: weekLabel(wk),
         isCurrentWeek,
         ...stats,
       };
@@ -134,7 +138,7 @@ export function buildHabitRhythm({
     });
     return {
       week: wk,
-      label: `W${wi + 1}`,
+      label: weekLabel(wk),
       isCurrentWeek,
       pct: n ? Math.round(sum / n) : null,
       activeCount: n,

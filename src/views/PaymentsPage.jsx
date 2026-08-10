@@ -103,11 +103,19 @@ export function PaymentsPage() {
 
   const phaseLabel = program?.phase === "program_complete"
     ? "8-week program complete"
-    : program?.phase === "in_program" && program?.week
+    : program?.phase === "in_program" && program?.week > 0
       ? `Week ${program.week} of 8`
-      : program?.phase === "paid_access"
-        ? "Program access"
-        : "Program";
+      : program?.phase === "in_program" && program?.week === 0
+        ? "Early access"
+        : program?.phase === "paid_access"
+          ? "Program access"
+          : "Program";
+
+  const programRange = program?.programStart && (program?.programLastDay || program?.programEnd)
+    ? ` · ${when(program.programStart)} – ${when(program.programLastDay || program.programEnd)}`
+    : program?.paidAt
+      ? ` · started ${when(program.paidAt)}`
+      : "";
 
   const openPortal = async () => {
     setPortalNote("");
@@ -186,11 +194,7 @@ export function PaymentsPage() {
         <div style={{ fontSize: 14.5, color: T.inkSoft, marginTop: 4 }}>
           {phaseLabel}
           {program?.cohortName ? ` · ${program.cohortName}` : ""}
-          {program?.programStart && program?.programEnd
-            ? ` · ${when(program.programStart)} – ${when(program.programEnd)}`
-            : program?.paidAt
-              ? ` · started ${when(program.paidAt)}`
-              : ""}
+          {programRange}
         </div>
         {program?.amount != null && (
           <div style={{ fontSize: 15, fontWeight: 700, marginTop: 10 }}>
