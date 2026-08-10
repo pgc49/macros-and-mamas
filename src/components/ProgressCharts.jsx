@@ -3,8 +3,6 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
-  Line,
-  LineChart,
   ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
@@ -14,6 +12,7 @@ import {
 } from "recharts";
 import { T, F, FD } from "../theme/tokens";
 import { Card } from "./ui";
+import { HabitRhythmCard } from "./HabitRhythmCard";
 
 const WATER = "#4F7F97";
 const WATER_SOFT = "#E4F0F5";
@@ -74,14 +73,17 @@ function MacroBarChart({ title, data, dataKey, lo, hi, unit = "g" }) {
 export function ProgressCharts({
   macros,
   macroHistory = [],
-  habitHistory = [],
   waterHistory = [],
   waterGoalOz = null,
   audience = "client",
+  /** Stage 5.7 habit rhythm inputs */
+  checksByWeek = {},
+  goalItems = [],
+  curWk = null,
+  earliestWk = null,
 }) {
   const hi = (n, d = 10) => n + d;
   const hasMacros = macros && macroHistory.length > 0;
-  const hasHabits = habitHistory.some((h) => h.pct > 0) || habitHistory.length > 1;
   const hasWater = waterHistory.length > 0;
   const waterGoal = Number(waterGoalOz) || 0;
   const waterHits = waterHistory.filter((d) => d.hit).length;
@@ -192,57 +194,13 @@ export function ProgressCharts({
         )}
       </Card>
 
-      <Card style={{ marginTop: 12 }}>
-        <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>Habit tracker rhythm</div>
-        <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
-          Weekly check-in consistency. Progress, not perfection — 70% weeks are strong weeks.
-        </p>
-
-        {!hasHabits ? (
-          <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6 }}>
-            {admin
-              ? "No habit check-ins yet. After a week or two of day circles, her rhythm shows up here."
-              : "Tap the day circles on Today as you go. After a week or two, your rhythm shows up here."}
-          </div>
-        ) : (
-          <>
-            <div style={{ height: 180 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={habitHistory} margin={{ top: 8, right: 10, bottom: 0, left: -18 }}>
-                  <CartesianGrid stroke={T.track} vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: T.inkSoft }} axisLine={false} tickLine={false} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: T.inkSoft }} axisLine={false} tickLine={false} unit="%" />
-                  <Tooltip
-                    contentStyle={{ fontFamily: F, fontSize: 12, borderRadius: 10, border: `1px solid ${T.border}` }}
-                    formatter={(v) => [`${v}%`, "Adherence"]}
-                    labelFormatter={(_, payload) => payload?.[0]?.payload?.rangeLabel || ""}
-                  />
-                  <ReferenceLine y={70} stroke={T.sage} strokeDasharray="5 4" label={{ value: "70%", fontSize: 10, fill: T.sage, position: "right" }} />
-                  <Line type="monotone" dataKey="pct" stroke={T.accent} strokeWidth={2.5} dot={{ r: 4, fill: T.accent }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mam-h-scroll" style={{ display: "flex", gap: 8, marginTop: 10, overflowX: "auto" }}>
-              {habitHistory.map((h) => (
-                <div
-                  key={h.week}
-                  style={{
-                    flex: "0 0 auto",
-                    minWidth: 56,
-                    textAlign: "center",
-                    padding: "8px 6px",
-                    borderRadius: 10,
-                    background: h.pct >= 70 ? T.sageSoft : T.accentSoft,
-                  }}
-                >
-                  <div style={{ fontFamily: FD, fontSize: 16, color: h.pct >= 70 ? "#3E5A46" : T.accentDeep }}>{h.pct}%</div>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: T.inkSoft }}>{h.label}</div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </Card>
+      <HabitRhythmCard
+        checksByWeek={checksByWeek}
+        goalItems={goalItems}
+        curWk={curWk}
+        earliestWk={earliestWk}
+        audience={audience}
+      />
     </>
   );
 }

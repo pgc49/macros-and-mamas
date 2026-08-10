@@ -1346,12 +1346,6 @@ export default function App() {
     [waterLogsByDate, waterOz],
   );
 
-  /** Weekly habit adherence series for Progress chart. */
-  const habitHistory = useMemo(
-    () => buildHabitHistory(checksByWeek, curWk, goalItems),
-    [checksByWeek, curWk, goalItems],
-  );
-
   if (authLoading || (user && !loaded)) {
     return (
       <Shell>

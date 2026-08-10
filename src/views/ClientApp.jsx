@@ -39,7 +39,7 @@ export function ClientApp({
   onAddCustomGoal, onUpdateCustomGoal, onArchiveCustomGoal,
   adherenceFor, progWeekNum, earliestWk,
   weighins, logWeighin, deleteWeighin, weeklyRate, trends,
-  macroHistory, habitHistory, waterHistory = [],
+  macroHistory, waterHistory = [],
   mealFilter, setMealFilter,
   mealPlanMode = "default",
   publishedPlan = null,
@@ -517,43 +517,44 @@ export function ClientApp({
           <ProgressCharts
             macros={macros}
             macroHistory={macroHistory}
-            habitHistory={habitHistory}
             waterHistory={waterHistory}
             waterGoalOz={waterOz}
+            checksByWeek={checksByWeek}
+            goalItems={goalItems}
+            curWk={curWk}
+            earliestWk={earliestWk}
           />
 
-          <Card style={{ marginTop: 12 }}>
-            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Your 4-week trends</div>
-            {trends.locked ? (
-              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6 }}>
-                Unlocks after four weeks of tracking so the patterns are real, not noise. You're at <b style={{ color: T.ink }}>{trends.n} of 4</b> — keep checking those boxes.
-              </div>
-            ) : (
-              <>
-                <div style={{ fontSize: 13.5, lineHeight: 1.6, color: T.inkSoft, marginBottom: 10 }}>
-                  Across your last {trends.n} weeks, your consistency is{" "}
-                  <b style={{ color: trends.delta >= 0 ? T.sage : T.amber }}>
-                    {trends.delta >= 3 ? "climbing" : trends.delta <= -3 ? "slipping" : "holding steady"}
-                  </b>
-                  {" "}({trends.overall.map((o) => `${o}%`).join(" → ")}).
-                </div>
-                {trends.items.map((i) => (
-                  <div key={i.label} style={{ marginBottom: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 3 }}>
-                      <span style={{ color: T.ink, fontWeight: 600 }}>{i.label}</span>
-                      <span style={{ color: T.inkSoft }}>{i.strength ? `${i.avgSessions.toFixed(1)}× / wk (goal 3)` : `${i.pct}%`}</span>
-                    </div>
-                    <div style={{ height: 6, background: T.track, borderRadius: 99 }}>
-                      <div style={{ height: 6, borderRadius: 99, width: `${i.strength ? Math.min((i.avgSessions / 3) * 100, 100) : i.pct}%`, background: (i.strength ? i.avgSessions >= 3 : i.pct >= 70) ? T.sage : T.accent }} />
-                    </div>
+          {!trends.locked && trends.items?.length > 0 && (
+            <Card style={{ marginTop: 12 }}>
+              <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>By goal</div>
+              <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
+                How each habit is landing across your finished weeks — including any YOURS goals you added.
+              </p>
+              {trends.items.map((i) => (
+                <div key={i.label} style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 3 }}>
+                    <span style={{ color: T.ink, fontWeight: 600 }}>{i.label}</span>
+                    <span style={{ color: T.inkSoft }}>
+                      {i.strength
+                        ? `${i.avgSessions.toFixed(1)}× / wk (goal ${i.nTarget || 3})`
+                        : `${i.pct}%`}
+                    </span>
                   </div>
-                ))}
-                <div style={{ background: T.accentSoft, borderRadius: 12, padding: "10px 14px", marginTop: 10, fontSize: 13, color: T.accentDeep, lineHeight: 1.55 }}>
-                  💬 Strongest habit: <b>{trends.best.label.toLowerCase()}</b> ({trends.best.pct}%). The one to love on next: <b>{trends.worst.label.toLowerCase()}</b> ({trends.worst.pct}%) — pick your easiest day and start there.
+                  <div style={{ height: 6, background: T.track, borderRadius: 99 }}>
+                    <div
+                      style={{
+                        height: 6,
+                        borderRadius: 99,
+                        width: `${i.strength ? Math.min((i.avgSessions / (i.nTarget || 3)) * 100, 100) : i.pct}%`,
+                        background: (i.strength ? i.avgSessions >= (i.nTarget || 3) : i.pct >= 70) ? T.sage : T.accent,
+                      }}
+                    />
+                  </div>
                 </div>
-              </>
-            )}
-          </Card>
+              ))}
+            </Card>
+          )}
 
           <Card style={{ marginTop: 12 }}>
             <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Before + after photos</div>

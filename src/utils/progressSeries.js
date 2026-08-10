@@ -110,7 +110,12 @@ export function buildTrends(checksByWeek, curWk = wkStartOf(), goalItems = null)
       const ch = checksByWeek[w] || {};
       sessions += DAYS.filter((d) => ch[`${it.id}|${d}`]).length;
     });
-    return { label: it.label, avgSessions: sessions / n, strength: true };
+    return {
+      label: it.label,
+      avgSessions: sessions / n,
+      strength: true,
+      nTarget: Number(it.nTarget) || 3,
+    };
   });
 
   const dailyItems = items.filter((i) => !i.strength);

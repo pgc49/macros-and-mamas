@@ -67,6 +67,25 @@ water_logs   -- only if no water logging exists (see 5.3)
   4. Add-goal sheet per 5.5.
 - Hint line under the week header updates to: "Tap the days as you go. Goals marked auto check themselves from your log."
 
+## 5.7 Progress tab — habit rhythm redesign
+VISUAL REFERENCE: habit-rhythm-mockup.html. Replaces the current line chart.
+- FILTER CHIPS above the chart: "All goals" (default) + one chip per active goal, program and custom alike, horizontally scrollable. Selecting a chip re-renders the chart for that goal.
+- BARS, NOT A LINE. Each week is its own bar. Never draw a line/trend connecting weeks — habit weeks stand alone, and a downward slope is a shame mechanic. No red anywhere; no down-arrow deltas.
+- EVERY week from W1 to current renders. A zero week is a short bar, not a missing label (the current chart skips empty weeks — fix).
+- CURRENT WEEK RULE: the in-progress week renders as a visually distinct hatched/outlined bar labeled "so far," and its % uses ELAPSED days as the denominator: min(target, days_elapsed_this_week) for daily goals; n_per_week goals keep n_target but carry the "so far" label. The current week must NEVER be computed against a full-week denominator (the existing 0%-on-day-one bug).
+- Keep the dashed 70% "strong week" reference line with its label.
+- ALL-GOALS %: average of per-goal completion (same math as the goals card, 5.4), using the elapsed-denominator rule for the current week. Custom goals join the blend from the week they were added; earlier weeks render as "— not added yet," excluded from that week's average.
+- SINGLE-GOAL VIEW adds a per-week detail list under the chart: "W1 · 5 of 7 days," with "so far" on the current week — day counts, because 71% means nothing to a tired mama but "5 of 7 days" does.
+- INSIGHT LINE (one, sage-green, warm): All view → "Your steadiest habit: {goal}" (highest average across completed weeks). Single-goal view → "Best week: {week} · X of Y days." Always affirming, never comparative to other mamas, never negative.
+
+### 5.7 acceptance
+- [ ] Chips render for every active goal incl. custom; selection re-renders chart + detail.
+- [ ] Current week: hatched, "so far," elapsed-day denominator; a member's day-one week shows a sane % or low bar, never a plunge to 0% against 7 days.
+- [ ] Zero-activity completed week renders as a low/zero bar with its label, not omitted.
+- [ ] No line/trend rendering exists in the component; no red states.
+- [ ] Custom goal added mid-program: pre-add weeks show "not added yet" and are excluded from All-goals math for those weeks.
+- [ ] Insight line correct for both views.
+
 ## OUT OF SCOPE
 Step/HealthKit integration (impossible in PWA), streaks/badges (guilt mechanics, off-brand — do not add even if trivial), goal sharing to channels, coach-assigned per-member goals, retroactive water entry, editing program goals.
 

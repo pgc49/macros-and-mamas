@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Habit Rhythm — Redesign Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--cream:#FAF4EE;--plum:#7E2A4F;--plumsoft:#F2D9E2;--ink:#3B2E36;--line:#F0E3E8;--muted:#8a7680;--sage:#7fa477;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFE6DE;font-family:'Nunito Sans',sans-serif;color:var(--ink);padding:16px 12px 48px;}
+  .viewer{max-width:430px;margin:0 auto;}
+  .viewer h1{font-family:'Playfair Display',serif;font-weight:600;font-size:24px;margin:4px 2px 6px;}
+  .try{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:13.5px;line-height:1.55;color:#5d4c55;margin-bottom:14px;}
+  .try b{color:var(--plum)}
+  .phone{background:var(--cream);border-radius:34px;border:1px solid #e5d7cd;box-shadow:0 18px 40px rgba(90,50,70,.14);padding:20px 14px 26px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:24px;padding:20px 18px;}
+  .card h2{font-family:'Playfair Display',serif;font-size:24px;font-weight:500;margin-bottom:6px;}
+  .card .sub{color:var(--muted);font-size:13.5px;line-height:1.5;margin-bottom:14px;}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:14px;scrollbar-width:none;}
+  .chips::-webkit-scrollbar{display:none}
+  .gchip{flex:0 0 auto;border:1.5px solid #E7D3DB;background:#fff;color:#6d5560;border-radius:999px;padding:7px 13px;font-weight:800;font-size:12.5px;cursor:pointer;}
+  .gchip.on{background:var(--plumsoft);border-color:var(--plumsoft);color:var(--plum);}
+  /* bar chart */
+  .chart{position:relative;height:190px;margin:6px 4px 4px;display:flex;align-items:flex-end;gap:18px;padding:0 6px;border-bottom:1.5px solid #eee0e6;}
+  .strong{position:absolute;left:0;right:0;bottom:70%;border-top:2px dashed #a9c4a3;z-index:0;}
+  .strong span{position:absolute;right:0;top:-18px;font-size:10.5px;font-weight:800;color:var(--sage);}
+  .bcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;z-index:1;}
+  .bval{font-size:13px;font-weight:800;color:var(--plum);margin-bottom:4px;}
+  .bar{width:100%;max-width:54px;border-radius:10px 10px 4px 4px;background:linear-gradient(180deg,#A64A73,var(--plum));transition:height .35s;}
+  .bar.now{background:repeating-linear-gradient(45deg,#E9C7D5 0 6px,#F6E4EC 6px 12px);border:1.5px dashed #C98BA6;}
+  .bcol .wl{font-size:12px;font-weight:800;color:#8a7680;margin-top:8px;}
+  .bcol .wl small{display:block;font-weight:700;color:#b39cad;font-size:10px;}
+  .legend{display:flex;gap:14px;padding:10px 4px 0;font-size:11.5px;color:var(--muted);font-weight:700;}
+  .sw{display:inline-block;width:12px;height:12px;border-radius:4px;vertical-align:-2px;margin-right:5px;}
+  .sw.done{background:var(--plum);}
+  .sw.now{background:repeating-linear-gradient(45deg,#E9C7D5 0 4px,#F6E4EC 4px 8px);border:1px dashed #C98BA6;}
+  /* detail rows */
+  .detail{margin-top:14px;border-top:1px solid #f3eaee;padding-top:12px;}
+  .drow{display:flex;justify-content:space-between;align-items:center;padding:7px 2px;font-size:14px;}
+  .drow .wk{font-weight:800;color:#6d5560;}
+  .drow .ct{color:var(--muted);font-weight:700;}
+  .insight{background:#F3F7F1;color:#4a6b45;border-radius:14px;padding:11px 14px;font-size:13.5px;font-weight:700;margin-top:14px;line-height:1.45;}
+</style>
+</head>
+<body>
+<div class="viewer">
+  <h1>Habit rhythm — redesigned</h1>
+  <div class="try"><b>Try it:</b> tap the goal chips. <b>All goals</b> shows the blended rhythm; any single goal shows its own weeks with day counts. The hatched bar is <b>this week so far</b> — measured only against days that have happened, never plotted as a fall to zero.</div>
+
+  <div class="phone">
+    <div class="card">
+      <h2>Habit tracker rhythm</h2>
+      <div class="sub">Weekly consistency. Progress, not perfection — 70% weeks are strong weeks.</div>
+
+      <div class="chips" id="chips"></div>
+
+      <div class="chart" id="chart">
+        <div class="strong"><span>strong week · 70%</span></div>
+      </div>
+      <div class="legend"><span><span class="sw done"></span>Finished weeks</span><span><span class="sw now"></span>This week so far</span></div>
+
+      <div class="detail" id="detail"></div>
+      <div class="insight" id="insight"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Week 3 in progress: 4 of 7 days elapsed
+const ELAPSED = 4;
+const goalsData = [
+ {name:'Macros',   target:7, weeks:[5,6,3]},
+ {name:'Water',    target:7, weeks:[4,5,3]},
+ {name:'Steps',    target:7, weeks:[3,4,2]},
+ {name:'Sunlight', target:7, weeks:[6,6,4]},
+ {name:'Home meals', target:7, weeks:[5,4,3]},
+ {name:'Strength', target:3, weeks:[2,3,1]},
+ {name:'Stretch (yours)', target:5, weeks:[null,3,2]}, // custom, added W2
+];
+const weekLabels=['W1','W2','W3'];
+let sel='all';
+
+function pctFor(g, wi){
+  const c=g.weeks[wi]; if(c===null) return null;
+  const isNow = wi===g.weeks.length-1;
+  const t = isNow ? Math.min(g.target, ELAPSED) : g.target;
+  return Math.min(Math.round(c/t*100),100);
+}
+function allPct(wi){
+  let s=0,n=0;
+  goalsData.forEach(g=>{const p=pctFor(g,wi); if(p!==null){s+=p;n++;}});
+  return Math.round(s/n);
+}
+function render(){
+  // chips
+  const chips=[{id:'all',label:'All goals'},...goalsData.map((g,i)=>({id:i,label:g.name}))];
+  document.getElementById('chips').innerHTML=chips.map(c=>
+    `<div class="gchip ${String(sel)===String(c.id)?'on':''}" onclick="pick('${c.id}')">${c.label}</div>`).join('');
+  // bars
+  const chart=document.getElementById('chart');
+  chart.querySelectorAll('.bcol').forEach(e=>e.remove());
+  weekLabels.forEach((wl,wi)=>{
+    const isNow = wi===weekLabels.length-1;
+    let p = sel==='all' ? allPct(wi) : pctFor(goalsData[sel],wi);
+    const col=document.createElement('div'); col.className='bcol';
+    if(p===null){
+      col.innerHTML=`<div class="bval" style="color:#b39cad">—</div><div class="bar" style="height:4px;background:#f0e3e8;border:none"></div><div class="wl">${wl}<small>not added yet</small></div>`;
+    } else {
+      col.innerHTML=`<div class="bval">${p}%</div><div class="bar ${isNow?'now':''}" style="height:${Math.max(p,3)*1.55}px"></div><div class="wl">${wl}${isNow?'<small>so far</small>':''}</div>`;
+    }
+    chart.appendChild(col);
+  });
+  // detail + insight
+  const d=document.getElementById('detail'), ins=document.getElementById('insight');
+  if(sel==='all'){
+    d.innerHTML='';
+    // steadiest habit = highest avg completed-week pct
+    let best=null,bestv=-1;
+    goalsData.forEach(g=>{
+      let s=0,n=0; g.weeks.forEach((c,wi)=>{if(c!==null&&wi<g.weeks.length-1){s+=pctFor(g,wi);n++;}});
+      if(n&&s/n>bestv){bestv=s/n;best=g;}
+    });
+    ins.innerHTML=`Your steadiest habit: <b>${best.name}</b>. That's the rhythm — the rest can borrow from it.`;
+  } else {
+    const g=goalsData[sel];
+    d.innerHTML=weekLabels.map((wl,wi)=>{
+      const c=g.weeks[wi];
+      if(c===null) return `<div class="drow"><span class="wk">${wl}</span><span class="ct">added in W2</span></div>`;
+      const isNow=wi===g.weeks.length-1;
+      const t=isNow?Math.min(g.target,ELAPSED):g.target;
+      return `<div class="drow"><span class="wk">${wl}${isNow?' · so far':''}</span><span class="ct">${c} of ${t} days</span></div>`;
+    }).join('');
+    let bi=0,bv=-1; g.weeks.forEach((c,wi)=>{if(c!==null&&wi<g.weeks.length-1){const p=pctFor(g,wi);if(p>bv){bv=p;bi=wi;}}});
+    ins.innerHTML=`Best week: <b>${weekLabels[bi]}</b> · ${g.weeks[bi]} of ${g.target} days. One good week means it's in you.`;
+  }
+}
+function pick(id){ sel = id==='all'?'all':parseInt(id); render(); }
+render();
+</script>
+</body>
+</html>
