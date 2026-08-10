@@ -37,7 +37,7 @@ export function ClientApp({
   viewWk, setViewWk, curWk, editPast, setEditPast,
   checksByWeek, toggleCheck, goalItems = [],
   onAddCustomGoal, onUpdateCustomGoal, onArchiveCustomGoal,
-  adherenceFor, progWeekNum, earliestWk,
+  adherenceFor, progWeekNum, earliestWk, programStartWeek = null,
   weighins, logWeighin, deleteWeighin, weeklyRate, trends,
   macroHistory, waterHistory = [],
   mealFilter, setMealFilter,
@@ -523,6 +523,7 @@ export function ClientApp({
             goalItems={goalItems}
             curWk={curWk}
             earliestWk={earliestWk}
+            programStartWeek={programStartWeek}
           />
 
           {!trends.locked && trends.items?.length > 0 && (

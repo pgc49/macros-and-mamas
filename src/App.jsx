@@ -12,9 +12,9 @@ import {
   buildMacroHistory,
   buildTrends,
   buildWaterHistory,
-  progWeekNum as weekNumberFromEarliest,
   weekKeysFromChecks,
 } from "./utils/progressSeries";
+import { programRelativeWeekNum, programStartWeekIso } from "./lib/cohorts";
 import { isBeforeGoalCreated, isFutureDayInWeek, mergeGoalItems } from "./lib/goals";
 import { PATHS, homePathFor, pathFromClientView, canAccessDashboard, goMarketingHome } from "./routing";
 import { needsMembershipPaywall } from "./lib/membershipAccess";
@@ -1328,7 +1328,11 @@ export default function App() {
     [checksByWeek, curWk],
   );
   const earliestWk = wkKeys[0];
-  const progWeekNum = (wk) => weekNumberFromEarliest(wk, earliestWk);
+  const programStartWeek = useMemo(
+    () => programStartWeekIso(profile?.cohort_label ?? authProfile?.cohort_label),
+    [profile?.cohort_label, authProfile?.cohort_label],
+  );
+  const progWeekNum = (wk) => programRelativeWeekNum(wk, programStartWeek, earliestWk);
 
   const trends = useMemo(
     () => buildTrends(checksByWeek, curWk, goalItems),
@@ -1441,6 +1445,7 @@ export default function App() {
       adherenceFor={adherenceFor}
       progWeekNum={progWeekNum}
       earliestWk={earliestWk}
+      programStartWeek={programStartWeek}
       weighins={weighins}
       logWeighin={logWeighin}
       deleteWeighin={deleteWeighin}

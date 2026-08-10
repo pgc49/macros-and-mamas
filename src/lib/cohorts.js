@@ -1,11 +1,15 @@
 /* Keep program dates in sync with functions/_shared/cohorts.js */
 
+import { parseLocalDate, wkStartOf } from "../utils/dates";
+
 export const COHORT_CALENDAR = [
   {
     label: "2026-07",
     displayName: "Founding Members",
-    programStart: "2026-07-20T00:00:00.000Z",
-    programEnd: "2026-09-14T00:00:00.000Z",
+    /** Monday of official Week 1 */
+    programStart: "2026-07-27T00:00:00.000Z",
+    /** Exclusive alumni start (last program day = Sep 20) */
+    programEnd: "2026-09-21T00:00:00.000Z",
   },
   {
     label: "2026-08",
@@ -33,6 +37,17 @@ export function freeMonthEndsAt(cohortOrLabel) {
   return new Date(start + FREE_MONTH_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
+/** Inclusive last calendar day of the 8-week program. */
+export function programLastDayIso(cohortOrLabel) {
+  const cohort = typeof cohortOrLabel === "string"
+    ? cohortByLabel(cohortOrLabel)
+    : cohortOrLabel;
+  if (!cohort?.programEnd) return null;
+  const end = Date.parse(cohort.programEnd);
+  if (!Number.isFinite(end)) return null;
+  return new Date(end - 24 * 60 * 60 * 1000).toISOString();
+}
+
 export function isProgramComplete(cohortOrLabel, now = new Date()) {
   const cohort = typeof cohortOrLabel === "string"
     ? cohortByLabel(cohortOrLabel)
@@ -44,7 +59,8 @@ export function isProgramComplete(cohortOrLabel, now = new Date()) {
 }
 
 /**
- * Program week 1–8 from cohort programStart (live calendar math).
+ * Program week 0–8 from cohort programStart (live calendar math).
+ * 0 = early-access week before official Week 1.
  * Keep in sync with functions/_shared/cohorts.js.
  */
 export function programWeekNumber(cohortOrLabel, now = new Date()) {
@@ -55,7 +71,42 @@ export function programWeekNumber(cohortOrLabel, now = new Date()) {
   const start = Date.parse(cohort.programStart);
   const t = now instanceof Date ? now.getTime() : Date.parse(now);
   if (!Number.isFinite(start) || !Number.isFinite(t)) return null;
-  if (t < start) return 1;
+  if (t < start) return 0;
   const week = Math.floor((t - start) / (7 * 24 * 60 * 60 * 1000)) + 1;
-  return Math.min(Math.max(week, 1), 8);
+  return Math.min(Math.max(week, 0), 8);
+}
+
+/** Monday YYYY-MM-DD of official Week 1 for a cohort label. */
+export function programStartWeekIso(cohortOrLabel) {
+  const cohort = typeof cohortOrLabel === "string"
+    ? cohortByLabel(cohortOrLabel)
+    : cohortOrLabel;
+  if (!cohort?.programStart) return null;
+  const day = String(cohort.programStart).slice(0, 10);
+  return wkStartOf(parseLocalDate(day));
+}
+
+/**
+ * Rhythm / Today week label number relative to official programStart.
+ * Jul 20 (early) → 0, Jul 27 → 1, Aug 10 → 3.
+ * Falls back to earliestWk-based numbering when no program anchor.
+ */
+export function programRelativeWeekNum(weekStart, programStartWeek, earliestWk = null) {
+  if (programStartWeek && weekStart) {
+    const a = parseLocalDate(weekStart).getTime();
+    const b = parseLocalDate(programStartWeek).getTime();
+    if (Number.isFinite(a) && Number.isFinite(b)) {
+      return Math.round((a - b) / (7 * 86400000)) + 1;
+    }
+  }
+  if (!earliestWk || !weekStart) return 1;
+  const a = parseLocalDate(weekStart).getTime();
+  const b = parseLocalDate(earliestWk).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 1;
+  return Math.round((a - b) / (7 * 86400000)) + 1;
+}
+
+export function programWeekLabel(weekStart, programStartWeek, earliestWk = null) {
+  const n = programRelativeWeekNum(weekStart, programStartWeek, earliestWk);
+  return `W${n}`;
 }

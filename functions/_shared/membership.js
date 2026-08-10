@@ -11,6 +11,7 @@ import {
   displayNameForCohortLabel,
   freeMonthEndsAt,
   isProgramComplete,
+  programLastDayIso,
   programWeekNumber,
 } from "./cohorts.js";
 import {
@@ -180,6 +181,7 @@ export function buildProgramSummaryFromCohort(profile, payments = []) {
   // Live calendar only — never fall back to stale profiles.week (often stuck at 1).
   const week = programWeekNumber(cohort);
   const complete = isProgramComplete(cohort);
+  const lastDay = programLastDayIso(cohort);
   let phase = "not_started";
   if (profile.paid) {
     if (complete) phase = "program_complete";
@@ -196,7 +198,10 @@ export function buildProgramSummaryFromCohort(profile, payments = []) {
       ? displayNameForCohortLabel(profile.cohort_label)
       : (profile.cohort_label || null),
     programStart: cohort?.programStart || null,
+    /** Exclusive alumni start (internal). */
     programEnd: cohort?.programEnd || null,
+    /** Inclusive last day of the 8 weeks (for Payments display). */
+    programLastDay: lastDay,
     freeMonthEndsAt: freeMonthEndsAt(cohort),
     label: latest?.description || "8-week program",
     amount: latest?.amount ?? null,
@@ -279,7 +284,7 @@ export async function buildSubscriptionPayload(env, profile) {
   if (beforeProgramEnd || inFreeMonth) {
     note = access.cohortLabel === "2026-07"
       ? `Founding Members get one month of monthly membership free starting ${formatShortDate(access.programEnd)} (through ${formatShortDate(freeEnd)}). Opt in below — nothing charges until that free month ends. You can subscribe early; the free period still applies.`
-      : `When your 8 weeks end${access.programEnd ? ` (${formatShortDate(access.programEnd)})` : ""}, you get one free month of membership. Opt in anytime — nothing charges until the free month ends.`;
+      : `When your 8 weeks end${access.programEnd ? ` (${formatShortDate(programLastDayIso(access.cohortLabel) || access.programEnd)})` : ""}, you get one free month of membership. Opt in anytime — nothing charges until the free month ends.`;
   } else if (afterFree) {
     note = "Your free month has ended. Subscribe to keep using the app — resubscribing does not include another free trial.";
   } else {

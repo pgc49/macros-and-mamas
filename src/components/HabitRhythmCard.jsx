@@ -16,14 +16,15 @@ export function HabitRhythmCard({
   goalItems = [],
   curWk,
   earliestWk = null,
+  programStartWeek = null,
   audience = "client",
 }) {
   const [sel, setSel] = useState("all");
   const admin = audience === "admin";
 
   const model = useMemo(
-    () => buildHabitRhythm({ checksByWeek, goalItems, curWk, earliestWk }),
-    [checksByWeek, goalItems, curWk, earliestWk],
+    () => buildHabitRhythm({ checksByWeek, goalItems, curWk, earliestWk, programStartWeek }),
+    [checksByWeek, goalItems, curWk, earliestWk, programStartWeek],
   );
 
   const series = sel === "all" ? model.allSeries : (model.byGoalId[sel] || []);
