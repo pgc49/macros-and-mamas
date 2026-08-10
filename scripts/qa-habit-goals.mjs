@@ -36,6 +36,7 @@ const {
   adherenceForItems,
   goalCreatedDateIso,
   goalWeekTarget,
+  isBeforeGoalCreated,
   mergeGoalItems,
 } = goals;
 const { buildHabitRhythm, goalActiveInWeek } = rhythmMod;
@@ -91,6 +92,18 @@ const target = goalWeekTarget(dailyItem, "2026-08-03");
 assert(target === 1, `mid-week Sunday daily target is 1, not 0 (got ${target})`);
 assert(goalWeekTarget({ id: "c2", source: "custom", daily: false, nTarget: 5, createdAt: createdUtc }, "2026-08-03") === 5, "5× week target stays 5");
 assert(!goalActiveInWeek(dailyItem, "2026-07-27"), "custom inactive before create week");
+assert(
+  isBeforeGoalCreated(dailyItem, "2026-07-27", "M"),
+  "days in weeks before create are locked",
+);
+assert(
+  !isBeforeGoalCreated(dailyItem, "2026-08-03", "S2"),
+  "create day (Sunday) stays tappable",
+);
+assert(
+  isBeforeGoalCreated(dailyItem, "2026-08-03", "M"),
+  "days before create day in that week are locked",
+);
 
 const rhythm = buildHabitRhythm({
   checksByWeek,

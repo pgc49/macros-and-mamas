@@ -20,11 +20,12 @@
    ================================================================== */
 
 export const APP_RELEASE_NOTES = {
-  id: "2026-08-goals-rhythm-v1",
+  id: "2026-08-goals-rhythm-v2",
   headline: "What’s new",
   bullets: [
-    "Custom goals in your rhythm tracker — add up to 3 of your own (YOURS), plus a clearer Progress tab to see how each habit is going week by week. Shout-out to Sheila for suggesting this!",
-    "Group messaging is live in the app — we’re slowly moving group-forum chat off WhatsApp so conversations live in one place. Give it a try!",
-    "A new referral system is on the way — Callie will share more about this soon!",
+    "Custom goals in your rhythm tracker — add up to 3 of your own (YOURS), plus a clearer Progress tab to see each habit week by week. Shout-out to Sheila for suggesting this!",
+    "Group messaging is in the app — we’re slowly moving the group forum off WhatsApp so conversations live in one place. Give it a try!",
+    "A new referral system is on the way — Callie will share more soon!",
+    "New recipe: High Protein Einkorn Pancakes",
   ],
 };
