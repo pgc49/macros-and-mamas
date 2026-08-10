@@ -16,6 +16,7 @@ import {
   voiceFileExtension,
   voiceRecordingSupported,
 } from "../lib/voiceMemo";
+import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
 
@@ -711,37 +712,8 @@ export function MessagesThread({
                       </a>
                     )}
                     {hasAttach && isAudio && (
-                      <div style={{ marginBottom: m.body ? 8 : 0, minWidth: 220 }}>
-                        <div style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: T.accentDeep,
-                          marginBottom: 6,
-                          letterSpacing: "0.02em",
-                        }}
-                        >
-                          Voice memo
-                        </div>
-                        {m.attachmentUrl ? (
-                          <audio
-                            controls
-                            preload="metadata"
-                            src={m.attachmentUrl}
-                            controlsList="nodownload"
-                            style={{
-                              width: "100%",
-                              maxWidth: 280,
-                              height: 40,
-                              verticalAlign: "middle",
-                            }}
-                          >
-                            Your browser can’t play this voice memo.
-                          </audio>
-                        ) : (
-                          <div style={{ fontSize: 13, color: T.inkSoft }}>
-                            Voice memo (loading…)
-                          </div>
-                        )}
+                      <div style={{ marginBottom: m.body ? 8 : 0 }}>
+                        <VoiceMemoPlayer src={m.attachmentUrl || ""} />
                       </div>
                     )}
                     {hasAttach && !isImage && !isAudio && (
@@ -1093,11 +1065,11 @@ export function MessagesThread({
               Discard
             </button>
           </div>
-          <audio
-            controls
-            preload="metadata"
+          <VoiceMemoPlayer
             src={voicePreview.url}
-            style={{ width: "100%", maxWidth: 320, height: 40 }}
+            label="Preview"
+            durationMs={voicePreview.durationMs}
+            style={{ maxWidth: 320 }}
           />
           <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8 }}>
             Add an optional note below, then Send.
