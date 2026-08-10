@@ -40,9 +40,14 @@ No Meta Ads MCP in this environment. Do these in Business Manager, then paste se
 - Waitlist Lead (Pixel + CAPI) with shared `event_id`
 - Checkout `InitiateCheckout` (Pixel + CAPI) + Stripe metadata
 - Webhook `Purchase` CAPI + Welcome page Pixel Purchase (same `event_id`)
+- Optional browser → `/api/meta-capi` bridge for Lead / InitiateCheckout / PageView only (not Purchase); origin + KV rate-limited
 - Supabase migration `036_cohort_waitlist_attribution.sql`
 - Astro `/` member/PWA guard + `/waitlist` → `cohort_waitlist`
 - Manifest `start_url` → `/dashboard` for **new** installs
+
+## Required for CAPI / lead rate limits
+
+Cloudflare Pages must have a **WAITLIST** KV namespace binding. Without it, `/api/waitlist`, `/api/lead`, and `/api/meta-capi` fail closed (429/503).
 
 ## Verify before spend
 

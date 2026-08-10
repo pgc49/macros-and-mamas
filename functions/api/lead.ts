@@ -5,7 +5,7 @@
  * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY,
  *      META_PIXEL_ID, META_CAPI_ACCESS_TOKEN (optional),
  *      LEAD_FROM_EMAIL (optional, default Callie address),
- *      WAITLIST KV (optional rate limit — same binding as /api/waitlist)
+ *      WAITLIST KV (required — rate limit fails closed if unbound; same binding as /api/waitlist)
  */
 
 import {
@@ -70,8 +70,10 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-async function rateLimited(env: Env, ip: string): Promise<boolean> {
-  if (!env.WAITLIST) return false;
+/** @returns {"ok"|"limited"|"unavailable"} */
+async function rateLimitStatus(env: Env, ip: string): Promise<"ok" | "limited" | "unavailable"> {
+  // Fail closed: unbound KV must not leave lead capture / Resend uncapped.
+  if (!env.WAITLIST) return "unavailable";
   const key = `lead-rl:${ip}`;
   const raw = await env.WAITLIST.get(key);
   const now = Date.now();
@@ -83,12 +85,22 @@ async function rateLimited(env: Env, ip: string): Promise<boolean> {
       hits = [];
     }
   }
-  if (hits.length >= RATE_LIMIT_MAX) return true;
+  if (hits.length >= RATE_LIMIT_MAX) return "limited";
   hits.push(now);
   await env.WAITLIST.put(key, JSON.stringify(hits), {
     expirationTtl: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000),
   });
-  return false;
+  return "ok";
+}
+
+/** Strip header-injection chars; cap length. HTML escaping happens at render. */
+function safeDisplayName(raw: string): string {
+  const cleaned = String(raw || '')
+    .replace(/[\r\n\0\u2028\u2029]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+  return cleaned || 'Mama';
 }
 
 async function sha256(value: string): Promise<string | null> {
@@ -278,7 +290,7 @@ async function sendRangesEmail(
     return;
   }
   const from = env.LEAD_FROM_EMAIL || FROM_CALLIE;
-  const name = opts.firstName || 'Mama';
+  const name = safeDisplayName(opts.firstName);
   const joinUrl = `${APP_URL}/join?from=quiz`;
   const signupCta = {
     cta_text: 'Finish signing up — lock in your spot',
@@ -286,6 +298,7 @@ async function sendRangesEmail(
   };
 
   let subject = '';
+  // renderEmail() HTML-escapes header; keep name free of CR/LF for subject safety.
   let header = `Hi ${name},`;
   let body = '';
   let cta: { cta_text?: string; cta_url?: string } = {};
@@ -391,7 +404,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     request.headers.get('cf-connecting-ip') ||
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     'unknown';
-  if (await rateLimited(env, ip)) {
+  const rl = await rateLimitStatus(env, ip);
+  if (rl === 'unavailable') {
+    console.error('[lead] rate limit unavailable (WAITLIST KV unbound)');
+    return json({ error: 'unavailable' }, 503);
+  }
+  if (rl === 'limited') {
     return json({ error: 'rate_limited' }, 429);
   }
 
@@ -407,10 +425,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   const email = String(body.email || '').trim().toLowerCase();
-  const firstName = String(body.first_name || '').trim();
+  const rawFirst = String(body.first_name || '').trim();
+  const firstName = safeDisplayName(rawFirst);
   // Last name optional at quiz gate — collected later at account/checkout.
-  const lastName = String(body.last_name || '').trim();
-  if (!EMAIL_RE.test(email) || !firstName) {
+  const lastName = String(body.last_name || '')
+    .replace(/[\r\n\0\u2028\u2029]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+  if (!EMAIL_RE.test(email) || !rawFirst) {
     return json({ error: 'invalid_fields' }, 400);
   }
   const domain = email.split('@')[1] || '';

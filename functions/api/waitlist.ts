@@ -5,10 +5,10 @@
  *
  * Env:
  *   SUPABASE_URL / VITE_SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY (preferred) or anon (insert policy allows)
+ *   SUPABASE_SERVICE_ROLE_KEY (required for inserts; anon insert policy removed)
  *   WAITLIST_COHORT (default cohort_2)
  *   META_PIXEL_ID + META_CAPI_ACCESS_TOKEN (optional Lead CAPI)
- *   WAITLIST KV (optional rate limit)
+ *   WAITLIST KV (required — rate limit fails closed if unbound)
  */
 
 interface Env {
@@ -107,8 +107,10 @@ async function parseBody(request: Request): Promise<WaitlistBody> {
   };
 }
 
-async function rateLimited(env: Env, ip: string): Promise<boolean> {
-  if (!env.WAITLIST) return false;
+/** @returns {"ok"|"limited"|"unavailable"} */
+async function rateLimitStatus(env: Env, ip: string): Promise<"ok" | "limited" | "unavailable"> {
+  // Fail closed: unbound KV must not leave the public form uncapped.
+  if (!env.WAITLIST) return "unavailable";
   const key = `rl:${ip}`;
   const raw = await env.WAITLIST.get(key);
   const now = Date.now();
@@ -120,12 +122,12 @@ async function rateLimited(env: Env, ip: string): Promise<boolean> {
       hits = [];
     }
   }
-  if (hits.length >= RATE_LIMIT_MAX) return true;
+  if (hits.length >= RATE_LIMIT_MAX) return "limited";
   hits.push(now);
   await env.WAITLIST.put(key, JSON.stringify(hits), {
     expirationTtl: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000),
   });
-  return false;
+  return "ok";
 }
 
 async function sha256(value: string): Promise<string | null> {
@@ -226,7 +228,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     "unknown";
 
   try {
-    if (await rateLimited(env, ip)) {
+    const rl = await rateLimitStatus(env, ip);
+    if (rl === "unavailable") {
+      console.error("waitlist rate limit unavailable (WAITLIST KV unbound)");
+      if (wantsJson) return json({ ok: false, error: "unavailable" }, 503);
+      return redirect("/waitlist?err=unavailable");
+    }
+    if (rl === "limited") {
       if (wantsJson) return json({ ok: false, error: "rate_limited" }, 429);
       return redirect("/waitlist?err=rate_limited");
     }

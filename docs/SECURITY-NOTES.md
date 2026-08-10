@@ -4,6 +4,10 @@
 
 | Issue | Fix |
 | --- | --- |
+| Open `/api/meta-capi` abuse (unauth Purchase spam) | Origin allowlist + WAITLIST KV rate limit (fail-closed); Purchase removed from browser bridge (webhook-only); `custom_data` key allowlist |
+| Waitlist/lead rate limits fail-open without KV | `/api/waitlist` + `/api/lead` return rate-limited when `WAITLIST` KV unbound |
+| AI meal-suggest / meal-idea rate limits fail-open | Fail closed if service role missing or count request fails |
+| Quiz lead email name injection / subject CR-LF | `safeDisplayName` strips control chars; `renderEmail` still HTML-escapes header |
 | Client could backdate `profiles.created_at` to unlock founding $149 | Migration `040_freeze_profile_created_at` + checkout uses `auth.users.created_at` |
 | Quiz re-submit could overwrite pregnant/vegan segment → unlock $249 | Sticky exit segments in `lead.ts` upsert |
 | `emailHasQuizUnlock` used PostgREST `ilike` (wildcard risk) | Switched to `email=eq.` |
@@ -30,4 +34,4 @@
 2. Confirm Production secrets: `RESEND_API_KEY`, `STRIPE_PRICE_ID_WAITLIST`, `STRIPE_PRICE_ID_LAB_ADDON=price_1U1vfzRyN0PahoiM6AVgkMYh`
 3. Strategy A (quiz-gated $249): keep `OPEN_WITHOUT_QUIZ` unset/`false`. Meta Lead fires only for enrollable quiz segments.
 4. Unknown path smoke: `/nope` should be a real 404 page, not the homepage
-5. Confirm Pages has a `WAITLIST` KV binding (rate limits for `/api/lead` + `/api/waitlist`)
+5. Confirm Pages has a `WAITLIST` KV binding (required — rate limits for `/api/lead`, `/api/waitlist`, `/api/meta-capi` fail closed without it)
