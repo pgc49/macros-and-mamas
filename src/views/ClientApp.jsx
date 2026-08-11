@@ -443,6 +443,15 @@ export function ClientApp({
                     accent
                     onLog={logRecipe}
                     onRemove={() => onDeleteCustomMeal?.(m.id)}
+                    onSaveIngredients={(meal) => onSaveCustomMeal?.({
+                      name: meal.name,
+                      cal: meal.cal,
+                      p: meal.p,
+                      c: meal.c,
+                      f: meal.f,
+                      serves: meal.serves,
+                      ingredients: meal.ingredients,
+                    })}
                   />
                 ))
               )}

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { withRecipeDetail } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
+import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
+import { SlotChips } from "./SlotChips";
 
 function IngList({ items }) {
   const lines = Array.isArray(items) ? items : [];
@@ -41,6 +43,9 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
   const batchLabel = serves > 1
     ? (isDinner ? ` · batch · serves ${serves}` : ` · batch serves ${serves}`)
     : "";
+  const [slot, setSlot] = useState(
+    () => normalizeSlot(r.slot || r.cat) || guessSlotFromTime(),
+  );
 
   const [logPhase, setLogPhase] = useState("idle");
   const logBtn = (
@@ -52,7 +57,12 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
         if (logPhase !== "idle") return;
         setLogPhase("busy");
         try {
-          const ok = await onLog?.(scaleMealForLog({ ...r, via: "recipe", fromPlanner: true }, servings));
+          const ok = await onLog?.(scaleMealForLog({
+            ...r,
+            via: "recipe",
+            slot,
+            fromPlanner: true,
+          }, servings));
           if (ok === false) {
             setLogPhase("idle");
             return;
@@ -142,23 +152,30 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
       </div>
 
       {showLog && (
-        <div
-          style={{
-            padding: "0 16px 12px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600 }}>Servings to log</div>
-            <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2, maxWidth: 220, lineHeight: 1.35 }}>
-              Scales macros only — recipe amounts stay at one serving
+        <div style={{ padding: "0 16px 12px" }}>
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginBottom: 6 }}>
+              Add to
             </div>
+            <SlotChips value={slot} onChange={setSlot} compact />
           </div>
-          <ServingStepper value={servings} onChange={setQty} compact />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600 }}>Servings to log</div>
+              <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2, maxWidth: 220, lineHeight: 1.35 }}>
+                Scales macros only — recipe amounts stay at one serving
+              </div>
+            </div>
+            <ServingStepper value={servings} onChange={setQty} compact />
+          </div>
         </div>
       )}
 
