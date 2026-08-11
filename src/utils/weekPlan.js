@@ -246,6 +246,25 @@ export function recipeToPlanMeal(recipe, slotOverride = null) {
   });
 }
 
+/**
+ * Avoid silently overwriting an existing My meal when AI/create adds a new one.
+ * Create Recipe still upserts by exact name on purpose (re-save same recipe).
+ */
+export function uniqueCustomMealName(name, existingMeals = []) {
+  const base = String(name || "").trim().slice(0, 72) || "Meal";
+  const taken = new Set(
+    (Array.isArray(existingMeals) ? existingMeals : [])
+      .map((m) => String(m?.name || "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let n = 2; n < 100; n += 1) {
+    const candidate = `${base} (${n})`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
+  return `${base} (${Date.now().toString(36).slice(-4)})`;
+}
+
 /** My meals → planner row. Copy saved Create Recipe ingredients when present. */
 export function customMealToPlanMeal(custom, slotOverride = "snack") {
   const slot = String(slotOverride || "snack").toLowerCase();

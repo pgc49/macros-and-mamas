@@ -37,6 +37,7 @@ import {
   rangeCoach,
   hydrateWeekPlanCustomIngredients,
   weekPlanNeedsCustomIngredientHydration,
+  uniqueCustomMealName,
 } from "../utils/weekPlan";
 
 /** Headroom to day high bands for the selected plan day (exclude meal being swapped). */
@@ -193,34 +194,37 @@ export function WeekPlanner({
     closePicker();
   };
 
-  const chooseRecipe = (recipe) => {
+  const resolvePickerSlot = (slotOverride, fallback = "snack") => {
+    const fromModal = slotOverride && slotOverride !== "any" ? slotOverride : null;
+    const fromPicker = picker?.slot && picker.slot !== "any" ? picker.slot : null;
+    const raw = String(fromModal || fromPicker || fallback).toLowerCase();
+    return raw === "pantry" ? "snack" : raw;
+  };
+
+  const chooseRecipe = (recipe, slotOverride = null) => {
     if (!picker) return;
-    const raw =
-      picker.slot && picker.slot !== "any"
-        ? picker.slot
-        : String(recipe.cat || "snack").toLowerCase();
-    const slot = raw === "pantry" ? "snack" : raw;
+    const slot = resolvePickerSlot(
+      slotOverride,
+      String(recipe.cat || "snack").toLowerCase(),
+    );
     placeMeal(recipeToPlanMeal(recipe, slot));
   };
 
-  const chooseCustom = (custom) => {
+  const chooseCustom = (custom, slotOverride = null) => {
     if (!picker) return;
-    const slot = picker.slot && picker.slot !== "any" ? picker.slot : "snack";
+    const slot = resolvePickerSlot(slotOverride, "snack");
     placeMeal(customMealToPlanMeal(custom, slot));
   };
 
-  const chooseAiMeal = async (idea, { saveToMine = false } = {}) => {
+  const chooseAiMeal = async (idea, { saveToMine = false, slot: slotOverride = null } = {}) => {
     if (!picker) return false;
-    const slot =
-      picker.slot && picker.slot !== "any"
-        ? picker.slot
-        : String(idea.slot || "dinner").toLowerCase();
+    const slot = resolvePickerSlot(slotOverride, String(idea.slot || "dinner").toLowerCase());
     const meal = aiIdeaToPlanMeal(idea, slot);
     if (saveToMine && onSaveCustomMeal) {
       // Persist recipe note (ingredients ± steps) — same field My meals / Create Recipe use.
       const ingredients = recipeNoteFromMeal(meal);
-      await onSaveCustomMeal({
-        name: meal.name,
+      const saved = await onSaveCustomMeal({
+        name: uniqueCustomMealName(meal.name, customMeals),
         cal: meal.cal,
         p: meal.p,
         c: meal.c,
@@ -229,7 +233,11 @@ export function WeekPlanner({
         ...(ingredients ? { ingredients } : {}),
       });
       setMessageSticky(false);
-      setMessage(`Added to ${picker.day} and saved to My meals.`);
+      setMessage(
+        saved
+          ? `Added to ${picker.day} and saved to My meals.`
+          : `Added to ${picker.day}, but couldn't save to My meals — try again from My meals.`,
+      );
     } else {
       setMessageSticky(false);
       setMessage(`Added to ${picker.day}.`);
@@ -1229,7 +1237,11 @@ function MealPickerModal({
               Callie&apos;s bank{effectiveSlot ? ` · ${SLOT_LABEL[effectiveSlot]}` : ""}
             </div>
             {bank.map((recipe) => (
-              <PickerRow key={recipe.name} recipe={recipe} onPick={onPickRecipe} />
+              <PickerRow
+                key={recipe.name}
+                recipe={recipe}
+                onPick={(r) => onPickRecipe(r, effectiveSlot)}
+              />
             ))}
           </>
         )}
@@ -1268,7 +1280,11 @@ function MealPickerModal({
               ))}
             </div>
             {pantryList.map((item) => (
-              <PickerRow key={item.name} recipe={item} onPick={onPickRecipe} />
+              <PickerRow
+                key={item.name}
+                recipe={item}
+                onPick={(r) => onPickRecipe(r, effectiveSlot)}
+              />
             ))}
           </>
         )}
@@ -1292,7 +1308,7 @@ function MealPickerModal({
                 <button
                   key={m.id}
                   type="button"
-                  onClick={() => onPickCustom(m)}
+                  onClick={() => onPickCustom(m, effectiveSlot)}
                   style={{
                     width: "100%",
                     textAlign: "left",
@@ -1332,7 +1348,7 @@ function MealPickerModal({
               onSaveCustomMeal={onSaveCustomMeal}
               saveLabel="Save & add to plan"
               onSaved={(saved) => {
-                if (saved) onPickCustom?.(saved);
+                if (saved) onPickCustom?.(saved, effectiveSlot);
               }}
               onCancel={goHub}
             />
@@ -1389,7 +1405,7 @@ function MealPickerModal({
             {describeMeal && (
               <AiMealPreview
                 meal={describeMeal}
-                onAdd={() => onPickAi(describeMeal, { saveToMine: saveMine })}
+                onAdd={() => onPickAi(describeMeal, { saveToMine: saveMine, slot: effectiveSlot })}
               />
             )}
           </>
@@ -1423,7 +1439,7 @@ function MealPickerModal({
               <AiMealPreview
                 key={`${m.name}-${i}`}
                 meal={m}
-                onAdd={() => onPickAi(m, { saveToMine: saveMine })}
+                onAdd={() => onPickAi(m, { saveToMine: saveMine, slot: effectiveSlot })}
               />
             ))}
           </>
@@ -1444,7 +1460,10 @@ function MealPickerModal({
               dayTotals={eatingRoom.dayTotals}
               bands={eatingRoom.bands}
               onMealIdea={onMealIdea}
-              onPick={(m, opts) => onPickAi(m, { saveToMine: !!opts?.saveToMine })}
+              onPick={(m, opts) => onPickAi(m, {
+                saveToMine: !!opts?.saveToMine,
+                slot: effectiveSlot,
+              })}
               addLabel="Add to plan"
               roomCaption="planned so far"
               defaultSaveMine={false}

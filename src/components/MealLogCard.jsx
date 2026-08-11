@@ -1483,7 +1483,16 @@ export function MealLogCard({
                       >
                         <input
                           value={draft.name}
-                          onChange={(ev) => setDraft((d) => ({ ...d, name: ev.target.value, handTweaked: true }))}
+                          onChange={(ev) => setDraft((d) => {
+                            const name = ev.target.value;
+                            return {
+                              ...d,
+                              name,
+                              // Keep serving-scale rename base in sync with hand edits.
+                              baseName: stripServingSuffix(name),
+                              handTweaked: true,
+                            };
+                          })}
                           style={{
                             width: "100%",
                             padding: "8px 10px",

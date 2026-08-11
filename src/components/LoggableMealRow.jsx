@@ -63,10 +63,14 @@ export function LoggableMealRow({
     setIngBusy(true);
     setIngNote("");
     try {
-      await onSaveIngredients({
+      const saved = await onSaveIngredients({
         ...meal,
         ingredients: ingDraft.trim(),
       });
+      if (saved === false || saved == null) {
+        setIngNote("Couldn't save — try again");
+        return;
+      }
       setIngNote("Saved");
       window.setTimeout(() => setIngNote(""), 2000);
     } catch {

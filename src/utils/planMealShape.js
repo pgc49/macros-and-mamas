@@ -31,7 +31,11 @@ export function ingredientsFromText(value, { max = 40 } = {}) {
       { max },
     );
   }
-  const text = String(value || "").trim().split(/\n\s*Steps:\s*\n/i)[0].trim();
+  // Drop a trailing or whole-note "Steps:" block (AI recipe notes).
+  const text = String(value || "")
+    .trim()
+    .split(/(?:^|\n)\s*Steps:\s*(?:\n|$)/i)[0]
+    .trim();
   if (!text) return [];
   const chunks = text
     .split(/\n+| · |•/g)

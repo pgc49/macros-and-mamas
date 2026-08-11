@@ -452,6 +452,7 @@ export function ClientApp({
               {myMealsAddOpen && (
                 <MyMealsAddSheet
                   macros={macros}
+                  customMeals={customMeals}
                   onClose={() => setMyMealsAddOpen(false)}
                   onEstimateRecipe={onEstimateRecipe}
                   onSaveCustomMeal={onSaveCustomMeal}

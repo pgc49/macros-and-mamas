@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { T, F, FD } from "../theme/tokens";
 import { Btn } from "./ui";
@@ -7,6 +7,7 @@ import { RecipeCreator } from "./RecipeCreator";
 import { SlotChips } from "./SlotChips";
 import { MEAL_SLOTS, SLOT_LABEL, guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
 import { recipeNoteFromMeal } from "../utils/planMealShape";
+import { uniqueCustomMealName } from "../utils/weekPlan";
 
 /**
  * My meals → "+ Add meal" sheet.
@@ -15,6 +16,7 @@ import { recipeNoteFromMeal } from "../utils/planMealShape";
  */
 export function MyMealsAddSheet({
   macros,
+  customMeals = [],
   onClose,
   onEstimateRecipe,
   onSaveCustomMeal,
@@ -28,6 +30,16 @@ export function MyMealsAddSheet({
   const [flash, setFlash] = useState("");
   const [describeMeal, setDescribeMeal] = useState(null);
   const [optionMeals, setOptionMeals] = useState([]);
+  const closeTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+  }, []);
+
+  const scheduleClose = (ms = 900) => {
+    if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => onClose?.(), ms);
+  };
 
   const goHub = () => {
     setView("hub");
@@ -42,7 +54,7 @@ export function MyMealsAddSheet({
     if (!idea || !onSaveCustomMeal) return false;
     const ingredients = recipeNoteFromMeal(idea);
     const saved = await onSaveCustomMeal({
-      name: idea.name,
+      name: uniqueCustomMealName(idea.name, customMeals),
       cal: Number(idea.cal) || 0,
       p: Number(idea.p) || 0,
       c: Number(idea.c) || 0,
@@ -57,7 +69,7 @@ export function MyMealsAddSheet({
     setFlash(`Saved “${saved.name}” to My meals.`);
     setDescribeMeal(null);
     setOptionMeals([]);
-    window.setTimeout(() => onClose?.(), 900);
+    scheduleClose(900);
     return true;
   };
 
@@ -250,7 +262,7 @@ export function MyMealsAddSheet({
             saveLabel="Save to My meals"
             onSaved={() => {
               setFlash("Saved to My meals.");
-              window.setTimeout(() => onClose?.(), 700);
+              scheduleClose(700);
             }}
             onCancel={goHub}
           />
