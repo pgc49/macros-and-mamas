@@ -245,6 +245,12 @@ describe("messaging crash containment", () => {
       expect(remountSend).not.toHaveBeenCalled();
       expect(screen.getByPlaceholderText("Write a message…").value).toBe("");
     });
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Next operation" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(1));
   });
 });
 

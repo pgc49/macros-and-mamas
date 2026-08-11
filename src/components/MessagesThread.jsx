@@ -286,6 +286,7 @@ export function MessagesThread({
         if (pendingSendAttempts.get(attemptScope)?.generation === matchingAttempt.generation) {
           pendingSendAttempts.delete(attemptScope);
         }
+        sendInFlightRef.current = false;
         return;
       } catch {
         // The original attempt failed; continue below with the same ID.
