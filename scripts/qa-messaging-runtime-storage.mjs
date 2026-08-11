@@ -19,10 +19,21 @@ function assert(condition, message) {
 }
 
 async function setRuntime(patch) {
-  const { error } = await service
+  const { data: rows, error: loadError } = await service
     .from("messaging_runtime_config")
-    .update(patch)
-    .eq("singleton", true);
+    .select("updated_at")
+    .eq("singleton", true)
+    .limit(1);
+  if (loadError) throw loadError;
+  const { error } = await service.rpc("update_messaging_runtime", {
+    p_actor_id: userId,
+    p_request_id: crypto.randomUUID(),
+    p_expected_updated_at: rows?.[0]?.updated_at,
+    p_mode: patch.mode ?? null,
+    p_attachments_enabled: patch.attachments_enabled ?? null,
+    p_notifications_enabled: patch.notifications_enabled ?? null,
+    p_reason: patch.reason ?? null,
+  });
   if (error) throw error;
 }
 
