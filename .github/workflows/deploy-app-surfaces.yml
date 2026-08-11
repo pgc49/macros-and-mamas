@@ -1,0 +1,96 @@
+name: Deploy isolated app surfaces
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      surface:
+        type: choice
+        options: [both, customer, admin]
+        default: both
+
+concurrency:
+  group: app-surface-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  classify:
+    if: ${{ vars.ENABLE_ISOLATED_SURFACE_DEPLOYS == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      customer: ${{ steps.paths.outputs.customer }}
+      admin: ${{ steps.paths.outputs.admin }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: paths
+        env:
+          BEFORE: ${{ github.event.before }}
+          MANUAL_SURFACE: ${{ inputs.surface }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            case "$MANUAL_SURFACE" in
+              customer) echo "customer=true" >> "$GITHUB_OUTPUT"; echo "admin=false" >> "$GITHUB_OUTPUT" ;;
+              admin) echo "customer=false" >> "$GITHUB_OUTPUT"; echo "admin=true" >> "$GITHUB_OUTPUT" ;;
+              *) echo "customer=true" >> "$GITHUB_OUTPUT"; echo "admin=true" >> "$GITHUB_OUTPUT" ;;
+            esac
+            exit 0
+          fi
+          git diff --name-only "$BEFORE" "$GITHUB_SHA" > /tmp/changed.txt
+          # Admin deploys for application/runtime changes. Documentation-only
+          # commits do not consume a Pages build.
+          if rg -q '^(src/|functions/|public/|scripts/|package|vite\\.config|supabase/)' /tmp/changed.txt; then
+            echo "admin=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "admin=false" >> "$GITHUB_OUTPUT"
+          fi
+          # A commit is customer-neutral only when every changed path is
+          # explicitly admin-only. Everything shared defaults to customer=true.
+          if awk '
+            !(/^src\\/admin\\// || /^docs\\/ADMIN-CUSTOMER-DEPLOYMENT-ISOLATION\\.md$/) { customer=1 }
+            END { exit customer ? 0 : 1 }
+          ' /tmp/changed.txt; then
+            echo "customer=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "customer=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-customer:
+    needs: classify
+    if: ${{ needs.classify.outputs.customer == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:customer
+      - run: npx wrangler@latest pages deploy dist --project-name "$CUSTOMER_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CUSTOMER_PROJECT: ${{ vars.CUSTOMER_PAGES_PROJECT }}
+
+  deploy-admin:
+    needs: classify
+    if: ${{ needs.classify.outputs.admin == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:admin
+      - run: npx wrangler@latest pages deploy dist --project-name "$ADMIN_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_PROJECT: ${{ vars.ADMIN_PAGES_PROJECT }}
+

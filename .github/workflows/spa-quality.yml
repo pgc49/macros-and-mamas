@@ -35,9 +35,6 @@ jobs:
       - name: Production build
         run: npm run build
 
-      - name: Customer/admin artifact isolation
-        run: npm run qa:surfaces
-
   database:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -83,3 +80,26 @@ jobs:
 
       - name: Messaging database and RLS tests
         run: supabase test db "$DB_ROOT/supabase/tests" --workdir "$DB_ROOT"
+
+  surface-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      matrix:
+        surface: [customer, admin]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:${{ matrix.surface }}
+        env:
+          CF_PAGES_BRANCH: main
+          CF_PAGES_COMMIT_SHA: ${{ github.sha }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.surface }}-surface-${{ github.sha }}
+          path: dist
+          retention-days: 7
