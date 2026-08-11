@@ -840,8 +840,7 @@ begin
   if p_scope = 'dm' then
     select r.emoji into existing_emoji
     from public.message_reactions r
-    where r.message_id = p_message_id and r.user_id = auth.uid()
-    for update;
+    where r.message_id = p_message_id and r.user_id = auth.uid();
     delete from public.message_reactions
     where public.message_reactions.message_id = p_message_id
       and user_id = auth.uid();
@@ -853,8 +852,7 @@ begin
   elsif p_scope = 'channel' then
     select r.emoji into existing_emoji
     from public.conversation_message_reactions r
-    where r.message_id = p_message_id and r.user_id = auth.uid()
-    for update;
+    where r.message_id = p_message_id and r.user_id = auth.uid();
     delete from public.conversation_message_reactions
     where public.conversation_message_reactions.message_id = p_message_id
       and user_id = auth.uid();
