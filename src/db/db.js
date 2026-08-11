@@ -409,6 +409,7 @@ function assertIdempotentPayload(existing, {
   body,
   replyToId,
   file,
+  recipientId = null,
   targetField,
   targetId,
 }) {
@@ -416,6 +417,7 @@ function assertIdempotentPayload(existing, {
   const sameTarget = existing[targetField] === targetId;
   const sameBody = String(existing.body || "") === String(body || "");
   const sameReply = String(existing.reply_to_id || "") === String(replyToId || "");
+  const sameRecipient = String(existing.recipient_id || "") === String(recipientId || "");
   let sameFile = true;
   if (file) {
     const mime = String(file.type || "").toLowerCase().split(";")[0].trim();
@@ -425,7 +427,7 @@ function assertIdempotentPayload(existing, {
   } else if (existing.attachment_path) {
     sameFile = false;
   }
-  if (!sameTarget || !sameBody || !sameReply || !sameFile) {
+  if (!sameTarget || !sameBody || !sameReply || !sameRecipient || !sameFile) {
     throw new Error("This retry no longer matches the original send.");
   }
 }
@@ -442,7 +444,13 @@ function isAudioMime(mime) {
   return MESSAGE_AUDIO_MIME.has(base) || base.startsWith("audio/");
 }
 
-async function uploadMessageAttachment({ clientId, file, allowAudio = false }) {
+async function uploadMessageAttachment({
+  clientId,
+  adminConversationId = null,
+  senderId = null,
+  file,
+  allowAudio = false,
+}) {
   if (!file) return null;
   // Strip codec params (e.g. audio/webm;codecs=opus) for allowlist + Storage.
   const mime = String(file.type || "").toLowerCase().split(";")[0].trim();
@@ -466,7 +474,9 @@ async function uploadMessageAttachment({ clientId, file, allowAudio = false }) {
   const id = (typeof crypto !== "undefined" && crypto.randomUUID)
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const path = `${clientId}/${id}-${safeAttachmentName(file.name)}`;
+  const path = adminConversationId
+    ? `admin-dm/${adminConversationId}/${senderId}/${id}-${safeAttachmentName(file.name)}`
+    : `${clientId}/${id}-${safeAttachmentName(file.name)}`;
   const { error } = await supabase.storage
     .from(MESSAGE_ATTACHMENT_BUCKET)
     .upload(path, file, {
@@ -637,7 +647,7 @@ async function hydrateChannelSenders(rows, conversationId = null) {
 }
 
 const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
-const DM_MESSAGE_SELECT = "id, client_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
+const DM_MESSAGE_SELECT = "id, client_id, sender_id, recipient_id, admin_dm_conversation_id, legacy_admin_attachment_path, client_message_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
 
 /** Attach in-thread reply preview objects from the loaded window (DMs + channels). */
 function attachReplyPreviews(rows) {
@@ -2189,6 +2199,31 @@ export const db = {
 
   channelHasUnread,
 
+  async ensureAdminDmConversation(peerId) {
+    await requireUserId();
+    if (!peerId) throw new Error("Admin peer required");
+    const { data, error } = await supabase.rpc("ensure_admin_dm_conversation", {
+      peer_id: peerId,
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+  },
+
+  async loadAdminDmMessages(conversationId, { limit = 100 } = {}) {
+    if (!conversationId) return [];
+    const { data, error } = await supabase
+      .from("messages")
+      .select(DM_MESSAGE_SELECT)
+      .eq("admin_dm_conversation_id", conversationId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(Math.min(200, Math.max(1, limit)));
+    if (error) throw error;
+    const withAttachments = await hydrateMessageAttachments(chronologicalMessages(data));
+    const withReplies = attachReplyPreviews(withAttachments);
+    return hydrateDmReactions(withReplies);
+  },
+
   /** Load 1:1 thread for a mama (self or admin viewing client). */
   async loadMessages(clientId, { limit = 100 } = {}) {
     if (!clientId) return [];
@@ -2215,6 +2250,8 @@ export const db = {
     file = null,
     replyToId = null,
     clientMessageId = null,
+    adminConversationId = null,
+    recipientId = null,
   }) {
     const uid = await requireUserId();
     if (!clientId) throw new Error("client required");
@@ -2231,8 +2268,9 @@ export const db = {
       body: text,
       replyToId,
       file,
-      targetField: "client_id",
-      targetId: clientId,
+      recipientId,
+      targetField: adminConversationId ? "admin_dm_conversation_id" : "client_id",
+      targetId: adminConversationId || clientId,
     });
     let data = prior.data || null;
     let attachment = null;
@@ -2248,7 +2286,13 @@ export const db = {
         allowAudio = String(me?.role || "").toLowerCase() === "admin";
         if (!allowAudio) throw new Error("Only Callie can send voice memos.");
       }
-      attachment = await uploadMessageAttachment({ clientId, file, allowAudio });
+      attachment = await uploadMessageAttachment({
+        clientId,
+        adminConversationId,
+        senderId: uid,
+        file,
+        allowAudio,
+      });
     }
     if (!data) {
       if (text.length < 1 && !attachment) throw new Error("Message is empty");
@@ -2257,6 +2301,12 @@ export const db = {
         .insert({
           client_id: clientId,
           sender_id: uid,
+          ...(adminConversationId
+            ? {
+              admin_dm_conversation_id: adminConversationId,
+              recipient_id: recipientId,
+            }
+            : {}),
           client_message_id: idempotencyKey,
           body: text,
           kind: "chat",
@@ -2287,8 +2337,9 @@ export const db = {
             body: text,
             replyToId,
             file,
-            targetField: "client_id",
-            targetId: clientId,
+            recipientId,
+            targetField: adminConversationId ? "admin_dm_conversation_id" : "client_id",
+            targetId: adminConversationId || clientId,
           });
         } catch (conflictError) {
           await removeUploadedAttachment(MESSAGE_ATTACHMENT_BUCKET, attachment?.path);
@@ -2326,6 +2377,44 @@ export const db = {
     const [hydrated] = await hydrateMessageAttachments([data]);
     const withReply = attachReplyPreviews(hydrated ? [hydrated] : [data])[0];
     return withReply || hydrated || data;
+  },
+
+  async sendAdminDmMessage({
+    conversationId,
+    clientId,
+    recipientId,
+    body,
+    file = null,
+    replyToId = null,
+    clientMessageId = null,
+  }) {
+    if (!conversationId || !clientId || !recipientId) {
+      throw new Error("Admin conversation identity required");
+    }
+    return this.sendMessage({
+      clientId,
+      recipientId,
+      adminConversationId: conversationId,
+      body,
+      file,
+      replyToId,
+      clientMessageId,
+    });
+  },
+
+  async markAdminDmRead(conversationId) {
+    const uid = await requireUserId();
+    if (!conversationId) return 0;
+    const { data, error } = await supabase
+      .from("messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("admin_dm_conversation_id", conversationId)
+      .eq("recipient_id", uid)
+      .is("read_at", null)
+      .is("deleted_at", null)
+      .select("id");
+    if (error) throw error;
+    return data?.length || 0;
   },
 
   /**
@@ -2605,6 +2694,21 @@ export const db = {
   },
 
   async loadMessageInbox(readerId = null) {
+    const { data: v2Rows, error: v2Error } = await supabase
+      .rpc("load_admin_message_inbox_v2");
+    if (!v2Error) {
+      return (v2Rows || []).map((row) => ({
+        threadType: row.thread_type,
+        threadId: row.thread_id,
+        clientId: row.client_id,
+        adminConversationId: row.admin_dm_conversation_id,
+        lastMessage: row.last_message,
+        unread: Number(row.unread) || 0,
+        participantIds: Array.isArray(row.participant_ids) ? row.participant_ids : [],
+      }));
+    }
+    if (!["PGRST202", "42883"].includes(String(v2Error.code || ""))) throw v2Error;
+
     const { data: inboxRows, error: inboxError } = await supabase
       .rpc("load_admin_message_inbox");
     if (!inboxError) {

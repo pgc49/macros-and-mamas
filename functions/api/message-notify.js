@@ -145,14 +145,36 @@ export async function onRequestPost({ request, env }) {
     } else if (senderIsAdmin && clientIsAdmin) {
       // Admin ↔ admin DM: only the other party in THIS thread (never every admin).
       route = "admin_to_admin";
-      const recipients = await adminDmRecipients(env, msg);
+      let recipients;
+      let adminUrl = "/admin?tab=messages";
+      if (msg.admin_dm_conversation_id) {
+        const validRecipient = await validateAdminDmRecipient(env, msg);
+        if (!validRecipient) {
+          await markMessageNotified(env, messageId);
+          await finishNotificationJob(env, job, { success: true });
+          console.warn("admin DM notification skipped", {
+            messageId,
+            reason: "skipped_recipient_deprovisioned",
+          });
+          return json({
+            ok: true,
+            skipped: "skipped_recipient_deprovisioned",
+            pushSent: 0,
+            emailSent: false,
+          });
+        }
+        recipients = [msg.recipient_id];
+        adminUrl = `/admin?tab=messages&dm=${encodeURIComponent(msg.admin_dm_conversation_id)}`;
+      } else {
+        recipients = await adminDmRecipients(env, msg);
+      }
       if (!recipients.length) throw new Error("admin DM recipient missing");
       for (const adminId of recipients) {
         const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
         const n = await sendPushToProfile(env, adminId, {
           title: firstName(sender.name) || "Admin",
           body: preview || "Open Messages in admin",
-          url: "/admin?tab=messages",
+          url: adminUrl,
           unreadCount: unreadCount || 1,
         });
         pushSent += n;
@@ -268,18 +290,27 @@ async function countUnreadForProfile(env, profileId, { asAdmin }) {
   if (!profileId) return 0;
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  let qs = `select=id&read_at=is.null&deleted_at=is.null&sender_id=neq.${encodeURIComponent(profileId)}`;
-  if (!asAdmin) {
-    qs += `&client_id=eq.${encodeURIComponent(profileId)}`;
-  } else {
-    const adminIds = await listAdminIds(env);
-    if (adminIds.length) {
-      const list = adminIds.map(encodeURIComponent).join(",");
-      // Mama senders OR threads owned by an admin (Patrick↔Callie DMs).
-      qs += `&or=(sender_id.not.in.(${list}),client_id.in.(${list}))`;
-    }
-  }
   try {
+    if (asAdmin) {
+      const qs = "select=sender_id,client_id,recipient_id,admin_dm_conversation_id"
+        + "&read_at=is.null&deleted_at=is.null"
+        + `&sender_id=neq.${encodeURIComponent(profileId)}`;
+      const adminIds = new Set(await listAdminIds(env));
+      const response = await fetch(`${base}/rest/v1/messages?${qs}`, {
+        headers: { apikey: key, authorization: `Bearer ${key}` },
+      });
+      if (!response.ok) throw new Error(`admin unread lookup failed (${response.status})`);
+      const rows = await response.json();
+      if (!Array.isArray(rows)) throw new Error("admin unread payload invalid");
+      return rows.filter((row) => (
+        row.admin_dm_conversation_id
+          ? row.recipient_id === profileId
+          : !adminIds.has(row.sender_id)
+      )).length;
+    }
+    const qs = "select=id&read_at=is.null&deleted_at=is.null"
+      + `&sender_id=neq.${encodeURIComponent(profileId)}`
+      + `&client_id=eq.${encodeURIComponent(profileId)}`;
     const resp = await fetch(`${base}/rest/v1/messages?${qs}`, {
       method: "HEAD",
       headers: {
@@ -397,6 +428,32 @@ async function adminDmRecipients(env, msg) {
   }
   // Brand-new thread owned by sender: notify Callie coach admins only.
   return (await listCallieAdminIds(env)).filter((id) => id !== msg.sender_id);
+}
+
+async function validateAdminDmRecipient(env, msg) {
+  if (!msg.admin_dm_conversation_id || !msg.recipient_id) return false;
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const [conversationResponse, recipient] = await Promise.all([
+    fetch(
+      `${base}/rest/v1/admin_dm_conversations`
+        + `?id=eq.${encodeURIComponent(msg.admin_dm_conversation_id)}`
+        + "&select=participant_low,participant_high&limit=1",
+      { headers: { apikey: key, authorization: `Bearer ${key}` } },
+    ),
+    loadProfile(env, msg.recipient_id),
+  ]);
+  if (!conversationResponse.ok) {
+    throw new Error(`admin DM conversation lookup failed (${conversationResponse.status})`);
+  }
+  const conversations = await conversationResponse.json();
+  if (!Array.isArray(conversations)) throw new Error("admin DM conversation payload invalid");
+  const conversation = conversations[0];
+  if (!conversation || String(recipient?.role || "").toLowerCase() !== "admin") return false;
+  const participants = [conversation.participant_low, conversation.participant_high];
+  return participants.includes(msg.sender_id)
+    && participants.includes(msg.recipient_id)
+    && msg.sender_id !== msg.recipient_id;
 }
 
 async function loadProfile(env, id) {

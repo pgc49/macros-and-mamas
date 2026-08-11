@@ -27,14 +27,20 @@ as $$
   );
 $$;
 
+create policy profiles_select_own_or_admin
+  on public.profiles for select to authenticated
+  using (id = auth.uid() or public.is_admin());
+
 create table public.messages (
   id uuid primary key default gen_random_uuid(),
   client_id uuid not null references public.profiles(id) on delete cascade,
   sender_id uuid not null references public.profiles(id) on delete cascade,
   body text not null default '',
   kind text not null default 'chat',
+  reply_to_id uuid,
   created_at timestamptz not null default now(),
   read_at timestamptz,
+  notified_at timestamptz,
   edited_at timestamptz,
   deleted_at timestamptz,
   attachment_path text,
@@ -70,4 +76,15 @@ create table public.conversation_messages (
 );
 
 alter table public.conversation_messages enable row level security;
+
+create table public.message_reactions (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references public.messages(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  emoji text not null,
+  created_at timestamptz not null default now(),
+  unique (message_id, user_id)
+);
+alter table public.message_reactions enable row level security;
+grant select, insert, delete on public.message_reactions to authenticated, service_role;
 

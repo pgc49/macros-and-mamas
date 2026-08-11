@@ -12,7 +12,9 @@ import { mergeMessagesById } from "../lib/messageOrdering";
  */
 export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const clientId = client?.id;
+  const isAdminClient = String(client?.role || "").toLowerCase() === "admin";
   const [messages, setMessages] = useState([]);
+  const [adminConversation, setAdminConversation] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -22,13 +24,19 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const refresh = useCallback(async () => {
     if (!clientId) return;
     try {
-      const list = await db.loadMessages(clientId);
+      const conversation = isAdminClient
+        ? await db.ensureAdminDmConversation(clientId)
+        : null;
+      if (conversation) setAdminConversation(conversation);
+      const list = conversation
+        ? await db.loadAdminDmMessages(conversation.id)
+        : await db.loadMessages(clientId);
       setMessages(list);
     } catch (e) {
       console.error(e);
       setError(e.message || "Couldn’t load messages.");
     }
-  }, [clientId]);
+  }, [clientId, isAdminClient]);
 
   useEffect(() => {
     refresh();
@@ -36,15 +44,18 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
 
   useEffect(() => {
     if (!clientId) return undefined;
+    const conversationId = adminConversation?.id || null;
     const channel = supabase
-      .channel(`messages-admin-client-${clientId}`)
+      .channel(`messages-admin-client-${conversationId || clientId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "messages",
-          filter: `client_id=eq.${clientId}`,
+          filter: conversationId
+            ? `admin_dm_conversation_id=eq.${conversationId}`
+            : `client_id=eq.${clientId}`,
         },
         () => { refresh(); },
       )
@@ -61,20 +72,30 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [clientId, refresh]);
+  }, [adminConversation?.id, clientId, refresh]);
 
   const send = async (body, file = null, opts = {}) => {
     if (!clientId) return;
     setBusy(true);
     setError("");
     try {
-      const row = await db.sendMessage({
-        clientId,
-        body,
-        file,
-        replyToId: opts.replyToId || null,
-        clientMessageId: opts.clientMessageId || null,
-      });
+      const row = isAdminClient
+        ? await db.sendAdminDmMessage({
+          conversationId: adminConversation?.id,
+          clientId: adminConversation?.participant_low,
+          recipientId: clientId,
+          body,
+          file,
+          replyToId: opts.replyToId || null,
+          clientMessageId: opts.clientMessageId || null,
+        })
+        : await db.sendMessage({
+          clientId,
+          body,
+          file,
+          replyToId: opts.replyToId || null,
+          clientMessageId: opts.clientMessageId || null,
+        });
       setMessages((list) => mergeMessagesById(list, [row]));
       onActivity?.();
     } catch (e) {
@@ -105,7 +126,11 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
 
   const markRead = async () => {
     if (!clientId || !adminUserId) return;
-    await db.markMessagesRead(clientId, adminUserId);
+    if (isAdminClient && adminConversation?.id) {
+      await db.markAdminDmRead(adminConversation.id);
+    } else {
+      await db.markMessagesRead(clientId, adminUserId);
+    }
     onActivity?.();
   };
 
@@ -134,12 +159,12 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           subtitle=""
           messages={messages}
           selfId={adminUserId}
-          threadKey={`dm:${clientId}:${adminUserId}`}
+          threadKey={`dm:${adminConversation?.id || clientId}:${adminUserId}`}
           peerName={first}
           senderNameById={client?.id ? { [client.id]: first } : null}
-          threadClientId={clientId}
+          threadClientId={isAdminClient ? null : clientId}
           showSenderNames
-          busy={busy}
+          busy={busy || (isAdminClient && !adminConversation)}
           onSend={send}
           onEdit={edit}
           onDelete={remove}

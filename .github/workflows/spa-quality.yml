@@ -69,9 +69,16 @@ jobs:
             cp supabase/migrations/20260811022913_messaging_idempotency_outbox.sql \
               "$DB_ROOT/supabase/migrations/"
           fi
+          if [ -f supabase/migrations/20260811132341_admin_dm_conversations.sql ]; then
+            cp supabase/migrations/20260811132341_admin_dm_conversations.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           cp supabase/tests/messaging_inbox.sql "$DB_ROOT/supabase/tests/"
           if [ -f supabase/tests/messaging_idempotency_outbox.sql ]; then
             cp supabase/tests/messaging_idempotency_outbox.sql "$DB_ROOT/supabase/tests/"
+          fi
+          if [ -f supabase/tests/admin_dm_conversations.sql ]; then
+            cp supabase/tests/admin_dm_conversations.sql "$DB_ROOT/supabase/tests/"
           fi
           echo "DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
 
@@ -80,3 +87,42 @@ jobs:
 
       - name: Messaging database and RLS tests
         run: supabase test db "$DB_ROOT/supabase/tests" --workdir "$DB_ROOT"
+
+  admin-dm-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.113.0
+      - name: Prepare legacy-shaped admin DM database
+        run: |
+          DB_ROOT="$RUNNER_TEMP/admin-dm-db"
+          mkdir -p "$DB_ROOT"
+          supabase init --workdir "$DB_ROOT"
+          python - "$DB_ROOT/supabase/config.toml" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          marker = "[db.seed]"
+          before, after = text.split(marker, 1)
+          after = after.replace("enabled = true", "enabled = false", 1)
+          path.write_text(before + marker + after)
+          PY
+          mkdir -p "$DB_ROOT/supabase/migrations" "$DB_ROOT/supabase/tests"
+          cp supabase/tests/bootstrap_messaging.sql \
+            "$DB_ROOT/supabase/migrations/20260101000000_bootstrap_messaging.sql"
+          cp supabase/migrations/20260811014815_messaging_inbox_and_ordering.sql \
+            "$DB_ROOT/supabase/migrations/"
+          cp supabase/migrations/20260811022913_messaging_idempotency_outbox.sql \
+            "$DB_ROOT/supabase/migrations/"
+          cp supabase/tests/seed_admin_dm_legacy.sql \
+            "$DB_ROOT/supabase/migrations/20260811120000_seed_admin_dm_legacy.sql"
+          cp supabase/migrations/20260811132341_admin_dm_conversations.sql \
+            "$DB_ROOT/supabase/migrations/"
+          cp supabase/tests/admin_dm_conversations.sql "$DB_ROOT/supabase/tests/"
+          echo "ADMIN_DM_DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
+      - run: supabase start --workdir "$ADMIN_DM_DB_ROOT"
+      - run: supabase test db "$ADMIN_DM_DB_ROOT/supabase/tests/admin_dm_conversations.sql" --workdir "$ADMIN_DM_DB_ROOT"

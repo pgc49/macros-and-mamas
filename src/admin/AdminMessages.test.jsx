@@ -56,6 +56,10 @@ const { deferredByClient, dbMock, realtimeChannel } = vi.hoisted(() => {
         const pending = pendingByClient.get(clientId);
         return pending ? pending.promise : Promise.resolve([]);
       }),
+      loadAdminDmMessages: vi.fn(async () => []),
+      ensureAdminDmConversation: vi.fn(),
+      sendAdminDmMessage: vi.fn(),
+      markAdminDmRead: vi.fn(async () => 0),
       markMessagesRead: vi.fn(async () => {}),
       countUnreadMessages: vi.fn(async () => 0),
       sendMessage: vi.fn(),
