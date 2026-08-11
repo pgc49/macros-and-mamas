@@ -1002,6 +1002,8 @@ export default function App() {
           p: entry.p,
           c: entry.c,
           f: entry.f,
+          serves: entry.serves,
+          ingredients: entry.ingredients,
         });
         setCustomMeals((list) => {
           const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);

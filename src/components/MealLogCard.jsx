@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "./ui";
 import { LoggableMealRow } from "./LoggableMealRow";
+import { SlotChips } from "./SlotChips";
 import { RECIPES, PANTRY_ITEMS } from "../content/data";
 import { PANTRY_GROUPS } from "../content/pantry";
 import {
@@ -13,8 +14,6 @@ import {
   wkStartOf,
 } from "../utils/dates";
 import {
-  MEAL_SLOTS,
-  SLOT_CHIP,
   SLOT_LABEL,
   SLOT_SECTION_ORDER,
   guessSlotFromTime,
@@ -22,6 +21,8 @@ import {
   normalizeSlot,
   resolveLogSlot,
 } from "../utils/mealSlots";
+import { formatServings, ServingStepper, snapServings } from "../utils/servings";
+import { recipeNoteFromMeal } from "../utils/planMealShape";
 import { targetBands } from "../utils/weekPlan";
 import { roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
@@ -47,38 +48,7 @@ const VIA_LABEL = {
 
 const AI_VIA = new Set(["photo", "describe", "menu"]);
 
-function SlotChips({ value, onChange, compact = false }) {
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: compact ? 5 : 6 }}>
-      {MEAL_SLOTS.map((s) => {
-        const active = value === s;
-        return (
-          <button
-            key={s}
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onChange?.(s);
-            }}
-            style={{
-              fontFamily: F,
-              fontSize: compact ? 11 : 12,
-              fontWeight: 700,
-              padding: compact ? "4px 9px" : "5px 11px",
-              borderRadius: 999,
-              border: `1.5px solid ${active ? T.accent : T.border}`,
-              background: active ? T.accentSoft : "#fff",
-              color: active ? T.accentDeep : T.inkSoft,
-              cursor: "pointer",
-            }}
-          >
-            {SLOT_CHIP[s]}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+const stripServingSuffix = (name) => String(name || "Meal").replace(/\s·\s[\d.]+×$/, "");
 
 const navBtn = (disabled) => ({
   width: 30,
@@ -308,6 +278,7 @@ export function MealLogCard({
 
   const pickMenuMeal = async (meal, opts = {}) => {
     if (!meal || !onManualLog) return false;
+    const recipeNote = recipeNoteFromMeal(meal);
     const ok = await onManualLog({
       name: String(meal.name || "").trim() || "Restaurant meal",
       cal: Number(meal.cal) || 0,
@@ -318,6 +289,8 @@ export function MealLogCard({
       slot: resolveLogSlot(meal.slot || logSlot),
       logged_date: date,
       saveCustom: !!opts.saveToMine,
+      serves: Number(meal.servings) || 1,
+      ...(recipeNote ? { ingredients: recipeNote } : {}),
     });
     if (ok === false) return false;
     setSnapMenuOpen(false);
@@ -412,16 +385,43 @@ export function MealLogCard({
   const startEdit = (e) => {
     setEditingId(e.id);
     setRowRefineError("");
+    const baseName = stripServingSuffix(e.name);
+    const base = {
+      cal: Number(e.cal) || 0,
+      p: Number(e.p) || 0,
+      c: Number(e.c) || 0,
+      f: Number(e.f) || 0,
+    };
     setDraft({
       name: e.name,
-      cal: e.cal,
-      p: e.p,
-      c: e.c,
-      f: e.f,
+      baseName,
+      base,
+      editServings: 1,
+      cal: base.cal,
+      p: base.p,
+      c: base.c,
+      f: base.f,
       via: e.via,
       slot: normalizeSlot(e.slot) || (onToday ? guessSlotFromTime() : "lunch"),
       saveCustom: false,
       handTweaked: false,
+    });
+  };
+
+  const applyEditServings = (nextQty) => {
+    setDraft((d) => {
+      if (!d?.base) return d;
+      const q = snapServings(nextQty);
+      const mul = (v) => Math.round((Number(v) || 0) * q);
+      return {
+        ...d,
+        editServings: q,
+        cal: mul(d.base.cal),
+        p: mul(d.base.p),
+        c: mul(d.base.c),
+        f: mul(d.base.f),
+        name: q === 1 ? d.baseName : `${d.baseName} · ${formatServings(q)}×`,
+      };
     });
   };
 
@@ -442,11 +442,11 @@ export function MealLogCard({
     });
     if (draft.saveCustom) {
       await onSaveCustomMeal?.({
-        name: draft.name,
-        cal: Number(draft.cal) || 0,
-        p: Number(draft.p) || 0,
-        c: Number(draft.c) || 0,
-        f: Number(draft.f) || 0,
+        name: draft.baseName || stripServingSuffix(draft.name),
+        cal: Number(draft.base?.cal ?? draft.cal) || 0,
+        p: Number(draft.base?.p ?? draft.p) || 0,
+        c: Number(draft.base?.c ?? draft.c) || 0,
+        f: Number(draft.base?.f ?? draft.f) || 0,
       });
     }
     setEditingId(null);
@@ -475,13 +475,20 @@ export function MealLogCard({
       return false;
     }
     const via = (Array.isArray(files) && files.length) ? "photo" : "describe";
-    setDraft((d) => ({
-      ...d,
-      name: String(result.meal || d.name || "Meal").trim().slice(0, 80) || d.name,
+    const nextName = String(result.meal || draft.name || "Meal").trim().slice(0, 80) || draft.name;
+    const base = {
       cal: Math.round(Number(result.calories) || 0),
       p: Math.round(Number(result.protein_g) || 0),
       c: Math.round(Number(result.carbs_g) || 0),
       f: Math.round(Number(result.fat_g) || 0),
+    };
+    setDraft((d) => ({
+      ...d,
+      name: nextName,
+      baseName: stripServingSuffix(nextName),
+      base,
+      editServings: 1,
+      ...base,
       via,
       handTweaked: false,
     }));
@@ -499,7 +506,17 @@ export function MealLogCard({
     <input
       inputMode="numeric"
       value={draft[k]}
-      onChange={(ev) => setDraft((d) => ({ ...d, [k]: ev.target.value, handTweaked: true }))}
+      onChange={(ev) => setDraft((d) => {
+        const raw = ev.target.value;
+        const next = { ...d, [k]: raw, handTweaked: true };
+        // Keep serving-stepper base in sync with hand edits (as 1× equivalent).
+        if (d?.base) {
+          const q = snapServings(d.editServings || 1) || 1;
+          const val = Number(raw) || 0;
+          next.base = { ...d.base, [k]: Math.round(val / q) };
+        }
+        return next;
+      })}
       style={{
         width: w,
         padding: "8px 8px",
@@ -1056,6 +1073,15 @@ export function MealLogCard({
                     via="custom"
                     accent={!(plannedMeals || []).length}
                     onLog={onLogRecipe}
+                    onSaveIngredients={onSaveCustomMeal ? (meal) => onSaveCustomMeal({
+                      name: meal.name,
+                      cal: meal.cal,
+                      p: meal.p,
+                      c: meal.c,
+                      f: meal.f,
+                      serves: meal.serves,
+                      ingredients: meal.ingredients,
+                    }) : undefined}
                   />
                 ))}
               </>
@@ -1457,7 +1483,16 @@ export function MealLogCard({
                       >
                         <input
                           value={draft.name}
-                          onChange={(ev) => setDraft((d) => ({ ...d, name: ev.target.value, handTweaked: true }))}
+                          onChange={(ev) => setDraft((d) => {
+                            const name = ev.target.value;
+                            return {
+                              ...d,
+                              name,
+                              // Keep serving-scale rename base in sync with hand edits.
+                              baseName: stripServingSuffix(name),
+                              handTweaked: true,
+                            };
+                          })}
                           style={{
                             width: "100%",
                             padding: "8px 10px",
@@ -1476,6 +1511,24 @@ export function MealLogCard({
                             onChange={(s) => setDraft((d) => ({ ...d, slot: s }))}
                             compact
                           />
+                        </div>
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          marginBottom: 10,
+                          flexWrap: "wrap",
+                        }}
+                        >
+                          <span style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600 }}>Servings</span>
+                          <ServingStepper
+                            value={draft.editServings || 1}
+                            onChange={applyEditServings}
+                            compact
+                          />
+                          <span style={{ fontSize: 11.5, color: T.inkSoft }}>
+                            Scales this log from what’s currently saved as 1×
+                          </span>
                         </div>
                         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                           {["cal", "p", "c", "f"].map((k) => (

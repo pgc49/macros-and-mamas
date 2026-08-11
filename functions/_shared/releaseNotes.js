@@ -19,12 +19,12 @@
    ================================================================== */
 
 export const APP_RELEASE_NOTES = {
-  id: "2026-08-goals-rhythm-v2",
-  headline: "What’s new",
+  id: "2026-08-meals-mama-feedback",
+  headline: "What’s new — mama requests",
   bullets: [
-    "Custom goals in your rhythm tracker — add up to 3 of your own (YOURS), plus a clearer Progress tab to see each habit week by week. Shout-out to Sheila for suggesting this!",
-    "Group messaging is in the app — we’re slowly moving the group forum off WhatsApp so conversations live in one place. Give it a try!",
-    "A new referral system is on the way — Callie will share more soon!",
-    "New recipe: High Protein Einkorn Pancakes",
+    "Pick Breakfast, Lunch, Dinner, or Snack when adding from My plan — thanks Laura!",
+    "Edit servings right on Today’s log (no delete + re-add) — thanks Laura!",
+    "See and save recipe notes on My meals — thanks Jenna!",
+    "New from Callie: Chicken Soba Stir Fry in the dinner recipes.",
   ],
 };

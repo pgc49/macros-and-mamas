@@ -23,9 +23,19 @@ const MACRO_KEYS = [
  *
  * What gets saved is ONE SERVING, matching how RECIPES[] in data.js already
  * stores Callie's own cards.
+ *
+ * `embedded` — always show the form (Plan / My meals add sheets).
+ * `onSaved(saved)` — after a successful save (saved row from db).
  */
-export function RecipeCreator({ onEstimateRecipe, onSaveCustomMeal }) {
-  const [open, setOpen] = useState(false);
+export function RecipeCreator({
+  onEstimateRecipe,
+  onSaveCustomMeal,
+  embedded = false,
+  onSaved,
+  onCancel,
+  saveLabel = "Save to My meals",
+}) {
+  const [open, setOpen] = useState(!!embedded);
   const [paste, setPaste] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -41,6 +51,10 @@ export function RecipeCreator({ onEstimateRecipe, onSaveCustomMeal }) {
 
   const close = () => {
     reset();
+    if (embedded) {
+      onCancel?.();
+      return;
+    }
     setOpen(false);
   };
 
@@ -100,9 +114,12 @@ export function RecipeCreator({ onEstimateRecipe, onSaveCustomMeal }) {
     }
     setSaved(`Saved “${name}” — ${perServing.cal} cal per serving.`);
     reset();
+    onSaved?.(result);
+    if (embedded) return;
+    setOpen(false);
   };
 
-  if (!open) {
+  if (!open && !embedded) {
     return (
       <div style={{ marginBottom: 12 }}>
         <button
@@ -165,25 +182,27 @@ export function RecipeCreator({ onEstimateRecipe, onSaveCustomMeal }) {
         padding: 14,
       }}
     >
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-        <div style={{ fontFamily: FD, fontSize: 17, color: T.ink }}>Create a recipe</div>
-        <button
-          type="button"
-          onClick={close}
-          style={{
-            marginLeft: "auto",
-            background: "none",
-            border: "none",
-            fontSize: 12.5,
-            color: T.inkSoft,
-            cursor: "pointer",
-            textDecoration: "underline",
-            fontFamily: F,
-          }}
-        >
-          close
-        </button>
-      </div>
+      {!embedded && (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+          <div style={{ fontFamily: FD, fontSize: 17, color: T.ink }}>Create a recipe</div>
+          <button
+            type="button"
+            onClick={close}
+            style={{
+              marginLeft: "auto",
+              background: "none",
+              border: "none",
+              fontSize: 12.5,
+              color: T.inkSoft,
+              cursor: "pointer",
+              textDecoration: "underline",
+              fontFamily: F,
+            }}
+          >
+            close
+          </button>
+        </div>
+      )}
 
       {!draft ? (
         <>
@@ -334,7 +353,7 @@ export function RecipeCreator({ onEstimateRecipe, onSaveCustomMeal }) {
 
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <Btn small onClick={save} disabled={busy}>
-              {busy ? "Saving…" : "Save to My meals"}
+              {busy ? "Saving…" : saveLabel}
             </Btn>
             <button
               type="button"

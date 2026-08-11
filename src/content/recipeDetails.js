@@ -440,6 +440,32 @@ export const RECIPE_DETAILS = {
     ],
   },
 
+  "Chicken soba stir fry": {
+    batch: [
+      { amount: "1 lb", item: "chicken, diced small" },
+      { amount: "2", item: "eggs" },
+      { amount: "6 oz", item: "soba noodles (Hakubaku or similar)" },
+      { amount: "3 tbsp", item: "coconut aminos" },
+      { amount: "1 tbsp", item: "toasted sesame oil (or 2 tsp to lighten fat)" },
+      { amount: "1 tbsp", item: "honey" },
+      { amount: "1 tbsp", item: "rice vinegar" },
+      { amount: "1 clove", item: "garlic, minced" },
+      { amount: "spray / drizzle", item: "high-heat oil for the pan" },
+      { amount: "optional", item: "green onion + sesame seeds to garnish" },
+    ],
+    serving: [
+      { amount: "½ batch", item: "chicken, eggs, soba, and sauce (~805 cal plate)" },
+    ],
+    steps: [
+      "Whisk coconut aminos, sesame oil, honey, rice vinegar, and garlic; set aside. Bring water to a boil for the soba.",
+      "Cook 6 oz soba (about 4 minutes for Hakubaku). Drain and rinse well — soba is starchy.",
+      "Pan-fry the diced chicken in a little high-heat oil until cooked through with some browning. Set aside.",
+      "Quickly scramble the two eggs in the same pan.",
+      "Add chicken, eggs, noodles, and sauce back together on medium-low and toss until hot and coated. Garnish with green onion and sesame seeds if you have them.",
+      "Logged serving = half the batch. For three plates, use ~⅓ each (~535 cal).",
+    ],
+  },
+
   "Greek yogurt + berries": {
     batch: null,
     serving: [
