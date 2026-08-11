@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
@@ -74,9 +74,12 @@ export function AdminMessages({
     initialClientId ? { type: "dm", id: initialClientId } : null,
   );
   const [dmMessages, setDmMessages] = useState([]);
+  const [dmLoadedClientId, setDmLoadedClientId] = useState(null);
+  const [dmLoadErrorClientId, setDmLoadErrorClientId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const dmLoadSequence = useRef(0);
 
   const clientMap = useMemo(() => {
     const m = new Map();
@@ -118,16 +121,30 @@ export function AdminMessages({
     }
   }, [adminUserId]);
 
-  const refreshDmThread = useCallback(async (clientId) => {
+  const refreshDmThread = useCallback(async (clientId, { clear = false } = {}) => {
+    const sequence = ++dmLoadSequence.current;
     if (!clientId) {
       setDmMessages([]);
+      setDmLoadedClientId(null);
+      setDmLoadErrorClientId(null);
       return;
+    }
+    if (clear) {
+      setDmMessages([]);
+      setDmLoadedClientId(null);
+      setDmLoadErrorClientId(null);
+      setError("");
     }
     try {
       const list = await db.loadMessages(clientId);
+      if (sequence !== dmLoadSequence.current) return;
       setDmMessages(list);
+      setDmLoadedClientId(clientId);
+      setDmLoadErrorClientId(null);
     } catch (e) {
+      if (sequence !== dmLoadSequence.current) return;
       console.error(e);
+      setDmLoadErrorClientId(clientId);
       setError(e.message || "Couldn’t load thread.");
     }
   }, []);
@@ -142,7 +159,7 @@ export function AdminMessages({
   }, [initialClientId]);
 
   useEffect(() => {
-    if (active?.type === "dm") refreshDmThread(active.id);
+    if (active?.type === "dm") refreshDmThread(active.id, { clear: true });
   }, [active, refreshDmThread]);
 
   useEffect(() => {
@@ -690,22 +707,62 @@ export function AdminMessages({
                   key={`dm-${active.id}`}
                   title=""
                   subtitle=""
-                  messages={dmMessages}
+                  messages={dmLoadedClientId === active.id ? dmMessages : []}
                   selfId={adminUserId}
                   peerName={activeName}
                   senderNameById={senderNameById}
                   threadClientId={activeIsAdmin ? null : active.id}
                   showSenderNames
-                  busy={busy}
+                  busy={busy || dmLoadedClientId !== active.id}
                   onSend={sendDm}
                   onEdit={editDm}
                   onDelete={removeDm}
                   onReact={reactDm}
-                  onMarkRead={markDmRead}
+                  onMarkRead={dmLoadedClientId === active.id ? markDmRead : undefined}
                   showReadReceipts
                   allowVoiceMemo
                   enableReply
                   showPushPrompt
+                  banner={dmLoadErrorClientId === active.id ? (
+                    <div style={{
+                      background: T.amberSoft,
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      marginBottom: 10,
+                      fontSize: 13.5,
+                      color: T.ink,
+                    }}
+                    >
+                      Couldn’t load this conversation.{" "}
+                      <button
+                        type="button"
+                        onClick={() => refreshDmThread(active.id, { clear: true })}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: T.accentDeep,
+                          font: "inherit",
+                          fontWeight: 700,
+                          padding: 0,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : dmLoadedClientId !== active.id ? (
+                    <div style={{
+                      background: T.track,
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      marginBottom: 10,
+                      fontSize: 13.5,
+                      color: T.inkSoft,
+                    }}
+                    >
+                      Loading conversation…
+                    </div>
+                  ) : null}
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
                   compact
                 />

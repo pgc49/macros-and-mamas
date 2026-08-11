@@ -43,10 +43,33 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.113.0
+
+      - name: Prepare isolated messaging schema
+        run: |
+          DB_ROOT="$RUNNER_TEMP/messaging-db"
+          mkdir -p "$DB_ROOT"
+          supabase init --workdir "$DB_ROOT"
+          python - "$DB_ROOT/supabase/config.toml" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          marker = "[db.seed]"
+          before, after = text.split(marker, 1)
+          after = after.replace("enabled = true", "enabled = false", 1)
+          path.write_text(before + marker + after)
+          PY
+          mkdir -p "$DB_ROOT/supabase/migrations" "$DB_ROOT/supabase/tests"
+          cp supabase/tests/bootstrap_messaging.sql \
+            "$DB_ROOT/supabase/migrations/20260101000000_bootstrap_messaging.sql"
+          cp supabase/migrations/20260811014815_messaging_inbox_and_ordering.sql \
+            "$DB_ROOT/supabase/migrations/"
+          cp supabase/tests/messaging_inbox.sql "$DB_ROOT/supabase/tests/"
+          echo "DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
 
       - name: Start disposable Supabase
-        run: supabase start
+        run: supabase start --workdir "$DB_ROOT"
 
       - name: Messaging database and RLS tests
-        run: supabase test db supabase/tests/messaging_inbox.sql
+        run: supabase test db "$DB_ROOT/supabase/tests/messaging_inbox.sql" --workdir "$DB_ROOT"

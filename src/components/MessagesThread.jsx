@@ -1371,13 +1371,20 @@ function messageRenderVersion(message) {
     : "";
   return [
     safeString(message?.body),
+    safeString(message?.sender_id),
+    safeString(message?.created_at),
+    safeString(message?.read_at),
     safeString(message?.edited_at),
     safeString(message?.deleted_at),
     safeString(message?.attachment_path),
+    safeString(message?.attachment_name),
+    safeString(message?.attachment_mime),
     safeString(message?.attachmentUrl),
     safeString(message?.reply_to_id),
     safeString(message?.reply_to?.id),
     safeString(message?.reply_to?.body),
+    safeString(message?.reply_to?.deleted_at),
+    message?.reply_to?.missing === true ? "missing" : "",
     reactions,
   ].join("|");
 }

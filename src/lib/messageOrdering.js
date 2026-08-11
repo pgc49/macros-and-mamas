@@ -28,8 +28,30 @@ export function mergeMessagesById(current, incoming) {
     if (!row || typeof row !== "object") continue;
     const id = String(row.id || "").trim();
     if (!id) continue;
-    // Incoming authoritative rows replace an existing optimistic/local copy.
-    byId.set(id, row);
+    const previous = byId.get(id);
+    if (!previous) {
+      byId.set(id, row);
+      continue;
+    }
+    // Realtime and local-send responses hydrate different supplemental fields.
+    // Merge the durable row without throwing away an already-resolved reply,
+    // reaction set, sender label, or signed attachment URL.
+    const merged = { ...previous, ...row };
+    if (!Object.hasOwn(row, "reactions")) merged.reactions = previous.reactions;
+    if (
+      previous.reply_to
+      && (!row.reply_to || (row.reply_to.missing && !previous.reply_to.missing))
+    ) {
+      merged.reply_to = previous.reply_to;
+    }
+    if (!row.sender_profile && previous.sender_profile) {
+      merged.sender_profile = previous.sender_profile;
+    }
+    if (!row.deleted_at && !row.attachmentUrl && previous.attachmentUrl) {
+      merged.attachmentUrl = previous.attachmentUrl;
+    }
+    if (row.deleted_at) merged.attachmentUrl = null;
+    byId.set(id, merged);
   }
   return sortChronologically([...byId.values()]);
 }

@@ -1,6 +1,6 @@
 begin;
 
-select plan(9);
+select plan(11);
 
 select has_function(
   'public',
@@ -21,6 +21,24 @@ select has_index(
   'conversation_messages',
   'conversation_messages_conversation_created_id_idx',
   'channel ordering index exists'
+);
+
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.load_admin_message_inbox()',
+    'EXECUTE'
+  ),
+  'authenticated users can invoke the guarded RPC'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.load_admin_message_inbox()',
+    'EXECUTE'
+  ),
+  'anonymous users cannot invoke the admin inbox RPC'
 );
 
 insert into auth.users (id, email)
