@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { db, fullName, channelHasUnread } from "../db/db";
 import { supabase } from "../lib/supabase";
+import { mergeMessagesById } from "../lib/messageOrdering";
 
 function displayName(c) {
   if (!c) return "Mama";
@@ -258,7 +260,7 @@ export function AdminMessages({
         file,
         replyToId: opts.replyToId || null,
       });
-      setDmMessages((list) => [...list, row]);
+      setDmMessages((list) => mergeMessagesById(list, [row]));
       refreshInbox();
     } catch (e) {
       console.error(e);
@@ -283,7 +285,7 @@ export function AdminMessages({
       });
       setChannelMessages((all) => ({
         ...all,
-        [conversationId]: [...(all[conversationId] || []), row],
+        [conversationId]: mergeMessagesById(all[conversationId] || [], [row]),
       }));
       refreshChannels();
     } catch (e) {
@@ -634,66 +636,80 @@ export function AdminMessages({
           }}
           >
             {active.type === "channel" ? (
-              <MessagesThread
-                key={`ch-${active.id}`}
-                title=""
-                subtitle=""
-                messages={activeChannelMessages}
-                selfId={adminUserId}
-                peerName={activeName}
-                senderNameById={senderNameById}
-                showSenderNames
-                busy={busy}
-                onSend={sendChannel}
-                onEdit={editChannel}
-                onDelete={removeChannel}
-                onReact={reactChannel}
-                onMarkRead={markChannelRead}
-                canModerate
-                allowVoiceMemo
-                enableReply
-                banner={activeChannel?.conversation?.read_only ? (
-                  <div style={{
-                    background: T.accentSoft,
-                    borderRadius: 12,
-                    padding: "10px 12px",
-                    marginBottom: 10,
-                    fontSize: 13.5,
-                  }}
-                  >
-                    This group is read-only right now.
-                  </div>
-                ) : null}
-                hideComposer={!!activeChannel?.conversation?.read_only}
-                emptyState="No group messages yet."
-                showPushPrompt
-                onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
-                compact
-              />
+              <ErrorBoundary
+                name="AdminChannelThread"
+                title="This group thread hit a snag"
+                message="The inbox still works. Try again or open another conversation."
+                resetKeys={[active.id]}
+              >
+                <MessagesThread
+                  key={`ch-${active.id}`}
+                  title=""
+                  subtitle=""
+                  messages={activeChannelMessages}
+                  selfId={adminUserId}
+                  peerName={activeName}
+                  senderNameById={senderNameById}
+                  showSenderNames
+                  busy={busy}
+                  onSend={sendChannel}
+                  onEdit={editChannel}
+                  onDelete={removeChannel}
+                  onReact={reactChannel}
+                  onMarkRead={markChannelRead}
+                  canModerate
+                  allowVoiceMemo
+                  enableReply
+                  banner={activeChannel?.conversation?.read_only ? (
+                    <div style={{
+                      background: T.accentSoft,
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      marginBottom: 10,
+                      fontSize: 13.5,
+                    }}
+                    >
+                      This group is read-only right now.
+                    </div>
+                  ) : null}
+                  hideComposer={!!activeChannel?.conversation?.read_only}
+                  emptyState="No group messages yet."
+                  showPushPrompt
+                  onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+                  compact
+                />
+              </ErrorBoundary>
             ) : (
-              <MessagesThread
-                key={`dm-${active.id}`}
-                title=""
-                subtitle=""
-                messages={dmMessages}
-                selfId={adminUserId}
-                peerName={activeName}
-                senderNameById={senderNameById}
-                threadClientId={activeIsAdmin ? null : active.id}
-                showSenderNames
-                busy={busy}
-                onSend={sendDm}
-                onEdit={editDm}
-                onDelete={removeDm}
-                onReact={reactDm}
-                onMarkRead={markDmRead}
-                showReadReceipts
-                allowVoiceMemo
-                enableReply
-                showPushPrompt
-                onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
-                compact
-              />
+              <ErrorBoundary
+                name="AdminDmThread"
+                title="This conversation hit a snag"
+                message="The inbox still works. Try again or open another mama."
+                resetKeys={[active.id]}
+              >
+                <MessagesThread
+                  key={`dm-${active.id}`}
+                  title=""
+                  subtitle=""
+                  messages={dmMessages}
+                  selfId={adminUserId}
+                  peerName={activeName}
+                  senderNameById={senderNameById}
+                  threadClientId={activeIsAdmin ? null : active.id}
+                  showSenderNames
+                  busy={busy}
+                  onSend={sendDm}
+                  onEdit={editDm}
+                  onDelete={removeDm}
+                  onReact={reactDm}
+                  onMarkRead={markDmRead}
+                  showReadReceipts
+                  allowVoiceMemo
+                  enableReply
+                  showPushPrompt
+                  onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+                  compact
+                />
+              </ErrorBoundary>
             )}
           </div>
         </>

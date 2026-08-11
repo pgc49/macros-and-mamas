@@ -34,3 +34,19 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start disposable Supabase
+        run: supabase start
+
+      - name: Messaging database and RLS tests
+        run: supabase test db supabase/tests/messaging_inbox.sql

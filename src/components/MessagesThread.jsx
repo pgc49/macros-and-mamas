@@ -91,10 +91,15 @@ export function MessagesThread({
   const draftRef = useRef(null);
   const holdTimer = useRef(null);
   const recorderRef = useRef(null);
+  const markReadRef = useRef(onMarkRead);
 
   useEffect(() => {
     registerMessageServiceWorker();
   }, []);
+
+  useEffect(() => {
+    markReadRef.current = onMarkRead;
+  }, [onMarkRead]);
 
   // Keep the latest message in view inside the list pane (iMessage-style).
   // Do NOT use scrollIntoView — it scrolls the page and fights flex height.
@@ -115,10 +120,12 @@ export function MessagesThread({
   }, [safeMessages.length, latestMessageId]);
 
   useEffect(() => {
-    Promise.resolve(onMarkRead?.()).catch((e) => {
+    Promise.resolve()
+      .then(() => markReadRef.current?.())
+      .catch((e) => {
       console.warn("mark messages read failed", e);
-    });
-  }, [safeMessages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+      });
+  }, [latestMessageId]);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -630,7 +637,7 @@ export function MessagesThread({
             <ErrorBoundary
               key={m.id}
               name="MessageBubble"
-              resetKeys={[m.id, m.updated_at, m.edited_at, m.attachmentUrl]}
+              resetKeys={[m.id, messageRenderVersion(m)]}
               fallback={<MessageBubbleFallback message={m} mine={mine} />}
             >
             <div
@@ -1278,6 +1285,7 @@ function formatMsgTime(iso) {
   if (!iso) return "";
   try {
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
     return d.toLocaleString(undefined, {
       month: "short",
       day: "numeric",
@@ -1325,6 +1333,7 @@ function normalizeMessageRow(row, index) {
 function MessageBubbleFallback({ message, mine }) {
   const body = safeString(message?.body);
   const time = formatMsgTime(message?.created_at);
+  const deleted = !!message?.deleted_at;
   return (
     <div style={{
       display: "flex",
@@ -1345,11 +1354,30 @@ function MessageBubbleFallback({ message, mine }) {
         wordBreak: "break-word",
       }}
       >
-        {body || (message?.attachment_path ? "Attachment unavailable" : "Message unavailable")}
+        {deleted
+          ? "Message deleted"
+          : (body || (message?.attachment_path ? "Attachment unavailable" : "Message unavailable"))}
         {time ? (
           <div style={{ marginTop: 6, fontSize: 11, color: T.inkSoft }}>{time}</div>
         ) : null}
       </div>
     </div>
   );
+}
+
+function messageRenderVersion(message) {
+  const reactions = Array.isArray(message?.reactions)
+    ? message.reactions.map((r) => `${safeString(r?.emoji)}:${Number(r?.count) || 0}:${r?.mine === true}`).join(",")
+    : "";
+  return [
+    safeString(message?.body),
+    safeString(message?.edited_at),
+    safeString(message?.deleted_at),
+    safeString(message?.attachment_path),
+    safeString(message?.attachmentUrl),
+    safeString(message?.reply_to_id),
+    safeString(message?.reply_to?.id),
+    safeString(message?.reply_to?.body),
+    reactions,
+  ].join("|");
 }

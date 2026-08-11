@@ -36,8 +36,8 @@ begin
     coalesce(participants.ids, array[t.client_id]::uuid[]) as participant_ids
   from threads t
   cross join lateral (
-    -- Prefer the latest visible message. If a thread only has deleted rows,
-    -- retain its latest tombstone so the thread does not disappear.
+    -- Latest activity remains the inbox source of truth, including a deletion
+    -- tombstone ("Message deleted"), so ordering matches what just happened.
     select
       m.id,
       m.client_id,
@@ -54,7 +54,7 @@ begin
       m.attachment_bytes
     from public.messages m
     where m.client_id = t.client_id
-    order by (m.deleted_at is null) desc, m.created_at desc, m.id desc
+    order by m.created_at desc, m.id desc
     limit 1
   ) latest_message
   left join lateral (

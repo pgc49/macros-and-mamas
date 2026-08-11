@@ -4,6 +4,7 @@ import { Card } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
 import { db, fullName } from "../db/db";
 import { supabase } from "../lib/supabase";
+import { mergeMessagesById } from "../lib/messageOrdering";
 
 /**
  * Per-client Messages on the admin client detail page.
@@ -73,7 +74,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
         file,
         replyToId: opts.replyToId || null,
       });
-      setMessages((list) => [...list, row]);
+      setMessages((list) => mergeMessagesById(list, [row]));
       onActivity?.();
     } catch (e) {
       console.error(e);
