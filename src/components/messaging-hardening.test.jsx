@@ -146,5 +146,111 @@ describe("messaging crash containment", () => {
     ));
     expect(screen.getByText("Message one")).toBeTruthy();
   });
+
+  it("reuses one idempotency key when an ambiguous send is retried", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const onSend = vi.fn()
+      .mockRejectedValueOnce(new Error("response lost"))
+      .mockResolvedValueOnce({});
+    render(<MessagesThread {...threadProps({ onSend })} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Send once" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    await screen.findByDisplayValue("Send once");
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+
+    const firstKey = onSend.mock.calls[0][2].clientMessageId;
+    const secondKey = onSend.mock.calls[1][2].clientMessageId;
+    expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(secondKey).toBe(firstKey);
+  });
+
+  it("keeps an ambiguous send key across remounts but changes it for a new payload", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const firstSend = vi.fn().mockRejectedValue(new Error("response lost"));
+    const first = render(
+      <MessagesThread
+        {...threadProps({ onSend: firstSend })}
+        threadKey="dm:mama-ambiguous"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Original payload" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(firstSend).toHaveBeenCalledTimes(1));
+    const originalKey = firstSend.mock.calls[0][2].clientMessageId;
+    first.unmount();
+
+    const remountSend = vi.fn().mockRejectedValue(new Error("still ambiguous"));
+    render(
+      <MessagesThread
+        {...threadProps({ onSend: remountSend })}
+        threadKey="dm:mama-ambiguous"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Original payload" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(1));
+    expect(remountSend.mock.calls[0][2].clientMessageId).toBe(originalKey);
+
+    await screen.findByDisplayValue("Original payload");
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Changed payload" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(2));
+    expect(remountSend.mock.calls[1][2].clientMessageId).not.toBe(originalKey);
+  });
+
+  it("shares an in-flight send across remounted thread instances", async () => {
+    let settle;
+    const pending = new Promise((resolve) => { settle = resolve; });
+    const originalSend = vi.fn(() => pending);
+    const first = render(
+      <MessagesThread
+        {...threadProps({ onSend: originalSend })}
+        threadKey="dm:mama-in-flight"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "One operation" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(originalSend).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    const remountSend = vi.fn();
+    render(
+      <MessagesThread
+        {...threadProps({ onSend: remountSend })}
+        threadKey="dm:mama-in-flight"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "One operation" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(remountSend).not.toHaveBeenCalled();
+
+    settle({});
+    await waitFor(() => {
+      expect(remountSend).not.toHaveBeenCalled();
+      expect(screen.getByPlaceholderText("Write a message…").value).toBe("");
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Next operation" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(1));
+  });
 });
 

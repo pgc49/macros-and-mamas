@@ -73,6 +73,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
         body,
         file,
         replyToId: opts.replyToId || null,
+        clientMessageId: opts.clientMessageId || null,
       });
       setMessages((list) => mergeMessagesById(list, [row]));
       onActivity?.();
@@ -133,6 +134,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           subtitle=""
           messages={messages}
           selfId={adminUserId}
+          threadKey={`dm:${clientId}:${adminUserId}`}
           peerName={first}
           senderNameById={client?.id ? { [client.id]: first } : null}
           threadClientId={clientId}

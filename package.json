@@ -13,7 +13,7 @@
     "qa:reactions": "node scripts/qa-message-reactions.mjs",
     "qa:messages-thread": "node scripts/smoke-messages-thread.mjs",
     "qa:message-ordering": "node scripts/qa-message-ordering.mjs",
-    "test:messaging": "vitest run src/components/messaging-hardening.test.jsx src/admin/AdminMessages.test.jsx",
+    "test:messaging": "vitest run src/components/messaging-hardening.test.jsx src/admin/AdminMessages.test.jsx functions/_shared/messageOutbox.test.js functions/api/message-notify.test.js functions/api/channel-notify.test.js",
     "qa:messaging": "npm run test:messaging && npm run qa:messages-thread && npm run qa:message-ordering && npm run qa:reactions && npm run qa:channels",
     "preview": "vite preview"
   },

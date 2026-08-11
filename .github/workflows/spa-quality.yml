@@ -65,11 +65,18 @@ jobs:
             "$DB_ROOT/supabase/migrations/20260101000000_bootstrap_messaging.sql"
           cp supabase/migrations/20260811014815_messaging_inbox_and_ordering.sql \
             "$DB_ROOT/supabase/migrations/"
+          if [ -f supabase/migrations/20260811022913_messaging_idempotency_outbox.sql ]; then
+            cp supabase/migrations/20260811022913_messaging_idempotency_outbox.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           cp supabase/tests/messaging_inbox.sql "$DB_ROOT/supabase/tests/"
+          if [ -f supabase/tests/messaging_idempotency_outbox.sql ]; then
+            cp supabase/tests/messaging_idempotency_outbox.sql "$DB_ROOT/supabase/tests/"
+          fi
           echo "DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
 
       - name: Start disposable Supabase
         run: supabase start --workdir "$DB_ROOT"
 
       - name: Messaging database and RLS tests
-        run: supabase test db "$DB_ROOT/supabase/tests/messaging_inbox.sql" --workdir "$DB_ROOT"
+        run: supabase test db "$DB_ROOT/supabase/tests" --workdir "$DB_ROOT"

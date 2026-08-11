@@ -217,6 +217,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
         body,
         file,
         replyToId: opts.replyToId || null,
+        clientMessageId: opts.clientMessageId || null,
       });
       setDmMessages((list) => attachReplyPreviewLocal(mergeMessagesById(list, [row])));
     } catch (e) {
@@ -266,6 +267,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
         body,
         file,
         replyToId: opts.replyToId || null,
+        clientMessageId: opts.clientMessageId || null,
       });
       setChannelMessages((all) => {
         const prev = all[conversationId] || [];
@@ -398,6 +400,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             subtitle=""
             messages={activeChannelMessages}
             selfId={userId}
+            threadKey={`channel:${activeChannel.conversation.id}:${userId}`}
             peerName={activeChannel.conversation.label || "Group"}
             senderNameById={senderNameById}
             showSenderNames
@@ -438,6 +441,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             subtitle=""
             messages={dmMessages}
             selfId={userId}
+            threadKey={`dm:${userId}`}
             peerName="Callie"
             busy={busy}
             onSend={send}

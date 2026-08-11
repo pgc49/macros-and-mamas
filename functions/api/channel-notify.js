@@ -6,8 +6,14 @@
 
 import { isUuid } from "../_shared/credits.js";
 import { invokeEdgeFunction } from "../_shared/supabaseEmail.js";
+import {
+  authorizeCron,
+  claimNotificationJob,
+  finishNotificationJob,
+} from "../_shared/messageOutbox.js";
 
 export async function onRequestPost({ request, env }) {
+  let job = null;
   try {
     const body = await request.json().catch(() => ({}));
     const messageId = String(body.messageId || "").trim();
@@ -19,22 +25,34 @@ export async function onRequestPost({ request, env }) {
     const user = cronAuth ? null : await requireUser(request, env);
     if (!cronAuth && !user) return json({ error: "unauthorized" }, 401);
 
-    const msg = await loadChannelMessage(env, messageId);
-    if (!msg) return json({ error: "not found" }, 404);
-    if (msg.deleted_at) return json({ ok: true, skipped: "deleted", pushSent: 0 });
-
-    if (!cronAuth) {
+    let msg;
+    if (cronAuth) {
+      job = await claimNotificationJob(env, "channel", messageId);
+      if (!job) {
+        return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0 });
+      }
+      msg = await loadChannelMessage(env, messageId);
+      if (!msg) {
+        await finishNotificationJob(env, job, { success: true });
+        return json({ ok: true, skipped: "source_missing", pushSent: 0 });
+      }
+    } else {
+      msg = await loadChannelMessage(env, messageId);
+      if (!msg) return json({ error: "not found" }, 404);
       if (!msg.sender_id || msg.sender_id !== user.id) {
         return json({ error: "forbidden" }, 403);
       }
-    } else if (msg.kind !== "system" && msg.sender_id) {
-      // Cron path is only for system prompts.
-      return json({ error: "forbidden" }, 403);
+      job = await claimNotificationJob(env, "channel", messageId);
     }
-
-    // Claim notify slot first (idempotent under retries).
-    const claimed = await claimChannelMessageNotified(env, messageId);
-    if (!claimed) {
+    if (!job) {
+      return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0 });
+    }
+    if (msg.deleted_at) {
+      await finishNotificationJob(env, job, { success: true });
+      return json({ ok: true, skipped: "deleted", pushSent: 0 });
+    }
+    if (msg.notified_at) {
+      await finishNotificationJob(env, job, { success: true });
       return json({ ok: true, skipped: "already_notified", pushSent: 0 });
     }
 
@@ -44,7 +62,7 @@ export async function onRequestPost({ request, env }) {
       listConversationMembers(env, msg.conversation_id),
       msg.reply_to_id ? loadChannelMessage(env, msg.reply_to_id) : Promise.resolve(null),
     ]);
-    if (!conversation) return json({ error: "channel missing" }, 400);
+    if (!conversation) throw new Error("channel missing");
 
     const senderIsAdmin = String(sender?.role || "").toLowerCase() === "admin";
     const preview = messagePreview(msg);
@@ -70,6 +88,8 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
+    await markChannelMessageNotified(env, messageId);
+    await finishNotificationJob(env, job, { success: true });
     return json({
       ok: true,
       route: "channel",
@@ -79,19 +99,18 @@ export async function onRequestPost({ request, env }) {
     });
   } catch (e) {
     console.error("channel-notify failed", e);
+    if (job) {
+      try {
+        await finishNotificationJob(env, job, {
+          success: false,
+          error: e?.message || e,
+        });
+      } catch (finishErr) {
+        console.error("channel outbox retry scheduling failed", finishErr);
+      }
+    }
     return json({ error: "notify failed" }, 500);
   }
-}
-
-function authorizeCron(request, env) {
-  const secret = String(env.CRON_SECRET || "");
-  if (!secret) return false;
-  const auth = request.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!token || token.length !== secret.length) return false;
-  let out = 0;
-  for (let i = 0; i < token.length; i += 1) out |= token.charCodeAt(i) ^ secret.charCodeAt(i);
-  return out === 0;
 }
 
 function shouldNotifyMember({
@@ -150,10 +169,17 @@ async function sendPushToProfile(env, profileId, payload) {
     url: payload.url,
   });
   if (!result.ok) {
-    console.warn("send-push edge failed", result);
-    return 0;
+    throw new Error(`send-push edge failed (${result.status || "unknown"})`);
   }
-  return Number(result.data?.sent) || 0;
+  const sent = Number(result.data?.sent) || 0;
+  const failures = Array.isArray(result.data?.failures) ? result.data.failures : [];
+  const retryableFailure = failures.some((failure) => (
+    ![404, 410].includes(Number(failure?.status))
+  ));
+  if (sent === 0 && retryableFailure) {
+    throw new Error("push provider temporarily failed");
+  }
+  return sent;
 }
 
 async function loadChannelMessage(env, id) {
@@ -189,30 +215,26 @@ async function listConversationMembers(env, conversationId) {
   );
 }
 
-/** Returns true if this caller won the notify claim. */
-async function claimChannelMessageNotified(env, messageId) {
+async function markChannelMessageNotified(env, messageId) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!base || !key || !messageId) return false;
+  if (!base || !key || !messageId) throw new Error("missing notified configuration");
   const resp = await fetch(
-    `${base}/rest/v1/conversation_messages?id=eq.${encodeURIComponent(messageId)}&notified_at=is.null`,
+    `${base}/rest/v1/conversation_messages?id=eq.${encodeURIComponent(messageId)}`,
     {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
         apikey: key,
         authorization: `Bearer ${key}`,
-        prefer: "return=representation",
+        prefer: "return=minimal",
       },
       body: JSON.stringify({ notified_at: new Date().toISOString() }),
     },
   );
   if (!resp.ok) {
-    console.warn("claim notified_at failed", resp.status, await resp.text().catch(() => ""));
-    return false;
+    throw new Error(`mark channel notified failed (${resp.status})`);
   }
-  const rows = await resp.json().catch(() => []);
-  return Array.isArray(rows) && rows.length > 0;
 }
 
 async function sbGet(env, path) {
@@ -223,10 +245,12 @@ async function sbGet(env, path) {
     headers: { apikey: key, authorization: `Bearer ${key}` },
   });
   if (!resp.ok) {
-    console.warn("supabase get failed", resp.status, await resp.text().catch(() => ""));
-    return [];
+    const detail = await resp.text().catch(() => "");
+    throw new Error(`supabase get failed (${resp.status}): ${detail.slice(0, 120)}`);
   }
-  return (await resp.json().catch(() => [])) || [];
+  const rows = await resp.json();
+  if (!Array.isArray(rows)) throw new Error("supabase source payload invalid");
+  return rows;
 }
 
 async function requireUser(request, env) {

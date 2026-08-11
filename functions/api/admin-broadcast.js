@@ -10,7 +10,7 @@
    - notify best-effort; never fail the whole send after inserts succeed
    ================================================================== */
 
-import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/supabaseEmail.js";
+import { onRequestPost as notifyDm } from "./message-notify.js";
 
 export async function onRequestPost({ request, env, waitUntil }) {
   try {
@@ -57,8 +57,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
       return json({ error: "Couldn’t save announcement messages — try again." }, 500);
     }
 
-    const preview = text.replace(/\s+/g, " ").trim().slice(0, 140);
-    const notifyPromise = notifyRecipients(env, inserted, preview);
+    const notifyPromise = notifyAnnouncementJobs(request, env, inserted);
 
     // Prefer finishing notifies after the response so the admin UI isn't blocked /
     // timed out by 40+ push+email subrequests.
@@ -95,9 +94,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
   }
 }
 
-async function notifyRecipients(env, rows, preview) {
-  // Small concurrency — stays under Pages subrequest limits better than fully serial,
-  // without exploding parallel fan-out. Each worker keeps local counters.
+async function notifyAnnouncementJobs(request, env, rows) {
   const queue = [...rows];
   const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
     let pushSent = 0;
@@ -105,36 +102,23 @@ async function notifyRecipients(env, rows, preview) {
     while (queue.length) {
       const row = queue.shift();
       if (!row?.id || !row.client_id) continue;
-      try {
-        const n = await sendPushToProfile(env, row.client_id, {
-          title: "Callie",
-          body: preview || "Open Messages in the app",
-          url: "/dashboard?tab=messages",
-          unreadCount: 1,
-        });
-        pushSent += n;
-        if (n > 0) continue;
-
-        const contact = await loadUserContact(env, row.client_id);
-        const email = contact.email || "";
-        if (!email) continue;
-        const mail = await invokeEdgeFunction(env, "message-email", {
-          email,
-          name: contact.name || "Mama",
-          preview: preview || "Callie posted an update in Messages.",
-        });
-        if (mail.ok) {
-          emailSent += 1;
-          await logEmailEvent(env, {
-            profileId: row.client_id,
-            emailType: "message",
-            toEmail: email,
-            meta: { messageId: row.id, announcement: true },
-          });
-        }
-      } catch (e) {
-        console.warn("broadcast notify one failed", row.client_id, e);
+      const response = await notifyDm({
+        request: new Request(request.url, {
+          method: "POST",
+          headers: {
+            authorization: request.headers.get("authorization") || "",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ messageId: row.id }),
+        }),
+        env,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(`announcement notify failed (${response.status})`);
       }
+      pushSent += Number(result.pushSent) || 0;
+      if (result.emailSent) emailSent += 1;
     }
     return { pushSent, emailSent };
   });
@@ -236,21 +220,6 @@ async function insertAnnouncementsBulk(env, { clientIds, senderId, body }) {
     if (Array.isArray(data)) inserted.push(...data);
   }
   return inserted;
-}
-
-async function sendPushToProfile(env, profileId, payload) {
-  const result = await invokeEdgeFunction(env, "send-push", {
-    profileId,
-    title: payload.title,
-    body: payload.body,
-    url: payload.url,
-    unreadCount: payload.unreadCount,
-  });
-  if (!result.ok) {
-    console.warn("send-push edge failed", result);
-    return 0;
-  }
-  return Number(result.data?.sent) || 0;
 }
 
 async function isAdmin(env, userId) {

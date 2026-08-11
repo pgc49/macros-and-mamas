@@ -20,6 +20,7 @@ import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
+const pendingSendAttempts = new Map();
 
 /**
  * Shared chat thread UI (mama Messages tab + admin per-client thread).
@@ -65,6 +66,8 @@ export function MessagesThread({
   canModerate = false,
   emptyState = "No messages yet — say hi or send a photo. Callie will reply here.",
   compact = false,
+  /** Stable DM/channel identity so ambiguous retries survive thread remounts. */
+  threadKey = "",
   onComposerFocusChange,
 }) {
   const safeMessages = Array.isArray(messages)
@@ -92,6 +95,7 @@ export function MessagesThread({
   const holdTimer = useRef(null);
   const recorderRef = useRef(null);
   const markReadRef = useRef(onMarkRead);
+  const sendInFlightRef = useRef(false);
 
   useEffect(() => {
     registerMessageServiceWorker();
@@ -254,18 +258,70 @@ export function MessagesThread({
   const send = async () => {
     const text = draft.trim();
     const attach = voicePreview?.file || file;
-    if ((!text && !attach) || busy || !onSend || recording) return;
+    if ((!text && !attach) || busy || !onSend || recording || sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
     const keptText = text;
     const keptFile = file;
     const keptVoice = voicePreview;
     const keptReply = replyTo;
+    const attemptScope = threadKey || `thread:${selfId || "unknown"}`;
+    const fingerprint = sendPayloadFingerprint(keptText, attach, keptReply?.id);
+    const previousAttempt = pendingSendAttempts.get(attemptScope);
+    const matchingAttempt = previousAttempt?.fingerprint === fingerprint
+      ? previousAttempt
+      : null;
+    const clientMessageId = matchingAttempt
+      ? previousAttempt.id
+      : createClientMessageId();
+
+    // A remounted instance may retry while the original request is still
+    // settling. Await that shared operation rather than creating a duplicate.
+    if (matchingAttempt?.promise) {
+      try {
+        await matchingAttempt.promise;
+        setDraft("");
+        clearFile();
+        clearVoicePreview();
+        setReplyTo(null);
+        if (pendingSendAttempts.get(attemptScope)?.generation === matchingAttempt.generation) {
+          pendingSendAttempts.delete(attemptScope);
+        }
+        sendInFlightRef.current = false;
+        return;
+      } catch {
+        // The original attempt failed; continue below with the same ID.
+      }
+    }
+
+    const generation = createClientMessageId();
+    const sendPromise = Promise.resolve().then(() => onSend(keptText, attach, {
+      ...(keptReply?.id ? { replyToId: keptReply.id } : {}),
+      clientMessageId,
+    }));
+    pendingSendAttempts.set(attemptScope, {
+      id: clientMessageId,
+      fingerprint,
+      generation,
+      promise: sendPromise,
+    });
     setDraft("");
     clearFile();
     clearVoicePreview();
     setReplyTo(null);
     try {
-      await onSend(keptText, attach, keptReply?.id ? { replyToId: keptReply.id } : undefined);
+      await sendPromise;
+      if (pendingSendAttempts.get(attemptScope)?.generation === generation) {
+        pendingSendAttempts.delete(attemptScope);
+      }
     } catch (e) {
+      if (pendingSendAttempts.get(attemptScope)?.generation === generation) {
+        pendingSendAttempts.set(attemptScope, {
+          id: clientMessageId,
+          fingerprint,
+          generation,
+          promise: null,
+        });
+      }
       console.error(e);
       setDraft(keptText);
       if (keptReply) setReplyTo(keptReply);
@@ -278,6 +334,8 @@ export function MessagesThread({
         }
       }
       setAttachError(e.message || "Couldn’t send.");
+    } finally {
+      sendInFlightRef.current = false;
     }
   };
 
@@ -1302,6 +1360,29 @@ function safeString(value, fallback = "") {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return fallback;
+}
+
+function createClientMessageId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // RFC 4122 v4 fallback for older embedded browsers.
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === "x" ? random : ((random & 0x3) | 0x8);
+    return value.toString(16);
+  });
+}
+
+function sendPayloadFingerprint(body, file, replyToId) {
+  return [
+    safeString(body),
+    safeString(replyToId),
+    safeString(file?.name),
+    safeString(file?.type),
+    Number(file?.size) || 0,
+    Number(file?.lastModified) || 0,
+  ].join("\u001f");
 }
 
 function normalizeMessageRow(row, index) {
