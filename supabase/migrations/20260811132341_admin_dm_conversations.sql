@@ -848,6 +848,7 @@ begin
       insert into public.message_reactions (message_id, user_id, emoji)
       values (p_message_id, auth.uid(), p_emoji);
       return query select p_message_id, p_emoji, false;
+      return;
     end if;
   elsif p_scope = 'channel' then
     select r.emoji into existing_emoji
@@ -860,6 +861,7 @@ begin
       insert into public.conversation_message_reactions (message_id, user_id, emoji)
       values (p_message_id, auth.uid(), p_emoji);
       return query select p_message_id, p_emoji, false;
+      return;
     end if;
   else
     raise exception 'invalid reaction scope';
