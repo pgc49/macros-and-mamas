@@ -1,5 +1,3 @@
-const MAX_ATTEMPTS = 6;
-
 function config(env) {
   return {
     base: String(env.SUPABASE_URL || "").replace(/\/$/, ""),
@@ -35,53 +33,52 @@ export async function claimNotificationJob(env, messageType, messageId) {
 }
 
 export async function finishNotificationJob(env, job, { success, error = "" }) {
-  if (!job?.id) return;
+  if (!job?.id || !job?.claim_token) throw new Error("missing outbox claim token");
   const { base, key } = config(env);
   if (!base || !key) throw new Error("missing outbox configuration");
-
-  const attempts = Math.max(1, Number(job.attempts) || 1);
-  const terminal = !success && attempts >= MAX_ATTEMPTS;
-  const delaySeconds = Math.min(15 * 60, 30 * (2 ** Math.max(0, attempts - 1)));
-  const next = new Date(Date.now() + delaySeconds * 1000).toISOString();
-  const patch = success
-    ? {
-      status: "sent",
-      sent_at: new Date().toISOString(),
-      locked_at: null,
-      last_error: null,
-    }
-    : {
-      status: terminal ? "dead" : "retry",
-      available_at: next,
-      locked_at: null,
-      last_error: String(error || "notification failed").slice(0, 500),
-    };
-
-  const resp = await fetch(
-    `${base}/rest/v1/message_notification_outbox?id=eq.${encodeURIComponent(job.id)}`,
-    {
-      method: "PATCH",
-      headers: headers(key, { prefer: "return=minimal" }),
-      body: JSON.stringify(patch),
-    },
-  );
+  const resp = await fetch(`${base}/rest/v1/rpc/finish_message_notification_job`, {
+    method: "POST",
+    headers: headers(key),
+    body: JSON.stringify({
+      p_job_id: job.id,
+      p_claim_token: job.claim_token,
+      p_success: success === true,
+      p_error: String(error || "").slice(0, 500) || null,
+    }),
+  });
   if (!resp.ok) throw new Error(`outbox finish failed (${resp.status})`);
+  const rows = await resp.json().catch(() => []);
+  if (!rows.length) throw new Error("outbox claim expired before completion");
+  return rows[0];
 }
 
 export async function listDueNotificationJobs(env, limit = 20) {
   const { base, key } = config(env);
   if (!base || !key) throw new Error("missing outbox configuration");
   const now = encodeURIComponent(new Date().toISOString());
+  const stale = encodeURIComponent(new Date(Date.now() - 5 * 60 * 1000).toISOString());
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20));
-  const path = "/rest/v1/message_notification_outbox"
+  const basePath = "/rest/v1/message_notification_outbox"
     + "?select=id,message_type,message_id,status,attempts,available_at,locked_at"
-    + "&status=in.(pending,retry,processing)"
-    + `&available_at=lte.${now}`
-    + "&order=created_at.asc"
-    + `&limit=${safeLimit}`;
-  const resp = await fetch(`${base}${path}`, { headers: headers(key) });
-  if (!resp.ok) throw new Error(`outbox list failed (${resp.status})`);
-  return (await resp.json().catch(() => [])) || [];
+    + "&order=created_at.asc";
+  const [dueResp, staleResp] = await Promise.all([
+    fetch(
+      `${base}${basePath}&status=in.(pending,retry)&available_at=lte.${now}&limit=${safeLimit}`,
+      { headers: headers(key) },
+    ),
+    fetch(
+      `${base}${basePath}&status=eq.processing&locked_at=lt.${stale}&limit=${safeLimit}`,
+      { headers: headers(key) },
+    ),
+  ]);
+  if (!dueResp.ok || !staleResp.ok) {
+    throw new Error(`outbox list failed (${dueResp.status}/${staleResp.status})`);
+  }
+  const due = (await dueResp.json().catch(() => [])) || [];
+  const staleJobs = (await staleResp.json().catch(() => [])) || [];
+  return [...due, ...staleJobs]
+    .sort((a, b) => String(a.available_at).localeCompare(String(b.available_at)))
+    .slice(0, safeLimit);
 }
 
 export function authorizeCron(request, env) {

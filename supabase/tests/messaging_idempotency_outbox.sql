@@ -1,6 +1,6 @@
 begin;
 
-select plan(12);
+select plan(16);
 
 select has_column('public', 'messages', 'client_message_id', 'DM idempotency column exists');
 select has_column(
@@ -121,6 +121,15 @@ select ok(
   'authenticated clients cannot claim notification jobs'
 );
 
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.finish_message_notification_job(bigint,uuid,boolean,text)',
+    'EXECUTE'
+  ),
+  'authenticated clients cannot finish notification jobs'
+);
+
 set local role service_role;
 
 select is(
@@ -144,6 +153,60 @@ select is(
   ),
   1,
   'claim increments attempt count'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.finish_message_notification_job(
+      (
+        select id
+        from public.message_notification_outbox
+        where message_type = 'dm'
+          and message_id = '10000000-0000-0000-0000-000000000011'
+      ),
+      '90000000-0000-4000-8000-000000000099',
+      true,
+      null
+    )
+  ),
+  0,
+  'stale claim token cannot finalize a job'
+);
+
+select is(
+  (
+    select status
+    from public.finish_message_notification_job(
+      (
+        select id
+        from public.message_notification_outbox
+        where message_type = 'dm'
+          and message_id = '10000000-0000-0000-0000-000000000011'
+      ),
+      (
+        select claim_token
+        from public.message_notification_outbox
+        where message_type = 'dm'
+          and message_id = '10000000-0000-0000-0000-000000000011'
+      ),
+      true,
+      null
+    )
+  ),
+  'sent',
+  'matching claim token finalizes the job'
+);
+
+select is(
+  (
+    select status
+    from public.message_notification_outbox
+    where message_type = 'dm'
+      and message_id = '10000000-0000-0000-0000-000000000011'
+  ),
+  'sent',
+  'outbox stores terminal sent state'
 );
 
 reset role;

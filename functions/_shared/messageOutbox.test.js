@@ -18,7 +18,13 @@ afterEach(() => {
 describe("message notification outbox", () => {
   it("claims a specific due message atomically", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify([
-      { id: 7, message_type: "dm", message_id: "message-id", attempts: 1 },
+      {
+        id: 7,
+        message_type: "dm",
+        message_id: "message-id",
+        attempts: 1,
+        claim_token: "10000000-0000-4000-8000-000000000007",
+      },
     ]), { status: 200 }));
 
     const job = await claimNotificationJob(env, "dm", "message-id");
@@ -32,23 +38,31 @@ describe("message notification outbox", () => {
 
   it("schedules exponential retry and eventually marks dead", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response(null, { status: 204 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ id: 8, status: "retry" }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ id: 9, status: "dead" }]), { status: 200 }));
 
-    await finishNotificationJob(env, { id: 8, attempts: 1 }, {
+    const retry = await finishNotificationJob(env, {
+      id: 8,
+      attempts: 1,
+      claim_token: "10000000-0000-4000-8000-000000000008",
+    }, {
       success: false,
       error: "provider unavailable",
     });
-    const retryPatch = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(retryPatch.status).toBe("retry");
-    expect(retryPatch.last_error).toBe("provider unavailable");
-    expect(retryPatch.locked_at).toBeNull();
+    const retryArgs = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(retry.status).toBe("retry");
+    expect(retryArgs.p_error).toBe("provider unavailable");
+    expect(retryArgs.p_claim_token).toBe("10000000-0000-4000-8000-000000000008");
 
-    await finishNotificationJob(env, { id: 9, attempts: 6 }, {
+    const dead = await finishNotificationJob(env, {
+      id: 9,
+      attempts: 6,
+      claim_token: "10000000-0000-4000-8000-000000000009",
+    }, {
       success: false,
       error: "still unavailable",
     });
-    const deadPatch = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(deadPatch.status).toBe("dead");
+    expect(dead.status).toBe("dead");
   });
 
   it("uses constant-time cron secret comparison", () => {

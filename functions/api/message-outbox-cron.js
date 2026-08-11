@@ -2,6 +2,8 @@ import {
   authorizeCron,
   listDueNotificationJobs,
 } from "../_shared/messageOutbox.js";
+import { onRequestPost as notifyDm } from "./message-notify.js";
+import { onRequestPost as notifyChannel } from "./channel-notify.js";
 
 /** Recovery drain: immediate browser calls handle normal delivery; cron retries missed jobs. */
 export async function onRequestPost({ request, env }) {
@@ -16,11 +18,9 @@ export async function onRequestPost({ request, env }) {
     const workers = Array.from({ length: Math.min(4, queue.length || 1) }, async () => {
       while (queue.length) {
         const job = queue.shift();
-        const endpoint = job.message_type === "channel"
-          ? "/api/channel-notify"
-          : "/api/message-notify";
+        const handler = job.message_type === "channel" ? notifyChannel : notifyDm;
         try {
-          const resp = await fetch(new URL(endpoint, request.url), {
+          const childRequest = new Request(request.url, {
             method: "POST",
             headers: {
               authorization: request.headers.get("authorization") || "",
@@ -28,6 +28,7 @@ export async function onRequestPost({ request, env }) {
             },
             body: JSON.stringify({ messageId: job.message_id }),
           });
+          const resp = await handler({ request: childRequest, env });
           results.push({
             id: job.id,
             type: job.message_type,
@@ -46,12 +47,13 @@ export async function onRequestPost({ request, env }) {
       }
     });
     await Promise.all(workers);
+    const failed = results.filter((item) => !item.ok).length;
     return json({
       ok: true,
       found: jobs.length,
       succeeded: results.filter((item) => item.ok).length,
-      failed: results.filter((item) => !item.ok).length,
-    });
+      failed,
+    }, failed > 0 ? 500 : 200);
   } catch (e) {
     console.error("message outbox cron failed", e);
     return json({ error: "outbox drain failed" }, 500);

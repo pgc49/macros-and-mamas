@@ -20,6 +20,7 @@ import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
+const pendingSendAttempts = new Map();
 
 /**
  * Shared chat thread UI (mama Messages tab + admin per-client thread).
@@ -65,6 +66,8 @@ export function MessagesThread({
   canModerate = false,
   emptyState = "No messages yet — say hi or send a photo. Callie will reply here.",
   compact = false,
+  /** Stable DM/channel identity so ambiguous retries survive thread remounts. */
+  threadKey = "",
   onComposerFocusChange,
 }) {
   const safeMessages = Array.isArray(messages)
@@ -92,7 +95,7 @@ export function MessagesThread({
   const holdTimer = useRef(null);
   const recorderRef = useRef(null);
   const markReadRef = useRef(onMarkRead);
-  const sendAttemptRef = useRef(null);
+  const sendInFlightRef = useRef(false);
 
   useEffect(() => {
     registerMessageServiceWorker();
@@ -255,13 +258,19 @@ export function MessagesThread({
   const send = async () => {
     const text = draft.trim();
     const attach = voicePreview?.file || file;
-    if ((!text && !attach) || busy || !onSend || recording) return;
+    if ((!text && !attach) || busy || !onSend || recording || sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
     const keptText = text;
     const keptFile = file;
     const keptVoice = voicePreview;
     const keptReply = replyTo;
-    const clientMessageId = sendAttemptRef.current || createClientMessageId();
-    sendAttemptRef.current = clientMessageId;
+    const attemptScope = threadKey || `thread:${selfId || "unknown"}`;
+    const fingerprint = sendPayloadFingerprint(keptText, attach, keptReply?.id);
+    const previousAttempt = pendingSendAttempts.get(attemptScope);
+    const clientMessageId = previousAttempt?.fingerprint === fingerprint
+      ? previousAttempt.id
+      : createClientMessageId();
+    pendingSendAttempts.set(attemptScope, { id: clientMessageId, fingerprint });
     setDraft("");
     clearFile();
     clearVoicePreview();
@@ -271,7 +280,9 @@ export function MessagesThread({
         ...(keptReply?.id ? { replyToId: keptReply.id } : {}),
         clientMessageId,
       });
-      sendAttemptRef.current = null;
+      if (pendingSendAttempts.get(attemptScope)?.id === clientMessageId) {
+        pendingSendAttempts.delete(attemptScope);
+      }
     } catch (e) {
       console.error(e);
       setDraft(keptText);
@@ -285,6 +296,8 @@ export function MessagesThread({
         }
       }
       setAttachError(e.message || "Couldn’t send.");
+    } finally {
+      sendInFlightRef.current = false;
     }
   };
 
@@ -1321,6 +1334,17 @@ function createClientMessageId() {
     const value = char === "x" ? random : ((random & 0x3) | 0x8);
     return value.toString(16);
   });
+}
+
+function sendPayloadFingerprint(body, file, replyToId) {
+  return [
+    safeString(body),
+    safeString(replyToId),
+    safeString(file?.name),
+    safeString(file?.type),
+    Number(file?.size) || 0,
+    Number(file?.lastModified) || 0,
+  ].join("\u001f");
 }
 
 function normalizeMessageRow(row, index) {

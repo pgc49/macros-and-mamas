@@ -25,15 +25,25 @@ export async function onRequestPost({ request, env }) {
     const user = cronAuth ? null : await requireUser(request, env);
     if (!cronAuth && !user) return json({ error: "unauthorized" }, 401);
 
-    const msg = await loadChannelMessage(env, messageId);
-    if (!msg) return json({ error: "not found" }, 404);
-    if (!cronAuth) {
+    let msg;
+    if (cronAuth) {
+      job = await claimNotificationJob(env, "channel", messageId);
+      if (!job) {
+        return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0 });
+      }
+      msg = await loadChannelMessage(env, messageId);
+      if (!msg) {
+        await finishNotificationJob(env, job, { success: true });
+        return json({ ok: true, skipped: "source_missing", pushSent: 0 });
+      }
+    } else {
+      msg = await loadChannelMessage(env, messageId);
+      if (!msg) return json({ error: "not found" }, 404);
       if (!msg.sender_id || msg.sender_id !== user.id) {
         return json({ error: "forbidden" }, 403);
       }
+      job = await claimNotificationJob(env, "channel", messageId);
     }
-
-    job = await claimNotificationJob(env, "channel", messageId);
     if (!job) {
       return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0 });
     }
@@ -159,10 +169,17 @@ async function sendPushToProfile(env, profileId, payload) {
     url: payload.url,
   });
   if (!result.ok) {
-    console.warn("send-push edge failed", result);
-    return 0;
+    throw new Error(`send-push edge failed (${result.status || "unknown"})`);
   }
-  return Number(result.data?.sent) || 0;
+  const sent = Number(result.data?.sent) || 0;
+  const failures = Array.isArray(result.data?.failures) ? result.data.failures : [];
+  const retryableFailure = failures.some((failure) => (
+    ![404, 410].includes(Number(failure?.status))
+  ));
+  if (sent === 0 && retryableFailure) {
+    throw new Error("push provider temporarily failed");
+  }
+  return sent;
 }
 
 async function loadChannelMessage(env, id) {
@@ -228,8 +245,8 @@ async function sbGet(env, path) {
     headers: { apikey: key, authorization: `Bearer ${key}` },
   });
   if (!resp.ok) {
-    console.warn("supabase get failed", resp.status, await resp.text().catch(() => ""));
-    return [];
+    const detail = await resp.text().catch(() => "");
+    throw new Error(`supabase get failed (${resp.status}): ${detail.slice(0, 120)}`);
   }
   return (await resp.json().catch(() => [])) || [];
 }

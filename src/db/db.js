@@ -405,6 +405,29 @@ function messageIdempotencyKey(value) {
   });
 }
 
+function assertIdempotentPayload(existing, {
+  body,
+  replyToId,
+  file,
+  targetField,
+  targetId,
+}) {
+  if (!existing) return;
+  const sameTarget = existing[targetField] === targetId;
+  const sameBody = String(existing.body || "") === String(body || "");
+  const sameReply = String(existing.reply_to_id || "") === String(replyToId || "");
+  let sameFile = true;
+  if (file) {
+    const mime = String(file.type || "").toLowerCase().split(";")[0].trim();
+    sameFile = existing.attachment_name === String(file.name || "attachment").slice(0, 120)
+      && existing.attachment_mime === mime
+      && Number(existing.attachment_bytes || 0) === Number(file.size || 0);
+  }
+  if (!sameTarget || !sameBody || !sameReply || !sameFile) {
+    throw new Error("This retry no longer matches the original send.");
+  }
+}
+
 function isAudioMime(mime) {
   const base = String(mime || "").toLowerCase().split(";")[0].trim();
   return MESSAGE_AUDIO_MIME.has(base) || base.startsWith("audio/");
@@ -536,6 +559,16 @@ async function hydrateChannelAttachments(rows) {
       return m;
     }
   }));
+}
+
+async function removeUploadedAttachment(bucket, path) {
+  if (!path) return;
+  try {
+    const { error } = await supabase.storage.from(bucket).remove([path]);
+    if (error) console.warn("message attachment cleanup failed", bucket, path, error);
+  } catch (error) {
+    console.warn("message attachment cleanup failed", bucket, path, error);
+  }
 }
 
 async function loadChannelSenderLabels(conversationId, userIds) {
@@ -1926,8 +1959,23 @@ export const db = {
     if (!conversationId) throw new Error("channel required");
     const idempotencyKey = messageIdempotencyKey(clientMessageId);
     const text = String(body || "").trim().slice(0, 2000);
+    const prior = await supabase
+      .from("conversation_messages")
+      .select(CHANNEL_MESSAGE_SELECT)
+      .eq("sender_id", uid)
+      .eq("client_message_id", idempotencyKey)
+      .maybeSingle();
+    if (prior.error) throw prior.error;
+    assertIdempotentPayload(prior.data, {
+      body: text,
+      replyToId,
+      file,
+      targetField: "conversation_id",
+      targetId: conversationId,
+    });
+    let data = prior.data || null;
     let attachment = null;
-    if (file) {
+    if (!data && file) {
       let allowAudio = false;
       if (isAudioMime(file.type)) {
         const { data: me, error: roleErr } = await supabase
@@ -1941,48 +1989,62 @@ export const db = {
       }
       attachment = await uploadChannelAttachment({ conversationId, file, allowAudio });
     }
-    if (text.length < 1 && !attachment) throw new Error("Message is empty");
-    let { data, error } = await supabase
-      .from("conversation_messages")
-      .insert({
-        conversation_id: conversationId,
-        sender_id: uid,
-        client_message_id: idempotencyKey,
-        body: text,
-        kind: "chat",
-        ...(replyToId ? { reply_to_id: replyToId } : {}),
-        ...(attachment
-          ? {
-            attachment_path: attachment.path,
-            attachment_name: attachment.name,
-            attachment_mime: attachment.mime,
-            attachment_bytes: attachment.bytes,
-          }
-          : {}),
-      })
-      .select(CHANNEL_MESSAGE_SELECT)
-      .single();
-    if (error) {
-      const duplicate = error.code === "23505";
-      // Avoid orphan storage objects when the row insert fails after upload.
-      if (attachment?.path) {
+    if (!data) {
+      if (text.length < 1 && !attachment) throw new Error("Message is empty");
+      const inserted = await supabase
+        .from("conversation_messages")
+        .insert({
+          conversation_id: conversationId,
+          sender_id: uid,
+          client_message_id: idempotencyKey,
+          body: text,
+          kind: "chat",
+          ...(replyToId ? { reply_to_id: replyToId } : {}),
+          ...(attachment
+            ? {
+              attachment_path: attachment.path,
+              attachment_name: attachment.name,
+              attachment_mime: attachment.mime,
+              attachment_bytes: attachment.bytes,
+            }
+            : {}),
+        })
+        .select(CHANNEL_MESSAGE_SELECT)
+        .single();
+      if (!inserted.error) {
+        data = inserted.data;
+      } else {
+        // An HTTP failure can be ambiguous: the row may have committed. Query
+        // before removing anything and only delete an object proven unreferenced.
+        const existing = await supabase
+          .from("conversation_messages")
+          .select(CHANNEL_MESSAGE_SELECT)
+          .eq("sender_id", uid)
+          .eq("client_message_id", idempotencyKey)
+          .maybeSingle();
+        if (existing.error) throw existing.error;
         try {
-          await supabase.storage.from(CHANNEL_ATTACHMENT_BUCKET).remove([attachment.path]);
-        } catch (cleanupErr) {
-          console.warn("channel attachment orphan cleanup failed", cleanupErr);
+          assertIdempotentPayload(existing.data, {
+            body: text,
+            replyToId,
+            file,
+            targetField: "conversation_id",
+            targetId: conversationId,
+          });
+        } catch (conflictError) {
+          await removeUploadedAttachment(CHANNEL_ATTACHMENT_BUCKET, attachment?.path);
+          throw conflictError;
+        }
+        if (existing.data) {
+          if (attachment?.path && attachment.path !== existing.data.attachment_path) {
+            await removeUploadedAttachment(CHANNEL_ATTACHMENT_BUCKET, attachment.path);
+          }
+          data = existing.data;
+        } else {
+          await removeUploadedAttachment(CHANNEL_ATTACHMENT_BUCKET, attachment?.path);
+          throw inserted.error;
         }
       }
-      if (!duplicate) throw error;
-      const existing = await supabase
-        .from("conversation_messages")
-        .select(CHANNEL_MESSAGE_SELECT)
-        .eq("sender_id", uid)
-        .eq("client_message_id", idempotencyKey)
-        .maybeSingle();
-      if (existing.error) throw existing.error;
-      if (!existing.data) throw error;
-      data = existing.data;
-      error = null;
     }
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -2147,8 +2209,23 @@ export const db = {
     if (!clientId) throw new Error("client required");
     const idempotencyKey = messageIdempotencyKey(clientMessageId);
     const text = String(body || "").trim().slice(0, 2000);
+    const prior = await supabase
+      .from("messages")
+      .select(DM_MESSAGE_SELECT)
+      .eq("sender_id", uid)
+      .eq("client_message_id", idempotencyKey)
+      .maybeSingle();
+    if (prior.error) throw prior.error;
+    assertIdempotentPayload(prior.data, {
+      body: text,
+      replyToId,
+      file,
+      targetField: "client_id",
+      targetId: clientId,
+    });
+    let data = prior.data || null;
     let attachment = null;
-    if (file) {
+    if (!data && file) {
       let allowAudio = false;
       if (isAudioMime(file.type)) {
         const { data: me, error: roleErr } = await supabase
@@ -2162,47 +2239,60 @@ export const db = {
       }
       attachment = await uploadMessageAttachment({ clientId, file, allowAudio });
     }
-    if (text.length < 1 && !attachment) throw new Error("Message is empty");
-    let { data, error } = await supabase
-      .from("messages")
-      .insert({
-        client_id: clientId,
-        sender_id: uid,
-        client_message_id: idempotencyKey,
-        body: text,
-        kind: "chat",
-        ...(replyToId ? { reply_to_id: replyToId } : {}),
-        ...(attachment
-          ? {
-            attachment_path: attachment.path,
-            attachment_name: attachment.name,
-            attachment_mime: attachment.mime,
-            attachment_bytes: attachment.bytes,
-          }
-          : {}),
-      })
-      .select(DM_MESSAGE_SELECT)
-      .single();
-    if (error) {
-      const duplicate = error.code === "23505";
-      if (attachment?.path) {
+    if (!data) {
+      if (text.length < 1 && !attachment) throw new Error("Message is empty");
+      const inserted = await supabase
+        .from("messages")
+        .insert({
+          client_id: clientId,
+          sender_id: uid,
+          client_message_id: idempotencyKey,
+          body: text,
+          kind: "chat",
+          ...(replyToId ? { reply_to_id: replyToId } : {}),
+          ...(attachment
+            ? {
+              attachment_path: attachment.path,
+              attachment_name: attachment.name,
+              attachment_mime: attachment.mime,
+              attachment_bytes: attachment.bytes,
+            }
+            : {}),
+        })
+        .select(DM_MESSAGE_SELECT)
+        .single();
+      if (!inserted.error) {
+        data = inserted.data;
+      } else {
+        const existing = await supabase
+          .from("messages")
+          .select(DM_MESSAGE_SELECT)
+          .eq("sender_id", uid)
+          .eq("client_message_id", idempotencyKey)
+          .maybeSingle();
+        if (existing.error) throw existing.error;
         try {
-          await supabase.storage.from(MESSAGE_ATTACHMENT_BUCKET).remove([attachment.path]);
-        } catch (cleanupErr) {
-          console.warn("message attachment orphan cleanup failed", cleanupErr);
+          assertIdempotentPayload(existing.data, {
+            body: text,
+            replyToId,
+            file,
+            targetField: "client_id",
+            targetId: clientId,
+          });
+        } catch (conflictError) {
+          await removeUploadedAttachment(MESSAGE_ATTACHMENT_BUCKET, attachment?.path);
+          throw conflictError;
+        }
+        if (existing.data) {
+          if (attachment?.path && attachment.path !== existing.data.attachment_path) {
+            await removeUploadedAttachment(MESSAGE_ATTACHMENT_BUCKET, attachment.path);
+          }
+          data = existing.data;
+        } else {
+          await removeUploadedAttachment(MESSAGE_ATTACHMENT_BUCKET, attachment?.path);
+          throw inserted.error;
         }
       }
-      if (!duplicate) throw error;
-      const existing = await supabase
-        .from("messages")
-        .select(DM_MESSAGE_SELECT)
-        .eq("sender_id", uid)
-        .eq("client_message_id", idempotencyKey)
-        .maybeSingle();
-      if (existing.error) throw existing.error;
-      if (!existing.data) throw error;
-      data = existing.data;
-      error = null;
     }
     try {
       const { data: sessionData } = await supabase.auth.getSession();

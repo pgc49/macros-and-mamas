@@ -704,6 +704,7 @@ export function AdminMessages({
                   subtitle=""
                   messages={activeChannelMessages}
                   selfId={adminUserId}
+                  threadKey={`channel:${active.id}:${adminUserId}`}
                   peerName={activeName}
                   senderNameById={senderNameById}
                   showSenderNames
@@ -748,6 +749,7 @@ export function AdminMessages({
                   subtitle=""
                   messages={dmLoadedClientId === active.id ? dmMessages : []}
                   selfId={adminUserId}
+                  threadKey={`dm:${active.id}:${adminUserId}`}
                   peerName={activeName}
                   senderNameById={senderNameById}
                   threadClientId={activeIsAdmin ? null : active.id}

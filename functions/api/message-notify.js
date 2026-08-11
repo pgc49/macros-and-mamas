@@ -13,6 +13,7 @@
    ================================================================== */
 
 import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/supabaseEmail.js";
+import { isUuid } from "../_shared/credits.js";
 import {
   authorizeCron,
   claimNotificationJob,
@@ -30,16 +31,28 @@ export async function onRequestPost({ request, env }) {
 
     const body = await request.json().catch(() => ({}));
     const messageId = String(body.messageId || "").trim();
-    if (!messageId) return json({ error: "messageId required" }, 400);
+    if (!messageId || !isUuid(messageId)) return json({ error: "messageId required" }, 400);
 
-    const msg = await loadMessage(env, messageId);
-    if (!msg) return json({ error: "not found" }, 404);
-    // Only the sender may notify — blocks admin re-notify spam loops.
-    if (!cronAuth && msg.sender_id !== user.id) {
-      return json({ error: "forbidden" }, 403);
+    let msg;
+    if (cronAuth) {
+      job = await claimNotificationJob(env, "dm", messageId);
+      if (!job) {
+        return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0, emailSent: false });
+      }
+      msg = await loadMessage(env, messageId);
+      if (!msg) {
+        await finishNotificationJob(env, job, { success: true });
+        return json({ ok: true, skipped: "source_missing", pushSent: 0, emailSent: false });
+      }
+    } else {
+      msg = await loadMessage(env, messageId);
+      if (!msg) return json({ error: "not found" }, 404);
+      // Only the sender may notify — blocks admin re-notify spam loops.
+      if (msg.sender_id !== user.id) {
+        return json({ error: "forbidden" }, 403);
+      }
+      job = await claimNotificationJob(env, "dm", messageId);
     }
-
-    job = await claimNotificationJob(env, "dm", messageId);
     if (!job) {
       return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0, emailSent: false });
     }
@@ -229,10 +242,17 @@ async function sendPushToProfile(env, profileId, payload) {
     unreadCount: payload.unreadCount,
   });
   if (!result.ok) {
-    console.warn("send-push edge failed", result);
-    return 0;
+    throw new Error(`send-push edge failed (${result.status || "unknown"})`);
   }
-  return Number(result.data?.sent) || 0;
+  const sent = Number(result.data?.sent) || 0;
+  const failures = Array.isArray(result.data?.failures) ? result.data.failures : [];
+  const retryableFailure = failures.some((failure) => (
+    ![404, 410].includes(Number(failure?.status))
+  ));
+  if (sent === 0 && retryableFailure) {
+    throw new Error("push provider temporarily failed");
+  }
+  return sent;
 }
 
 /**

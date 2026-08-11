@@ -134,6 +134,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           subtitle=""
           messages={messages}
           selfId={adminUserId}
+          threadKey={`dm:${clientId}:${adminUserId}`}
           peerName={first}
           senderNameById={client?.id ? { [client.id]: first } : null}
           threadClientId={clientId}
