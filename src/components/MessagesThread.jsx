@@ -581,15 +581,16 @@ export function MessagesThread({
   };
 
   return (
-    <div style={{
+    <div data-messages-thread style={{
       display: "flex",
       flexDirection: "column",
-      minHeight: compact ? 0 : "62vh",
+      minHeight: 0,
       flex: 1,
-      height: compact ? "100%" : undefined,
+      height: compact ? "100%" : "min(62vh, 582px)",
       minWidth: 0,
-      // Compact (admin fill): clip to parent so the list scrolls, not the page.
-      overflow: compact ? "hidden" : undefined,
+      // Bound both customer and admin threads so loaded history scrolls inside
+      // the list instead of moving the composer below Shell's scroll viewport.
+      overflow: "hidden",
     }}
     >
       {(title || subtitle) && (
@@ -632,6 +633,7 @@ export function MessagesThread({
       {banner}
 
       <div
+        data-message-list
         ref={listRef}
         style={{
           flex: 1,
@@ -642,10 +644,9 @@ export function MessagesThread({
           padding: 12,
           // Critical: default minHeight:auto prevents shrinking below content,
           // which expands the whole thread instead of scrolling inside the pane.
-          minHeight: compact ? 0 : 280,
+          minHeight: 0,
           minWidth: 0,
-          /* compact (admin fill): fill parent. Mama tab keeps a viewport cap. */
-          maxHeight: compact ? "none" : "min(64vh, 520px)",
+          maxHeight: "none",
           WebkitOverflowScrolling: "touch",
           overscrollBehavior: "contain",
         }}
@@ -1228,7 +1229,7 @@ export function MessagesThread({
       )}
 
       {!hideComposer && (
-      <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-end" }}>
+      <div data-message-composer style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-end" }}>
         <label
           style={iconBtn}
           title="Attach photo or PDF"
