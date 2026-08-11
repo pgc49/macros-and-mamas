@@ -130,12 +130,18 @@ jobs:
           VITE_META_PIXEL_ID: ${{ vars.VITE_META_PIXEL_ID }}
           VITE_CF_WEB_ANALYTICS_TOKEN: ${{ vars.VITE_CF_WEB_ANALYTICS_TOKEN }}
           VITE_LIVE_CHANNEL_COHORTS: ${{ vars.VITE_LIVE_CHANNEL_COHORTS }}
+      - name: Package and compile deployable Pages artifact
+        run: |
+          mkdir -p deploy-artifact/marketing/src
+          cp -R dist deploy-artifact/dist
+          cp -R functions deploy-artifact/functions
+          cp -R marketing/src/lib deploy-artifact/marketing/src/lib
+          cd deploy-artifact
+          npx wrangler@4.120.1 pages functions build functions
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.surface }}-surface-${{ github.sha }}
-          path: |
-            dist
-            functions
+          path: deploy-artifact
           retention-days: 7
 
   classify-production-surfaces:
