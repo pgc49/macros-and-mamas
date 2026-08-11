@@ -107,7 +107,10 @@ The migration is additive and must fail closed if preflight assumptions change:
 4. Order each pair using native UUID ordering and merge buckets sharing that
    ordered pair.
 5. Insert one conversation per unique pair.
-6. Set only `admin_dm_conversation_id` and `recipient_id`.
+6. Set `admin_dm_conversation_id`, `recipient_id`, and
+   `legacy_admin_attachment_path=true` only for linked rows that already have
+   a legacy attachment path (exactly three rows in the current inventory).
+   Ordinary callers cannot set or change this stamp.
 7. Do **not** alter:
    - message ID
    - `client_id`
@@ -124,6 +127,7 @@ The migration must verify post-backfill:
 - 51/51 current admin rows linked;
 - exactly one Callie↔Patrick conversation;
 - all three attachment paths unchanged and still signable;
+- exactly three linked rows carry the legacy attachment stamp;
 - no row has sender = recipient;
 - no admin-owned message remains unlinked.
 - every reply parent resolves to the same resulting conversation.
@@ -220,6 +224,11 @@ denormalize an unchecked conversation ID onto reactions.
 - Push URL: `/admin?tab=messages&dm=<conversation-id>`
 - Unread badge: only rows with `recipient_id = target admin`
 - Durable outbox/idempotency behavior remains unchanged
+
+Immediately before delivery, the outbox processor revalidates that
+`recipient_id` is still a current admin and a participant in the linked
+conversation. If not, it terminally completes the job as skipped without
+sending any push/email preview and emits a structured audit/log event.
 
 Idempotent duplicate recovery must compare both
 `admin_dm_conversation_id` and `recipient_id`; matching only legacy
@@ -321,6 +330,7 @@ changes remain additive; no destructive reversal.
 - admin client-detail and inbox open the same conversation;
 - recipient-only, monotonic read receipt;
 - notification routing and unread badge recipient-only;
+- demotion after enqueue but before outbox processing sends no notification;
 - reply parent must share conversation;
 - idempotent send retries stay in the same conversation;
 - pre-cutover old app writes remain linked during compatibility window;
