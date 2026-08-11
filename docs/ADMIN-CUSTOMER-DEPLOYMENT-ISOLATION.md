@@ -69,8 +69,22 @@ External ownership remains singular:
 ## Deterministic deployment workflow
 
 Manual preview deployment uses `.github/workflows/deploy-app-surfaces.yml` and
-always deploys a non-production `preview-{run_id}` branch. It is disabled unless
+deploys **both** customer and admin from the same SHA to fixed non-production
+`staging` aliases. It is disabled unless
 `ENABLE_ISOLATED_SURFACE_PREVIEWS=true`.
+
+Preview variables must include dedicated, matching staging values:
+
+- `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PROJECT_REF`,
+  `STAGING_SUPABASE_ANON_KEY` (production ref is rejected);
+- `CUSTOMER_STAGING_URL`, `ADMIN_STAGING_URL`, `ADMIN_STAGING_HOST`;
+- staging VAPID/Sentry values and `STAGING_CRON_SECRET`.
+
+Both Pages Preview environments must set `APP_ENVIRONMENT=staging`,
+`ADMIN_APP_URL=ADMIN_STAGING_URL`, and the same staging Supabase server
+credentials. The workflow verifies customer/admin manifests, SHA, browser and
+server project refs, schema version, runtime admin URL, outbox recovery,
+attachment GC, and health before accepting the preview.
 
 Production deployment is downstream of every `SPA quality` job and requires
 `ENABLE_ISOLATED_SURFACE_DEPLOYS=true` plus approval in protected GitHub
@@ -84,7 +98,8 @@ Before enabling:
 3. Disable Git auto-production deployment on both Pages projects.
 4. Protect GitHub environments `app-surfaces-preview` and
    `app-surfaces-production` with appropriate reviewers.
-5. Enable previews and use `workflow_dispatch` to test each project.
+5. Enable previews and use one `workflow_dispatch` to deploy/test the paired
+   staging surfaces.
 6. Enable production deployment only after preview acceptance.
 
 Shared changes deploy both surfaces. A commit is customer-neutral only when

@@ -6,13 +6,19 @@ export async function onRequestPost({ request, env }) {
     return json({ error: "unauthorized" }, 401);
   }
   try {
+    const body = await request.json().catch(() => ({}));
     const base = String(env.SUPABASE_URL || "").replace(/\/$/, "");
     const key = String(env.SUPABASE_SERVICE_ROLE_KEY || "");
     if (!base || !key) throw new Error("missing Supabase configuration");
     const supabase = createClient(base, key, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const before = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const requestedGrace = Number(body.graceMinutes);
+    const graceMinutes = String(env.APP_ENVIRONMENT || "") === "staging"
+      && Number.isFinite(requestedGrace)
+      ? Math.max(0, Math.min(60, requestedGrace))
+      : 60;
+    const before = new Date(Date.now() - graceMinutes * 60 * 1000).toISOString();
     const { data: rows, error: findError } = await supabase.rpc(
       "find_orphan_message_attachments",
       { p_before: before, p_limit: 200 },

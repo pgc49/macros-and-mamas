@@ -200,5 +200,69 @@ describe("durable DM notification processing", () => {
       );
     }
   });
+
+  it("passes linked admin conversation to email CTA rendering", async () => {
+    const senderId = "00000000-0000-4000-8000-000000000031";
+    const recipientId = "00000000-0000-4000-8000-000000000032";
+    const conversationId = "20000000-0000-4000-8000-000000000031";
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options = {}) => {
+      const value = String(url);
+      if (value.includes("/rest/v1/messages?id=eq.")) {
+        if (options.method === "PATCH") return new Response(null, { status: 204 });
+        return new Response(JSON.stringify([{
+          id: "10000000-0000-4000-8000-000000000031",
+          client_id: senderId,
+          sender_id: senderId,
+          recipient_id: recipientId,
+          admin_dm_conversation_id: conversationId,
+          body: "Linked admin note",
+          kind: "chat",
+          deleted_at: null,
+          notified_at: null,
+        }]), { status: 200 });
+      }
+      if (value.includes(`/rest/v1/profiles?id=eq.${senderId}`)) {
+        return new Response(JSON.stringify([{ id: senderId, name: "Sender", role: "admin" }]));
+      }
+      if (value.includes(`/rest/v1/profiles?id=eq.${recipientId}`)) {
+        return new Response(JSON.stringify([{ id: recipientId, name: "Recipient", role: "admin" }]));
+      }
+      if (value.includes("/rest/v1/admin_dm_conversations")) {
+        return new Response(JSON.stringify([{
+          participant_low: senderId,
+          participant_high: recipientId,
+        }]));
+      }
+      if (value.includes("/rest/v1/rpc/count_message_unread_for_profile")) {
+        return new Response(JSON.stringify(1));
+      }
+      throw new Error(`unexpected fetch ${value}`);
+    });
+    mocks.invoke.mockImplementation(async (_env, name, payload) => {
+      if (name === "send-push") {
+        return { ok: true, data: { sent: 0, attempted: 0 } };
+      }
+      if (name === "message-email") {
+        expect(payload.adminConversationId).toBe(conversationId);
+        return { ok: true, data: { id: "email" } };
+      }
+      throw new Error(`unexpected edge ${name}`);
+    });
+    mocks.contact.mockResolvedValue({
+      email: "recipient@example.com",
+      name: "Recipient",
+    });
+
+    const response = await onRequestPost({
+      request: request("10000000-0000-4000-8000-000000000031"),
+      env,
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      env,
+      "message-email",
+      expect.objectContaining({ adminConversationId: conversationId }),
+    );
+  });
 });
 

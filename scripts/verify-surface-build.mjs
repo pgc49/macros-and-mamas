@@ -96,6 +96,13 @@ writeFileSync(
     buildId: process.env.CF_PAGES_COMMIT_SHA || process.env.VITE_APP_BUILD_ID || "dev",
     adminChunkCount: adminChunks.length,
     adminModuleRefs,
+    supabaseProjectRef: (() => {
+      try {
+        return new URL(process.env.VITE_SUPABASE_URL || "").hostname.split(".")[0] || "";
+      } catch {
+        return "";
+      }
+    })(),
   }, null, 2),
 );
 

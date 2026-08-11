@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: app-surface-preview-${{ github.ref }}
@@ -22,12 +23,13 @@ jobs:
           ADMIN_PROJECT: ${{ vars.ADMIN_PAGES_PROJECT }}
           CUSTOMER_URL: ${{ vars.CUSTOMER_STAGING_URL }}
           ADMIN_URL: ${{ vars.ADMIN_STAGING_URL }}
+          ADMIN_HOST: ${{ vars.ADMIN_STAGING_HOST }}
           SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
           SUPABASE_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
           SUPABASE_ANON: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
           VAPID: ${{ vars.STAGING_VAPID_PUBLIC_KEY }}
         run: |
-          for name in CUSTOMER_PROJECT ADMIN_PROJECT CUSTOMER_URL ADMIN_URL SUPABASE_URL SUPABASE_REF SUPABASE_ANON VAPID; do
+          for name in CUSTOMER_PROJECT ADMIN_PROJECT CUSTOMER_URL ADMIN_URL ADMIN_HOST SUPABASE_URL SUPABASE_REF SUPABASE_ANON VAPID; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing staging variable $name"
               exit 1
@@ -35,10 +37,29 @@ jobs:
           done
           test "$CUSTOMER_PROJECT" != "$ADMIN_PROJECT"
           test "$CUSTOMER_URL" != "$ADMIN_URL"
-          if printf '%s' "$SUPABASE_URL" | rg -q 'reangkqbsazwxvrqvsdo'; then
-            echo "::error::Staging preview points at production Supabase"
-            exit 1
-          fi
+          node - <<'NODE'
+          const prodRef = "reangkqbsazwxvrqvsdo";
+          const ref = process.env.SUPABASE_REF;
+          const urlRef = new URL(process.env.SUPABASE_URL).hostname.split(".")[0];
+          if (ref === prodRef || urlRef === prodRef || ref !== urlRef) process.exit(1);
+          if (new URL(process.env.CUSTOMER_URL).hostname === "www.macrosandmamas.com") process.exit(1);
+          if (new URL(process.env.ADMIN_URL).hostname === "admin.macrosandmamas.com") process.exit(1);
+          if (new URL(process.env.ADMIN_URL).hostname !== process.env.ADMIN_HOST) process.exit(1);
+          NODE
+      - name: Require green full integration CI for this SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/spa-quality.yml/runs?head_sha=${GITHUB_SHA}&status=completed" \
+            > /tmp/quality-runs.json
+          node - <<'NODE'
+          const runs = require("/tmp/quality-runs.json").workflow_runs || [];
+          if (!runs.some((run) => run.head_sha === process.env.GITHUB_SHA && run.conclusion === "success")) {
+            console.error("No successful full SPA quality run for this exact SHA");
+            process.exit(1);
+          }
+          NODE
 
   deploy:
     needs: validate
@@ -57,7 +78,7 @@ jobs:
       - run: npm run qa:messaging
       - run: npm run build:${{ matrix.surface }}
         env:
-          CF_PAGES_BRANCH: preview-${{ github.run_id }}
+          CF_PAGES_BRANCH: staging
           CF_PAGES_COMMIT_SHA: ${{ github.sha }}
           PREVIEW_MARKETING: ${{ matrix.surface == 'customer' && '1' || '0' }}
           CF_PAGES_URL: ${{ matrix.surface == 'customer' && vars.CUSTOMER_STAGING_URL || vars.ADMIN_STAGING_URL }}
@@ -70,12 +91,11 @@ jobs:
           VITE_SENTRY_DSN: ${{ vars.STAGING_SENTRY_DSN }}
           VITE_LIVE_CHANNEL_COHORTS: ${{ vars.VITE_LIVE_CHANNEL_COHORTS }}
       - run: npx wrangler@4.120.1 pages functions build functions
-      - run: npx wrangler@4.120.1 pages deploy dist --project-name "$PROJECT" --branch "$PREVIEW_BRANCH" --commit-hash "$GITHUB_SHA"
+      - run: npx wrangler@4.120.1 pages deploy dist --project-name "$PROJECT" --branch staging --commit-hash "$GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PROJECT: ${{ matrix.surface == 'customer' && vars.CUSTOMER_PAGES_PROJECT || vars.ADMIN_PAGES_PROJECT }}
-          PREVIEW_BRANCH: preview-${{ github.run_id }}
 
   verify:
     needs: deploy
@@ -90,21 +110,59 @@ jobs:
           CRON_SECRET: ${{ secrets.STAGING_CRON_SECRET }}
         run: |
           set -euo pipefail
-          for base in "$CUSTOMER_URL" "$ADMIN_URL"; do
+          for pair in "customer:$CUSTOMER_URL" "admin:$ADMIN_URL"; do
+            surface=${pair%%:*}
+            base=${pair#*:}
+            manifest=$(curl -fsS "$base/surface-manifest.json")
+            node -e '
+              const value = JSON.parse(process.argv[1]);
+              if (value.surface !== process.argv[2]) process.exit(1);
+              if (value.buildId !== process.env.GITHUB_SHA) process.exit(1);
+              if (value.supabaseProjectRef !== process.env.SUPABASE_REF) process.exit(1);
+            ' "$manifest" "$surface"
             payload=$(curl -fsS "$base/api/environment-check")
             echo "$payload"
             node -e '
               const value = JSON.parse(process.argv[1]);
               if (value.environment !== "staging") process.exit(1);
               if (value.supabaseProjectRef !== process.env.SUPABASE_REF) process.exit(1);
+              if (value.messagingSchemaVersion !== "admin_dm_v1") process.exit(1);
+              if (value.adminAppUrl !== process.env.ADMIN_URL) process.exit(1);
             ' "$payload"
           done
-          for endpoint in message-outbox-cron message-attachment-gc-cron messaging-health; do
-            status=$(curl -sS -o "/tmp/$endpoint.json" -w "%{http_code}" -X POST \
-              "$CUSTOMER_URL/api/$endpoint" \
-              -H "Authorization: Bearer $CRON_SECRET" \
-              -H "Content-Type: application/json")
-            cat "/tmp/$endpoint.json"
-            test "$status" = "200"
-          done
+          curl -fsS -X POST "$CUSTOMER_URL/api/staging-messaging-fixtures" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"seed"}' > /tmp/staging-fixture.json
+          cat /tmp/staging-fixture.json
+
+          curl -fsS -X POST "$CUSTOMER_URL/api/message-outbox-cron" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" > /tmp/outbox.json
+          curl -fsS -X POST "$CUSTOMER_URL/api/message-attachment-gc-cron" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{"graceMinutes":0}' > /tmp/gc.json
+
+          node - <<'NODE' > /tmp/verify-body.json
+          const fixture = require("/tmp/staging-fixture.json");
+          process.stdout.write(JSON.stringify({
+            action: "verify",
+            messageId: fixture.messageId,
+            objectPath: fixture.objectPath,
+          }));
+          NODE
+          curl -fsS -X POST "$CUSTOMER_URL/api/staging-messaging-fixtures" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --data @/tmp/verify-body.json > /tmp/fixture-verify.json
+          cat /tmp/fixture-verify.json
+
+          curl -fsS -X POST "$CUSTOMER_URL/api/messaging-health" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" > /tmp/health.json
+          node -e '
+            const value = require("/tmp/health.json");
+            if (!value.ok || value.outbox.dead > 0 || value.outbox.staleProcessing > 0) process.exit(1);
+          '
 

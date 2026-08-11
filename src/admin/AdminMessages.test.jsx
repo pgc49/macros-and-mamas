@@ -125,6 +125,35 @@ afterEach(() => {
 });
 
 describe("AdminMessages thread switching", () => {
+  it("opens an authorized channel deep link after channels load", async () => {
+    dbMock.listMyChannels.mockResolvedValueOnce([{
+      conversation: {
+        id: "30000000-0000-4000-8000-000000000031",
+        label: "Test Group",
+        read_only: false,
+      },
+      membership: { notify_level: "all" },
+    }]);
+    dbMock.loadChannelMessages.mockResolvedValueOnce([{
+      id: "channel-message",
+      conversation_id: "30000000-0000-4000-8000-000000000031",
+      sender_id: "admin-1",
+      body: "Channel deep link message",
+      created_at: "2026-08-10T10:00:00Z",
+      reactions: [],
+    }]);
+    render(
+      <AdminMessages
+        roster={[{ id: "admin-1", name: "Admin One", role: "admin" }]}
+        adminUserId="admin-1"
+        initialChannelId="30000000-0000-4000-8000-000000000031"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+    await screen.findByText("Channel deep link message");
+    expect(screen.getAllByText("Test Group").length).toBeGreaterThan(0);
+  });
+
   it("loads and sends admin DMs by pair conversation ID", async () => {
     dbMock.loadMessageInbox.mockResolvedValueOnce([{
       threadType: "admin",

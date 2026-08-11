@@ -987,5 +987,15 @@ revoke all on function public.find_orphan_message_attachments(timestamptz, integ
 grant execute on function public.find_orphan_message_attachments(timestamptz, integer)
   to service_role;
 
+create or replace function public.messaging_schema_version()
+returns text
+language sql
+immutable
+security invoker
+set search_path = ''
+as $$ select 'admin_dm_v1'::text; $$;
+revoke all on function public.messaging_schema_version() from public, anon, authenticated;
+grant execute on function public.messaging_schema_version() to service_role;
+
 
 
