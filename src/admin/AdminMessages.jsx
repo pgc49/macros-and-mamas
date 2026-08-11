@@ -61,6 +61,7 @@ export function AdminMessages({
   adminUserId,
   initialClientId = null,
   initialAdminConversationId = null,
+  initialChannelId = null,
   onUnreadTotalChange,
 }) {
   const isWide = useIsWide();
@@ -95,6 +96,7 @@ export function AdminMessages({
   const activeRef = useRef(active);
   const dmLoadSequence = useRef(new Map());
   const initialAdminLinkHandled = useRef(false);
+  const initialChannelLinkHandled = useRef(false);
 
   const clientMap = useMemo(() => {
     const m = new Map();
@@ -220,6 +222,15 @@ export function AdminMessages({
     activeRef.current = next;
     setActive(next);
   }, [adminUserId, inbox, initialAdminConversationId]);
+
+  useEffect(() => {
+    if (initialChannelLinkHandled.current || !initialChannelId || !channels.length) return;
+    if (!channels.some((item) => item.conversation.id === initialChannelId)) return;
+    initialChannelLinkHandled.current = true;
+    const next = { type: "channel", id: initialChannelId, threadId: initialChannelId };
+    activeRef.current = next;
+    setActive(next);
+  }, [channels, initialChannelId]);
 
   useEffect(() => {
     activeRef.current = active;

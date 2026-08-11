@@ -13,11 +13,17 @@ serve(async (req) => {
   if (denied) return denied;
 
   try {
-    const { email, name, preview } = await req.json();
+    const { email, name, preview, adminConversationId } = await req.json();
     if (!email) return jsonResponse({ error: "missing email" }, 400);
 
     const first = (name || "Mama").trim().split(/\s+/)[0] || "Mama";
     const snippet = String(preview || "").trim().slice(0, 160);
+    const adminBase = String(
+      Deno.env.get("ADMIN_APP_URL") || APP_URL,
+    ).replace(/\/$/, "");
+    const destination = adminConversationId
+      ? `${adminBase}/admin?tab=messages&dm=${encodeURIComponent(String(adminConversationId))}`
+      : `${APP_URL}/dashboard?tab=messages`;
 
     const { data, error } = await resend.emails.send({
       from: FROM_CALLIE,
@@ -32,7 +38,7 @@ serve(async (req) => {
           <p>Open the app → <b>Messages</b> to read and reply.</p>
         `,
         cta_text: "Open Messages",
-        cta_url: `${APP_URL}/dashboard?tab=messages`,
+        cta_url: destination,
       }),
     });
 

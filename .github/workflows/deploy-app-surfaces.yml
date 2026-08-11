@@ -1,22 +1,52 @@
-name: Preview isolated app surface
+name: Preview isolated customer and admin surfaces
 
 on:
   workflow_dispatch:
-    inputs:
-      surface:
-        type: choice
-        options: [customer, admin]
-        required: true
+
+permissions:
+  contents: read
 
 concurrency:
-  group: app-surface-preview-${{ inputs.surface }}-${{ github.ref }}
+  group: app-surface-preview-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  preview:
+  validate:
     if: ${{ vars.ENABLE_ISOLATED_SURFACE_PREVIEWS == 'true' }}
     runs-on: ubuntu-latest
     environment: app-surfaces-preview
+    steps:
+      - name: Validate staging isolation
+        env:
+          CUSTOMER_PROJECT: ${{ vars.CUSTOMER_PAGES_PROJECT }}
+          ADMIN_PROJECT: ${{ vars.ADMIN_PAGES_PROJECT }}
+          CUSTOMER_URL: ${{ vars.CUSTOMER_STAGING_URL }}
+          ADMIN_URL: ${{ vars.ADMIN_STAGING_URL }}
+          SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          SUPABASE_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+          SUPABASE_ANON: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+          VAPID: ${{ vars.STAGING_VAPID_PUBLIC_KEY }}
+        run: |
+          for name in CUSTOMER_PROJECT ADMIN_PROJECT CUSTOMER_URL ADMIN_URL SUPABASE_URL SUPABASE_REF SUPABASE_ANON VAPID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing staging variable $name"
+              exit 1
+            fi
+          done
+          test "$CUSTOMER_PROJECT" != "$ADMIN_PROJECT"
+          test "$CUSTOMER_URL" != "$ADMIN_URL"
+          if printf '%s' "$SUPABASE_URL" | rg -q 'reangkqbsazwxvrqvsdo'; then
+            echo "::error::Staging preview points at production Supabase"
+            exit 1
+          fi
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: app-surfaces-preview
+    strategy:
+      matrix:
+        surface: [admin, customer]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,40 +55,56 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run qa:messaging
-      - name: Validate required public build variables
-        env:
-          CUSTOMER_APP_URL: ${{ vars.CUSTOMER_APP_URL }}
-          ADMIN_APP_URL: ${{ vars.ADMIN_APP_URL }}
-          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          SUPABASE_ANON: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-          VAPID: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
-        run: |
-          for name in CUSTOMER_APP_URL ADMIN_APP_URL SUPABASE_URL SUPABASE_ANON VAPID; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Missing repository variable $name"
-              exit 1
-            fi
-          done
-      - run: npm run build:${{ inputs.surface }}
+      - run: npm run build:${{ matrix.surface }}
         env:
           CF_PAGES_BRANCH: preview-${{ github.run_id }}
           CF_PAGES_COMMIT_SHA: ${{ github.sha }}
-          PREVIEW_MARKETING: ${{ inputs.surface == 'customer' && '1' || '0' }}
-          CF_PAGES_URL: ${{ inputs.surface == 'customer' && vars.CUSTOMER_APP_URL || vars.ADMIN_APP_URL }}
-          CUSTOMER_APP_URL: ${{ vars.CUSTOMER_APP_URL }}
-          VITE_ADMIN_APP_URL: ${{ vars.ADMIN_APP_URL }}
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-          VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
-          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
-          VITE_META_PIXEL_ID: ${{ vars.VITE_META_PIXEL_ID }}
-          VITE_CF_WEB_ANALYTICS_TOKEN: ${{ vars.VITE_CF_WEB_ANALYTICS_TOKEN }}
+          PREVIEW_MARKETING: ${{ matrix.surface == 'customer' && '1' || '0' }}
+          CF_PAGES_URL: ${{ matrix.surface == 'customer' && vars.CUSTOMER_STAGING_URL || vars.ADMIN_STAGING_URL }}
+          CUSTOMER_APP_URL: ${{ vars.CUSTOMER_STAGING_URL }}
+          ADMIN_APP_ALLOWED_HOSTS: ${{ vars.ADMIN_STAGING_HOST }}
+          VITE_ADMIN_APP_URL: ${{ vars.ADMIN_STAGING_URL }}
+          VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+          VITE_VAPID_PUBLIC_KEY: ${{ vars.STAGING_VAPID_PUBLIC_KEY }}
+          VITE_SENTRY_DSN: ${{ vars.STAGING_SENTRY_DSN }}
           VITE_LIVE_CHANNEL_COHORTS: ${{ vars.VITE_LIVE_CHANNEL_COHORTS }}
       - run: npx wrangler@4.120.1 pages functions build functions
       - run: npx wrangler@4.120.1 pages deploy dist --project-name "$PROJECT" --branch "$PREVIEW_BRANCH" --commit-hash "$GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PROJECT: ${{ inputs.surface == 'customer' && vars.CUSTOMER_PAGES_PROJECT || vars.ADMIN_PAGES_PROJECT }}
+          PROJECT: ${{ matrix.surface == 'customer' && vars.CUSTOMER_PAGES_PROJECT || vars.ADMIN_PAGES_PROJECT }}
           PREVIEW_BRANCH: preview-${{ github.run_id }}
+
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: app-surfaces-preview
+    steps:
+      - name: Verify staging runtime identity and recovery ownership
+        env:
+          CUSTOMER_URL: ${{ vars.CUSTOMER_STAGING_URL }}
+          ADMIN_URL: ${{ vars.ADMIN_STAGING_URL }}
+          SUPABASE_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+          CRON_SECRET: ${{ secrets.STAGING_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          for base in "$CUSTOMER_URL" "$ADMIN_URL"; do
+            payload=$(curl -fsS "$base/api/environment-check")
+            echo "$payload"
+            node -e '
+              const value = JSON.parse(process.argv[1]);
+              if (value.environment !== "staging") process.exit(1);
+              if (value.supabaseProjectRef !== process.env.SUPABASE_REF) process.exit(1);
+            ' "$payload"
+          done
+          for endpoint in message-outbox-cron message-attachment-gc-cron messaging-health; do
+            status=$(curl -sS -o "/tmp/$endpoint.json" -w "%{http_code}" -X POST \
+              "$CUSTOMER_URL/api/$endpoint" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H "Content-Type: application/json")
+            cat "/tmp/$endpoint.json"
+            test "$status" = "200"
+          done
 

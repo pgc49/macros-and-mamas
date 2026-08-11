@@ -186,13 +186,16 @@ jobs:
           SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           SUPABASE_ANON: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           VAPID: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
+          CUSTOMER_PROJECT: ${{ vars.CUSTOMER_PAGES_PROJECT }}
+          ADMIN_PROJECT: ${{ vars.ADMIN_PAGES_PROJECT }}
         run: |
-          for name in CUSTOMER_APP_URL ADMIN_APP_URL SUPABASE_URL SUPABASE_ANON VAPID; do
+          for name in CUSTOMER_APP_URL ADMIN_APP_URL SUPABASE_URL SUPABASE_ANON VAPID CUSTOMER_PROJECT ADMIN_PROJECT; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing repository variable $name"
               exit 1
             fi
           done
+          test "$CUSTOMER_PROJECT" != "$ADMIN_PROJECT"
       - run: npm run build:${{ matrix.surface }}
         env:
           CF_PAGES_BRANCH: main
@@ -223,7 +226,7 @@ jobs:
 
   classify-production-surfaces:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_ISOLATED_SURFACE_DEPLOYS == 'true' }}
-    needs: [verify, database, surface-build]
+    needs: [verify, database, admin-dm-database, surface-build]
     runs-on: ubuntu-latest
     outputs:
       customer: ${{ steps.paths.outputs.customer }}

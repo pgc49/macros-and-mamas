@@ -1,6 +1,12 @@
 begin;
 
-select plan(34);
+select plan(35);
+
+select is(
+  (select mode from public.messaging_runtime_config where singleton),
+  'read_only',
+  'admin backfill preserves pre-existing runtime mode'
+);
 
 select is(
   (select count(*)::integer from public.admin_dm_conversations),
@@ -93,6 +99,10 @@ select throws_ok(
   'admin provisioning frozen during DM migration',
   'admin demotion is frozen during compatibility'
 );
+
+update public.messaging_runtime_config
+set mode = 'normal', reason = ''
+where singleton = true;
 
 set local role authenticated;
 set local request.jwt.claim.role = 'authenticated';

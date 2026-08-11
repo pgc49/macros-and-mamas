@@ -128,6 +128,19 @@ insert into public.admin_dm_conversations (participant_low, participant_high)
 select distinct ids[1], ids[2] from bucket_pairs
 on conflict (participant_low, participant_high) do nothing;
 
+do $$
+begin
+  if exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.messages'::regclass
+      and tgname = 'messages_enforce_runtime_mutation'
+      and not tgisinternal
+  ) then
+    alter table public.messages disable trigger messages_enforce_runtime_mutation;
+  end if;
+end;
+$$;
+
 with admin_buckets as (
   select m.client_id
   from public.messages m
@@ -163,6 +176,19 @@ set
   legacy_admin_attachment_path = m.attachment_path is not null
 from mapped
 where m.client_id = mapped.client_id;
+
+do $$
+begin
+  if exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.messages'::regclass
+      and tgname = 'messages_enforce_runtime_mutation'
+      and not tgisinternal
+  ) then
+    alter table public.messages enable trigger messages_enforce_runtime_mutation;
+  end if;
+end;
+$$;
 
 alter table public.admin_dm_conversations force row level security;
 
@@ -691,6 +717,7 @@ create policy "message_attachments_insert"
   on storage.objects for insert to authenticated
   with check (
     bucket_id = 'message-attachments'
+    and public.messaging_attachments_enabled()
     and (
       (
         (storage.foldername(name))[1] = 'admin-dm'

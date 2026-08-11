@@ -72,3 +72,7 @@ insert into public.message_reactions (message_id, user_id, emoji)
 select id, '00000000-0000-0000-0000-000000000052', '❤️'
 from public.messages where body = 'legacy-a-1';
 
+update public.messaging_runtime_config
+set mode = 'read_only', reason = 'migration backfill test'
+where singleton = true;
+

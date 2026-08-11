@@ -192,12 +192,31 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           showReadReceipts
           allowVoiceMemo
           enableReply
-          hideComposer={!!adminConversation && !isAdminClient}
           showPushPrompt={false}
-          banner={<MessagingRuntimeBanner runtime={runtime} />}
-          hideComposer={runtime.mode !== "normal"}
+          banner={(
+            <>
+              <MessagingRuntimeBanner runtime={runtime} />
+              {adminConversation && !isAdminClient ? (
+                <div style={{
+                  background: T.amberSoft,
+                  borderRadius: 12,
+                  padding: "10px 12px",
+                  marginBottom: 10,
+                  fontSize: 13.5,
+                  color: T.ink,
+                }}
+                >
+                  This admin no longer has messaging access. History is read-only.
+                </div>
+              ) : null}
+            </>
+          )}
+          hideComposer={runtime.mode !== "normal" || (!!adminConversation && !isAdminClient)}
           allowAttachments={runtime.attachmentsEnabled}
-          allowMutations={runtime.mode === "normal"}
+          allowMutations={
+            runtime.mode === "normal"
+            && (!adminConversation || isAdminClient)
+          }
           compact
         />
       </div>

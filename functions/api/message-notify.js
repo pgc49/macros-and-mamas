@@ -113,6 +113,7 @@ export async function onRequestPost({ request, env }) {
             email,
             name: contact.name || "Admin",
             preview,
+            adminConversationId: msg.admin_dm_conversation_id,
           });
           let delivered = mail.ok;
           if (!delivered) {
@@ -120,6 +121,7 @@ export async function onRequestPost({ request, env }) {
               email,
               name: contact.name || "Admin",
               preview,
+              url: `/admin?tab=messages&dm=${encodeURIComponent(msg.admin_dm_conversation_id)}`,
             });
           }
           if (!delivered) throw new Error("admin email delivery failed");
@@ -333,17 +335,29 @@ async function countUnreadForProfile(env, profileId, { asAdmin }) {
   return Math.max(0, Number(await response.json()) || 0);
 }
 
-async function sendMamaEmailDirect(env, { email, name, preview }) {
+async function sendMamaEmailDirect(
+  env,
+  {
+    email,
+    name,
+    preview,
+    url = "/dashboard?tab=messages",
+  },
+) {
   const key = String(env.RESEND_API_KEY || "").trim();
   if (!key || !email) return false;
   const first = firstName(name) || "Mama";
   const snippet = String(preview || "").trim().slice(0, 160);
-  const appUrl = String(env.APP_URL || "https://www.macrosandmamas.com").replace(/\/$/, "");
+  const baseUrl = String(
+    url.startsWith("/admin")
+      ? (env.ADMIN_APP_URL || env.APP_URL || "https://www.macrosandmamas.com")
+      : (env.APP_URL || "https://www.macrosandmamas.com"),
+  ).replace(/\/$/, "");
   const html = `<!doctype html><html><body style="font-family:Helvetica,Arial,sans-serif;color:#33272E">
     <p>Hi ${escapeHtml(first)},</p>
     <p>Callie left you a message in Macros and Mamas.</p>
     ${snippet ? `<p><i>${escapeHtml(snippet)}</i></p>` : ""}
-    <p><a href="${appUrl}/dashboard?tab=messages">Open Messages</a></p>
+    <p><a href="${baseUrl}${escapeHtml(url)}">Open Messages</a></p>
   </body></html>`;
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",
