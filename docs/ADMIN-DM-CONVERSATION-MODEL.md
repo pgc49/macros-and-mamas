@@ -107,10 +107,10 @@ The migration is additive and must fail closed if preflight assumptions change:
 4. Order each pair using native UUID ordering and merge buckets sharing that
    ordered pair.
 5. Insert one conversation per unique pair.
-6. Set `admin_dm_conversation_id`, `recipient_id`, and
-   `legacy_admin_attachment_path=true` only for linked rows that already have
-   a legacy attachment path (exactly three rows in the current inventory).
-   Ordinary callers cannot set or change this stamp.
+6. Set `admin_dm_conversation_id` and `recipient_id` on all 51 current rows.
+   Set `legacy_admin_attachment_path=true` only on the three linked rows that
+   already have a legacy attachment path. Ordinary callers cannot set or
+   change this stamp.
 7. Do **not** alter:
    - message ID
    - `client_id`
@@ -228,7 +228,10 @@ denormalize an unchecked conversation ID onto reactions.
 Immediately before delivery, the outbox processor revalidates that
 `recipient_id` is still a current admin and a participant in the linked
 conversation. If not, it terminally completes the job as skipped without
-sending any push/email preview and emits a structured audit/log event.
+sending any push/email preview. It uses the existing success completion
+(`status='sent'`) and records structured reason
+`skipped_recipient_deprovisioned` in notification audit/log output; it does not
+introduce a new outbox status.
 
 Idempotent duplicate recovery must compare both
 `admin_dm_conversation_id` and `recipient_id`; matching only legacy
