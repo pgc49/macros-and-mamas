@@ -45,11 +45,13 @@ if (surface === "customer") {
   ) {
     throw new Error(`unsafe VITE_ADMIN_APP_URL: ${adminUrl.toString()}`);
   }
-  if (process.env.CF_PAGES_URL) {
-    const customerHost = new URL(process.env.CF_PAGES_URL).hostname;
-    if (customerHost === adminUrl.hostname) {
-      throw new Error("admin redirect target cannot equal customer origin");
-    }
+  const customerUrl = new URL(
+    process.env.CUSTOMER_APP_URL
+      || process.env.CF_PAGES_URL
+      || "https://www.macrosandmamas.com",
+  );
+  if (customerUrl.hostname === adminUrl.hostname) {
+    throw new Error("admin redirect target cannot equal customer origin");
   }
   const maps = files
     .filter((name) => name.endsWith(".map"))
