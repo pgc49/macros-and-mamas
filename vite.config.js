@@ -6,6 +6,9 @@ export default defineConfig(() => {
   const surface = process.env.APP_SURFACE || 'combined'
   return {
     plugins: [react()],
+    build: {
+      manifest: true,
+    },
     define: {
       'import.meta.env.VITE_APP_SURFACE': JSON.stringify(surface),
     },
