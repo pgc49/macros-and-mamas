@@ -19,7 +19,8 @@ function assert(condition, message) {
 }
 
 async function createAdmin(label) {
-  const email = `${label}-${suffix}@example.com`;
+  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const email = `${slug}-${suffix}@example.com`;
   const created = await service.auth.admin.createUser({
     email,
     password,
