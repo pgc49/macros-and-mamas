@@ -58,16 +58,18 @@ export async function listDueNotificationJobs(env, limit = 20) {
   const now = encodeURIComponent(new Date().toISOString());
   const stale = encodeURIComponent(new Date(Date.now() - 5 * 60 * 1000).toISOString());
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20));
+  const freshLimit = Math.max(1, Math.ceil(safeLimit * 0.75));
+  const staleLimit = Math.max(0, safeLimit - freshLimit);
   const basePath = "/rest/v1/message_notification_outbox"
     + "?select=id,message_type,message_id,status,attempts,available_at,locked_at"
     + "&order=created_at.asc";
   const [dueResp, staleResp] = await Promise.all([
     fetch(
-      `${base}${basePath}&status=in.(pending,retry)&available_at=lte.${now}&limit=${safeLimit}`,
+      `${base}${basePath}&status=in.(pending,retry)&available_at=lte.${now}&limit=${freshLimit}`,
       { headers: headers(key) },
     ),
     fetch(
-      `${base}${basePath}&status=eq.processing&locked_at=lt.${stale}&limit=${safeLimit}`,
+      `${base}${basePath}&status=eq.processing&locked_at=lt.${stale}&limit=${Math.max(1, staleLimit)}`,
       { headers: headers(key) },
     ),
   ]);
@@ -76,9 +78,12 @@ export async function listDueNotificationJobs(env, limit = 20) {
   }
   const due = (await dueResp.json().catch(() => [])) || [];
   const staleJobs = (await staleResp.json().catch(() => [])) || [];
-  return [...due, ...staleJobs]
-    .sort((a, b) => String(a.available_at).localeCompare(String(b.available_at)))
-    .slice(0, safeLimit);
+  // Reserve most of every batch for fresh work so repeatedly stale jobs
+  // cannot monopolize recovery.
+  return [
+    ...due.slice(0, freshLimit),
+    ...staleJobs.slice(0, staleLimit),
+  ];
 }
 
 export function authorizeCron(request, env) {

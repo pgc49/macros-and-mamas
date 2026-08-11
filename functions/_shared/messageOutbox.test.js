@@ -3,6 +3,7 @@ import {
   authorizeCron,
   claimNotificationJob,
   finishNotificationJob,
+  listDueNotificationJobs,
 } from "./messageOutbox.js";
 
 const env = {
@@ -71,6 +72,29 @@ describe("message notification outbox", () => {
     });
     expect(authorizeCron(request, env)).toBe(true);
     expect(authorizeCron(new Request("https://example.com"), env)).toBe(false);
+  });
+
+  it("reserves recovery capacity for fresh jobs ahead of stale leases", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify(
+        Array.from({ length: 9 }, (_, index) => ({
+          id: index + 1,
+          status: "pending",
+          available_at: `2026-08-10T10:00:0${index}Z`,
+        })),
+      ), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(
+        Array.from({ length: 20 }, (_, index) => ({
+          id: 100 + index,
+          status: "processing",
+          available_at: "2026-08-01T00:00:00Z",
+        })),
+      ), { status: 200 }));
+
+    const jobs = await listDueNotificationJobs(env, 12);
+    expect(jobs).toHaveLength(12);
+    expect(jobs.filter((job) => job.status === "pending")).toHaveLength(9);
+    expect(jobs.filter((job) => job.status === "processing")).toHaveLength(3);
   });
 });
 

@@ -209,5 +209,42 @@ describe("messaging crash containment", () => {
     await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(2));
     expect(remountSend.mock.calls[1][2].clientMessageId).not.toBe(originalKey);
   });
+
+  it("shares an in-flight send across remounted thread instances", async () => {
+    let settle;
+    const pending = new Promise((resolve) => { settle = resolve; });
+    const originalSend = vi.fn(() => pending);
+    const first = render(
+      <MessagesThread
+        {...threadProps({ onSend: originalSend })}
+        threadKey="dm:mama-in-flight"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "One operation" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(originalSend).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    const remountSend = vi.fn();
+    render(
+      <MessagesThread
+        {...threadProps({ onSend: remountSend })}
+        threadKey="dm:mama-in-flight"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "One operation" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(remountSend).not.toHaveBeenCalled();
+
+    settle({});
+    await waitFor(() => {
+      expect(remountSend).not.toHaveBeenCalled();
+      expect(screen.getByPlaceholderText("Write a message…").value).toBe("");
+    });
+  });
 });
 

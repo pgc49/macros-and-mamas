@@ -267,23 +267,60 @@ export function MessagesThread({
     const attemptScope = threadKey || `thread:${selfId || "unknown"}`;
     const fingerprint = sendPayloadFingerprint(keptText, attach, keptReply?.id);
     const previousAttempt = pendingSendAttempts.get(attemptScope);
-    const clientMessageId = previousAttempt?.fingerprint === fingerprint
+    const matchingAttempt = previousAttempt?.fingerprint === fingerprint
+      ? previousAttempt
+      : null;
+    const clientMessageId = matchingAttempt
       ? previousAttempt.id
       : createClientMessageId();
-    pendingSendAttempts.set(attemptScope, { id: clientMessageId, fingerprint });
+
+    // A remounted instance may retry while the original request is still
+    // settling. Await that shared operation rather than creating a duplicate.
+    if (matchingAttempt?.promise) {
+      try {
+        await matchingAttempt.promise;
+        setDraft("");
+        clearFile();
+        clearVoicePreview();
+        setReplyTo(null);
+        if (pendingSendAttempts.get(attemptScope)?.generation === matchingAttempt.generation) {
+          pendingSendAttempts.delete(attemptScope);
+        }
+        return;
+      } catch {
+        // The original attempt failed; continue below with the same ID.
+      }
+    }
+
+    const generation = createClientMessageId();
+    const sendPromise = Promise.resolve().then(() => onSend(keptText, attach, {
+      ...(keptReply?.id ? { replyToId: keptReply.id } : {}),
+      clientMessageId,
+    }));
+    pendingSendAttempts.set(attemptScope, {
+      id: clientMessageId,
+      fingerprint,
+      generation,
+      promise: sendPromise,
+    });
     setDraft("");
     clearFile();
     clearVoicePreview();
     setReplyTo(null);
     try {
-      await onSend(keptText, attach, {
-        ...(keptReply?.id ? { replyToId: keptReply.id } : {}),
-        clientMessageId,
-      });
-      if (pendingSendAttempts.get(attemptScope)?.id === clientMessageId) {
+      await sendPromise;
+      if (pendingSendAttempts.get(attemptScope)?.generation === generation) {
         pendingSendAttempts.delete(attemptScope);
       }
     } catch (e) {
+      if (pendingSendAttempts.get(attemptScope)?.generation === generation) {
+        pendingSendAttempts.set(attemptScope, {
+          id: clientMessageId,
+          fingerprint,
+          generation,
+          promise: null,
+        });
+      }
       console.error(e);
       setDraft(keptText);
       if (keptReply) setReplyTo(keptReply);

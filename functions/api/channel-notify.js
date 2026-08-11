@@ -248,7 +248,9 @@ async function sbGet(env, path) {
     const detail = await resp.text().catch(() => "");
     throw new Error(`supabase get failed (${resp.status}): ${detail.slice(0, 120)}`);
   }
-  return (await resp.json().catch(() => [])) || [];
+  const rows = await resp.json();
+  if (!Array.isArray(rows)) throw new Error("supabase source payload invalid");
+  return rows;
 }
 
 async function requireUser(request, env) {
