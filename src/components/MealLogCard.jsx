@@ -22,6 +22,7 @@ import {
   resolveLogSlot,
 } from "../utils/mealSlots";
 import { formatServings, ServingStepper, snapServings } from "../utils/servings";
+import { recipeNoteFromMeal } from "../utils/planMealShape";
 import { targetBands } from "../utils/weekPlan";
 import { roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
@@ -277,6 +278,7 @@ export function MealLogCard({
 
   const pickMenuMeal = async (meal, opts = {}) => {
     if (!meal || !onManualLog) return false;
+    const recipeNote = recipeNoteFromMeal(meal);
     const ok = await onManualLog({
       name: String(meal.name || "").trim() || "Restaurant meal",
       cal: Number(meal.cal) || 0,
@@ -287,6 +289,8 @@ export function MealLogCard({
       slot: resolveLogSlot(meal.slot || logSlot),
       logged_date: date,
       saveCustom: !!opts.saveToMine,
+      serves: Number(meal.servings) || 1,
+      ...(recipeNote ? { ingredients: recipeNote } : {}),
     });
     if (ok === false) return false;
     setSnapMenuOpen(false);

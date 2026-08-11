@@ -20,6 +20,7 @@ export function asIngredientLines(value, { max = 40 } = {}) {
 /**
  * My meals store ingredients as a newline (or " · ") joined string from Create Recipe.
  * Planner / grocery need { amount, item }[] — parse best-effort.
+ * Trailing "Steps:" blocks (optional notes) are ignored when parsing.
  */
 export function ingredientsFromText(value, { max = 40 } = {}) {
   if (Array.isArray(value)) {
@@ -30,13 +31,52 @@ export function ingredientsFromText(value, { max = 40 } = {}) {
       { max },
     );
   }
-  const text = String(value || "").trim();
+  const text = String(value || "").trim().split(/\n\s*Steps:\s*\n/i)[0].trim();
   if (!text) return [];
   const chunks = text
     .split(/\n+| · |•/g)
     .map((s) => s.trim())
     .filter(Boolean);
   return asIngredientLines(chunks.map(lineToIngredient).filter(Boolean), { max });
+}
+
+/** { amount, item }[] or string[] → My meals recipe-note text (one line per ingredient). */
+export function ingredientsToText(value, { max = 40 } = {}) {
+  if (typeof value === "string") return value.trim().slice(0, 4000);
+  const lines = asIngredientLines(value, { max });
+  if (!lines.length && Array.isArray(value)) {
+    return value
+      .map((line) => String(line || "").trim())
+      .filter(Boolean)
+      .slice(0, max)
+      .join("\n")
+      .slice(0, 4000);
+  }
+  return lines
+    .map((line) => [line.amount, line.item].filter(Boolean).join(" ").trim())
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 4000);
+}
+
+/**
+ * Build a My meals recipe note from an AI / plan meal.
+ * Prefers serving ingredients; falls back to batch. Optionally appends steps
+ * after a "Steps:" marker (ignored by ingredientsFromText for grocery).
+ */
+export function recipeNoteFromMeal(meal) {
+  if (!meal || typeof meal !== "object") return "";
+  if (typeof meal.ingredients === "string" && meal.ingredients.trim()) {
+    return meal.ingredients.trim().slice(0, 4000);
+  }
+  const serving = asIngredientLines(meal.ingredients ?? meal.serving);
+  const batch = asIngredientLines(meal.batch);
+  const ingText = ingredientsToText(serving.length ? serving : batch);
+  const steps = asStepLines(meal.steps);
+  if (!steps.length) return ingText;
+  const stepBlock = ["Steps:", ...steps.map((s, i) => `${i + 1}. ${s}`)].join("\n");
+  if (!ingText) return stepBlock.slice(0, 4000);
+  return `${ingText}\n\n${stepBlock}`.slice(0, 4000);
 }
 
 /** "1 cup oats" → { amount: "1 cup", item: "oats" }; otherwise whole line as item. */

@@ -9,7 +9,7 @@ import { withRecipeDetail, mealToCard } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 import { addDaysIso, fmtRange, wkStartOf } from "../utils/dates";
 import { safeBuildGroceryList } from "../utils/groceryList";
-import { weekPlanHasPoisonShapes } from "../utils/planMealShape";
+import { recipeNoteFromMeal, weekPlanHasPoisonShapes } from "../utils/planMealShape";
 import { roomLeftFromTotals } from "../utils/eatingOutImpact";
 import {
   PLAN_DAYS,
@@ -215,12 +215,16 @@ export function WeekPlanner({
         : String(idea.slot || "dinner").toLowerCase();
     const meal = aiIdeaToPlanMeal(idea, slot);
     if (saveToMine && onSaveCustomMeal) {
+      // Persist recipe note (ingredients ± steps) — same field My meals / Create Recipe use.
+      const ingredients = recipeNoteFromMeal(meal);
       await onSaveCustomMeal({
         name: meal.name,
         cal: meal.cal,
         p: meal.p,
         c: meal.c,
         f: meal.f,
+        serves: Number(meal.servings) || 1,
+        ...(ingredients ? { ingredients } : {}),
       });
       setMessageSticky(false);
       setMessage(`Added to ${picker.day} and saved to My meals.`);
