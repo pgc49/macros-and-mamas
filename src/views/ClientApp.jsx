@@ -14,7 +14,7 @@ import { HomeScreenTip } from "../components/HomeScreenTip";
 import { MondayVoiceDropBanner } from "../components/MondayVoiceDropBanner";
 import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { LoggableMealRow } from "../components/LoggableMealRow";
-import { RecipeCreator } from "../components/RecipeCreator";
+import { MyMealsAddSheet } from "../components/MyMealsAddSheet";
 import { WeekPlanner } from "../components/WeekPlanner";
 import { FoodPrefsEditor } from "../components/FoodPrefsEditor";
 import { ErrorBoundary } from "../components/ErrorBoundary";
@@ -67,6 +67,7 @@ export function ClientApp({
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
   const [composerFocused, setComposerFocused] = useState(false);
+  const [myMealsAddOpen, setMyMealsAddOpen] = useState(false);
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
@@ -413,6 +414,7 @@ export function ClientApp({
                 onSuggestAiWeek={onSuggestAiWeek}
                 onMealIdea={onMealIdea}
                 onSaveCustomMeal={onSaveCustomMeal}
+                onEstimateRecipe={onEstimateRecipe}
                 onLog={logRecipe}
               />
             </ErrorBoundary>
@@ -424,14 +426,42 @@ export function ClientApp({
 
           {mealFilter === "My meals" && (
             <div style={{ marginBottom: 12 }}>
-              <RecipeCreator
-                onEstimateRecipe={onEstimateRecipe}
-                onSaveCustomMeal={onSaveCustomMeal}
-              />
+              <button
+                type="button"
+                onClick={() => setMyMealsAddOpen(true)}
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1.5px dashed ${T.accent}`,
+                  background: "#fff",
+                  color: T.accentDeep,
+                  fontFamily: F,
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  marginBottom: 12,
+                }}
+              >
+                ＋ Add meal
+                <div style={{ fontWeight: 500, fontSize: 11.5, color: T.inkSoft, marginTop: 3 }}>
+                  Create a recipe, describe a meal, or generate options
+                </div>
+              </button>
+              {myMealsAddOpen && (
+                <MyMealsAddSheet
+                  macros={macros}
+                  onClose={() => setMyMealsAddOpen(false)}
+                  onEstimateRecipe={onEstimateRecipe}
+                  onSaveCustomMeal={onSaveCustomMeal}
+                  onMealIdea={onMealIdea}
+                />
+              )}
               {!customMeals.length ? (
                 <Card>
                   <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
-                    Nothing saved yet. Paste a recipe above, save one from Today logging, or when you add an AI meal on Plan, choose <b style={{ color: T.ink }}>Save to My meals</b>.
+                    Nothing saved yet. Tap <b style={{ color: T.ink }}>＋ Add meal</b> to paste a recipe or let AI draft one — or save from Today logging / Plan.
                   </div>
                 </Card>
               ) : (

@@ -11,6 +11,7 @@ import { addDaysIso, fmtRange, wkStartOf } from "../utils/dates";
 import { safeBuildGroceryList } from "../utils/groceryList";
 import { recipeNoteFromMeal, weekPlanHasPoisonShapes } from "../utils/planMealShape";
 import { roomLeftFromTotals } from "../utils/eatingOutImpact";
+import { RecipeCreator } from "./RecipeCreator";
 import {
   PLAN_DAYS,
   PLAN_SLOTS,
@@ -70,6 +71,7 @@ export function WeekPlanner({
   onSuggestAiWeek,
   onMealIdea,
   onSaveCustomMeal,
+  onEstimateRecipe,
   onLog,
 }) {
   const planned = normalizeWeekDays(days);
@@ -491,6 +493,8 @@ export function WeekPlanner({
           onPickCustom={chooseCustom}
           onPickAi={chooseAiMeal}
           onMealIdea={onMealIdea}
+          onEstimateRecipe={onEstimateRecipe}
+          onSaveCustomMeal={onSaveCustomMeal}
         />
       )}
     </div>
@@ -964,9 +968,11 @@ function MealPickerModal({
   onPickCustom,
   onPickAi,
   onMealIdea,
+  onEstimateRecipe,
+  onSaveCustomMeal,
 }) {
   const initialSlot = slot === "any" ? null : slot;
-  const [view, setView] = useState("hub"); // hub | bank | pantry | mine | describe | options | eating_out
+  const [view, setView] = useState("hub"); // hub | bank | pantry | mine | create | describe | options | eating_out
   const [slotPick, setSlotPick] = useState(initialSlot);
   const [pantryGroup, setPantryGroup] = useState("all");
   const [description, setDescription] = useState("");
@@ -1112,18 +1118,20 @@ function MealPickerModal({
             <div style={{ fontFamily: FD, fontSize: 20 }}>{title}</div>
             <div style={{ fontSize: 12.5, color: T.inkSoft }}>
               {view === "hub"
-                ? "Bank, pantry, My meals, or AI for this slot"
+                ? "Bank, pantry, My meals, paste a recipe, or AI"
                 : view === "bank"
                   ? "Callie’s recipe bank"
                   : view === "pantry"
                     ? "Cheat-sheet staples · easy one-tap picks"
                     : view === "mine"
                       ? "Your saved macros meals"
-                      : view === "describe"
-                        ? "Describe what you want — AI builds one meal"
-                        : view === "eating_out"
-                          ? "Menu picks for this plan day (Today → Menu logs it)"
-                          : "2–3 options from your tastes + Callie’s guide"}
+                      : view === "create"
+                        ? "Paste a recipe — saves to My meals and adds it here"
+                        : view === "describe"
+                          ? "Describe what you want — AI builds one meal"
+                          : view === "eating_out"
+                            ? "Menu picks for this plan day (Today → Menu logs it)"
+                            : "2–3 options from your tastes + Callie’s guide"}
             </div>
           </div>
           <ActionPill onClick={onClose}>Close</ActionPill>
@@ -1159,6 +1167,11 @@ function MealPickerModal({
               title="My meals"
               sub={customMeals.length ? `${customMeals.length} saved · with ingredients when you added them` : "Empty until you save one"}
               onClick={() => setView("mine")}
+            />
+            <HubBtn
+              title="Create a recipe"
+              sub="Paste one you found — saves to My meals and adds it to this day"
+              onClick={() => { setView("create"); setErr(""); }}
             />
             <HubBtn
               title="Describe a meal (AI)"
@@ -1272,7 +1285,7 @@ function MealPickerModal({
             )}
             {!customMeals.length ? (
               <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
-                No saved meals yet. After an AI add, leave Save to My meals on — or save from Today logging.
+                No saved meals yet. Use Create a recipe, or leave Save to My meals on after an AI add.
               </div>
             ) : (
               customMeals.map((m) => (
@@ -1294,11 +1307,35 @@ function MealPickerModal({
                 >
                   <div style={{ fontWeight: 700, fontSize: 14, color: T.ink }}>{m.name}</div>
                   <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
-                    {m.cal} cal · P {m.p}g · C {m.c}g · F {m.f}g · macros only
+                    {m.cal} cal · P {m.p}g · C {m.c}g · F {m.f}g
+                    {m.ingredients ? " · has recipe note" : ""}
                   </div>
                 </button>
               ))
             )}
+          </>
+        )}
+
+        {view === "create" && (
+          <>
+            {!initialSlot && (
+              <>
+                <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 6 }}>
+                  Slot for this meal on the plan
+                </div>
+                {slotChooser}
+              </>
+            )}
+            <RecipeCreator
+              embedded
+              onEstimateRecipe={onEstimateRecipe}
+              onSaveCustomMeal={onSaveCustomMeal}
+              saveLabel="Save & add to plan"
+              onSaved={(saved) => {
+                if (saved) onPickCustom?.(saved);
+              }}
+              onCancel={goHub}
+            />
           </>
         )}
 
