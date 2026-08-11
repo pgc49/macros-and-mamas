@@ -86,6 +86,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - uses: supabase/setup-cli@v1
         with:
           version: 2.113.0
@@ -119,3 +124,10 @@ jobs:
           echo "ADMIN_DM_DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
       - run: supabase start --workdir "$ADMIN_DM_DB_ROOT"
       - run: supabase test db "$ADMIN_DM_DB_ROOT/supabase/tests/admin_dm_conversations.sql" --workdir "$ADMIN_DM_DB_ROOT"
+      - name: Admin DM Storage/RLS behavior
+        run: |
+          supabase status -o env --workdir "$ADMIN_DM_DB_ROOT" > "$RUNNER_TEMP/admin-dm.env"
+          set -a
+          source "$RUNNER_TEMP/admin-dm.env"
+          set +a
+          node scripts/qa-admin-dm-storage.mjs

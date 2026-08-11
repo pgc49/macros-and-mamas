@@ -1,6 +1,6 @@
 begin;
 
-select plan(30);
+select plan(33);
 
 select is(
   (select count(*)::integer from public.admin_dm_conversations),
@@ -260,7 +260,43 @@ select is(
   'nonparticipant admin cannot read A-C reactions'
 );
 
+reset role;
+set local role service_role;
+select is(
+  public.count_message_unread_for_profile(
+    '00000000-0000-0000-0000-000000000053'
+  ),
+  1,
+  'exact unread RPC counts only explicit admin recipient'
+);
+
+reset role;
+set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000053';
+select is(
+  (
+    select cleared
+    from public.toggle_message_reaction_atomic(
+      'dm',
+      (select id from public.messages where body = 'A to C private'),
+      '❤️'
+    )
+  ),
+  false,
+  'atomic reaction RPC adds admin DM reaction'
+);
+select is(
+  (
+    select cleared
+    from public.toggle_message_reaction_atomic(
+      'dm',
+      (select id from public.messages where body = 'A to C private'),
+      '❤️'
+    )
+  ),
+  true,
+  'atomic reaction RPC clears same reaction'
+);
 select lives_ok(
   $$
     update public.messages

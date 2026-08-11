@@ -88,3 +88,7 @@ create table public.message_reactions (
 alter table public.message_reactions enable row level security;
 grant select, insert, delete on public.message_reactions to authenticated, service_role;
 
+insert into storage.buckets (id, name, public)
+values ('message-attachments', 'message-attachments', false)
+on conflict (id) do nothing;
+

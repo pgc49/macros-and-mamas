@@ -287,7 +287,8 @@ export function AdminMessages({
   const activeName = active?.type === "channel"
     ? (activeChannel?.conversation?.label || "Group")
     : displayName(activePeer);
-  const activeIsAdmin = active?.type === "dm" && isAdminProfile(activePeer);
+  const activeIsAdmin = active?.type === "dm" && active?.threadType === "admin";
+  const adminPeerIsActive = !activeIsAdmin || isAdminProfile(activePeer);
 
   const senderNameById = useMemo(() => {
     const map = {};
@@ -391,6 +392,12 @@ export function AdminMessages({
   const sendDm = async (body, file = null, opts = {}) => {
     const thread = activeRef.current?.type === "dm" ? activeRef.current : null;
     if (!thread) return;
+    if (
+      thread.threadType === "admin"
+      && !isAdminProfile(clientMap.get(thread.peerId))
+    ) {
+      throw new Error("This admin no longer has messaging access.");
+    }
     setBusy(true);
     setError("");
     try {
@@ -861,19 +868,36 @@ export function AdminMessages({
                   threadKey={`dm:${active.id}:${adminUserId}`}
                   peerName={activeName}
                   senderNameById={senderNameById}
-                  threadClientId={activeIsAdmin ? null : active.id}
+                  threadClientId={activeIsAdmin ? null : (active.clientId || active.id)}
                   showSenderNames
-                  busy={busy || dmLoadedClientId !== active.id}
+                  busy={busy || dmLoadedClientId !== active.id || !adminPeerIsActive}
                   onSend={sendDm}
-                  onEdit={editDm}
-                  onDelete={removeDm}
-                  onReact={reactDm}
-                  onMarkRead={dmLoadedClientId === active.id ? markDmRead : undefined}
+                  onEdit={adminPeerIsActive ? editDm : undefined}
+                  onDelete={adminPeerIsActive ? removeDm : undefined}
+                  onReact={adminPeerIsActive ? reactDm : undefined}
+                  onMarkRead={
+                    dmLoadedClientId === active.id && adminPeerIsActive
+                      ? markDmRead
+                      : undefined
+                  }
                   showReadReceipts
                   allowVoiceMemo
                   enableReply
                   showPushPrompt
-                  banner={dmLoadErrorClientId === active.id ? (
+                  hideComposer={!adminPeerIsActive}
+                  banner={!adminPeerIsActive ? (
+                    <div style={{
+                      background: T.amberSoft,
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      marginBottom: 10,
+                      fontSize: 13.5,
+                      color: T.ink,
+                    }}
+                    >
+                      This admin no longer has messaging access. History is read-only.
+                    </div>
+                  ) : dmLoadErrorClientId === active.id ? (
                     <div style={{
                       background: T.amberSoft,
                       borderRadius: 12,

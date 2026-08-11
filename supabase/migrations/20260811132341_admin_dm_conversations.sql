@@ -68,11 +68,21 @@ create index messages_recipient_unread_idx
   where recipient_id is not null and read_at is null and deleted_at is null;
 
 lock table public.messages in share row exclusive mode;
+lock table public.profiles in share row exclusive mode;
 
 do $$
 declare
   invalid_buckets integer;
+  admin_count integer;
+  admin_message_count integer;
 begin
+  select count(*) into admin_count from public.profiles where role = 'admin';
+  select count(*) into admin_message_count
+  from public.messages m
+  join public.profiles owner on owner.id = m.client_id and owner.role = 'admin';
+  if admin_message_count > 0 and admin_count <> 2 then
+    raise exception 'legacy admin DM backfill requires exactly two admins';
+  end if;
   with admin_buckets as (
     select m.client_id
     from public.messages m
@@ -302,18 +312,23 @@ alter table public.messages
   add constraint messages_attachment_path_check check (
     attachment_path is null
     or (
-      admin_dm_conversation_id is null
-      and attachment_path like client_id::text || '/%'
-    )
-    or (
-      admin_dm_conversation_id is not null
-      and legacy_admin_attachment_path
-    )
-    or (
-      admin_dm_conversation_id is not null
-      and not legacy_admin_attachment_path
-      and attachment_path like
-        'admin-dm/' || admin_dm_conversation_id::text || '/' || sender_id::text || '/%'
+      char_length(trim(attachment_path)) between 1 and 500
+      and (
+        (
+          admin_dm_conversation_id is null
+          and attachment_path like client_id::text || '/%'
+        )
+        or (
+          admin_dm_conversation_id is not null
+          and legacy_admin_attachment_path
+        )
+        or (
+          admin_dm_conversation_id is not null
+          and not legacy_admin_attachment_path
+          and attachment_path like
+            'admin-dm/' || admin_dm_conversation_id::text || '/' || sender_id::text || '/%'
+        )
+      )
     )
   );
 
@@ -641,7 +656,13 @@ create policy "message_attachments_select"
   using (
     bucket_id = 'message-attachments'
     and (
-      owner_id = auth.uid()::text
+      (
+        owner_id = auth.uid()::text
+        and not exists (
+          select 1 from public.messages referenced
+          where referenced.attachment_path = name
+        )
+      )
       or exists (
         select 1 from public.messages m
         where m.attachment_path = name
@@ -670,7 +691,25 @@ create policy "message_attachments_delete"
   using (
     bucket_id = 'message-attachments'
     and (
-      owner_id = auth.uid()::text
+      (
+        owner_id = auth.uid()::text
+        and not exists (
+          select 1 from public.messages referenced
+          where referenced.attachment_path = name
+        )
+      )
+      or exists (
+        select 1 from public.messages m
+        where m.attachment_path = name
+          and m.admin_dm_conversation_id is not null
+          and m.sender_id = auth.uid()
+          and public.is_admin()
+          and exists (
+            select 1 from public.admin_dm_conversations c
+            where c.id = m.admin_dm_conversation_id
+              and auth.uid() in (c.participant_low, c.participant_high)
+          )
+      )
       or (
         public.is_admin()
         and exists (

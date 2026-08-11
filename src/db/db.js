@@ -449,6 +449,7 @@ async function uploadMessageAttachment({
   clientId,
   adminConversationId = null,
   senderId = null,
+  objectId = null,
   file,
   allowAudio = false,
 }) {
@@ -472,9 +473,9 @@ async function uploadMessageAttachment({
         : "That file is over 10 MB — try a smaller photo.",
     );
   }
-  const id = (typeof crypto !== "undefined" && crypto.randomUUID)
+  const id = objectId || ((typeof crypto !== "undefined" && crypto.randomUUID)
     ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
   const path = adminConversationId
     ? `admin-dm/${adminConversationId}/${senderId}/${id}-${safeAttachmentName(file.name)}`
     : `${clientId}/${id}-${safeAttachmentName(file.name)}`;
@@ -484,7 +485,10 @@ async function uploadMessageAttachment({
       contentType: mime,
       upsert: false,
     });
-  if (error) {
+  if (error && !(
+    Number(error.statusCode || error.status) === 409
+    || /already exists|duplicate/i.test(String(error.message || ""))
+  )) {
     console.error("message attachment upload failed", error);
     throw new Error("Couldn’t upload that attachment — try again.");
   }
@@ -516,7 +520,12 @@ async function hydrateMessageAttachments(rows) {
   }));
 }
 
-async function uploadChannelAttachment({ conversationId, file, allowAudio = false }) {
+async function uploadChannelAttachment({
+  conversationId,
+  file,
+  allowAudio = false,
+  objectId = null,
+}) {
   if (!file) return null;
   if (!conversationId) throw new Error("channel required");
   const uid = await requireUserId();
@@ -538,9 +547,9 @@ async function uploadChannelAttachment({ conversationId, file, allowAudio = fals
         : "That file is over 10 MB — try a smaller photo.",
     );
   }
-  const id = (typeof crypto !== "undefined" && crypto.randomUUID)
+  const id = objectId || ((typeof crypto !== "undefined" && crypto.randomUUID)
     ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
   // {conversationId}/{userId}/{file} — storage delete scoped to own folder.
   const path = `${conversationId}/${uid}/${id}-${safeAttachmentName(file.name)}`;
   const { error } = await supabase.storage
@@ -549,7 +558,10 @@ async function uploadChannelAttachment({ conversationId, file, allowAudio = fals
       contentType: mime,
       upsert: false,
     });
-  if (error) {
+  if (error && !(
+    Number(error.statusCode || error.status) === 409
+    || /already exists|duplicate/i.test(String(error.message || ""))
+  )) {
     console.error("channel attachment upload failed", error);
     throw new Error("Couldn’t upload that attachment — try again.");
   }
@@ -1983,7 +1995,12 @@ export const db = {
         allowAudio = String(me?.role || "").toLowerCase() === "admin";
         if (!allowAudio) throw new Error("Only Callie can send voice memos.");
       }
-      attachment = await uploadChannelAttachment({ conversationId, file, allowAudio });
+      attachment = await uploadChannelAttachment({
+        conversationId,
+        file,
+        allowAudio,
+        objectId: idempotencyKey,
+      });
     }
     if (!data) {
       if (text.length < 1 && !attachment) throw new Error("Message is empty");
@@ -2186,6 +2203,19 @@ export const db = {
     return Array.isArray(data) ? data[0] : data;
   },
 
+  async findAdminDmConversation(peerId) {
+    const uid = await requireUserId();
+    if (!peerId || peerId === uid) return null;
+    const { data, error } = await supabase
+      .from("admin_dm_conversations")
+      .select("id, participant_low, participant_high, created_at")
+      .or(`participant_low.eq.${uid},participant_high.eq.${uid}`);
+    if (error) throw error;
+    return (data || []).find((row) => (
+      [row.participant_low, row.participant_high].includes(peerId)
+    )) || null;
+  },
+
   async loadAdminDmMessages(conversationId, { limit = 100 } = {}) {
     if (!conversationId) return [];
     const { data, error } = await supabase
@@ -2267,6 +2297,7 @@ export const db = {
         clientId,
         adminConversationId,
         senderId: uid,
+        objectId: idempotencyKey,
         file,
         allowAudio,
       });

@@ -25,9 +25,10 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const refresh = useCallback(async () => {
     if (!clientId || isSelfAdmin) return;
     try {
-      const conversation = isAdminClient
+      const existingConversation = await db.findAdminDmConversation(clientId);
+      const conversation = existingConversation || (isAdminClient
         ? await db.ensureAdminDmConversation(clientId)
-        : null;
+        : null);
       if (conversation) setAdminConversation(conversation);
       const list = conversation
         ? await db.loadAdminDmMessages(conversation.id)
@@ -80,7 +81,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     setBusy(true);
     setError("");
     try {
-      const row = isAdminClient
+      const row = adminConversation
         ? await db.sendAdminDmMessage({
           conversationId: adminConversation?.id,
           clientId: adminConversation?.participant_low,
@@ -127,7 +128,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
 
   const markRead = async () => {
     if (!clientId || !adminUserId) return;
-    if (isAdminClient && adminConversation?.id) {
+    if (adminConversation?.id) {
       await db.markAdminDmRead(adminConversation.id);
     } else {
       await db.markMessagesRead(clientId, adminUserId);
@@ -173,17 +174,22 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           threadKey={`dm:${adminConversation?.id || clientId}:${adminUserId}`}
           peerName={first}
           senderNameById={client?.id ? { [client.id]: first } : null}
-          threadClientId={isAdminClient ? null : clientId}
+          threadClientId={adminConversation ? null : clientId}
           showSenderNames
-          busy={busy || (isAdminClient && !adminConversation)}
+          busy={
+            busy
+            || (isAdminClient && !adminConversation)
+            || (!!adminConversation && !isAdminClient)
+          }
           onSend={send}
-          onEdit={edit}
-          onDelete={remove}
-          onReact={react}
-          onMarkRead={markRead}
+          onEdit={adminConversation && !isAdminClient ? undefined : edit}
+          onDelete={adminConversation && !isAdminClient ? undefined : remove}
+          onReact={adminConversation && !isAdminClient ? undefined : react}
+          onMarkRead={adminConversation && !isAdminClient ? undefined : markRead}
           showReadReceipts
           allowVoiceMemo
           enableReply
+          hideComposer={!!adminConversation && !isAdminClient}
           showPushPrompt={false}
           compact
         />
