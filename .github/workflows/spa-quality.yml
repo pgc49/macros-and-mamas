@@ -1,0 +1,75 @@
+name: SPA quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spa-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Messaging checks
+        run: npm run qa:messaging
+
+      - name: Production build
+        run: npm run build
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.113.0
+
+      - name: Prepare isolated messaging schema
+        run: |
+          DB_ROOT="$RUNNER_TEMP/messaging-db"
+          mkdir -p "$DB_ROOT"
+          supabase init --workdir "$DB_ROOT"
+          python - "$DB_ROOT/supabase/config.toml" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          marker = "[db.seed]"
+          before, after = text.split(marker, 1)
+          after = after.replace("enabled = true", "enabled = false", 1)
+          path.write_text(before + marker + after)
+          PY
+          mkdir -p "$DB_ROOT/supabase/migrations" "$DB_ROOT/supabase/tests"
+          cp supabase/tests/bootstrap_messaging.sql \
+            "$DB_ROOT/supabase/migrations/20260101000000_bootstrap_messaging.sql"
+          cp supabase/migrations/20260811014815_messaging_inbox_and_ordering.sql \
+            "$DB_ROOT/supabase/migrations/"
+          cp supabase/tests/messaging_inbox.sql "$DB_ROOT/supabase/tests/"
+          echo "DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
+
+      - name: Start disposable Supabase
+        run: supabase start --workdir "$DB_ROOT"
+
+      - name: Messaging database and RLS tests
+        run: supabase test db "$DB_ROOT/supabase/tests/messaging_inbox.sql" --workdir "$DB_ROOT"

@@ -3,8 +3,10 @@ import { createPortal } from "react-dom";
 import { MessagesThread } from "./MessagesThread";
 import { db } from "../db/db";
 import { supabase } from "../lib/supabase";
+import { mergeMessagesById } from "../lib/messageOrdering";
 import { T, F, FD } from "../theme/tokens";
 import { Btn } from "./ui";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 function friendlyError(e, fallback) {
   const msg = String(e?.message || "");
@@ -216,7 +218,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
         file,
         replyToId: opts.replyToId || null,
       });
-      setDmMessages((list) => attachReplyPreviewLocal([...list, row]));
+      setDmMessages((list) => attachReplyPreviewLocal(mergeMessagesById(list, [row])));
     } catch (e) {
       console.error(e);
       setError(friendlyError(e, "Couldn’t send."));
@@ -267,7 +269,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       });
       setChannelMessages((all) => {
         const prev = all[conversationId] || [];
-        const next = attachReplyPreviewLocal([...prev, row]);
+        const next = attachReplyPreviewLocal(mergeMessagesById(prev, [row]));
         return { ...all, [conversationId]: next };
       });
     } catch (e) {
@@ -384,57 +386,71 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       </div>
 
       {activeChannel ? (
-        <MessagesThread
-          key={activeChannel.conversation.id}
-          title=""
-          subtitle=""
-          messages={activeChannelMessages}
-          selfId={userId}
-          peerName={activeChannel.conversation.label || "Group"}
-          senderNameById={senderNameById}
-          showSenderNames
-          busy={busy}
-          onSend={sendChannel}
-          onEdit={editChannel}
-          onDelete={removeChannel}
-          onReact={reactChannel}
-          onMarkRead={markChannelRead}
-          canModerate={isAdmin}
-          allowVoiceMemo={isAdmin}
-          enableReply
-          headerExtra={(
-            <ChannelHeader
-              conversation={activeChannel.conversation}
-              membership={activeChannel.membership}
-              onOpenNotifySettings={() => setNotifyChannelId(activeChannel.conversation.id)}
-            />
-          )}
-          banner={activeChannel.conversation.read_only ? <ReadOnlyBanner /> : null}
-          hideComposer={!!activeChannel.conversation.read_only}
-          emptyState="No group messages yet — say hi when you’re ready."
-          showPushPrompt
-          onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
-          onComposerFocusChange={onComposerFocusChange}
-        />
+        <ErrorBoundary
+          name="CustomerChannelThread"
+          title="This group thread hit a snag"
+          message="The rest of Messages still works. Try again or switch back to Callie."
+          resetKeys={[activeChannel.conversation.id]}
+        >
+          <MessagesThread
+            key={activeChannel.conversation.id}
+            title=""
+            subtitle=""
+            messages={activeChannelMessages}
+            selfId={userId}
+            peerName={activeChannel.conversation.label || "Group"}
+            senderNameById={senderNameById}
+            showSenderNames
+            busy={busy}
+            onSend={sendChannel}
+            onEdit={editChannel}
+            onDelete={removeChannel}
+            onReact={reactChannel}
+            onMarkRead={markChannelRead}
+            canModerate={isAdmin}
+            allowVoiceMemo={isAdmin}
+            enableReply
+            headerExtra={(
+              <ChannelHeader
+                conversation={activeChannel.conversation}
+                membership={activeChannel.membership}
+                onOpenNotifySettings={() => setNotifyChannelId(activeChannel.conversation.id)}
+              />
+            )}
+            banner={activeChannel.conversation.read_only ? <ReadOnlyBanner /> : null}
+            hideComposer={!!activeChannel.conversation.read_only}
+            emptyState="No group messages yet — say hi when you’re ready."
+            showPushPrompt
+            onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+            onComposerFocusChange={onComposerFocusChange}
+          />
+        </ErrorBoundary>
       ) : (
-        <MessagesThread
-          key="callie"
-          title=""
-          subtitle=""
-          messages={dmMessages}
-          selfId={userId}
-          peerName="Callie"
-          busy={busy}
-          onSend={send}
-          onEdit={edit}
-          onDelete={remove}
-          onReact={reactDm}
-          onMarkRead={markRead}
-          enableReply
-          showPushPrompt
-          onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
-          onComposerFocusChange={onComposerFocusChange}
-        />
+        <ErrorBoundary
+          name="CustomerDmThread"
+          title="This conversation hit a snag"
+          message="Your messages are safe. Try again here or switch to a group."
+          resetKeys={[userId, "callie"]}
+        >
+          <MessagesThread
+            key="callie"
+            title=""
+            subtitle=""
+            messages={dmMessages}
+            selfId={userId}
+            peerName="Callie"
+            busy={busy}
+            onSend={send}
+            onEdit={edit}
+            onDelete={remove}
+            onReact={reactDm}
+            onMarkRead={markRead}
+            enableReply
+            showPushPrompt
+            onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+            onComposerFocusChange={onComposerFocusChange}
+          />
+        </ErrorBoundary>
       )}
 
       {notifyChannel && (

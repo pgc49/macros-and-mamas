@@ -5,6 +5,7 @@ import {
   aggregateReactions,
   isAllowedReactionEmoji,
 } from "../lib/messageReactions";
+import { chronologicalMessages } from "../lib/messageOrdering";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
 
@@ -1886,10 +1887,11 @@ export const db = {
       .from("conversation_messages")
       .select(CHANNEL_MESSAGE_SELECT)
       .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(Math.min(300, Math.max(1, limit)));
     if (error) throw error;
-    const withAttachments = await hydrateChannelAttachments(data || []);
+    const withAttachments = await hydrateChannelAttachments(chronologicalMessages(data));
     const withSenders = await hydrateChannelSenders(withAttachments, conversationId);
     const withReplies = attachChannelReplyPreviews(withSenders);
     return hydrateChannelReactions(withReplies);
@@ -2093,10 +2095,11 @@ export const db = {
       .from("messages")
       .select(DM_MESSAGE_SELECT)
       .eq("client_id", clientId)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(Math.min(200, Math.max(1, limit)));
     if (error) throw error;
-    const withAttachments = await hydrateMessageAttachments(data || []);
+    const withAttachments = await hydrateMessageAttachments(chronologicalMessages(data));
     const withReplies = attachReplyPreviews(withAttachments);
     return hydrateDmReactions(withReplies);
   },
@@ -2443,6 +2446,24 @@ export const db = {
   },
 
   async loadMessageInbox(readerId = null) {
+    const { data: inboxRows, error: inboxError } = await supabase
+      .rpc("load_admin_message_inbox");
+    if (!inboxError) {
+      return (inboxRows || []).map((row) => ({
+        clientId: row.client_id,
+        lastMessage: row.last_message,
+        unread: Number(row.unread) || 0,
+        participantIds: Array.isArray(row.participant_ids) ? row.participant_ids : [],
+      }));
+    }
+    // Backward-compatible only during migration rollout. Once the RPC is
+    // installed, real database errors must surface instead of hiding behind
+    // the old globally-truncated inbox query.
+    if (!["PGRST202", "42883"].includes(String(inboxError.code || ""))) {
+      throw inboxError;
+    }
+    console.warn("message inbox RPC unavailable; using rollout fallback", inboxError);
+
     const [{ data: msgs, error }, { data: admins, error: adminErr }] = await Promise.all([
       supabase
         .from("messages")

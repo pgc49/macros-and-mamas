@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { db, fullName, channelHasUnread } from "../db/db";
 import { supabase } from "../lib/supabase";
+import { mergeMessagesById } from "../lib/messageOrdering";
 
 function displayName(c) {
   if (!c) return "Mama";
@@ -72,9 +74,13 @@ export function AdminMessages({
     initialClientId ? { type: "dm", id: initialClientId } : null,
   );
   const [dmMessages, setDmMessages] = useState([]);
+  const [dmLoadedClientId, setDmLoadedClientId] = useState(null);
+  const [dmLoadErrorClientId, setDmLoadErrorClientId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const activeRef = useRef(active);
+  const dmLoadSequence = useRef(new Map());
 
   const clientMap = useMemo(() => {
     const m = new Map();
@@ -116,16 +122,35 @@ export function AdminMessages({
     }
   }, [adminUserId]);
 
-  const refreshDmThread = useCallback(async (clientId) => {
+  const refreshDmThread = useCallback(async (clientId, { clear = false } = {}) => {
+    const sequence = (dmLoadSequence.current.get(clientId) || 0) + 1;
+    dmLoadSequence.current.set(clientId, sequence);
     if (!clientId) {
       setDmMessages([]);
+      setDmLoadedClientId(null);
+      setDmLoadErrorClientId(null);
       return;
+    }
+    if (clear) {
+      setDmMessages([]);
+      setDmLoadedClientId(null);
+      setDmLoadErrorClientId(null);
+      setError("");
     }
     try {
       const list = await db.loadMessages(clientId);
+      const stillCurrent = activeRef.current?.type === "dm"
+        && activeRef.current.id === clientId;
+      if (sequence !== dmLoadSequence.current.get(clientId) || !stillCurrent) return;
       setDmMessages(list);
+      setDmLoadedClientId(clientId);
+      setDmLoadErrorClientId(null);
     } catch (e) {
+      const stillCurrent = activeRef.current?.type === "dm"
+        && activeRef.current.id === clientId;
+      if (sequence !== dmLoadSequence.current.get(clientId) || !stillCurrent) return;
       console.error(e);
+      setDmLoadErrorClientId(clientId);
       setError(e.message || "Couldn’t load thread.");
     }
   }, []);
@@ -136,11 +161,19 @@ export function AdminMessages({
   }, [refreshInbox, refreshChannels]);
 
   useEffect(() => {
-    if (initialClientId) setActive({ type: "dm", id: initialClientId });
+    if (initialClientId) {
+      const next = { type: "dm", id: initialClientId };
+      activeRef.current = next;
+      setActive(next);
+    }
   }, [initialClientId]);
 
   useEffect(() => {
-    if (active?.type === "dm") refreshDmThread(active.id);
+    activeRef.current = active;
+  }, [active]);
+
+  useEffect(() => {
+    if (active?.type === "dm") refreshDmThread(active.id, { clear: true });
   }, [active, refreshDmThread]);
 
   useEffect(() => {
@@ -224,41 +257,53 @@ export function AdminMessages({
   const openDm = (profileOrId) => {
     try { window.scrollTo({ top: 0, behavior: "auto" }); } catch { /* ignore */ }
     if (typeof profileOrId === "string") {
-      setActive({ type: "dm", id: profileOrId });
+      const next = { type: "dm", id: profileOrId };
+      activeRef.current = next;
+      setActive(next);
       return;
     }
     const profile = profileOrId;
     if (!profile?.id) return;
     if (isAdminProfile(profile) && adminUserId) {
-      setActive({ type: "dm", id: canonicalAdminThreadId(adminUserId, profile.id) });
+      const next = { type: "dm", id: canonicalAdminThreadId(adminUserId, profile.id) };
+      activeRef.current = next;
+      setActive(next);
       return;
     }
-    setActive({ type: "dm", id: profile.id });
+    const next = { type: "dm", id: profile.id };
+    activeRef.current = next;
+    setActive(next);
   };
 
   const openChannel = (conversationId) => {
     if (!conversationId) return;
     try { window.scrollTo({ top: 0, behavior: "auto" }); } catch { /* ignore */ }
-    setActive({ type: "channel", id: conversationId });
+    const next = { type: "channel", id: conversationId };
+    activeRef.current = next;
+    setActive(next);
   };
 
   const closeThread = () => {
+    activeRef.current = null;
     setActive(null);
     setDmMessages([]);
   };
 
   const sendDm = async (body, file = null, opts = {}) => {
-    if (active?.type !== "dm") return;
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    if (!clientId) return;
     setBusy(true);
     setError("");
     try {
       const row = await db.sendMessage({
-        clientId: active.id,
+        clientId,
         body,
         file,
         replyToId: opts.replyToId || null,
       });
-      setDmMessages((list) => [...list, row]);
+      if (activeRef.current?.type === "dm" && activeRef.current.id === clientId) {
+        setDmMessages((list) => mergeMessagesById(list, [row]));
+      }
       refreshInbox();
     } catch (e) {
       console.error(e);
@@ -283,7 +328,7 @@ export function AdminMessages({
       });
       setChannelMessages((all) => ({
         ...all,
-        [conversationId]: [...(all[conversationId] || []), row],
+        [conversationId]: mergeMessagesById(all[conversationId] || [], [row]),
       }));
       refreshChannels();
     } catch (e) {
@@ -296,14 +341,22 @@ export function AdminMessages({
   };
 
   const editDm = async (messageId, body) => {
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    if (!clientId) return;
     const row = await db.editMessage(messageId, body);
-    setDmMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+    if (activeRef.current?.type === "dm" && activeRef.current.id === clientId) {
+      setDmMessages((list) => mergeMessagesById(list, [row]));
+    }
     refreshInbox();
   };
 
   const removeDm = async (messageId) => {
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    if (!clientId) return;
     const row = await db.deleteMessage(messageId);
-    setDmMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row, attachmentUrl: null } : m)));
+    if (activeRef.current?.type === "dm" && activeRef.current.id === clientId) {
+      setDmMessages((list) => mergeMessagesById(list, [{ ...row, attachmentUrl: null }]));
+    }
     refreshInbox();
   };
 
@@ -330,8 +383,10 @@ export function AdminMessages({
   };
 
   const reactDm = async (messageId, emoji) => {
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    if (!clientId) return;
     await db.toggleDmReaction(messageId, emoji);
-    if (active?.type === "dm") await refreshDmThread(active.id);
+    await refreshDmThread(clientId);
   };
 
   const reactChannel = async (messageId, emoji) => {
@@ -340,8 +395,9 @@ export function AdminMessages({
   };
 
   const markDmRead = async () => {
-    if (active?.type !== "dm" || !adminUserId) return;
-    await db.markMessagesRead(active.id, adminUserId);
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    if (!clientId || !adminUserId) return;
+    await db.markMessagesRead(clientId, adminUserId);
     refreshInbox();
   };
 
@@ -634,66 +690,120 @@ export function AdminMessages({
           }}
           >
             {active.type === "channel" ? (
-              <MessagesThread
-                key={`ch-${active.id}`}
-                title=""
-                subtitle=""
-                messages={activeChannelMessages}
-                selfId={adminUserId}
-                peerName={activeName}
-                senderNameById={senderNameById}
-                showSenderNames
-                busy={busy}
-                onSend={sendChannel}
-                onEdit={editChannel}
-                onDelete={removeChannel}
-                onReact={reactChannel}
-                onMarkRead={markChannelRead}
-                canModerate
-                allowVoiceMemo
-                enableReply
-                banner={activeChannel?.conversation?.read_only ? (
-                  <div style={{
-                    background: T.accentSoft,
-                    borderRadius: 12,
-                    padding: "10px 12px",
-                    marginBottom: 10,
-                    fontSize: 13.5,
-                  }}
-                  >
-                    This group is read-only right now.
-                  </div>
-                ) : null}
-                hideComposer={!!activeChannel?.conversation?.read_only}
-                emptyState="No group messages yet."
-                showPushPrompt
-                onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
-                compact
-              />
+              <ErrorBoundary
+                name="AdminChannelThread"
+                title="This group thread hit a snag"
+                message="The inbox still works. Try again or open another conversation."
+                resetKeys={[active.id]}
+              >
+                <MessagesThread
+                  key={`ch-${active.id}`}
+                  title=""
+                  subtitle=""
+                  messages={activeChannelMessages}
+                  selfId={adminUserId}
+                  peerName={activeName}
+                  senderNameById={senderNameById}
+                  showSenderNames
+                  busy={busy}
+                  onSend={sendChannel}
+                  onEdit={editChannel}
+                  onDelete={removeChannel}
+                  onReact={reactChannel}
+                  onMarkRead={markChannelRead}
+                  canModerate
+                  allowVoiceMemo
+                  enableReply
+                  banner={activeChannel?.conversation?.read_only ? (
+                    <div style={{
+                      background: T.accentSoft,
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      marginBottom: 10,
+                      fontSize: 13.5,
+                    }}
+                    >
+                      This group is read-only right now.
+                    </div>
+                  ) : null}
+                  hideComposer={!!activeChannel?.conversation?.read_only}
+                  emptyState="No group messages yet."
+                  showPushPrompt
+                  onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+                  compact
+                />
+              </ErrorBoundary>
             ) : (
-              <MessagesThread
-                key={`dm-${active.id}`}
-                title=""
-                subtitle=""
-                messages={dmMessages}
-                selfId={adminUserId}
-                peerName={activeName}
-                senderNameById={senderNameById}
-                threadClientId={activeIsAdmin ? null : active.id}
-                showSenderNames
-                busy={busy}
-                onSend={sendDm}
-                onEdit={editDm}
-                onDelete={removeDm}
-                onReact={reactDm}
-                onMarkRead={markDmRead}
-                showReadReceipts
-                allowVoiceMemo
-                enableReply
-                showPushPrompt
-                onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
-                compact
-              />
+              <ErrorBoundary
+                name="AdminDmThread"
+                title="This conversation hit a snag"
+                message="The inbox still works. Try again or open another mama."
+                resetKeys={[active.id]}
+              >
+                <MessagesThread
+                  key={`dm-${active.id}`}
+                  title=""
+                  subtitle=""
+                  messages={dmLoadedClientId === active.id ? dmMessages : []}
+                  selfId={adminUserId}
+                  peerName={activeName}
+                  senderNameById={senderNameById}
+                  threadClientId={activeIsAdmin ? null : active.id}
+                  showSenderNames
+                  busy={busy || dmLoadedClientId !== active.id}
+                  onSend={sendDm}
+                  onEdit={editDm}
+                  onDelete={removeDm}
+                  onReact={reactDm}
+                  onMarkRead={dmLoadedClientId === active.id ? markDmRead : undefined}
+                  showReadReceipts
+                  allowVoiceMemo
+                  enableReply
+                  showPushPrompt
+                  banner={dmLoadErrorClientId === active.id ? (
+                    <div style={{
+                      background: T.amberSoft,
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      marginBottom: 10,
+                      fontSize: 13.5,
+                      color: T.ink,
+                    }}
+                    >
+                      Couldn’t load this conversation.{" "}
+                      <button
+                        type="button"
+                        onClick={() => refreshDmThread(active.id, { clear: true })}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: T.accentDeep,
+                          font: "inherit",
+                          fontWeight: 700,
+                          padding: 0,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : dmLoadedClientId !== active.id ? (
+                    <div style={{
+                      background: T.track,
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      marginBottom: 10,
+                      fontSize: 13.5,
+                      color: T.inkSoft,
+                    }}
+                    >
+                      Loading conversation…
+                    </div>
+                  ) : null}
+                  onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+                  compact
+                />
+              </ErrorBoundary>
             )}
           </div>
         </>

@@ -12,6 +12,9 @@
     "qa:channels": "node scripts/qa-channels-notify.mjs",
     "qa:reactions": "node scripts/qa-message-reactions.mjs",
     "qa:messages-thread": "node scripts/smoke-messages-thread.mjs",
+    "qa:message-ordering": "node scripts/qa-message-ordering.mjs",
+    "test:messaging": "vitest run src/components/messaging-hardening.test.jsx src/admin/AdminMessages.test.jsx",
+    "qa:messaging": "npm run test:messaging && npm run qa:messages-thread && npm run qa:message-ordering && npm run qa:reactions && npm run qa:channels",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -19,14 +22,17 @@
     "@supabase/supabase-js": "^2.110.7",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.1",
+    "react-router-dom": "^7.18.2",
     "recharts": "^3.9.2"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
     "oxlint": "^1.71.0",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "vitest": "^4.1.10"
   }
 }

@@ -610,9 +610,11 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
         </Card>
 
         <ErrorBoundary
+          key={`client-messages-${sel.id}`}
           name="AdminClientMessages"
           title="Messages couldn’t load"
-          message="Her profile still works — open the Messages tab or refresh to try again."
+          message="Her messages are safe. Try again here, or use the Messages inbox while the rest of her profile stays available."
+          resetKeys={[sel.id]}
         >
           <AdminClientMessages
             client={sel}
@@ -1133,12 +1135,19 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
       )}
 
       {tab === "messages" && (
-        <AdminMessages
-          roster={all}
-          adminUserId={user?.id}
-          initialClientId={adminSel}
-          onUnreadTotalChange={setUnreadMessages}
-        />
+        <ErrorBoundary
+          name="AdminMessages"
+          title="Messages inbox hit a snag"
+          message="Conversations are safe. Try again here — other admin tabs still work."
+          resetKeys={[user?.id, adminSel, tab]}
+        >
+          <AdminMessages
+            roster={all}
+            adminUserId={user?.id}
+            initialClientId={adminSel}
+            onUnreadTotalChange={setUnreadMessages}
+          />
+        </ErrorBoundary>
       )}
 
       {tab === "announcements" && (

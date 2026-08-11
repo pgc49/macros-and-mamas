@@ -1,0 +1,150 @@
+// @vitest-environment jsdom
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { MessagesThread } from "./MessagesThread";
+
+vi.mock("@sentry/react", () => ({
+  captureException: vi.fn(),
+}));
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+function Thrower({ active = true }) {
+  if (active) throw new Error("intentional render failure");
+  return <div>Recovered thread</div>;
+}
+
+function message(id, minute = 0) {
+  return {
+    id,
+    sender_id: "mama-1",
+    body: `Message ${id}`,
+    created_at: `2026-08-10T10:${String(minute).padStart(2, "0")}:00.000Z`,
+    reactions: [],
+  };
+}
+
+function threadProps(overrides = {}) {
+  return {
+    title: "",
+    subtitle: "",
+    messages: [],
+    selfId: "admin-1",
+    peerName: "Mama",
+    showPushPrompt: false,
+    onSend: vi.fn(),
+    onEdit: vi.fn(),
+    onDelete: vi.fn(),
+    onReact: vi.fn(),
+    onMarkRead: vi.fn(),
+    ...overrides,
+  };
+}
+
+describe("messaging crash containment", () => {
+  it("recovers locally when Retry is tapped", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let throwing = true;
+    function RetryThrower() {
+      if (throwing) throw new Error("intentional transient failure");
+      return <div>Recovered thread</div>;
+    }
+    render(
+      <ErrorBoundary
+        name="test"
+        resetKeys={["thread-a"]}
+        onReset={() => { throwing = false; }}
+      >
+        <RetryThrower />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByText("This section couldn’t load")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(screen.getByText("Recovered thread")).toBeTruthy();
+  });
+
+  it("resets a latched boundary when the thread key changes", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(
+      <ErrorBoundary name="test" resetKeys={["thread-a"]}>
+        <Thrower />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText("This section couldn’t load")).toBeTruthy();
+
+    view.rerender(
+      <ErrorBoundary name="test" resetKeys={["thread-b"]}>
+        <Thrower active={false} />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText("Recovered thread")).toBeTruthy();
+  });
+
+  it("renders malformed rows without blanking the thread", () => {
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [
+            null,
+            {
+              id: "bad-row",
+              sender_id: 42,
+              body: { unexpected: true },
+              attachment_mime: 99,
+              reactions: "broken",
+              created_at: "not-a-date",
+            },
+            message("valid", 1),
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByText("Message valid")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Write a message…")).toBeTruthy();
+  });
+
+  it("marks read when the latest ID changes at a capped window size", async () => {
+    const onMarkRead = vi.fn();
+    const firstWindow = Array.from({ length: 100 }, (_, i) => message(`m-${i}`, i % 60));
+    const view = render(
+      <MessagesThread {...threadProps({ messages: firstWindow, onMarkRead })} />,
+    );
+    await waitFor(() => expect(onMarkRead).toHaveBeenCalledTimes(1));
+
+    const nextWindow = [...firstWindow.slice(1), message("m-100", 59)];
+    view.rerender(
+      <MessagesThread {...threadProps({ messages: nextWindow, onMarkRead })} />,
+    );
+    await waitFor(() => expect(onMarkRead).toHaveBeenCalledTimes(2));
+  });
+
+  it("contains synchronous mark-read failures", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [message("one", 1)],
+          onMarkRead: () => { throw new Error("read failed"); },
+        })}
+      />,
+    );
+    await waitFor(() => expect(warn).toHaveBeenCalledWith(
+      "mark messages read failed",
+      expect.any(Error),
+    ));
+    expect(screen.getByText("Message one")).toBeTruthy();
+  });
+});
+
