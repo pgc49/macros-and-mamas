@@ -216,13 +216,8 @@ values
     '00000000-0000-0000-0000-000000000022'
   );
 
--- Local Supabase protects direct storage-table deletes so production callers
--- use the Storage API. Disable only that test trigger inside this rollback-only
--- transaction; RLS policies remain active and are what these assertions cover.
-set local role supabase_storage_admin;
-alter table storage.objects disable trigger user;
-reset role;
-
+-- The disposable bootstrap disables only Storage's direct-delete guard so
+-- these statements can exercise RLS; production still uses the Storage API.
 set local role authenticated;
 set local request.jwt.claim.role = 'authenticated';
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000022';

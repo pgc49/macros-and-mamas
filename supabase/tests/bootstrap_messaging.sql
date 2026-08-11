@@ -87,3 +87,7 @@ create table public.conversation_messages (
 
 alter table public.conversation_messages enable row level security;
 
+-- Test-only: allow direct DELETE statements to exercise Storage RLS. The real
+-- Storage API owns this table and protects direct production deletes.
+alter table storage.objects disable trigger user;
+
