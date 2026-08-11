@@ -29,6 +29,7 @@ describe("messaging runtime operations", () => {
         mode: "normal",
         attachments_enabled: true,
         notifications_enabled: true,
+        updated_at: "2026-08-11T01:00:00Z",
       }]), { status: 200 }));
 
     const loaded = await loadMessagingRuntime(env);

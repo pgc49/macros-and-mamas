@@ -77,6 +77,7 @@ describe("message notification outbox", () => {
   it("reserves recovery capacity for fresh jobs ahead of stale leases", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response(JSON.stringify(0), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(0), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(
         Array.from({ length: 9 }, (_, index) => ({
           id: index + 1,

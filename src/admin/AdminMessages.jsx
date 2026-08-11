@@ -880,6 +880,33 @@ function AdminMessagingRuntimeControls({
 }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [health, setHealth] = useState(null);
+  const [healthError, setHealthError] = useState("");
+
+  const loadHealth = useCallback(async () => {
+    if (!runtimeLoaded) return;
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) throw new Error("Not signed in");
+      const response = await fetch("/api/messaging-health", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok && !payload.outbox) throw new Error(payload.error || "Health check failed");
+      setHealth(payload);
+      setHealthError("");
+    } catch (error) {
+      setHealthError(error.message || "Health check failed");
+    }
+  }, [runtimeLoaded]);
+
+  useEffect(() => {
+    loadHealth();
+    const timer = window.setInterval(loadHealth, 60_000);
+    return () => window.clearInterval(timer);
+  }, [loadHealth]);
 
   const apply = async (next, label) => {
     if (!window.confirm(`${label}? This changes messaging for every admin and mama.`)) return;
@@ -888,9 +915,36 @@ function AdminMessagingRuntimeControls({
     try {
       await onUpdate(next);
       setMessage("Messaging controls updated.");
+      await loadHealth();
     } catch (error) {
       console.error(error);
       setMessage(error.message || "Couldn’t update messaging controls.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const acknowledgeDead = async () => {
+    const reason = window.prompt("Why are these failed notifications being acknowledged?");
+    if (reason === null || reason.trim().length < 3) return;
+    setSaving(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      const response = await fetch("/api/admin-message-outbox-ack", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token || ""}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ reason }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Acknowledgement failed");
+      setMessage(`Acknowledged ${payload.acknowledged || 0} failed notification jobs.`);
+      await loadHealth();
+    } catch (error) {
+      setMessage(error.message || "Acknowledgement failed.");
     } finally {
       setSaving(false);
     }
@@ -959,6 +1013,34 @@ function AdminMessagingRuntimeControls({
       {(message || runtimeError) && (
         <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6 }}>
           {message || runtimeError}
+        </div>
+      )}
+      {(health?.outbox || healthError) && (
+        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6 }}>
+          {health?.outbox ? (
+            <>
+              Outbox: {health.outbox.pending || 0} pending · {health.outbox.retry || 0} retry
+              {" · "}{health.outbox.processing || 0} processing · {health.outbox.dead || 0} dead
+              {health.outbox.dead > 0 ? (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={acknowledgeDead}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: T.accentDeep,
+                    font: "inherit",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    marginLeft: 8,
+                  }}
+                >
+                  Acknowledge dead jobs
+                </button>
+              ) : null}
+            </>
+          ) : healthError}
         </div>
       )}
     </div>

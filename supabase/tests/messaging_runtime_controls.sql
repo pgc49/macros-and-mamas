@@ -1,6 +1,6 @@
 begin;
 
-select plan(16);
+select plan(24);
 
 select has_table('public', 'messaging_runtime_config', 'runtime config exists');
 select has_table('public', 'messaging_runtime_audit', 'runtime audit exists');
@@ -131,6 +131,28 @@ select throws_ok(
   'read-only mode blocks reactions'
 );
 
+select throws_ok(
+  $$
+    update public.messages
+    set notified_at = now()
+    where body = 'existing message'
+  $$,
+  'P0001',
+  'notification state is server-managed',
+  'authenticated client cannot suppress notifications'
+);
+
+reset role;
+set local role service_role;
+select lives_ok(
+  $$
+    update public.messages
+    set notified_at = now()
+    where body = 'existing message'
+  $$,
+  'service notification state update remains allowed during read-only mode'
+);
+
 reset role;
 select throws_ok(
   $$
@@ -181,6 +203,74 @@ select is(
   ),
   'processing',
   're-enabling notifications releases pending jobs'
+);
+
+reset role;
+
+insert into public.message_notification_outbox (
+  message_type, message_id, status, attempts, created_at, locked_at
+) values
+  (
+    'dm',
+    '20000000-0000-4000-8000-000000000031',
+    'processing',
+    2,
+    now() - interval '25 hours',
+    now() - interval '10 minutes'
+  ),
+  (
+    'dm',
+    '20000000-0000-4000-8000-000000000032',
+    'dead',
+    6,
+    now(),
+    null
+  );
+
+set local role service_role;
+select is(
+  public.expire_message_notification_jobs(),
+  1,
+  'old processing jobs expire atomically'
+);
+select is(
+  (
+    select status from public.message_notification_outbox
+    where message_id = '20000000-0000-4000-8000-000000000031'
+  ),
+  'expired',
+  'expired job cannot be reclaimed'
+);
+select is(
+  public.acknowledge_dead_notification_jobs(
+    '00000000-0000-0000-0000-000000000031',
+    'Reviewed in test incident'
+  ),
+  1,
+  'admin acknowledgement archives dead jobs'
+);
+select is(
+  (
+    select status from public.message_notification_outbox
+    where message_id = '20000000-0000-4000-8000-000000000032'
+  ),
+  'acknowledged',
+  'acknowledged job no longer degrades health'
+);
+select is(
+  (
+    select dead::integer from public.messaging_health_snapshot()
+  ),
+  0,
+  'health snapshot excludes acknowledged incidents'
+);
+select is(
+  (
+    select count(*)::integer
+    from public.message_notification_incident_audit
+  ),
+  1,
+  'dead-job acknowledgement is audited'
 );
 
 reset role;

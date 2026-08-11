@@ -47,18 +47,27 @@ try {
   const { error: signInError } = await client.auth.signInWithPassword({ email, password });
   if (signInError) throw signInError;
   const file = () => new Blob(["test"], { type: "application/pdf" });
+  const conversationId = "30000000-0000-4000-8000-000000000031";
 
   await setRuntime({ mode: "normal", attachments_enabled: false });
   const paused = await client.storage
     .from("message-attachments")
     .upload(`${userId}/paused-${suffix}.pdf`, file());
   assert(paused.error, "attachment upload succeeded while switch was paused");
+  const pausedChannel = await client.storage
+    .from("channel-attachments")
+    .upload(`${conversationId}/${userId}/paused-${suffix}.pdf`, file());
+  assert(pausedChannel.error, "channel attachment succeeded while switch was paused");
 
   await setRuntime({ mode: "read_only", attachments_enabled: true });
   const readOnly = await client.storage
     .from("message-attachments")
     .upload(`${userId}/readonly-${suffix}.pdf`, file());
   assert(readOnly.error, "attachment upload succeeded while messaging was read-only");
+  const readOnlyChannel = await client.storage
+    .from("channel-attachments")
+    .upload(`${conversationId}/${userId}/readonly-${suffix}.pdf`, file());
+  assert(readOnlyChannel.error, "channel attachment succeeded while messaging was read-only");
 
   await setRuntime({ mode: "normal", attachments_enabled: true });
   const allowedPath = `${userId}/allowed-${suffix}.pdf`;
@@ -66,9 +75,15 @@ try {
     .from("message-attachments")
     .upload(allowedPath, file());
   if (allowed.error) throw allowed.error;
+  const allowedChannelPath = `${conversationId}/${userId}/allowed-${suffix}.pdf`;
+  const allowedChannel = await client.storage
+    .from("channel-attachments")
+    .upload(allowedChannelPath, file());
+  if (allowedChannel.error) throw allowedChannel.error;
 
   console.log("qa:messaging-runtime-storage OK");
   await service.storage.from("message-attachments").remove([allowedPath]);
+  await service.storage.from("channel-attachments").remove([allowedChannelPath]);
 } finally {
   await setRuntime({
     mode: "normal",

@@ -25,7 +25,7 @@ alter table public.messaging_runtime_config enable row level security;
 alter table public.messaging_runtime_audit enable row level security;
 revoke all on table public.messaging_runtime_config from public, anon, authenticated;
 revoke all on table public.messaging_runtime_audit from public, anon, authenticated;
-grant select, insert, update on table public.messaging_runtime_config to service_role;
+grant select on table public.messaging_runtime_config to service_role;
 grant select, insert on table public.messaging_runtime_audit to service_role;
 grant usage, select on sequence public.messaging_runtime_audit_id_seq to service_role;
 
@@ -71,7 +71,7 @@ create or replace function public.update_messaging_runtime(
 returns setof public.messaging_runtime_config
 language plpgsql
 volatile
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -259,6 +259,28 @@ for each row execute function private.enforce_messaging_mutation_mode();
 
 revoke all on function private.enforce_messaging_mutation_mode() from public;
 
+create or replace function private.freeze_dm_notified_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if auth.role() is distinct from 'service_role'
+     and new.notified_at is distinct from old.notified_at
+  then
+    raise exception 'notification state is server-managed';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists messages_freeze_notified_at on public.messages;
+create trigger messages_freeze_notified_at
+before update on public.messages
+for each row execute function private.freeze_dm_notified_at();
+
+revoke all on function private.freeze_dm_notified_at() from public;
+
 drop policy if exists "message_attachments_insert" on storage.objects;
 create policy "message_attachments_insert"
   on storage.objects for insert to authenticated
@@ -308,6 +330,7 @@ as $$
   where message_type = p_message_type
     and message_id = p_message_id
     and available_at <= now()
+    and created_at >= now() - interval '24 hours'
     and coalesce((
       select config.notifications_enabled
       from public.messaging_runtime_config config
@@ -329,7 +352,9 @@ alter table public.message_notification_outbox
   drop constraint if exists message_notification_outbox_status_check;
 alter table public.message_notification_outbox
   add constraint message_notification_outbox_status_check
-  check (status in ('pending', 'processing', 'retry', 'sent', 'dead', 'expired'));
+  check (status in (
+    'pending', 'processing', 'retry', 'sent', 'dead', 'expired', 'acknowledged'
+  ));
 
 create or replace function public.expire_message_notification_jobs()
 returns integer
@@ -345,7 +370,7 @@ as $$
       locked_at = null,
       claim_token = null,
       last_error = 'notification expired after 24 hours'
-    where status in ('pending', 'retry')
+    where status in ('pending', 'retry', 'processing')
       and created_at < now() - interval '24 hours'
     returning 1
   )
@@ -356,6 +381,80 @@ revoke all on function public.expire_message_notification_jobs()
   from public, anon, authenticated;
 grant execute on function public.expire_message_notification_jobs()
   to service_role;
+
+create table if not exists public.message_notification_incident_audit (
+  id bigint generated always as identity primary key,
+  actor_id uuid not null references public.profiles(id) on delete restrict,
+  acknowledged_count integer not null,
+  reason text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.message_notification_incident_audit enable row level security;
+revoke all on table public.message_notification_incident_audit
+  from public, anon, authenticated, service_role;
+grant select on table public.message_notification_incident_audit to service_role;
+grant usage, select on sequence public.message_notification_incident_audit_id_seq
+  to service_role;
+
+create or replace function public.acknowledge_dead_notification_jobs(
+  p_actor_id uuid,
+  p_reason text
+)
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  affected integer;
+begin
+  if p_actor_id is null or char_length(trim(coalesce(p_reason, ''))) < 3 then
+    raise exception 'actor and acknowledgement reason required';
+  end if;
+  update public.message_notification_outbox
+  set status = 'acknowledged'
+  where status = 'dead';
+  get diagnostics affected = row_count;
+  insert into public.message_notification_incident_audit (
+    actor_id, acknowledged_count, reason
+  ) values (
+    p_actor_id, affected, left(trim(p_reason), 500)
+  );
+  return affected;
+end;
+$$;
+
+revoke all on function public.acknowledge_dead_notification_jobs(uuid, text)
+  from public, anon, authenticated;
+grant execute on function public.acknowledge_dead_notification_jobs(uuid, text)
+  to service_role;
+
+create or replace function public.cleanup_message_notification_history()
+returns integer
+language sql
+volatile
+security definer
+set search_path = ''
+as $$
+  with removed as (
+    delete from public.message_notification_outbox
+    where status in ('sent', 'expired', 'acknowledged')
+      and created_at < now() - interval '30 days'
+    returning 1
+  )
+  select count(*)::integer from removed;
+$$;
+
+revoke all on function public.cleanup_message_notification_history()
+  from public, anon, authenticated;
+grant execute on function public.cleanup_message_notification_history()
+  to service_role;
+
+create index if not exists message_notification_outbox_health_idx
+  on public.message_notification_outbox (status, created_at)
+  where status in ('pending', 'retry', 'processing', 'dead');
 
 create or replace function public.messaging_health_snapshot()
 returns table (
@@ -377,13 +476,14 @@ as $$
     count(*) filter (where status = 'retry'),
     count(*) filter (where status = 'processing'),
     count(*) filter (where status = 'dead'),
-    count(*) filter (where status = 'expired'),
+    0::bigint,
     min(created_at) filter (where status in ('pending', 'retry', 'processing')),
     count(*) filter (
       where status = 'processing'
         and locked_at < now() - interval '5 minutes'
     )
-  from public.message_notification_outbox;
+  from public.message_notification_outbox
+  where status in ('pending', 'retry', 'processing', 'dead');
 $$;
 
 revoke all on function public.messaging_health_snapshot()

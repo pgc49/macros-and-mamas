@@ -114,6 +114,8 @@ grant select, insert, delete on public.conversation_message_reactions
   to authenticated, service_role;
 
 insert into storage.buckets (id, name, public)
-values ('message-attachments', 'message-attachments', false)
+values
+  ('message-attachments', 'message-attachments', false),
+  ('channel-attachments', 'channel-attachments', false)
 on conflict (id) do nothing;
 

@@ -73,12 +73,20 @@ export function useMessagingRuntime() {
       throw new Error(payload.error || "Runtime update failed");
     }
     if (sequence !== requestSequence.current) return null;
+    if (
+      !["normal", "read_only", "off"].includes(payload.runtime?.mode)
+      || typeof payload.runtime?.attachments_enabled !== "boolean"
+      || typeof payload.runtime?.notifications_enabled !== "boolean"
+      || !payload.runtime?.updated_at
+    ) {
+      throw new Error("Runtime update returned invalid status");
+    }
     const updated = {
-      mode: payload.runtime?.mode || "normal",
-      attachmentsEnabled: payload.runtime?.attachments_enabled !== false,
-      notificationsEnabled: payload.runtime?.notifications_enabled !== false,
+      mode: payload.runtime.mode,
+      attachmentsEnabled: payload.runtime.attachments_enabled,
+      notificationsEnabled: payload.runtime.notifications_enabled,
       reason: String(payload.runtime?.reason || ""),
-      updatedAt: payload.runtime?.updated_at || null,
+      updatedAt: payload.runtime.updated_at,
     };
     setRuntime(updated);
     setRuntimeError("");

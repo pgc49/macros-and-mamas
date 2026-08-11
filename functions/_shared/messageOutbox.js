@@ -66,6 +66,17 @@ export async function listDueNotificationJobs(env, limit = 20) {
   if (!expireResponse.ok) {
     throw new Error(`outbox expiry failed (${expireResponse.status})`);
   }
+  const cleanupResponse = await fetch(
+    `${base}/rest/v1/rpc/cleanup_message_notification_history`,
+    {
+      method: "POST",
+      headers: headers(key),
+      body: "{}",
+    },
+  );
+  if (!cleanupResponse.ok) {
+    throw new Error(`outbox cleanup failed (${cleanupResponse.status})`);
+  }
   const now = encodeURIComponent(new Date().toISOString());
   const stale = encodeURIComponent(new Date(Date.now() - 5 * 60 * 1000).toISOString());
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20));

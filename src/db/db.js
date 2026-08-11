@@ -1879,12 +1879,20 @@ export const db = {
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) throw new Error("Messaging runtime status unavailable");
+    if (
+      !["normal", "read_only", "off"].includes(row.mode)
+      || typeof row.attachments_enabled !== "boolean"
+      || typeof row.notifications_enabled !== "boolean"
+      || !row.updated_at
+    ) {
+      throw new Error("Messaging runtime status invalid");
+    }
     return {
-      mode: ["normal", "read_only", "off"].includes(row?.mode) ? row.mode : "normal",
-      attachmentsEnabled: row?.attachments_enabled !== false,
-      notificationsEnabled: row?.notifications_enabled !== false,
-      reason: String(row?.reason || ""),
-      updatedAt: row?.updated_at || null,
+      mode: row.mode,
+      attachmentsEnabled: row.attachments_enabled,
+      notificationsEnabled: row.notifications_enabled,
+      reason: String(row.reason || ""),
+      updatedAt: row.updated_at,
     };
   },
 

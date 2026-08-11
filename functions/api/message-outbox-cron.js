@@ -56,7 +56,7 @@ export async function onRequestPost({ request, env }) {
     return json({
       ok: true,
       found: jobs.length,
-      succeeded: results.filter((item) => item.ok).length,
+      succeeded: results.filter((item) => item.ok && !item.skipped).length,
       failed,
       skipped: results.filter((item) => item.ok && item.skipped).length,
     }, failed > 0 ? 500 : 200);
