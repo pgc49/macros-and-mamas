@@ -10,7 +10,10 @@ import App from "./App.jsx";
 import { CONFIG } from "./config";
 
 const customerAdminRedirect = import.meta.env.VITE_APP_SURFACE === "customer"
-  && window.location.pathname.startsWith("/admin");
+  && (
+    window.location.pathname === "/admin"
+    || window.location.pathname.startsWith("/admin/")
+  );
 
 if (customerAdminRedirect) {
   const target = new URL("/admin", CONFIG.ADMIN_APP_URL);

@@ -68,16 +68,24 @@ External ownership remains singular:
 
 ## Deterministic deployment workflow
 
-`.github/workflows/deploy-app-surfaces.yml` is disabled unless repository
-variable `ENABLE_ISOLATED_SURFACE_DEPLOYS=true`.
+Manual preview deployment uses `.github/workflows/deploy-app-surfaces.yml` and
+always deploys a non-production `preview-{run_id}` branch. It is disabled unless
+`ENABLE_ISOLATED_SURFACE_PREVIEWS=true`.
+
+Production deployment is downstream of every `SPA quality` job and requires
+`ENABLE_ISOLATED_SURFACE_DEPLOYS=true` plus approval in protected GitHub
+environment `app-surfaces-production`.
 
 Before enabling:
 
-1. Set repository variables `CUSTOMER_PAGES_PROJECT`, `ADMIN_PAGES_PROJECT`.
+1. Set repository variables `CUSTOMER_PAGES_PROJECT`, `ADMIN_PAGES_PROJECT`,
+   `CUSTOMER_APP_URL`, `ADMIN_APP_URL`, and every public `VITE_*` value.
 2. Add `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` secrets.
 3. Disable Git auto-production deployment on both Pages projects.
-4. Use `workflow_dispatch` to test each project.
-5. Enable the repository variable only after preview acceptance.
+4. Protect GitHub environments `app-surfaces-preview` and
+   `app-surfaces-production` with appropriate reviewers.
+5. Enable previews and use `workflow_dispatch` to test each project.
+6. Enable production deployment only after preview acceptance.
 
 Shared changes deploy both surfaces. A commit is customer-neutral only when
 every changed path is explicitly admin-only, avoiding Pages watch-path bypass
@@ -93,6 +101,10 @@ limits on unusually large pushes.
 5. Record and remove Callie's old `www` push subscriptions, then have her sign
    in and register notifications on the admin origin. Verify the new row before
    relying on admin push.
+
+   The `push_subscription_origin` migration makes this automatic when the new
+   admin-origin subscription is saved: legacy/null and non-admin-origin
+   endpoints for that admin are removed while same-origin devices remain.
 
    Run only during the approved cutover, after recording the count:
 
@@ -113,6 +125,8 @@ limits on unusually large pushes.
 7. Deploy customer preview; verify `/admin?...` transfers query/hash to the
    admin origin and customer routes remain unchanged.
 8. Promote customer only after both previews pass.
+9. Record both production deployment IDs, roll each project back independently,
+   verify the other build ID is unchanged, then restore both deployments.
 
 ## Acceptance criteria
 

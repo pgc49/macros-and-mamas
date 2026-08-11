@@ -1,96 +1,62 @@
-name: Deploy isolated app surfaces
+name: Preview isolated app surface
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       surface:
         type: choice
-        options: [both, customer, admin]
-        default: both
+        options: [customer, admin]
+        required: true
 
 concurrency:
-  group: app-surface-deploy-${{ github.ref }}
-  cancel-in-progress: false
+  group: app-surface-preview-${{ inputs.surface }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  classify:
-    if: ${{ vars.ENABLE_ISOLATED_SURFACE_DEPLOYS == 'true' }}
+  preview:
+    if: ${{ vars.ENABLE_ISOLATED_SURFACE_PREVIEWS == 'true' }}
     runs-on: ubuntu-latest
-    outputs:
-      customer: ${{ steps.paths.outputs.customer }}
-      admin: ${{ steps.paths.outputs.admin }}
+    environment: app-surfaces-preview
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          fetch-depth: 2
-      - id: paths
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run qa:messaging
+      - name: Validate required public build variables
         env:
-          BEFORE: ${{ github.event.before }}
-          MANUAL_SURFACE: ${{ inputs.surface }}
-          EVENT: ${{ github.event_name }}
+          CUSTOMER_APP_URL: ${{ vars.CUSTOMER_APP_URL }}
+          ADMIN_APP_URL: ${{ vars.ADMIN_APP_URL }}
+          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          SUPABASE_ANON: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VAPID: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
         run: |
-          if [ "$EVENT" = "workflow_dispatch" ]; then
-            case "$MANUAL_SURFACE" in
-              customer) echo "customer=true" >> "$GITHUB_OUTPUT"; echo "admin=false" >> "$GITHUB_OUTPUT" ;;
-              admin) echo "customer=false" >> "$GITHUB_OUTPUT"; echo "admin=true" >> "$GITHUB_OUTPUT" ;;
-              *) echo "customer=true" >> "$GITHUB_OUTPUT"; echo "admin=true" >> "$GITHUB_OUTPUT" ;;
-            esac
-            exit 0
-          fi
-          git diff --name-only "$BEFORE" "$GITHUB_SHA" > /tmp/changed.txt
-          # Admin deploys for application/runtime changes. Documentation-only
-          # commits do not consume a Pages build.
-          if rg -q '^(src/|functions/|public/|scripts/|package|vite\\.config|supabase/)' /tmp/changed.txt; then
-            echo "admin=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "admin=false" >> "$GITHUB_OUTPUT"
-          fi
-          # A commit is customer-neutral only when every changed path is
-          # explicitly admin-only. Everything shared defaults to customer=true.
-          if awk '
-            !(/^src\\/admin\\// || /^docs\\/ADMIN-CUSTOMER-DEPLOYMENT-ISOLATION\\.md$/) { customer=1 }
-            END { exit customer ? 0 : 1 }
-          ' /tmp/changed.txt; then
-            echo "customer=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "customer=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  deploy-customer:
-    needs: classify
-    if: ${{ needs.classify.outputs.customer == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build:customer
-      - run: npx wrangler@latest pages deploy dist --project-name "$CUSTOMER_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+          for name in CUSTOMER_APP_URL ADMIN_APP_URL SUPABASE_URL SUPABASE_ANON VAPID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing repository variable $name"
+              exit 1
+            fi
+          done
+      - run: npm run build:${{ inputs.surface }}
+        env:
+          CF_PAGES_BRANCH: preview-${{ github.run_id }}
+          CF_PAGES_COMMIT_SHA: ${{ github.sha }}
+          CF_PAGES_URL: ${{ inputs.surface == 'customer' && vars.CUSTOMER_APP_URL || vars.ADMIN_APP_URL }}
+          CUSTOMER_APP_URL: ${{ vars.CUSTOMER_APP_URL }}
+          VITE_ADMIN_APP_URL: ${{ vars.ADMIN_APP_URL }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          VITE_META_PIXEL_ID: ${{ vars.VITE_META_PIXEL_ID }}
+          VITE_CF_WEB_ANALYTICS_TOKEN: ${{ vars.VITE_CF_WEB_ANALYTICS_TOKEN }}
+          VITE_LIVE_CHANNEL_COHORTS: ${{ vars.VITE_LIVE_CHANNEL_COHORTS }}
+      - run: npx wrangler@4.120.1 pages deploy dist --project-name "$PROJECT" --branch "$PREVIEW_BRANCH" --commit-hash "$GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CUSTOMER_PROJECT: ${{ vars.CUSTOMER_PAGES_PROJECT }}
-
-  deploy-admin:
-    needs: classify
-    if: ${{ needs.classify.outputs.admin == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build:admin
-      - run: npx wrangler@latest pages deploy dist --project-name "$ADMIN_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          ADMIN_PROJECT: ${{ vars.ADMIN_PAGES_PROJECT }}
+          PROJECT: ${{ inputs.surface == 'customer' && vars.CUSTOMER_PAGES_PROJECT || vars.ADMIN_PAGES_PROJECT }}
+          PREVIEW_BRANCH: preview-${{ github.run_id }}
 
