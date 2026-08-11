@@ -71,6 +71,15 @@ try {
     .upload(path, new Blob(["new"], { type: "application/pdf" }));
   if (upload.error) throw upload.error;
   cleanupPaths.push(path);
+  const orphanBeforeInsert = await service.rpc("find_orphan_message_attachments", {
+    p_before: new Date(Date.now() + 60_000).toISOString(),
+    p_limit: 200,
+  });
+  if (orphanBeforeInsert.error) throw orphanBeforeInsert.error;
+  assert(
+    (orphanBeforeInsert.data || []).some((row) => row.name === path),
+    "unreferenced upload was not visible to grace-period collector",
+  );
 
   const insert = await adminC.client.from("messages").insert({
     client_id: conversation.participant_low,
@@ -85,6 +94,15 @@ try {
     attachment_bytes: 3,
   });
   if (insert.error) throw insert.error;
+  const orphanAfterInsert = await service.rpc("find_orphan_message_attachments", {
+    p_before: new Date(Date.now() + 60_000).toISOString(),
+    p_limit: 200,
+  });
+  if (orphanAfterInsert.error) throw orphanAfterInsert.error;
+  assert(
+    !(orphanAfterInsert.data || []).some((row) => row.name === path),
+    "referenced attachment was incorrectly marked orphan",
+  );
 
   assert(await canDownload(adminD.client, path), "pair recipient cannot read attachment");
   assert(!(await canDownload(adminE.client, path)), "nonparticipant read pair attachment");
@@ -95,6 +113,13 @@ try {
   await service.from("profiles").update({ role: "client" }).eq("id", adminD.id);
   assert(!(await canDownload(adminD.client, path)), "demoted admin retained attachment access");
 
+  await service.from("profiles").update({ role: "client" }).eq("id", adminC.id);
+  assert(!(await canDownload(adminC.client, path)), "demoted owner retained attachment read access");
+  await adminC.client.storage.from("message-attachments").remove([path]);
+  const serviceCheck = await service.storage.from("message-attachments").download(path);
+  assert(!serviceCheck.error, "demoted owner deleted referenced attachment");
+
+  await service.from("profiles").update({ role: "admin" }).eq("id", adminC.id);
   const ownerDelete = await adminC.client.storage.from("message-attachments").remove([path]);
   if (ownerDelete.error) throw ownerDelete.error;
   assert(!(await canDownload(adminC.client, path)), "sender could not delete own attachment");

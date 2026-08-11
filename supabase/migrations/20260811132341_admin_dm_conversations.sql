@@ -624,6 +624,69 @@ $$;
 revoke all on function public.safe_uuid(text) from public, anon;
 grant execute on function public.safe_uuid(text) to authenticated;
 
+create or replace function public.message_attachment_is_unreferenced(object_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select not exists (
+    select 1 from public.messages m where m.attachment_path = object_name
+  );
+$$;
+
+create or replace function public.can_access_message_attachment(
+  object_name text,
+  for_delete boolean default false
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare message_row public.messages;
+declare conversation_row public.admin_dm_conversations;
+begin
+  select * into message_row
+  from public.messages m
+  where m.attachment_path = object_name
+  limit 1;
+  if message_row.id is null then return false; end if;
+
+  if message_row.admin_dm_conversation_id is null then
+    if for_delete then
+      return auth.uid() = message_row.sender_id or public.is_admin();
+    end if;
+    return auth.uid() = message_row.client_id or public.is_admin();
+  end if;
+
+  select * into conversation_row
+  from public.admin_dm_conversations c
+  where c.id = message_row.admin_dm_conversation_id;
+  if conversation_row.id is null
+     or not public.is_admin()
+     or auth.uid() not in (
+       conversation_row.participant_low,
+       conversation_row.participant_high
+     )
+  then
+    return false;
+  end if;
+  return not for_delete or auth.uid() = message_row.sender_id;
+end;
+$$;
+
+revoke all on function public.message_attachment_is_unreferenced(text)
+  from public, anon;
+revoke all on function public.can_access_message_attachment(text, boolean)
+  from public, anon;
+grant execute on function public.message_attachment_is_unreferenced(text)
+  to authenticated;
+grant execute on function public.can_access_message_attachment(text, boolean)
+  to authenticated;
+
 create policy "message_attachments_insert"
   on storage.objects for insert to authenticated
   with check (
@@ -658,30 +721,9 @@ create policy "message_attachments_select"
     and (
       (
         owner_id = auth.uid()::text
-        and not exists (
-          select 1 from public.messages referenced
-          where referenced.attachment_path = name
-        )
+        and public.message_attachment_is_unreferenced(name)
       )
-      or exists (
-        select 1 from public.messages m
-        where m.attachment_path = name
-          and (
-            (
-              m.admin_dm_conversation_id is null
-              and (m.client_id = auth.uid() or public.is_admin())
-            )
-            or (
-              m.admin_dm_conversation_id is not null
-              and public.is_admin()
-              and exists (
-                select 1 from public.admin_dm_conversations c
-                where c.id = m.admin_dm_conversation_id
-                  and auth.uid() in (c.participant_low, c.participant_high)
-              )
-            )
-          )
-      )
+      or public.can_access_message_attachment(name, false)
     )
   );
 
@@ -693,31 +735,9 @@ create policy "message_attachments_delete"
     and (
       (
         owner_id = auth.uid()::text
-        and not exists (
-          select 1 from public.messages referenced
-          where referenced.attachment_path = name
-        )
+        and public.message_attachment_is_unreferenced(name)
       )
-      or exists (
-        select 1 from public.messages m
-        where m.attachment_path = name
-          and m.admin_dm_conversation_id is not null
-          and m.sender_id = auth.uid()
-          and public.is_admin()
-          and exists (
-            select 1 from public.admin_dm_conversations c
-            where c.id = m.admin_dm_conversation_id
-              and auth.uid() in (c.participant_low, c.participant_high)
-          )
-      )
-      or (
-        public.is_admin()
-        and exists (
-          select 1 from public.messages m
-          where m.attachment_path = name
-            and m.admin_dm_conversation_id is null
-        )
-      )
+      or public.can_access_message_attachment(name, true)
     )
   );
 
@@ -912,6 +932,32 @@ $$;
 revoke all on function public.count_message_unread_for_profile(uuid)
   from public, anon, authenticated;
 grant execute on function public.count_message_unread_for_profile(uuid)
+  to service_role;
+
+create or replace function public.find_orphan_message_attachments(
+  p_before timestamptz,
+  p_limit integer default 200
+)
+returns table (name text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select object.name
+  from storage.objects object
+  where object.bucket_id = 'message-attachments'
+    and object.created_at < p_before
+    and not exists (
+      select 1 from public.messages message
+      where message.attachment_path = object.name
+    )
+  order by object.created_at
+  limit least(greatest(coalesce(p_limit, 200), 1), 500);
+$$;
+revoke all on function public.find_orphan_message_attachments(timestamptz, integer)
+  from public, anon, authenticated;
+grant execute on function public.find_orphan_message_attachments(timestamptz, integer)
   to service_role;
 
 

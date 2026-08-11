@@ -1,6 +1,6 @@
 begin;
 
-select plan(33);
+select plan(34);
 
 select is(
   (select count(*)::integer from public.admin_dm_conversations),
@@ -239,6 +239,29 @@ select throws_ok(
   '23514',
   null,
   'ordinary linked write cannot use legacy path'
+);
+
+select throws_ok(
+  $$
+    insert into public.messages (
+      client_id, sender_id, recipient_id, admin_dm_conversation_id,
+      body, kind, attachment_path
+    )
+    select
+      conversation.participant_low,
+      '00000000-0000-0000-0000-000000000051',
+      '00000000-0000-0000-0000-000000000053',
+      conversation.id,
+      'oversized attachment path',
+      'chat',
+      'admin-dm/' || conversation.id || '/00000000-0000-0000-0000-000000000051/'
+        || repeat('x', 501)
+    from public.admin_dm_conversations conversation
+    where conversation.participant_high = '00000000-0000-0000-0000-000000000053'
+  $$,
+  '23514',
+  null,
+  'linked attachment path retains 500-character bound'
 );
 
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000052';

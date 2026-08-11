@@ -876,7 +876,7 @@ export function AdminMessages({
                   onDelete={adminPeerIsActive ? removeDm : undefined}
                   onReact={adminPeerIsActive ? reactDm : undefined}
                   onMarkRead={
-                    dmLoadedClientId === active.id && adminPeerIsActive
+                    dmLoadedClientId === active.id
                       ? markDmRead
                       : undefined
                   }

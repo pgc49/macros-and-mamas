@@ -185,7 +185,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           onEdit={adminConversation && !isAdminClient ? undefined : edit}
           onDelete={adminConversation && !isAdminClient ? undefined : remove}
           onReact={adminConversation && !isAdminClient ? undefined : react}
-          onMarkRead={adminConversation && !isAdminClient ? undefined : markRead}
+          onMarkRead={markRead}
           showReadReceipts
           allowVoiceMemo
           enableReply
