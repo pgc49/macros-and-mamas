@@ -79,7 +79,8 @@ export function AdminMessages({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const dmLoadSequence = useRef(0);
+  const activeRef = useRef(active);
+  const dmLoadSequence = useRef(new Map());
 
   const clientMap = useMemo(() => {
     const m = new Map();
@@ -122,7 +123,8 @@ export function AdminMessages({
   }, [adminUserId]);
 
   const refreshDmThread = useCallback(async (clientId, { clear = false } = {}) => {
-    const sequence = ++dmLoadSequence.current;
+    const sequence = (dmLoadSequence.current.get(clientId) || 0) + 1;
+    dmLoadSequence.current.set(clientId, sequence);
     if (!clientId) {
       setDmMessages([]);
       setDmLoadedClientId(null);
@@ -137,12 +139,16 @@ export function AdminMessages({
     }
     try {
       const list = await db.loadMessages(clientId);
-      if (sequence !== dmLoadSequence.current) return;
+      const stillCurrent = activeRef.current?.type === "dm"
+        && activeRef.current.id === clientId;
+      if (sequence !== dmLoadSequence.current.get(clientId) || !stillCurrent) return;
       setDmMessages(list);
       setDmLoadedClientId(clientId);
       setDmLoadErrorClientId(null);
     } catch (e) {
-      if (sequence !== dmLoadSequence.current) return;
+      const stillCurrent = activeRef.current?.type === "dm"
+        && activeRef.current.id === clientId;
+      if (sequence !== dmLoadSequence.current.get(clientId) || !stillCurrent) return;
       console.error(e);
       setDmLoadErrorClientId(clientId);
       setError(e.message || "Couldn’t load thread.");
@@ -155,8 +161,16 @@ export function AdminMessages({
   }, [refreshInbox, refreshChannels]);
 
   useEffect(() => {
-    if (initialClientId) setActive({ type: "dm", id: initialClientId });
+    if (initialClientId) {
+      const next = { type: "dm", id: initialClientId };
+      activeRef.current = next;
+      setActive(next);
+    }
   }, [initialClientId]);
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   useEffect(() => {
     if (active?.type === "dm") refreshDmThread(active.id, { clear: true });
@@ -243,41 +257,53 @@ export function AdminMessages({
   const openDm = (profileOrId) => {
     try { window.scrollTo({ top: 0, behavior: "auto" }); } catch { /* ignore */ }
     if (typeof profileOrId === "string") {
-      setActive({ type: "dm", id: profileOrId });
+      const next = { type: "dm", id: profileOrId };
+      activeRef.current = next;
+      setActive(next);
       return;
     }
     const profile = profileOrId;
     if (!profile?.id) return;
     if (isAdminProfile(profile) && adminUserId) {
-      setActive({ type: "dm", id: canonicalAdminThreadId(adminUserId, profile.id) });
+      const next = { type: "dm", id: canonicalAdminThreadId(adminUserId, profile.id) };
+      activeRef.current = next;
+      setActive(next);
       return;
     }
-    setActive({ type: "dm", id: profile.id });
+    const next = { type: "dm", id: profile.id };
+    activeRef.current = next;
+    setActive(next);
   };
 
   const openChannel = (conversationId) => {
     if (!conversationId) return;
     try { window.scrollTo({ top: 0, behavior: "auto" }); } catch { /* ignore */ }
-    setActive({ type: "channel", id: conversationId });
+    const next = { type: "channel", id: conversationId };
+    activeRef.current = next;
+    setActive(next);
   };
 
   const closeThread = () => {
+    activeRef.current = null;
     setActive(null);
     setDmMessages([]);
   };
 
   const sendDm = async (body, file = null, opts = {}) => {
-    if (active?.type !== "dm") return;
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    if (!clientId) return;
     setBusy(true);
     setError("");
     try {
       const row = await db.sendMessage({
-        clientId: active.id,
+        clientId,
         body,
         file,
         replyToId: opts.replyToId || null,
       });
-      setDmMessages((list) => mergeMessagesById(list, [row]));
+      if (activeRef.current?.type === "dm" && activeRef.current.id === clientId) {
+        setDmMessages((list) => mergeMessagesById(list, [row]));
+      }
       refreshInbox();
     } catch (e) {
       console.error(e);
@@ -315,14 +341,22 @@ export function AdminMessages({
   };
 
   const editDm = async (messageId, body) => {
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    if (!clientId) return;
     const row = await db.editMessage(messageId, body);
-    setDmMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+    if (activeRef.current?.type === "dm" && activeRef.current.id === clientId) {
+      setDmMessages((list) => mergeMessagesById(list, [row]));
+    }
     refreshInbox();
   };
 
   const removeDm = async (messageId) => {
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    if (!clientId) return;
     const row = await db.deleteMessage(messageId);
-    setDmMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row, attachmentUrl: null } : m)));
+    if (activeRef.current?.type === "dm" && activeRef.current.id === clientId) {
+      setDmMessages((list) => mergeMessagesById(list, [{ ...row, attachmentUrl: null }]));
+    }
     refreshInbox();
   };
 
@@ -349,8 +383,10 @@ export function AdminMessages({
   };
 
   const reactDm = async (messageId, emoji) => {
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    if (!clientId) return;
     await db.toggleDmReaction(messageId, emoji);
-    if (active?.type === "dm") await refreshDmThread(active.id);
+    await refreshDmThread(clientId);
   };
 
   const reactChannel = async (messageId, emoji) => {
@@ -359,8 +395,9 @@ export function AdminMessages({
   };
 
   const markDmRead = async () => {
-    if (active?.type !== "dm" || !adminUserId) return;
-    await db.markMessagesRead(active.id, adminUserId);
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    if (!clientId || !adminUserId) return;
+    await db.markMessagesRead(clientId, adminUserId);
     refreshInbox();
   };
 

@@ -56,6 +56,36 @@ assert(hydrated[0].reactions.length === 1, "merge preserves hydrated reactions")
 assert(hydrated[0].reply_to.body === "Resolved parent", "merge preserves resolved reply");
 assert(hydrated[0].attachmentUrl === "signed-url", "merge preserves signed attachment URL");
 
+const deletedThenDelayed = mergeMessagesById([{
+  id: "deleted",
+  created_at: "2026-08-10T10:05:00Z",
+  body: "",
+  deleted_at: "2026-08-10T10:06:00Z",
+  attachmentUrl: null,
+}], [{
+  id: "deleted",
+  created_at: "2026-08-10T10:05:00Z",
+  body: "stale send response",
+  deleted_at: null,
+  attachmentUrl: "stale-url",
+}]);
+assert(deletedThenDelayed[0].deleted_at, "delayed response cannot undo deletion");
+assert(deletedThenDelayed[0].body === "", "deleted content is not resurrected");
+assert(deletedThenDelayed[0].attachmentUrl === null, "deleted attachment URL stays cleared");
+
+const editedThenDelayed = mergeMessagesById([{
+  id: "edited",
+  created_at: "2026-08-10T10:07:00Z",
+  body: "new edit",
+  edited_at: "2026-08-10T10:08:00Z",
+}], [{
+  id: "edited",
+  created_at: "2026-08-10T10:07:00Z",
+  body: "old send response",
+  edited_at: null,
+}]);
+assert(editedThenDelayed[0].body === "new edit", "delayed response cannot undo edit");
+
 const dbSource = readFileSync(new URL("../src/db/db.js", import.meta.url), "utf8");
 assert(
   dbSource.includes('.rpc("load_admin_message_inbox")'),

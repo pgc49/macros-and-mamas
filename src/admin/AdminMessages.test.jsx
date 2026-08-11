@@ -145,5 +145,110 @@ describe("AdminMessages thread switching", () => {
       expect(screen.getByText("B private message")).toBeTruthy();
     });
   });
+
+  it("does not merge a late send response into a different mama thread", async () => {
+    const mamaA = deferred();
+    const mamaB = deferred();
+    const sendA = deferred();
+    deferredByClient.set("mama-a", mamaA);
+    deferredByClient.set("mama-b", mamaB);
+    dbMock.sendMessage.mockImplementationOnce(() => sendA.promise);
+
+    render(
+      <AdminMessages
+        roster={[
+          { id: "mama-a", name: "Mama A", email: "a@example.com" },
+          { id: "mama-b", name: "Mama B", email: "b@example.com" },
+        ]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mama A/ }));
+    mamaA.resolve([{
+      id: "a-old",
+      sender_id: "mama-a",
+      body: "A existing",
+      created_at: "2026-08-10T10:00:00Z",
+      reactions: [],
+    }]);
+    await screen.findByText("A existing");
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Reply to A" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(screen.getByRole("button", { name: /Mama B/ }));
+    mamaB.resolve([{
+      id: "b-existing",
+      sender_id: "mama-b",
+      body: "B existing",
+      created_at: "2026-08-10T10:01:00Z",
+      reactions: [],
+    }]);
+    await screen.findByText("B existing");
+
+    sendA.resolve({
+      id: "a-late-send",
+      sender_id: "admin-1",
+      body: "Reply to A",
+      created_at: "2026-08-10T10:02:00Z",
+      reactions: [],
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Reply to A")).toBeNull();
+      expect(screen.getByText("B existing")).toBeTruthy();
+    });
+  });
+
+  it("does not let a late reaction refresh replace the selected thread", async () => {
+    const mamaA = deferred();
+    const mamaB = deferred();
+    const reaction = deferred();
+    deferredByClient.set("mama-a", mamaA);
+    deferredByClient.set("mama-b", mamaB);
+    dbMock.toggleDmReaction.mockImplementationOnce(() => reaction.promise);
+
+    render(
+      <AdminMessages
+        roster={[
+          { id: "mama-a", name: "Mama A", email: "a@example.com" },
+          { id: "mama-b", name: "Mama B", email: "b@example.com" },
+        ]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mama A/ }));
+    mamaA.resolve([{
+      id: "a-react",
+      sender_id: "mama-a",
+      body: "React on A",
+      created_at: "2026-08-10T10:00:00Z",
+      reactions: [],
+    }]);
+    const bubbleText = await screen.findByText("React on A");
+    fireEvent.contextMenu(bubbleText.closest("[data-msg-id]"));
+    fireEvent.click(screen.getByRole("button", { name: "React with ❤️" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Mama B/ }));
+    mamaB.resolve([{
+      id: "b-after-react",
+      sender_id: "mama-b",
+      body: "B stays selected",
+      created_at: "2026-08-10T10:01:00Z",
+      reactions: [],
+    }]);
+    await screen.findByText("B stays selected");
+
+    reaction.resolve({});
+    await waitFor(() => {
+      expect(screen.queryByText("React on A")).toBeNull();
+      expect(screen.getByText("B stays selected")).toBeTruthy();
+    });
+  });
 });
 

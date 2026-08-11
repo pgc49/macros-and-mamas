@@ -37,6 +37,20 @@ export function mergeMessagesById(current, incoming) {
     // Merge the durable row without throwing away an already-resolved reply,
     // reaction set, sender label, or signed attachment URL.
     const merged = { ...previous, ...row };
+    const previousEdit = timestamp(previous.edited_at);
+    const incomingEdit = timestamp(row.edited_at);
+    if (previousEdit > incomingEdit && !row.deleted_at) {
+      merged.body = previous.body;
+      merged.edited_at = previous.edited_at;
+    }
+    if (previous.read_at && !row.read_at) merged.read_at = previous.read_at;
+    if (previous.deleted_at && !row.deleted_at) {
+      // Deletion is monotonic. A delayed insert/send response must never
+      // resurrect content that Realtime already marked deleted.
+      merged.body = previous.body;
+      merged.deleted_at = previous.deleted_at;
+      merged.attachmentUrl = null;
+    }
     if (!Object.hasOwn(row, "reactions")) merged.reactions = previous.reactions;
     if (
       previous.reply_to
@@ -47,7 +61,7 @@ export function mergeMessagesById(current, incoming) {
     if (!row.sender_profile && previous.sender_profile) {
       merged.sender_profile = previous.sender_profile;
     }
-    if (!row.deleted_at && !row.attachmentUrl && previous.attachmentUrl) {
+    if (!previous.deleted_at && !row.deleted_at && !row.attachmentUrl && previous.attachmentUrl) {
       merged.attachmentUrl = previous.attachmentUrl;
     }
     if (row.deleted_at) merged.attachmentUrl = null;
