@@ -1,16 +1,20 @@
 begin;
 
-select plan(7);
+select plan(16);
 
 insert into auth.users (id, email)
 values
   ('00000000-0000-0000-0000-000000000021', 'rls-admin@example.com'),
-  ('00000000-0000-0000-0000-000000000022', 'rls-mama@example.com');
+  ('00000000-0000-0000-0000-000000000022', 'rls-mama@example.com'),
+  ('00000000-0000-0000-0000-000000000023', 'rls-admin-two@example.com'),
+  ('00000000-0000-0000-0000-000000000024', 'rls-admin-three@example.com');
 
 insert into public.profiles (id, email, name, role, status)
 values
   ('00000000-0000-0000-0000-000000000021', 'rls-admin@example.com', 'Admin', 'admin', 'active'),
-  ('00000000-0000-0000-0000-000000000022', 'rls-mama@example.com', 'Mama', 'client', 'active');
+  ('00000000-0000-0000-0000-000000000022', 'rls-mama@example.com', 'Mama', 'client', 'active'),
+  ('00000000-0000-0000-0000-000000000023', 'rls-admin-two@example.com', 'Admin Two', 'admin', 'active'),
+  ('00000000-0000-0000-0000-000000000024', 'rls-admin-three@example.com', 'Admin Three', 'admin', 'active');
 
 insert into public.messages (id, client_id, sender_id, body, kind)
 values
@@ -27,10 +31,25 @@ values
     '00000000-0000-0000-0000-000000000022',
     'mama to coach',
     'chat'
+  ),
+  (
+    '10000000-0000-0000-0000-000000000023',
+    '00000000-0000-0000-0000-000000000022',
+    '00000000-0000-0000-0000-000000000021',
+    'second coach to mama',
+    'chat'
+  ),
+  (
+    '10000000-0000-0000-0000-000000000024',
+    '00000000-0000-0000-0000-000000000023',
+    '00000000-0000-0000-0000-000000000021',
+    'admin one to admin two',
+    'chat'
   );
 
 set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000022';
+set local request.jwt.claim.role = 'authenticated';
 
 select throws_ok(
   $$
@@ -94,7 +113,75 @@ select throws_ok(
   'mama cannot edit coach message'
 );
 
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000024';
+
+select throws_ok(
+  $$
+    update public.messages
+    set read_at = now()
+    where id = '10000000-0000-0000-0000-000000000023'
+  $$,
+  'P0001',
+  'only the recipient can mark message read',
+  'unrelated admin cannot mark coach-to-mama message read'
+);
+
+select throws_ok(
+  $$
+    update public.messages
+    set read_at = now()
+    where id = '10000000-0000-0000-0000-000000000024'
+  $$,
+  'P0001',
+  'only the recipient can mark message read',
+  'nonrecipient admin cannot mark admin DM read'
+);
+
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000023';
+
+select lives_ok(
+  $$
+    update public.messages
+    set read_at = now()
+    where id = '10000000-0000-0000-0000-000000000024'
+  $$,
+  'admin DM recipient can mark message read'
+);
+
+set local role service_role;
+set local request.jwt.claim.role = 'service_role';
+
+select lives_ok(
+  $$
+    update public.messages
+    set notified_at = now()
+    where id = '10000000-0000-0000-0000-000000000021'
+  $$,
+  'service role can update server-managed notification state'
+);
+
+select ok(
+  (
+    select notified_at is not null
+    from public.messages
+    where id = '10000000-0000-0000-0000-000000000021'
+  ),
+  'service-managed notification state persisted'
+);
+
+select throws_ok(
+  $$
+    update public.messages
+    set read_at = null
+    where id = '10000000-0000-0000-0000-000000000021'
+  $$,
+  'P0001',
+  'read receipt is monotonic',
+  'service role cannot reverse a read receipt'
+);
+
 reset role;
+reset request.jwt.claim.role;
 
 select ok(
   exists (
@@ -109,6 +196,70 @@ select ok(
   ),
   'attachment delete policy is uploader-owned, not thread-folder-owned'
 );
+
+insert into storage.buckets (id, name, public)
+values ('message-attachments', 'message-attachments', false)
+on conflict (id) do nothing;
+
+insert into storage.objects (id, bucket_id, name, owner_id)
+values
+  (
+    '20000000-0000-4000-8000-000000000021',
+    'message-attachments',
+    '00000000-0000-0000-0000-000000000022/admin-file.pdf',
+    '00000000-0000-0000-0000-000000000021'
+  ),
+  (
+    '20000000-0000-4000-8000-000000000022',
+    'message-attachments',
+    '00000000-0000-0000-0000-000000000022/mama-file.pdf',
+    '00000000-0000-0000-0000-000000000022'
+  );
+
+-- Local Supabase protects direct storage-table deletes so production callers
+-- use the Storage API. Disable only that test trigger inside this rollback-only
+-- transaction; RLS policies remain active and are what these assertions cover.
+alter table storage.objects disable trigger user;
+
+set local role authenticated;
+set local request.jwt.claim.role = 'authenticated';
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000022';
+
+select results_eq(
+  $$
+    delete from storage.objects
+    where id = '20000000-0000-4000-8000-000000000021'
+    returning 1
+  $$,
+  $$ select 1 where false $$,
+  'same-thread non-owner cannot delete admin attachment'
+);
+
+select results_eq(
+  $$
+    delete from storage.objects
+    where id = '20000000-0000-4000-8000-000000000022'
+    returning 1
+  $$,
+  $$ values (1) $$,
+  'uploader can delete own attachment'
+);
+
+reset role;
+set local role authenticated;
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000021';
+
+select results_eq(
+  $$
+    delete from storage.objects
+    where id = '20000000-0000-4000-8000-000000000021'
+    returning 1
+  $$,
+  $$ values (1) $$,
+  'admin can delete thread attachment for moderation'
+);
+
+reset role;
 
 select * from finish();
 

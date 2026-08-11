@@ -6,6 +6,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  client_is_admin boolean;
 begin
   if NEW.sender_id is distinct from OLD.sender_id
      or NEW.client_id is distinct from OLD.client_id
@@ -21,14 +23,40 @@ begin
     raise exception 'notification state is server-managed';
   end if;
 
-  if auth.role() is distinct from 'service_role'
-     and NEW.read_at is distinct from OLD.read_at
-  then
-    if auth.uid() = OLD.sender_id then
-      raise exception 'sender cannot mark own message read';
-    end if;
+  if NEW.read_at is distinct from OLD.read_at then
     if NEW.read_at is null or OLD.read_at is not null then
       raise exception 'read receipt is monotonic';
+    end if;
+    if auth.role() is distinct from 'service_role' then
+      if auth.uid() = OLD.sender_id then
+        raise exception 'sender cannot mark own message read';
+      end if;
+
+      select exists (
+        select 1
+        from public.profiles p
+        where p.id = OLD.client_id
+          and p.role = 'admin'
+      ) into client_is_admin;
+
+      if client_is_admin then
+        -- Admin-DM rows owned by the other participant have an explicit
+        -- recipient. Owner-sent rows rely on the current two-admin model.
+        if OLD.sender_id <> OLD.client_id and auth.uid() <> OLD.client_id then
+          raise exception 'only the recipient can mark message read';
+        end if;
+        if OLD.sender_id = OLD.client_id and not public.is_admin() then
+          raise exception 'only the recipient can mark message read';
+        end if;
+      elsif OLD.sender_id = OLD.client_id then
+        -- Mama → coach: an admin recipient may acknowledge.
+        if not public.is_admin() then
+          raise exception 'only the recipient can mark message read';
+        end if;
+      elsif auth.uid() <> OLD.client_id then
+        -- Coach → mama: only that mama may acknowledge.
+        raise exception 'only the recipient can mark message read';
+      end if;
     end if;
   end if;
 
