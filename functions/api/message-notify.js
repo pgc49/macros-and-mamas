@@ -80,7 +80,53 @@ export async function onRequestPost({ request, env }) {
     let emailSent = false;
     let route = "unknown";
 
-    if (!senderIsAdmin && !clientIsAdmin) {
+    if (msg.admin_dm_conversation_id) {
+      route = "admin_to_admin";
+      const validRecipient = await validateAdminDmRecipient(env, msg, sender);
+      if (!validRecipient) {
+        await markMessageNotified(env, messageId);
+        await finishNotificationJob(env, job, { success: true });
+        console.warn("admin DM notification skipped", {
+          messageId,
+          reason: "skipped_recipient_deprovisioned",
+        });
+        return json({
+          ok: true,
+          skipped: "skipped_recipient_deprovisioned",
+          pushSent: 0,
+          emailSent: false,
+        });
+      }
+      const adminId = msg.recipient_id;
+      const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
+      pushSent = await sendPushToProfile(env, adminId, {
+        title: firstName(sender.name) || "Admin",
+        body: preview || "Open Messages in admin",
+        url: `/admin?tab=messages&dm=${encodeURIComponent(msg.admin_dm_conversation_id)}`,
+        unreadCount: unreadCount || 1,
+      });
+      if (pushSent === 0) {
+        const contact = await loadUserContact(env, adminId, { strict: true });
+        const email = contact.email || "";
+        if (email) {
+          const mail = await invokeEdgeFunction(env, "message-email", {
+            email,
+            name: contact.name || "Admin",
+            preview,
+          });
+          let delivered = mail.ok;
+          if (!delivered) {
+            delivered = await sendMamaEmailDirect(env, {
+              email,
+              name: contact.name || "Admin",
+              preview,
+            });
+          }
+          if (!delivered) throw new Error("admin email delivery failed");
+          emailSent = true;
+        }
+      }
+    } else if (!senderIsAdmin && !clientIsAdmin) {
       // Mama → Callie (thread owned by mama). Push only — no ops email.
       route = "mama_to_callie";
       const coachIds = await listCallieAdminIds(env);
@@ -147,27 +193,7 @@ export async function onRequestPost({ request, env }) {
       route = "admin_to_admin";
       let recipients;
       let adminUrl = "/admin?tab=messages";
-      if (msg.admin_dm_conversation_id) {
-        const validRecipient = await validateAdminDmRecipient(env, msg);
-        if (!validRecipient) {
-          await markMessageNotified(env, messageId);
-          await finishNotificationJob(env, job, { success: true });
-          console.warn("admin DM notification skipped", {
-            messageId,
-            reason: "skipped_recipient_deprovisioned",
-          });
-          return json({
-            ok: true,
-            skipped: "skipped_recipient_deprovisioned",
-            pushSent: 0,
-            emailSent: false,
-          });
-        }
-        recipients = [msg.recipient_id];
-        adminUrl = `/admin?tab=messages&dm=${encodeURIComponent(msg.admin_dm_conversation_id)}`;
-      } else {
-        recipients = await adminDmRecipients(env, msg);
-      }
+      recipients = await adminDmRecipients(env, msg);
       if (!recipients.length) throw new Error("admin DM recipient missing");
       for (const adminId of recipients) {
         const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
@@ -290,42 +316,21 @@ async function countUnreadForProfile(env, profileId, { asAdmin }) {
   if (!profileId) return 0;
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  try {
-    if (asAdmin) {
-      const qs = "select=sender_id,client_id,recipient_id,admin_dm_conversation_id"
-        + "&read_at=is.null&deleted_at=is.null"
-        + `&sender_id=neq.${encodeURIComponent(profileId)}`;
-      const adminIds = new Set(await listAdminIds(env));
-      const response = await fetch(`${base}/rest/v1/messages?${qs}`, {
-        headers: { apikey: key, authorization: `Bearer ${key}` },
-      });
-      if (!response.ok) throw new Error(`admin unread lookup failed (${response.status})`);
-      const rows = await response.json();
-      if (!Array.isArray(rows)) throw new Error("admin unread payload invalid");
-      return rows.filter((row) => (
-        row.admin_dm_conversation_id
-          ? row.recipient_id === profileId
-          : !adminIds.has(row.sender_id)
-      )).length;
-    }
-    const qs = "select=id&read_at=is.null&deleted_at=is.null"
-      + `&sender_id=neq.${encodeURIComponent(profileId)}`
-      + `&client_id=eq.${encodeURIComponent(profileId)}`;
-    const resp = await fetch(`${base}/rest/v1/messages?${qs}`, {
-      method: "HEAD",
+  void asAdmin;
+  const response = await fetch(
+    `${base}/rest/v1/rpc/count_message_unread_for_profile`,
+    {
+      method: "POST",
       headers: {
         apikey: key,
         authorization: `Bearer ${key}`,
-        Prefer: "count=exact",
+        "content-type": "application/json",
       },
-    });
-    const range = resp.headers.get("content-range") || "";
-    const m = range.match(/\/(\d+)\s*$/);
-    return m ? Math.max(0, Number(m[1]) || 0) : 0;
-  } catch (e) {
-    console.warn("countUnreadForProfile failed", e);
-    return 0;
-  }
+      body: JSON.stringify({ p_profile_id: profileId }),
+    },
+  );
+  if (!response.ok) throw new Error(`unread count failed (${response.status})`);
+  return Math.max(0, Number(await response.json()) || 0);
 }
 
 async function sendMamaEmailDirect(env, { email, name, preview }) {
@@ -430,7 +435,7 @@ async function adminDmRecipients(env, msg) {
   return (await listCallieAdminIds(env)).filter((id) => id !== msg.sender_id);
 }
 
-async function validateAdminDmRecipient(env, msg) {
+async function validateAdminDmRecipient(env, msg, sender) {
   if (!msg.admin_dm_conversation_id || !msg.recipient_id) return false;
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -449,7 +454,11 @@ async function validateAdminDmRecipient(env, msg) {
   const conversations = await conversationResponse.json();
   if (!Array.isArray(conversations)) throw new Error("admin DM conversation payload invalid");
   const conversation = conversations[0];
-  if (!conversation || String(recipient?.role || "").toLowerCase() !== "admin") return false;
+  if (
+    !conversation
+    || String(sender?.role || "").toLowerCase() !== "admin"
+    || String(recipient?.role || "").toLowerCase() !== "admin"
+  ) return false;
   const participants = [conversation.participant_low, conversation.participant_high];
   return participants.includes(msg.sender_id)
     && participants.includes(msg.recipient_id)
@@ -477,10 +486,6 @@ async function listAdminProfiles(env) {
   );
   if (!resp.ok) return [];
   return (await resp.json().catch(() => [])) || [];
-}
-
-async function listAdminIds(env) {
-  return (await listAdminProfiles(env)).map((r) => r.id).filter(Boolean);
 }
 
 async function requireUser(request, env) {

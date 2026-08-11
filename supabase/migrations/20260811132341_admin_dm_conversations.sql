@@ -210,13 +210,12 @@ begin
     if not coalesce(compat, false) or admin_count <> 2 then
       raise exception 'admin DM conversation required';
     end if;
+    select array_agg(id order by id) into admin_ids
+    from public.profiles where role = 'admin';
     select * into conv
     from public.admin_dm_conversations
-    where auth.uid() in (participant_low, participant_high)
-    limit 1;
+    where participant_low = admin_ids[1] and participant_high = admin_ids[2];
     if conv.id is null then
-      select array_agg(id order by id) into admin_ids
-      from public.profiles where role = 'admin';
       insert into public.admin_dm_conversations (participant_low, participant_high)
       values (admin_ids[1], admin_ids[2])
       on conflict (participant_low, participant_high) do nothing;
@@ -239,6 +238,10 @@ begin
        or new.sender_id not in (conv.participant_low, conv.participant_high)
        or new.recipient_id not in (conv.participant_low, conv.participant_high)
        or new.sender_id = new.recipient_id
+       or not exists (
+         select 1 from public.profiles recipient
+         where recipient.id = new.recipient_id and recipient.role = 'admin'
+       )
     then
       raise exception 'invalid admin DM conversation identity';
     end if;
@@ -256,7 +259,8 @@ end;
 $$;
 
 drop trigger if exists messages_set_dm_conversation_identity on public.messages;
-create trigger messages_set_dm_conversation_identity
+drop trigger if exists messages_00_set_dm_conversation_identity on public.messages;
+create trigger messages_00_set_dm_conversation_identity
 before insert on public.messages
 for each row execute function private.set_dm_conversation_identity();
 revoke all on function private.set_dm_conversation_identity() from public;
@@ -272,12 +276,16 @@ begin
   select admin_provisioning_frozen into frozen
   from public.admin_dm_migration_state where singleton;
   select count(*) into admin_count from public.profiles where role = 'admin';
-  if coalesce(frozen, false)
-     and new.role = 'admin'
-     and (tg_op = 'INSERT' or old.role is distinct from 'admin')
-     and admin_count >= 2
-  then
-    raise exception 'admin provisioning frozen during DM migration';
+  if coalesce(frozen, false) then
+    if tg_op = 'INSERT' and new.role = 'admin' and admin_count >= 2 then
+      raise exception 'admin provisioning frozen during DM migration';
+    end if;
+    if tg_op = 'UPDATE'
+       and old.role is distinct from new.role
+       and (old.role = 'admin' or new.role = 'admin')
+    then
+      raise exception 'admin provisioning frozen during DM migration';
+    end if;
   end if;
   return new;
 end;
@@ -333,7 +341,8 @@ end;
 $$;
 
 drop trigger if exists messages_enforce_reply_thread on public.messages;
-create trigger messages_enforce_reply_thread
+drop trigger if exists messages_10_enforce_reply_thread on public.messages;
+create trigger messages_10_enforce_reply_thread
 before insert or update of reply_to_id on public.messages
 for each row execute function public.enforce_dm_reply_same_thread();
 
@@ -450,6 +459,23 @@ create policy "messages_insert_own"
             and recipient_id in (c.participant_low, c.participant_high)
             and recipient_id <> auth.uid()
         )
+      )
+    )
+    and (
+      kind = 'chat'
+      or (public.is_admin() and kind = 'announcement')
+    )
+    and (
+      public.is_admin()
+      or attachment_mime is null
+      or attachment_mime !~* '^audio/'
+    )
+    and char_length(trim(body)) <= 2000
+    and (
+      char_length(trim(body)) >= 1
+      or (
+        attachment_path is not null
+        and char_length(trim(attachment_path)) between 1 and 500
       )
     )
   );
@@ -645,17 +671,6 @@ create policy "message_attachments_delete"
     bucket_id = 'message-attachments'
     and (
       owner_id = auth.uid()::text
-      or exists (
-        select 1 from public.messages m
-        where m.attachment_path = name
-          and m.admin_dm_conversation_id is not null
-          and public.is_admin()
-          and exists (
-            select 1 from public.admin_dm_conversations c
-            where c.id = m.admin_dm_conversation_id
-              and auth.uid() in (c.participant_low, c.participant_high)
-          )
-      )
       or (
         public.is_admin()
         and exists (
@@ -764,6 +779,101 @@ $$;
 
 revoke all on function public.load_admin_message_inbox_v2() from public, anon;
 grant execute on function public.load_admin_message_inbox_v2() to authenticated;
+
+create or replace function public.toggle_message_reaction_atomic(
+  p_scope text,
+  p_message_id uuid,
+  p_emoji text
+)
+returns table (message_id uuid, emoji text, cleared boolean)
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare existing_emoji text;
+begin
+  if p_emoji not in ('❤️', '👍', '👎', '😂', '‼️', '❓') then
+    raise exception 'reaction unavailable';
+  end if;
+  perform pg_advisory_xact_lock(
+    hashtextextended(p_scope || ':' || p_message_id::text || ':' || auth.uid()::text, 0)
+  );
+  if p_scope = 'dm' then
+    select r.emoji into existing_emoji
+    from public.message_reactions r
+    where r.message_id = p_message_id and r.user_id = auth.uid()
+    for update;
+    delete from public.message_reactions
+    where public.message_reactions.message_id = p_message_id
+      and user_id = auth.uid();
+    if existing_emoji is distinct from p_emoji then
+      insert into public.message_reactions (message_id, user_id, emoji)
+      values (p_message_id, auth.uid(), p_emoji);
+      return query select p_message_id, p_emoji, false;
+    end if;
+  elsif p_scope = 'channel' then
+    select r.emoji into existing_emoji
+    from public.conversation_message_reactions r
+    where r.message_id = p_message_id and r.user_id = auth.uid()
+    for update;
+    delete from public.conversation_message_reactions
+    where public.conversation_message_reactions.message_id = p_message_id
+      and user_id = auth.uid();
+    if existing_emoji is distinct from p_emoji then
+      insert into public.conversation_message_reactions (message_id, user_id, emoji)
+      values (p_message_id, auth.uid(), p_emoji);
+      return query select p_message_id, p_emoji, false;
+    end if;
+  else
+    raise exception 'invalid reaction scope';
+  end if;
+  return query select p_message_id, p_emoji, true;
+end;
+$$;
+revoke all on function public.toggle_message_reaction_atomic(text, uuid, text)
+  from public, anon;
+grant execute on function public.toggle_message_reaction_atomic(text, uuid, text)
+  to authenticated;
+
+create or replace function public.count_message_unread_for_profile(p_profile_id uuid)
+returns integer
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select count(*)::integer
+  from public.messages m
+  where m.read_at is null
+    and m.deleted_at is null
+    and m.sender_id <> p_profile_id
+    and (
+      (
+        m.admin_dm_conversation_id is not null
+        and m.recipient_id = p_profile_id
+      )
+      or (
+        m.admin_dm_conversation_id is null
+        and (
+          (
+            m.client_id = p_profile_id
+            and m.sender_id <> p_profile_id
+          )
+          or (
+            exists (
+              select 1 from public.profiles target
+              where target.id = p_profile_id and target.role = 'admin'
+            )
+            and m.sender_id = m.client_id
+          )
+        )
+      )
+    );
+$$;
+revoke all on function public.count_message_unread_for_profile(uuid)
+  from public, anon, authenticated;
+grant execute on function public.count_message_unread_for_profile(uuid)
+  to service_role;
 
 
 

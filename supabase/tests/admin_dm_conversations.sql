@@ -1,6 +1,6 @@
 begin;
 
-select plan(24);
+select plan(30);
 
 select is(
   (select count(*)::integer from public.admin_dm_conversations),
@@ -83,6 +83,16 @@ select throws_ok(
   'admin provisioning frozen during DM migration',
   'third admin provisioning is frozen during compatibility'
 );
+select throws_ok(
+  $$
+    update public.profiles
+    set role = 'client'
+    where id = '00000000-0000-0000-0000-000000000052'
+  $$,
+  'P0001',
+  'admin provisioning frozen during DM migration',
+  'admin demotion is frozen during compatibility'
+);
 
 set local role authenticated;
 set local request.jwt.claim.role = 'authenticated';
@@ -114,6 +124,32 @@ select ok(
     from public.messages where body = 'compatibility write'
   ),
   'compatibility trigger assigns pair, recipient, and legacy stamp'
+);
+
+select lives_ok(
+  $$
+    insert into public.messages (
+      client_id, sender_id, body, kind, reply_to_id
+    )
+    select
+      '00000000-0000-0000-0000-000000000051',
+      '00000000-0000-0000-0000-000000000051',
+      'compatibility reply',
+      'chat',
+      parent.id
+    from public.messages parent
+    where parent.body = 'legacy-a-1'
+  $$,
+  'old client reply is stamped before same-conversation validation'
+);
+select ok(
+  (
+    select child.admin_dm_conversation_id = parent.admin_dm_conversation_id
+    from public.messages child
+    join public.messages parent on parent.id = child.reply_to_id
+    where child.body = 'compatibility reply'
+  ),
+  'compatibility reply remains in parent conversation'
 );
 
 reset role;
@@ -251,6 +287,29 @@ select is(
   0,
   'demoted participant loses historical message access'
 );
+
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000051';
+select throws_ok(
+  $$
+    insert into public.messages (
+      client_id, sender_id, recipient_id, admin_dm_conversation_id, body, kind
+    )
+    select
+      conversation.participant_low,
+      '00000000-0000-0000-0000-000000000051',
+      '00000000-0000-0000-0000-000000000053',
+      conversation.id,
+      'send to demoted admin',
+      'chat'
+    from public.admin_dm_conversations conversation
+    where conversation.participant_high = '00000000-0000-0000-0000-000000000053'
+  $$,
+  'P0001',
+  'invalid admin DM conversation identity',
+  'new send to demoted recipient is rejected'
+);
+
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000053';
 select throws_ok(
   $$
     select * from public.ensure_admin_dm_conversation(
@@ -260,6 +319,54 @@ select throws_ok(
   'P0001',
   'valid admin peer required',
   'demoted participant cannot ensure admin conversation'
+);
+
+reset role;
+insert into auth.users (id, email)
+values ('00000000-0000-0000-0000-000000000054', 'mama-policy@example.com');
+insert into public.profiles (id, email, name, role, status)
+values (
+  '00000000-0000-0000-0000-000000000054',
+  'mama-policy@example.com',
+  'Mama Policy',
+  'client',
+  'active'
+);
+set local role authenticated;
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000054';
+select throws_ok(
+  $$
+    insert into public.messages (client_id, sender_id, body, kind)
+    values (
+      '00000000-0000-0000-0000-000000000054',
+      '00000000-0000-0000-0000-000000000054',
+      'forged announcement',
+      'announcement'
+    )
+  $$,
+  '42501',
+  null,
+  'mama cannot spoof announcement kind'
+);
+select throws_ok(
+  $$
+    insert into public.messages (
+      client_id, sender_id, body, kind,
+      attachment_path, attachment_name, attachment_mime, attachment_bytes
+    ) values (
+      '00000000-0000-0000-0000-000000000054',
+      '00000000-0000-0000-0000-000000000054',
+      '',
+      'chat',
+      '00000000-0000-0000-0000-000000000054/voice.m4a',
+      'voice.m4a',
+      'audio/mp4',
+      100
+    )
+  $$,
+  '42501',
+  null,
+  'mama cannot attach audio'
 );
 
 reset role;

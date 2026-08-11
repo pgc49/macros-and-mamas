@@ -86,6 +86,7 @@ export function AdminMessages({
   const [query, setQuery] = useState("");
   const activeRef = useRef(active);
   const dmLoadSequence = useRef(new Map());
+  const initialAdminLinkHandled = useRef(false);
 
   const clientMap = useMemo(() => {
     const m = new Map();
@@ -186,12 +187,17 @@ export function AdminMessages({
   }, [initialClientId]);
 
   useEffect(() => {
-    if (!initialAdminConversationId || !inbox.length) return;
+    if (
+      initialAdminLinkHandled.current
+      || !initialAdminConversationId
+      || !inbox.length
+    ) return;
     const row = inbox.find((item) => (
       item.threadType === "admin"
       && item.threadId === initialAdminConversationId
     ));
     if (!row) return;
+    initialAdminLinkHandled.current = true;
     const peerId = (row.participantIds || []).find((id) => id !== adminUserId) || null;
     const next = {
       type: "dm",

@@ -13,6 +13,7 @@ import { mergeMessagesById } from "../lib/messageOrdering";
 export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const clientId = client?.id;
   const isAdminClient = String(client?.role || "").toLowerCase() === "admin";
+  const isSelfAdmin = isAdminClient && clientId === adminUserId;
   const [messages, setMessages] = useState([]);
   const [adminConversation, setAdminConversation] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -22,7 +23,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const first = String(name).trim().split(/\s+/)[0] || "her";
 
   const refresh = useCallback(async () => {
-    if (!clientId) return;
+    if (!clientId || isSelfAdmin) return;
     try {
       const conversation = isAdminClient
         ? await db.ensureAdminDmConversation(clientId)
@@ -36,14 +37,14 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
       console.error(e);
       setError(e.message || "Couldn’t load messages.");
     }
-  }, [clientId, isAdminClient]);
+  }, [clientId, isAdminClient, isSelfAdmin]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
   useEffect(() => {
-    if (!clientId) return undefined;
+    if (!clientId || isSelfAdmin) return undefined;
     const conversationId = adminConversation?.id || null;
     const channel = supabase
       .channel(`messages-admin-client-${conversationId || clientId}`)
@@ -72,7 +73,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [adminConversation?.id, clientId, refresh]);
+  }, [adminConversation?.id, clientId, isSelfAdmin, refresh]);
 
   const send = async (body, file = null, opts = {}) => {
     if (!clientId) return;
@@ -135,6 +136,16 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   };
 
   if (!clientId || !adminUserId) return null;
+  if (isSelfAdmin) {
+    return (
+      <Card style={{ marginTop: 12 }}>
+        <div style={{ fontFamily: FD, fontSize: 18 }}>Messages</div>
+        <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "6px 0 0" }}>
+          This is your own admin profile. Open another admin to use the test DM.
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <Card style={{ marginTop: 12 }}>

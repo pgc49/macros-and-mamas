@@ -417,7 +417,8 @@ function assertIdempotentPayload(existing, {
   const sameTarget = existing[targetField] === targetId;
   const sameBody = String(existing.body || "") === String(body || "");
   const sameReply = String(existing.reply_to_id || "") === String(replyToId || "");
-  const sameRecipient = String(existing.recipient_id || "") === String(recipientId || "");
+  const sameRecipient = recipientId == null
+    || String(existing.recipient_id || "") === String(recipientId);
   let sameFile = true;
   if (file) {
     const mime = String(file.type || "").toLowerCase().split(";")[0].trim();
@@ -771,45 +772,21 @@ async function hydrateChannelReactions(messages) {
  * @param {"dm"|"channel"} scope
  */
 async function toggleMessageReaction(scope, messageId, emoji) {
-  const uid = await requireUserId();
+  await requireUserId();
   if (!messageId) throw new Error("message required");
   if (!isAllowedReactionEmoji(emoji)) throw new Error("That reaction isn’t available.");
-  const table = scope === "channel"
-    ? "conversation_message_reactions"
-    : "message_reactions";
-
-  const { data: existing, error: findErr } = await supabase
-    .from(table)
-    .select("id, emoji")
-    .eq("message_id", messageId)
-    .eq("user_id", uid)
-    .maybeSingle();
-  if (findErr) throw findErr;
-
-  if (existing?.id && existing.emoji === emoji) {
-    const { error: delErr } = await supabase
-      .from(table)
-      .delete()
-      .eq("id", existing.id)
-      .eq("user_id", uid);
-    if (delErr) throw delErr;
-    return { messageId, emoji, cleared: true };
-  }
-
-  if (existing?.id) {
-    const { error: delErr } = await supabase
-      .from(table)
-      .delete()
-      .eq("id", existing.id)
-      .eq("user_id", uid);
-    if (delErr) throw delErr;
-  }
-
-  const { error: insErr } = await supabase
-    .from(table)
-    .insert({ message_id: messageId, user_id: uid, emoji });
-  if (insErr) throw insErr;
-  return { messageId, emoji, cleared: false };
+  const { data, error } = await supabase.rpc("toggle_message_reaction_atomic", {
+    p_scope: scope,
+    p_message_id: messageId,
+    p_emoji: emoji,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    messageId,
+    emoji,
+    cleared: row?.cleared === true,
+  };
 }
 
 export const db = {
@@ -2342,7 +2319,9 @@ export const db = {
             targetId: adminConversationId || clientId,
           });
         } catch (conflictError) {
-          await removeUploadedAttachment(MESSAGE_ATTACHMENT_BUCKET, attachment?.path);
+          if (attachment?.path && attachment.path !== existing.data?.attachment_path) {
+            await removeUploadedAttachment(MESSAGE_ATTACHMENT_BUCKET, attachment.path);
+          }
           throw conflictError;
         }
         if (existing.data) {
