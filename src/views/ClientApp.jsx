@@ -490,11 +490,18 @@ export function ClientApp({
 
       {tab === "messages" && (
         <>
-          <MessagesPanel
-            userId={userId}
-            onUnreadChange={onUnreadMessagesChange}
-            onComposerFocusChange={setComposerFocused}
-          />
+          <ErrorBoundary
+            name="CustomerMessages"
+            title="Messages hit a snag"
+            message="Your conversations are safe. Try again here — Today and the rest of the app still work."
+            resetKeys={[userId, tab]}
+          >
+            <MessagesPanel
+              userId={userId}
+              onUnreadChange={onUnreadMessagesChange}
+              onComposerFocusChange={setComposerFocused}
+            />
+          </ErrorBoundary>
           {!composerFocused && <TechHelpFooter />}
         </>
       )}

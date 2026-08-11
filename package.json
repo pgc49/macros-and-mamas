@@ -12,6 +12,8 @@
     "qa:channels": "node scripts/qa-channels-notify.mjs",
     "qa:reactions": "node scripts/qa-message-reactions.mjs",
     "qa:messages-thread": "node scripts/smoke-messages-thread.mjs",
+    "qa:message-ordering": "node scripts/qa-message-ordering.mjs",
+    "qa:messaging": "npm run qa:messages-thread && npm run qa:message-ordering && npm run qa:reactions && npm run qa:channels",
     "preview": "vite preview"
   },
   "dependencies": {

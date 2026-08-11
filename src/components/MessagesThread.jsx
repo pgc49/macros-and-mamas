@@ -17,6 +17,7 @@ import {
   voiceRecordingSupported,
 } from "../lib/voiceMemo";
 import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
 
@@ -66,6 +67,10 @@ export function MessagesThread({
   compact = false,
   onComposerFocusChange,
 }) {
+  const safeMessages = Array.isArray(messages)
+    ? messages.map(normalizeMessageRow)
+    : [];
+  const latestMessageId = safeMessages[safeMessages.length - 1]?.id || "";
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -107,11 +112,13 @@ export function MessagesThread({
       window.clearTimeout(t2);
     };
     // Last id: new tip message; length: empty → first load.
-  }, [messages.length, messages[messages.length - 1]?.id]);
+  }, [safeMessages.length, latestMessageId]);
 
   useEffect(() => {
-    onMarkRead?.();
-  }, [messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    Promise.resolve(onMarkRead?.()).catch((e) => {
+      console.warn("mark messages read failed", e);
+    });
+  }, [safeMessages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -578,7 +585,7 @@ export function MessagesThread({
           overscrollBehavior: "contain",
         }}
       >
-        {!messages.length && (
+        {!safeMessages.length && (
           <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, padding: "20px 8px", textAlign: "center" }}>
             {emptyState}
           </div>
@@ -589,7 +596,7 @@ export function MessagesThread({
           let lastReadId = null;
           let lastDeliveredId = null;
           if (showReadReceipts) {
-            for (const m of messages) {
+            for (const m of safeMessages) {
               if (m.deleted_at) continue;
               const coachOutbound = threadClientId
                 ? m.sender_id !== threadClientId
@@ -600,12 +607,12 @@ export function MessagesThread({
             }
             // If the latest outbound is read, don't also leave a stale Delivered marker.
             if (lastDeliveredId && lastReadId) {
-              const readIdx = messages.findIndex((m) => m.id === lastReadId);
-              const delIdx = messages.findIndex((m) => m.id === lastDeliveredId);
+              const readIdx = safeMessages.findIndex((m) => m.id === lastReadId);
+              const delIdx = safeMessages.findIndex((m) => m.id === lastDeliveredId);
               if (readIdx > delIdx) lastDeliveredId = null;
             }
           }
-          return messages.map((m) => {
+          return safeMessages.map((m) => {
           const mine = m.sender_id === selfId;
           const deleted = !!m.deleted_at;
           const isImage = String(m.attachment_mime || "").startsWith("image/");
@@ -616,12 +623,17 @@ export function MessagesThread({
           const receiptLabel = m.id === lastReadId
             ? "Read"
             : m.id === lastDeliveredId
-              ? "Delivered"
+              ? "Sent"
               : null;
           const showReceipt = !!receiptLabel;
           return (
-            <div
+            <ErrorBoundary
               key={m.id}
+              name="MessageBubble"
+              resetKeys={[m.id, m.updated_at, m.edited_at, m.attachmentUrl]}
+              fallback={<MessageBubbleFallback message={m} mine={mine} />}
+            >
+            <div
               style={{
                 display: "flex",
                 justifyContent: mine ? "flex-end" : "flex-start",
@@ -952,6 +964,7 @@ export function MessagesThread({
                 </div>
               )}
             </div>
+            </ErrorBoundary>
           );
           });
         })()}
@@ -1274,4 +1287,69 @@ function formatMsgTime(iso) {
   } catch {
     return "";
   }
+}
+
+function safeString(value, fallback = "") {
+  if (value == null) return fallback;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
+}
+
+function normalizeMessageRow(row, index) {
+  const source = row && typeof row === "object" && !Array.isArray(row) ? row : {};
+  const id = safeString(source.id).trim() || `invalid-message-${index}`;
+  const reactions = Array.isArray(source.reactions)
+    ? source.reactions
+      .filter((r) => r && typeof r === "object" && typeof r.emoji === "string")
+      .map((r) => ({
+        ...r,
+        emoji: r.emoji,
+        count: Math.max(1, Number(r.count) || 1),
+        mine: r.mine === true,
+      }))
+    : [];
+  return {
+    ...source,
+    id,
+    body: safeString(source.body),
+    sender_id: safeString(source.sender_id),
+    attachment_path: safeString(source.attachment_path),
+    attachment_mime: safeString(source.attachment_mime),
+    attachment_name: safeString(source.attachment_name),
+    created_at: safeString(source.created_at),
+    reactions,
+  };
+}
+
+function MessageBubbleFallback({ message, mine }) {
+  const body = safeString(message?.body);
+  const time = formatMsgTime(message?.created_at);
+  return (
+    <div style={{
+      display: "flex",
+      justifyContent: mine ? "flex-end" : "flex-start",
+      marginBottom: 10,
+    }}
+    >
+      <div style={{
+        maxWidth: "85%",
+        borderRadius: 14,
+        padding: "10px 12px",
+        background: mine ? T.accentSoft : T.sageSoft,
+        color: T.ink,
+        fontFamily: F,
+        fontSize: 14.5,
+        lineHeight: 1.45,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+      }}
+      >
+        {body || (message?.attachment_path ? "Attachment unavailable" : "Message unavailable")}
+        {time ? (
+          <div style={{ marginTop: 6, fontSize: 11, color: T.inkSoft }}>{time}</div>
+        ) : null}
+      </div>
+    </div>
+  );
 }

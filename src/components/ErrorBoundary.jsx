@@ -10,11 +10,22 @@ import { T, F, FD } from "../theme/tokens";
 export class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { error: null };
+    this.state = {
+      error: null,
+      resetKeys: Array.isArray(props.resetKeys) ? props.resetKeys : [],
+    };
   }
 
   static getDerivedStateFromError(error) {
     return { error };
+  }
+
+  static getDerivedStateFromProps(props, state) {
+    const before = Array.isArray(state.resetKeys) ? state.resetKeys : [];
+    const after = Array.isArray(props.resetKeys) ? props.resetKeys : [];
+    const changed = before.length !== after.length
+      || before.some((value, index) => !Object.is(value, after[index]));
+    return changed ? { error: null, resetKeys: after } : null;
   }
 
   componentDidCatch(error, info) {
@@ -24,6 +35,11 @@ export class ErrorBoundary extends Component {
       tags: { boundary: this.props.name || "unknown" },
     });
   }
+
+  reset = () => {
+    this.setState({ error: null });
+    this.props.onReset?.();
+  };
 
   render() {
     if (this.state.error) {
@@ -46,6 +62,24 @@ export class ErrorBoundary extends Component {
             {this.props.message
               || "Something went wrong here. The rest of the app should still work — refresh if you need this section."}
           </div>
+          <button
+            type="button"
+            onClick={this.reset}
+            style={{
+              marginTop: 12,
+              border: `1.5px solid ${T.accent}`,
+              borderRadius: 999,
+              background: "#fff",
+              color: T.accentDeep,
+              padding: "8px 14px",
+              fontFamily: F,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Try again
+          </button>
         </div>
       );
     }

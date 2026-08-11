@@ -24,6 +24,17 @@ const adminSrc = readFileSync(new URL("../src/admin/AdminClientMessages.jsx", im
 assert(adminSrc.includes("min(70vh, 640px)"), "AdminClientMessages should bound chat height");
 assert(adminSrc.includes("MessagesThread"), "AdminClientMessages still mounts MessagesThread");
 
+const boundarySrc = readFileSync(new URL("../src/components/ErrorBoundary.jsx", import.meta.url), "utf8");
+assert(boundarySrc.includes("resetKeys"), "ErrorBoundary must reset when context changes");
+assert(boundarySrc.includes("Try again"), "ErrorBoundary must offer local recovery");
+
+const clientAppSrc = readFileSync(new URL("../src/views/ClientApp.jsx", import.meta.url), "utf8");
+assert(clientAppSrc.includes('name="CustomerMessages"'), "customer Messages needs a local boundary");
+
+const adminPortalSrc = readFileSync(new URL("../src/admin/AdminPortal.jsx", import.meta.url), "utf8");
+assert(adminPortalSrc.includes('name="AdminMessages"'), "admin inbox needs a local boundary");
+assert(adminPortalSrc.includes("client-messages-${sel.id}"), "client-message boundary must remount by client");
+
 const vite = await createServer({
   server: { middlewareMode: true },
   appType: "custom",
@@ -53,6 +64,15 @@ try {
         body: "Hi Callie",
         created_at: "2026-08-10T10:00:00.000Z",
         reactions: [],
+      },
+      null,
+      {
+        id: "malformed",
+        sender_id: "becca-1",
+        body: { unexpected: true },
+        attachment_mime: 42,
+        reactions: "not-an-array",
+        created_at: "invalid",
       },
       {
         id: "m2",
@@ -103,6 +123,22 @@ try {
   assert(adminHtml.includes("Message") && adminHtml.includes("Becca"), "admin card title renders");
   assert(!adminHtml.includes("Messages couldn’t load"), "admin card must not crash");
   assert(adminHtml.includes("Write a message") || adminHtml.includes("Send"), "composer renders inside admin card");
+
+  const panelMod = await vite.ssrLoadModule("/src/components/MessagesPanel.jsx");
+  const panelHtml = renderToString(createElement(panelMod.MessagesPanel, {
+    userId: "mama-1",
+    onUnreadChange: () => {},
+    onComposerFocusChange: () => {},
+  }));
+  assert(panelHtml.includes("Callie"), "customer MessagesPanel renders");
+
+  const inboxMod = await vite.ssrLoadModule("/src/admin/AdminMessages.jsx");
+  const inboxHtml = renderToString(createElement(inboxMod.AdminMessages, {
+    roster: [],
+    adminUserId: "admin-1",
+    onUnreadTotalChange: () => {},
+  }));
+  assert(inboxHtml.includes("Messages"), "admin inbox renders");
 
   console.log("qa:messages-thread OK");
 } finally {
