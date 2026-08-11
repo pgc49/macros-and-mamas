@@ -43,6 +43,7 @@ jobs:
         env:
           CF_PAGES_BRANCH: preview-${{ github.run_id }}
           CF_PAGES_COMMIT_SHA: ${{ github.sha }}
+          PREVIEW_MARKETING: ${{ inputs.surface == 'customer' && '1' || '0' }}
           CF_PAGES_URL: ${{ inputs.surface == 'customer' && vars.CUSTOMER_APP_URL || vars.ADMIN_APP_URL }}
           CUSTOMER_APP_URL: ${{ vars.CUSTOMER_APP_URL }}
           VITE_ADMIN_APP_URL: ${{ vars.ADMIN_APP_URL }}
