@@ -49,6 +49,7 @@ select lives_ok(
 
 reset role;
 set local role service_role;
+set local request.jwt.claim.role = 'service_role';
 
 select is(
   (
@@ -92,6 +93,7 @@ select throws_ok(
 
 reset role;
 set local role authenticated;
+set local request.jwt.claim.role = 'authenticated';
 
 select throws_ok(
   $$
@@ -144,6 +146,7 @@ select throws_ok(
 
 reset role;
 set local role service_role;
+set local request.jwt.claim.role = 'service_role';
 select lives_ok(
   $$
     update public.messages
@@ -165,6 +168,7 @@ select throws_ok(
 );
 
 set local role authenticated;
+set local request.jwt.claim.role = 'authenticated';
 select is(
   public.messaging_attachments_enabled(),
   false,
@@ -177,6 +181,7 @@ set mode = 'normal', attachments_enabled = false, notifications_enabled = false
 where singleton;
 
 set local role service_role;
+set local request.jwt.claim.role = 'service_role';
 select is(
   (
     select count(*)::integer
@@ -192,6 +197,7 @@ select is(
 reset role;
 update public.messaging_runtime_config set notifications_enabled = true where singleton;
 set local role service_role;
+set local request.jwt.claim.role = 'service_role';
 
 select is(
   (
@@ -228,6 +234,7 @@ insert into public.message_notification_outbox (
   );
 
 set local role service_role;
+set local request.jwt.claim.role = 'service_role';
 select is(
   public.expire_message_notification_jobs(),
   1,
