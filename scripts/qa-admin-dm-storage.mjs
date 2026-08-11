@@ -33,8 +33,10 @@ async function canDownload(client, path) {
 }
 
 try {
-  await service.auth.admin.updateUserById(aId, { password, email_confirm: true });
-  await service.auth.admin.updateUserById(bId, { password, email_confirm: true });
+  const updatedA = await service.auth.admin.updateUserById(aId, { password });
+  if (updatedA.error) throw updatedA.error;
+  const updatedB = await service.auth.admin.updateUserById(bId, { password });
+  if (updatedB.error) throw updatedB.error;
   const adminA = await login("legacy-admin-a@example.com");
   const adminB = await login("legacy-admin-b@example.com");
   const { data: conversations, error: conversationError } = await service

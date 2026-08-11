@@ -1,7 +1,19 @@
-insert into auth.users (id, email)
+insert into auth.users (id, email, aud, role, email_confirmed_at)
 values
-  ('00000000-0000-0000-0000-000000000051', 'legacy-admin-a@example.com'),
-  ('00000000-0000-0000-0000-000000000052', 'legacy-admin-b@example.com');
+  (
+    '00000000-0000-0000-0000-000000000051',
+    'legacy-admin-a@example.com',
+    'authenticated',
+    'authenticated',
+    now()
+  ),
+  (
+    '00000000-0000-0000-0000-000000000052',
+    'legacy-admin-b@example.com',
+    'authenticated',
+    'authenticated',
+    now()
+  );
 
 insert into public.profiles (id, email, name, role, status)
 values
