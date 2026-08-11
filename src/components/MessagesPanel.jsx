@@ -43,11 +43,17 @@ function attachReplyPreviewLocal(list) {
 
 /** Mama Messages tab — Callie 1:1 plus cohort channels. */
 export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange }) {
+  const requestedChannel = useRef(
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("channel"),
+  ).current;
   const [dmMessages, setDmMessages] = useState([]);
   const [dmUnread, setDmUnread] = useState(0);
   const [channels, setChannels] = useState([]);
   const [channelMessages, setChannelMessages] = useState({});
-  const [activePill, setActivePill] = useState("callie");
+  const [activePill, setActivePill] = useState(requestedChannel || "callie");
+  const [channelsLoaded, setChannelsLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notifyChannelId, setNotifyChannelId] = useState(null);
@@ -106,6 +112,8 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     } catch (e) {
       console.error(e);
       setError(friendlyError(e, "Couldn’t load group messages."));
+    } finally {
+      setChannelsLoaded(true);
     }
   }, [userId]);
 
@@ -115,13 +123,21 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   }, [refreshDm, refreshChannels]);
 
   useEffect(() => {
-    if (!channels.length || deepLinkedChannel.current) return;
-    const requested = new URLSearchParams(window.location.search).get("channel");
-    if (requested && channels.some((item) => item.conversation.id === requested)) {
-      setActivePill(requested);
-      deepLinkedChannel.current = true;
+    if (!channelsLoaded || deepLinkedChannel.current) return;
+    const requestedExists = requestedChannel
+      && channels.some((item) => item.conversation.id === requestedChannel);
+    if (requestedExists) {
+      setActivePill(requestedChannel);
+    } else {
+      setActivePill("callie");
     }
-  }, [channels]);
+    if (requestedChannel) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("channel");
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    deepLinkedChannel.current = true;
+  }, [channels, channelsLoaded, requestedChannel]);
 
   useEffect(() => {
     if (!userId) return undefined;
@@ -428,6 +444,19 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             onComposerFocusChange={onComposerFocusChange}
           />
         </ErrorBoundary>
+      ) : activePill !== "callie" ? (
+        <div
+          role="status"
+          style={{
+            minHeight: 280,
+            display: "grid",
+            placeItems: "center",
+            color: T.inkSoft,
+            fontSize: 13.5,
+          }}
+        >
+          Loading conversation…
+        </div>
       ) : (
         <ErrorBoundary
           name="CustomerDmThread"
