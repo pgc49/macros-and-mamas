@@ -1873,6 +1873,29 @@ export const db = {
     return { homescreenTipDismissedAt: at };
   },
 
+  async loadMessagingRuntime() {
+    await requireUserId();
+    const { data, error } = await supabase.rpc("messaging_runtime_status");
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error("Messaging runtime status unavailable");
+    if (
+      !["normal", "read_only", "off"].includes(row.mode)
+      || typeof row.attachments_enabled !== "boolean"
+      || typeof row.notifications_enabled !== "boolean"
+      || !row.updated_at
+    ) {
+      throw new Error("Messaging runtime status invalid");
+    }
+    return {
+      mode: row.mode,
+      attachmentsEnabled: row.attachments_enabled,
+      notificationsEnabled: row.notifications_enabled,
+      reason: String(row.reason || ""),
+      updatedAt: row.updated_at,
+    };
+  },
+
   async listMyChannels() {
     const uid = await requireUserId();
     const [{ data: profile, error: profileErr }, { data, error }] = await Promise.all([

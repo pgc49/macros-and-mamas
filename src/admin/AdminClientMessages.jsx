@@ -5,12 +5,15 @@ import { MessagesThread } from "../components/MessagesThread";
 import { db, fullName } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { mergeMessagesById } from "../lib/messageOrdering";
+import { useMessagingRuntime } from "../lib/useMessagingRuntime";
+import { MessagingRuntimeBanner } from "../components/MessagingRuntimeBanner";
 
 /**
  * Per-client Messages on the admin client detail page.
  * Same thread as the Messages inbox tab — Callie can nudge while reviewing data.
  */
 export function AdminClientMessages({ client, adminUserId, onActivity }) {
+  const { runtime } = useMessagingRuntime();
   const clientId = client?.id;
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -149,6 +152,10 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           allowVoiceMemo
           enableReply
           showPushPrompt={false}
+          banner={<MessagingRuntimeBanner runtime={runtime} />}
+          hideComposer={runtime.mode !== "normal"}
+          allowAttachments={runtime.attachmentsEnabled}
+          allowMutations={runtime.mode === "normal"}
           compact
         />
       </div>

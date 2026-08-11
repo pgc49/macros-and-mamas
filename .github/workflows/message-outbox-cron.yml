@@ -31,3 +31,15 @@ jobs:
           cat /tmp/outbox.json
           test "$status" = "200"
 
+      - name: Check messaging health
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          status=$(curl -sS -o /tmp/messaging-health.json -w "%{http_code}" -X POST \
+            "https://www.macrosandmamas.com/api/messaging-health" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json")
+          cat /tmp/messaging-health.json
+          test "$status" = "200"
+
