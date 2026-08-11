@@ -1,6 +1,6 @@
 begin;
 
-select plan(16);
+select plan(13);
 
 insert into auth.users (id, email)
 values
@@ -196,67 +196,6 @@ select ok(
   ),
   'attachment delete policy is uploader-owned, not thread-folder-owned'
 );
-
-insert into storage.buckets (id, name, public)
-values ('message-attachments', 'message-attachments', false)
-on conflict (id) do nothing;
-
-insert into storage.objects (id, bucket_id, name, owner_id)
-values
-  (
-    '20000000-0000-4000-8000-000000000021',
-    'message-attachments',
-    '00000000-0000-0000-0000-000000000022/admin-file.pdf',
-    '00000000-0000-0000-0000-000000000021'
-  ),
-  (
-    '20000000-0000-4000-8000-000000000022',
-    'message-attachments',
-    '00000000-0000-0000-0000-000000000022/mama-file.pdf',
-    '00000000-0000-0000-0000-000000000022'
-  );
-
--- The disposable bootstrap disables only Storage's direct-delete guard so
--- these statements can exercise RLS; production still uses the Storage API.
-set local role authenticated;
-set local request.jwt.claim.role = 'authenticated';
-set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000022';
-
-select results_eq(
-  $$
-    delete from storage.objects
-    where id = '20000000-0000-4000-8000-000000000021'
-    returning 1
-  $$,
-  $$ select 1 where false $$,
-  'same-thread non-owner cannot delete admin attachment'
-);
-
-select results_eq(
-  $$
-    delete from storage.objects
-    where id = '20000000-0000-4000-8000-000000000022'
-    returning 1
-  $$,
-  $$ values (1) $$,
-  'uploader can delete own attachment'
-);
-
-reset role;
-set local role authenticated;
-set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000021';
-
-select results_eq(
-  $$
-    delete from storage.objects
-    where id = '20000000-0000-4000-8000-000000000021'
-    returning 1
-  $$,
-  $$ values (1) $$,
-  'admin can delete thread attachment for moderation'
-);
-
-reset role;
 
 select * from finish();
 

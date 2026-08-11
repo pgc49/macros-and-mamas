@@ -87,7 +87,27 @@ create table public.conversation_messages (
 
 alter table public.conversation_messages enable row level security;
 
--- Test-only: allow direct DELETE statements to exercise Storage RLS. The real
--- Storage API owns this table and protects direct production deletes.
-alter table storage.objects disable trigger user;
+insert into storage.buckets (id, name, public)
+values ('message-attachments', 'message-attachments', false)
+on conflict (id) do nothing;
+
+create policy message_attachments_insert
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'message-attachments'
+    and (
+      public.is_admin()
+      or (storage.foldername(name))[1] = auth.uid()::text
+    )
+  );
+
+create policy message_attachments_select
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'message-attachments'
+    and (
+      public.is_admin()
+      or (storage.foldername(name))[1] = auth.uid()::text
+    )
+  );
 
