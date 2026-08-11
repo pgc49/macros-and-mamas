@@ -1873,6 +1873,20 @@ export const db = {
     return { homescreenTipDismissedAt: at };
   },
 
+  async loadMessagingRuntime() {
+    await requireUserId();
+    const { data, error } = await supabase.rpc("messaging_runtime_status");
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    return {
+      mode: ["normal", "read_only", "off"].includes(row?.mode) ? row.mode : "normal",
+      attachmentsEnabled: row?.attachments_enabled !== false,
+      notificationsEnabled: row?.notifications_enabled !== false,
+      reason: String(row?.reason || ""),
+      updatedAt: row?.updated_at || null,
+    };
+  },
+
   async listMyChannels() {
     const uid = await requireUserId();
     const [{ data: profile, error: profileErr }, { data, error }] = await Promise.all([

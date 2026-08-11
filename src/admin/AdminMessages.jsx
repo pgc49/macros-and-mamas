@@ -6,6 +6,8 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { db, fullName, channelHasUnread } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { mergeMessagesById } from "../lib/messageOrdering";
+import { useMessagingRuntime } from "../lib/useMessagingRuntime";
+import { MessagingRuntimeBanner } from "../components/MessagingRuntimeBanner";
 
 function displayName(c) {
   if (!c) return "Mama";
@@ -66,6 +68,11 @@ export function AdminMessages({
   onUnreadTotalChange,
 }) {
   const isWide = useIsWide();
+  const {
+    runtime,
+    runtimeError,
+    updateRuntime,
+  } = useMessagingRuntime();
   const [inbox, setInbox] = useState([]);
   const [channels, setChannels] = useState([]);
   const [channelMessages, setChannelMessages] = useState({});
@@ -717,19 +724,25 @@ export function AdminMessages({
                   canModerate
                   allowVoiceMemo
                   enableReply
-                  banner={activeChannel?.conversation?.read_only ? (
-                    <div style={{
-                      background: T.accentSoft,
-                      borderRadius: 12,
-                      padding: "10px 12px",
-                      marginBottom: 10,
-                      fontSize: 13.5,
-                    }}
-                    >
-                      This group is read-only right now.
-                    </div>
-                  ) : null}
-                  hideComposer={!!activeChannel?.conversation?.read_only}
+                  banner={(
+                    <>
+                      <MessagingRuntimeBanner runtime={runtime} />
+                      {activeChannel?.conversation?.read_only ? (
+                        <div style={{
+                          background: T.accentSoft,
+                          borderRadius: 12,
+                          padding: "10px 12px",
+                          marginBottom: 10,
+                          fontSize: 13.5,
+                        }}
+                        >
+                          This group is read-only right now.
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                  hideComposer={runtime.mode !== "normal" || !!activeChannel?.conversation?.read_only}
+                  allowAttachments={runtime.attachmentsEnabled}
                   emptyState="No group messages yet."
                   showPushPrompt
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
@@ -764,7 +777,10 @@ export function AdminMessages({
                   allowVoiceMemo
                   enableReply
                   showPushPrompt
-                  banner={dmLoadErrorClientId === active.id ? (
+                  banner={(
+                    <>
+                      <MessagingRuntimeBanner runtime={runtime} />
+                      {dmLoadErrorClientId === active.id ? (
                     <div style={{
                       background: T.amberSoft,
                       borderRadius: 12,
@@ -791,7 +807,7 @@ export function AdminMessages({
                         Try again
                       </button>
                     </div>
-                  ) : dmLoadedClientId !== active.id ? (
+                      ) : dmLoadedClientId !== active.id ? (
                     <div style={{
                       background: T.track,
                       borderRadius: 12,
@@ -803,7 +819,11 @@ export function AdminMessages({
                     >
                       Loading conversation…
                     </div>
-                  ) : null}
+                      ) : null}
+                    </>
+                  )}
+                  hideComposer={runtime.mode !== "normal"}
+                  allowAttachments={runtime.attachmentsEnabled}
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
                   compact
                 />
@@ -825,6 +845,13 @@ export function AdminMessages({
           </p>
         </>
       )}
+      {(!active || isWide) && (
+        <AdminMessagingRuntimeControls
+          runtime={runtime}
+          runtimeError={runtimeError}
+          onUpdate={updateRuntime}
+        />
+      )}
       {error && <div style={{ fontSize: 13, color: T.amber, marginBottom: 10 }}>{error}</div>}
 
       <div style={{
@@ -839,6 +866,98 @@ export function AdminMessages({
         {showInbox && inboxPane}
         {showThread && threadPane}
       </div>
+    </div>
+  );
+}
+
+function AdminMessagingRuntimeControls({
+  runtime,
+  runtimeError,
+  onUpdate,
+}) {
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const apply = async (next, label) => {
+    if (!window.confirm(`${label}? This changes messaging for every admin and mama.`)) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      await onUpdate(next);
+      setMessage("Messaging controls updated.");
+    } catch (error) {
+      console.error(error);
+      setMessage(error.message || "Couldn’t update messaging controls.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setMode = async (mode) => {
+    let reason = "";
+    if (mode !== "normal") {
+      reason = window.prompt(
+        "Short explanation shown to mamas (optional):",
+        runtime.reason || "Brief maintenance — your messages are safe.",
+      ) || "";
+    }
+    await apply({ ...runtime, mode, reason }, `Set messaging to ${mode.replace("_", "-")}`);
+  };
+
+  return (
+    <div style={{
+      border: `1px solid ${T.border}`,
+      background: runtime.mode === "normal" ? T.sageSoft : T.amberSoft,
+      borderRadius: 14,
+      padding: "10px 12px",
+      marginBottom: 12,
+    }}
+    >
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: T.ink, marginBottom: 8 }}>
+        Messaging operations · {runtime.mode.replace("_", "-")}
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {["normal", "read_only", "off"].map((mode) => (
+          <Btn
+            key={mode}
+            small
+            ghost={runtime.mode !== mode}
+            disabled={saving}
+            onClick={() => setMode(mode)}
+          >
+            {mode === "normal" ? "Normal" : mode === "read_only" ? "Read-only" : "Off"}
+          </Btn>
+        ))}
+        <label style={{ fontSize: 12.5, fontWeight: 700, display: "flex", gap: 5 }}>
+          <input
+            type="checkbox"
+            checked={runtime.attachmentsEnabled}
+            disabled={saving}
+            onChange={(event) => apply({
+              ...runtime,
+              attachmentsEnabled: event.target.checked,
+            }, `${event.target.checked ? "Enable" : "Pause"} attachments`)}
+          />
+          Attachments
+        </label>
+        <label style={{ fontSize: 12.5, fontWeight: 700, display: "flex", gap: 5 }}>
+          <input
+            type="checkbox"
+            checked={runtime.notificationsEnabled}
+            disabled={saving}
+            onChange={(event) => apply({
+              ...runtime,
+              notificationsEnabled: event.target.checked,
+            }, `${event.target.checked ? "Enable" : "Pause"} push/email`)}
+          />
+          Push/email
+        </label>
+      </div>
+      {(message || runtimeError) && (
+        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6 }}>
+          {message || runtimeError}
+        </div>
+      )}
     </div>
   );
 }

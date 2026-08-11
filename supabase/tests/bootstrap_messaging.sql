@@ -27,6 +27,16 @@ as $$
   );
 $$;
 
+create or replace function public.is_active_conversation_member(conv_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select true;
+$$;
+
 create table public.messages (
   id uuid primary key default gen_random_uuid(),
   client_id uuid not null references public.profiles(id) on delete cascade,

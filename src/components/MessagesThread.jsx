@@ -61,6 +61,7 @@ export function MessagesThread({
   headerExtra = null,
   banner = null,
   hideComposer = false,
+  allowAttachments = true,
   showSenderNames = false,
   /** When true, selfId may delete/edit others' messages (admin moderation). */
   canModerate = false,
@@ -258,6 +259,10 @@ export function MessagesThread({
   const send = async () => {
     const text = draft.trim();
     const attach = voicePreview?.file || file;
+    if (attach && !allowAttachments) {
+      setAttachError("Attachments are temporarily paused. Remove it to send text.");
+      return;
+    }
     if ((!text && !attach) || busy || !onSend || recording || sendInFlightRef.current) return;
     sendInFlightRef.current = true;
     const keptText = text;
@@ -1229,6 +1234,7 @@ export function MessagesThread({
 
       {!hideComposer && (
       <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-end" }}>
+        {allowAttachments && (
         <label
           style={iconBtn}
           title="Attach photo or PDF"
@@ -1244,7 +1250,8 @@ export function MessagesThread({
             style={{ display: "none" }}
           />
         </label>
-        {allowVoiceMemo && (
+        )}
+        {allowVoiceMemo && allowAttachments && (
           <button
             type="button"
             onClick={recording ? stopRecording : startRecording}
@@ -1311,7 +1318,7 @@ export function MessagesThread({
         </Btn>
       </div>
       )}
-      {!hideComposer && allowVoiceMemo && !recording && !voicePreview && (
+      {!hideComposer && allowVoiceMemo && allowAttachments && !recording && !voicePreview && (
         <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6, lineHeight: 1.4 }}>
           Mic = voice memo (admins only). Mamas can play it in the thread — they can’t send voice back.
         </div>

@@ -52,6 +52,12 @@ const { deferredByClient, dbMock, realtimeChannel } = vi.hoisted(() => {
       ]),
       listMyChannels: vi.fn(async () => []),
       loadChannelMessages: vi.fn(async () => []),
+      loadMessagingRuntime: vi.fn(async () => ({
+        mode: "normal",
+        attachmentsEnabled: true,
+        notificationsEnabled: true,
+        reason: "",
+      })),
       loadMessages: vi.fn((clientId) => {
         const pending = pendingByClient.get(clientId);
         return pending ? pending.promise : Promise.resolve([]);
