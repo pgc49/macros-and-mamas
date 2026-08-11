@@ -39,7 +39,8 @@ alter table public.messages
   add column admin_dm_conversation_id uuid null
     references public.admin_dm_conversations(id) on delete restrict,
   add column recipient_id uuid null
-    references public.profiles(id) on delete set null;
+    references public.profiles(id) on delete set null,
+  add column legacy_admin_attachment_path boolean not null default false;
 
 create index messages_admin_dm_created_idx
   on public.messages (admin_dm_conversation_id, created_at desc, id desc)
@@ -74,6 +75,12 @@ Before insert, a database trigger must enforce:
 3. Replies stay within the same `admin_dm_conversation_id`.
 4. Only `recipient_id` can set `read_at`; receipt remains monotonic.
 5. Browser clients cannot set `notified_at`.
+
+The null-conversation branch is valid only when `client_id` is not an admin.
+For admin-owned rows, compatibility mode transforms a legacy-shaped write
+before validation; after compatibility closes, any write without
+`admin_dm_conversation_id` is permanently rejected (including stale clients
+and direct/service API calls).
 
 Complete receipt state machine:
 
@@ -201,10 +208,10 @@ Realtime filters:
 - mama DM: `client_id=eq.<mama>`
 - admin DM: `admin_dm_conversation_id=eq.<conversation>`
 
-`message_reactions` has no conversation column. Keep one RLS-filtered global
-reaction subscription and refetch only the active authorized thread when the
-changed `message_id` is currently loaded. Do not denormalize an unchecked
-conversation ID onto reactions.
+`message_reactions` has no conversation column, and DELETE payloads may omit
+`message_id`. Keep one RLS-filtered global reaction subscription and refetch
+the active authorized thread on every reaction INSERT/UPDATE/DELETE. Do not
+denormalize an unchecked conversation ID onto reactions.
 
 ## Notifications
 
@@ -228,7 +235,7 @@ Decision: **admin DMs are pair-private**, not globally visible to every admin.
 
 `admin_dm_conversations`:
 
-- SELECT: authenticated caller is either participant
+- SELECT: caller is a participant and remains a current admin
 - INSERT: RLS `WITH CHECK` enforces caller membership + two current admins;
   guarded RPC is the normal path
 - UPDATE/DELETE: no browser grants
@@ -236,9 +243,12 @@ Decision: **admin DMs are pair-private**, not globally visible to every admin.
 Message SELECT/UPDATE policies branch:
 
 - `admin_dm_conversation_id is null`: existing mama-thread rules;
-- linked admin message: caller must be a conversation participant.
+- linked admin message: caller is a participant and `public.is_admin()` remains
+  true.
 
-Reaction policies join through the message and apply the same branch. Storage
+Reaction policies join through the message and apply the same branch. INSERT
+and DELETE also retain `user_id = auth.uid()`; pair membership does not permit
+removing another participant's reaction. Storage
 policies join `storage.objects.name = messages.attachment_path`; linked admin
 attachments require pair membership, while unlinked mama attachments keep
 existing mama/coach behavior. This removes the current global-admin bypass for
@@ -247,6 +257,27 @@ pair-private content.
 New admin attachments use:
 `admin-dm/{conversation-id}/{sender-id}/{uuid-file}`. Legacy paths remain
 unchanged and are authorized through the linked message row—not folder prefix.
+
+Storage INSERT happens before the message row exists. Its policy parses the new
+path and requires segment 1=`admin-dm`, segment 2 is a conversation containing
+the current admin, and segment 3=`auth.uid()`. Persisted SELECT joins object
+name to the linked message/conversation. DELETE permits the object owner for
+retry/orphan cleanup plus the explicitly intended pair moderation rule.
+
+Replace `messages_attachment_path_check` with a branched constraint:
+
+- unlinked mama path begins `{client_id}/`;
+- linked backfill/compatibility row may retain its existing legacy path;
+- new linked admin path begins
+  `admin-dm/{admin_dm_conversation_id}/{sender_id}/`.
+
+Legacy-style linked paths are accepted only when stamped by backfill or the
+temporary compatibility trigger (`legacy_admin_attachment_path=true`), never
+by ordinary post-cutover inserts. The stamp is immutable.
+
+Admin deprovisioning revokes sessions before role removal. Conversation,
+message, reaction, and Storage policies all recheck current admin role, so a
+demoted participant immediately loses historical pair-private access.
 
 ## Rollout
 
@@ -281,8 +312,12 @@ changes remain additive; no destructive reversal.
 - legacy 5+46 rows become one pair without changing IDs/client IDs/paths;
 - legacy-shaped write is linked by compatibility trigger with two admins;
 - compatibility write and third-admin provisioning fail once ambiguity exists;
+- post-window admin-owned write without conversation ID is rejected;
 - all three current attachments remain accessible;
 - B cannot read/react/sign A↔C messages or attachments;
+- demoted participant cannot read/react/sign historical pair content;
+- pre-row Storage INSERT accepts only valid conversation/member/sender paths;
+- branched attachment constraint rejects ordinary linked legacy-style paths;
 - admin client-detail and inbox open the same conversation;
 - recipient-only, monotonic read receipt;
 - notification routing and unread badge recipient-only;
