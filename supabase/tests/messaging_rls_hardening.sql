@@ -1,6 +1,6 @@
 begin;
 
-select plan(15);
+select plan(17);
 
 insert into auth.users (id, email)
 values
@@ -56,6 +56,14 @@ values
     '00000000-0000-0000-0000-000000000021',
     '00000000-0000-0000-0000-000000000023',
     'admin owner to admin two',
+    'chat'
+  ),
+  (
+    '10000000-0000-0000-0000-000000000026',
+    '00000000-0000-0000-0000-000000000021',
+    '00000000-0000-0000-0000-000000000021',
+    '00000000-0000-0000-0000-000000000023',
+    'unread for admin two only',
     'chat'
   );
 
@@ -182,6 +190,30 @@ select lives_ok(
     where id = '10000000-0000-0000-0000-000000000025'
   $$,
   'owner-sent admin DM recipient can mark message read'
+);
+
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000024';
+
+select is(
+  (
+    select unread::integer
+    from public.load_admin_message_inbox()
+    where client_id = '00000000-0000-0000-0000-000000000021'
+  ),
+  0,
+  'third admin inbox excludes admin DMs for another recipient'
+);
+
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000023';
+
+select is(
+  (
+    select unread::integer
+    from public.load_admin_message_inbox()
+    where client_id = '00000000-0000-0000-0000-000000000021'
+  ),
+  1,
+  'admin DM recipient inbox includes her unread message'
 );
 
 set local role service_role;

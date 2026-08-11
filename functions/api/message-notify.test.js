@@ -77,6 +77,7 @@ describe("durable DM notification processing", () => {
           id: "10000000-0000-4000-8000-000000000011",
           client_id: recipientId,
           sender_id: senderId,
+          recipient_id: recipientId,
           body: "Admin note",
           kind: "chat",
           deleted_at: null,
@@ -103,6 +104,16 @@ describe("durable DM notification processing", () => {
         return new Response(JSON.stringify([
           { id: senderId, name: "Patrick", email: "patrick@example.com", role: "admin" },
           { id: recipientId, name: "Callie", email: "callie@example.com", role: "admin" },
+        ]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/messages?select=sender_id,client_id,recipient_id")) {
+        return new Response(JSON.stringify([
+          { sender_id: senderId, client_id: senderId, recipient_id: recipientId },
+          {
+            sender_id: senderId,
+            client_id: senderId,
+            recipient_id: "00000000-0000-4000-8000-000000000099",
+          },
         ]), { status: 200 });
       }
       if (value.includes("/rest/v1/messages?") && options.method === "HEAD") {
@@ -136,6 +147,11 @@ describe("durable DM notification processing", () => {
     });
 
     expect(response.status).toBe(500);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      env,
+      "send-push",
+      expect.objectContaining({ unreadCount: 1 }),
+    );
     expect(mocks.finish).toHaveBeenCalledWith(
       env,
       expect.objectContaining({ id: 1 }),

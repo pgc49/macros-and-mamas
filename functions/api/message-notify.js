@@ -268,18 +268,29 @@ async function countUnreadForProfile(env, profileId, { asAdmin }) {
   if (!profileId) return 0;
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  let qs = `select=id&read_at=is.null&deleted_at=is.null&sender_id=neq.${encodeURIComponent(profileId)}`;
-  if (!asAdmin) {
-    qs += `&client_id=eq.${encodeURIComponent(profileId)}`;
-  } else {
-    const adminIds = await listAdminIds(env);
-    if (adminIds.length) {
-      const list = adminIds.map(encodeURIComponent).join(",");
-      // Mama senders OR threads owned by an admin (Patrick↔Callie DMs).
-      qs += `&or=(sender_id.not.in.(${list}),client_id.in.(${list}))`;
-    }
-  }
   try {
+    if (asAdmin) {
+      const qs = "select=sender_id,client_id,recipient_id"
+        + "&read_at=is.null&deleted_at=is.null"
+        + `&sender_id=neq.${encodeURIComponent(profileId)}`;
+      const adminIds = await listAdminIds(env);
+      const adminSet = new Set(adminIds);
+      const resp = await fetch(`${base}/rest/v1/messages?${qs}`, {
+        headers: { apikey: key, authorization: `Bearer ${key}` },
+      });
+      if (!resp.ok) throw new Error(`admin unread lookup failed (${resp.status})`);
+      const rows = await resp.json();
+      if (!Array.isArray(rows)) throw new Error("admin unread payload invalid");
+      return rows.filter((row) => (
+        adminSet.has(row.client_id)
+          ? row.recipient_id === profileId
+          : !adminSet.has(row.sender_id)
+      )).length;
+    }
+
+    const qs = "select=id&read_at=is.null&deleted_at=is.null"
+      + `&sender_id=neq.${encodeURIComponent(profileId)}`
+      + `&client_id=eq.${encodeURIComponent(profileId)}`;
     const resp = await fetch(`${base}/rest/v1/messages?${qs}`, {
       method: "HEAD",
       headers: {

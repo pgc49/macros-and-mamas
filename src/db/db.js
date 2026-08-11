@@ -1966,7 +1966,6 @@ export const db = {
     file = null,
     replyToId = null,
     clientMessageId = null,
-    recipientId = null,
   }) {
     const uid = await requireUserId();
     if (!conversationId) throw new Error("channel required");
@@ -2009,7 +2008,6 @@ export const db = {
         .insert({
           conversation_id: conversationId,
           sender_id: uid,
-          ...(recipientId ? { recipient_id: recipientId } : {}),
           client_message_id: idempotencyKey,
           body: text,
           kind: "chat",
@@ -2220,6 +2218,7 @@ export const db = {
     file = null,
     replyToId = null,
     clientMessageId = null,
+    recipientId = null,
   }) {
     const uid = await requireUserId();
     if (!clientId) throw new Error("client required");
@@ -2263,6 +2262,7 @@ export const db = {
         .insert({
           client_id: clientId,
           sender_id: uid,
+          ...(recipientId ? { recipient_id: recipientId } : {}),
           client_message_id: idempotencyKey,
           body: text,
           kind: "chat",

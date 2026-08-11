@@ -7,6 +7,10 @@ create index if not exists messages_recipient_created_idx
   on public.messages (recipient_id, created_at desc)
   where recipient_id is not null;
 
+-- Drop the old identity guard inside this migration transaction so legacy
+-- admin-DM ownership can be normalized; the hardened trigger is recreated below.
+drop trigger if exists messages_protect_edits on public.messages;
+
 -- Admin → mama has one explicit recipient.
 update public.messages m
 set recipient_id = m.client_id
@@ -34,6 +38,19 @@ where m.recipient_id is null
   and exists (
     select 1 from public.profiles p
     where p.id = m.client_id and p.role = 'admin'
+  );
+
+update public.messages m
+set client_id = least(m.sender_id::text, m.recipient_id::text)::uuid
+where m.recipient_id is not null
+  and m.client_id::text <> least(m.sender_id::text, m.recipient_id::text)
+  and exists (
+    select 1 from public.profiles sender
+    where sender.id = m.sender_id and sender.role = 'admin'
+  )
+  and exists (
+    select 1 from public.profiles recipient
+    where recipient.id = m.recipient_id and recipient.role = 'admin'
   );
 
 create or replace function private.set_dm_recipient()
