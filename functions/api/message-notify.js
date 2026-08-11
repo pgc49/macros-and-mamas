@@ -376,6 +376,9 @@ async function markMessageNotified(env, messageId) {
 
 /** Peer for Patrick↔Callie DMs — never fan out to every admin. */
 async function adminDmRecipients(env, msg) {
+  if (msg.recipient_id && msg.recipient_id !== msg.sender_id) {
+    return [msg.recipient_id];
+  }
   if (msg.client_id && msg.client_id !== msg.sender_id) {
     return [msg.client_id];
   }

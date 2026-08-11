@@ -1,6 +1,6 @@
 begin;
 
-select plan(13);
+select plan(15);
 
 insert into auth.users (id, email)
 values
@@ -16,12 +16,13 @@ values
   ('00000000-0000-0000-0000-000000000023', 'rls-admin-two@example.com', 'Admin Two', 'admin', 'active'),
   ('00000000-0000-0000-0000-000000000024', 'rls-admin-three@example.com', 'Admin Three', 'admin', 'active');
 
-insert into public.messages (id, client_id, sender_id, body, kind)
+insert into public.messages (id, client_id, sender_id, recipient_id, body, kind)
 values
   (
     '10000000-0000-0000-0000-000000000021',
     '00000000-0000-0000-0000-000000000022',
     '00000000-0000-0000-0000-000000000021',
+    null,
     'coach to mama',
     'chat'
   ),
@@ -29,6 +30,7 @@ values
     '10000000-0000-0000-0000-000000000022',
     '00000000-0000-0000-0000-000000000022',
     '00000000-0000-0000-0000-000000000022',
+    null,
     'mama to coach',
     'chat'
   ),
@@ -36,6 +38,7 @@ values
     '10000000-0000-0000-0000-000000000023',
     '00000000-0000-0000-0000-000000000022',
     '00000000-0000-0000-0000-000000000021',
+    null,
     'second coach to mama',
     'chat'
   ),
@@ -43,7 +46,16 @@ values
     '10000000-0000-0000-0000-000000000024',
     '00000000-0000-0000-0000-000000000023',
     '00000000-0000-0000-0000-000000000021',
+    '00000000-0000-0000-0000-000000000023',
     'admin one to admin two',
+    'chat'
+  ),
+  (
+    '10000000-0000-0000-0000-000000000025',
+    '00000000-0000-0000-0000-000000000021',
+    '00000000-0000-0000-0000-000000000021',
+    '00000000-0000-0000-0000-000000000023',
+    'admin owner to admin two',
     'chat'
   );
 
@@ -146,6 +158,30 @@ select lives_ok(
     where id = '10000000-0000-0000-0000-000000000024'
   $$,
   'admin DM recipient can mark message read'
+);
+
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000024';
+
+select throws_ok(
+  $$
+    update public.messages
+    set read_at = now()
+    where id = '10000000-0000-0000-0000-000000000025'
+  $$,
+  'P0001',
+  'only the recipient can mark message read',
+  'third admin cannot mark owner-sent admin DM read'
+);
+
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000023';
+
+select lives_ok(
+  $$
+    update public.messages
+    set read_at = now()
+    where id = '10000000-0000-0000-0000-000000000025'
+  $$,
+  'owner-sent admin DM recipient can mark message read'
 );
 
 set local role service_role;

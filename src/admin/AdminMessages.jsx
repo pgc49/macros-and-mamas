@@ -265,7 +265,11 @@ export function AdminMessages({
     const profile = profileOrId;
     if (!profile?.id) return;
     if (isAdminProfile(profile) && adminUserId) {
-      const next = { type: "dm", id: canonicalAdminThreadId(adminUserId, profile.id) };
+      const next = {
+        type: "dm",
+        id: canonicalAdminThreadId(adminUserId, profile.id),
+        peerId: profile.id,
+      };
       activeRef.current = next;
       setActive(next);
       return;
@@ -291,6 +295,7 @@ export function AdminMessages({
 
   const sendDm = async (body, file = null, opts = {}) => {
     const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    const recipientId = activeRef.current?.peerId || activePeerId;
     if (!clientId) return;
     setBusy(true);
     setError("");
@@ -301,6 +306,7 @@ export function AdminMessages({
         file,
         replyToId: opts.replyToId || null,
         clientMessageId: opts.clientMessageId || null,
+        recipientId: activeIsAdmin && recipientId !== adminUserId ? recipientId : null,
       });
       if (activeRef.current?.type === "dm" && activeRef.current.id === clientId) {
         setDmMessages((list) => mergeMessagesById(list, [row]));
@@ -551,7 +557,7 @@ export function AdminMessages({
               subtitle={previewText(row.lastMessage) || "No messages yet"}
               unread={row.unread || 0}
               active={selected}
-              onClick={() => openDm(row.clientId)}
+              onClick={() => openDm(c || row.clientId)}
             />
           );
         })}
