@@ -45,6 +45,7 @@ create table public.messages (
   kind text not null default 'chat',
   created_at timestamptz not null default now(),
   read_at timestamptz,
+  notified_at timestamptz,
   edited_at timestamptz,
   deleted_at timestamptz,
   attachment_path text,
