@@ -65,6 +65,9 @@ select is(
   'legacy reactions remain linked'
 );
 
+insert into auth.users (id, email)
+values ('00000000-0000-0000-0000-000000000053', 'admin-c@example.com');
+
 select throws_ok(
   $$
     insert into public.profiles (id, email, name, role, status)
