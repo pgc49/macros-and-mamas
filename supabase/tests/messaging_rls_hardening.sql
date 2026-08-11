@@ -113,29 +113,23 @@ select throws_ok(
   'mama cannot edit coach message'
 );
 
-select is(
-  (
-    with removed as (
-      delete from storage.objects
-      where id = '20000000-0000-4000-8000-000000000021'
-      returning id
-    )
-    select count(*)::integer from removed
-  ),
-  0,
+select results_eq(
+  $$
+    delete from storage.objects
+    where id = '20000000-0000-4000-8000-000000000021'
+    returning 1
+  $$,
+  $$ select 1 where false $$,
   'mama cannot delete admin attachment in her thread folder'
 );
 
-select is(
-  (
-    with removed as (
-      delete from storage.objects
-      where id = '20000000-0000-4000-8000-000000000022'
-      returning id
-    )
-    select count(*)::integer from removed
-  ),
-  1,
+select results_eq(
+  $$
+    delete from storage.objects
+    where id = '20000000-0000-4000-8000-000000000022'
+    returning 1
+  $$,
+  $$ values (1) $$,
   'mama can delete her own uploaded attachment'
 );
 

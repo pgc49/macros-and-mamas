@@ -79,6 +79,11 @@ $$;
 
 revoke all on function public.protect_message_edits() from public, anon, authenticated;
 
+drop trigger if exists messages_protect_edits on public.messages;
+create trigger messages_protect_edits
+  before update on public.messages
+  for each row execute function public.protect_message_edits();
+
 -- A mama can read every attachment in her own thread, but can only delete an
 -- object she uploaded. Admins retain moderation/cleanup access.
 drop policy if exists "message_attachments_delete" on storage.objects;
