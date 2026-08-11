@@ -69,9 +69,16 @@ jobs:
             cp supabase/migrations/20260811022913_messaging_idempotency_outbox.sql \
               "$DB_ROOT/supabase/migrations/"
           fi
+          if [ -f supabase/migrations/20260811031417_messaging_rls_hardening.sql ]; then
+            cp supabase/migrations/20260811031417_messaging_rls_hardening.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           cp supabase/tests/messaging_inbox.sql "$DB_ROOT/supabase/tests/"
           if [ -f supabase/tests/messaging_idempotency_outbox.sql ]; then
             cp supabase/tests/messaging_idempotency_outbox.sql "$DB_ROOT/supabase/tests/"
+          fi
+          if [ -f supabase/tests/messaging_rls_hardening.sql ]; then
+            cp supabase/tests/messaging_rls_hardening.sql "$DB_ROOT/supabase/tests/"
           fi
           echo "DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
 
