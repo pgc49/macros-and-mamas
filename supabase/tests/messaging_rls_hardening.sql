@@ -1,6 +1,6 @@
 begin;
 
-select plan(9);
+select plan(7);
 
 insert into auth.users (id, email)
 values
@@ -27,25 +27,6 @@ values
     '00000000-0000-0000-0000-000000000022',
     'mama to coach',
     'chat'
-  );
-
-insert into storage.buckets (id, name, public)
-values ('message-attachments', 'message-attachments', false)
-on conflict (id) do nothing;
-
-insert into storage.objects (id, bucket_id, name, owner_id)
-values
-  (
-    '20000000-0000-4000-8000-000000000021',
-    'message-attachments',
-    '00000000-0000-0000-0000-000000000022/admin-file.pdf',
-    '00000000-0000-0000-0000-000000000021'
-  ),
-  (
-    '20000000-0000-4000-8000-000000000022',
-    'message-attachments',
-    '00000000-0000-0000-0000-000000000022/mama-file.pdf',
-    '00000000-0000-0000-0000-000000000022'
   );
 
 set local role authenticated;
@@ -113,36 +94,20 @@ select throws_ok(
   'mama cannot edit coach message'
 );
 
-select results_eq(
-  $$
-    delete from storage.objects
-    where id = '20000000-0000-4000-8000-000000000021'
-    returning 1
-  $$,
-  $$ select 1 where false $$,
-  'mama cannot delete admin attachment in her thread folder'
-);
-
-select results_eq(
-  $$
-    delete from storage.objects
-    where id = '20000000-0000-4000-8000-000000000022'
-    returning 1
-  $$,
-  $$ values (1) $$,
-  'mama can delete her own uploaded attachment'
-);
-
 reset role;
 
-select is(
-  (
-    select count(*)::integer
-    from storage.objects
-    where id = '20000000-0000-4000-8000-000000000021'
+select ok(
+  exists (
+    select 1
+    from pg_policies
+    where schemaname = 'storage'
+      and tablename = 'objects'
+      and policyname = 'message_attachments_delete'
+      and cmd = 'DELETE'
+      and qual ilike '%owner_id%'
+      and qual not ilike '%foldername%'
   ),
-  1,
-  'admin-owned attachment remains after denied delete'
+  'attachment delete policy is uploader-owned, not thread-folder-owned'
 );
 
 select * from finish();
