@@ -66,16 +66,20 @@ export async function listDueNotificationJobs(env, limit = 20) {
   if (!expireResponse.ok) {
     throw new Error(`outbox expiry failed (${expireResponse.status})`);
   }
-  const cleanupResponse = await fetch(
-    `${base}/rest/v1/rpc/cleanup_message_notification_history`,
-    {
-      method: "POST",
-      headers: headers(key),
-      body: "{}",
-    },
-  );
-  if (!cleanupResponse.ok) {
-    console.warn("outbox cleanup deferred", cleanupResponse.status);
+  try {
+    const cleanupResponse = await fetch(
+      `${base}/rest/v1/rpc/cleanup_message_notification_history`,
+      {
+        method: "POST",
+        headers: headers(key),
+        body: "{}",
+      },
+    );
+    if (!cleanupResponse.ok) {
+      console.warn("outbox cleanup deferred", cleanupResponse.status);
+    }
+  } catch (error) {
+    console.warn("outbox cleanup deferred", error);
   }
   const now = encodeURIComponent(new Date().toISOString());
   const stale = encodeURIComponent(new Date(Date.now() - 5 * 60 * 1000).toISOString());

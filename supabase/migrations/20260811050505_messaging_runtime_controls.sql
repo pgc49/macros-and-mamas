@@ -28,8 +28,7 @@ revoke all on table public.messaging_runtime_config
 revoke all on table public.messaging_runtime_audit
   from public, anon, authenticated, service_role;
 grant select on table public.messaging_runtime_config to service_role;
-grant select, insert on table public.messaging_runtime_audit to service_role;
-grant usage, select on sequence public.messaging_runtime_audit_id_seq to service_role;
+grant select on table public.messaging_runtime_audit to service_role;
 
 insert into public.messaging_runtime_config (singleton)
 values (true)

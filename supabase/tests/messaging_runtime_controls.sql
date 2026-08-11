@@ -1,6 +1,6 @@
 begin;
 
-select plan(31);
+select plan(32);
 
 select has_table('public', 'messaging_runtime_config', 'runtime config exists');
 select has_table('public', 'messaging_runtime_audit', 'runtime audit exists');
@@ -23,6 +23,10 @@ select ok(
 select ok(
   not has_table_privilege('service_role', 'public.messaging_runtime_config', 'DELETE'),
   'service role cannot delete runtime singleton'
+);
+select ok(
+  not has_table_privilege('service_role', 'public.messaging_runtime_audit', 'INSERT'),
+  'runtime audit rows cannot be forged directly'
 );
 select ok(
   not has_table_privilege('service_role', 'public.messaging_runtime_audit', 'UPDATE'),

@@ -19,6 +19,7 @@ export function useMessagingRuntime() {
   const mutationInFlight = useRef(false);
 
   const refreshRuntime = useCallback(async () => {
+    if (mutationInFlight.current) return null;
     const sequence = ++requestSequence.current;
     const mutationAtStart = mutationGeneration.current;
     try {
