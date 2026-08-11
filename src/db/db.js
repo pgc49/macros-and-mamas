@@ -2811,14 +2811,56 @@ export const db = {
   async savePushSubscription({ endpoint, p256dh, auth, userAgent }) {
     const uid = await requireUserId();
     if (!endpoint || !p256dh || !auth) throw new Error("invalid subscription");
+    const appOrigin = typeof window !== "undefined" ? window.location.origin : null;
     const { error } = await supabase.from("push_subscriptions").upsert({
       profile_id: uid,
       endpoint: String(endpoint).slice(0, 2000),
       p256dh: String(p256dh).slice(0, 200),
       auth: String(auth).slice(0, 200),
       user_agent: String(userAgent || "").slice(0, 300) || null,
+      app_origin: appOrigin,
+      last_seen_at: new Date().toISOString(),
     }, { onConflict: "endpoint" });
     if (error) throw error;
+    const adminOrigin = (() => {
+      try {
+        return new URL(
+          import.meta.env.VITE_ADMIN_APP_URL || "https://admin.macrosandmamas.com",
+        ).origin;
+      } catch {
+        return "";
+      }
+    })();
+    if (appOrigin && appOrigin === adminOrigin) {
+      const { data: me } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", uid)
+        .maybeSingle();
+      if (String(me?.role || "").toLowerCase() === "admin") {
+        const currentEndpoint = String(endpoint).slice(0, 2000);
+        const [legacy, otherOrigins] = await Promise.all([
+          supabase
+            .from("push_subscriptions")
+            .delete()
+            .eq("profile_id", uid)
+            .is("app_origin", null)
+            .neq("endpoint", currentEndpoint),
+          supabase
+            .from("push_subscriptions")
+            .delete()
+            .eq("profile_id", uid)
+            .neq("app_origin", appOrigin)
+            .neq("endpoint", currentEndpoint),
+        ]);
+        if (legacy.error || otherOrigins.error) {
+          console.warn(
+            "old admin push subscription cleanup failed",
+            legacy.error || otherOrigins.error,
+          );
+        }
+      }
+    }
     return { ok: true };
   },
 

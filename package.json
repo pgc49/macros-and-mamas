@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "VITE_APP_BUILD_ID=${CF_PAGES_COMMIT_SHA:-${VITE_APP_BUILD_ID:-dev}} vite build && node scripts/maybe-preview-marketing.mjs",
+    "build:customer": "APP_SURFACE=customer npm run build && APP_SURFACE=customer node scripts/verify-surface-build.mjs",
+    "build:admin": "APP_SURFACE=admin npm run build && APP_SURFACE=admin node scripts/verify-surface-build.mjs",
+    "qa:surfaces": "npm run build:customer && npm run build:admin",
     "build:www-cutover": "MARKETING_WWW_CUTOVER=1 npm run build",
     "lint": "oxlint",
     "qa:credits": "node scripts/qa-credits-math.mjs",

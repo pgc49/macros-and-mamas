@@ -56,11 +56,12 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: true, skipped: "already_notified", pushSent: 0 });
     }
 
-    const [conversation, sender, members, replyTo] = await Promise.all([
+    const [conversation, sender, members, replyTo, adminIds] = await Promise.all([
       loadConversation(env, msg.conversation_id),
       msg.sender_id ? loadProfile(env, msg.sender_id) : Promise.resolve(null),
       listConversationMembers(env, msg.conversation_id),
       msg.reply_to_id ? loadChannelMessage(env, msg.reply_to_id) : Promise.resolve(null),
+      listAdminIds(env),
     ]);
     if (!conversation) throw new Error("channel missing");
 
@@ -76,6 +77,7 @@ export async function onRequestPost({ request, env }) {
       messageKind: msg.kind,
       replyTo,
     }));
+    const adminSet = new Set(adminIds);
 
     let pushSent = 0;
     for (const member of recipients) {
@@ -84,7 +86,10 @@ export async function onRequestPost({ request, env }) {
         body: preview
           ? (msg.kind === "system" ? preview : `${senderLabel}: ${preview}`)
           : `${senderLabel} posted in the group`,
-        url: `/dashboard?tab=messages&channel=${encodeURIComponent(msg.conversation_id)}`,
+        url: channelNotificationUrl(
+          msg.conversation_id,
+          adminSet.has(member.user_id),
+        ),
       });
     }
 
@@ -111,6 +116,11 @@ export async function onRequestPost({ request, env }) {
     }
     return json({ error: "notify failed" }, 500);
   }
+}
+
+export function channelNotificationUrl(conversationId, isAdminRecipient) {
+  const path = isAdminRecipient ? "/admin" : "/dashboard";
+  return `${path}?tab=messages&channel=${encodeURIComponent(conversationId)}`;
 }
 
 function shouldNotifyMember({
@@ -213,6 +223,14 @@ async function listConversationMembers(env, conversationId) {
     `/rest/v1/conversation_members?conversation_id=eq.${encodeURIComponent(conversationId)}`
       + "&removed_at=is.null&select=conversation_id,user_id,notify_level,removed_at",
   );
+}
+
+async function listAdminIds(env) {
+  const rows = await sbGet(
+    env,
+    "/rest/v1/profiles?role=eq.admin&select=id",
+  );
+  return rows.map((row) => row.id).filter(Boolean);
 }
 
 async function markChannelMessageNotified(env, messageId) {

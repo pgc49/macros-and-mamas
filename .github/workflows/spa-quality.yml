@@ -80,12 +80,19 @@ jobs:
             cp supabase/migrations/20260811050505_messaging_runtime_controls.sql \
               "$DB_ROOT/supabase/migrations/"
           fi
+          if [ -f supabase/migrations/20260811064316_push_subscription_origin.sql ]; then
+            cp supabase/migrations/20260811064316_push_subscription_origin.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           cp supabase/tests/messaging_inbox.sql "$DB_ROOT/supabase/tests/"
           if [ -f supabase/tests/messaging_idempotency_outbox.sql ]; then
             cp supabase/tests/messaging_idempotency_outbox.sql "$DB_ROOT/supabase/tests/"
           fi
           if [ -f supabase/tests/messaging_runtime_controls.sql ]; then
             cp supabase/tests/messaging_runtime_controls.sql "$DB_ROOT/supabase/tests/"
+          fi
+          if [ -f supabase/tests/push_subscription_origin.sql ]; then
+            cp supabase/tests/push_subscription_origin.sql "$DB_ROOT/supabase/tests/"
           fi
           echo "DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
 
@@ -138,6 +145,10 @@ jobs:
             "$DB_ROOT/supabase/migrations/"
           cp supabase/migrations/20260811022913_messaging_idempotency_outbox.sql \
             "$DB_ROOT/supabase/migrations/"
+          cp supabase/migrations/20260811050505_messaging_runtime_controls.sql \
+            "$DB_ROOT/supabase/migrations/"
+          cp supabase/migrations/20260811064316_push_subscription_origin.sql \
+            "$DB_ROOT/supabase/migrations/"
           cp supabase/tests/seed_admin_dm_legacy.sql \
             "$DB_ROOT/supabase/migrations/20260811120000_seed_admin_dm_legacy.sql"
           cp supabase/migrations/20260811132341_admin_dm_conversations.sql \
@@ -153,3 +164,141 @@ jobs:
           source "$RUNNER_TEMP/admin-dm.env"
           set +a
           node scripts/qa-admin-dm-storage.mjs
+
+  surface-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      matrix:
+        surface: [customer, admin]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate deploy build variables
+        if: ${{ github.event_name == 'push' && vars.ENABLE_ISOLATED_SURFACE_DEPLOYS == 'true' }}
+        env:
+          CUSTOMER_APP_URL: ${{ vars.CUSTOMER_APP_URL }}
+          ADMIN_APP_URL: ${{ vars.ADMIN_APP_URL }}
+          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          SUPABASE_ANON: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VAPID: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
+        run: |
+          for name in CUSTOMER_APP_URL ADMIN_APP_URL SUPABASE_URL SUPABASE_ANON VAPID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing repository variable $name"
+              exit 1
+            fi
+          done
+      - run: npm run build:${{ matrix.surface }}
+        env:
+          CF_PAGES_BRANCH: main
+          CF_PAGES_COMMIT_SHA: ${{ github.sha }}
+          CF_PAGES_URL: ${{ matrix.surface == 'customer' && vars.CUSTOMER_APP_URL || vars.ADMIN_APP_URL }}
+          CUSTOMER_APP_URL: ${{ vars.CUSTOMER_APP_URL }}
+          VITE_ADMIN_APP_URL: ${{ vars.ADMIN_APP_URL }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          VITE_META_PIXEL_ID: ${{ vars.VITE_META_PIXEL_ID }}
+          VITE_CF_WEB_ANALYTICS_TOKEN: ${{ vars.VITE_CF_WEB_ANALYTICS_TOKEN }}
+          VITE_LIVE_CHANNEL_COHORTS: ${{ vars.VITE_LIVE_CHANNEL_COHORTS }}
+      - name: Package and compile deployable Pages artifact
+        run: |
+          mkdir -p deploy-artifact/marketing/src
+          cp -R dist deploy-artifact/dist
+          cp -R functions deploy-artifact/functions
+          cp -R marketing/src/lib deploy-artifact/marketing/src/lib
+          cd deploy-artifact
+          npx wrangler@4.120.1 pages functions build functions
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.surface }}-surface-${{ github.sha }}
+          path: deploy-artifact
+          retention-days: 7
+
+  classify-production-surfaces:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_ISOLATED_SURFACE_DEPLOYS == 'true' }}
+    needs: [verify, database, surface-build]
+    runs-on: ubuntu-latest
+    outputs:
+      customer: ${{ steps.paths.outputs.customer }}
+      admin: ${{ steps.paths.outputs.admin }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: paths
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -z "$BEFORE" ] || printf '%s' "$BEFORE" | rg -q '^0+$'; then
+            echo "customer=true" >> "$GITHUB_OUTPUT"
+            echo "admin=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only "$BEFORE" "$GITHUB_SHA" > /tmp/changed.txt
+          # Admin currently contains the full app. Only known documentation or
+          # marketing-only changes are admin-neutral; unknown paths default to
+          # deploying admin.
+          if awk '
+            !(/^docs\\// || /^marketing\\//) { shared=1 }
+            END { exit shared ? 0 : 1 }
+          ' /tmp/changed.txt; then
+            echo "admin=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "admin=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Customer-neutral means every file is explicitly admin-only.
+          if awk '
+            !(/^src\\/admin\\// || /^docs\\/ADMIN-CUSTOMER-DEPLOYMENT-ISOLATION\\.md$/) { shared=1 }
+            END { exit shared ? 0 : 1 }
+          ' /tmp/changed.txt; then
+            echo "customer=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "customer=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-customer-production:
+    needs: [surface-build, classify-production-surfaces]
+    if: ${{ needs.classify-production-surfaces.outputs.customer == 'true' }}
+    runs-on: ubuntu-latest
+    environment: app-surfaces-production
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: customer-surface-${{ github.sha }}
+          path: deploy
+      - run: npx wrangler@4.120.1 pages deploy dist --project-name "$PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+        working-directory: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ vars.CUSTOMER_PAGES_PROJECT }}
+
+  deploy-admin-production:
+    needs: [surface-build, classify-production-surfaces]
+    if: ${{ needs.classify-production-surfaces.outputs.admin == 'true' }}
+    runs-on: ubuntu-latest
+    environment: app-surfaces-production
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: admin-surface-${{ github.sha }}
+          path: deploy
+      - run: npx wrangler@4.120.1 pages deploy dist --project-name "$PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+        working-directory: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ vars.ADMIN_PAGES_PROJECT }}

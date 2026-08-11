@@ -28,6 +28,10 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+if (process.env.APP_SURFACE === "admin") {
+  console.log("[overlay-marketing] skip for isolated admin surface");
+  process.exit(0);
+}
 const branch = process.env.CF_PAGES_BRANCH || "";
 const forceCutover = process.env.MARKETING_WWW_CUTOVER === "1";
 const forcePreview = process.env.PREVIEW_MARKETING === "1";

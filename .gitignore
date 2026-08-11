@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 _worker.bundle
+.wrangler
 *.local
 
 # Editor directories and files
