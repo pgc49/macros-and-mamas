@@ -44,10 +44,10 @@ values
   ),
   (
     '10000000-0000-0000-0000-000000000024',
-    '00000000-0000-0000-0000-000000000023',
     '00000000-0000-0000-0000-000000000021',
     '00000000-0000-0000-0000-000000000023',
-    'admin one to admin two',
+    '00000000-0000-0000-0000-000000000021',
+    'admin two to admin one',
     'chat'
   ),
   (
@@ -149,7 +149,7 @@ select throws_ok(
   'nonrecipient admin cannot mark admin DM read'
 );
 
-set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000023';
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000021';
 
 select lives_ok(
   $$
