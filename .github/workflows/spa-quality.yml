@@ -35,6 +35,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Customer/admin artifact isolation
+        run: npm run qa:surfaces
+
   database:
     runs-on: ubuntu-latest
     timeout-minutes: 15

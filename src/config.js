@@ -48,6 +48,7 @@ export const CONFIG = {
   // every table. Service-role key never ships to the client.
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
+  ADMIN_APP_URL: envUrl("VITE_ADMIN_APP_URL") || "https://admin.macrosandmamas.com",
 
   // Private WhatsApp invite — shown in approve email; optional in-app tip.
   WHATSAPP_GROUP_URL:

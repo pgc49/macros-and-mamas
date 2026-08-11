@@ -127,10 +127,29 @@ function SignInGate({
   );
 }
 
-/* Admin is a separate chunk — never loaded on customer marketing/dashboard paths. */
-const AdminPortal = lazy(() =>
-  import("./admin/AdminPortal").then((m) => ({ default: m.AdminPortal })),
-);
+const APP_SURFACE = import.meta.env.VITE_APP_SURFACE || "combined";
+const ADMIN_SURFACE_ENABLED = APP_SURFACE !== "customer";
+
+/* Customer builds compile this import away; admin/combined builds keep it lazy. */
+const AdminPortal = ADMIN_SURFACE_ENABLED
+  ? lazy(() => import("./admin/AdminPortal").then((m) => ({ default: m.AdminPortal })))
+  : null;
+
+function AdminSurfaceRedirect() {
+  useEffect(() => {
+    const target = new URL("/admin", CONFIG.ADMIN_APP_URL);
+    target.search = window.location.search;
+    target.hash = window.location.hash;
+    window.location.replace(target.toString());
+  }, []);
+  return (
+    <Shell>
+      <div style={{ fontFamily: FD, fontSize: 18, color: T.inkSoft, padding: "24px 0" }}>
+        Opening the secure admin app…
+      </div>
+    </Shell>
+  );
+}
 
 /* Account hub pages — lazy so marketing homepage / Safari first paint never pulls Profile+Payments. */
 const AccountPage = lazy(() =>
@@ -1771,7 +1790,9 @@ export default function App() {
       <Route
         path={PATHS.admin}
         element={
-          !user
+          !ADMIN_SURFACE_ENABLED
+            ? <AdminSurfaceRedirect />
+            : !user
             ? <Navigate to={PATHS.signin} replace />
             : !isAdmin
               ? <Navigate to={dashboardUnlocked ? PATHS.dashboard : PATHS.home} replace />
