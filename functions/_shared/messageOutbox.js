@@ -55,6 +55,17 @@ export async function finishNotificationJob(env, job, { success, error = "" }) {
 export async function listDueNotificationJobs(env, limit = 20) {
   const { base, key } = config(env);
   if (!base || !key) throw new Error("missing outbox configuration");
+  const expireResponse = await fetch(
+    `${base}/rest/v1/rpc/expire_message_notification_jobs`,
+    {
+      method: "POST",
+      headers: headers(key),
+      body: "{}",
+    },
+  );
+  if (!expireResponse.ok) {
+    throw new Error(`outbox expiry failed (${expireResponse.status})`);
+  }
   const now = encodeURIComponent(new Date().toISOString());
   const stale = encodeURIComponent(new Date(Date.now() - 5 * 60 * 1000).toISOString());
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20));

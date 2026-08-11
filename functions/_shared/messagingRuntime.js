@@ -27,32 +27,38 @@ export async function loadMessagingRuntime(env) {
   if (!response.ok) throw new Error(`runtime load failed (${response.status})`);
   const rows = await response.json();
   if (!Array.isArray(rows)) throw new Error("runtime payload invalid");
-  return rows[0] || {
-    mode: "normal",
-    attachments_enabled: true,
-    notifications_enabled: true,
-    reason: "",
-    updated_at: null,
-    updated_by: null,
-  };
+  if (!rows[0]) throw new Error("runtime singleton missing");
+  return rows[0];
 }
 
-export async function updateMessagingRuntime(env, patch, userId) {
+export async function updateMessagingRuntime(
+  env,
+  patch,
+  userId,
+  expectedUpdatedAt,
+  requestId,
+) {
   const { base, serviceKey } = config(env);
   if (!base || !serviceKey) throw new Error("missing messaging runtime configuration");
-  const response = await fetch(
-    `${base}/rest/v1/messaging_runtime_config?singleton=eq.true`,
-    {
-      method: "PATCH",
-      headers: serviceHeaders(serviceKey, { prefer: "return=representation" }),
-      body: JSON.stringify({
-        ...patch,
-        updated_at: new Date().toISOString(),
-        updated_by: userId,
-      }),
-    },
-  );
-  if (!response.ok) throw new Error(`runtime update failed (${response.status})`);
+  const response = await fetch(`${base}/rest/v1/rpc/update_messaging_runtime`, {
+    method: "POST",
+    headers: serviceHeaders(serviceKey),
+    body: JSON.stringify({
+      p_actor_id: userId,
+      p_request_id: requestId,
+      p_expected_updated_at: expectedUpdatedAt,
+      p_mode: patch.mode ?? null,
+      p_attachments_enabled: patch.attachments_enabled ?? null,
+      p_notifications_enabled: patch.notifications_enabled ?? null,
+      p_reason: patch.reason ?? null,
+    }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const error = new Error(payload.message || `runtime update failed (${response.status})`);
+    if (payload.code === "40001") error.code = "CONFLICT";
+    throw error;
+  }
   const rows = await response.json();
   if (!Array.isArray(rows) || !rows[0]) throw new Error("runtime update returned no row");
   return rows[0];
@@ -84,48 +90,48 @@ export async function loadMessagingHealth(env) {
   const { base, serviceKey } = config(env);
   if (!base || !serviceKey) throw new Error("missing messaging health configuration");
   const headers = serviceHeaders(serviceKey);
-  const [runtime, jobsResponse, dmResponse, channelResponse] = await Promise.all([
+  const [runtime, healthResponse] = await Promise.all([
     loadMessagingRuntime(env),
     fetch(
-      `${base}/rest/v1/message_notification_outbox`
-        + "?select=status,attempts,created_at,available_at,locked_at"
-        + "&status=neq.sent&order=created_at.asc&limit=500",
-      { headers },
-    ),
-    fetch(`${base}/rest/v1/messages?select=created_at&order=created_at.desc&limit=1`, { headers }),
-    fetch(
-      `${base}/rest/v1/conversation_messages?select=created_at&order=created_at.desc&limit=1`,
-      { headers },
+      `${base}/rest/v1/rpc/messaging_health_snapshot`,
+      {
+        method: "POST",
+        headers,
+        body: "{}",
+      },
     ),
   ]);
-  if (!jobsResponse.ok || !dmResponse.ok || !channelResponse.ok) {
-    throw new Error("messaging health query failed");
-  }
-  const jobs = await jobsResponse.json();
-  const dm = await dmResponse.json();
-  const channels = await channelResponse.json();
-  if (!Array.isArray(jobs) || !Array.isArray(dm) || !Array.isArray(channels)) {
+  if (!healthResponse.ok) throw new Error("messaging health query failed");
+  const rows = await healthResponse.json();
+  if (!Array.isArray(rows) || !rows[0]) {
     throw new Error("messaging health payload invalid");
   }
+  const snapshot = rows[0];
   const now = Date.now();
-  const counts = { pending: 0, retry: 0, processing: 0, dead: 0 };
-  for (const job of jobs) {
-    if (Object.hasOwn(counts, job.status)) counts[job.status] += 1;
-  }
-  const oldest = jobs[0]?.created_at || null;
+  const oldest = snapshot.oldest_open_at || null;
   const oldestAgeSeconds = oldest
     ? Math.max(0, Math.round((now - new Date(oldest).getTime()) / 1000))
     : 0;
   return {
-    runtime,
+    runtime: {
+      mode: runtime.mode,
+      attachments_enabled: runtime.attachments_enabled,
+      notifications_enabled: runtime.notifications_enabled,
+    },
     outbox: {
-      ...counts,
-      totalOpen: jobs.length,
+      pending: Number(snapshot.pending) || 0,
+      retry: Number(snapshot.retry) || 0,
+      processing: Number(snapshot.processing) || 0,
+      dead: Number(snapshot.dead) || 0,
+      expired: Number(snapshot.expired) || 0,
+      staleProcessing: Number(snapshot.stale_processing) || 0,
+      totalOpen: (Number(snapshot.pending) || 0)
+        + (Number(snapshot.retry) || 0)
+        + (Number(snapshot.processing) || 0)
+        + (Number(snapshot.dead) || 0),
       oldest,
       oldestAgeSeconds,
     },
-    latestMessageAt: dm[0]?.created_at || null,
-    latestChannelMessageAt: channels[0]?.created_at || null,
   };
 }
 

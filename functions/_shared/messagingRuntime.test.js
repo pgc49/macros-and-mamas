@@ -39,10 +39,11 @@ describe("messaging runtime operations", () => {
       attachments_enabled: true,
       notifications_enabled: true,
       reason: "",
-    }, "admin-id");
+    }, "admin-id", "2026-08-11T00:00:00Z", "request-id");
     expect(updated.mode).toBe("normal");
     const patch = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(patch.updated_by).toBe("admin-id");
+    expect(patch.p_actor_id).toBe("admin-id");
+    expect(patch.p_expected_updated_at).toBe("2026-08-11T00:00:00Z");
   });
 
   it("reports dead and aging outbox jobs without message content", async () => {
@@ -54,14 +55,15 @@ describe("messaging runtime operations", () => {
         notifications_enabled: true,
         reason: "",
       }]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([
-        { status: "retry", attempts: 2, created_at: old },
-        { status: "dead", attempts: 6, created_at: old },
-      ]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([
-        { created_at: "2026-08-11T00:00:00Z" },
-      ]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        pending: 0,
+        retry: 1,
+        processing: 0,
+        dead: 1,
+        expired: 0,
+        oldest_open_at: old,
+        stale_processing: 0,
+      }]), { status: 200 }));
 
     const health = await loadMessagingHealth(env);
     expect(health.outbox.retry).toBe(1);

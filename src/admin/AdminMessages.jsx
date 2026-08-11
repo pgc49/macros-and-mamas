@@ -70,6 +70,7 @@ export function AdminMessages({
   const isWide = useIsWide();
   const {
     runtime,
+    runtimeLoaded,
     runtimeError,
     updateRuntime,
   } = useMessagingRuntime();
@@ -848,6 +849,7 @@ export function AdminMessages({
       {(!active || isWide) && (
         <AdminMessagingRuntimeControls
           runtime={runtime}
+          runtimeLoaded={runtimeLoaded}
           runtimeError={runtimeError}
           onUpdate={updateRuntime}
         />
@@ -872,6 +874,7 @@ export function AdminMessages({
 
 function AdminMessagingRuntimeControls({
   runtime,
+  runtimeLoaded,
   runtimeError,
   onUpdate,
 }) {
@@ -896,12 +899,14 @@ function AdminMessagingRuntimeControls({
   const setMode = async (mode) => {
     let reason = "";
     if (mode !== "normal") {
-      reason = window.prompt(
+      const response = window.prompt(
         "Short explanation shown to mamas (optional):",
         runtime.reason || "Brief maintenance — your messages are safe.",
-      ) || "";
+      );
+      if (response === null) return;
+      reason = response;
     }
-    await apply({ ...runtime, mode, reason }, `Set messaging to ${mode.replace("_", "-")}`);
+    await apply({ mode, reason }, `Set messaging to ${mode.replace("_", "-")}`);
   };
 
   return (
@@ -922,7 +927,7 @@ function AdminMessagingRuntimeControls({
             key={mode}
             small
             ghost={runtime.mode !== mode}
-            disabled={saving}
+            disabled={saving || !runtimeLoaded}
             onClick={() => setMode(mode)}
           >
             {mode === "normal" ? "Normal" : mode === "read_only" ? "Read-only" : "Off"}
@@ -932,9 +937,8 @@ function AdminMessagingRuntimeControls({
           <input
             type="checkbox"
             checked={runtime.attachmentsEnabled}
-            disabled={saving}
+            disabled={saving || !runtimeLoaded}
             onChange={(event) => apply({
-              ...runtime,
               attachmentsEnabled: event.target.checked,
             }, `${event.target.checked ? "Enable" : "Pause"} attachments`)}
           />
@@ -944,9 +948,8 @@ function AdminMessagingRuntimeControls({
           <input
             type="checkbox"
             checked={runtime.notificationsEnabled}
-            disabled={saving}
+            disabled={saving || !runtimeLoaded}
             onChange={(event) => apply({
-              ...runtime,
               notificationsEnabled: event.target.checked,
             }, `${event.target.checked ? "Enable" : "Pause"} push/email`)}
           />

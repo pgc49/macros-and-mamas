@@ -256,6 +256,10 @@ export function MessagesThread({
     setRecordMs(0);
   };
 
+  useEffect(() => {
+    if (recording && (!allowAttachments || hideComposer)) cancelRecording();
+  }, [allowAttachments, hideComposer, recording]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const send = async () => {
     const text = draft.trim();
     const attach = voicePreview?.file || file;

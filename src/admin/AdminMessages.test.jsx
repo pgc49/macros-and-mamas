@@ -57,6 +57,7 @@ const { deferredByClient, dbMock, realtimeChannel } = vi.hoisted(() => {
         attachmentsEnabled: true,
         notificationsEnabled: true,
         reason: "",
+        updatedAt: "2026-08-11T00:00:00Z",
       })),
       loadMessages: vi.fn((clientId) => {
         const pending = pendingByClient.get(clientId);
@@ -108,6 +109,20 @@ afterEach(() => {
 });
 
 describe("AdminMessages thread switching", () => {
+  it("fails closed and disables admin controls when runtime status is unavailable", async () => {
+    dbMock.loadMessagingRuntime.mockRejectedValueOnce(new Error("runtime unavailable"));
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+    const normal = await screen.findByRole("button", { name: "Normal" });
+    await waitFor(() => expect(normal.disabled).toBe(true));
+    expect(screen.getByText("Couldn’t check messaging status.")).toBeTruthy();
+  });
+
   it("never renders a late previous-client response under the new client", async () => {
     const mamaA = deferred();
     const mamaB = deferred();

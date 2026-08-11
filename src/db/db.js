@@ -1878,6 +1878,7 @@ export const db = {
     const { data, error } = await supabase.rpc("messaging_runtime_status");
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error("Messaging runtime status unavailable");
     return {
       mode: ["normal", "read_only", "off"].includes(row?.mode) ? row.mode : "normal",
       attachmentsEnabled: row?.attachments_enabled !== false,

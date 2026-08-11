@@ -66,6 +66,11 @@ create policy messages_insert_own
     and (public.is_admin() or auth.uid() = client_id)
   );
 
+create policy messages_update_thread
+  on public.messages for update to authenticated
+  using (public.is_admin() or auth.uid() = client_id)
+  with check (public.is_admin() or auth.uid() = client_id);
+
 grant select, insert, update, delete on public.messages to authenticated;
 grant select, insert, update, delete on public.messages to service_role;
 grant select on public.profiles to authenticated;
@@ -89,4 +94,26 @@ create table public.conversation_messages (
 );
 
 alter table public.conversation_messages enable row level security;
+
+create table public.message_reactions (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null,
+  user_id uuid not null,
+  emoji text not null
+);
+
+create table public.conversation_message_reactions (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null,
+  user_id uuid not null,
+  emoji text not null
+);
+
+grant select, insert, delete on public.message_reactions to authenticated, service_role;
+grant select, insert, delete on public.conversation_message_reactions
+  to authenticated, service_role;
+
+insert into storage.buckets (id, name, public)
+values ('message-attachments', 'message-attachments', false)
+on conflict (id) do nothing;
 

@@ -11,7 +11,11 @@ async function handle(request, env) {
   try {
     const health = await loadMessagingHealth(env);
     const unhealthy = health.outbox.dead > 0
-      || health.outbox.oldestAgeSeconds > 10 * 60;
+      || (
+        health.runtime.notifications_enabled
+        && health.outbox.oldestAgeSeconds > 10 * 60
+      )
+      || health.outbox.staleProcessing > 0;
     if (unhealthy) {
       console.error("messaging health degraded", {
         outbox: health.outbox,
