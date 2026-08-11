@@ -107,7 +107,7 @@ export async function onRequestPost({ request, env }) {
           unreadCount: unreadCount || 1,
         });
         if (pushSent === 0) {
-          const contact = await loadUserContact(env, msg.client_id);
+          const contact = await loadUserContact(env, msg.client_id, { strict: true });
           const email = contact.email || client.email || "";
           if (email) {
             const mail = await invokeEdgeFunction(env, "message-email", {
@@ -157,22 +157,25 @@ export async function onRequestPost({ request, env }) {
         });
         pushSent += n;
         if (n > 0) continue;
-        const contact = await loadUserContact(env, adminId);
+        const contact = await loadUserContact(env, adminId, { strict: true });
         const email = contact.email || "";
         if (!email) continue;
+        let delivered = false;
         const mail = await invokeEdgeFunction(env, "message-email", {
           email,
           name: contact.name || "Admin",
           preview,
         });
-        if (mail.ok) emailSent = true;
+        if (mail.ok) delivered = true;
         else if (await sendMamaEmailDirect(env, {
           email,
           name: contact.name || "Admin",
           preview,
         })) {
-          emailSent = true;
+          delivered = true;
         }
+        if (!delivered) throw new Error("admin email delivery failed");
+        emailSent = true;
       }
     } else {
       // Mama should never own an admin-as-client_id thread; ignore safely.
@@ -341,8 +344,11 @@ async function loadMessage(env, id) {
     `${base}/rest/v1/messages?id=eq.${encodeURIComponent(id)}&select=*&limit=1`,
     { headers: { apikey: key, authorization: `Bearer ${key}` } },
   );
-  if (!resp.ok) return null;
-  const rows = await resp.json().catch(() => []);
+  if (!resp.ok) {
+    throw new Error(`message source lookup failed (${resp.status})`);
+  }
+  const rows = await resp.json();
+  if (!Array.isArray(rows)) throw new Error("message source payload invalid");
   return rows[0] || null;
 }
 

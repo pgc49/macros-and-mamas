@@ -103,7 +103,7 @@ function resendIdFrom(result) {
 }
 
 /** Best-effort profile + auth email lookup via service role. */
-export async function loadUserContact(env, userId) {
+export async function loadUserContact(env, userId, { strict = false } = {}) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key || !userId) return { email: null, name: null, profile: null };
@@ -118,9 +118,25 @@ export async function loadUserContact(env, userId) {
     }),
   ]);
 
-  const profiles = profileResp.ok ? await profileResp.json().catch(() => []) : [];
+  if (strict && !profileResp.ok) {
+    throw new Error(`profile contact lookup failed (${profileResp.status})`);
+  }
+  if (strict && !userResp.ok && userResp.status !== 404) {
+    throw new Error(`auth contact lookup failed (${userResp.status})`);
+  }
+  const profiles = profileResp.ok
+    ? await profileResp.json().catch((error) => {
+      if (strict) throw error;
+      return [];
+    })
+    : [];
   const profile = profiles[0] || null;
-  const authUser = userResp.ok ? await userResp.json().catch(() => null) : null;
+  const authUser = userResp.ok
+    ? await userResp.json().catch((error) => {
+      if (strict) throw error;
+      return null;
+    })
+    : null;
 
   return {
     email: authUser?.email || null,

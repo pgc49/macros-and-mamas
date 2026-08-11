@@ -169,5 +169,45 @@ describe("messaging crash containment", () => {
     expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
     expect(secondKey).toBe(firstKey);
   });
+
+  it("keeps an ambiguous send key across remounts but changes it for a new payload", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const firstSend = vi.fn().mockRejectedValue(new Error("response lost"));
+    const first = render(
+      <MessagesThread
+        {...threadProps({ onSend: firstSend })}
+        threadKey="dm:mama-ambiguous"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Original payload" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(firstSend).toHaveBeenCalledTimes(1));
+    const originalKey = firstSend.mock.calls[0][2].clientMessageId;
+    first.unmount();
+
+    const remountSend = vi.fn().mockRejectedValue(new Error("still ambiguous"));
+    render(
+      <MessagesThread
+        {...threadProps({ onSend: remountSend })}
+        threadKey="dm:mama-ambiguous"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Original payload" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(1));
+    expect(remountSend.mock.calls[0][2].clientMessageId).toBe(originalKey);
+
+    await screen.findByDisplayValue("Original payload");
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Changed payload" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(2));
+    expect(remountSend.mock.calls[1][2].clientMessageId).not.toBe(originalKey);
+  });
 });
 

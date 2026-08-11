@@ -422,10 +422,19 @@ function assertIdempotentPayload(existing, {
     sameFile = existing.attachment_name === String(file.name || "attachment").slice(0, 120)
       && existing.attachment_mime === mime
       && Number(existing.attachment_bytes || 0) === Number(file.size || 0);
+  } else if (existing.attachment_path) {
+    sameFile = false;
   }
   if (!sameTarget || !sameBody || !sameReply || !sameFile) {
     throw new Error("This retry no longer matches the original send.");
   }
+}
+
+function isDefinitiveInsertRejection(error) {
+  const code = String(error?.code || "");
+  // Data/constraint/authorization rejection means Postgres did not commit.
+  // Network, timeout, and generic 5xx outcomes remain ambiguous.
+  return /^(22|23)/.test(code) || code === "42501";
 }
 
 function isAudioMime(mime) {
@@ -2041,7 +2050,9 @@ export const db = {
           }
           data = existing.data;
         } else {
-          await removeUploadedAttachment(CHANNEL_ATTACHMENT_BUCKET, attachment?.path);
+          if (isDefinitiveInsertRejection(inserted.error)) {
+            await removeUploadedAttachment(CHANNEL_ATTACHMENT_BUCKET, attachment?.path);
+          }
           throw inserted.error;
         }
       }
@@ -2289,7 +2300,9 @@ export const db = {
           }
           data = existing.data;
         } else {
-          await removeUploadedAttachment(MESSAGE_ATTACHMENT_BUCKET, attachment?.path);
+          if (isDefinitiveInsertRejection(inserted.error)) {
+            await removeUploadedAttachment(MESSAGE_ATTACHMENT_BUCKET, attachment?.path);
+          }
           throw inserted.error;
         }
       }
