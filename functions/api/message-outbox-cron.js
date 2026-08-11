@@ -32,11 +32,13 @@ export async function onRequestPost({ request, env }) {
             handler({ request: childRequest, env }),
             8_000,
           );
+          const payload = await resp.clone().json().catch(() => ({}));
           results.push({
             id: job.id,
             type: job.message_type,
             ok: resp.ok,
             status: resp.status,
+            skipped: !!payload.skipped,
           });
         } catch (e) {
           console.warn("outbox cron invoke failed", job.id, e);
@@ -54,8 +56,9 @@ export async function onRequestPost({ request, env }) {
     return json({
       ok: true,
       found: jobs.length,
-      succeeded: results.filter((item) => item.ok).length,
+      succeeded: results.filter((item) => item.ok && !item.skipped).length,
       failed,
+      skipped: results.filter((item) => item.ok && item.skipped).length,
     }, failed > 0 ? 500 : 200);
   } catch (e) {
     console.error("message outbox cron failed", e);

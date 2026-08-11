@@ -122,7 +122,11 @@ try {
   }));
   assert(adminHtml.includes("Message") && adminHtml.includes("Becca"), "admin card title renders");
   assert(!adminHtml.includes("Messages couldn’t load"), "admin card must not crash");
-  assert(adminHtml.includes("Write a message") || adminHtml.includes("Send"), "composer renders inside admin card");
+  assert(
+    adminHtml.includes("Messages are read-only right now")
+      && adminHtml.includes("Messaging status is temporarily unavailable"),
+    "admin card fails closed until runtime status loads",
+  );
 
   const panelMod = await vite.ssrLoadModule("/src/components/MessagesPanel.jsx");
   const panelHtml = renderToString(createElement(panelMod.MessagesPanel, {
