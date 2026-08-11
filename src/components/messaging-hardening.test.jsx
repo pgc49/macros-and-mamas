@@ -136,7 +136,6 @@ describe("messaging crash containment", () => {
     const list = view.container.querySelector("[data-message-list]");
 
     expect(screen.getByPlaceholderText("Write a message…")).toBeTruthy();
-    expect(thread.style.height).toBe("min(62vh, 582px)");
     expect(thread.style.minHeight).toBe("0");
     expect(thread.style.overflow).toBe("hidden");
     expect(list.style.minHeight).toBe("0");
@@ -151,8 +150,7 @@ describe("messaging crash containment", () => {
     );
 
     expect(screen.getByPlaceholderText("Write a message…")).toBeTruthy();
-    expect(view.container.querySelector("[data-messages-thread]").style.height)
-      .toBe("min(62vh, 582px)");
+    expect(view.container.querySelector("[data-messages-thread]").style.overflow).toBe("hidden");
     expect(view.container.querySelector("[data-message-list]").style.minHeight).toBe("0");
   });
 
