@@ -92,6 +92,7 @@ export function MessagesThread({
   const holdTimer = useRef(null);
   const recorderRef = useRef(null);
   const markReadRef = useRef(onMarkRead);
+  const sendAttemptRef = useRef(null);
 
   useEffect(() => {
     registerMessageServiceWorker();
@@ -259,12 +260,18 @@ export function MessagesThread({
     const keptFile = file;
     const keptVoice = voicePreview;
     const keptReply = replyTo;
+    const clientMessageId = sendAttemptRef.current || createClientMessageId();
+    sendAttemptRef.current = clientMessageId;
     setDraft("");
     clearFile();
     clearVoicePreview();
     setReplyTo(null);
     try {
-      await onSend(keptText, attach, keptReply?.id ? { replyToId: keptReply.id } : undefined);
+      await onSend(keptText, attach, {
+        ...(keptReply?.id ? { replyToId: keptReply.id } : {}),
+        clientMessageId,
+      });
+      sendAttemptRef.current = null;
     } catch (e) {
       console.error(e);
       setDraft(keptText);
@@ -1302,6 +1309,18 @@ function safeString(value, fallback = "") {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return fallback;
+}
+
+function createClientMessageId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // RFC 4122 v4 fallback for older embedded browsers.
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === "x" ? random : ((random & 0x3) | 0x8);
+    return value.toString(16);
+  });
 }
 
 function normalizeMessageRow(row, index) {

@@ -13,13 +13,20 @@
    ================================================================== */
 
 import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/supabaseEmail.js";
+import {
+  authorizeCron,
+  claimNotificationJob,
+  finishNotificationJob,
+} from "../_shared/messageOutbox.js";
 
 const DEFAULT_CALLIE_EMAIL = "calista@nourishwithcalista.com";
 
 export async function onRequestPost({ request, env }) {
+  let job = null;
   try {
-    const user = await requireUser(request, env);
-    if (!user) return json({ error: "unauthorized" }, 401);
+    const cronAuth = authorizeCron(request, env);
+    const user = cronAuth ? null : await requireUser(request, env);
+    if (!cronAuth && !user) return json({ error: "unauthorized" }, 401);
 
     const body = await request.json().catch(() => ({}));
     const messageId = String(body.messageId || "").trim();
@@ -28,20 +35,29 @@ export async function onRequestPost({ request, env }) {
     const msg = await loadMessage(env, messageId);
     if (!msg) return json({ error: "not found" }, 404);
     // Only the sender may notify — blocks admin re-notify spam loops.
-    if (msg.sender_id !== user.id) {
+    if (!cronAuth && msg.sender_id !== user.id) {
       return json({ error: "forbidden" }, 403);
     }
 
+    job = await claimNotificationJob(env, "dm", messageId);
+    if (!job) {
+      return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0, emailSent: false });
+    }
+
     // Never notify on soft-deleted / empty identity rows.
-    if (msg.deleted_at) return json({ ok: true, skipped: "deleted", pushSent: 0, emailSent: false });
+    if (msg.deleted_at) {
+      await finishNotificationJob(env, job, { success: true });
+      return json({ ok: true, skipped: "deleted", pushSent: 0, emailSent: false });
+    }
     // Idempotent — one notify per message (survives client retries).
     if (msg.notified_at) {
+      await finishNotificationJob(env, job, { success: true });
       return json({ ok: true, skipped: "already_notified", pushSent: 0, emailSent: false });
     }
 
     const sender = await loadProfile(env, msg.sender_id);
     const client = await loadProfile(env, msg.client_id);
-    if (!sender || !client) return json({ error: "profile missing" }, 400);
+    if (!sender || !client) throw new Error("profile missing");
 
     const senderIsAdmin = String(sender.role || "").toLowerCase() === "admin";
     const clientIsAdmin = String(client.role || "").toLowerCase() === "admin";
@@ -55,6 +71,7 @@ export async function onRequestPost({ request, env }) {
       // Mama → Callie (thread owned by mama). Push only — no ops email.
       route = "mama_to_callie";
       const coachIds = await listCallieAdminIds(env);
+      if (!coachIds.length) throw new Error("no Callie notification recipient configured");
       for (const coachId of coachIds) {
         if (coachId === msg.sender_id) continue;
         const unreadCount = await countUnreadForProfile(env, coachId, { asAdmin: true });
@@ -108,6 +125,7 @@ export async function onRequestPost({ request, env }) {
                 });
               }
             }
+            if (!emailSent) throw new Error("mama email delivery failed");
           }
         }
       }
@@ -115,6 +133,7 @@ export async function onRequestPost({ request, env }) {
       // Admin ↔ admin DM: only the other party in THIS thread (never every admin).
       route = "admin_to_admin";
       const recipients = await adminDmRecipients(env, msg);
+      if (!recipients.length) throw new Error("admin DM recipient missing");
       for (const adminId of recipients) {
         const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
         const n = await sendPushToProfile(env, adminId, {
@@ -148,9 +167,20 @@ export async function onRequestPost({ request, env }) {
     }
 
     await markMessageNotified(env, messageId);
+    await finishNotificationJob(env, job, { success: true });
     return json({ ok: true, route, pushSent, emailSent });
   } catch (e) {
     console.error("message-notify failed", e);
+    if (job) {
+      try {
+        await finishNotificationJob(env, job, {
+          success: false,
+          error: e?.message || e,
+        });
+      } catch (finishErr) {
+        console.error("message outbox retry scheduling failed", finishErr);
+      }
+    }
     return json({ error: "notify failed" }, 500);
   }
 }
@@ -301,7 +331,7 @@ async function markMessageNotified(env, messageId) {
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key || !messageId) return;
   try {
-    await fetch(`${base}/rest/v1/messages?id=eq.${encodeURIComponent(messageId)}`, {
+    const resp = await fetch(`${base}/rest/v1/messages?id=eq.${encodeURIComponent(messageId)}`, {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
@@ -311,8 +341,10 @@ async function markMessageNotified(env, messageId) {
       },
       body: JSON.stringify({ notified_at: new Date().toISOString() }),
     });
+    if (!resp.ok) throw new Error(`mark notified failed (${resp.status})`);
   } catch (e) {
     console.warn("markMessageNotified failed", e);
+    throw e;
   }
 }
 

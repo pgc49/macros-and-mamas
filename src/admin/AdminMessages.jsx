@@ -300,6 +300,7 @@ export function AdminMessages({
         body,
         file,
         replyToId: opts.replyToId || null,
+        clientMessageId: opts.clientMessageId || null,
       });
       if (activeRef.current?.type === "dm" && activeRef.current.id === clientId) {
         setDmMessages((list) => mergeMessagesById(list, [row]));
@@ -325,6 +326,7 @@ export function AdminMessages({
         body,
         file,
         replyToId: opts.replyToId || null,
+        clientMessageId: opts.clientMessageId || null,
       });
       setChannelMessages((all) => ({
         ...all,

@@ -217,6 +217,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
         body,
         file,
         replyToId: opts.replyToId || null,
+        clientMessageId: opts.clientMessageId || null,
       });
       setDmMessages((list) => attachReplyPreviewLocal(mergeMessagesById(list, [row])));
     } catch (e) {
@@ -266,6 +267,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
         body,
         file,
         replyToId: opts.replyToId || null,
+        clientMessageId: opts.clientMessageId || null,
       });
       setChannelMessages((all) => {
         const prev = all[conversationId] || [];

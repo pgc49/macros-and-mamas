@@ -146,5 +146,28 @@ describe("messaging crash containment", () => {
     ));
     expect(screen.getByText("Message one")).toBeTruthy();
   });
+
+  it("reuses one idempotency key when an ambiguous send is retried", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const onSend = vi.fn()
+      .mockRejectedValueOnce(new Error("response lost"))
+      .mockResolvedValueOnce({});
+    render(<MessagesThread {...threadProps({ onSend })} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Send once" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    await screen.findByDisplayValue("Send once");
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+
+    const firstKey = onSend.mock.calls[0][2].clientMessageId;
+    const secondKey = onSend.mock.calls[1][2].clientMessageId;
+    expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(secondKey).toBe(firstKey);
+  });
 });
 

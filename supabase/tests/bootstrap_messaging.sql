@@ -55,7 +55,18 @@ grant select on public.profiles to authenticated;
 create table public.conversation_messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null,
-  created_at timestamptz not null default now()
+  sender_id uuid references public.profiles(id) on delete set null,
+  body text not null default '',
+  kind text not null default 'chat',
+  created_at timestamptz not null default now(),
+  read_at timestamptz,
+  edited_at timestamptz,
+  deleted_at timestamptz,
+  notified_at timestamptz,
+  attachment_path text,
+  attachment_name text,
+  attachment_mime text,
+  attachment_bytes integer
 );
 
 alter table public.conversation_messages enable row level security;

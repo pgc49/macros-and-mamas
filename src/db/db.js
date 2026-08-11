@@ -391,6 +391,20 @@ function safeAttachmentName(name) {
     .slice(0, 80) || "file";
 }
 
+function messageIdempotencyKey(value) {
+  const key = String(value || "").trim().toLowerCase();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(key)) {
+    return key;
+  }
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    return (char === "x" ? random : ((random & 0x3) | 0x8)).toString(16);
+  });
+}
+
 function isAudioMime(mime) {
   const base = String(mime || "").toLowerCase().split(";")[0].trim();
   return MESSAGE_AUDIO_MIME.has(base) || base.startsWith("audio/");
@@ -580,8 +594,8 @@ async function hydrateChannelSenders(rows, conversationId = null) {
   });
 }
 
-const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
-const DM_MESSAGE_SELECT = "id, client_id, sender_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
+const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
+const DM_MESSAGE_SELECT = "id, client_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
 
 /** Attach in-thread reply preview objects from the loaded window (DMs + channels). */
 function attachReplyPreviews(rows) {
@@ -1906,9 +1920,11 @@ export const db = {
     body,
     file = null,
     replyToId = null,
+    clientMessageId = null,
   }) {
     const uid = await requireUserId();
     if (!conversationId) throw new Error("channel required");
+    const idempotencyKey = messageIdempotencyKey(clientMessageId);
     const text = String(body || "").trim().slice(0, 2000);
     let attachment = null;
     if (file) {
@@ -1926,11 +1942,12 @@ export const db = {
       attachment = await uploadChannelAttachment({ conversationId, file, allowAudio });
     }
     if (text.length < 1 && !attachment) throw new Error("Message is empty");
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("conversation_messages")
       .insert({
         conversation_id: conversationId,
         sender_id: uid,
+        client_message_id: idempotencyKey,
         body: text,
         kind: "chat",
         ...(replyToId ? { reply_to_id: replyToId } : {}),
@@ -1946,6 +1963,7 @@ export const db = {
       .select(CHANNEL_MESSAGE_SELECT)
       .single();
     if (error) {
+      const duplicate = error.code === "23505";
       // Avoid orphan storage objects when the row insert fails after upload.
       if (attachment?.path) {
         try {
@@ -1954,7 +1972,17 @@ export const db = {
           console.warn("channel attachment orphan cleanup failed", cleanupErr);
         }
       }
-      throw error;
+      if (!duplicate) throw error;
+      const existing = await supabase
+        .from("conversation_messages")
+        .select(CHANNEL_MESSAGE_SELECT)
+        .eq("sender_id", uid)
+        .eq("client_message_id", idempotencyKey)
+        .maybeSingle();
+      if (existing.error) throw existing.error;
+      if (!existing.data) throw error;
+      data = existing.data;
+      error = null;
     }
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -2108,9 +2136,16 @@ export const db = {
     return toggleMessageReaction("dm", messageId, emoji);
   },
 
-  async sendMessage({ clientId, body, file = null, replyToId = null }) {
+  async sendMessage({
+    clientId,
+    body,
+    file = null,
+    replyToId = null,
+    clientMessageId = null,
+  }) {
     const uid = await requireUserId();
     if (!clientId) throw new Error("client required");
+    const idempotencyKey = messageIdempotencyKey(clientMessageId);
     const text = String(body || "").trim().slice(0, 2000);
     let attachment = null;
     if (file) {
@@ -2128,11 +2163,12 @@ export const db = {
       attachment = await uploadMessageAttachment({ clientId, file, allowAudio });
     }
     if (text.length < 1 && !attachment) throw new Error("Message is empty");
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("messages")
       .insert({
         client_id: clientId,
         sender_id: uid,
+        client_message_id: idempotencyKey,
         body: text,
         kind: "chat",
         ...(replyToId ? { reply_to_id: replyToId } : {}),
@@ -2147,7 +2183,27 @@ export const db = {
       })
       .select(DM_MESSAGE_SELECT)
       .single();
-    if (error) throw error;
+    if (error) {
+      const duplicate = error.code === "23505";
+      if (attachment?.path) {
+        try {
+          await supabase.storage.from(MESSAGE_ATTACHMENT_BUCKET).remove([attachment.path]);
+        } catch (cleanupErr) {
+          console.warn("message attachment orphan cleanup failed", cleanupErr);
+        }
+      }
+      if (!duplicate) throw error;
+      const existing = await supabase
+        .from("messages")
+        .select(DM_MESSAGE_SELECT)
+        .eq("sender_id", uid)
+        .eq("client_message_id", idempotencyKey)
+        .maybeSingle();
+      if (existing.error) throw existing.error;
+      if (!existing.data) throw error;
+      data = existing.data;
+      error = null;
+    }
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;

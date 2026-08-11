@@ -73,6 +73,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
         body,
         file,
         replyToId: opts.replyToId || null,
+        clientMessageId: opts.clientMessageId || null,
       });
       setMessages((list) => mergeMessagesById(list, [row]));
       onActivity?.();
