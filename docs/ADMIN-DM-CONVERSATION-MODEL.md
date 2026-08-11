@@ -31,7 +31,7 @@ create table public.admin_dm_conversations (
   participant_low uuid not null references public.profiles(id) on delete restrict,
   participant_high uuid not null references public.profiles(id) on delete restrict,
   created_at timestamptz not null default now(),
-  check (participant_low::text < participant_high::text),
+  check (participant_low < participant_high),
   unique (participant_low, participant_high)
 );
 
@@ -40,6 +40,14 @@ alter table public.messages
     references public.admin_dm_conversations(id) on delete restrict,
   add column recipient_id uuid null
     references public.profiles(id) on delete set null;
+
+create index messages_admin_dm_created_idx
+  on public.messages (admin_dm_conversation_id, created_at desc, id desc)
+  where admin_dm_conversation_id is not null;
+
+create index messages_recipient_unread_idx
+  on public.messages (recipient_id, created_at desc)
+  where recipient_id is not null and read_at is null and deleted_at is null;
 ```
 
 `client_id` remains required for backward compatibility:
@@ -49,7 +57,8 @@ alter table public.messages
 - legacy admin DM: keep its existing `client_id` and attachment path
 
 All new code groups admin DMs exclusively by `admin_dm_conversation_id`, never
-by `client_id`.
+by `client_id`. Returned compatibility `clientId` is always
+`participant_low`, never the latest row's legacy owner.
 
 ## Invariants
 
@@ -66,21 +75,33 @@ Before insert, a database trigger must enforce:
 4. Only `recipient_id` can set `read_at`; receipt remains monotonic.
 5. Browser clients cannot set `notified_at`.
 
+Complete receipt state machine:
+
+- mama→coach: `recipient_id = null`; any current admin may acknowledge once;
+- coach→mama: `recipient_id = client_id`; only that mama may acknowledge;
+- admin→admin: `recipient_id` is the other conversation participant;
+- every receipt is monotonic, including service-role operations;
+- `notified_at` is service-role-only on both INSERT and UPDATE.
+
 `ensure_admin_dm_conversation(peer_id)` is an authenticated, security-invoker
-RPC. It verifies caller + peer are admins, orders the pair, and returns the
-existing row or inserts one. A unique constraint handles concurrent creation.
+RPC. `authenticated` receives INSERT only with an RLS `WITH CHECK` requiring:
+caller is one participant, both participants are current admins, low/high order
+is valid, and participants differ. Direct insert is therefore no less safe than
+the RPC. The RPC uses `INSERT ... ON CONFLICT DO NOTHING`, then SELECT.
 
 ## Legacy backfill
 
 The migration is additive and must fail closed if preflight assumptions change:
 
-1. Find every message whose `client_id` profile is admin.
-2. Derive the distinct admin pair from `sender_id`, `client_id`, and the other
-   sender in that legacy owner bucket.
-3. Assert every bucket maps to exactly two admins.
-4. Insert one conversation per unique pair.
-5. Set only `admin_dm_conversation_id` and `recipient_id`.
-6. Do **not** alter:
+1. Lock admin-owned message writes for the migration transaction.
+2. For every admin-owned legacy bucket, derive members as the distinct union of
+   `client_id` and every `sender_id`.
+3. Require exactly two current admins in each bucket.
+4. Order each pair using native UUID ordering and merge buckets sharing that
+   ordered pair.
+5. Insert one conversation per unique pair.
+6. Set only `admin_dm_conversation_id` and `recipient_id`.
+7. Do **not** alter:
    - message ID
    - `client_id`
    - attachment path/name
@@ -98,6 +119,18 @@ The migration must verify post-backfill:
 - all three attachment paths unchanged and still signable;
 - no row has sender = recipient;
 - no admin-owned message remains unlinked.
+- every reply parent resolves to the same resulting conversation.
+
+After backfill, replace the current reply trigger:
+
+- linked admin message may reply only to a linked parent with the same
+  `admin_dm_conversation_id`;
+- unlinked mama message may reply only to an unlinked parent with the same
+  `client_id`;
+- linked↔unlinked replies are rejected.
+
+Freeze `admin_dm_conversation_id`, `recipient_id`, sender, client, reply,
+created time, and `client_message_id` after insert.
 
 ## Query/API contract
 
@@ -138,7 +171,7 @@ Add explicit methods rather than overloading mama APIs silently:
 db.ensureAdminDmConversation(peerId)
 db.loadAdminDmMessages(conversationId, options)
 db.sendAdminDmMessage({ conversationId, recipientId, ... })
-db.markAdminDmRead(conversationId, readerId)
+db.markAdminDmRead(conversationId) // database derives reader from auth.uid()
 ```
 
 Existing `loadMessages(clientId)` / `sendMessage({clientId})` remain mama-thread
@@ -159,12 +192,19 @@ methods.
 - Starting an admin thread first calls `ensureAdminDmConversation(peerId)`.
 - Admin client-detail messaging uses the same admin conversation ID—not the
   selected profile UUID.
+- `AdminPortal` parses `?dm=<conversation-uuid>`, verifies caller membership,
+  and passes a discriminated initial admin thread to `AdminMessages`.
 - Mama/customer code is unchanged.
 
 Realtime filters:
 
 - mama DM: `client_id=eq.<mama>`
 - admin DM: `admin_dm_conversation_id=eq.<conversation>`
+
+`message_reactions` has no conversation column. Keep one RLS-filtered global
+reaction subscription and refetch only the active authorized thread when the
+changed `message_id` is currently loaded. Do not denormalize an unchecked
+conversation ID onto reactions.
 
 ## Notifications
 
@@ -174,50 +214,82 @@ Realtime filters:
 - Unread badge: only rows with `recipient_id = target admin`
 - Durable outbox/idempotency behavior remains unchanged
 
-The old inference from `client_id` or “first other sender” is removed after
-backfill verification.
+Idempotent duplicate recovery must compare both
+`admin_dm_conversation_id` and `recipient_id`; matching only legacy
+`client_id` is forbidden.
+
+The notifier requires non-null conversation ID + validated `recipient_id`.
+Current profile roles, `client_id`, and “first other sender” are never used to
+infer the target after backfill verification.
 
 ## RLS
 
+Decision: **admin DMs are pair-private**, not globally visible to every admin.
+
 `admin_dm_conversations`:
 
-- SELECT: authenticated caller is either participant (admins may retain global
-  moderation visibility only if explicitly desired)
-- INSERT: through guarded RPC
+- SELECT: authenticated caller is either participant
+- INSERT: RLS `WITH CHECK` enforces caller membership + two current admins;
+  guarded RPC is the normal path
 - UPDATE/DELETE: no browser grants
 
-`messages` keeps existing mama RLS. Admin-message validation is enforced by
-triggers and executable negative tests. The model does not grant mamas access
-to admin conversations.
+Message SELECT/UPDATE policies branch:
+
+- `admin_dm_conversation_id is null`: existing mama-thread rules;
+- linked admin message: caller must be a conversation participant.
+
+Reaction policies join through the message and apply the same branch. Storage
+policies join `storage.objects.name = messages.attachment_path`; linked admin
+attachments require pair membership, while unlinked mama attachments keep
+existing mama/coach behavior. This removes the current global-admin bypass for
+pair-private content.
+
+New admin attachments use:
+`admin-dm/{conversation-id}/{sender-id}/{uuid-file}`. Legacy paths remain
+unchanged and are authorized through the linked message row—not folder prefix.
 
 ## Rollout
 
-1. Merge/apply additive schema + backfill while old app remains live.
-2. Validate row/path/signing invariants in production.
-3. Deploy new admin app/query code.
-4. Verify one unified Callie↔Patrick thread and send/read/reply/reaction/media.
-5. Add a temporary third-admin test account:
+1. Freeze admin provisioning for the rollout.
+2. Apply additive schema/backfill plus a temporary compatibility trigger.
+3. Compatibility trigger handles legacy-shaped admin writes only while exactly
+   two admins exist: derive the sole pair, set conversation/recipient, and
+   reject ambiguity.
+4. Validate row/path/signing invariants in production.
+5. Deploy new admin app/query code.
+6. Verify one unified Callie↔Patrick thread and send/read/reply/reaction/media.
+7. Close the old-app rollback window, disable compatibility mode, and establish
+   the conversation-aware build as the oldest permitted rollback.
+8. In isolated staging—not production—create a third admin:
    - A↔B and A↔C produce different conversation IDs;
    - previews/unread/receipts never cross pairs.
-6. Remove test account.
-7. Keep legacy columns and compatibility paths through rollback window.
+9. Clean up staging messages, reactions, outbox rows, attachments,
+   conversations, sessions, then profile.
+10. Keep legacy columns/paths indefinitely for attachment compatibility.
 
-Rollback is application-only: retain added table/columns and run the previous
-app. No destructive database reversal.
+Before step 7, the immediately previous app may be used because the
+compatibility trigger links its writes. After a third-admin conversation can
+exist, rollback to a client unaware of conversation IDs is forbidden. Database
+changes remain additive; no destructive reversal.
 
 ## Required automated tests
 
 - pair uniqueness under concurrent ensure calls;
 - A↔B and A↔C separation with A as lowest UUID;
 - unauthorized/non-admin ensure denied;
+- direct INSERT obeys the same pair/admin RLS as ensure RPC;
 - legacy 5+46 rows become one pair without changing IDs/client IDs/paths;
+- legacy-shaped write is linked by compatibility trigger with two admins;
+- compatibility write and third-admin provisioning fail once ambiguity exists;
 - all three current attachments remain accessible;
+- B cannot read/react/sign A↔C messages or attachments;
 - admin client-detail and inbox open the same conversation;
 - recipient-only, monotonic read receipt;
 - notification routing and unread badge recipient-only;
 - reply parent must share conversation;
 - idempotent send retries stay in the same conversation;
-- old app can still read new rows under `participant_low` fallback.
+- pre-cutover old app writes remain linked during compatibility window;
+- post-window rollback to a conversation-unaware build is rejected by runbook.
 
 ## Relationship to blocked PR #220
 
