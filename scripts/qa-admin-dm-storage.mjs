@@ -58,6 +58,22 @@ try {
   const adminC = await createAdmin("Admin C");
   const adminD = await createAdmin("Admin D");
   const adminE = await createAdmin("Admin E");
+  const runtime = await service
+    .from("messaging_runtime_config")
+    .select("updated_at")
+    .eq("singleton", true)
+    .single();
+  if (runtime.error) throw runtime.error;
+  const runtimeUpdate = await service.rpc("update_messaging_runtime", {
+    p_actor_id: adminC.id,
+    p_request_id: crypto.randomUUID(),
+    p_expected_updated_at: runtime.data.updated_at,
+    p_mode: "normal",
+    p_attachments_enabled: true,
+    p_notifications_enabled: true,
+    p_reason: "integration storage test",
+  });
+  if (runtimeUpdate.error) throw runtimeUpdate.error;
   const ensured = await adminC.client.rpc("ensure_admin_dm_conversation", {
     peer_id: adminD.id,
   });
