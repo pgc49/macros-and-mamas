@@ -744,6 +744,7 @@ export function AdminMessages({
                   )}
                   hideComposer={runtime.mode !== "normal" || !!activeChannel?.conversation?.read_only}
                   allowAttachments={runtime.attachmentsEnabled}
+                  allowMutations={runtime.mode === "normal"}
                   emptyState="No group messages yet."
                   showPushPrompt
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
@@ -825,6 +826,7 @@ export function AdminMessages({
                   )}
                   hideComposer={runtime.mode !== "normal"}
                   allowAttachments={runtime.attachmentsEnabled}
+                  allowMutations={runtime.mode === "normal"}
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
                   compact
                 />

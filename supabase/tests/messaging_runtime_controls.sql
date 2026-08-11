@@ -1,6 +1,6 @@
 begin;
 
-select plan(24);
+select plan(31);
 
 select has_table('public', 'messaging_runtime_config', 'runtime config exists');
 select has_table('public', 'messaging_runtime_audit', 'runtime audit exists');
@@ -12,6 +12,26 @@ select ok(
   not has_function_privilege('anon', 'public.messaging_runtime_status()', 'EXECUTE'),
   'anonymous users cannot read runtime status'
 );
+select ok(
+  not has_table_privilege('service_role', 'public.messaging_runtime_config', 'INSERT'),
+  'service role cannot bypass audited config inserts'
+);
+select ok(
+  not has_table_privilege('service_role', 'public.messaging_runtime_config', 'UPDATE'),
+  'service role cannot bypass audited config updates'
+);
+select ok(
+  not has_table_privilege('service_role', 'public.messaging_runtime_config', 'DELETE'),
+  'service role cannot delete runtime singleton'
+);
+select ok(
+  not has_table_privilege('service_role', 'public.messaging_runtime_audit', 'UPDATE'),
+  'runtime audit rows are immutable'
+);
+select ok(
+  not has_table_privilege('service_role', 'public.messaging_runtime_audit', 'DELETE'),
+  'runtime audit rows cannot be deleted'
+);
 
 insert into auth.users (id, email)
 values ('00000000-0000-0000-0000-000000000031', 'runtime-mama@example.com');
@@ -22,6 +42,13 @@ values (
   'Runtime Mama',
   'client',
   'active'
+);
+
+insert into public.conversation_messages (conversation_id, body, kind)
+values (
+  '30000000-0000-4000-8000-000000000031',
+  'existing channel message',
+  'chat'
 );
 
 set local role authenticated;
@@ -123,6 +150,17 @@ select throws_ok(
 
 select throws_ok(
   $$
+    update public.messages
+    set attachment_name = 'forged.pdf'
+    where body = 'existing message'
+  $$,
+  'P0001',
+  'messaging is temporarily read-only',
+  'read-only mode blocks DM attachment mutation'
+);
+
+select throws_ok(
+  $$
     insert into public.message_reactions (message_id, user_id, emoji)
     select id, sender_id, '❤️'
     from public.messages
@@ -157,6 +195,17 @@ select lives_ok(
 );
 
 reset role;
+select throws_ok(
+  $$
+    update public.conversation_messages
+    set attachment_name = 'forged-channel.pdf'
+    where body = 'existing channel message'
+  $$,
+  'P0001',
+  'messaging is temporarily read-only',
+  'read-only mode blocks channel attachment mutation'
+);
+
 select throws_ok(
   $$
     insert into public.conversation_messages (conversation_id, body, kind)

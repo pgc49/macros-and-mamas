@@ -431,6 +431,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             )}
             hideComposer={runtime.mode !== "normal" || !!activeChannel.conversation.read_only}
             allowAttachments={runtime.attachmentsEnabled}
+            allowMutations={runtime.mode === "normal"}
             emptyState="No group messages yet — say hi when you’re ready."
             showPushPrompt
             onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
@@ -462,6 +463,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             banner={<MessagingRuntimeBanner runtime={runtime} />}
             hideComposer={runtime.mode !== "normal"}
             allowAttachments={runtime.attachmentsEnabled}
+            allowMutations={runtime.mode === "normal"}
             showPushPrompt
             onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
             onComposerFocusChange={onComposerFocusChange}

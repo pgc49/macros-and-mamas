@@ -23,8 +23,10 @@ create table if not exists public.messaging_runtime_audit (
 
 alter table public.messaging_runtime_config enable row level security;
 alter table public.messaging_runtime_audit enable row level security;
-revoke all on table public.messaging_runtime_config from public, anon, authenticated;
-revoke all on table public.messaging_runtime_audit from public, anon, authenticated;
+revoke all on table public.messaging_runtime_config
+  from public, anon, authenticated, service_role;
+revoke all on table public.messaging_runtime_audit
+  from public, anon, authenticated, service_role;
 grant select on table public.messaging_runtime_config to service_role;
 grant select, insert on table public.messaging_runtime_audit to service_role;
 grant usage, select on sequence public.messaging_runtime_audit_id_seq to service_role;
@@ -212,9 +214,9 @@ begin
 
   if TG_TABLE_NAME = 'messages'
      and (
-       new.body is distinct from old.body
-       or new.edited_at is distinct from old.edited_at
-       or new.deleted_at is distinct from old.deleted_at
+       to_jsonb(new) - 'read_at' - 'notified_at'
+       is distinct from
+       to_jsonb(old) - 'read_at' - 'notified_at'
      )
   then
     raise exception 'messaging is temporarily read-only';
@@ -222,9 +224,9 @@ begin
 
   if TG_TABLE_NAME = 'conversation_messages'
      and (
-       new.body is distinct from old.body
-       or new.edited_at is distinct from old.edited_at
-       or new.deleted_at is distinct from old.deleted_at
+       to_jsonb(new) - 'notified_at'
+       is distinct from
+       to_jsonb(old) - 'notified_at'
      )
   then
     raise exception 'messaging is temporarily read-only';
@@ -438,10 +440,16 @@ volatile
 security definer
 set search_path = ''
 as $$
-  with removed as (
-    delete from public.message_notification_outbox
+  with candidates as (
+    select id
+    from public.message_notification_outbox
     where status in ('sent', 'expired', 'acknowledged')
       and created_at < now() - interval '30 days'
+    order by created_at
+    limit 500
+  ), removed as (
+    delete from public.message_notification_outbox
+    where id in (select id from candidates)
     returning 1
   )
   select count(*)::integer from removed;
@@ -455,6 +463,10 @@ grant execute on function public.cleanup_message_notification_history()
 create index if not exists message_notification_outbox_health_idx
   on public.message_notification_outbox (status, created_at)
   where status in ('pending', 'retry', 'processing', 'dead');
+
+create index if not exists message_notification_outbox_retention_idx
+  on public.message_notification_outbox (status, created_at)
+  where status in ('sent', 'expired', 'acknowledged');
 
 create or replace function public.messaging_health_snapshot()
 returns table (
@@ -476,7 +488,11 @@ as $$
     count(*) filter (where status = 'retry'),
     count(*) filter (where status = 'processing'),
     count(*) filter (where status = 'dead'),
-    0::bigint,
+    (
+      select count(*)
+      from public.message_notification_outbox expired_jobs
+      where expired_jobs.status = 'expired'
+    ),
     min(created_at) filter (where status in ('pending', 'retry', 'processing')),
     count(*) filter (
       where status = 'processing'

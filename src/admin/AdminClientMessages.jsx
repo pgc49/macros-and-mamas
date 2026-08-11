@@ -155,6 +155,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           banner={<MessagingRuntimeBanner runtime={runtime} />}
           hideComposer={runtime.mode !== "normal"}
           allowAttachments={runtime.attachmentsEnabled}
+          allowMutations={runtime.mode === "normal"}
           compact
         />
       </div>

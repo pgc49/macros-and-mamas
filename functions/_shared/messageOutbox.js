@@ -75,7 +75,7 @@ export async function listDueNotificationJobs(env, limit = 20) {
     },
   );
   if (!cleanupResponse.ok) {
-    throw new Error(`outbox cleanup failed (${cleanupResponse.status})`);
+    console.warn("outbox cleanup deferred", cleanupResponse.status);
   }
   const now = encodeURIComponent(new Date().toISOString());
   const stale = encodeURIComponent(new Date(Date.now() - 5 * 60 * 1000).toISOString());

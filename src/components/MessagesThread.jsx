@@ -62,6 +62,7 @@ export function MessagesThread({
   banner = null,
   hideComposer = false,
   allowAttachments = true,
+  allowMutations = true,
   showSenderNames = false,
   /** When true, selfId may delete/edit others' messages (admin moderation). */
   canModerate = false,
@@ -435,18 +436,24 @@ export function MessagesThread({
   };
 
   const canEditMsg = (m) => (
+    allowMutations
+    &&
     !m.deleted_at
     && !!onEdit
     && m.sender_id === selfId
   );
 
   const canDeleteMsg = (m) => (
+    allowMutations
+    &&
     !m.deleted_at
     && !!onDelete
     && (m.sender_id === selfId || canModerate)
   );
 
   const canReplyMsg = (m) => (
+    allowMutations
+    &&
     enableReply
     && !hideComposer
     && !m.deleted_at
@@ -454,6 +461,8 @@ export function MessagesThread({
   );
 
   const canReactMsg = (m) => (
+    allowMutations
+    &&
     enableReactions
     && typeof onReact === "function"
     && !m.deleted_at
@@ -464,6 +473,15 @@ export function MessagesThread({
   const canManage = (m) => (
     canEditMsg(m) || canDeleteMsg(m) || canReplyMsg(m) || canReactMsg(m)
   );
+
+  useEffect(() => {
+    if (allowMutations) return;
+    clearHold();
+    setMenuId(null);
+    setEditingId(null);
+    setEditDraft("");
+    setReplyTo(null);
+  }, [allowMutations]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startReply = (m) => {
     if (!canReplyMsg(m)) return;
