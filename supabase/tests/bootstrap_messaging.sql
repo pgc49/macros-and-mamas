@@ -27,6 +27,10 @@ as $$
   );
 $$;
 
+create policy profiles_select_own_or_admin
+  on public.profiles for select to authenticated
+  using (id = auth.uid() or public.is_admin());
+
 create table public.messages (
   id uuid primary key default gen_random_uuid(),
   client_id uuid not null references public.profiles(id) on delete cascade,
