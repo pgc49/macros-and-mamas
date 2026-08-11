@@ -64,7 +64,9 @@ create policy messages_update_thread
   with check (public.is_admin() or auth.uid() = client_id);
 
 grant select, insert, update, delete on public.messages to authenticated;
+grant select, insert, update, delete on public.messages to service_role;
 grant select on public.profiles to authenticated;
+grant select on public.profiles to service_role;
 
 create table public.conversation_messages (
   id uuid primary key default gen_random_uuid(),
