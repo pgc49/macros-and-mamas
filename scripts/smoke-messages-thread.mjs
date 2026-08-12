@@ -21,6 +21,8 @@ assert(src.includes("scrollTop = el.scrollHeight"), "MessagesThread should scrol
 assert(src.includes('height: compact ? "100%" : "min(62vh, 582px)"'), "customer thread must have a stable viewport height");
 assert(src.includes('minHeight: 0'), "message flex items must be allowed to shrink");
 assert(src.includes('maxHeight: "none"'), "message list sizing must come from its bounded thread");
+assert(src.includes("paddingBottom: 4"), "thread must pad composer away from overflow clip");
+assert(src.includes("outline: \"none\"") || src.includes("outline: 'none'"), "composer focus must use in-box border, not outer Safari ring");
 
 const adminSrc = readFileSync(new URL("../src/admin/AdminClientMessages.jsx", import.meta.url), "utf8");
 assert(adminSrc.includes("min(70vh, 640px)"), "AdminClientMessages should bound chat height");

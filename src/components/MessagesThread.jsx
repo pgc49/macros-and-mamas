@@ -588,9 +588,12 @@ export function MessagesThread({
       flex: 1,
       height: compact ? "100%" : "min(62vh, 582px)",
       minWidth: 0,
-      // Bound both customer and admin threads so loaded history scrolls inside
-      // the list instead of moving the composer below Shell's scroll viewport.
+      // Keep history inside a fixed viewport box on every phone. Bottom padding
+      // leaves room for composer borders/radii so overflow clipping never
+      // shaves the input row.
       overflow: "hidden",
+      paddingBottom: 4,
+      boxSizing: "border-box",
     }}
     >
       {(title || subtitle) && (
@@ -1229,7 +1232,19 @@ export function MessagesThread({
       )}
 
       {!hideComposer && (
-      <div data-message-composer style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-end" }}>
+      <div
+        data-message-composer
+        style={{
+          display: "flex",
+          gap: 8,
+          marginTop: 10,
+          alignItems: "flex-end",
+          flexShrink: 0,
+          // Keep the full 1.5px borders / radii inside the bounded thread on
+          // every viewport — no phone-specific hacks.
+          paddingBottom: 2,
+        }}
+      >
         <label
           style={iconBtn}
           title="Attach photo or PDF"
@@ -1284,8 +1299,12 @@ export function MessagesThread({
           autoComplete="off"
           autoCorrect="on"
           disabled={recording}
-          onFocus={() => onComposerFocusChange?.(true)}
-          onBlur={() => {
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = T.accent;
+            onComposerFocusChange?.(true);
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = T.border;
             // Delay so Send/attach taps still register before tabs return
             window.setTimeout(() => onComposerFocusChange?.(false), 180);
           }}
@@ -1295,6 +1314,8 @@ export function MessagesThread({
             padding: "12px 14px",
             borderRadius: 12,
             border: `1.5px solid ${T.border}`,
+            outline: "none",
+            WebkitAppearance: "none",
             fontFamily: F,
             fontSize: 16,
             lineHeight: 1.4,
