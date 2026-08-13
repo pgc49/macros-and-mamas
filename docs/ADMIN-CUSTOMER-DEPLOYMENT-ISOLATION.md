@@ -17,6 +17,18 @@ The customer compiler removes the `AdminPortal` dynamic import. CI fails if an
 `AdminPortal-*` chunk or source reference appears in the customer artifact. The
 admin artifact must contain exactly one admin chunk.
 
+## Out of scope
+
+This is the simplified path. It does **not** include:
+
+- Admin-to-admin DMs (`admin_dm_conversations`, inbox rewrite, compatibility freeze)
+- Messaging kill switches / health RPCs
+- A Git-synced Supabase preview replay of the full production schema
+
+Patrick and Callie test messaging as **mama accounts** (`role=client`) in the
+same Callie 1:1 threads customers use. Do not merge #221, #224, or #225 for this
+cutover.
+
 ## Cloudflare Pages draft configuration
 
 Create the admin project before changing the existing customer build.
@@ -139,7 +151,7 @@ limits on unusually large pushes.
   both surfaces.
 - Callie's old `www` push subscriptions are removed and replaced by a verified
   admin-origin subscription.
-- Admin manifest starts at `/admin`; admin DM/channel pushes open `/admin`.
+- Admin manifest starts at `/admin`; Callie's mama-DM and channel pushes open `/admin`.
 - Both projects pass the complete secret/binding inventory.
 - Stripe webhook and scheduled jobs still have exactly one owner.
 
