@@ -6,6 +6,8 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { db, fullName, channelHasUnread } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { mergeMessagesById } from "../lib/messageOrdering";
+import { useMessagingRuntime } from "../lib/useMessagingRuntime";
+import { MessagingRuntimeBanner } from "../components/MessagingRuntimeBanner";
 
 function displayName(c) {
   if (!c) return "Mama";
@@ -14,11 +16,6 @@ function displayName(c) {
 
 function isAdminProfile(c) {
   return String(c?.role || "").toLowerCase() === "admin";
-}
-
-/** One shared Patrick↔Callie thread (whichever uuid sorts first). */
-function canonicalAdminThreadId(a, b) {
-  return String(a) < String(b) ? a : b;
 }
 
 function previewText(m) {
@@ -63,15 +60,32 @@ export function AdminMessages({
   roster = [],
   adminUserId,
   initialClientId = null,
+  initialAdminConversationId = null,
+  initialChannelId = null,
   onUnreadTotalChange,
 }) {
   const isWide = useIsWide();
+  const {
+    runtime,
+    runtimeLoaded,
+    runtimeError,
+    updateRuntime,
+  } = useMessagingRuntime();
   const [inbox, setInbox] = useState([]);
   const [channels, setChannels] = useState([]);
   const [channelMessages, setChannelMessages] = useState({});
   /** @type {[{ type: 'dm'|'channel', id: string }|null, Function]} */
   const [active, setActive] = useState(
-    initialClientId ? { type: "dm", id: initialClientId } : null,
+    initialClientId
+      ? {
+        type: "dm",
+        id: initialClientId,
+        threadId: initialClientId,
+        threadType: "mama",
+        clientId: initialClientId,
+        peerId: initialClientId,
+      }
+      : null,
   );
   const [dmMessages, setDmMessages] = useState([]);
   const [dmLoadedClientId, setDmLoadedClientId] = useState(null);
@@ -81,6 +95,8 @@ export function AdminMessages({
   const [query, setQuery] = useState("");
   const activeRef = useRef(active);
   const dmLoadSequence = useRef(new Map());
+  const initialAdminLinkHandled = useRef(false);
+  const initialChannelLinkHandled = useRef(false);
 
   const clientMap = useMemo(() => {
     const m = new Map();
@@ -122,10 +138,13 @@ export function AdminMessages({
     }
   }, [adminUserId]);
 
-  const refreshDmThread = useCallback(async (clientId, { clear = false } = {}) => {
-    const sequence = (dmLoadSequence.current.get(clientId) || 0) + 1;
-    dmLoadSequence.current.set(clientId, sequence);
-    if (!clientId) {
+  const refreshDmThread = useCallback(async (thread, { clear = false } = {}) => {
+    const threadId = thread?.threadId || thread?.id;
+    const threadType = thread?.threadType || "mama";
+    const sequenceKey = `${threadType}:${threadId || ""}`;
+    const sequence = (dmLoadSequence.current.get(sequenceKey) || 0) + 1;
+    dmLoadSequence.current.set(sequenceKey, sequence);
+    if (!threadId) {
       setDmMessages([]);
       setDmLoadedClientId(null);
       setDmLoadErrorClientId(null);
@@ -138,19 +157,21 @@ export function AdminMessages({
       setError("");
     }
     try {
-      const list = await db.loadMessages(clientId);
+      const list = threadType === "admin"
+        ? await db.loadAdminDmMessages(threadId)
+        : await db.loadMessages(thread.clientId || threadId);
       const stillCurrent = activeRef.current?.type === "dm"
-        && activeRef.current.id === clientId;
-      if (sequence !== dmLoadSequence.current.get(clientId) || !stillCurrent) return;
+        && (activeRef.current.threadId || activeRef.current.id) === threadId;
+      if (sequence !== dmLoadSequence.current.get(sequenceKey) || !stillCurrent) return;
       setDmMessages(list);
-      setDmLoadedClientId(clientId);
+      setDmLoadedClientId(threadId);
       setDmLoadErrorClientId(null);
     } catch (e) {
       const stillCurrent = activeRef.current?.type === "dm"
-        && activeRef.current.id === clientId;
-      if (sequence !== dmLoadSequence.current.get(clientId) || !stillCurrent) return;
+        && (activeRef.current.threadId || activeRef.current.id) === threadId;
+      if (sequence !== dmLoadSequence.current.get(sequenceKey) || !stillCurrent) return;
       console.error(e);
-      setDmLoadErrorClientId(clientId);
+      setDmLoadErrorClientId(threadId);
       setError(e.message || "Couldn’t load thread.");
     }
   }, []);
@@ -162,18 +183,61 @@ export function AdminMessages({
 
   useEffect(() => {
     if (initialClientId) {
-      const next = { type: "dm", id: initialClientId };
+      const next = {
+        type: "dm",
+        id: initialClientId,
+        threadId: initialClientId,
+        threadType: "mama",
+        clientId: initialClientId,
+        peerId: initialClientId,
+      };
       activeRef.current = next;
       setActive(next);
     }
   }, [initialClientId]);
 
   useEffect(() => {
+    if (
+      initialAdminLinkHandled.current
+      || !initialAdminConversationId
+      || !inbox.length
+    ) return;
+    const row = inbox.find((item) => (
+      item.threadType === "admin"
+      && item.threadId === initialAdminConversationId
+    ));
+    if (!row) return;
+    initialAdminLinkHandled.current = true;
+    const peerId = (row.participantIds || []).find((id) => id !== adminUserId) || null;
+    const next = {
+      type: "dm",
+      id: row.threadId,
+      threadId: row.threadId,
+      threadType: "admin",
+      clientId: row.clientId,
+      adminConversationId: row.adminConversationId,
+      participantIds: row.participantIds,
+      peerId,
+    };
+    activeRef.current = next;
+    setActive(next);
+  }, [adminUserId, inbox, initialAdminConversationId]);
+
+  useEffect(() => {
+    if (initialChannelLinkHandled.current || !initialChannelId || !channels.length) return;
+    if (!channels.some((item) => item.conversation.id === initialChannelId)) return;
+    initialChannelLinkHandled.current = true;
+    const next = { type: "channel", id: initialChannelId, threadId: initialChannelId };
+    activeRef.current = next;
+    setActive(next);
+  }, [channels, initialChannelId]);
+
+  useEffect(() => {
     activeRef.current = active;
   }, [active]);
 
   useEffect(() => {
-    if (active?.type === "dm") refreshDmThread(active.id, { clear: true });
+    if (active?.type === "dm") refreshDmThread(active, { clear: true });
   }, [active, refreshDmThread]);
 
   useEffect(() => {
@@ -184,14 +248,14 @@ export function AdminMessages({
         { event: "*", schema: "public", table: "messages" },
         () => {
           refreshInbox();
-          if (active?.type === "dm") refreshDmThread(active.id);
+          if (active?.type === "dm") refreshDmThread(active);
         },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "message_reactions" },
         () => {
-          if (active?.type === "dm") refreshDmThread(active.id);
+          if (active?.type === "dm") refreshDmThread(active);
         },
       )
       .on(
@@ -223,12 +287,15 @@ export function AdminMessages({
 
   const activePeerId = useMemo(() => {
     if (active?.type !== "dm" || !adminUserId) return active?.id || null;
+    if (active.peerId) return active.peerId;
     const fromMsgs = dmMessages
-      .map((m) => m.sender_id)
+      .flatMap((m) => [m.sender_id, m.recipient_id])
       .filter((id) => id && id !== adminUserId);
-    const participants = [...new Set([active.id, ...fromMsgs])];
+    const participants = [
+      ...new Set([...(active.participantIds || []), active.clientId, ...fromMsgs]),
+    ].filter(Boolean);
     return peerIdForThread({
-      clientId: active.id,
+      clientId: active.clientId || active.id,
       adminUserId,
       participantIds: participants,
       clientMap,
@@ -239,7 +306,8 @@ export function AdminMessages({
   const activeName = active?.type === "channel"
     ? (activeChannel?.conversation?.label || "Group")
     : displayName(activePeer);
-  const activeIsAdmin = active?.type === "dm" && isAdminProfile(activePeer);
+  const activeIsAdmin = active?.type === "dm" && active?.threadType === "admin";
+  const adminPeerIsActive = !activeIsAdmin || isAdminProfile(activePeer);
 
   const senderNameById = useMemo(() => {
     const map = {};
@@ -254,10 +322,17 @@ export function AdminMessages({
     return map;
   }, [roster, activeChannelMessages, adminUserId]);
 
-  const openDm = (profileOrId) => {
+  const openDm = async (profileOrId) => {
     try { window.scrollTo({ top: 0, behavior: "auto" }); } catch { /* ignore */ }
     if (typeof profileOrId === "string") {
-      const next = { type: "dm", id: profileOrId };
+      const next = {
+        type: "dm",
+        id: profileOrId,
+        threadId: profileOrId,
+        threadType: "mama",
+        clientId: profileOrId,
+        peerId: profileOrId,
+      };
       activeRef.current = next;
       setActive(next);
       return;
@@ -265,12 +340,56 @@ export function AdminMessages({
     const profile = profileOrId;
     if (!profile?.id) return;
     if (isAdminProfile(profile) && adminUserId) {
-      const next = { type: "dm", id: canonicalAdminThreadId(adminUserId, profile.id) };
+      setBusy(true);
+      let conversation;
+      try {
+        conversation = await db.ensureAdminDmConversation(profile.id);
+      } catch (e) {
+        console.error(e);
+        setError(e.message || "Couldn’t open admin conversation.");
+        return;
+      } finally {
+        setBusy(false);
+      }
+      const next = {
+        type: "dm",
+        id: conversation.id,
+        threadId: conversation.id,
+        threadType: "admin",
+        clientId: conversation.participant_low,
+        adminConversationId: conversation.id,
+        participantIds: [conversation.participant_low, conversation.participant_high],
+        peerId: profile.id,
+      };
       activeRef.current = next;
       setActive(next);
       return;
     }
-    const next = { type: "dm", id: profile.id };
+    const next = {
+      type: "dm",
+      id: profile.id,
+      threadId: profile.id,
+      threadType: "mama",
+      clientId: profile.id,
+      peerId: profile.id,
+    };
+    activeRef.current = next;
+    setActive(next);
+  };
+
+  const openInboxThread = (row) => {
+    const peerId = (row.participantIds || []).find((id) => id !== adminUserId)
+      || row.clientId;
+    const next = {
+      type: "dm",
+      id: row.threadId || row.clientId,
+      threadId: row.threadId || row.clientId,
+      threadType: row.threadType || "mama",
+      clientId: row.clientId,
+      adminConversationId: row.adminConversationId || null,
+      participantIds: row.participantIds || [],
+      peerId,
+    };
     activeRef.current = next;
     setActive(next);
   };
@@ -290,19 +409,38 @@ export function AdminMessages({
   };
 
   const sendDm = async (body, file = null, opts = {}) => {
-    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
-    if (!clientId) return;
+    const thread = activeRef.current?.type === "dm" ? activeRef.current : null;
+    if (!thread) return;
+    if (
+      thread.threadType === "admin"
+      && !isAdminProfile(clientMap.get(thread.peerId))
+    ) {
+      throw new Error("This admin no longer has messaging access.");
+    }
     setBusy(true);
     setError("");
     try {
-      const row = await db.sendMessage({
-        clientId,
-        body,
-        file,
-        replyToId: opts.replyToId || null,
-        clientMessageId: opts.clientMessageId || null,
-      });
-      if (activeRef.current?.type === "dm" && activeRef.current.id === clientId) {
+      const row = thread.threadType === "admin"
+        ? await db.sendAdminDmMessage({
+          conversationId: thread.adminConversationId || thread.threadId,
+          clientId: thread.clientId,
+          recipientId: thread.peerId,
+          body,
+          file,
+          replyToId: opts.replyToId || null,
+          clientMessageId: opts.clientMessageId || null,
+        })
+        : await db.sendMessage({
+          clientId: thread.clientId || thread.threadId,
+          body,
+          file,
+          replyToId: opts.replyToId || null,
+          clientMessageId: opts.clientMessageId || null,
+        });
+      if (
+        activeRef.current?.type === "dm"
+        && (activeRef.current.threadId || activeRef.current.id) === thread.threadId
+      ) {
         setDmMessages((list) => mergeMessagesById(list, [row]));
       }
       refreshInbox();
@@ -385,10 +523,10 @@ export function AdminMessages({
   };
 
   const reactDm = async (messageId, emoji) => {
-    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
-    if (!clientId) return;
+    const thread = activeRef.current?.type === "dm" ? activeRef.current : null;
+    if (!thread) return;
     await db.toggleDmReaction(messageId, emoji);
-    await refreshDmThread(clientId);
+    await refreshDmThread(thread);
   };
 
   const reactChannel = async (messageId, emoji) => {
@@ -397,9 +535,13 @@ export function AdminMessages({
   };
 
   const markDmRead = async () => {
-    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
-    if (!clientId || !adminUserId) return;
-    await db.markMessagesRead(clientId, adminUserId);
+    const thread = activeRef.current?.type === "dm" ? activeRef.current : null;
+    if (!thread || !adminUserId) return;
+    if (thread.threadType === "admin") {
+      await db.markAdminDmRead(thread.adminConversationId || thread.threadId);
+    } else {
+      await db.markMessagesRead(thread.clientId || thread.threadId, adminUserId);
+    }
     refreshInbox();
   };
 
@@ -421,7 +563,9 @@ export function AdminMessages({
     }));
   };
 
-  const inboxIds = useMemo(() => new Set(inbox.map((i) => i.clientId)), [inbox]);
+  const inboxPeerIds = useMemo(() => new Set(
+    inbox.flatMap((item) => item.participantIds || [item.clientId]).filter(Boolean),
+  ), [inbox]);
   const q = query.trim().toLowerCase();
 
   const filteredChannels = useMemo(() => {
@@ -434,12 +578,8 @@ export function AdminMessages({
   const filteredInbox = useMemo(() => {
     if (!q) return inbox;
     return inbox.filter((row) => {
-      const peerId = peerIdForThread({
-        clientId: row.clientId,
-        adminUserId,
-        participantIds: row.participantIds,
-        clientMap,
-      });
+      const peerId = (row.participantIds || []).find((id) => id !== adminUserId)
+        || row.clientId;
       const c = clientMap.get(peerId || row.clientId);
       const hay = `${displayName(c)} ${c?.email || ""} ${previewText(row.lastMessage)}`.toLowerCase();
       return hay.includes(q);
@@ -453,16 +593,13 @@ export function AdminMessages({
         const isAdmin = isAdminProfile(c);
         const activeClient = c.stage === "active" || c.status === "active" || isAdmin;
         if (!activeClient) return false;
-        const threadId = (isAdmin && adminUserId)
-          ? canonicalAdminThreadId(adminUserId, c.id)
-          : c.id;
-        if (inboxIds.has(threadId)) return false;
+        if (inboxPeerIds.has(c.id)) return false;
         if (!q) return true;
         const hay = `${displayName(c)} ${c.email || ""} ${c.phone || ""}`.toLowerCase();
         return hay.includes(q);
       })
       .sort((a, b) => displayName(a).localeCompare(displayName(b), undefined, { sensitivity: "base" }))
-  ), [roster, inboxIds, q, adminUserId]);
+  ), [roster, inboxPeerIds, q, adminUserId]);
 
   const showInbox = isWide || !active;
   const showThread = isWide || !!active;
@@ -534,24 +671,22 @@ export function AdminMessages({
           </div>
         )}
         {filteredInbox.map((row) => {
-          const peerId = peerIdForThread({
-            clientId: row.clientId,
-            adminUserId,
-            participantIds: row.participantIds,
-            clientMap,
-          });
+          const peerId = (row.participantIds || []).find((id) => id !== adminUserId)
+            || row.clientId;
           const c = clientMap.get(peerId || row.clientId);
           const name = displayName(c);
-          const selected = active?.type === "dm" && active.id === row.clientId;
+          const rowThreadId = row.threadId || row.clientId;
+          const selected = active?.type === "dm"
+            && (active.threadId || active.id) === rowThreadId;
           const isAdminRow = isAdminProfile(c);
           return (
             <InboxRow
-              key={row.clientId}
+              key={`${row.threadType || "mama"}:${rowThreadId}`}
               title={`${name}${isAdminRow ? " · admin" : ""}`}
               subtitle={previewText(row.lastMessage) || "No messages yet"}
               unread={row.unread || 0}
               active={selected}
-              onClick={() => openDm(row.clientId)}
+              onClick={() => openInboxThread(row)}
             />
           );
         })}
@@ -717,19 +852,26 @@ export function AdminMessages({
                   canModerate
                   allowVoiceMemo
                   enableReply
-                  banner={activeChannel?.conversation?.read_only ? (
-                    <div style={{
-                      background: T.accentSoft,
-                      borderRadius: 12,
-                      padding: "10px 12px",
-                      marginBottom: 10,
-                      fontSize: 13.5,
-                    }}
-                    >
-                      This group is read-only right now.
-                    </div>
-                  ) : null}
-                  hideComposer={!!activeChannel?.conversation?.read_only}
+                  banner={(
+                    <>
+                      <MessagingRuntimeBanner runtime={runtime} />
+                      {activeChannel?.conversation?.read_only ? (
+                        <div style={{
+                          background: T.accentSoft,
+                          borderRadius: 12,
+                          padding: "10px 12px",
+                          marginBottom: 10,
+                          fontSize: 13.5,
+                        }}
+                        >
+                          This group is read-only right now.
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                  hideComposer={runtime.mode !== "normal" || !!activeChannel?.conversation?.read_only}
+                  allowAttachments={runtime.attachmentsEnabled}
+                  allowMutations={runtime.mode === "normal"}
                   emptyState="No group messages yet."
                   showPushPrompt
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
@@ -752,19 +894,38 @@ export function AdminMessages({
                   threadKey={`dm:${active.id}:${adminUserId}`}
                   peerName={activeName}
                   senderNameById={senderNameById}
-                  threadClientId={activeIsAdmin ? null : active.id}
+                  threadClientId={activeIsAdmin ? null : (active.clientId || active.id)}
                   showSenderNames
-                  busy={busy || dmLoadedClientId !== active.id}
+                  busy={busy || dmLoadedClientId !== active.id || !adminPeerIsActive}
                   onSend={sendDm}
-                  onEdit={editDm}
-                  onDelete={removeDm}
-                  onReact={reactDm}
-                  onMarkRead={dmLoadedClientId === active.id ? markDmRead : undefined}
+                  onEdit={adminPeerIsActive ? editDm : undefined}
+                  onDelete={adminPeerIsActive ? removeDm : undefined}
+                  onReact={adminPeerIsActive ? reactDm : undefined}
+                  onMarkRead={
+                    dmLoadedClientId === active.id
+                      ? markDmRead
+                      : undefined
+                  }
                   showReadReceipts
                   allowVoiceMemo
                   enableReply
                   showPushPrompt
-                  banner={dmLoadErrorClientId === active.id ? (
+                  banner={(
+                    <>
+                      <MessagingRuntimeBanner runtime={runtime} />
+                      {!adminPeerIsActive ? (
+                        <div style={{
+                          background: T.amberSoft,
+                          borderRadius: 12,
+                          padding: "10px 12px",
+                          marginBottom: 10,
+                          fontSize: 13.5,
+                          color: T.ink,
+                        }}
+                        >
+                          This admin no longer has messaging access. History is read-only.
+                        </div>
+                      ) : dmLoadErrorClientId === active.id ? (
                     <div style={{
                       background: T.amberSoft,
                       borderRadius: 12,
@@ -777,7 +938,7 @@ export function AdminMessages({
                       Couldn’t load this conversation.{" "}
                       <button
                         type="button"
-                        onClick={() => refreshDmThread(active.id, { clear: true })}
+                        onClick={() => refreshDmThread(active, { clear: true })}
                         style={{
                           border: "none",
                           background: "transparent",
@@ -791,7 +952,7 @@ export function AdminMessages({
                         Try again
                       </button>
                     </div>
-                  ) : dmLoadedClientId !== active.id ? (
+                      ) : dmLoadedClientId !== active.id ? (
                     <div style={{
                       background: T.track,
                       borderRadius: 12,
@@ -803,7 +964,12 @@ export function AdminMessages({
                     >
                       Loading conversation…
                     </div>
-                  ) : null}
+                      ) : null}
+                    </>
+                  )}
+                  hideComposer={runtime.mode !== "normal" || !adminPeerIsActive}
+                  allowAttachments={runtime.attachmentsEnabled}
+                  allowMutations={runtime.mode === "normal" && adminPeerIsActive}
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
                   compact
                 />
@@ -825,6 +991,14 @@ export function AdminMessages({
           </p>
         </>
       )}
+      {(!active || isWide) && (
+        <AdminMessagingRuntimeControls
+          runtime={runtime}
+          runtimeLoaded={runtimeLoaded}
+          runtimeError={runtimeError}
+          onUpdate={updateRuntime}
+        />
+      )}
       {error && <div style={{ fontSize: 13, color: T.amber, marginBottom: 10 }}>{error}</div>}
 
       <div style={{
@@ -839,6 +1013,181 @@ export function AdminMessages({
         {showInbox && inboxPane}
         {showThread && threadPane}
       </div>
+    </div>
+  );
+}
+
+function AdminMessagingRuntimeControls({
+  runtime,
+  runtimeLoaded,
+  runtimeError,
+  onUpdate,
+}) {
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [health, setHealth] = useState(null);
+  const [healthError, setHealthError] = useState("");
+
+  const loadHealth = useCallback(async () => {
+    if (!runtimeLoaded) return;
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) throw new Error("Not signed in");
+      const response = await fetch("/api/messaging-health", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok && !payload.outbox) throw new Error(payload.error || "Health check failed");
+      setHealth(payload);
+      setHealthError("");
+    } catch (error) {
+      setHealthError(error.message || "Health check failed");
+    }
+  }, [runtimeLoaded]);
+
+  useEffect(() => {
+    loadHealth();
+    const timer = window.setInterval(loadHealth, 60_000);
+    return () => window.clearInterval(timer);
+  }, [loadHealth]);
+
+  const apply = async (next, label) => {
+    if (!window.confirm(`${label}? This changes messaging for every admin and mama.`)) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      await onUpdate(next);
+      setMessage("Messaging controls updated.");
+      await loadHealth();
+    } catch (error) {
+      console.error(error);
+      setMessage(error.message || "Couldn’t update messaging controls.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const acknowledgeDead = async () => {
+    const reason = window.prompt("Why are these failed notifications being acknowledged?");
+    if (reason === null || reason.trim().length < 3) return;
+    setSaving(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      const response = await fetch("/api/admin-message-outbox-ack", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token || ""}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ reason }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Acknowledgement failed");
+      setMessage(`Acknowledged ${payload.acknowledged || 0} failed notification jobs.`);
+      await loadHealth();
+    } catch (error) {
+      setMessage(error.message || "Acknowledgement failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setMode = async (mode) => {
+    let reason = "";
+    if (mode !== "normal") {
+      const response = window.prompt(
+        "Short explanation shown to mamas (optional):",
+        runtime.reason || "Brief maintenance — your messages are safe.",
+      );
+      if (response === null) return;
+      reason = response;
+    }
+    await apply({ mode, reason }, `Set messaging to ${mode.replace("_", "-")}`);
+  };
+
+  return (
+    <div style={{
+      border: `1px solid ${T.border}`,
+      background: runtime.mode === "normal" ? T.sageSoft : T.amberSoft,
+      borderRadius: 14,
+      padding: "10px 12px",
+      marginBottom: 12,
+    }}
+    >
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: T.ink, marginBottom: 8 }}>
+        Messaging operations · {runtime.mode.replace("_", "-")}
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {["normal", "read_only", "off"].map((mode) => (
+          <Btn
+            key={mode}
+            small
+            ghost={runtime.mode !== mode}
+            disabled={saving || !runtimeLoaded}
+            onClick={() => setMode(mode)}
+          >
+            {mode === "normal" ? "Normal" : mode === "read_only" ? "Read-only" : "Off"}
+          </Btn>
+        ))}
+        <label style={{ fontSize: 12.5, fontWeight: 700, display: "flex", gap: 5 }}>
+          <input
+            type="checkbox"
+            checked={runtime.attachmentsEnabled}
+            disabled={saving || !runtimeLoaded}
+            onChange={(event) => apply({
+              attachmentsEnabled: event.target.checked,
+            }, `${event.target.checked ? "Enable" : "Pause"} attachments`)}
+          />
+          Attachments
+        </label>
+        <label style={{ fontSize: 12.5, fontWeight: 700, display: "flex", gap: 5 }}>
+          <input
+            type="checkbox"
+            checked={runtime.notificationsEnabled}
+            disabled={saving || !runtimeLoaded}
+            onChange={(event) => apply({
+              notificationsEnabled: event.target.checked,
+            }, `${event.target.checked ? "Enable" : "Pause"} push/email`)}
+          />
+          Push/email
+        </label>
+      </div>
+      {(message || runtimeError) && (
+        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6 }}>
+          {message || runtimeError}
+        </div>
+      )}
+      {(health?.outbox || healthError) && (
+        <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6 }}>
+          {health?.outbox ? (
+            <>
+              Outbox: {health.outbox.pending || 0} pending · {health.outbox.retry || 0} retry
+              {" · "}{health.outbox.processing || 0} processing · {health.outbox.dead || 0} dead
+              {health.outbox.dead > 0 ? (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={acknowledgeDead}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: T.accentDeep,
+                    font: "inherit",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    marginLeft: 8,
+                  }}
+                >
+                  Acknowledge dead jobs
+                </button>
+              ) : null}
+            </>
+          ) : healthError}
+        </div>
+      )}
     </div>
   );
 }

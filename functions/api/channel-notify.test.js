@@ -19,13 +19,25 @@ vi.mock("../_shared/supabaseEmail.js", () => ({
   invokeEdgeFunction: vi.fn(),
 }));
 
-import { onRequestPost } from "./channel-notify.js";
+import {
+  channelNotificationUrl,
+  onRequestPost,
+} from "./channel-notify.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe("durable channel notification processing", () => {
+  it("routes admin and customer push opens to their own surfaces", () => {
+    expect(channelNotificationUrl("channel-1", true)).toBe(
+      "/admin?tab=messages&channel=channel-1",
+    );
+    expect(channelNotificationUrl("channel-1", false)).toBe(
+      "/dashboard?tab=messages&channel=channel-1",
+    );
+  });
+
   it("retries malformed successful source responses", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ unexpected: true }), { status: 200 }),

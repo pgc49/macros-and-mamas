@@ -61,6 +61,8 @@ export function MessagesThread({
   headerExtra = null,
   banner = null,
   hideComposer = false,
+  allowAttachments = true,
+  allowMutations = true,
   showSenderNames = false,
   /** When true, selfId may delete/edit others' messages (admin moderation). */
   canModerate = false,
@@ -255,9 +257,17 @@ export function MessagesThread({
     setRecordMs(0);
   };
 
+  useEffect(() => {
+    if (recording && (!allowAttachments || hideComposer)) cancelRecording();
+  }, [allowAttachments, hideComposer, recording]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const send = async () => {
     const text = draft.trim();
     const attach = voicePreview?.file || file;
+    if (attach && !allowAttachments) {
+      setAttachError("Attachments are temporarily paused. Remove it to send text.");
+      return;
+    }
     if ((!text && !attach) || busy || !onSend || recording || sendInFlightRef.current) return;
     sendInFlightRef.current = true;
     const keptText = text;
@@ -426,18 +436,24 @@ export function MessagesThread({
   };
 
   const canEditMsg = (m) => (
+    allowMutations
+    &&
     !m.deleted_at
     && !!onEdit
     && m.sender_id === selfId
   );
 
   const canDeleteMsg = (m) => (
+    allowMutations
+    &&
     !m.deleted_at
     && !!onDelete
     && (m.sender_id === selfId || canModerate)
   );
 
   const canReplyMsg = (m) => (
+    allowMutations
+    &&
     enableReply
     && !hideComposer
     && !m.deleted_at
@@ -445,6 +461,8 @@ export function MessagesThread({
   );
 
   const canReactMsg = (m) => (
+    allowMutations
+    &&
     enableReactions
     && typeof onReact === "function"
     && !m.deleted_at
@@ -455,6 +473,15 @@ export function MessagesThread({
   const canManage = (m) => (
     canEditMsg(m) || canDeleteMsg(m) || canReplyMsg(m) || canReactMsg(m)
   );
+
+  useEffect(() => {
+    if (allowMutations) return;
+    clearHold();
+    setMenuId(null);
+    setEditingId(null);
+    setEditDraft("");
+    setReplyTo(null);
+  }, [allowMutations]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startReply = (m) => {
     if (!canReplyMsg(m)) return;
@@ -1245,6 +1272,7 @@ export function MessagesThread({
           paddingBottom: 2,
         }}
       >
+        {allowAttachments && (
         <label
           style={iconBtn}
           title="Attach photo or PDF"
@@ -1260,7 +1288,8 @@ export function MessagesThread({
             style={{ display: "none" }}
           />
         </label>
-        {allowVoiceMemo && (
+        )}
+        {allowVoiceMemo && allowAttachments && (
           <button
             type="button"
             onClick={recording ? stopRecording : startRecording}
@@ -1333,7 +1362,7 @@ export function MessagesThread({
         </Btn>
       </div>
       )}
-      {!hideComposer && allowVoiceMemo && !recording && !voicePreview && (
+      {!hideComposer && allowVoiceMemo && allowAttachments && !recording && !voicePreview && (
         <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6, lineHeight: 1.4 }}>
           Mic = voice memo (admins only). Mamas can play it in the thread — they can’t send voice back.
         </div>

@@ -7,6 +7,8 @@ import { mergeMessagesById } from "../lib/messageOrdering";
 import { T, F, FD } from "../theme/tokens";
 import { Btn } from "./ui";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { MessagingRuntimeBanner } from "./MessagingRuntimeBanner";
+import { useMessagingRuntime } from "../lib/useMessagingRuntime";
 
 function friendlyError(e, fallback) {
   const msg = String(e?.message || "");
@@ -43,6 +45,7 @@ function attachReplyPreviewLocal(list) {
 
 /** Mama Messages tab — Callie 1:1 plus cohort channels. */
 export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange }) {
+  const { runtime } = useMessagingRuntime();
   const [dmMessages, setDmMessages] = useState([]);
   const [dmUnread, setDmUnread] = useState(0);
   const [channels, setChannels] = useState([]);
@@ -420,8 +423,15 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
                 onOpenNotifySettings={() => setNotifyChannelId(activeChannel.conversation.id)}
               />
             )}
-            banner={activeChannel.conversation.read_only ? <ReadOnlyBanner /> : null}
-            hideComposer={!!activeChannel.conversation.read_only}
+            banner={(
+              <>
+                <MessagingRuntimeBanner runtime={runtime} />
+                {activeChannel.conversation.read_only ? <ReadOnlyBanner /> : null}
+              </>
+            )}
+            hideComposer={runtime.mode !== "normal" || !!activeChannel.conversation.read_only}
+            allowAttachments={runtime.attachmentsEnabled}
+            allowMutations={runtime.mode === "normal"}
             emptyState="No group messages yet — say hi when you’re ready."
             showPushPrompt
             onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
@@ -450,6 +460,10 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             onReact={reactDm}
             onMarkRead={markRead}
             enableReply
+            banner={<MessagingRuntimeBanner runtime={runtime} />}
+            hideComposer={runtime.mode !== "normal"}
+            allowAttachments={runtime.attachmentsEnabled}
+            allowMutations={runtime.mode === "normal"}
             showPushPrompt
             onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
             onComposerFocusChange={onComposerFocusChange}

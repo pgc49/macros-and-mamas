@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "VITE_APP_BUILD_ID=${CF_PAGES_COMMIT_SHA:-${VITE_APP_BUILD_ID:-dev}} vite build && node scripts/maybe-preview-marketing.mjs",
+    "build:customer": "APP_SURFACE=customer npm run build && APP_SURFACE=customer node scripts/verify-surface-build.mjs",
+    "build:admin": "APP_SURFACE=admin npm run build && APP_SURFACE=admin node scripts/verify-surface-build.mjs",
+    "qa:surfaces": "npm run build:customer && npm run build:admin",
     "build:www-cutover": "MARKETING_WWW_CUTOVER=1 npm run build",
     "lint": "oxlint",
     "qa:credits": "node scripts/qa-credits-math.mjs",
@@ -13,7 +16,7 @@
     "qa:reactions": "node scripts/qa-message-reactions.mjs",
     "qa:messages-thread": "node scripts/smoke-messages-thread.mjs",
     "qa:message-ordering": "node scripts/qa-message-ordering.mjs",
-    "test:messaging": "vitest run src/components/messaging-hardening.test.jsx src/admin/AdminMessages.test.jsx functions/_shared/messageOutbox.test.js functions/api/message-notify.test.js functions/api/channel-notify.test.js",
+    "test:messaging": "vitest run src/components/messaging-hardening.test.jsx src/admin/AdminMessages.test.jsx src/lib/useMessagingRuntime.test.jsx functions/_shared/messageOutbox.test.js functions/_shared/messagingRuntime.test.js functions/api/message-notify.test.js functions/api/channel-notify.test.js functions/api/admin-messaging-runtime.test.js",
     "qa:messaging": "npm run test:messaging && npm run qa:messages-thread && npm run qa:message-ordering && npm run qa:reactions && npm run qa:channels",
     "preview": "vite preview"
   },

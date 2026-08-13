@@ -271,6 +271,21 @@ function EmailTimeline({ profileId }) {
 
 export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel }) {
   const { user } = useAuth();
+  const initialAdminConversationId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const value = new URLSearchParams(window.location.search).get("dm");
+    return /^[0-9a-f-]{36}$/i.test(String(value || "")) ? value : null;
+  }, []);
+  const initialMessageClientId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const value = new URLSearchParams(window.location.search).get("client");
+    return /^[0-9a-f-]{36}$/i.test(String(value || "")) ? value : null;
+  }, []);
+  const initialChannelId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const value = new URLSearchParams(window.location.search).get("channel");
+    return /^[0-9a-f-]{36}$/i.test(String(value || "")) ? value : null;
+  }, []);
   const [tab, setTab] = useState(() => {
     if (typeof window === "undefined") return "overview";
     const q = new URLSearchParams(window.location.search).get("tab");
@@ -1144,7 +1159,9 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           <AdminMessages
             roster={all}
             adminUserId={user?.id}
-            initialClientId={adminSel}
+            initialClientId={adminSel || initialMessageClientId}
+            initialAdminConversationId={initialAdminConversationId}
+            initialChannelId={initialChannelId}
             onUnreadTotalChange={setUnreadMessages}
           />
         </ErrorBoundary>

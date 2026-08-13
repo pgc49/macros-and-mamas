@@ -52,10 +52,33 @@ const { deferredByClient, dbMock, realtimeChannel } = vi.hoisted(() => {
       ]),
       listMyChannels: vi.fn(async () => []),
       loadChannelMessages: vi.fn(async () => []),
+      loadMessagingRuntime: vi.fn(async () => ({
+        mode: "normal",
+        attachmentsEnabled: true,
+        notificationsEnabled: true,
+        reason: "",
+        updatedAt: "2026-08-11T00:00:00Z",
+      })),
       loadMessages: vi.fn((clientId) => {
         const pending = pendingByClient.get(clientId);
         return pending ? pending.promise : Promise.resolve([]);
       }),
+      loadAdminDmMessages: vi.fn(async () => []),
+      ensureAdminDmConversation: vi.fn(async (peerId) => ({
+        id: "admin-conversation",
+        participant_low: "admin-1",
+        participant_high: peerId,
+      })),
+      sendAdminDmMessage: vi.fn(async (args) => ({
+        id: "admin-sent",
+        sender_id: "admin-1",
+        recipient_id: args.recipientId,
+        admin_dm_conversation_id: args.conversationId,
+        body: args.body,
+        created_at: "2026-08-10T10:04:00Z",
+        reactions: [],
+      })),
+      markAdminDmRead: vi.fn(async () => 0),
       markMessagesRead: vi.fn(async () => {}),
       countUnreadMessages: vi.fn(async () => 0),
       sendMessage: vi.fn(),
@@ -102,6 +125,104 @@ afterEach(() => {
 });
 
 describe("AdminMessages thread switching", () => {
+  it("opens an authorized channel deep link after channels load", async () => {
+    dbMock.listMyChannels.mockResolvedValueOnce([{
+      conversation: {
+        id: "30000000-0000-4000-8000-000000000031",
+        label: "Test Group",
+        read_only: false,
+      },
+      membership: { notify_level: "all" },
+    }]);
+    dbMock.loadChannelMessages.mockResolvedValueOnce([{
+      id: "channel-message",
+      conversation_id: "30000000-0000-4000-8000-000000000031",
+      sender_id: "admin-1",
+      body: "Channel deep link message",
+      created_at: "2026-08-10T10:00:00Z",
+      reactions: [],
+    }]);
+    render(
+      <AdminMessages
+        roster={[{ id: "admin-1", name: "Admin One", role: "admin" }]}
+        adminUserId="admin-1"
+        initialChannelId="30000000-0000-4000-8000-000000000031"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+    await screen.findByText("Channel deep link message");
+    expect(screen.getAllByText("Test Group").length).toBeGreaterThan(0);
+  });
+
+  it("loads and sends admin DMs by pair conversation ID", async () => {
+    dbMock.loadMessageInbox.mockResolvedValueOnce([{
+      threadType: "admin",
+      threadId: "admin-conversation",
+      clientId: "admin-1",
+      adminConversationId: "admin-conversation",
+      participantIds: ["admin-1", "admin-2"],
+      unread: 1,
+      lastMessage: {
+        id: "admin-existing",
+        sender_id: "admin-2",
+        recipient_id: "admin-1",
+        admin_dm_conversation_id: "admin-conversation",
+        body: "Admin private",
+        created_at: "2026-08-10T10:03:00Z",
+      },
+    }]);
+    dbMock.loadAdminDmMessages.mockResolvedValueOnce([{
+      id: "admin-existing",
+      sender_id: "admin-2",
+      recipient_id: "admin-1",
+      admin_dm_conversation_id: "admin-conversation",
+      body: "Admin private",
+      created_at: "2026-08-10T10:03:00Z",
+      reactions: [],
+    }]);
+
+    render(
+      <AdminMessages
+        roster={[
+          { id: "admin-1", name: "Admin One", role: "admin" },
+          { id: "admin-2", name: "Admin Two", role: "admin" },
+        ]}
+        adminUserId="admin-1"
+        initialAdminConversationId="admin-conversation"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+    await waitFor(() => expect(dbMock.loadAdminDmMessages).toHaveBeenCalledWith(
+      "admin-conversation",
+    ));
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Admin reply" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(dbMock.sendAdminDmMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: "admin-conversation",
+        recipientId: "admin-2",
+        body: "Admin reply",
+      }),
+    ));
+  });
+
+  it("fails closed and disables admin controls when runtime status is unavailable", async () => {
+    dbMock.loadMessagingRuntime.mockRejectedValueOnce(new Error("runtime unavailable"));
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+    const normal = await screen.findByRole("button", { name: "Normal" });
+    await waitFor(() => expect(normal.disabled).toBe(true));
+    expect(screen.getByText("Couldn’t check messaging status.")).toBeTruthy();
+  });
+
   it("never renders a late previous-client response under the new client", async () => {
     const mamaA = deferred();
     const mamaB = deferred();

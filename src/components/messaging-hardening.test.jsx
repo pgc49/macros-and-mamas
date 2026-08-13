@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { MessagesThread } from "./MessagesThread";
+import { MessagingRuntimeBanner } from "./MessagingRuntimeBanner";
 
 vi.mock("@sentry/react", () => ({
   captureException: vi.fn(),
@@ -113,6 +114,42 @@ describe("messaging crash containment", () => {
     );
     expect(screen.getByText("Message valid")).toBeTruthy();
     expect(screen.getByPlaceholderText("Write a message…")).toBeTruthy();
+  });
+
+  it("hides attachment controls and explains runtime maintenance", () => {
+    render(
+      <>
+        <MessagingRuntimeBanner runtime={{
+          mode: "read_only",
+          attachmentsEnabled: false,
+          notificationsEnabled: false,
+          reason: "Maintenance test",
+        }}
+        />
+        <MessagesThread
+          {...threadProps({
+            messages: [{
+              id: "paused-message",
+              sender_id: "admin-1",
+              body: "Paused mutation",
+              created_at: "2026-08-11T00:00:00Z",
+              reactions: [],
+            }],
+          })}
+          allowAttachments={false}
+          allowMutations={false}
+          allowVoiceMemo
+        />
+      </>,
+    );
+    expect(screen.getByText("Messages are read-only right now")).toBeTruthy();
+    expect(screen.getByText(/Maintenance test/)).toBeTruthy();
+    expect(screen.queryByLabelText("Attach photo or PDF")).toBeNull();
+    expect(screen.queryByLabelText("Record voice memo")).toBeNull();
+    fireEvent.contextMenu(screen.getByText("Paused mutation").closest("[data-msg-id]"));
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "React with ❤️" })).toBeNull();
   });
 
   it("marks read when the latest ID changes at a capped window size", async () => {

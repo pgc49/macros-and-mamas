@@ -80,7 +80,55 @@ export async function onRequestPost({ request, env }) {
     let emailSent = false;
     let route = "unknown";
 
-    if (!senderIsAdmin && !clientIsAdmin) {
+    if (msg.admin_dm_conversation_id) {
+      route = "admin_to_admin";
+      const validRecipient = await validateAdminDmRecipient(env, msg, sender);
+      if (!validRecipient) {
+        await markMessageNotified(env, messageId);
+        await finishNotificationJob(env, job, { success: true });
+        console.warn("admin DM notification skipped", {
+          messageId,
+          reason: "skipped_recipient_deprovisioned",
+        });
+        return json({
+          ok: true,
+          skipped: "skipped_recipient_deprovisioned",
+          pushSent: 0,
+          emailSent: false,
+        });
+      }
+      const adminId = msg.recipient_id;
+      const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
+      pushSent = await sendPushToProfile(env, adminId, {
+        title: firstName(sender.name) || "Admin",
+        body: preview || "Open Messages in admin",
+        url: `/admin?tab=messages&dm=${encodeURIComponent(msg.admin_dm_conversation_id)}`,
+        unreadCount: unreadCount || 1,
+      });
+      if (pushSent === 0) {
+        const contact = await loadUserContact(env, adminId, { strict: true });
+        const email = contact.email || "";
+        if (email) {
+          const mail = await invokeEdgeFunction(env, "message-email", {
+            email,
+            name: contact.name || "Admin",
+            preview,
+            adminConversationId: msg.admin_dm_conversation_id,
+          });
+          let delivered = mail.ok;
+          if (!delivered) {
+            delivered = await sendMamaEmailDirect(env, {
+              email,
+              name: contact.name || "Admin",
+              preview,
+              url: `/admin?tab=messages&dm=${encodeURIComponent(msg.admin_dm_conversation_id)}`,
+            });
+          }
+          if (!delivered) throw new Error("admin email delivery failed");
+          emailSent = true;
+        }
+      }
+    } else if (!senderIsAdmin && !clientIsAdmin) {
       // Mama → Callie (thread owned by mama). Push only — no ops email.
       route = "mama_to_callie";
       const coachIds = await listCallieAdminIds(env);
@@ -145,14 +193,16 @@ export async function onRequestPost({ request, env }) {
     } else if (senderIsAdmin && clientIsAdmin) {
       // Admin ↔ admin DM: only the other party in THIS thread (never every admin).
       route = "admin_to_admin";
-      const recipients = await adminDmRecipients(env, msg);
+      let recipients;
+      let adminUrl = "/admin?tab=messages";
+      recipients = await adminDmRecipients(env, msg);
       if (!recipients.length) throw new Error("admin DM recipient missing");
       for (const adminId of recipients) {
         const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
         const n = await sendPushToProfile(env, adminId, {
           title: firstName(sender.name) || "Admin",
           body: preview || "Open Messages in admin",
-          url: "/admin?tab=messages",
+          url: adminUrl,
           unreadCount: unreadCount || 1,
         });
         pushSent += n;
@@ -268,46 +318,46 @@ async function countUnreadForProfile(env, profileId, { asAdmin }) {
   if (!profileId) return 0;
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  let qs = `select=id&read_at=is.null&deleted_at=is.null&sender_id=neq.${encodeURIComponent(profileId)}`;
-  if (!asAdmin) {
-    qs += `&client_id=eq.${encodeURIComponent(profileId)}`;
-  } else {
-    const adminIds = await listAdminIds(env);
-    if (adminIds.length) {
-      const list = adminIds.map(encodeURIComponent).join(",");
-      // Mama senders OR threads owned by an admin (Patrick↔Callie DMs).
-      qs += `&or=(sender_id.not.in.(${list}),client_id.in.(${list}))`;
-    }
-  }
-  try {
-    const resp = await fetch(`${base}/rest/v1/messages?${qs}`, {
-      method: "HEAD",
+  void asAdmin;
+  const response = await fetch(
+    `${base}/rest/v1/rpc/count_message_unread_for_profile`,
+    {
+      method: "POST",
       headers: {
         apikey: key,
         authorization: `Bearer ${key}`,
-        Prefer: "count=exact",
+        "content-type": "application/json",
       },
-    });
-    const range = resp.headers.get("content-range") || "";
-    const m = range.match(/\/(\d+)\s*$/);
-    return m ? Math.max(0, Number(m[1]) || 0) : 0;
-  } catch (e) {
-    console.warn("countUnreadForProfile failed", e);
-    return 0;
-  }
+      body: JSON.stringify({ p_profile_id: profileId }),
+    },
+  );
+  if (!response.ok) throw new Error(`unread count failed (${response.status})`);
+  return Math.max(0, Number(await response.json()) || 0);
 }
 
-async function sendMamaEmailDirect(env, { email, name, preview }) {
+async function sendMamaEmailDirect(
+  env,
+  {
+    email,
+    name,
+    preview,
+    url = "/dashboard?tab=messages",
+  },
+) {
   const key = String(env.RESEND_API_KEY || "").trim();
   if (!key || !email) return false;
   const first = firstName(name) || "Mama";
   const snippet = String(preview || "").trim().slice(0, 160);
-  const appUrl = String(env.APP_URL || "https://www.macrosandmamas.com").replace(/\/$/, "");
+  const baseUrl = String(
+    url.startsWith("/admin")
+      ? (env.ADMIN_APP_URL || env.APP_URL || "https://www.macrosandmamas.com")
+      : (env.APP_URL || "https://www.macrosandmamas.com"),
+  ).replace(/\/$/, "");
   const html = `<!doctype html><html><body style="font-family:Helvetica,Arial,sans-serif;color:#33272E">
     <p>Hi ${escapeHtml(first)},</p>
     <p>Callie left you a message in Macros and Mamas.</p>
     ${snippet ? `<p><i>${escapeHtml(snippet)}</i></p>` : ""}
-    <p><a href="${appUrl}/dashboard?tab=messages">Open Messages</a></p>
+    <p><a href="${baseUrl}${escapeHtml(url)}">Open Messages</a></p>
   </body></html>`;
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -399,6 +449,36 @@ async function adminDmRecipients(env, msg) {
   return (await listCallieAdminIds(env)).filter((id) => id !== msg.sender_id);
 }
 
+async function validateAdminDmRecipient(env, msg, sender) {
+  if (!msg.admin_dm_conversation_id || !msg.recipient_id) return false;
+  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const [conversationResponse, recipient] = await Promise.all([
+    fetch(
+      `${base}/rest/v1/admin_dm_conversations`
+        + `?id=eq.${encodeURIComponent(msg.admin_dm_conversation_id)}`
+        + "&select=participant_low,participant_high&limit=1",
+      { headers: { apikey: key, authorization: `Bearer ${key}` } },
+    ),
+    loadProfile(env, msg.recipient_id),
+  ]);
+  if (!conversationResponse.ok) {
+    throw new Error(`admin DM conversation lookup failed (${conversationResponse.status})`);
+  }
+  const conversations = await conversationResponse.json();
+  if (!Array.isArray(conversations)) throw new Error("admin DM conversation payload invalid");
+  const conversation = conversations[0];
+  if (
+    !conversation
+    || String(sender?.role || "").toLowerCase() !== "admin"
+    || String(recipient?.role || "").toLowerCase() !== "admin"
+  ) return false;
+  const participants = [conversation.participant_low, conversation.participant_high];
+  return participants.includes(msg.sender_id)
+    && participants.includes(msg.recipient_id)
+    && msg.sender_id !== msg.recipient_id;
+}
+
 async function loadProfile(env, id) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -420,10 +500,6 @@ async function listAdminProfiles(env) {
   );
   if (!resp.ok) return [];
   return (await resp.json().catch(() => [])) || [];
-}
-
-async function listAdminIds(env) {
-  return (await listAdminProfiles(env)).map((r) => r.id).filter(Boolean);
 }
 
 async function requireUser(request, env) {
