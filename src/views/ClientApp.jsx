@@ -365,7 +365,7 @@ export function ClientApp({
             </>
           )}
 
-          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && mealFilter !== "Snack" && mealFilter !== "Pantry" && (
+          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && mealFilter !== "Snack" && mealFilter !== "Treats" && mealFilter !== "Pantry" && (
             <Card style={{ background: T.accentSoft, border: "none", marginBottom: 14 }}>
               {SKELETONS.filter((s) => s.meal === mealFilter).map((s) => (
                 <div key={s.meal} style={{ marginBottom: 0 }}>

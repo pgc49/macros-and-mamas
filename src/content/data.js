@@ -29,15 +29,6 @@ export const SKELETONS = [
       "Rice, potatoes, or sweet potato",
     ],
   },
-  {
-    meal: "Treats",
-    formula: "Sweet treat · protein cookie, 1 serving",
-    lines: [
-      "Batch of 12 cookies — log one (or scale)",
-      "Oatmeal or chocolate chip protein cookies",
-      "Bake at 350°F for about 10 minutes",
-    ],
-  },
 ];
 
 export { PANTRY_ITEMS, PANTRY_GROUPS, pantryByGroup, pantryGroupLabel } from "./pantry";
