@@ -88,6 +88,19 @@ if (runCutover) {
   buildEnv.PUBLIC_NOINDEX = "true";
 }
 
+/** SPA Pages env → Astro overlay so www only needs one paste per id. */
+const overlayPublicFromVite = [
+  ["PUBLIC_META_PIXEL_ID", "VITE_META_PIXEL_ID"],
+  ["PUBLIC_CF_WEB_ANALYTICS_TOKEN", "VITE_CF_WEB_ANALYTICS_TOKEN"],
+  ["PUBLIC_GTM_ID", "VITE_GTM_ID"],
+  ["PUBLIC_GA_MEASUREMENT_ID", "VITE_GA_MEASUREMENT_ID"],
+];
+for (const [publicName, viteName] of overlayPublicFromVite) {
+  if (!buildEnv[publicName] && buildEnv[viteName]) {
+    buildEnv[publicName] = buildEnv[viteName];
+  }
+}
+
 const build = spawnSync("npm", ["run", "build"], {
   cwd: marketingDir,
   stdio: "inherit",

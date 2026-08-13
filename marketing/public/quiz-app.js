@@ -129,6 +129,9 @@
       });
     }
   } catch (e) {}
+  trackGoogle('quiz_start', {
+    placement: state.source === 'quiz_page' ? 'quiz_page' : state.source,
+  });
 
   function attr() {
     try {
@@ -181,11 +184,22 @@
     } catch (e) {}
   }
 
+  /** GA4 / GTM dataLayer — no-op until Google tags are loaded. */
+  function trackGoogle(eventName, params) {
+    try {
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push(Object.assign({ event: eventName }, params || {}));
+      if (typeof window.gtag === 'function') {
+        window.gtag('event', eventName, params || {});
+      }
+    } catch (e) {}
+  }
+
   /** Meta custom events so partial quiz progress is retargetable. */
   function trackMeta(s) {
     try {
+      const pct = progress();
       if (typeof window.fbq === 'function') {
-        const pct = progress();
         window.fbq('trackCustom', 'QuizStep', { step: s, progress: pct });
         if (s === 'q4' || s === 'q5') {
           window.fbq('trackCustom', 'QuizHalfway', { step: s, progress: pct });
@@ -193,6 +207,13 @@
         if (s === 'gate') {
           window.fbq('trackCustom', 'QuizEmailGate', { step: s, progress: pct });
         }
+      }
+      trackGoogle('quiz_step', { step: s, progress: pct });
+      if (s === 'q4' || s === 'q5') {
+        trackGoogle('quiz_halfway', { step: s, progress: pct });
+      }
+      if (s === 'gate') {
+        trackGoogle('quiz_email_gate', { step: s, progress: pct });
       }
     } catch (e) {}
   }
@@ -941,24 +962,35 @@
       // Meta Lead only for enrollable segments. Fully vegan + pregnant
       // fire QuizNurture instead — never train delivery on non-qualified leads.
       try {
-        if (typeof window.fbq === 'function') {
-          const seg = String(data.segment || '');
-          const qualified =
-            data.qualified_lead === true ||
-            (data.qualified_lead == null && ENROLLABLE_SEGMENTS[seg]);
-          if (qualified) {
+        const seg = String(data.segment || '');
+        const qualified =
+          data.qualified_lead === true ||
+          (data.qualified_lead == null && ENROLLABLE_SEGMENTS[seg]);
+        if (qualified) {
+          if (typeof window.fbq === 'function') {
             window.fbq(
               'track',
               'Lead',
               { content_name: 'ranges_quiz', content_category: seg },
               { eventID: eventId },
             );
-          } else {
+          }
+          trackGoogle('generate_lead', {
+            content_name: 'ranges_quiz',
+            content_category: seg,
+            event_id: eventId,
+          });
+        } else {
+          if (typeof window.fbq === 'function') {
             window.fbq('trackCustom', 'QuizNurture', {
               content_name: 'ranges_quiz',
               content_category: seg || 'nurture',
             });
           }
+          trackGoogle('quiz_nurture', {
+            content_name: 'ranges_quiz',
+            content_category: seg || 'nurture',
+          });
         }
       } catch (e) {}
 

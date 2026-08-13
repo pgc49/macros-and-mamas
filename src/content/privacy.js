@@ -1,5 +1,5 @@
 /** Privacy Policy — mirrored from launch legal copy. */
-export const PRIVACY_EFFECTIVE_DATE = "August 7, 2026";
+export const PRIVACY_EFFECTIVE_DATE = "August 13, 2026";
 
 export const PRIVACY_INTRO = [
   'This Privacy Policy explains how C&C Health Coaching LLC ("we," "us," or "our") collects, uses, and shares information when you use the Macros and Mamas program, website (macrosandmamas.com), and web application (the "Program"). It is incorporated into our Terms and Conditions.',
@@ -16,10 +16,10 @@ export const PRIVACY_SECTIONS = [
       "Program activity — meal logs, meal photos and descriptions, weekly weigh-ins, and habit checklist entries.",
       "Communications — messages you send us by email or in the group chat, and any testimonials or progress photos you choose to share with us.",
       "Information collected automatically:",
-      "Basic technical and usage data such as IP address, browser and device type, pages viewed, and timestamps, used to operate and secure the site. We may use Cloudflare Web Analytics for aggregate site traffic (pageviews by path); that product is designed not to use cookies for analytics and does not give us a per-visitor identity in our database.",
+      "Basic technical and usage data such as IP address, browser and device type, pages viewed, and timestamps, used to operate and secure the site. We may use Cloudflare Web Analytics for aggregate site traffic (pageviews by path); that product is designed not to use cookies for analytics and does not give us a per-visitor identity in our database. We may also use Google Analytics 4 (via the Google tag / gtag.js, and optionally Google Tag Manager) on public marketing and enrollment pages. Google Analytics uses cookies and similar identifiers to measure visits, sources, and conversion events; it is not loaded on signed-in coaching tabs.",
       "Marketing attribution — when you arrive from a campaign link (for example with UTM parameters) or a Meta ad, we may store those parameters in your browser and, if you create an account, attach first-touch source fields to your profile so we can understand which channels lead to signups. A first-party browser identifier may be stored locally and linked to your profile at signup; we do not store anonymous pageview rows for visitors who never create an account.",
-      "Ranges quiz / lead magnet — if you use the free ranges quiz, we collect your name, email, and quiz answers (for example height, weight, feeding status, postpartum timing, goals, and optional health flags such as thyroid or blood sugar). We use this to calculate or personally review your macro ranges, email your results, and follow up about the Program. Baby's birthday may be collected for early-postpartum timing reminders. Health-adjacent quiz answers are not sent to Meta advertising tools.",
-      "Advertising measurement data — when you arrive from a Meta (Facebook/Instagram) ad or interact with a tracked conversion (for example joining the waitlist or completing checkout), we may collect Meta cookie identifiers (_fbp / _fbc), click IDs (fbclid), and UTM campaign parameters, and we may hash your email and phone for ads measurement. See Section 4.",
+      "Ranges quiz / lead magnet — if you use the free ranges quiz, we collect your name, email, and quiz answers (for example height, weight, feeding status, postpartum timing, goals, and optional health flags such as thyroid or blood sugar). We use this to calculate or personally review your macro ranges, email your results, and follow up about the Program. Baby's birthday may be collected for early-postpartum timing reminders. Health-adjacent quiz answers are not sent to Meta advertising tools or to Google Analytics.",
+      "Advertising measurement data — when you arrive from a Meta (Facebook/Instagram) ad, a Google ad, or interact with a tracked conversion (for example joining the waitlist, completing the ranges quiz, or completing checkout), we may collect advertising cookie identifiers (_fbp / _fbc, Google Analytics cookies such as _ga), click IDs (fbclid, gclid), and UTM campaign parameters, and we may hash your email and phone for Meta ads measurement. See Section 4.",
       "Information we do not collect: we never see or store your full payment card details. Payments are processed by Stripe.",
     ],
   },
@@ -34,10 +34,10 @@ export const PRIVACY_SECTIONS = [
       "invite you to and administer the private group chat;",
       "process payments and, where applicable, refunds;",
       "deliver free ranges quiz results by email and related Program follow-ups;",
-      "measure and improve advertising performance (for example, whether a waitlist signup, quiz lead, or purchase came from a Meta ad) using Meta Pixel and Conversions API — without sending health-adjacent quiz answers to Meta;",
+      "measure and improve advertising and site performance (for example, whether a waitlist signup, quiz lead, or purchase came from a Meta or Google campaign) using Meta Pixel and Conversions API, and Google Analytics 4 / the Google tag — without sending health-adjacent quiz answers to Meta or Google;",
       "improve the Program and troubleshoot problems;",
       "comply with legal obligations and enforce our Terms.",
-      "We do not sell your personal information for money. We may share limited information with Meta for advertising measurement as described in Section 4.",
+      "We do not sell your personal information for money. We may share limited information with Meta for advertising measurement and with Google for analytics as described in Section 4.",
     ],
   },
   {
@@ -53,6 +53,7 @@ export const PRIVACY_SECTIONS = [
       "Stripe — payment processing",
       "Supabase — database and account authentication",
       "Cloudflare — website hosting, delivery, and optional Web Analytics (aggregate traffic)",
+      "Google LLC — Google Analytics 4 and the Google tag (and Google Tag Manager if enabled) on public marketing and enrollment pages. Data may include IP address (we request IP anonymization), device and browser type, pages viewed, referring URLs, UTM parameters, click IDs (gclid), and conversion events such as generate_lead, begin_checkout, and purchase. Google may also set cookies. Google processes this data under its own terms and privacy policy.",
       "Resend — email delivery",
       "AI provider(s) — meal photo and description estimates",
       "WhatsApp (Meta) — group communication",
@@ -89,7 +90,7 @@ export const PRIVACY_SECTIONS = [
       "opt out of marketing emails using the unsubscribe link — note that transactional emails about your active program will still be sent;",
       "leave the group chat at any time.",
       "If you are a California resident, the CCPA/CPRA gives you rights to know what personal information we collect, to request deletion or correction, to opt out of the \"sale\" or \"sharing\" of personal information for cross-context behavioral advertising, and not to be discriminated against for exercising those rights.",
-      "We do not sell personal information for money. We share limited data with Meta for advertising measurement (Pixel / Conversions API) as described in Section 4. To opt out of that sharing, email calista@nourishwithcalista.com with the subject \"Do Not Share My Info\" and we will honor your request as required by law. You may also use browser or platform controls (for example Meta ad settings) to limit ad tracking.",
+      "We do not sell personal information for money. We share limited data with Meta for advertising measurement (Pixel / Conversions API) and with Google for analytics (Google Analytics 4 / Google tag) as described in Section 4. To opt out of that sharing, email calista@nourishwithcalista.com with the subject \"Do Not Share My Info\" and we will honor your request as required by law. You may also use browser or platform controls (for example Meta ad settings, Google Ads Settings, or an analytics opt-out add-on) to limit ad tracking.",
       "To make a request, email calista@nourishwithcalista.com. We will verify your identity and respond within the timeframe required by law.",
     ],
   },

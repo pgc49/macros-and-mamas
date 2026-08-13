@@ -71,6 +71,8 @@ Workers & Pages → Create → Pages → Connect to Git → `pgc49/macros-and-ma
 - `SUPABASE_SERVICE_ROLE_KEY` (preferred) or anon key
 - Optional: `META_PIXEL_ID`, `META_CAPI_ACCESS_TOKEN`
 - Optional: `PUBLIC_CF_WEB_ANALYTICS_TOKEN` (Cloudflare Web Analytics beacon)
+- Optional: `PUBLIC_GA_MEASUREMENT_ID` (GA4 `G-XXXX`)
+- Optional: `PUBLIC_GTM_ID` (Google Tag Manager)
 
 Do **not** attach `www` to this project. www cutover overlays Astro onto the
 SPA Pages project instead — see `../docs/WWW-CUTOVER.md`.
@@ -93,6 +95,7 @@ That overlay is for a quick visual URL; waitlist API and proper Astro
 asset hosting still belong on the separate Pages project above.
 
 See `../docs/META-SETUP.md` for Pixel / CAPI secrets.  
+See `../docs/GOOGLE-SETUP.md` for Google tag / GA4.  
 See `../docs/ANALYTICS.md` for Cloudflare Web Analytics + profile attribution.  
 See `../docs/RANGES-QUIZ.md` for the free ranges quiz lead magnet.
 

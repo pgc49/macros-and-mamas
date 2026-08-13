@@ -40,6 +40,11 @@ const metaDomainVerify = (import.meta.env.PUBLIC_META_DOMAIN_VERIFY || '').trim(
 const cfWebAnalyticsToken = (
   import.meta.env.PUBLIC_CF_WEB_ANALYTICS_TOKEN || ''
 ).trim();
+const tagIdOk = (value: string) => /^[A-Z0-9][A-Z0-9_-]{4,40}$/i.test(value);
+const gtmIdRaw = (import.meta.env.PUBLIC_GTM_ID || '').trim();
+const gaMeasurementIdRaw = (import.meta.env.PUBLIC_GA_MEASUREMENT_ID || '').trim();
+const gtmId = tagIdOk(gtmIdRaw) ? gtmIdRaw : '';
+const gaMeasurementId = tagIdOk(gaMeasurementIdRaw) ? gaMeasurementIdRaw : '';
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -167,8 +172,55 @@ const jsonLd = {
         />
       )
     }
+    {
+      gtmId && (
+        <script is:inline define:vars={{ gtmId }}>
+          (function (w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+            var f = d.getElementsByTagName(s)[0],
+              j = d.createElement(s),
+              dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+          })(window, document, 'script', 'dataLayer', gtmId);
+        </script>
+      )
+    }
+    {
+      gaMeasurementId && (
+        <>
+          <script
+            async
+            src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+          />
+          <script is:inline define:vars={{ gaMeasurementId }}>
+            window.dataLayer = window.dataLayer || [];
+            function gtag() {
+              dataLayer.push(arguments);
+            }
+            window.gtag = gtag;
+            gtag('js', new Date());
+            gtag('config', gaMeasurementId, { anonymize_ip: true });
+          </script>
+        </>
+      )
+    }
   </head>
   <body>
+    {
+      gtmId && (
+        <noscript>
+          <iframe
+            src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}
+            height="0"
+            width="0"
+            style="display:none;visibility:hidden"
+          />
+        </noscript>
+      )
+    }
     <slot />
     <script is:inline>
       /* Attribution capture → waitlist hidden fields + SPA handoff (sessionStorage).
@@ -206,6 +258,7 @@ const jsonLd = {
             utm_content: (params.get('utm_content') || '').trim(),
             utm_term: (params.get('utm_term') || '').trim(),
             fbclid: fbclid,
+            gclid: (params.get('gclid') || '').trim(),
             fbp: cookie('_fbp'),
             fbc: cookie('_fbc') || (fbclid ? 'fb.1.' + Date.now() + '.' + fbclid : ''),
             landing_path: location.pathname || '/',
@@ -230,6 +283,7 @@ const jsonLd = {
               'utm_content',
               'utm_term',
               'fbclid',
+              'gclid',
               'fbp',
               'fbc',
             ].forEach(function (name) {
@@ -266,6 +320,7 @@ const jsonLd = {
                 'utm_content',
                 'utm_term',
                 'fbclid',
+                'gclid',
               ].forEach(function (k) {
                 if (merged[k] && !u.searchParams.get(k)) {
                   u.searchParams.set(k, merged[k]);

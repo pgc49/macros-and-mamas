@@ -86,6 +86,20 @@ export const CONFIG = {
    * no visitor ids in Supabase. Public routes only. See docs/ANALYTICS.md.
    */
   CF_WEB_ANALYTICS_TOKEN: envUrl("VITE_CF_WEB_ANALYTICS_TOKEN"),
+
+  /**
+   * Google Tag Manager container (GTM-XXXX). Optional. Public routes only.
+   * Prefer this if you will add Google Ads tags later without another deploy.
+   * Do not also configure the same GA4 stream inside GTM if GA_MEASUREMENT_ID
+   * is set — that double-counts pageviews. See docs/GOOGLE-SETUP.md.
+   */
+  GTM_ID: envUrl("VITE_GTM_ID"),
+
+  /**
+   * GA4 measurement ID (G-XXXX) via gtag.js. Public routes only.
+   * Least dashboard work: create a GA4 property, paste this, redeploy.
+   */
+  GA_MEASUREMENT_ID: envUrl("VITE_GA_MEASUREMENT_ID"),
 };
 
 /** True when public checkout / new signups are open. */

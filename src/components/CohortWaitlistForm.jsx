@@ -9,6 +9,7 @@ import {
   newBrowserEventId,
   trackPixel,
 } from "../lib/attribution";
+import { trackGoogleFromMeta } from "../lib/googleTag";
 
 /** Waitlist capture form — used on /waitlist (first name, last name, email, phone). */
 export function CohortWaitlistForm({ source = "waitlist_page" }) {
@@ -82,12 +83,22 @@ export function CohortWaitlistForm({ source = "waitlist_page" }) {
       });
       // Browser pixel; server CAPI is handled inside /api/waitlist (same event_id).
       trackPixel("Lead", { content_name: "cohort_waitlist", currency: "USD", value: 249 }, eventId);
+      trackGoogleFromMeta(
+        "Lead",
+        { content_name: "cohort_waitlist", currency: "USD", value: 249 },
+        eventId,
+      );
       setDone(true);
     } catch (err) {
       console.error("cohort waitlist failed", err);
       const msg = String(err?.message || "");
       if (/duplicate|unique|already/i.test(msg)) {
         trackPixel("Lead", { content_name: "cohort_waitlist", currency: "USD", value: 249 }, eventId);
+        trackGoogleFromMeta(
+          "Lead",
+          { content_name: "cohort_waitlist", currency: "USD", value: 249 },
+          eventId,
+        );
         setDone(true);
       } else if (/rate_limited/i.test(msg)) {
         setError("Too many tries from this network — wait a bit and try again.");

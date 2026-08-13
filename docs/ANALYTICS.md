@@ -1,13 +1,22 @@
 # Site analytics + signup conversion
 
-Two layers, on purpose:
+Three layers, on purpose:
 
 | Layer | What you see | Anonymous visitors? |
 | --- | --- | --- |
 | **Cloudflare Web Analytics** | Aggregate pageviews, paths, referrers, countries | Counts only — **no visitor ids**, nothing written to Supabase |
+| **Google Analytics 4** (Google tag) | Realtime + reports, sources, conversion events | Cookie-based on **public** pages only — see `docs/GOOGLE-SETUP.md` |
 | **Supabase `profiles` attribution** | First-touch UTM / anon_id / landing path on people who create accounts | **Only at signup/join** (step 3). Browsers who never sign up leave no profile row |
 
 Meta Pixel / CAPI remain for **ad optimization**. Do not use Events Manager as your only funnel.
+
+## Who does what
+
+I can put tags and events in the repo. You have to create vendor accounts and paste IDs into Cloudflare. Details:
+
+- Google tag + GA4 — `docs/GOOGLE-SETUP.md`
+- Meta Pixel + Ads Manager — `docs/META-SETUP.md`
+- www cutover (still your Cloudflare admin) — `docs/WWW-CUTOVER.md`
 
 ## Anonymous ids — when do they appear?
 
@@ -125,4 +134,4 @@ Cloudflare Web Analytics + `profiles` attribution is the free path that matches 
 
 ## Privacy
 
-`src/content/privacy.js` mentions Cloudflare Web Analytics (aggregate) and first-touch attribution on account creation. Keep Meta measurement gated until that privacy copy is approved/live (see `docs/META-SETUP.md`).
+`src/content/privacy.js` mentions Cloudflare Web Analytics (aggregate), Google Analytics 4 / the Google tag on public pages, and first-touch attribution on account creation. Keep Meta measurement **and** Google env vars unset until that privacy copy is approved/live (see `docs/META-SETUP.md` and `docs/GOOGLE-SETUP.md`).
