@@ -56,6 +56,22 @@ const { deferredByClient, dbMock, realtimeChannel } = vi.hoisted(() => {
         const pending = pendingByClient.get(clientId);
         return pending ? pending.promise : Promise.resolve([]);
       }),
+      loadAdminDmMessages: vi.fn(async () => []),
+      ensureAdminDmConversation: vi.fn(async (peerId) => ({
+        id: "admin-conversation",
+        participant_low: "admin-1",
+        participant_high: peerId,
+      })),
+      sendAdminDmMessage: vi.fn(async (args) => ({
+        id: "admin-sent",
+        sender_id: "admin-1",
+        recipient_id: args.recipientId,
+        admin_dm_conversation_id: args.conversationId,
+        body: args.body,
+        created_at: "2026-08-10T10:04:00Z",
+        reactions: [],
+      })),
+      markAdminDmRead: vi.fn(async () => 0),
       markMessagesRead: vi.fn(async () => {}),
       countUnreadMessages: vi.fn(async () => 0),
       sendMessage: vi.fn(),
@@ -102,6 +118,61 @@ afterEach(() => {
 });
 
 describe("AdminMessages thread switching", () => {
+  it("loads and sends admin DMs by pair conversation ID", async () => {
+    dbMock.loadMessageInbox.mockResolvedValueOnce([{
+      threadType: "admin",
+      threadId: "admin-conversation",
+      clientId: "admin-1",
+      adminConversationId: "admin-conversation",
+      participantIds: ["admin-1", "admin-2"],
+      unread: 1,
+      lastMessage: {
+        id: "admin-existing",
+        sender_id: "admin-2",
+        recipient_id: "admin-1",
+        admin_dm_conversation_id: "admin-conversation",
+        body: "Admin private",
+        created_at: "2026-08-10T10:03:00Z",
+      },
+    }]);
+    dbMock.loadAdminDmMessages.mockResolvedValueOnce([{
+      id: "admin-existing",
+      sender_id: "admin-2",
+      recipient_id: "admin-1",
+      admin_dm_conversation_id: "admin-conversation",
+      body: "Admin private",
+      created_at: "2026-08-10T10:03:00Z",
+      reactions: [],
+    }]);
+
+    render(
+      <AdminMessages
+        roster={[
+          { id: "admin-1", name: "Admin One", role: "admin" },
+          { id: "admin-2", name: "Admin Two", role: "admin" },
+        ]}
+        adminUserId="admin-1"
+        initialAdminConversationId="admin-conversation"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+    await waitFor(() => expect(dbMock.loadAdminDmMessages).toHaveBeenCalledWith(
+      "admin-conversation",
+    ));
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Admin reply" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(dbMock.sendAdminDmMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: "admin-conversation",
+        recipientId: "admin-2",
+        body: "Admin reply",
+      }),
+    ));
+  });
+
   it("never renders a late previous-client response under the new client", async () => {
     const mamaA = deferred();
     const mamaB = deferred();

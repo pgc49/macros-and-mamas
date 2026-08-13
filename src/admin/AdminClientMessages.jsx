@@ -12,7 +12,10 @@ import { mergeMessagesById } from "../lib/messageOrdering";
  */
 export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const clientId = client?.id;
+  const isAdminClient = String(client?.role || "").toLowerCase() === "admin";
+  const isSelfAdmin = isAdminClient && clientId === adminUserId;
   const [messages, setMessages] = useState([]);
+  const [adminConversation, setAdminConversation] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -20,31 +23,41 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const first = String(name).trim().split(/\s+/)[0] || "her";
 
   const refresh = useCallback(async () => {
-    if (!clientId) return;
+    if (!clientId || isSelfAdmin) return;
     try {
-      const list = await db.loadMessages(clientId);
+      const existingConversation = await db.findAdminDmConversation(clientId);
+      const conversation = existingConversation || (isAdminClient
+        ? await db.ensureAdminDmConversation(clientId)
+        : null);
+      if (conversation) setAdminConversation(conversation);
+      const list = conversation
+        ? await db.loadAdminDmMessages(conversation.id)
+        : await db.loadMessages(clientId);
       setMessages(list);
     } catch (e) {
       console.error(e);
       setError(e.message || "Couldn’t load messages.");
     }
-  }, [clientId]);
+  }, [clientId, isAdminClient, isSelfAdmin]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
   useEffect(() => {
-    if (!clientId) return undefined;
+    if (!clientId || isSelfAdmin) return undefined;
+    const conversationId = adminConversation?.id || null;
     const channel = supabase
-      .channel(`messages-admin-client-${clientId}`)
+      .channel(`messages-admin-client-${conversationId || clientId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "messages",
-          filter: `client_id=eq.${clientId}`,
+          filter: conversationId
+            ? `admin_dm_conversation_id=eq.${conversationId}`
+            : `client_id=eq.${clientId}`,
         },
         () => { refresh(); },
       )
@@ -61,20 +74,30 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [clientId, refresh]);
+  }, [adminConversation?.id, clientId, isSelfAdmin, refresh]);
 
   const send = async (body, file = null, opts = {}) => {
     if (!clientId) return;
     setBusy(true);
     setError("");
     try {
-      const row = await db.sendMessage({
-        clientId,
-        body,
-        file,
-        replyToId: opts.replyToId || null,
-        clientMessageId: opts.clientMessageId || null,
-      });
+      const row = adminConversation
+        ? await db.sendAdminDmMessage({
+          conversationId: adminConversation?.id,
+          clientId: adminConversation?.participant_low,
+          recipientId: clientId,
+          body,
+          file,
+          replyToId: opts.replyToId || null,
+          clientMessageId: opts.clientMessageId || null,
+        })
+        : await db.sendMessage({
+          clientId,
+          body,
+          file,
+          replyToId: opts.replyToId || null,
+          clientMessageId: opts.clientMessageId || null,
+        });
       setMessages((list) => mergeMessagesById(list, [row]));
       onActivity?.();
     } catch (e) {
@@ -105,11 +128,25 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
 
   const markRead = async () => {
     if (!clientId || !adminUserId) return;
-    await db.markMessagesRead(clientId, adminUserId);
+    if (adminConversation?.id) {
+      await db.markAdminDmRead(adminConversation.id);
+    } else {
+      await db.markMessagesRead(clientId, adminUserId);
+    }
     onActivity?.();
   };
 
   if (!clientId || !adminUserId) return null;
+  if (isSelfAdmin) {
+    return (
+      <Card style={{ marginTop: 12 }}>
+        <div style={{ fontFamily: FD, fontSize: 18 }}>Messages</div>
+        <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "6px 0 0" }}>
+          This is your own admin profile. Open another admin to use the test DM.
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <Card style={{ marginTop: 12 }}>
@@ -134,20 +171,25 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           subtitle=""
           messages={messages}
           selfId={adminUserId}
-          threadKey={`dm:${clientId}:${adminUserId}`}
+          threadKey={`dm:${adminConversation?.id || clientId}:${adminUserId}`}
           peerName={first}
           senderNameById={client?.id ? { [client.id]: first } : null}
-          threadClientId={clientId}
+          threadClientId={adminConversation ? null : clientId}
           showSenderNames
-          busy={busy}
+          busy={
+            busy
+            || (isAdminClient && !adminConversation)
+            || (!!adminConversation && !isAdminClient)
+          }
           onSend={send}
-          onEdit={edit}
-          onDelete={remove}
-          onReact={react}
+          onEdit={adminConversation && !isAdminClient ? undefined : edit}
+          onDelete={adminConversation && !isAdminClient ? undefined : remove}
+          onReact={adminConversation && !isAdminClient ? undefined : react}
           onMarkRead={markRead}
           showReadReceipts
           allowVoiceMemo
           enableReply
+          hideComposer={!!adminConversation && !isAdminClient}
           showPushPrompt={false}
           compact
         />

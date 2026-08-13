@@ -31,3 +31,15 @@ jobs:
           cat /tmp/outbox.json
           test "$status" = "200"
 
+      - name: Clean old unreferenced message attachments
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          status=$(curl -sS -o /tmp/attachment-gc.json -w "%{http_code}" -X POST \
+            "https://www.macrosandmamas.com/api/message-attachment-gc-cron" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json")
+          cat /tmp/attachment-gc.json
+          test "$status" = "200"
+

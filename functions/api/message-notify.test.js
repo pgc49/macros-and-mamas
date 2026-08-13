@@ -105,11 +105,8 @@ describe("durable DM notification processing", () => {
           { id: recipientId, name: "Callie", email: "callie@example.com", role: "admin" },
         ]), { status: 200 });
       }
-      if (value.includes("/rest/v1/messages?") && options.method === "HEAD") {
-        return new Response(null, {
-          status: 200,
-          headers: { "content-range": "0-0/1" },
-        });
+      if (value.includes("/rest/v1/rpc/count_message_unread_for_profile")) {
+        return new Response(JSON.stringify(1), { status: 200 });
       }
       if (value === "https://api.resend.com/emails") {
         return new Response("provider down", { status: 503 });
@@ -141,6 +138,67 @@ describe("durable DM notification processing", () => {
       expect.objectContaining({ id: 1 }),
       expect.objectContaining({ success: false }),
     );
+  });
+
+  it("skips linked admin notifications after either recipient ordering is demoted", async () => {
+    const low = "00000000-0000-4000-8000-000000000021";
+    const high = "00000000-0000-4000-8000-000000000022";
+    for (const [senderId, recipientId] of [[low, high], [high, low]]) {
+      vi.clearAllMocks();
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options = {}) => {
+        const value = String(url);
+        if (value.includes("/rest/v1/messages?id=eq.")) {
+          if (options.method === "PATCH") return new Response(null, { status: 204 });
+          return new Response(JSON.stringify([{
+            id: "10000000-0000-4000-8000-000000000021",
+            client_id: low,
+            sender_id: senderId,
+            recipient_id: recipientId,
+            admin_dm_conversation_id: "20000000-0000-4000-8000-000000000021",
+            body: "Private admin note",
+            kind: "chat",
+            deleted_at: null,
+            notified_at: null,
+          }]), { status: 200 });
+        }
+        if (value.includes(`/rest/v1/profiles?id=eq.${senderId}`)) {
+          return new Response(JSON.stringify([{
+            id: senderId,
+            name: "Active Admin",
+            role: "admin",
+          }]), { status: 200 });
+        }
+        if (value.includes(`/rest/v1/profiles?id=eq.${recipientId}`)) {
+          return new Response(JSON.stringify([{
+            id: recipientId,
+            name: "Former Admin",
+            role: "client",
+          }]), { status: 200 });
+        }
+        if (value.includes("/rest/v1/admin_dm_conversations")) {
+          return new Response(JSON.stringify([{
+            participant_low: low,
+            participant_high: high,
+          }]), { status: 200 });
+        }
+        throw new Error(`unexpected fetch ${value}`);
+      });
+
+      const response = await onRequestPost({
+        request: request("10000000-0000-4000-8000-000000000021"),
+        env,
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(expect.objectContaining({
+        skipped: "skipped_recipient_deprovisioned",
+      }));
+      expect(mocks.invoke).not.toHaveBeenCalled();
+      expect(mocks.finish).toHaveBeenCalledWith(
+        env,
+        expect.objectContaining({ id: 1 }),
+        { success: true },
+      );
+    }
   });
 });
 
