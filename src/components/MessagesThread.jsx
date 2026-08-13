@@ -608,15 +608,19 @@ export function MessagesThread({
   };
 
   return (
-    <div style={{
+    <div data-messages-thread style={{
       display: "flex",
       flexDirection: "column",
-      minHeight: compact ? 0 : "62vh",
+      minHeight: 0,
       flex: 1,
-      height: compact ? "100%" : undefined,
+      height: compact ? "100%" : "min(62vh, 582px)",
       minWidth: 0,
-      // Compact (admin fill): clip to parent so the list scrolls, not the page.
-      overflow: compact ? "hidden" : undefined,
+      // Keep history inside a fixed viewport box on every phone. Bottom padding
+      // leaves room for composer borders/radii so overflow clipping never
+      // shaves the input row.
+      overflow: "hidden",
+      paddingBottom: 4,
+      boxSizing: "border-box",
     }}
     >
       {(title || subtitle) && (
@@ -659,6 +663,7 @@ export function MessagesThread({
       {banner}
 
       <div
+        data-message-list
         ref={listRef}
         style={{
           flex: 1,
@@ -669,10 +674,9 @@ export function MessagesThread({
           padding: 12,
           // Critical: default minHeight:auto prevents shrinking below content,
           // which expands the whole thread instead of scrolling inside the pane.
-          minHeight: compact ? 0 : 280,
+          minHeight: 0,
           minWidth: 0,
-          /* compact (admin fill): fill parent. Mama tab keeps a viewport cap. */
-          maxHeight: compact ? "none" : "min(64vh, 520px)",
+          maxHeight: "none",
           WebkitOverflowScrolling: "touch",
           overscrollBehavior: "contain",
         }}
@@ -1255,7 +1259,19 @@ export function MessagesThread({
       )}
 
       {!hideComposer && (
-      <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-end" }}>
+      <div
+        data-message-composer
+        style={{
+          display: "flex",
+          gap: 8,
+          marginTop: 10,
+          alignItems: "flex-end",
+          flexShrink: 0,
+          // Keep the full 1.5px borders / radii inside the bounded thread on
+          // every viewport — no phone-specific hacks.
+          paddingBottom: 2,
+        }}
+      >
         {allowAttachments && (
         <label
           style={iconBtn}
@@ -1312,8 +1328,12 @@ export function MessagesThread({
           autoComplete="off"
           autoCorrect="on"
           disabled={recording}
-          onFocus={() => onComposerFocusChange?.(true)}
-          onBlur={() => {
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = T.accent;
+            onComposerFocusChange?.(true);
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = T.border;
             // Delay so Send/attach taps still register before tabs return
             window.setTimeout(() => onComposerFocusChange?.(false), 180);
           }}
@@ -1323,6 +1343,8 @@ export function MessagesThread({
             padding: "12px 14px",
             borderRadius: 12,
             border: `1.5px solid ${T.border}`,
+            outline: "none",
+            WebkitAppearance: "none",
             fontFamily: F,
             fontSize: 16,
             lineHeight: 1.4,

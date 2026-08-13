@@ -167,6 +167,37 @@ describe("messaging crash containment", () => {
     await waitFor(() => expect(onMarkRead).toHaveBeenCalledTimes(2));
   });
 
+  it("keeps writable composer in a bounded thread when history loads", () => {
+    const view = render(<MessagesThread {...threadProps()} />);
+    const thread = view.container.querySelector("[data-messages-thread]");
+    const list = view.container.querySelector("[data-message-list]");
+    const composer = view.container.querySelector("[data-message-composer]");
+    const input = screen.getByPlaceholderText("Write a message…");
+
+    expect(input).toBeTruthy();
+    expect(thread.style.minHeight).toBe("0px");
+    expect(thread.style.overflow).toBe("hidden");
+    expect(thread.style.paddingBottom).toBe("4px");
+    expect(list.style.minHeight).toBe("0px");
+    expect(list.style.maxHeight).toBe("none");
+    expect(composer.style.flexShrink).toBe("0");
+    expect(input.style.outline).toBe("none");
+
+    view.rerender(
+      <MessagesThread
+        {...threadProps({
+          messages: Array.from({ length: 80 }, (_, i) => message(`loaded-${i}`, i % 60)),
+        })}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText("Write a message…")).toBeTruthy();
+    expect(view.container.querySelector("[data-messages-thread]").style.overflow).toBe("hidden");
+    expect(view.container.querySelector("[data-messages-thread]").style.paddingBottom).toBe("4px");
+    expect(view.container.querySelector("[data-message-list]").style.minHeight).toBe("0px");
+    expect(view.container.querySelector("[data-message-composer]").style.flexShrink).toBe("0");
+  });
+
   it("contains synchronous mark-read failures", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     render(
