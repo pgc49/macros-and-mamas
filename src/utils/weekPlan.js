@@ -218,7 +218,7 @@ export function countPlannedMeals(days) {
 /** Convert a bank recipe into a planner meal row (with ingredients for grocery). */
 function normalizePlanSlot(raw) {
   const slot = String(raw || "snack").toLowerCase();
-  if (slot === "pantry") return "snack";
+  if (slot === "pantry" || slot === "treat" || slot === "treats") return "snack";
   return PLAN_SLOTS.includes(slot) ? slot : "snack";
 }
 
@@ -467,6 +467,9 @@ export function bankRecipesForSlot(slot) {
   if (!key || key === "any" || key === "all") return RECIPES;
   const label = SLOT_LABEL[key] || "";
   if (!label) return RECIPES;
+  if (key === "snack") {
+    return RECIPES.filter((r) => r.cat === "Snack" || r.cat === "Treats");
+  }
   return RECIPES.filter((r) => r.cat === label);
 }
 

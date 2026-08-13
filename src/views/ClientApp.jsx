@@ -380,7 +380,7 @@ export function ClientApp({
           )}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {["Plan", "Food prefs", "My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Pantry"].map((c) => (
+            {["Plan", "Food prefs", "My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"].map((c) => (
               <Chip
                 key={c}
                 active={mealFilter === c}

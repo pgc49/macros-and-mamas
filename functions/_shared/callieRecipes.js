@@ -27,4 +27,6 @@ export const CALLIE_RECIPES = [
   { cat: "Snack", name: "Cottage cheese + cucumber", desc: "150g 2% cottage cheese, 1 cup cucumber slices, cracked pepper.", cal: 160, p: 20, c: 8, f: 4, serves: 1 },
   { cat: "Snack", name: "Protein shake", desc: "1 scoop (30g) protein, 1 cup unsweetened almond milk, ice.", cal: 150, p: 25, c: 4, f: 3, serves: 1 },
   { cat: "Snack", name: "Apple + peanut butter", desc: "1 medium apple, 16g (1 tbsp) natural peanut butter.", cal: 190, p: 5, c: 28, f: 8, serves: 1 },
+  { cat: "Treats", name: "Oatmeal protein cookies", desc: "M+M sweet treat. Batch: oats, einkorn or AP flour, vanilla protein, cinnamon, egg whites, nonfat Greek yogurt, maple or honey, optional raisins. Makes 12. Logged serving = 1 cookie (~85 cal).", cal: 85, p: 5, c: 13, f: 1, serves: 12 },
+  { cat: "Treats", name: "Chocolate chip protein cookies", desc: "M+M sweet treat. Batch: einkorn or AP flour, vanilla protein, egg whites, nonfat Greek yogurt, maple or honey, mini chocolate chips. Makes 12. Logged serving = 1 cookie (~95 cal).", cal: 95, p: 5, c: 15, f: 2, serves: 12 },
 ];
