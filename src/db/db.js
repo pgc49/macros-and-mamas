@@ -409,6 +409,7 @@ function assertIdempotentPayload(existing, {
   body,
   replyToId,
   file,
+  recipientId,
   targetField,
   targetId,
 }) {
@@ -416,6 +417,8 @@ function assertIdempotentPayload(existing, {
   const sameTarget = existing[targetField] === targetId;
   const sameBody = String(existing.body || "") === String(body || "");
   const sameReply = String(existing.reply_to_id || "") === String(replyToId || "");
+  const sameRecipient = !recipientId
+    || String(existing.recipient_id || "") === String(recipientId);
   let sameFile = true;
   if (file) {
     const mime = String(file.type || "").toLowerCase().split(";")[0].trim();
@@ -425,7 +428,7 @@ function assertIdempotentPayload(existing, {
   } else if (existing.attachment_path) {
     sameFile = false;
   }
-  if (!sameTarget || !sameBody || !sameReply || !sameFile) {
+  if (!sameTarget || !sameBody || !sameReply || !sameRecipient || !sameFile) {
     throw new Error("This retry no longer matches the original send.");
   }
 }
@@ -637,7 +640,7 @@ async function hydrateChannelSenders(rows, conversationId = null) {
 }
 
 const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
-const DM_MESSAGE_SELECT = "id, client_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
+const DM_MESSAGE_SELECT = "id, client_id, sender_id, recipient_id, client_message_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
 
 /** Attach in-thread reply preview objects from the loaded window (DMs + channels). */
 function attachReplyPreviews(rows) {
@@ -2215,6 +2218,7 @@ export const db = {
     file = null,
     replyToId = null,
     clientMessageId = null,
+    recipientId = null,
   }) {
     const uid = await requireUserId();
     if (!clientId) throw new Error("client required");
@@ -2231,6 +2235,7 @@ export const db = {
       body: text,
       replyToId,
       file,
+      recipientId,
       targetField: "client_id",
       targetId: clientId,
     });
@@ -2257,6 +2262,7 @@ export const db = {
         .insert({
           client_id: clientId,
           sender_id: uid,
+          ...(recipientId ? { recipient_id: recipientId } : {}),
           client_message_id: idempotencyKey,
           body: text,
           kind: "chat",
@@ -2287,6 +2293,7 @@ export const db = {
             body: text,
             replyToId,
             file,
+            recipientId,
             targetField: "client_id",
             targetId: clientId,
           });
@@ -2626,7 +2633,7 @@ export const db = {
     const [{ data: msgs, error }, { data: admins, error: adminErr }] = await Promise.all([
       supabase
         .from("messages")
-        .select("id, client_id, sender_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
+        .select("id, client_id, sender_id, recipient_id, body, kind, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes")
         .order("created_at", { ascending: false })
         .limit(500),
       supabase.from("profiles").select("id").eq("role", "admin"),
@@ -2648,6 +2655,7 @@ export const db = {
       const row = byClient.get(m.client_id);
       row.participantIds.add(m.sender_id);
       row.participantIds.add(m.client_id);
+      if (m.recipient_id) row.participantIds.add(m.recipient_id);
       // Prefer a non-deleted last preview when possible
       if (row.lastMessage?.deleted_at && !m.deleted_at) {
         row.lastMessage = m;
@@ -2658,6 +2666,7 @@ export const db = {
       if (readerId && m.sender_id === readerId) continue;
       const senderIsAdmin = adminIds.has(m.sender_id);
       const threadIsAdminDm = adminIds.has(m.client_id);
+      if (threadIsAdminDm && m.recipient_id && m.recipient_id !== readerId) continue;
       if (senderIsAdmin && !threadIsAdminDm) continue;
       row.unread += 1;
     }

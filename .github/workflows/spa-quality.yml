@@ -41,6 +41,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
       - uses: supabase/setup-cli@v1
         with:
           version: 2.113.0
@@ -69,9 +76,16 @@ jobs:
             cp supabase/migrations/20260811022913_messaging_idempotency_outbox.sql \
               "$DB_ROOT/supabase/migrations/"
           fi
+          if [ -f supabase/migrations/20260811031417_messaging_rls_hardening.sql ]; then
+            cp supabase/migrations/20260811031417_messaging_rls_hardening.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           cp supabase/tests/messaging_inbox.sql "$DB_ROOT/supabase/tests/"
           if [ -f supabase/tests/messaging_idempotency_outbox.sql ]; then
             cp supabase/tests/messaging_idempotency_outbox.sql "$DB_ROOT/supabase/tests/"
+          fi
+          if [ -f supabase/tests/messaging_rls_hardening.sql ]; then
+            cp supabase/tests/messaging_rls_hardening.sql "$DB_ROOT/supabase/tests/"
           fi
           echo "DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
 
@@ -80,3 +94,11 @@ jobs:
 
       - name: Messaging database and RLS tests
         run: supabase test db "$DB_ROOT/supabase/tests" --workdir "$DB_ROOT"
+
+      - name: Storage API ownership test
+        run: |
+          supabase status -o env --workdir "$DB_ROOT" > "$RUNNER_TEMP/supabase.env"
+          set -a
+          source "$RUNNER_TEMP/supabase.env"
+          set +a
+          node scripts/qa-message-storage-rls.mjs
