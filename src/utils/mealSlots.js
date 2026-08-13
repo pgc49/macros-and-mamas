@@ -31,6 +31,7 @@ export function normalizeSlot(raw) {
   if (MEAL_SLOTS.includes(s)) return s;
   if (s === "snacks") return "snack";
   if (s === "pantry") return "snack";
+  if (s === "treat" || s === "treats") return "snack";
   return null;
 }
 

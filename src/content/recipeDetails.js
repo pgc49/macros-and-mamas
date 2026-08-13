@@ -523,6 +523,60 @@ export const RECIPE_DETAILS = {
       "Eat right away so the apple doesn’t brown. If packing for later, add a squeeze of lemon on the cut surfaces.",
     ],
   },
+
+  "Oatmeal protein cookies": {
+    batch: [
+      { amount: "1 cup", item: "old-fashioned rolled oats" },
+      { amount: "½ cup", item: "einkorn or all-purpose flour" },
+      { amount: "⅓ cup (about 1 scoop)", item: "vanilla protein powder" },
+      { amount: "½ tsp", item: "baking soda" },
+      { amount: "¾ tsp", item: "ground cinnamon" },
+      { amount: "¼ tsp", item: "salt" },
+      { amount: "2", item: "large egg whites" },
+      { amount: "⅓ cup", item: "plain nonfat Greek yogurt" },
+      { amount: "¼ cup", item: "maple syrup or honey" },
+      { amount: "1 tsp", item: "vanilla extract" },
+      { amount: "¼ cup", item: "raisins (optional)" },
+    ],
+    serving: [
+      { amount: "1 cookie", item: "from the batch of 12 (~85 cal)" },
+    ],
+    steps: [
+      "Heat the oven to 350°F. Line a baking sheet with parchment.",
+      "In a bowl, stir together oats, flour, protein powder, baking soda, cinnamon, and salt.",
+      "In a second bowl, whisk egg whites, Greek yogurt, maple or honey, and vanilla until smooth.",
+      "Fold the wet into the dry until just combined. Stir in raisins if using. Dough will be thick.",
+      "Scoop 12 cookies onto the sheet and flatten each a bit with damp fingers or the back of a spoon — they don’t spread much.",
+      "Bake about 10 minutes, until the edges are set and the tops look dry. Cool a minute on the sheet, then move to a rack.",
+      "Logged serving = 1 cookie. Scale the log if you eat more than one.",
+    ],
+  },
+
+  "Chocolate chip protein cookies": {
+    batch: [
+      { amount: "1 cup", item: "einkorn or all-purpose flour" },
+      { amount: "⅓ cup (about 1 scoop)", item: "vanilla protein powder" },
+      { amount: "½ tsp", item: "baking soda" },
+      { amount: "¼ tsp", item: "salt" },
+      { amount: "2", item: "large egg whites" },
+      { amount: "⅓ cup", item: "plain nonfat Greek yogurt" },
+      { amount: "¼ cup", item: "maple syrup or honey" },
+      { amount: "1 tsp", item: "vanilla extract" },
+      { amount: "¼ cup", item: "mini chocolate chips" },
+    ],
+    serving: [
+      { amount: "1 cookie", item: "from the batch of 12 (~95 cal)" },
+    ],
+    steps: [
+      "Heat the oven to 350°F. Line a baking sheet with parchment.",
+      "In a bowl, stir together flour, protein powder, baking soda, and salt.",
+      "In a second bowl, whisk egg whites, Greek yogurt, maple or honey, and vanilla until smooth.",
+      "Fold the wet into the dry until just combined. Stir in the mini chocolate chips. Dough will be thick.",
+      "Scoop 12 cookies onto the sheet and flatten each a bit — they don’t spread much.",
+      "Bake about 10 minutes, until the edges are set and the tops look dry. Cool a minute on the sheet, then move to a rack.",
+      "Logged serving = 1 cookie. Scale the log if you eat more than one.",
+    ],
+  },
 };
 
 function lookupDetail(recipe) {

@@ -60,7 +60,11 @@ function scoreRecipe(recipe, prefTokens) {
  */
 export function suggestRecipesForSlot(profile, slot, { limit = 6 } = {}) {
   const label = SLOT_LABEL[String(slot || "").toLowerCase()];
-  const pool = label ? RECIPES.filter((r) => r.cat === label) : RECIPES;
+  const pool = !label
+    ? RECIPES
+    : String(slot || "").toLowerCase() === "snack"
+      ? RECIPES.filter((r) => r.cat === "Snack" || r.cat === "Treats")
+      : RECIPES.filter((r) => r.cat === label);
   const prefTokens = tokens(prefForSlot(profile, slot));
   const ranked = pool
     .map((recipe) => {
