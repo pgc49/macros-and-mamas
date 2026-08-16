@@ -96,6 +96,7 @@ export function captureAttributionFromLocation(search = window.location.search) 
     utm_content: (params.get("utm_content") || "").trim().slice(0, 120),
     utm_term: (params.get("utm_term") || "").trim().slice(0, 120),
     fbclid: fbclid.slice(0, 200),
+    gclid: (params.get("gclid") || "").trim().slice(0, 200),
     fbp: readCookie("_fbp").slice(0, 128),
     fbc: (readCookie("_fbc") || buildFbc(fbclid)).slice(0, 128),
     landing_path: path,

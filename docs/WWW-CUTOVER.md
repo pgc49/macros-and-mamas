@@ -40,8 +40,11 @@ On **`macros-and-mamas`** Production (and Preview if you test quiz there):
 | --- | --- |
 | `SUPABASE_URL` / already present | Shared |
 | `SUPABASE_SERVICE_ROLE_KEY` | `marketing_leads` + waitlist upserts |
-| `RESEND_API_KEY` | Ranges delivery email |
+| `RESEND_API_KEY` | Quiz ranges email |
 | `LEAD_FROM_EMAIL` | Optional From override |
+| `VITE_GA_MEASUREMENT_ID` | Optional GA4 (`G-XXXX`) — overlay copies to marketing HTML |
+| `VITE_GTM_ID` | Optional GTM (`GTM-XXXX`) |
+| `VITE_META_PIXEL_ID` / `META_PIXEL_ID` / `META_CAPI_ACCESS_TOKEN` | Optional ads measurement |
 
 Plaintext enrollment mode stays in `marketing/wrangler.toml` (`waitlist` \| `open`).
 

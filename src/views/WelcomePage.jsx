@@ -4,6 +4,7 @@ import { Shell, Card, Btn } from "../components/ui";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
 import { trackPixel } from "../lib/attribution";
+import { trackGoogleFromMeta } from "../lib/googleTag";
 
 /**
  * Stripe success landing. Never trust the URL alone — poll until webhook
@@ -35,11 +36,13 @@ export function WelcomePage({ onPaid, navigate }) {
       // Must match webhook: metadata.event_id || session.id
       const eventId = storedId || sessionId;
       if (!eventId) return;
-      trackPixel(
-        "Purchase",
-        { currency: "USD", content_name: "enrollment", order_id: sessionId || eventId },
-        eventId,
-      );
+      const purchaseParams = {
+        currency: "USD",
+        content_name: "enrollment",
+        order_id: sessionId || eventId,
+      };
+      trackPixel("Purchase", purchaseParams, eventId);
+      trackGoogleFromMeta("Purchase", purchaseParams, eventId);
     };
 
     const tick = async () => {

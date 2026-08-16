@@ -37,6 +37,7 @@ import { T, FD } from "./theme/tokens";
 import { isStandaloneDisplay, registerMessageServiceWorker, syncAppBadge } from "./lib/push";
 import { ensureMetaPixel } from "./lib/metaPixel";
 import { ensureCloudflareWebAnalytics } from "./lib/cloudflareWebAnalytics";
+import { ensureGoogleTag } from "./lib/googleTag";
 import {
   isPublicTrackingPath,
   persistAttributionToProfile,
@@ -224,10 +225,11 @@ export default function App() {
     return undefined;
   }, [user?.id]);
 
-  // Meta Pixel + CF Web Analytics + UTM capture on public routes only (env-gated).
+  // Meta Pixel + Google tag/GA4 + CF Web Analytics on public routes (env-gated).
   useEffect(() => {
     ensureMetaPixel(location.pathname);
     ensureCloudflareWebAnalytics(location.pathname);
+    ensureGoogleTag(location.pathname);
   }, [location.pathname]);
 
   // First-touch attribution → profiles once signed in (signup / join / welcome).

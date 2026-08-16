@@ -32,6 +32,9 @@ jobs:
       - name: Messaging checks
         run: npm run qa:messaging
 
+      - name: Tracking unit tests
+        run: npm run test:tracking
+
       - name: Production build
         run: npm run build
 

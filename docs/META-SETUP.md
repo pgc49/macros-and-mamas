@@ -2,6 +2,8 @@
 
 No Meta Ads MCP in this environment. Do these in Business Manager, then paste secrets into Cloudflare Pages.
 
+**You vs agent:** Pixel, CAPI, quiz/checkout/purchase events, and attribution are **already in the repo**. Your time is Business Manager + Pixel + token + domain verify + pasting env vars + Test Events + the actual ad campaigns. ~20–30 minutes for setup; campaigns are ongoing. See `docs/GOOGLE-SETUP.md` for the Google side (same pattern: I wire, you paste IDs).
+
 ## Before Pixel goes live
 
 1. **Approve** the Privacy Policy update (Meta measurement / CCPA “share” language) in `src/content/privacy.js`.

@@ -107,6 +107,7 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 5. Customer Portal: Dashboard → enable card update + invoice history; **disable** cancel + plan switch. Payments → **Open billing portal**.
 6. Before real charges: switch to live keys, live prices, and a live webhook.
 7. See `docs/ENROLLMENT-OPEN.md` and `docs/WWW-CUTOVER.md` for www marketing cutover.
+8. See `docs/GOOGLE-SETUP.md` and `docs/META-SETUP.md` for analytics / ads tags (you paste IDs; code is already wired).
 
 ## App URLs
 

@@ -6,6 +6,7 @@ import {
   newBrowserEventId,
   trackPixel,
 } from "./attribution";
+import { trackGoogleFromMeta } from "./googleTag";
 
 async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
@@ -45,14 +46,12 @@ export async function startCheckout(opts = {}) {
   captureAttributionFromLocation();
   const attr = getStoredAttribution() || {};
   const eventId = newBrowserEventId("ic");
-  trackPixel(
-    "InitiateCheckout",
-    {
-      currency: "USD",
-      content_name: labReview ? "enrollment_lab" : "enrollment",
-    },
-    eventId,
-  );
+  const checkoutParams = {
+    currency: "USD",
+    content_name: labReview ? "enrollment_lab" : "enrollment",
+  };
+  trackPixel("InitiateCheckout", checkoutParams, eventId);
+  trackGoogleFromMeta("InitiateCheckout", checkoutParams, eventId);
   const resp = await fetch(CONFIG.CHECKOUT_ENDPOINT, {
     method: "POST",
     headers,
