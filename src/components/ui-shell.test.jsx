@@ -38,4 +38,14 @@ describe("Shell content width", () => {
     const content = view.container.querySelector("[data-shell-content]");
     expect(content.style.maxWidth).toBe("1120px");
   });
+
+  it("keeps the Admin link same-origin on combined/admin surfaces", () => {
+    const view = render(
+      <MemoryRouter>
+        <Shell>body</Shell>
+      </MemoryRouter>,
+    );
+    const admin = view.getByText("Admin");
+    expect(admin.getAttribute("href")).toBe("/admin");
+  });
 });

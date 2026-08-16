@@ -1,3 +1,5 @@
+import { CONFIG } from "./config";
+
 /** Canonical app paths */
 export const PATHS = {
   home: "/",
@@ -58,6 +60,30 @@ export function homePathFor({
   if (!approved) return PATHS.pending;
   if (membershipPaywall) return PATHS.membership;
   return PATHS.dashboard;
+}
+
+/**
+ * Coach portal href. On www (customer surface) this is the isolated admin
+ * origin so Shell / support links do not SPA-navigate to a missing /admin.
+ */
+export function adminPortalHref({
+  surface = import.meta.env.VITE_APP_SURFACE || "combined",
+  origin = CONFIG.ADMIN_APP_URL,
+} = {}) {
+  if (surface === "customer") {
+    try {
+      return new URL(PATHS.admin, origin).toString();
+    } catch {
+      return "https://admin.macrosandmamas.com/admin";
+    }
+  }
+  return PATHS.admin;
+}
+
+export function isExternalAdminHref(
+  surface = import.meta.env.VITE_APP_SURFACE || "combined",
+) {
+  return surface === "customer";
 }
 
 /** Dashboard access: approve + pay, or admin dogfooding an approved intake. */

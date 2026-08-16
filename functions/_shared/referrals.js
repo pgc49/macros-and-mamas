@@ -10,6 +10,7 @@ import {
   vestingDays,
 } from "./credits.js";
 import { referralCouponId } from "./pricing.js";
+import { adminPortalUrl } from "./adminOrigin.js";
 
 export const REFERRAL_CREDIT_CENTS = 2500;
 export const AMBASSADOR_PAID_THRESHOLD = 3;
@@ -395,7 +396,7 @@ async function notifyAmbassador(env, { name, email, paidCount }) {
     `${display} just hit ${paidCount} paid referrals.`,
     email ? `Email: ${safe(email)}` : "",
     "Manual $100 ambassador payout — no automated cash-out.",
-    "https://www.macrosandmamas.com/admin",
+    adminPortalUrl(env),
   ].filter(Boolean).join("\n");
 
   try {

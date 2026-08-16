@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { FD, F, T } from "../theme/tokens";
-import { Shell, Card, Btn } from "../components/ui";
+import { Shell, Card, Btn, AdminPortalLink } from "../components/ui";
 import { PATHS } from "../routing";
 import { useAuth } from "../auth/useAuth.jsx";
 import { supabase } from "../lib/supabase";
@@ -236,7 +236,7 @@ export function SupportPage() {
           {fromAdmin ? (
             <>
               {" · "}
-              <Link to={PATHS.admin} style={{ color: T.accent, fontWeight: 700 }}>Back to admin</Link>
+              <AdminPortalLink style={{ color: T.accent, fontWeight: 700 }}>Back to admin</AdminPortalLink>
             </>
           ) : null}
         </p>

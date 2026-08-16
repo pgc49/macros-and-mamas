@@ -5,19 +5,11 @@
  * After admin.macrosandmamas.com is live, www (and apex) /admin go to that
  * origin so Callie bookmarks and old links leave the customer app.
  */
-const CUSTOMER_HOSTS = new Set(["www.macrosandmamas.com", "macrosandmamas.com"]);
-const DEFAULT_ADMIN_ORIGIN = "https://admin.macrosandmamas.com";
+import { adminOriginFromEnv } from "./_shared/adminOrigin.js";
 
-export function adminOriginFromEnv(env) {
-  const raw = String(env?.VITE_ADMIN_APP_URL || env?.ADMIN_APP_URL || DEFAULT_ADMIN_ORIGIN).trim();
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== "https:" || url.username || url.password) return DEFAULT_ADMIN_ORIGIN;
-    return url.origin;
-  } catch {
-    return DEFAULT_ADMIN_ORIGIN;
-  }
-}
+const CUSTOMER_HOSTS = new Set(["www.macrosandmamas.com", "macrosandmamas.com"]);
+
+export { adminOriginFromEnv };
 
 export function isAdminPath(pathname) {
   return pathname === "/admin" || pathname.startsWith("/admin/");

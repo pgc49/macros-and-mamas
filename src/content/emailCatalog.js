@@ -199,7 +199,7 @@ Callie
     subject: "💰 New mama: [name] — paid $[amount]",
     audience: "Callie",
     cta: null,
-    bodyPreview: `Plain-text alert with name, email, actual Stripe amount, and link to /admin.`,
+    bodyPreview: `Plain-text alert with name, email, actual Stripe amount, and link to https://admin.macrosandmamas.com/admin.`,
   },
   {
     id: "callie_intake",
@@ -210,7 +210,7 @@ Callie
     subject: "✅ [name] finished intake — review + approve",
     audience: "Callie",
     cta: null,
-    bodyPreview: `Headline stats (age, weight, breastfeeding, tastes, phone) + deep link to /admin. Flags pregnant / postpartum / diet for Callie 1:1 — no auto-deny.`,
+    bodyPreview: `Headline stats (age, weight, breastfeeding, tastes, phone) + deep link to https://admin.macrosandmamas.com/admin. Flags pregnant / postpartum / diet for Callie 1:1 — no auto-deny.`,
   },
   {
     id: "callie_eligibility_hold",

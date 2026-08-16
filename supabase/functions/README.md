@@ -58,6 +58,7 @@ cd /Users/patricksmacmini/macros-and-mamas
 git pull origin main
 
 supabase secrets set APP_URL=https://www.macrosandmamas.com
+supabase secrets set ADMIN_APP_URL=https://admin.macrosandmamas.com
 supabase secrets set CALLIE_NOTIFY_EMAIL=calista@nourishwithcalista.com
 # Optional: also notify co-owner (defaults to pgchammas@gmail.com in code)
 # supabase secrets set OWNER_NOTIFY_EMAIL=pgchammas@gmail.com

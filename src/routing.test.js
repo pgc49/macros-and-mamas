@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PATHS, homePathFor } from "./routing";
+import { PATHS, adminPortalHref, homePathFor, isExternalAdminHref } from "./routing";
 
 const enrolled = {
   approved: true,
@@ -20,5 +20,21 @@ describe("homePathFor", () => {
 
   it("still sends mamas to dashboard when enrolled", () => {
     expect(homePathFor({ isAdmin: false, ...enrolled, surface: "customer" })).toBe(PATHS.dashboard);
+  });
+});
+
+describe("adminPortalHref", () => {
+  it("stays same-origin on admin and combined surfaces", () => {
+    expect(adminPortalHref({ surface: "admin" })).toBe(PATHS.admin);
+    expect(adminPortalHref({ surface: "combined" })).toBe(PATHS.admin);
+    expect(isExternalAdminHref("admin")).toBe(false);
+    expect(isExternalAdminHref("combined")).toBe(false);
+  });
+
+  it("sends www coaches to the isolated admin origin", () => {
+    expect(adminPortalHref({ surface: "customer" })).toBe(
+      "https://admin.macrosandmamas.com/admin",
+    );
+    expect(isExternalAdminHref("customer")).toBe(true);
   });
 });

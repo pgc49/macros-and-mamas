@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { APP_URL, FROM_CALLIE, notifyRecipients, OWNER_NOTIFY_EMAIL } from "../_shared/emailTemplates.ts";
+import { ADMIN_PORTAL_URL, FROM_CALLIE, notifyRecipients, OWNER_NOTIFY_EMAIL } from "../_shared/emailTemplates.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { assertServiceRole } from "../_shared/assertServiceRole.ts";
 
@@ -36,7 +36,7 @@ serve(async (req) => {
           : `${display} just paid.`,
         email ? `Email: ${email}` : "",
         `If intake stalls, nudge her from admin.`,
-        `${APP_URL}/admin`,
+        ADMIN_PORTAL_URL,
       ]
         .filter(Boolean)
         .join("\n");
@@ -66,7 +66,7 @@ serve(async (req) => {
         s.seasonNote ? `Season note: ${s.seasonNote}` : "",
         s.phone ? `Phone: ${s.phone}` : "",
         "",
-        `Review + approve: ${APP_URL}/admin`,
+        `Review + approve: ${ADMIN_PORTAL_URL}`,
       ]
         .filter((line) => line !== undefined)
         .join("\n");
@@ -81,7 +81,7 @@ serve(async (req) => {
         s.monthsPP != null && s.monthsPP !== "" ? `Months postpartum: ${s.monthsPP}` : "",
         "",
         "No auto-refund was issued. Reach out 1:1 and decide whether to refund in Stripe.",
-        `${APP_URL}/admin`,
+        ADMIN_PORTAL_URL,
       ]
         .filter(Boolean)
         .join("\n");
