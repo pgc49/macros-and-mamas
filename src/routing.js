@@ -37,6 +37,9 @@ export function goMarketingHome() {
  * Where a signed-in user should land after auth / cold load.
  * Pay-first: account → pay → intake → Callie approve → dashboard.
  * After founding free month without a sub → membership gate.
+ *
+ * www (customer surface) has no coach portal — admins stay in the mama app.
+ * Coach UI is https://admin.macrosandmamas.com.
  */
 export function homePathFor({
   isAdmin,
@@ -45,8 +48,10 @@ export function homePathFor({
   macros,
   refunded,
   membershipPaywall = false,
+  surface = import.meta.env.VITE_APP_SURFACE || "combined",
 }) {
-  if (isAdmin) return PATHS.admin;
+  if (isAdmin && surface !== "customer") return PATHS.admin;
+  if (isAdmin) return PATHS.dashboard;
   if (refunded) return PATHS.goodbye;
   if (!paid) return PATHS.join;
   if (!macros) return PATHS.onboarding;

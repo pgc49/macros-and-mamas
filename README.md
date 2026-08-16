@@ -125,7 +125,7 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
 | `/support` | Signed-in clients | Tech help form → private GitHub issue (Tech Guy). WhatsApp link prompts sign-in. |
 | `/admin` | `profiles.role = admin` only | Overview (signups/paid), clients, email templates + per-mama send log |
 
-Admins land on `/admin` after sign-in, and can open **My dashboard** (`/dashboard`) to dogfood the product. Non-admins hitting `/admin` are redirected away.
+On www, admins land on `/dashboard` (mama app). The coach portal is `https://admin.macrosandmamas.com`. On that host, admins land on `/admin` and can open **My dashboard** to dogfood. Non-admins hitting `/admin` are redirected away.
 
 ## Key paths
 
