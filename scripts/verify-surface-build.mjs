@@ -80,6 +80,9 @@ if (surface === "customer") {
   ) {
     throw new Error("customer artifact contains admin portal code");
   }
+  if (js.includes("www.macrosandmamas.com/admin")) {
+    throw new Error("customer artifact still links coaches to www /admin");
+  }
 }
 
 if (surface === "admin" && (adminChunks.length !== 1 || adminModuleRefs < 1)) {

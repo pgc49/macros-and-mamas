@@ -73,6 +73,11 @@ export function renderEmail({
 
 export const FROM_CALLIE = "Callie · Macros and Mamas <calista@nourishwithcalista.com>";
 export const APP_URL = Deno.env.get("APP_URL") || "https://www.macrosandmamas.com";
+/** Coach portal. Do not send Callie to www /admin. */
+export const ADMIN_APP_URL = (
+  Deno.env.get("ADMIN_APP_URL") || "https://admin.macrosandmamas.com"
+).replace(/\/$/, "");
+export const ADMIN_PORTAL_URL = `${ADMIN_APP_URL}/admin`;
 /** Private WhatsApp invite — set WHATSAPP_GROUP_URL in function secrets to override. */
 export const WHATSAPP_GROUP_URL =
   Deno.env.get("WHATSAPP_GROUP_URL") ||

@@ -2,10 +2,25 @@ import { Link, useLocation } from "react-router-dom";
 import { T, F, FD } from "../theme/tokens";
 import { Fonts } from "../theme/Fonts";
 import { useAuth } from "../auth/useAuth.jsx";
-import { PATHS } from "../routing";
+import { PATHS, adminPortalHref, isExternalAdminHref } from "../routing";
 import { rangeState, formatRangeProgress } from "../utils/rangeProgress";
 
 export { rangeState } from "../utils/rangeProgress";
+
+export function AdminPortalLink({ children, style, ...props }) {
+  if (isExternalAdminHref()) {
+    return (
+      <a href={adminPortalHref()} style={style} {...props}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link to={PATHS.admin} style={style} {...props}>
+      {children}
+    </Link>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Building blocks (defined OUTSIDE the app so inputs keep focus)     */
@@ -209,7 +224,7 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false, conte
               {isAdmin && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
                   {pathname !== PATHS.admin && (
-                    <Link to={PATHS.admin} style={linkStyle}>Admin</Link>
+                    <AdminPortalLink style={linkStyle}>Admin</AdminPortalLink>
                   )}
                   {pathname !== PATHS.dashboard && (
                     <Link to={PATHS.dashboard} style={linkStyle}>My dashboard</Link>
