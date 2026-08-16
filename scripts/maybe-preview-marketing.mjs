@@ -60,7 +60,7 @@ const out = join(root, "dist");
 const spaIndex = join(out, "index.html");
 
 /** Top-level SPA client routes from src/routing.js (not `/`, not marketing). */
-const SPA_ROUTES = [
+const ALL_SPA_ROUTES = [
   "home",
   "join",
   "welcome",
@@ -77,6 +77,13 @@ const SPA_ROUTES = [
   "support",
   "account",
 ];
+const customerSurface = process.env.APP_SURFACE === "customer";
+const SPA_ROUTES = customerSurface
+  ? ALL_SPA_ROUTES.filter((route) => route !== "admin")
+  : ALL_SPA_ROUTES;
+const ADMIN_ORIGIN = String(process.env.VITE_ADMIN_APP_URL || "https://admin.macrosandmamas.com")
+  .trim()
+  .replace(/\/$/, "") || "https://admin.macrosandmamas.com";
 
 const install = spawnSync("npm", ["install", "--no-fund", "--no-audit"], {
   cwd: marketingDir,
@@ -194,6 +201,14 @@ const redirectLines = [
   "/app/ /dashboard/ 302!",
   "/app.html /dashboard/ 302!",
 ];
+if (customerSurface) {
+  redirectLines.push(
+    `# Isolated admin origin — do not plant an /admin SPA shell on customer.`,
+    `/admin ${ADMIN_ORIGIN}/admin 302`,
+    `/admin/ ${ADMIN_ORIGIN}/admin/ 302`,
+    `/admin/* ${ADMIN_ORIGIN}/admin/:splat 302`,
+  );
+}
 for (const route of SPA_ROUTES) {
   // Prefer /dashboard/ folder indexes; help clear bad edge redirects.
   redirectLines.push(`/${route} /${route}/ 302`);

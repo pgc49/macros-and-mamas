@@ -53,6 +53,19 @@ if (surface === "customer") {
   if (customerUrl.hostname === adminUrl.hostname) {
     throw new Error("admin redirect target cannot equal customer origin");
   }
+  const redirectsPath = join(dist, "_redirects");
+  if (existsSync(redirectsPath)) {
+    const redirects = readFileSync(redirectsPath, "utf8");
+    if (
+      !redirects.includes(`${adminUrl.origin}/admin`)
+      || !redirects.includes("/admin/*")
+    ) {
+      throw new Error("customer _redirects must send /admin to the admin origin");
+    }
+  }
+  if (existsSync(join(dist, "admin", "index.html"))) {
+    throw new Error("customer artifact must not plant an /admin SPA shell");
+  }
   const maps = files
     .filter((name) => name.endsWith(".map"))
     .map((name) => readFileSync(join(assets, name), "utf8"))
