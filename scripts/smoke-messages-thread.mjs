@@ -38,6 +38,14 @@ assert(clientAppSrc.includes('name="CustomerMessages"'), "customer Messages need
 const adminPortalSrc = readFileSync(new URL("../src/admin/AdminPortal.jsx", import.meta.url), "utf8");
 assert(adminPortalSrc.includes('name="AdminMessages"'), "admin inbox needs a local boundary");
 assert(adminPortalSrc.includes("client-messages-${sel.id}"), "client-message boundary must remount by client");
+assert(adminPortalSrc.includes("contentMaxWidth={tab === \"messages\" ? 1120 : 560}"), "admin Messages must use a wide desktop shell");
+
+const shellSrc = readFileSync(new URL("../src/components/ui.jsx", import.meta.url), "utf8");
+assert(shellSrc.includes("contentMaxWidth = 560"), "Shell must keep the phone-width default");
+assert(shellSrc.includes("maxWidth: contentMaxWidth"), "Shell must honor contentMaxWidth");
+
+assert(src.includes("flexWrap: \"wrap\""), "composer must wrap instead of crushing the textarea");
+assert(src.includes("flex: \"1 1 180px\""), "composer textarea needs a usable flex basis on desktop");
 
 const vite = await createServer({
   server: { middlewareMode: true },

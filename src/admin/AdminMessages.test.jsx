@@ -250,5 +250,32 @@ describe("AdminMessages thread switching", () => {
       expect(screen.getByText("B stays selected")).toBeTruthy();
     });
   });
+
+  it("gives the thread pane leftover width on desktop so the composer is not crushed", async () => {
+    render(
+      <AdminMessages
+        roster={[
+          { id: "mama-a", name: "Mama A", email: "a@example.com" },
+          { id: "mama-b", name: "Mama B", email: "b@example.com" },
+        ]}
+        adminUserId="admin-1"
+        initialClientId="mama-a"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    const grid = await waitFor(() => {
+      const el = document.querySelector("[data-admin-messages-grid]");
+      expect(el).toBeTruthy();
+      return el;
+    });
+    expect(grid.style.minWidth).toBe("0px");
+    expect(grid.style.width).toBe("100%");
+    expect(grid.style.gridTemplateColumns).toBe("minmax(220px, 280px) minmax(0, 1fr)");
+
+    const input = await screen.findByPlaceholderText("Write a message…");
+    expect(input.style.minWidth).toBe("0px");
+    expect(input.style.flex).toContain("180px");
+  });
 });
 

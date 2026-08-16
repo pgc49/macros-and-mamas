@@ -144,6 +144,10 @@ describe("messaging crash containment", () => {
     expect(list.style.minHeight).toBe("0px");
     expect(list.style.maxHeight).toBe("none");
     expect(composer.style.flexShrink).toBe("0");
+    expect(composer.style.minWidth).toBe("0px");
+    expect(composer.style.flexWrap).toBe("wrap");
+    expect(input.style.minWidth).toBe("0px");
+    expect(input.style.flex).toContain("180px");
     expect(input.style.outline).toBe("none");
 
     view.rerender(

@@ -147,7 +147,7 @@ function accountInitials(profile, email) {
   return local.slice(0, 2).toUpperCase();
 }
 
-export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => {
+export const Shell = ({ children, bottomBar = null, hideBottomBar = false, contentMaxWidth = 560 }) => {
   const { user, profile, isAdmin } = useAuth();
   const { pathname } = useLocation();
   const linkStyle = {
@@ -182,8 +182,9 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false }) => 
     >
       <Fonts />
       <div
+        data-shell-content
         style={{
-          maxWidth: 560,
+          maxWidth: contentMaxWidth,
           width: "100%",
           margin: "0 auto",
           padding: hasBarSlot ? "0 16px 20px" : "0 16px 90px",
