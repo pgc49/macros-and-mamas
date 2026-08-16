@@ -471,6 +471,7 @@ export function AdminMessages({
     <div style={{
       display: "flex",
       flexDirection: "column",
+      minWidth: 0,
       minHeight: 0,
       height: isWide ? "min(78vh, 820px)" : "auto",
       background: "#fff",
@@ -827,10 +828,14 @@ export function AdminMessages({
       )}
       {error && <div style={{ fontSize: 13, color: T.amber, marginBottom: 10 }}>{error}</div>}
 
-      <div style={{
+      <div
+        data-admin-messages-grid
+        style={{
         display: "grid",
+        width: "100%",
+        minWidth: 0,
         gridTemplateColumns: isWide && showInbox && showThread
-          ? "minmax(260px, 340px) minmax(0, 1fr)"
+          ? "minmax(220px, 280px) minmax(0, 1fr)"
           : "minmax(0, 1fr)",
         gap: 12,
         alignItems: "stretch",

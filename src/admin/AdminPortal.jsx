@@ -776,7 +776,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
   };
 
   return (
-    <Shell>
+    <Shell contentMaxWidth={tab === "messages" ? 1120 : 560}>
       <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 4px" }}>Callie admin</h2>
       <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 4px", lineHeight: 1.45 }}>
         Bird&apos;s-eye view for the founding group.{" "}

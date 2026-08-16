@@ -1236,10 +1236,14 @@ export function MessagesThread({
         data-message-composer
         style={{
           display: "flex",
+          flexWrap: "wrap",
           gap: 8,
           marginTop: 10,
           alignItems: "flex-end",
           flexShrink: 0,
+          minWidth: 0,
+          width: "100%",
+          boxSizing: "border-box",
           // Keep the full 1.5px borders / radii inside the bounded thread on
           // every viewport — no phone-specific hacks.
           paddingBottom: 2,
@@ -1309,7 +1313,9 @@ export function MessagesThread({
             window.setTimeout(() => onComposerFocusChange?.(false), 180);
           }}
           style={{
-            flex: 1,
+            flex: "1 1 180px",
+            minWidth: 0,
+            width: 0,
             boxSizing: "border-box",
             padding: "12px 14px",
             borderRadius: 12,
@@ -1321,6 +1327,7 @@ export function MessagesThread({
             lineHeight: 1.4,
             resize: "none",
             overflowY: "auto",
+            overflowWrap: "break-word",
             color: T.ink,
             background: "#fff",
             minHeight: 52,
