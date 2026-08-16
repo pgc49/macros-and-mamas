@@ -14,7 +14,8 @@ Serve the Astro marketing site on `www.macrosandmamas.com` **without** moving th
 | Path | Serves |
 | --- | --- |
 | `/`, `/quiz`, `/waitlist`, `/thanks`, `/_astro/*` | Astro static files from overlay |
-| `/dashboard`, `/join`, `/signin`, `/admin`, … | SPA shell → `/spa/index.html` (**per-route rewrites only**) |
+| `/dashboard`, `/join`, `/signin`, … | SPA shell planted per route folder |
+| `/admin` | 302 to `https://admin.macrosandmamas.com/admin` (query kept) |
 | `/api/lead`, `/api/waitlist` | Copied marketing Functions (KV rate-limited when `WAITLIST` binding is set) |
 | `/api/checkout`, webhooks, … | Existing SPA Functions |
 | Unknown paths | Astro `404.html` (not the homepage) |

@@ -1,7 +1,10 @@
 # Admin/customer deployment isolation (draft)
 
-This runbook is **not approved to ship**. It prepares independent Cloudflare
-Pages deployments so an admin-only UI change cannot publish a new customer app.
+Admin Pages is live at `https://admin.macrosandmamas.com` (`surface=admin`).
+www `/admin` still serves the combined SPA until this transfer ships.
+
+This runbook prepares independent Cloudflare Pages deployments so an admin-only
+UI change cannot publish a new mama app.
 
 ## Target
 
