@@ -1,7 +1,9 @@
 # Admin/customer deployment isolation (draft)
 
 Admin Pages is live at `https://admin.macrosandmamas.com` (`surface=admin`).
-www `/admin` still serves the combined SPA until this transfer ships.
+www production `npm run build` is the **customer** surface: no AdminPortal
+chunk, `/admin` 302s to the admin origin. Do not change the admin Pages
+build command — it must stay `npm run build:admin`.
 
 This runbook prepares independent Cloudflare Pages deployments so an admin-only
 UI change cannot publish a new mama app.
@@ -136,7 +138,8 @@ limits on unusually large pushes.
      where lower(email) = 'calista@nourishwithcalista.com'
    );
    ```
-6. Change the customer project build command to `npm run build:customer`.
+6. www `npm run build` defaults to the customer surface (`APP_SURFACE=customer`).
+   The admin Pages project must keep `npm run build:admin`.
 7. Deploy customer preview; verify `/admin?...` transfers query/hash to the
    admin origin and customer routes remain unchanged.
 8. Promote customer only after both previews pass.

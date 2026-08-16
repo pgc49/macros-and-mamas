@@ -25,7 +25,7 @@ Serve the Astro marketing site on `www.macrosandmamas.com` **without** moving th
 
 ## What the build does (`main`)
 
-`npm run build` → Vite SPA → `scripts/maybe-preview-marketing.mjs` when `CF_PAGES_BRANCH=main`:
+`npm run build` (customer surface) → Vite SPA → `scripts/maybe-preview-marketing.mjs` when `CF_PAGES_BRANCH=main`:
 
 1. Build `marketing/` (enrollment mode from `marketing/wrangler.toml`; **no** `PUBLIC_NOINDEX`)
 2. Move SPA `dist/index.html` → `dist/spa/index.html`

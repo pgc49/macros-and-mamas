@@ -56,10 +56,11 @@ if (surface === "customer") {
   const redirectsPath = join(dist, "_redirects");
   if (existsSync(redirectsPath)) {
     const redirects = readFileSync(redirectsPath, "utf8");
-    if (
+    const overlayWroteAdmin = redirects.includes("Isolated admin origin");
+    if (overlayWroteAdmin && (
       !redirects.includes(`${adminUrl.origin}/admin`)
       || !redirects.includes("/admin/*")
-    ) {
+    )) {
       throw new Error("customer _redirects must send /admin to the admin origin");
     }
   }

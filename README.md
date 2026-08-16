@@ -33,7 +33,8 @@ Typical loop: `npm run build` then `npx wrangler pages dev dist` so `/api/*` and
 
 **Pages build settings**
 
-- Build command: `npm run build`
+- www (`macros-and-mamas`): Build command `npm run build` (customer surface; admin JS is compiled out)
+- Admin (`macros-and-mamas-admin`): Build command `npm run build:admin`
 - Build output directory: `dist`
 - Root directory: `/` (empty)
 - Framework preset: none / Vite
