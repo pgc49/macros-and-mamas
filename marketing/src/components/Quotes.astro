@@ -1,6 +1,7 @@
 ---
 /**
- * Homepage testimonials. Desktop uses 3 columns once a third card exists.
+ * Homepage testimonials. Mobile stacks. Desktop (JS) shows one larger card
+ * at a time so uneven quote lengths stay readable.
  */
 const testimonials = [
   {
@@ -11,7 +12,7 @@ const testimonials = [
   {
     pull: "If I didn't lose another pound, this would still be the best investment I've made in myself in years.",
     body: "I was worried tracking macros would feel like a second job — that between kids and paid work, I wouldn't stick with it. But the app has made it so simple. Logging meals takes me two minutes, and I always know exactly what I need for the day. It's honestly become second nature. I'm happy to see the weight coming off, but the bigger thing is how I feel: no brain fog, consistent energy throughout the day. I feel like a new person.",
-    who: "— Lauren, mama of two",
+    who: "— Lauren, nursing mama of two",
   },
   {
     pull: "It's better and easier than anything I've used before, way better than MyFitnessPal.",
@@ -25,17 +26,101 @@ const testimonials = [
   <div class="wrap">
     <span class="kicker">What the mamas say</span>
     <h2>Real words from the program</h2>
-    <div class="q-grid">
+    <div class="q-stage" tabindex="0">
+      <button class="q-arrow q-prev" type="button" aria-label="Previous mama">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+      <div class="q-grid">
+        {
+          testimonials.map((t, idx) => (
+            <article class:list={["q-card", "rv", idx === 0 && "is-on"]} data-q-index={idx}>
+              <p class="q-pull">{t.pull}</p>
+              <p class="q-body">{t.body}</p>
+              <div class="q-who">{t.who}</div>
+            </article>
+          ))
+        }
+      </div>
+      <button class="q-arrow q-next" type="button" aria-label="Next mama">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M9 5 L16 12 L9 19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="q-dots" role="tablist" aria-label="Mama stories">
       {
-        testimonials.map((t) => (
-          <article class="q-card rv">
-            <p class="q-pull">{t.pull}</p>
-            <p class="q-body">{t.body}</p>
-            <div class="q-who">{t.who}</div>
-          </article>
+        testimonials.map((t, idx) => (
+          <button
+            class:list={["q-dot", idx === 0 && "is-on"]}
+            type="button"
+            role="tab"
+            aria-selected={idx === 0 ? "true" : "false"}
+            aria-label={`Show ${t.who.replace(/^—\s*/, "")}`}
+            data-q-index={idx}
+          ></button>
         ))
       }
     </div>
     <p class="q-note">Every mama&apos;s results are her own.</p>
   </div>
 </section>
+
+<script is:inline>
+  (function () {
+    var root = document.getElementById("stories");
+    if (!root) return;
+    var cards = root.querySelectorAll(".q-card");
+    var dots = root.querySelectorAll(".q-dot");
+    var prev = root.querySelector(".q-prev");
+    var next = root.querySelector(".q-next");
+    var grid = root.querySelector(".q-grid");
+    if (cards.length < 2) return;
+    var i = 0;
+    var mq = window.matchMedia("(min-width: 880px)");
+
+    function desktop() {
+      return mq.matches;
+    }
+
+    function show(n) {
+      i = (n + cards.length) % cards.length;
+      cards.forEach(function (card, idx) {
+        card.classList.toggle("is-on", idx === i);
+      });
+      dots.forEach(function (dot, idx) {
+        var on = idx === i;
+        dot.classList.toggle("is-on", on);
+        dot.setAttribute("aria-selected", on ? "true" : "false");
+      });
+    }
+
+    function sync() {
+      var on = desktop();
+      root.classList.toggle("is-carousel", on);
+      if (grid) {
+        if (on) grid.setAttribute("aria-live", "polite");
+        else grid.removeAttribute("aria-live");
+      }
+      if (on) show(i);
+    }
+
+    if (prev) prev.addEventListener("click", function () { if (desktop()) show(i - 1); });
+    if (next) next.addEventListener("click", function () { if (desktop()) show(i + 1); });
+    dots.forEach(function (dot) {
+      dot.addEventListener("click", function () {
+        if (!desktop()) return;
+        show(Number(dot.getAttribute("data-q-index")) || 0);
+      });
+    });
+    root.addEventListener("keydown", function (e) {
+      if (!desktop()) return;
+      if (e.key === "ArrowLeft") { e.preventDefault(); show(i - 1); }
+      if (e.key === "ArrowRight") { e.preventDefault(); show(i + 1); }
+    });
+    if (mq.addEventListener) mq.addEventListener("change", sync);
+    else if (mq.addListener) mq.addListener(sync);
+    sync();
+  })();
+</script>
