@@ -98,6 +98,10 @@ if (runCutover) {
 } else {
   buildEnv.PUBLIC_NOINDEX = "true";
 }
+if (!buildEnv.PUBLIC_META_PIXEL_ID) {
+  buildEnv.PUBLIC_META_PIXEL_ID =
+    buildEnv.VITE_META_PIXEL_ID || "1078367721716098";
+}
 
 const build = spawnSync("npm", ["run", "build"], {
   cwd: marketingDir,
@@ -230,6 +234,10 @@ function copyMarketingFunctions() {
     [
       join(marketingDir, "functions/api/waitlist.ts"),
       join(root, "functions/api/waitlist.ts"),
+    ],
+    [
+      join(marketingDir, "functions/_shared/metaPixelId.js"),
+      join(root, "functions/_shared/metaPixelId.js"),
     ],
   ];
   for (const [from, to] of pairs) {

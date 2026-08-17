@@ -8,6 +8,7 @@
  */
 
 import { supabase } from "./supabase";
+import { CONFIG } from "../config";
 
 const STORAGE_KEY = "mm_attribution_v1";
 const ANON_KEY = "mm_anon_id";
@@ -143,6 +144,27 @@ export function trackPixel(eventName, params = {}, eventId) {
 }
 
 /**
+ * Re-init Pixel with email/name/phone so Meta can match the person
+ * (the "data matching" step in Events Manager). Safe no-op without fbq.
+ */
+export function setPixelAdvancedMatching(user = {}) {
+  if (typeof window === "undefined" || typeof window.fbq !== "function") return;
+  const pixelId = CONFIG.META_PIXEL_ID;
+  if (!pixelId) return;
+  const payload = {};
+  const em = String(user.email || "").trim().toLowerCase();
+  const fn = String(user.firstName || "").trim().toLowerCase();
+  const ln = String(user.lastName || "").trim().toLowerCase();
+  const ph = String(user.phone || "").replace(/\D/g, "");
+  if (em) payload.em = em;
+  if (fn) payload.fn = fn;
+  if (ln) payload.ln = ln;
+  if (ph.length >= 7) payload.ph = ph;
+  if (!Object.keys(payload).length) return;
+  window.fbq("init", pixelId, payload);
+}
+
+/**
  * Public marketing / enrollment routes only — not coaching tabs.
  * Used to decide whether to load Pixel / CF Web Analytics scripts.
  */
@@ -151,6 +173,8 @@ export function isPublicTrackingPath(pathname) {
   return (
     p === "/" ||
     p === "/waitlist" ||
+    p === "/quiz" ||
+    p === "/thanks" ||
     p === "/join" ||
     p === "/welcome" ||
     p === "/signin" ||

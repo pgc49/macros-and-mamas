@@ -17,6 +17,7 @@
     root.dataset.postPayCopy
     || "After you pre-pay, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.";
   const ATTR_KEY = 'mm_attribution_v1';
+  const META_PIXEL_ID = '1078367721716098';
   /** Segments that may enroll Aug 31 — only these fire Meta Lead. */
   const ENROLLABLE_SEGMENTS = { main: 1, early_pp_nurture: 1 };
   /**
@@ -947,6 +948,13 @@
             data.qualified_lead === true ||
             (data.qualified_lead == null && ENROLLABLE_SEGMENTS[seg]);
           if (qualified) {
+            try {
+              window.fbq('init', META_PIXEL_ID, {
+                em: String(state.contact.email || '').trim().toLowerCase(),
+                fn: String(state.contact.first_name || '').trim().toLowerCase(),
+                ln: String(state.contact.last_name || '').trim().toLowerCase(),
+              });
+            } catch (e) {}
             window.fbq(
               'track',
               'Lead',

@@ -7,3 +7,5 @@ pages_build_output_dir = "dist"
 # Flip enrollment CTAs: "open" | "waitlist" — then merge to main / redeploy.
 [vars]
 PUBLIC_ENROLLMENT_MODE = "waitlist"
+PUBLIC_META_PIXEL_ID = "1078367721716098"
+META_PIXEL_ID = "1078367721716098"

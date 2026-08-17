@@ -13,6 +13,7 @@ import {
   offerPrice,
   siteUrl,
 } from '../config';
+import { DEFAULT_META_PIXEL_ID } from '../../functions/_shared/metaPixelId.js';
 
 interface Props {
   title: string;
@@ -35,7 +36,9 @@ const canonical = new URL(Astro.url.pathname, siteUrl).href;
 const noindex =
   import.meta.env.PUBLIC_NOINDEX === 'true' ||
   import.meta.env.PUBLIC_NOINDEX === '1';
-const metaPixelId = (import.meta.env.PUBLIC_META_PIXEL_ID || '').trim();
+const metaPixelId = (
+  import.meta.env.PUBLIC_META_PIXEL_ID || DEFAULT_META_PIXEL_ID
+).trim();
 const metaDomainVerify = (import.meta.env.PUBLIC_META_DOMAIN_VERIFY || '').trim();
 const cfWebAnalyticsToken = (
   import.meta.env.PUBLIC_CF_WEB_ANALYTICS_TOKEN || ''
@@ -169,6 +172,19 @@ const jsonLd = {
     }
   </head>
   <body>
+    {
+      metaPixelId && (
+        <noscript>
+          <img
+            height="1"
+            width="1"
+            style="display:none"
+            alt=""
+            src={`https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1`}
+          />
+        </noscript>
+      )
+    }
     <slot />
     <script is:inline>
       /* Attribution capture → waitlist hidden fields + SPA handoff (sessionStorage).

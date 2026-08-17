@@ -7,10 +7,12 @@
      META_CAPI_TEST_EVENT_CODE (optional — Test Events)
    ================================================================== */
 
+import { resolveMetaPixelId } from "./metaPixelId.js";
+
 const GRAPH = "https://graph.facebook.com/v21.0";
 
 export function metaConfigured(env) {
-  return Boolean(env?.META_PIXEL_ID && env?.META_CAPI_ACCESS_TOKEN);
+  return Boolean(resolveMetaPixelId(env) && env?.META_CAPI_ACCESS_TOKEN);
 }
 
 /** SHA-256 hex of normalized string; empty input → null (omit). */
@@ -85,7 +87,7 @@ export async function sendMetaCapiEvent(env, opts) {
     body.test_event_code = String(env.META_CAPI_TEST_EVENT_CODE);
   }
 
-  const url = `${GRAPH}/${encodeURIComponent(env.META_PIXEL_ID)}/events?access_token=${encodeURIComponent(env.META_CAPI_ACCESS_TOKEN)}`;
+  const url = `${GRAPH}/${encodeURIComponent(resolveMetaPixelId(env))}/events?access_token=${encodeURIComponent(env.META_CAPI_ACCESS_TOKEN)}`;
   const resp = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
