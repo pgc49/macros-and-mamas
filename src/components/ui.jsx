@@ -57,6 +57,35 @@ export const inputStyle = {
   borderRadius: 12, background: "#fff", color: T.ink,
 };
 
+/** Shared search field for meal lists (Today → My plan, Meals, planner picker). */
+export function MealSearchInput({
+  value,
+  onChange,
+  placeholder = "Search meals",
+  style,
+}) {
+  return (
+    <input
+      type="search"
+      value={value}
+      onChange={(e) => onChange?.(e.target.value)}
+      placeholder={placeholder}
+      autoCapitalize="none"
+      autoCorrect="off"
+      spellCheck={false}
+      aria-label={placeholder}
+      style={{
+        ...inputStyle,
+        padding: "10px 13px",
+        fontSize: 15,
+        marginBottom: 12,
+        boxSizing: "border-box",
+        ...style,
+      }}
+    />
+  );
+}
+
 export const Chip = ({ active, onClick, children }) => (
   <button onClick={onClick} style={{
     padding: "10px 16px", borderRadius: 999, fontSize: 14, fontWeight: 600, cursor: "pointer",

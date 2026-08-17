@@ -19,12 +19,10 @@
    ================================================================== */
 
 export const APP_RELEASE_NOTES = {
-  id: "2026-08-meals-mama-feedback",
-  headline: "What’s new — mama requests",
+  id: "2026-08-meal-search",
+  headline: "What’s new — easier meal picking",
   bullets: [
-    "Pick Breakfast, Lunch, Dinner, or Snack when adding from My plan — thanks Laura!",
-    "Edit servings right on Today’s log (no delete + re-add) — thanks Laura!",
-    "See and save recipe notes on My meals — thanks Jenna!",
-    "New from Callie: Chicken Soba Stir Fry in the dinner recipes.",
+    "Search your plan, My meals, and the recipe bank instead of scrolling — mama request!",
+    "Meals now opens on All meals so you can find anything without picking a slot first.",
   ],
 };
