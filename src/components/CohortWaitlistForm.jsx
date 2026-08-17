@@ -7,6 +7,7 @@ import {
   captureAttributionFromLocation,
   getStoredAttribution,
   newBrowserEventId,
+  setPixelAdvancedMatching,
   trackPixel,
 } from "../lib/attribution";
 
@@ -80,6 +81,12 @@ export function CohortWaitlistForm({ source = "waitlist_page" }) {
         source,
         attribution: attr,
       });
+      setPixelAdvancedMatching({
+        email: em,
+        firstName: first,
+        lastName: last,
+        phone: ph,
+      });
       // Browser pixel; server CAPI is handled inside /api/waitlist (same event_id).
       trackPixel("Lead", { content_name: "cohort_waitlist", currency: "USD", value: 249 }, eventId);
       setDone(true);
@@ -87,6 +94,12 @@ export function CohortWaitlistForm({ source = "waitlist_page" }) {
       console.error("cohort waitlist failed", err);
       const msg = String(err?.message || "");
       if (/duplicate|unique|already/i.test(msg)) {
+        setPixelAdvancedMatching({
+          email: em,
+          firstName: first,
+          lastName: last,
+          phone: ph,
+        });
         trackPixel("Lead", { content_name: "cohort_waitlist", currency: "USD", value: 249 }, eventId);
         setDone(true);
       } else if (/rate_limited/i.test(msg)) {

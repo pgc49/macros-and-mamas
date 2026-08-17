@@ -1,57 +1,53 @@
-# Meta Pixel + CAPI setup (manual checklist)
+# Meta Pixel + CAPI setup
 
-No Meta Ads MCP in this environment. Do these in Business Manager, then paste secrets into Cloudflare Pages.
+Live Pixel ID: **`1078367721716098`**. It is public (it ships in the browser snippet). Do **not** paste Meta’s generic “every page” snippet by hand — the site already has the base code and conversion events. Matt’s email is the standard Events Manager template; we implemented the recommended/advanced version in code.
 
-## Before Pixel goes live
+## What is already installed (this PR)
 
-1. **Approve** the Privacy Policy update (Meta measurement / CCPA “share” language) in `src/content/privacy.js`.
-2. Do **not** set `VITE_META_PIXEL_ID` / `META_*` env vars until that privacy copy is merged and live.
+| Meta asked for | What we ship |
+| --- | --- |
+| Base code (`fbq('init')` + `PageView`) | Marketing pages (`/`, `/quiz`, `/waitlist`, `/thanks`) and public SPA routes (`/join`, `/welcome`, `/signin`) |
+| Event code | `Lead` (qualified quiz + waitlist), `InitiateCheckout`, `Purchase`, plus quiz custom events |
+| Data matching | Email / name / phone sent into Pixel `init` on Lead; hashed email/phone on CAPI |
+| Every page of the website | **No** — not on `/dashboard`, intake, or admin. Those are the coaching app (health data). Ads only need public pages. |
 
-## Your steps in Meta
+After this merges and production deploys, Events Manager should show **PageView** from www (allow ~20 minutes). Use **Test Events** to confirm Lead.
 
-1. Create/confirm **Meta Business Suite / Business Manager**.
-2. Create an **Ad account** (billing can wait).
-3. **Events Manager → Connect data → Web → Meta Pixel → Create**  
-   Name e.g. `Macros and Mamas Web`. Copy **Pixel ID**.
-4. **Generate Conversions API access token** for that Pixel  
-   (Events Manager → Settings → Generate access token). Store in a password manager.
-5. **Domain verification** for `macrosandmamas.com`  
-   Meta-tag: set `PUBLIC_META_DOMAIN_VERIFY` on the marketing Pages project  
-   (or DNS TXT if you prefer).
-6. Paste into Cloudflare Pages (SPA project and/or marketing project as noted):
+## Still yours in Meta / Cloudflare
 
-| Env var | Where | Notes |
-| --- | --- | --- |
-| `VITE_META_PIXEL_ID` | SPA (Vite) | Browser Pixel |
-| `PUBLIC_META_PIXEL_ID` | Marketing Astro | Browser Pixel |
-| `META_PIXEL_ID` | Both (Functions) | CAPI |
-| `META_CAPI_ACCESS_TOKEN` | Both (Functions) | Secret |
-| `META_CAPI_TEST_EVENT_CODE` | Both (optional) | Test Events only |
-| `PUBLIC_META_DOMAIN_VERIFY` | Marketing (optional) | Domain verify meta tag |
-| `PUBLIC_NOINDEX=true` | Marketing staging | Keep until www cutover |
+Browser Pixel works without more env vars. Server-side **Conversions API** (needed for iPhone ads) still needs a secret:
 
-7. After deploy: Meta **Test Events** → submit waitlist → confirm **Lead**.  
-   When enrollment is open: test checkout → **Purchase** (deduped once).
-8. Only then create a campaign optimized for **Lead** → `https://www.macrosandmamas.com/waitlist`.
+1. Events Manager → Pixel → Settings → **Generate access token**.
+2. Cloudflare → **`macros-and-mamas`** → Settings → Environment variables (Production + Preview):
 
-## Agent-built pieces (already in repo)
+   | Var | Value |
+   | --- | --- |
+   | `META_CAPI_ACCESS_TOKEN` | the token (secret) |
+   | `META_PIXEL_ID` | `1078367721716098` (optional — code already defaults to this) |
+   | `META_CAPI_TEST_EVENT_CODE` | optional, Test Events only |
 
-- Attribution helper + public-route Pixel loader (SPA)
-- Waitlist Lead (Pixel + CAPI) with shared `event_id`
-- Checkout `InitiateCheckout` (Pixel + CAPI) + Stripe metadata
-- Webhook `Purchase` CAPI + Welcome page Pixel Purchase (same `event_id`)
-- Optional browser → `/api/meta-capi` bridge for Lead / InitiateCheckout / PageView only (not Purchase); origin + KV rate-limited
-- Supabase migration `036_cohort_waitlist_attribution.sql`
-- Astro `/` member/PWA guard + `/waitlist` → `cohort_waitlist`
-- Manifest `start_url` → `/dashboard` for **new** installs
+3. Domain verification for `macrosandmamas.com` if Events Manager still asks (meta tag `PUBLIC_META_DOMAIN_VERIFY` or DNS TXT).
+4. Test Events: open `/quiz`, submit a qualified lead, confirm **Lead**. Paid checkout should show **Purchase** once (browser + CAPI share `event_id` so it does not double).
 
-## Required for CAPI / lead rate limits
+Do not create a second Pixel. Do not paste a second copy of the base code into Google Tag Manager.
 
-Cloudflare Pages must have a **WAITLIST** KV namespace binding. Without it, `/api/waitlist`, `/api/lead`, and `/api/meta-capi` fail closed (429/503).
+## Events (for Ads Manager optimization)
+
+| Event | When |
+| --- | --- |
+| `PageView` | Public page load (and SPA public route changes) |
+| `Lead` | Qualified ranges quiz submit, or waitlist form |
+| `QuizNurture` (custom) | Pregnant / fully vegan quiz — not a Lead |
+| `QuizStart` / `QuizStep` / `QuizHalfway` / `QuizEmailGate` | Quiz progress (retargeting) |
+| `InitiateCheckout` | Mama clicks pay |
+| `Purchase` | Stripe paid (`/welcome` Pixel + webhook CAPI, same id) |
+
+Cold ads should still point at `https://www.macrosandmamas.com/quiz` (or `/` for retargeting), not the generic waitlist unless Matt is running a waitlist campaign.
 
 ## Verify before spend
 
-- [ ] Test Events shows Lead (and Purchase in test mode)
-- [ ] Purchase appears once (not doubled)
-- [ ] Event Match Quality not empty (email hash)
-- [ ] Waitlist row in Supabase has UTM / `event_id` columns populated
+- [ ] Events Manager status Active (PageView)
+- [ ] Test Events shows Lead (and Purchase in a test checkout)
+- [ ] Purchase appears once, not doubled
+- [ ] Event Match Quality is not empty (email hash)
+- [ ] Pixel Helper on `/` and `/quiz` shows Pixel `1078367721716098`; **not** on `/dashboard`

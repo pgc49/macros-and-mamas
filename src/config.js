@@ -1,6 +1,4 @@
-/* ------------------------------------------------------------------ */
-/*  CONFIG — every external dependency lives here.                     */
-/* ------------------------------------------------------------------ */
+import { DEFAULT_META_PIXEL_ID } from "../functions/_shared/metaPixelId.js";
 
 function envUrl(name) {
   const v = import.meta.env[name];
@@ -76,11 +74,11 @@ export const CONFIG = {
   COHORT_START_COMPACT: "Aug 31",
 
   /**
-   * Meta Pixel (browser). Set VITE_META_PIXEL_ID in Cloudflare Pages.
-   * Pixel script loads only on public routes — never on coaching tabs.
-   * Leave empty until privacy update is live and Pixel ID is ready.
+   * Meta Pixel (browser). Public ID 1078367721716098 is the live pixel.
+   * Override with VITE_META_PIXEL_ID in Cloudflare Pages if it ever changes.
+   * Script loads only on public routes — never on coaching tabs.
    */
-  META_PIXEL_ID: envUrl("VITE_META_PIXEL_ID"),
+  META_PIXEL_ID: envUrl("VITE_META_PIXEL_ID") || DEFAULT_META_PIXEL_ID,
 
   /**
    * Cloudflare Web Analytics (browser beacon). Aggregate pageviews only —

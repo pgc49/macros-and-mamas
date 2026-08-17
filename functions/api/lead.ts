@@ -19,6 +19,7 @@ import {
   escapeHtml,
   renderEmail,
 } from '../_shared/emailLayout.mjs';
+import { resolveMetaPixelId } from '../_shared/metaPixelId.js';
 
 interface Env {
   WAITLIST?: KVNamespace;
@@ -207,7 +208,8 @@ async function sendLeadCapi(
     sourceUrl: string;
   },
 ) {
-  if (!env.META_PIXEL_ID || !env.META_CAPI_ACCESS_TOKEN) return;
+  const pixelId = resolveMetaPixelId(env);
+  if (!pixelId || !env.META_CAPI_ACCESS_TOKEN) return;
   const em = await sha256(opts.email);
   const fn = await sha256(opts.firstName);
   const ln = await sha256(opts.lastName);
@@ -237,7 +239,7 @@ async function sendLeadCapi(
   if (env.META_CAPI_TEST_EVENT_CODE) {
     payload.test_event_code = env.META_CAPI_TEST_EVENT_CODE;
   }
-  const url = `https://graph.facebook.com/v21.0/${encodeURIComponent(env.META_PIXEL_ID)}/events?access_token=${encodeURIComponent(env.META_CAPI_ACCESS_TOKEN)}`;
+  const url = `https://graph.facebook.com/v21.0/${encodeURIComponent(pixelId)}/events?access_token=${encodeURIComponent(env.META_CAPI_ACCESS_TOKEN)}`;
   try {
     const resp = await fetch(url, {
       method: 'POST',
