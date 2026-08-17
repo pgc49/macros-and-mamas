@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
-import { Btn, inputStyle } from "./ui";
+import { Btn, inputStyle, MealSearchInput } from "./ui";
 import { LoggableMealRow } from "./LoggableMealRow";
 import { SlotChips } from "./SlotChips";
 import { RECIPES, PANTRY_ITEMS } from "../content/data";
@@ -27,6 +27,7 @@ import { targetBands } from "../utils/weekPlan";
 import { roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
 import { LogMealRefine } from "./LogMealRefine";
+import { filterMealsByQuery } from "../utils/mealSearch";
 
 /** She pasted a link — the estimator only reads text, so say so plainly. */
 const URL_RE = /(https?:\/\/|www\.)\S+/i;
@@ -147,6 +148,7 @@ export function MealLogCard({
   const [draft, setDraft] = useState(null);
   const [estimateDraft, setEstimateDraft] = useState(null);
   const [pantryGroup, setPantryGroup] = useState("all");
+  const [planSearch, setPlanSearch] = useState("");
   const [logSlot, setLogSlot] = useState(() => guessSlotFromTime());
   // What was sent for the estimate on screen, so "I added X" can re-ask
   // about the whole plate instead of throwing the first answer away.
@@ -163,6 +165,28 @@ export function MealLogCard({
   const pantryVisible = pantryGroup === "all"
     ? PANTRY_ITEMS
     : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
+  const searchingPlan = Boolean(String(planSearch || "").trim());
+  const plannedVisible = useMemo(
+    () => filterMealsByQuery(plannedMeals || [], planSearch),
+    [plannedMeals, planSearch],
+  );
+  const customVisible = useMemo(
+    () => filterMealsByQuery(customMeals || [], planSearch),
+    [customMeals, planSearch],
+  );
+  const recipesVisible = useMemo(
+    () => filterMealsByQuery(recipes || [], planSearch),
+    [recipes, planSearch],
+  );
+  const pantrySearchPool = searchingPlan ? PANTRY_ITEMS : pantryVisible;
+  const pantryMatches = useMemo(
+    () => filterMealsByQuery(pantrySearchPool, planSearch),
+    [pantrySearchPool, planSearch],
+  );
+  const planMatchCount = plannedVisible.length
+    + customVisible.length
+    + recipesVisible.length
+    + pantryMatches.length;
 
   const MAX_SNAP_PHOTOS = 3;
 
@@ -307,6 +331,7 @@ export function MealLogCard({
       }
       if (next === "snap") setSnapMenuOpen(false);
       if (next) setLogSlot(guessSlotFromTime());
+      if (next !== "recipes") setPlanSearch("");
       return next;
     });
   };
@@ -1029,13 +1054,25 @@ export function MealLogCard({
         )}
 
         {method === "recipes" && (
-          <div style={{ marginTop: 12, maxHeight: 360, overflowY: "auto" }}>
-            {(plannedMeals || []).length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <MealSearchInput
+              value={planSearch}
+              onChange={setPlanSearch}
+              placeholder="Search my plan & saved meals"
+              style={{ marginBottom: 10 }}
+            />
+            <div style={{ maxHeight: 360, overflowY: "auto" }}>
+            {searchingPlan && planMatchCount === 0 && (
+              <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginBottom: 8 }}>
+                No meals match “{planSearch.trim()}”. Try a name or ingredient.
+              </div>
+            )}
+            {plannedVisible.length > 0 && (
               <>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: T.accentDeep, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 }}>
                   Your plan · {onToday ? "today" : formatLongDay(date)}
                 </div>
-                {plannedMeals.map((r) => (
+                {plannedVisible.map((r) => (
                   <LoggableMealRow
                     key={r.id || `${r.slot}-${r.name}`}
                     meal={{
@@ -1053,25 +1090,25 @@ export function MealLogCard({
                 ))}
               </>
             )}
-            {(customMeals || []).length > 0 && (
+            {customVisible.length > 0 && (
               <>
                 <div style={{
                   fontSize: 11.5,
                   fontWeight: 700,
-                  color: (plannedMeals || []).length ? T.inkSoft : T.accentDeep,
+                  color: plannedVisible.length ? T.inkSoft : T.accentDeep,
                   letterSpacing: 0.4,
                   textTransform: "uppercase",
-                  margin: (plannedMeals || []).length ? "12px 0 6px" : "0 0 6px",
+                  margin: plannedVisible.length ? "12px 0 6px" : "0 0 6px",
                 }}
                 >
                   My meals
                 </div>
-                {customMeals.map((r) => (
+                {customVisible.map((r) => (
                   <LoggableMealRow
                     key={r.id || r.name}
                     meal={r}
                     via="custom"
-                    accent={!(plannedMeals || []).length}
+                    accent={!plannedVisible.length}
                     onLog={onLogRecipe}
                     onSaveIngredients={onSaveCustomMeal ? (meal) => onSaveCustomMeal({
                       name: meal.name,
@@ -1086,23 +1123,25 @@ export function MealLogCard({
                 ))}
               </>
             )}
+            {recipesVisible.length > 0 && (
             <div style={{
               fontSize: 11.5,
               fontWeight: 700,
               color: T.inkSoft,
               letterSpacing: 0.4,
               textTransform: "uppercase",
-              margin: ((plannedMeals || []).length || (customMeals || []).length) ? "12px 0 6px" : "0 0 6px",
+              margin: (plannedVisible.length || customVisible.length) ? "12px 0 6px" : "0 0 6px",
             }}
             >
-              {(plannedMeals || []).length ? "Also in the bank" : "From the bank"}
+              {plannedVisible.length ? "Also in the bank" : "From the bank"}
             </div>
-            {(plannedMeals || []).length === 0 && (customMeals || []).length === 0 && (
+            )}
+            {!searchingPlan && (plannedMeals || []).length === 0 && (customMeals || []).length === 0 && (
               <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 8, lineHeight: 1.45 }}>
                 Nothing on your Plan for this day yet — add meals under Meals → Plan, or pick from the bank below.
               </div>
             )}
-            {recipes.map((r) => (
+            {recipesVisible.map((r) => (
               <LoggableMealRow
                 key={r.name}
                 meal={r}
@@ -1110,6 +1149,7 @@ export function MealLogCard({
                 onLog={onLogRecipe}
               />
             ))}
+            {(pantryMatches.length > 0 || !searchingPlan) && (
             <div style={{
               fontSize: 11.5,
               fontWeight: 700,
@@ -1121,6 +1161,8 @@ export function MealLogCard({
             >
               Pantry staples
             </div>
+            )}
+            {!searchingPlan && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
               <button
                 type="button"
@@ -1160,7 +1202,8 @@ export function MealLogCard({
                 </button>
               ))}
             </div>
-            {pantryVisible.map((r) => (
+            )}
+            {pantryMatches.map((r) => (
               <LoggableMealRow
                 key={r.name}
                 meal={r}
@@ -1168,6 +1211,7 @@ export function MealLogCard({
                 onLog={onLogRecipe}
               />
             ))}
+            </div>
           </div>
         )}
 

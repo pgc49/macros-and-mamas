@@ -1,8 +1,8 @@
 import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
-import { SKELETONS, RECIPES, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
+import { RECIPES, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
-import { Shell, Card, Chip, RangeBand, rangeState } from "../components/ui";
+import { Shell, Card, Chip, RangeBand, rangeState, MealSearchInput } from "../components/ui";
 import { formatRangeProgress } from "../utils/rangeProgress";
 import { MealLogCard } from "../components/MealLogCard";
 import { MealRecipeCard } from "../components/MealRecipeCard";
@@ -22,6 +22,7 @@ import { TechHelpFooter } from "../components/TechHelpFooter";
 import { MessagesPanel } from "../components/MessagesPanel";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
+import { filterMealsByQuery, mealMatchesQuery, uniqueMealsByName } from "../utils/mealSearch";
 import { db } from "../db/db";
 import { useState } from "react";
 
@@ -66,6 +67,7 @@ export function ClientApp({
   onUnreadMessagesChange,
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
+  const [mealQuery, setMealQuery] = useState("");
   const [composerFocused, setComposerFocused] = useState(false);
   const [myMealsAddOpen, setMyMealsAddOpen] = useState(false);
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
@@ -75,6 +77,19 @@ export function ClientApp({
   const pantryVisible = pantryGroup === "all"
     ? PANTRY_ITEMS
     : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
+  const bankSource = personalized ? uniqueMealsByName(flatPersonalized) : RECIPES;
+  const isBankFilter = mealFilter === "All meals"
+    || mealFilter === "Breakfast"
+    || mealFilter === "Lunch"
+    || mealFilter === "Dinner"
+    || mealFilter === "Snack"
+    || mealFilter === "Treats";
+  const visibleBank = bankSource.filter((m) => {
+    if (mealFilter !== "All meals" && (m.cat || "") !== mealFilter) return false;
+    return mealMatchesQuery(m, mealQuery);
+  });
+  const visibleCustomMeals = filterMealsByQuery(customMeals, mealQuery);
+  const searchingMeals = Boolean(String(mealQuery || "").trim());
   const plannedCount = countPlannedMeals(weekPlanDays);
   const hi = (n, d = 10) => n + d;
   const hasElectrolytes = hasPublicUrl(CONFIG.FULLSCRIPT_ELECTROLYTES);
@@ -353,39 +368,30 @@ export function ClientApp({
                   ? "My meals"
                   : mealFilter === "Pantry"
                     ? "Pantry staples"
-                    : "Recipe bank"}
+                    : mealFilter === "All meals"
+                      ? "All meals"
+                      : "Recipe bank"}
               </h2>
               <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
                 {mealFilter === "My meals"
                   ? "Saved meals for one-tap logging — add a few, then hop to Today when you’re ready."
                   : mealFilter === "Pantry"
                     ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap Add to Today as many times as you need."
-                    : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
+                    : mealFilter === "All meals"
+                      ? "Search Callie’s recipes, or pick a slot. Tap Add to Today — you stay here so you can keep going."
+                      : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
               </p>
             </>
           )}
 
-          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && mealFilter !== "Snack" && mealFilter !== "Treats" && mealFilter !== "Pantry" && (
-            <Card style={{ background: T.accentSoft, border: "none", marginBottom: 14 }}>
-              {SKELETONS.filter((s) => s.meal === mealFilter).map((s) => (
-                <div key={s.meal} style={{ marginBottom: 0 }}>
-                  <div style={{ fontFamily: FD, fontSize: 17, color: T.accentDeep }}>{s.meal} <span style={{ fontFamily: F, fontSize: 13, color: T.inkSoft }}>— {s.formula}</span></div>
-                  <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.6 }}>{s.lines.join(" · ")}</div>
-                </div>
-              ))}
-              <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.5, marginTop: 10 }}>
-                House rules: max 2 whole eggs per meal (egg whites are free game) · sweeten with honey, maple, or applesauce · organic where you can.
-              </div>
-            </Card>
-          )}
-
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {["Plan", "Food prefs", "My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"].map((c) => (
+            {["All meals", "Plan", "Food prefs", "My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"].map((c) => (
               <Chip
                 key={c}
                 active={mealFilter === c}
                 onClick={() => {
                   setMealFilter(c);
+                  setMealQuery("");
                   if (c === "Pantry") setPantryGroup("all");
                 }}
               >
@@ -393,6 +399,14 @@ export function ClientApp({
               </Chip>
             ))}
           </div>
+
+          {(isBankFilter || mealFilter === "My meals") && (
+            <MealSearchInput
+              value={mealQuery}
+              onChange={setMealQuery}
+              placeholder={mealFilter === "My meals" ? "Search my meals" : "Search meals"}
+            />
+          )}
 
           {mealFilter === "Plan" && (
             <ErrorBoundary
@@ -465,8 +479,14 @@ export function ClientApp({
                     Nothing saved yet. Tap <b style={{ color: T.ink }}>＋ Add meal</b> to paste a recipe or let AI draft one — or save from Today logging / Plan.
                   </div>
                 </Card>
+              ) : !visibleCustomMeals.length ? (
+                <Card>
+                  <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
+                    No saved meals match “{mealQuery.trim()}”.
+                  </div>
+                </Card>
               ) : (
-                customMeals.map((m) => (
+                visibleCustomMeals.map((m) => (
                   <LoggableMealRow
                     key={m.id}
                     meal={m}
@@ -513,17 +533,17 @@ export function ClientApp({
             </div>
           )}
 
-          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && mealFilter !== "Pantry" && personalized && flatPersonalized
-            .filter((m) => (m.cat || "").toLowerCase() === mealFilter.toLowerCase())
-            .map((m, idx) => (
-              <MealRecipeCard key={`${m.name}-${idx}`} meal={m} onLog={logRecipe} />
-            ))}
+          {isBankFilter && searchingMeals && !visibleBank.length && (
+            <Card>
+              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
+                No recipes match “{mealQuery.trim()}”. Try a name or ingredient, or pick a slot.
+              </div>
+            </Card>
+          )}
 
-          {mealFilter !== "Plan" && mealFilter !== "My meals" && mealFilter !== "Food prefs" && mealFilter !== "Pantry" && !personalized && RECIPES
-            .filter((r) => r.cat === mealFilter)
-            .map((r) => (
-              <MealRecipeCard key={r.name} meal={r} onLog={logRecipe} />
-            ))}
+          {isBankFilter && visibleBank.map((m, idx) => (
+            <MealRecipeCard key={`${m.name}-${idx}`} meal={m} onLog={logRecipe} />
+          ))}
           <TechHelpFooter />
         </>
       )}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { T, F, FD } from "../theme/tokens";
-import { Card, Btn } from "./ui";
+import { Card, Btn, MealSearchInput } from "./ui";
 import { GroceryListBody } from "./GroceryListPanel";
 import { AiMealPreview } from "./AiMealPreview";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
@@ -39,6 +39,7 @@ import {
   weekPlanNeedsCustomIngredientHydration,
   uniqueCustomMealName,
 } from "../utils/weekPlan";
+import { filterMealsByQuery } from "../utils/mealSearch";
 
 /** Headroom to day high bands for the selected plan day (exclude meal being swapped). */
 function roomLeftForDay(days, dayKey, macros, replaceId = null) {
@@ -983,6 +984,7 @@ function MealPickerModal({
   const [view, setView] = useState("hub"); // hub | bank | pantry | mine | create | describe | options | eating_out
   const [slotPick, setSlotPick] = useState(initialSlot);
   const [pantryGroup, setPantryGroup] = useState("all");
+  const [pickerSearch, setPickerSearch] = useState("");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -997,9 +999,19 @@ function MealPickerModal({
   );
   const pantryList = useMemo(() => {
     const all = pantryItemsForPicker();
-    if (!pantryGroup || pantryGroup === "all") return all;
-    return all.filter((item) => item.group === pantryGroup);
-  }, [pantryGroup]);
+    const grouped = (!pantryGroup || pantryGroup === "all")
+      ? all
+      : all.filter((item) => item.group === pantryGroup);
+    return filterMealsByQuery(grouped, pickerSearch);
+  }, [pantryGroup, pickerSearch]);
+  const bankList = useMemo(
+    () => filterMealsByQuery(bank, pickerSearch),
+    [bank, pickerSearch],
+  );
+  const mineList = useMemo(
+    () => filterMealsByQuery(customMeals, pickerSearch),
+    [customMeals, pickerSearch],
+  );
   const eatingRoom = useMemo(
     () => roomLeftForDay([{ day, meals: dayMeals }], day, macros, replaceId),
     [day, dayMeals, macros, replaceId],
@@ -1015,6 +1027,7 @@ function MealPickerModal({
     setDescribeMeal(null);
     setOptionMeals([]);
     setBusy(false);
+    setPickerSearch("");
   };
 
   const runDescribe = async () => {
@@ -1233,10 +1246,19 @@ function MealPickerModal({
         {view === "bank" && (
           <>
             {!initialSlot && slotChooser}
+            <MealSearchInput
+              value={pickerSearch}
+              onChange={setPickerSearch}
+              placeholder="Search the bank"
+            />
             <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: T.inkSoft, margin: "4px 0 8px" }}>
               Callie&apos;s bank{effectiveSlot ? ` · ${SLOT_LABEL[effectiveSlot]}` : ""}
             </div>
-            {bank.map((recipe) => (
+            {!bankList.length ? (
+              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
+                {pickerSearch.trim() ? `No recipes match “${pickerSearch.trim()}”.` : "No recipes in this slot."}
+              </div>
+            ) : bankList.map((recipe) => (
               <PickerRow
                 key={recipe.name}
                 recipe={recipe}
@@ -1259,6 +1281,11 @@ function MealPickerModal({
             <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: T.inkSoft, margin: "4px 0 8px" }}>
               Pantry staples
             </div>
+            <MealSearchInput
+              value={pickerSearch}
+              onChange={setPickerSearch}
+              placeholder="Search pantry"
+            />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
               {[
                 { id: "all", label: "All" },
@@ -1279,13 +1306,17 @@ function MealPickerModal({
                 </ActionPill>
               ))}
             </div>
-            {pantryList.map((item) => (
+            {pantryList.length ? pantryList.map((item) => (
               <PickerRow
                 key={item.name}
                 recipe={item}
                 onPick={(r) => onPickRecipe(r, effectiveSlot)}
               />
-            ))}
+            )) : (
+              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
+                {pickerSearch.trim() ? `No pantry items match “${pickerSearch.trim()}”.` : "No pantry items in this group."}
+              </div>
+            )}
           </>
         )}
 
@@ -1304,7 +1335,17 @@ function MealPickerModal({
                 No saved meals yet. Use Create a recipe, or leave Save to My meals on after an AI add.
               </div>
             ) : (
-              customMeals.map((m) => (
+              <>
+                <MealSearchInput
+                  value={pickerSearch}
+                  onChange={setPickerSearch}
+                  placeholder="Search my meals"
+                />
+                {!mineList.length ? (
+                  <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
+                    No saved meals match “{pickerSearch.trim()}”.
+                  </div>
+                ) : mineList.map((m) => (
                 <button
                   key={m.id}
                   type="button"
@@ -1327,7 +1368,8 @@ function MealPickerModal({
                     {m.ingredients ? " · has recipe note" : ""}
                   </div>
                 </button>
-              ))
+                ))}
+              </>
             )}
           </>
         )}
