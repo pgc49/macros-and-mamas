@@ -159,32 +159,35 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
         run: |
-          if [ -z "$BEFORE" ] || printf '%s' "$BEFORE" | rg -q '^0+$'; then
-            echo "customer=true" >> "$GITHUB_OUTPUT"
-            echo "admin=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git diff --name-only "$BEFORE" "$GITHUB_SHA" > /tmp/changed.txt
-          # Admin currently contains the full app. Only known documentation or
-          # marketing-only changes are admin-neutral; unknown paths default to
-          # deploying admin.
-          if awk '
-            !(/^docs\\// || /^marketing\\//) { shared=1 }
-            END { exit shared ? 0 : 1 }
-          ' /tmp/changed.txt; then
-            echo "admin=true" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          customer=true
+          admin=true
+          if [ -n "${BEFORE}" ] && ! printf '%s' "$BEFORE" | grep -qE '^0+$'; then
+            git diff --name-only "$BEFORE" "$GITHUB_SHA" | tee /tmp/changed.txt
+            if [ -s /tmp/changed.txt ]; then
+              # Admin currently contains the full app. Only docs/ or marketing/
+              # changes are admin-neutral; unknown paths deploy admin.
+              if grep -qvE '^(docs/|marketing/)' /tmp/changed.txt; then
+                admin=true
+              else
+                admin=false
+              fi
+              # Customer-neutral means every file is explicitly admin-only.
+              if grep -qvE '^(src/admin/|docs/ADMIN-CUSTOMER-DEPLOYMENT-ISOLATION\.md$)' /tmp/changed.txt; then
+                customer=true
+              else
+                customer=false
+              fi
+            else
+              echo "No file changes; deploying both surfaces"
+            fi
           else
-            echo "admin=false" >> "$GITHUB_OUTPUT"
+            echo "No before SHA; deploying both surfaces"
           fi
-          # Customer-neutral means every file is explicitly admin-only.
-          if awk '
-            !(/^src\\/admin\\// || /^docs\\/ADMIN-CUSTOMER-DEPLOYMENT-ISOLATION\\.md$/) { shared=1 }
-            END { exit shared ? 0 : 1 }
-          ' /tmp/changed.txt; then
-            echo "customer=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "customer=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "customer=$customer"
+          echo "admin=$admin"
+          echo "customer=$customer" >> "$GITHUB_OUTPUT"
+          echo "admin=$admin" >> "$GITHUB_OUTPUT"
 
   deploy-customer-production:
     needs: [surface-build, classify-production-surfaces]
