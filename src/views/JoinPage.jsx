@@ -237,6 +237,7 @@ export function JoinPage({ profileCreatedAt = null }) {
           {quoteLoading ? "Loading your price…" : openBlurb}
         </p>
         {isEarly && (
+          /* Checkout is the only referral entry; quiz gate does not collect a code. */
           <details
             className="mm-ref-code"
             defaultOpen={Boolean(referralCode)}
