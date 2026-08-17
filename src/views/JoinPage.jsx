@@ -237,27 +237,50 @@ export function JoinPage({ profileCreatedAt = null }) {
           {quoteLoading ? "Loading your price…" : openBlurb}
         </p>
         {isEarly && (
-          <label
+          <details
+            className="mm-ref-code"
+            defaultOpen={Boolean(referralCode)}
             style={{
               display: "block",
               textAlign: "left",
               marginTop: 16,
-              fontSize: 13.5,
-              color: T.inkSoft,
             }}
           >
-            Friend&apos;s referral code
-            <span style={{ fontWeight: 400, opacity: 0.8 }}> (optional — $25 off)</span>
+            <style>{`
+              .mm-ref-code > summary {
+                list-style: none;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                font-size: 13.5px;
+                font-weight: 700;
+                color: ${T.ink};
+              }
+              .mm-ref-code > summary::-webkit-details-marker { display: none; }
+              .mm-ref-code > summary::after {
+                content: "▾";
+                font-size: 12px;
+                font-weight: 400;
+                color: ${T.inkSoft};
+                line-height: 1;
+                transition: transform .15s ease;
+              }
+              .mm-ref-code[open] > summary::after { transform: rotate(180deg); }
+            `}</style>
+            <summary>Referral code</summary>
             <input
               value={referralCode}
               onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
               placeholder="e.g. SARAH25"
               autoComplete="off"
               spellCheck={false}
+              aria-label="Referral code"
               style={{
                 display: "block",
                 width: "100%",
-                marginTop: 6,
+                marginTop: 8,
                 padding: "12px 14px",
                 borderRadius: 12,
                 border: `1.5px solid ${T.border}`,
@@ -269,7 +292,7 @@ export function JoinPage({ profileCreatedAt = null }) {
                 boxSizing: "border-box",
               }}
             />
-          </label>
+          </details>
         )}
         {labToggle}
         <Btn style={{ width: "100%", marginTop: 14 }} disabled={busy || quoteLoading || !amount} onClick={pay}>
