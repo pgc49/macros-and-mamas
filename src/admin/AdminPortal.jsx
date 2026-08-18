@@ -31,7 +31,7 @@ import { AdminCredits } from "./AdminCredits";
 import { AdminClientRoster, CohortFilterBar, CopyPhoneButton } from "./AdminClientRoster";
 import { emailRecipient, emailTypeLabel } from "./emailLog";
 import { rosterStats } from "./clientRoster";
-import { formatReferredBy } from "./referredBy";
+import { formatReferredBy, thankReferrerLabel } from "./referredBy";
 import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
@@ -469,6 +469,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     const flags = needsAttention(sel);
     const stage = sel.stage || (sel.status === "active" ? "active" : "awaiting_approval");
     const referredLine = formatReferredBy(sel.referredBy);
+    const thankLabel = thankReferrerLabel(sel.referredBy);
     return (
       <Shell>
         <button
@@ -508,7 +509,38 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                 {sel.refunded ? " · Refunded" : ""}
                 {sel.cohort_label ? ` · ${adminCohortName(sel.cohort_label)}` : ""}
                 {sel.email ? <><br />✉️ {sel.email}</> : null}
-                {referredLine ? <><br />{referredLine}</> : null}
+                {referredLine ? (
+                  <div style={{ marginTop: 6 }}>
+                    <div>{referredLine}</div>
+                    {sel.referredBy?.advocateUserId ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminSel(sel.referredBy.advocateUserId);
+                          setTab("messages");
+                        }}
+                        aria-label={`${thankLabel} to thank her`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          marginTop: 8,
+                          minHeight: 44,
+                          padding: "0 12px",
+                          borderRadius: 12,
+                          border: `1.5px solid ${T.accent}`,
+                          background: "#fff",
+                          color: T.accentDeep,
+                          fontFamily: F,
+                          fontWeight: 800,
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {thankLabel}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
                 {sel.age ? <><br />{sel.age} yrs</> : null}
                 {sel.currentWeight != null && sel.goalWeight != null ? <> · {sel.currentWeight} → {sel.goalWeight} lbs</> : null}
                 {sel.pregnant ? <><br />⚠️ Pregnant — review 1:1 before approving or refunding</> : null}

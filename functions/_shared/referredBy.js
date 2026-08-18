@@ -45,7 +45,11 @@ export function pickReferredBy({
   const advocateName = advocateProfileName(advocate);
   const code = normalizedCode(row.code);
   if (!advocateName && !code) return null;
-  return { advocateName, code };
+  return {
+    advocateName,
+    code,
+    advocateUserId: row.advocate_user_id || "",
+  };
 }
 
 /** Map referred_user_id → { advocateName, code } for roster attach. */
@@ -76,12 +80,17 @@ export function formatReferredBy(referral) {
   return `Referred by ${name} · ${code}`;
 }
 
-/** Quiet roster hint: "via Ava" (first name) or "via AVA25". */
+/** Quiet roster hint: "via Ava Stone" (full name) or "via AVA25". */
 export function formatReferredByHint(referral) {
   const line = formatReferredBy(referral);
   if (!line) return "";
   const name = String(referral?.advocateName || "").trim();
-  const first = name.split(/\s+/)[0] || "";
-  const who = first || normalizedCode(referral?.code);
+  const who = name || normalizedCode(referral?.code);
   return who ? `via ${who}` : "";
+}
+
+/** Button label to open the advocate's in-app thread. */
+export function thankReferrerLabel(referral) {
+  const name = String(referral?.advocateName || "").trim();
+  return name ? `Message ${name}` : "Message her";
 }

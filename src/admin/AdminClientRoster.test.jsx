@@ -105,7 +105,7 @@ describe("AdminClientRoster", () => {
         },
       ],
     });
-    expect(screen.getByText("via Ava")).toBeTruthy();
+    expect(screen.getByText("via Ava Stone")).toBeTruthy();
     expect(screen.queryByText(/Referred by/)).toBeNull();
   });
 

@@ -3,6 +3,7 @@ import {
   formatReferredBy,
   formatReferredByHint,
   pickReferredBy,
+  thankReferrerLabel,
 } from "./referredBy.js";
 
 const AVA = "advocate-1";
@@ -29,7 +30,7 @@ describe("pickReferredBy", () => {
       rows: [row()],
       profilesById,
       referredUserId: MAMA,
-    })).toEqual({ advocateName: "Ava Stone", code: "AVA25" });
+    })).toEqual({ advocateName: "Ava Stone", code: "AVA25", advocateUserId: AVA });
   });
 
   it("includes pending_payment when that is the only row", () => {
@@ -37,7 +38,7 @@ describe("pickReferredBy", () => {
       rows: [row({ status: "pending_payment" })],
       profilesById,
       referredUserId: MAMA,
-    })).toEqual({ advocateName: "Ava Stone", code: "AVA25" });
+    })).toEqual({ advocateName: "Ava Stone", code: "AVA25", advocateUserId: AVA });
   });
 
   it("returns null when there is no referral", () => {
@@ -61,7 +62,7 @@ describe("pickReferredBy", () => {
       rows: [row()],
       profilesById: { [AVA]: { name: "", last_name: "", email: "ava@example.com" } },
       referredUserId: MAMA,
-    })).toEqual({ advocateName: "", code: "AVA25" });
+    })).toEqual({ advocateName: "", code: "AVA25", advocateUserId: AVA });
   });
 
   it("prefers paid over an older pending_payment row", () => {
@@ -72,7 +73,22 @@ describe("pickReferredBy", () => {
       ],
       profilesById,
       referredUserId: MAMA,
-    })).toEqual({ advocateName: "Ava Stone", code: "AVA25" });
+    })).toEqual({ advocateName: "Ava Stone", code: "AVA25", advocateUserId: AVA });
+  });
+
+  it("keeps two advocates with the same first name distinct", () => {
+    const other = "advocate-2";
+    expect(pickReferredBy({
+      rows: [row({ advocate_user_id: other, code: "MEGANO25" })],
+      profilesById: {
+        [other]: { name: "Megan", last_name: "Onnelly" },
+      },
+      referredUserId: MAMA,
+    })).toEqual({
+      advocateName: "Megan Onnelly",
+      code: "MEGANO25",
+      advocateUserId: other,
+    });
   });
 });
 
@@ -94,8 +110,9 @@ describe("formatReferredBy", () => {
 });
 
 describe("formatReferredByHint", () => {
-  it("keeps the roster hint to a first name", () => {
-    expect(formatReferredByHint({ advocateName: "Ava Stone", code: "AVA25" })).toBe("via Ava");
+  it("uses the full advocate name so two Megans stay distinct", () => {
+    expect(formatReferredByHint({ advocateName: "Megan Onnelly", code: "MEGANO25" }))
+      .toBe("via Megan Onnelly");
   });
 
   it("falls back to the code when there is no name", () => {
@@ -104,5 +121,16 @@ describe("formatReferredByHint", () => {
 
   it("returns empty when there is no referral", () => {
     expect(formatReferredByHint(null)).toBe("");
+  });
+});
+
+describe("thankReferrerLabel", () => {
+  it("names the advocate so Callie can thank the right mama", () => {
+    expect(thankReferrerLabel({ advocateName: "Megan Onnelly", advocateUserId: "x" }))
+      .toBe("Message Megan Onnelly");
+  });
+
+  it("falls back when the advocate has no profile name", () => {
+    expect(thankReferrerLabel({ advocateName: "", code: "AVA25" })).toBe("Message her");
   });
 });
