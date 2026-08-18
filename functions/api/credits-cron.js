@@ -6,12 +6,19 @@
    ================================================================== */
 
 import { runCreditsCron } from "../_shared/credits.js";
+import { backfillReferralCodes } from "../_shared/referrals.js";
 
 export async function onRequestPost({ request, env }) {
   try {
     if (!authorize(request, env)) return json({ error: "unauthorized" }, 401);
     const stats = await runCreditsCron(env);
-    return json({ ok: true, ...stats }, 200);
+    let codes = null;
+    try {
+      codes = await backfillReferralCodes(env);
+    } catch (codeErr) {
+      console.error("ensure referral codes failed", codeErr);
+    }
+    return json({ ok: true, ...stats, codes }, 200);
   } catch (e) {
     console.error("credits-cron failed", e);
     return json({ error: "credits cron failed" }, 500);

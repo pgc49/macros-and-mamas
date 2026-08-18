@@ -1000,7 +1000,14 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
       {tab === "credits" && (
         <ErrorBoundary message="Credits admin hit an error. Other admin tabs still work — refresh or switch tabs.">
-          <AdminCredits roster={all} />
+          <AdminCredits
+            roster={all}
+            onOpenClient={(id) => setAdminSel(id)}
+            onMessageClient={(id) => {
+              setAdminSel(id);
+              setTab("messages");
+            }}
+          />
         </ErrorBoundary>
       )}
 
