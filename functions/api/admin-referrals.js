@@ -45,7 +45,7 @@ export async function onRequestPost({ request, env }) {
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || "").trim();
 
-    if (action === "backfill") {
+    if (action === "backfill" || action === "ensure-active") {
       const stats = await backfillReferralCodes(env);
       return json({ ok: true, ...stats }, 200);
     }

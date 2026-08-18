@@ -21,6 +21,7 @@ import { sendMetaCapiEvent } from "../_shared/metaCapi.js";
 import { purchaseEventIdFromStripeSession } from "../_shared/purchaseEventId.js";
 import { handleInvoicePaidCredits } from "../_shared/credits.js";
 import {
+  ensureReferralCode,
   handleChargeRefundedReferral,
   handleCheckoutReferral,
 } from "../_shared/referrals.js";
@@ -232,6 +233,17 @@ async function handleCheckoutSessionCompleted(env, event) {
     await ensureCohortChannelAfterPaid(env, userId);
   } catch (channelErr) {
     console.error("cohort channel join failed", userId, channelErr);
+  }
+
+  try {
+    const contact = await loadUserContact(env, userId);
+    await ensureReferralCode(env, {
+      userId,
+      name: contact.name || contact.profile?.name,
+      lastName: contact.profile?.last_name,
+    });
+  } catch (codeErr) {
+    console.error("ensure referral code after paid failed", userId, codeErr);
   }
 
   // Skip side effects if this session already unlocked paid (e.g. completed then
