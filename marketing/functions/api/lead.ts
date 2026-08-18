@@ -8,11 +8,7 @@
  *      WAITLIST KV (required — rate limit fails closed if unbound; same binding as /api/waitlist)
  */
 
-import {
-  computeRanges,
-  feedingLine,
-  segmentForAnswers,
-} from '../_shared/rangesEngine.mjs';
+import { buildQuizPayoff, feedingLine } from '../_shared/rangesEngine.mjs';
 import {
   FROM_CALLIE,
   escapeHtml,
@@ -433,49 +429,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   const answers = normalizeAnswers(body.answers || {});
-  const segment = segmentForAnswers(answers as Parameters<typeof segmentForAnswers>[0]);
-
-  // Pregnant: nurture only — no macro preview.
-  // Everyone else (including vegan + review flags): soft-compute preview bands
-  // for the payoff UI. Hard review flags still stored for Callie.
-  const hard =
-    segment === 'pregnancy_nurture'
-      ? { needs_review: false, review_reason: null as string | null }
-      : computeRanges(answers as Parameters<typeof computeRanges>[0]);
-
-  let preview: ReturnType<typeof computeRanges> | null = null;
-  if (segment !== 'pregnancy_nurture') {
-    const soft = computeRanges(
-      answers as Parameters<typeof computeRanges>[0],
-      { skipReview: true },
-    );
-    if (!soft.needs_review && 'protein_low_g' in soft) {
-      preview = soft;
-    }
-  }
-
-  const needsReview = Boolean(hard.needs_review);
-  const reviewReason = hard.needs_review
-    ? String(hard.review_reason || '')
-    : null;
+  const payoff = buildQuizPayoff(answers);
+  const segment = payoff.segment;
+  const needsReview = payoff.needs_review;
+  const reviewReason = payoff.review_reason;
+  const qualifiedLead = payoff.qualified_lead;
+  const earlyPp = payoff.early_pp;
 
   const eventId =
     String(body.event_id || '').trim() ||
     `lead_${crypto.randomUUID()}`;
 
-  const rangesPayload =
-    preview && 'protein_low_g' in preview
-      ? {
-          protein_low_g: preview.protein_low_g,
-          protein_high_g: preview.protein_high_g,
-          carbs_low_g: preview.carbs_low_g,
-          carbs_high_g: preview.carbs_high_g,
-          fat_low_g: preview.fat_low_g,
-          fat_high_g: preview.fat_high_g,
-          calories_low: preview.calories_low,
-          calories_high: preview.calories_high,
-        }
-      : {};
+  const rangesPayload = payoff.ranges || {};
 
   const referredBy = String(body.referred_by || '')
     .trim()
@@ -529,18 +494,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const ua = request.headers.get('user-agent') || '';
   const sourceUrl = 'https://www.macrosandmamas.com/quiz';
 
-  const earlyPp = segment === 'early_pp_nurture';
   const formatted =
     rangesPayload.protein_low_g != null
       ? formatBands(rangesPayload as Parameters<typeof formatBands>[0])
       : null;
-
-  // Meta Lead only for enrollable, non-vegan finishes.
-  // Fully vegan + pregnant must not optimize delivery toward non-buyers.
-  const flaggedVegan = answers.flags.includes('vegan');
-  const qualifiedLead =
-    !flaggedVegan &&
-    (segment === 'main' || segment === 'early_pp_nurture');
 
   context.waitUntil(
     Promise.all([
@@ -570,12 +527,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ]),
   );
 
-  // not_postpartum auto-sets feeding=not_feeding; don't show the postpartum
-  // “still rebuilding” sage callout on that path (payoff + email).
-  const showFeedingLine =
-    rangesPayload.protein_low_g != null &&
-    answers.months_postpartum !== 'not_postpartum';
-
   return json({
     ok: true,
     event_id: eventId,
@@ -584,9 +535,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     needs_review: needsReview,
     review_reason: reviewReason,
     early_pp: earlyPp,
-    ranges: rangesPayload.protein_low_g != null ? rangesPayload : null,
-    feeding_line: showFeedingLine
-      ? feedingLine(answers.feeding as 'exclusive')
-      : null,
+    ranges: payoff.ranges,
+    feeding_line: payoff.feeding_line,
   });
 };

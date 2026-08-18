@@ -77,6 +77,7 @@
     },
     contact: { first_name: '', last_name: '', email: '', referred_by: '' },
     result: null,
+    leadSaved: false,
     busy: false,
     error: '',
     source: 'quiz_page',
@@ -692,10 +693,14 @@
     const rangesBlock = hasRanges
       ? rangesCardHtml(r)
       : `<p class="q-copy">Check your inbox. Callie is sending next steps. You can still lock your spot below.</p>`;
+    const unsavedNote = state.leadSaved
+      ? ''
+      : `<p class="q-copy">We couldn't email these just now. They're on this page, and you can still lock your spot below.</p>`;
 
     return screenShell(
       `${escapeHtml(state.contact.first_name)}, your ranges are ready.`,
       `${previewOnceHtml()}
+      ${unsavedNote}
       ${veganNote}
       ${rangesBlock}
       ${fastOfferHtml()}
@@ -725,7 +730,11 @@
       <a class="btn q-offer-btn" href="${joinHref}">Pre-pay $${offerPrice} — lock my spot</a>
       ${email ? `<p class="q-offer-continuing">Continuing as ${escapeHtml(email)}</p>` : ''}
       <p class="q-offer-after">${escapeHtml(postPayCopy)}</p>
-      <p class="q-offer-skip">Not ready yet? Your ranges stay in your inbox either way.</p>
+      <p class="q-offer-skip">${
+        state.leadSaved
+          ? 'Not ready yet? Your ranges stay in your inbox either way.'
+          : 'Not ready yet? Screenshot these ranges — we couldn\'t email them just now.'
+      }</p>
     </div>`;
   }
 
@@ -907,6 +916,65 @@
       };
     }
 
+    function rememberQuizEmail() {
+      try {
+        const leadEmail = String(state.contact.email || '').trim().toLowerCase();
+        if (leadEmail) sessionStorage.setItem('mm_quiz_email', leadEmail);
+      } catch (e) {}
+    }
+
+    function localPayoff() {
+      const build = globalThis.__mmBuildQuizPayoff;
+      if (typeof build !== 'function') return null;
+      try {
+        return build(payload.answers);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function showPayoff(data, saved) {
+      rememberQuizEmail();
+      if (saved) {
+        try {
+          localStorage.setItem('mm_lead_email', '1');
+        } catch (e) {}
+        try {
+          if (typeof window.fbq === 'function') {
+            const seg = String(data.segment || '');
+            const qualified =
+              data.qualified_lead === true ||
+              (data.qualified_lead == null && ENROLLABLE_SEGMENTS[seg]);
+            if (qualified) {
+              try {
+                window.fbq('init', META_PIXEL_ID, {
+                  em: String(state.contact.email || '').trim().toLowerCase(),
+                  fn: String(state.contact.first_name || '').trim().toLowerCase(),
+                  ln: String(state.contact.last_name || '').trim().toLowerCase(),
+                });
+              } catch (e) {}
+              window.fbq(
+                'track',
+                'Lead',
+                { content_name: 'ranges_quiz', content_category: seg },
+                { eventID: eventId },
+              );
+            } else {
+              window.fbq('trackCustom', 'QuizNurture', {
+                content_name: 'ranges_quiz',
+                content_category: seg || 'nurture',
+              });
+            }
+          }
+        } catch (e) {}
+      }
+      state.result = data;
+      state.leadSaved = saved;
+      state.busy = false;
+      state.error = '';
+      setStep('result');
+    }
+
     try {
       const resp = await fetch('/api/lead', {
         method: 'POST',
@@ -920,49 +988,13 @@
       if (!resp.ok) {
         throw new Error(data.error || 'save_failed');
       }
-      try {
-        localStorage.setItem('mm_lead_email', '1');
-      } catch (e) {}
-      try {
-        const leadEmail = String(state.contact.email || '').trim().toLowerCase();
-        if (leadEmail) sessionStorage.setItem('mm_quiz_email', leadEmail);
-      } catch (e) {}
-
-      // Meta Lead only for enrollable segments. Fully vegan + pregnant
-      // fire QuizNurture instead — never train delivery on non-qualified leads.
-      try {
-        if (typeof window.fbq === 'function') {
-          const seg = String(data.segment || '');
-          const qualified =
-            data.qualified_lead === true ||
-            (data.qualified_lead == null && ENROLLABLE_SEGMENTS[seg]);
-          if (qualified) {
-            try {
-              window.fbq('init', META_PIXEL_ID, {
-                em: String(state.contact.email || '').trim().toLowerCase(),
-                fn: String(state.contact.first_name || '').trim().toLowerCase(),
-                ln: String(state.contact.last_name || '').trim().toLowerCase(),
-              });
-            } catch (e) {}
-            window.fbq(
-              'track',
-              'Lead',
-              { content_name: 'ranges_quiz', content_category: seg },
-              { eventID: eventId },
-            );
-          } else {
-            window.fbq('trackCustom', 'QuizNurture', {
-              content_name: 'ranges_quiz',
-              content_category: seg || 'nurture',
-            });
-          }
-        }
-      } catch (e) {}
-
-      state.result = data;
-      state.busy = false;
-      setStep('result');
+      showPayoff(data, true);
     } catch (e) {
+      const fallback = localPayoff();
+      if (fallback) {
+        showPayoff(fallback, false);
+        return;
+      }
       state.busy = false;
       state.error = 'Could not save just now. Try again in a moment.';
       render();

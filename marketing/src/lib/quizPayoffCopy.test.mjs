@@ -33,4 +33,10 @@ describe("quiz payoff copy", () => {
     assert.doesNotMatch(quizJs, /Progress · ranges/);
     assert.match(quizJs, /Messages · 1:1 with Callie/);
   });
+
+  it("still shows payoff when /api/lead fails", () => {
+    assert.match(quizJs, /function localPayoff/);
+    assert.match(quizJs, /__mmBuildQuizPayoff/);
+    assert.match(quizJs, /We couldn't email these just now/);
+  });
 });

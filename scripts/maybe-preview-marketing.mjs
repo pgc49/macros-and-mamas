@@ -269,4 +269,13 @@ function copyMarketingFunctions() {
   console.log(
     "[overlay-marketing] functions/_shared/emailLayout.mjs → marketing/src/lib",
   );
+  const rangesEmailShim = join(root, "functions/_shared/rangesEmail.mjs");
+  writeFileSync(
+    rangesEmailShim,
+    "/** Re-export quiz ranges email helper for SPA Pages Functions (www cutover). */\n" +
+      "export * from '../../marketing/src/lib/rangesEmail.mjs';\n",
+  );
+  console.log(
+    "[overlay-marketing] functions/_shared/rangesEmail.mjs → marketing/src/lib",
+  );
 }

@@ -71,5 +71,13 @@ const quizJsV = createHash('sha256')
     </div>
   </main>
   <Footer />
+  <script>
+    import { buildQuizPayoff } from '../lib/rangesEngine.mjs';
+    // Preview Pages often lack the WAITLIST KV binding, so /api/lead 503s.
+    // Same engine as the server — used only when save fails.
+    (globalThis as typeof globalThis & {
+      __mmBuildQuizPayoff?: typeof buildQuizPayoff;
+    }).__mmBuildQuizPayoff = buildQuizPayoff;
+  </script>
   <script is:inline src={`/quiz-app.js?v=${quizJsV}`}></script>
 </BaseLayout>
