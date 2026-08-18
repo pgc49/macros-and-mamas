@@ -8,7 +8,7 @@ Live Pixel ID: **`1078367721716098`**. It is public (it ships in the browser sni
 | --- | --- |
 | Base code (`fbq('init')` + `PageView`) | Marketing pages (`/`, `/quiz`, `/waitlist`, `/thanks`) and public SPA routes (`/join`, `/welcome`, `/signin`) |
 | Event code | `Lead` (qualified quiz + waitlist), `InitiateCheckout`, `Purchase`, plus quiz custom events |
-| Data matching | Email / name / phone sent into Pixel `init` on Lead; hashed email/phone on CAPI |
+| Data matching | Email / name / phone sent into Pixel `init` on Lead; hashed email, phone, name, and billing address (when collected) on CAPI |
 | Every page of the website | **No** — not on `/dashboard`, intake, or admin. Those are the coaching app (health data). Ads only need public pages. |
 
 After this merges and production deploys, Events Manager should show **PageView** from www (allow ~20 minutes). Use **Test Events** to confirm Lead.

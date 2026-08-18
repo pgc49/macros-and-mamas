@@ -59,6 +59,12 @@ export async function onRequestPost({ request, env }) {
       eventId,
       email: String(body.email || "").slice(0, 254),
       phone: String(body.phone || "").slice(0, 32),
+      firstName: String(body.first_name || body.firstName || "").slice(0, 80),
+      lastName: String(body.last_name || body.lastName || "").slice(0, 80),
+      city: String(body.city || "").slice(0, 80),
+      state: String(body.state || "").slice(0, 40),
+      zip: String(body.zip || body.postal_code || "").slice(0, 20),
+      country: String(body.country || "").slice(0, 8),
       fbp: String(body.fbp || "").slice(0, 128),
       fbc: String(body.fbc || "").slice(0, 128),
       eventSourceUrl: sanitizeEventSourceUrl(
