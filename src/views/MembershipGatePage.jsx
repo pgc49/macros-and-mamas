@@ -9,7 +9,8 @@ import { startMembershipCheckout } from "../lib/billing";
 import { useState } from "react";
 
 /**
- * Hard gate after the founding free month when there is no active membership.
+ * Hard gate after founding free month (or programEnd for later cohorts)
+ * when there is no active membership.
  * Only Payments + sign out remain available from here.
  */
 export function MembershipGatePage() {
