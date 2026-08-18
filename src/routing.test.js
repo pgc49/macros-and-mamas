@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PATHS, adminPortalHref, homePathFor, isExternalAdminHref } from "./routing";
+import { PATHS, adminPortalHref, canonicalPath, homePathFor, isExternalAdminHref } from "./routing";
 
 const enrolled = {
   approved: true,
@@ -7,6 +7,15 @@ const enrolled = {
   macros: true,
   refunded: false,
 };
+
+describe("canonicalPath", () => {
+  it("strips Cloudflare pretty-URL trailing slashes", () => {
+    expect(canonicalPath("/signin/")).toBe("/signin");
+    expect(canonicalPath("/join/")).toBe("/join");
+    expect(canonicalPath("/")).toBe("/");
+    expect(canonicalPath("/signin")).toBe("/signin");
+  });
+});
 
 describe("homePathFor", () => {
   it("sends admins to the coach portal on admin and combined surfaces", () => {

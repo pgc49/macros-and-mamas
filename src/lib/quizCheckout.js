@@ -46,3 +46,21 @@ export function emailsMatch(a, b) {
   const right = normalizeEmail(b);
   return Boolean(left && right && left === right);
 }
+
+function quizParams({ email, auth } = {}) {
+  const params = new URLSearchParams({ from: "quiz" });
+  if (auth) params.set("auth", auth);
+  const normalized = normalizeEmail(email);
+  if (normalized) params.set("email", normalized);
+  return params;
+}
+
+/** /join?from=quiz&email= — keep the quiz address across leftover-session hops. */
+export function quizJoinHref(email) {
+  return `/join?${quizParams({ email }).toString()}`;
+}
+
+/** /signin?from=quiz&auth=create&email= */
+export function quizSignInHref(email, auth = "create") {
+  return `/signin?${quizParams({ email, auth }).toString()}`;
+}

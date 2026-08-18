@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emailsMatch, normalizeEmail, resolveQuizEmail } from "./quizCheckout";
+import { emailsMatch, normalizeEmail, quizJoinHref, quizSignInHref, resolveQuizEmail } from "./quizCheckout";
 
 describe("normalizeEmail", () => {
   it("restores a plus alias that a query string decoded as a space", () => {
@@ -33,5 +33,19 @@ describe("resolveQuizEmail", () => {
     );
     expect(params.get("email")).toBe("pgchammas+metaadspaidtest@gmail.com");
     expect(resolveQuizEmail(params)).toBe("pgchammas+metaadspaidtest@gmail.com");
+  });
+});
+
+describe("quiz handoff hrefs", () => {
+  it("keeps the plus-alias on join so a leftover session can match", () => {
+    expect(quizJoinHref("pgchammas+testaccount@gmail.com")).toBe(
+      "/join?from=quiz&email=pgchammas%2Btestaccount%40gmail.com",
+    );
+  });
+
+  it("sends create-account back to the same quiz email", () => {
+    expect(quizSignInHref("pgchammas+testaccount@gmail.com")).toBe(
+      "/signin?from=quiz&auth=create&email=pgchammas%2Btestaccount%40gmail.com",
+    );
   });
 });

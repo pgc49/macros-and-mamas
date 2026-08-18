@@ -25,5 +25,12 @@ export const PATHS = {
   membership: "/membership",
 };
 
+/** Cloudflare pretty-URLs turn /signin into /signin/ — treat them as the same route. */
+export function canonicalPath(pathname) {
+  const p = String(pathname || "");
+  if (p.length > 1 && /\/+$/.test(p)) return p.replace(/\/+$/, "") || "/";
+  return p || "/";
+}
+
 /** Astro owns these on www; do not plant an SPA shell over them. */
 export const MARKETING_OWNED_PATHS = new Set(["/", "/waitlist"]);

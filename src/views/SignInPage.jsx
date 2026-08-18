@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { FD, T, F } from "../theme/tokens";
 import { Shell, Card, Btn, Field, inputStyle } from "../components/ui";
 import { useAuth } from "../auth/useAuth.jsx";
 import { PATHS } from "../routing";
 import { TERMS_VERSION } from "../content/terms";
 import { isEnrollmentOpen } from "../config";
-import { rememberQuizEmail } from "../lib/quizCheckout";
+import { normalizeEmail, quizJoinHref, rememberQuizEmail } from "../lib/quizCheckout";
 import { isUnconfirmedEmailError } from "../auth/completeSignup";
 
 /**
@@ -20,14 +20,20 @@ export function SignInPage({
   onSwitchMode,
 }) {
   const { signInWithPassword, signUpWithPassword, resetPasswordForEmail } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const prefillEmail = String(searchParams.get("email") || "").trim();
+  const prefillEmail = normalizeEmail(searchParams.get("email") || "");
   const fromQuiz = searchParams.get("from") === "quiz";
   const [email, setEmail] = useState(prefillEmail);
 
   useEffect(() => {
     if (fromQuiz && prefillEmail) rememberQuizEmail(prefillEmail);
   }, [fromQuiz, prefillEmail]);
+
+  const goQuizJoin = (value = email) => {
+    if (!fromQuiz) return;
+    navigate(quizJoinHref(value), { replace: true });
+  };
   const [password, setPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -38,13 +44,14 @@ export function SignInPage({
   const isCreate = mode === "create";
 
   const submit = async () => {
-    if (!email.trim()) return;
+    const accountEmail = normalizeEmail(email);
+    if (!accountEmail) return;
 
     if (forgotMode) {
       setBusy(true);
       setError("");
       setInfo("");
-      const { error: err } = await resetPasswordForEmail(email);
+      const { error: err } = await resetPasswordForEmail(accountEmail);
       setBusy(false);
       if (err) {
         setError(err.message || "Could not send reset email.");
@@ -69,7 +76,7 @@ export function SignInPage({
 
     if (isCreate) {
       const termsAcceptedAt = new Date().toISOString();
-      const { error: err, needsEmailConfirm } = await signUpWithPassword(email, password, {
+      const { error: err, needsEmailConfirm } = await signUpWithPassword(accountEmail, password, {
         termsAcceptedAt,
         termsVersion: TERMS_VERSION,
       });
@@ -77,7 +84,8 @@ export function SignInPage({
       if (err) {
         const msg = err.message || "Could not create account.";
         if (/already|registered|exists|invalid login/i.test(msg) && onSwitchMode) {
-          setError("That email already has an account. Sign in with the password you just created.");
+          setError("That email already has an account. Sign in with the password you created, or tap Forgot password.");
+          onSwitchMode("signin");
           return;
         }
         setError(msg);
@@ -85,11 +93,13 @@ export function SignInPage({
       }
       if (needsEmailConfirm) {
         setInfo("Check your email to confirm your account, then sign in. Check spam too.");
+        return;
       }
+      goQuizJoin(accountEmail);
       return;
     }
 
-    const { error: err } = await signInWithPassword(email, password);
+    const { error: err } = await signInWithPassword(accountEmail, password);
     setBusy(false);
     if (err) {
       const msg = err.message || "Could not sign in.";
@@ -102,7 +112,9 @@ export function SignInPage({
         return;
       }
       setError(msg);
+      return;
     }
+    goQuizJoin(accountEmail);
   };
 
   return (
@@ -150,7 +162,7 @@ export function SignInPage({
           </Field>
         )}
 
-        {!isCreate && !forgotMode && (
+        {!forgotMode && (!isCreate || fromQuiz) && (
           <div style={{ textAlign: "right", marginTop: -6, marginBottom: 14 }}>
             <button
               type="button"
