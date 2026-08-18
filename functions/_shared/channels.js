@@ -98,6 +98,19 @@ export async function ensureChannelMembership(env, {
 }
 
 /**
+ * Pay-time / approve-time stamp: keep an existing label, else use paid_at.
+ * Never force-open the current enrollment cohort — a late-activated Founding
+ * mama must stay on her payment window.
+ * @param {{ cohort_label?: string|null, paid_at?: string|Date|null }} profile
+ * @param {string|Date} [now]
+ */
+export function cohortAssignOptsForPaidProfile(profile, now = new Date()) {
+  const existing = String(profile?.cohort_label || "").trim();
+  if (existing) return { existingLabel: existing };
+  return { at: profile?.paid_at || now };
+}
+
+/**
  * Stamp cohort_label + tier and join the cohort channel.
  * @param {{ at?: string|Date, forceLabel?: string }} [opts]
  */
@@ -133,10 +146,27 @@ export async function assignCohortAndJoinChannel(env, userId, opts = {}) {
   return { label, conversationId: conv.id, membership };
 }
 
-/** Paid checkout for the open enrollment cohort (C2). */
+/** Paid checkout — stamp from paid_at window if unlabeled. */
 export async function handlePaidEnrollmentChannel(env, userId) {
-  const open = openEnrollmentCohort(env);
-  return assignCohortAndJoinChannel(env, userId, { forceLabel: open.label });
+  const rows = await sbFetch(
+    env,
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,cohort_label,paid_at&limit=1`,
+    { method: "GET" },
+  );
+  const profile = Array.isArray(rows) ? rows[0] : null;
+  const opts = cohortAssignOptsForPaidProfile(profile);
+  if (opts.existingLabel) {
+    const conv = await getCohortConversation(env, opts.existingLabel);
+    if (conv) {
+      await ensureChannelMembership(env, {
+        conversationId: conv.id,
+        userId,
+        notifyLevel: "highlights",
+      });
+    }
+    return { label: opts.existingLabel, existed: true };
+  }
+  return assignCohortAndJoinChannel(env, userId, { at: opts.at });
 }
 
 /** Callie activation — stamp from calendar if not already labeled. */
