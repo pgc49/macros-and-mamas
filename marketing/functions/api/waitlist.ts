@@ -143,6 +143,8 @@ async function sendLeadCapi(env: Env, opts: {
   eventId: string;
   email: string;
   phone: string;
+  firstName?: string;
+  lastName?: string;
   fbp?: string;
   fbc?: string;
   ip: string;
@@ -153,9 +155,13 @@ async function sendLeadCapi(env: Env, opts: {
   if (!pixelId || !env.META_CAPI_ACCESS_TOKEN) return;
   const em = await sha256(opts.email);
   const ph = await sha256(opts.phone.replace(/\D/g, ""));
+  const fn = await sha256(String(opts.firstName || "").trim().toLowerCase());
+  const ln = await sha256(String(opts.lastName || "").trim().toLowerCase());
   const user_data: Record<string, unknown> = {};
   if (em) user_data.em = [em];
   if (ph) user_data.ph = [ph];
+  if (fn) user_data.fn = [fn];
+  if (ln) user_data.ln = [ln];
   if (opts.fbp) user_data.fbp = opts.fbp.slice(0, 128);
   if (opts.fbc) user_data.fbc = opts.fbc.slice(0, 128);
   if (opts.ip) user_data.client_ip_address = opts.ip.slice(0, 64);
@@ -294,6 +300,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       eventId,
       email: String(row.email),
       phone: String(row.phone),
+      firstName: String(row.first_name || ""),
+      lastName: String(row.last_name || ""),
       fbp: body.fbp,
       fbc: body.fbc,
       ip,

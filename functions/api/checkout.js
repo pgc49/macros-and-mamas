@@ -191,6 +191,9 @@ export async function onRequestPost({ request, env }) {
         eventName: "InitiateCheckout",
         eventId,
         email: user.email,
+        firstName: profile?.name || "",
+        lastName: profile?.last_name || "",
+        phone: profile?.phone || "",
         fbp,
         fbc,
         eventSourceUrl: `${origin}/join`,
@@ -255,7 +258,7 @@ async function fetchProfile(env, userId, authHeader) {
   if (!apikey || !authorization) return null;
 
   const resp = await fetch(
-    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid,refunded,created_at`,
+    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=paid,refunded,created_at,name,last_name,phone`,
     {
       headers: {
         apikey,

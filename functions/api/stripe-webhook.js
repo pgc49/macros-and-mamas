@@ -17,7 +17,10 @@ import {
   loadUserContact,
   sendWelcomeEmails,
 } from "../_shared/supabaseEmail.js";
-import { sendMetaCapiEvent } from "../_shared/metaCapi.js";
+import {
+  matchFieldsFromProfileAndCheckout,
+  sendMetaCapiEvent,
+} from "../_shared/metaCapi.js";
 import { purchaseEventIdFromStripeSession } from "../_shared/purchaseEventId.js";
 import { handleInvoicePaidCredits } from "../_shared/credits.js";
 import {
@@ -244,11 +247,7 @@ async function handleCheckoutSessionCompleted(env, event) {
   // Purchase CAPI — idempotent event_id = Stripe session.id (dedupe with browser)
   try {
     const contact = await loadUserContact(env, userId);
-    const email =
-      contact.email ||
-      session.customer_email ||
-      session.customer_details?.email ||
-      "";
+    const match = matchFieldsFromProfileAndCheckout(contact, session);
     const amount =
       Number(session.metadata?.amount_usd) ||
       (session.amount_total != null ? Number(session.amount_total) / 100 : 0);
@@ -257,7 +256,7 @@ async function handleCheckoutSessionCompleted(env, event) {
       await sendMetaCapiEvent(env, {
         eventName: "Purchase",
         eventId: purchaseEventId,
-        email,
+        ...match,
         fbp: session.metadata?.fbp || "",
         fbc: session.metadata?.fbc || "",
         clientIp: session.metadata?.client_ip || "",
