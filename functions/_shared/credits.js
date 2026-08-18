@@ -23,6 +23,15 @@ export function isUuid(value) {
   return UUID_RE.test(String(value || "").trim());
 }
 
+/** Manual grants always need a human note. Referral / milestone grants may omit one. */
+export function requireManualGrantNote(note, reason = "manual") {
+  const noteText = String(note || "").trim().slice(0, MAX_NOTE_CHARS);
+  if (reason === "manual" && !noteText) {
+    throw new Error("note required");
+  }
+  return noteText;
+}
+
 export function supabaseConfig(env) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -152,10 +161,7 @@ export async function grantCredit(env, {
   if (reason === "manual" && cents > MAX_MANUAL_GRANT_CENTS) {
     throw new Error(`grant exceeds max $${MAX_MANUAL_GRANT_CENTS / 100}`);
   }
-  const noteText = String(note || "").trim().slice(0, MAX_NOTE_CHARS);
-  if (reason === "manual" && !noteText) {
-    throw new Error("note required");
-  }
+  const noteText = requireManualGrantNote(note, reason);
   if (relatedReferralId != null && relatedReferralId !== "" && !isUuid(relatedReferralId)) {
     throw new Error("invalid grant");
   }
