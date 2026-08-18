@@ -63,6 +63,29 @@ describe("AdminClientRoster", () => {
     expect(screen.getByText("Never messaged")).toBeTruthy();
   });
 
+  it("shows a Comp chip on complimentary roster rows", () => {
+    renderRoster({
+      filter: "all",
+      roster: [
+        {
+          id: "comp-1",
+          role: "client",
+          name: "Comp Mama",
+          email: "comp@example.com",
+          stage: "active",
+          status: "active",
+          paid: true,
+          comp: true,
+          hasIntake: true,
+          unreadFromMama: 0,
+          lastAdminAt: null,
+        },
+      ],
+    });
+    expect(screen.getByText("Comp Mama")).toBeTruthy();
+    expect(screen.getByText("Comp")).toBeTruthy();
+  });
+
   it("shows last messaged and a message shortcut on active rows", () => {
     const onMessageClient = () => {};
     renderRoster({ filter: "active", onMessageClient });

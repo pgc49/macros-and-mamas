@@ -1,7 +1,7 @@
 /* ==================================================================
    /functions/api/support.js — signed-in mama tech help → GitHub issue
    ==================================================================
-   Requires Supabase JWT. Form at /support (WhatsApp → sign in → report).
+   Requires Supabase JWT. Form at /support (sign in → report).
    Primary: create GitHub issue (Issues-only PAT). Never auto-@cursor.
    Fallback: email OWNER via notify-callie type=support.
    Media: client uploads to private support-screenshots/{userId}/… then

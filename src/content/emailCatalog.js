@@ -49,7 +49,7 @@ First, complete your intake — it takes about 3 minutes. That's where I learn y
 
 Then your macros get built — not by a calculator — by me. I personally review every mama's numbers before they go live. You'll get them within a day of finishing your intake, as flexible ranges, because real life doesn't happen in exact grams.
 
-Once your macros are approved, your invite to our WhatsApp Macros group comes in that email — with a join link. That's where I live Monday through Friday — voice notes, plate pics, wins, questions, all of it. Every Monday I drop a short voice note that sets the week's focus. Listen while you pump, nurse, walk, or hide in the pantry. No judgment!
+Once your macros are approved, you'll find me in Messages in the app — your group with the other mamas. That's where I live Monday through Friday — voice notes, plate pics, wins, questions, all of it. Every Monday I drop a short voice note that sets the week's focus. Listen while you pump, nurse, walk, or hide in the pantry. No judgment!
 
 While you're at it, do these two things — today if you can:
 1. Take your before photos. Same outfit, same spot, same lighting — front, side, and back. Your face doesn't need to be in them. You will not believe how much you'll want these in eight weeks!
@@ -94,7 +94,7 @@ Callie
 
 I have your intake — thank you. I'm reviewing your numbers personally and you'll usually have them within a day.
 
-When I approve, your dashboard unlocks and your WhatsApp group invite arrives in that email (with a join link).
+When I approve, your dashboard unlocks and you can say hi in Messages — that's your group with me and the other mamas.
 
 If your before photos and first weigh-in are still on the list — now's the moment.
 
@@ -113,8 +113,8 @@ Callie`,
 
 I just finished your numbers — they're live in your dashboard right now, built from everything you told me. Remember: these are ranges, not rules. Active day, eat the top. Slow day, the bottom. Both count.
 
-Join the mamas group chat — I'm in there Monday through Friday answering in voice notes. Come say hi so I can welcome you properly:
-[Tap here to join WhatsApp → chat.whatsapp.com/…]
+Join the mamas group — I'm in there Monday through Friday answering in voice notes. Open Messages in the app and come say hi so I can welcome you properly:
+[Open Messages → /dashboard?tab=messages]
 
 Your first 48 hours, and this is the whole assignment:
 1. Today: log one meal. Tap it from your plan, snap it, or type it. Just one.

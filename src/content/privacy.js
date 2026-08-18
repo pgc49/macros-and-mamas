@@ -55,10 +55,10 @@ export const PRIVACY_SECTIONS = [
       "Cloudflare — website hosting, delivery, and optional Web Analytics (aggregate traffic)",
       "Resend — email delivery",
       "AI provider(s) — meal photo and description estimates",
-      "WhatsApp (Meta) — group communication",
+      "In-app Messages — group and 1:1 coaching chat hosted on our app (Supabase)",
       "Meta Platforms, Inc. — advertising measurement via Meta Pixel (browser) and Conversions API (server). Data may include hashed email and phone, IP address, user agent, cookie identifiers (_fbp / _fbc), click IDs, and event details such as Lead, InitiateCheckout, and Purchase. Meta uses this to measure ad performance and may use it under Meta's own policies. This is a \"share\" for cross-context behavioral advertising measurement under CCPA/CPRA language.",
       "We may also disclose information if required by law or legal process, to protect our rights or someone's safety, or in connection with a sale or reorganization of our business.",
-      "A note on the group chat: the private WhatsApp group is operated by Meta under its own terms and privacy policy. Other members of the group can see your phone number and anything you post there. Please share only what you're comfortable sharing with the group.",
+      "A note on the group chat: Messages is in the app. Other members of the group can see anything you post there. Please share only what you're comfortable sharing with the group.",
     ],
   },
   {

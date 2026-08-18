@@ -10,6 +10,10 @@ import {
   listLedgerForUser,
 } from "../_shared/credits.js";
 import {
+  billingFallbackPayments,
+  stripePortalAvailable,
+} from "../_shared/comp.js";
+import {
   buildProgramSummaryFromCohort,
   buildSubscriptionPayload,
   membershipAccess,
@@ -46,7 +50,8 @@ export async function onRequestGet({ request, env }) {
       subscription,
       access,
       credits,
-      portalAvailable: !!env.STRIPE_SECRET_KEY && !!profile.stripe_customer_id,
+      complimentary: !!profile.comp,
+      portalAvailable: stripePortalAvailable(profile, { stripeSecret: env.STRIPE_SECRET_KEY }),
     });
   } catch (e) {
     console.error("billing get failed", e);
@@ -65,7 +70,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     const profile = await fetchBillingProfile(env, user.id);
-    if (!profile?.stripe_customer_id) {
+    if (!profile?.stripe_customer_id || profile.comp) {
       return json({ error: "no billing customer" }, 404);
     }
     if (profile.refunded) return json({ error: "enrollment refunded" }, 403);
@@ -170,7 +175,7 @@ async function listCustomerPayments(env, profile) {
     }
   }
 
-  if (!out.length) return fallbackFromProfile(profile);
+  if (!out.length) return billingFallbackPayments(profile);
   out.sort((a, b) => {
     const ta = a.created ? Date.parse(a.created) : 0;
     const tb = b.created ? Date.parse(b.created) : 0;
@@ -180,18 +185,7 @@ async function listCustomerPayments(env, profile) {
 }
 
 function fallbackFromProfile(profile) {
-  if (!profile.paid) return [];
-  return [{
-    id: profile.stripe_payment_intent || "program",
-    created: profile.paid_at,
-    amount: null,
-    currency: "usd",
-    status: "succeeded",
-    description: "8-week program",
-    receiptUrl: null,
-    brand: null,
-    last4: null,
-  }];
+  return billingFallbackPayments(profile);
 }
 
 function mapCharge(ch) {
@@ -274,7 +268,7 @@ async function fetchBillingProfile(env, userId) {
   const url =
     `${base}/rest/v1/profiles`
     + `?id=eq.${encodeURIComponent(userId)}`
-    + `&select=id,role,paid,refunded,paid_at,week,cohort_label,tier,stripe_customer_id,stripe_payment_intent,stripe_subscription_id,subscription_status,subscription_current_period_end,subscription_trial_end`;
+    + `&select=id,role,paid,refunded,comp,paid_at,week,cohort_label,tier,stripe_customer_id,stripe_payment_intent,stripe_subscription_id,subscription_status,subscription_current_period_end,subscription_trial_end`;
   const resp = await fetch(url, {
     headers: { apikey: key, authorization: `Bearer ${key}` },
   });
