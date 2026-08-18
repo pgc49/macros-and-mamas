@@ -1,4 +1,5 @@
 import { adminCohortName } from "../lib/cohorts";
+import { isStripeCollected } from "../../functions/_shared/comp.js";
 import { addDaysIso, localDateIso } from "../utils/dates";
 
 export const UNASSIGNED_COHORT = "unassigned";
@@ -137,7 +138,7 @@ export function filterRoster(all, filter, { query = "", todayIso = localDateIso(
   } else if (filter === "unpaid") {
     list = clientsOnly.filter((c) => c.stage === "signed_up");
   } else if (filter === "paid") {
-    list = clientsOnly.filter((c) => c.paid && !c.refunded);
+    list = clientsOnly.filter((c) => isStripeCollected(c));
   } else if (filter === "awaiting_intake") {
     list = clientsOnly.filter((c) => c.stage === "paid_awaiting_intake");
   } else if (filter === "awaiting_approval") {
@@ -184,7 +185,7 @@ export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all
     ).length,
     awaitingIntake: clientsOnly.filter((c) => c.stage === "paid_awaiting_intake").length,
     unpaid: clientsOnly.filter((c) => c.stage === "signed_up").length,
-    paid: clientsOnly.filter((c) => c.paid && !c.refunded).length,
+    paid: clientsOnly.filter((c) => isStripeCollected(c)).length,
     refunded: clientsOnly.filter((c) => c.refunded || c.stage === "refunded").length,
     all: clientsOnly.length,
   };
@@ -194,7 +195,7 @@ export function rosterStats(all, cohort = "all") {
   const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
   return {
     signups: clientsOnly.length,
-    paid: clientsOnly.filter((c) => c.paid && !c.refunded).length,
+    paid: clientsOnly.filter((c) => isStripeCollected(c)).length,
     unpaid: clientsOnly.filter((c) => !c.paid && !c.refunded).length,
     awaitingIntake: clientsOnly.filter((c) => c.stage === "paid_awaiting_intake").length,
     awaitingApproval: clientsOnly.filter(

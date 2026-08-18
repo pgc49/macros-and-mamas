@@ -116,6 +116,7 @@ function rowToProfile(row) {
     status: row.status,
     paid: !!row.paid,
     refunded: !!row.refunded,
+    comp: !!row.comp,
     paidAt: row.paid_at || null,
     week: row.week ?? 0,
     role: row.role,
@@ -1718,6 +1719,7 @@ export const db = {
         cohort_label: p.cohort_label || null,
         paid,
         refunded,
+        comp: !!p.comp,
         paidAt: p.paid_at || null,
         createdAt: p.created_at || null,
         role: p.role,
@@ -1750,7 +1752,7 @@ export const db = {
     const nonAdminClients = clients.filter((c) => String(c.role || "").toLowerCase() !== "admin");
     const stats = {
       signups: nonAdminClients.length,
-      paid: nonAdminClients.filter((c) => c.paid && !c.refunded).length,
+      paid: nonAdminClients.filter((c) => c.paid && !c.refunded && !c.comp).length,
       unpaid: nonAdminClients.filter((c) => !c.paid && !c.refunded).length,
       awaitingIntake: nonAdminClients.filter((c) => c.stage === "paid_awaiting_intake").length,
       awaitingApproval: nonAdminClients.filter((c) => c.stage === "awaiting_approval").length,
@@ -1840,6 +1842,24 @@ export const db = {
       })
       .eq("profile_id", clientId);
     if (error) throw error;
+  },
+
+  /**
+   * Admin-only: mark / unmark a complimentary seat.
+   * Marking sets paid=true so she keeps dashboard access. Never writes Stripe ids.
+   */
+  async setClientComp(clientId, comp) {
+    if (!clientId) throw new Error("client required");
+    const next = !!comp;
+    const patch = next ? { comp: true, paid: true } : { comp: false };
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(patch)
+      .eq("id", clientId)
+      .select("comp, paid")
+      .single();
+    if (error) throw error;
+    return { comp: !!data.comp, paid: !!data.paid };
   },
 
   async approveClient(clientId) {

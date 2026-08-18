@@ -415,6 +415,21 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     }, 400);
   };
 
+  const toggleComp = async (c) => {
+    const next = !c.comp;
+    setRoster((rs) => rs.map((x) => (x.id === c.id ? {
+      ...x,
+      comp: next,
+      paid: next ? true : x.paid,
+    } : x)));
+    try {
+      await db.setClientComp(c.id, next);
+    } catch (e) {
+      console.error("setClientComp failed", e);
+      setRoster((rs) => rs.map((x) => (x.id === c.id ? { ...x, comp: c.comp, paid: c.paid } : x)));
+    }
+  };
+
   const approveClient = async (c) => {
     setRoster((rs) => rs.map((x) => (x.id === c.id ? {
       ...x, status: "active", week: 1, stage: "active",
@@ -475,10 +490,19 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                     Admin · test
                   </span>
                 )}
+                {sel.comp && (
+                  <span style={{
+                    marginLeft: 10, fontSize: 12, fontWeight: 700, fontFamily: F,
+                    padding: "3px 10px", borderRadius: 99, background: T.sageSoft, color: T.sage,
+                    verticalAlign: "middle",
+                  }}>
+                    Comp
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.6 }}>
                 {STAGE_LABEL[stage] || stage}
-                {sel.paid ? " · Paid" : " · Unpaid"}
+                {sel.comp ? " · Comp" : sel.paid ? " · Paid" : " · Unpaid"}
                 {sel.refunded ? " · Refunded" : ""}
                 {sel.cohort_label ? ` · ${adminCohortName(sel.cohort_label)}` : ""}
                 {sel.email ? <><br />✉️ {sel.email}</> : null}
@@ -506,7 +530,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                     <span style={{ fontSize: 13, color: T.inkSoft }}>📱 Phone</span>
                     <CopyPhoneButton phone={sel.phone} />
                     {stage === "awaiting_approval" && (
-                      <span style={{ fontSize: 12, color: T.inkSoft }}>WhatsApp invite is also in her approve email</span>
+                      <span style={{ fontSize: 12, color: T.inkSoft }}>Approve email points her to Messages</span>
                     )}
                   </div>
                 ) : null}
@@ -525,9 +549,27 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
           {!sel.macros && (
             <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
-              {sel.paid
-                ? "Paid — waiting on her to finish intake. No macros to review yet."
-                : "Signed up but hasn't paid yet."}
+              {sel.comp
+                ? "Complimentary — waiting on her to finish intake. No macros to review yet."
+                : sel.paid
+                  ? "Paid — waiting on her to finish intake. No macros to review yet."
+                  : "Signed up but hasn't paid yet."}
+            </div>
+          )}
+
+          {sel.role !== "admin" && (
+            <div style={{ marginTop: 10 }}>
+              <Btn
+                small
+                ghost
+                onClick={() => toggleComp(sel)}
+                style={{ minHeight: 40 }}
+              >
+                {sel.comp ? "Clear complimentary" : "Mark complimentary"}
+              </Btn>
+              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6, lineHeight: 1.45 }}>
+                Comp keeps dashboard access without counting as Stripe-paid. Does not write Stripe ids.
+              </div>
             </div>
           )}
 
@@ -605,7 +647,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                     ⚠ {f === "losing too fast"
                       ? "Losing faster than 1.5 lb/wk — voice-note her to eat the top of her ranges."
                       : f === "no logs in 48h — check in"
-                        ? "No meals, water, or weigh-ins yesterday or today — a quick WhatsApp check-in usually helps."
+                        ? "No meals, water, or weigh-ins yesterday or today — a quick Messages check-in usually helps."
                         : f}
                   </div>
                 ))}

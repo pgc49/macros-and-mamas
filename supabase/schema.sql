@@ -40,6 +40,7 @@ create table if not exists public.profiles (
   status text not null default 'pending',
   paid boolean not null default false,
   refunded boolean not null default false,
+  comp boolean not null default false,
   stripe_customer_id text,
   stripe_payment_intent text,
   paid_at timestamptz,
@@ -351,6 +352,7 @@ begin
 
   new.paid := old.paid;
   new.refunded := old.refunded;
+  new.comp := old.comp;
   new.stripe_customer_id := old.stripe_customer_id;
   new.stripe_payment_intent := old.stripe_payment_intent;
   new.paid_at := old.paid_at;
@@ -389,6 +391,7 @@ begin
     new.role := 'client';
     new.paid := false;
     new.refunded := false;
+    new.comp := false;
     new.stripe_customer_id := null;
     new.stripe_payment_intent := null;
     new.paid_at := null;
@@ -400,6 +403,7 @@ begin
 
   new.paid := old.paid;
   new.refunded := old.refunded;
+  new.comp := old.comp;
   new.stripe_customer_id := old.stripe_customer_id;
   new.stripe_payment_intent := old.stripe_payment_intent;
   new.paid_at := old.paid_at;

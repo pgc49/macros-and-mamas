@@ -196,6 +196,11 @@ export function PaymentsPage() {
           {program?.cohortName ? ` · ${program.cohortName}` : ""}
           {programRange}
         </div>
+        {data?.complimentary && (
+          <div style={{ fontSize: 14.5, color: T.inkSoft, marginTop: 10, lineHeight: 1.45 }}>
+            Complimentary seat — no Stripe charge on this account.
+          </div>
+        )}
         {program?.amount != null && (
           <div style={{ fontSize: 15, fontWeight: 700, marginTop: 10 }}>
             {money(program.amount, program.currency)}
@@ -331,7 +336,9 @@ export function PaymentsPage() {
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 22, margin: 0 }}>Payment history</h2>
         </div>
         {payments.length === 0 ? (
-          <div style={{ fontSize: 14.5, color: T.inkSoft }}>No payments on file yet.</div>
+          <div style={{ fontSize: 14.5, color: T.inkSoft }}>
+            {data?.complimentary ? "Complimentary — no Stripe payment on file." : "No payments on file yet."}
+          </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {payments.map((p) => (
@@ -389,7 +396,9 @@ export function PaymentsPage() {
         </Btn>
         {!data?.portalAvailable && (
           <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8 }}>
-            Portal unlocks after checkout creates a Stripe customer for this account.
+            {data?.complimentary
+              ? "Stripe portal isn’t used for complimentary seats."
+              : "Portal unlocks after checkout creates a Stripe customer for this account."}
           </div>
         )}
         {portalNote && (
