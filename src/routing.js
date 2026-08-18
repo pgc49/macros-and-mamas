@@ -14,7 +14,7 @@ export function goMarketingHome() {
 /**
  * Where a signed-in user should land after auth / cold load.
  * Pay-first: account → pay → intake → Callie approve → dashboard.
- * After founding free month without a sub → membership gate.
+ * After founding free month (or programEnd for later cohorts) without a sub → membership gate.
  *
  * www (customer surface) has no coach portal — admins stay in the mama app.
  * Coach UI is https://admin.macrosandmamas.com.

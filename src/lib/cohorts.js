@@ -8,7 +8,7 @@ export const COHORT_CALENDAR = [
     displayName: "Founding Members",
     /** Monday of official Week 1 */
     programStart: "2026-07-27T00:00:00.000Z",
-    /** Exclusive alumni start (last program day = Sep 20) */
+    /** Exclusive end / founding free-month start (last program day = Sep 20) */
     programEnd: "2026-09-21T00:00:00.000Z",
   },
   {
@@ -16,10 +16,13 @@ export const COHORT_CALENDAR = [
     displayName: "August Group",
     /** Monday of official Week 1 — matches join/marketing copy. */
     programStart: "2026-08-31T00:00:00.000Z",
-    /** Exclusive alumni start (last program day = Oct 25). */
+    /** Exclusive end (last program day = Oct 25). No post-program free month. */
     programEnd: "2026-10-26T00:00:00.000Z",
   },
 ];
+
+/** Founding Members only — post-program free month is not a later-cohort perk. */
+export const FOUNDING_COHORT_LABEL = "2026-07";
 
 export const FREE_MONTH_DAYS = 30;
 
@@ -51,11 +54,20 @@ export function defaultVoiceDropCohort(rosterCohortFilter, now = new Date()) {
   return live?.label || COHORT_CALENDAR[0]?.label || "2026-07";
 }
 
+/** True only for Founding (2026-07). August and later do not get a free month. */
+export function hasFoundingFreeMonth(cohortOrLabel) {
+  const cohort = typeof cohortOrLabel === "string"
+    ? cohortByLabel(cohortOrLabel)
+    : cohortOrLabel;
+  return cohort?.label === FOUNDING_COHORT_LABEL;
+}
+
+/** Founding: programEnd + FREE_MONTH_DAYS. Other cohorts: null. */
 export function freeMonthEndsAt(cohortOrLabel) {
   const cohort = typeof cohortOrLabel === "string"
     ? cohortByLabel(cohortOrLabel)
     : cohortOrLabel;
-  if (!cohort?.programEnd) return null;
+  if (!hasFoundingFreeMonth(cohort) || !cohort?.programEnd) return null;
   const start = Date.parse(cohort.programEnd);
   if (!Number.isFinite(start)) return null;
   return new Date(start + FREE_MONTH_DAYS * 24 * 60 * 60 * 1000).toISOString();
