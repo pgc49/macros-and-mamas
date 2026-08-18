@@ -11,7 +11,11 @@ import {
 
 export function CopyPhoneButton({ phone, compact = false }) {
   const [copied, setCopied] = useState(false);
-  if (!phone) return null;
+  if (!phone) {
+    return compact ? null : (
+      <span style={{ fontSize: 12.5, color: T.inkSoft }}>—</span>
+    );
+  }
   const onCopy = async (e) => {
     e.stopPropagation();
     e.preventDefault();
