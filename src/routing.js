@@ -1,7 +1,7 @@
 import { CONFIG } from "./config";
-import { PATHS } from "./lib/appPaths";
+import { PATHS, canonicalPath } from "./lib/appPaths";
 
-export { PATHS };
+export { PATHS, canonicalPath };
 
 /**
  * Full document load of `/` so www serves the Astro marketing homepage.

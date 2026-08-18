@@ -8,10 +8,10 @@ import { useAuth } from "../auth/useAuth.jsx";
 import {
   emailsMatch,
   normalizeEmail,
+  quizSignInHref,
   rememberQuizEmail,
   resolveQuizEmail,
 } from "../lib/quizCheckout";
-import { PATHS } from "../routing";
 
 const LAB_ADDON_PRICE = 349;
 const COHORT_START = CONFIG.COHORT_START || "Monday, Aug 31";
@@ -77,12 +77,7 @@ export function JoinPage({ profileCreatedAt = null }) {
     try {
       rememberQuizEmail(quizEmail);
       await signOut();
-      const params = new URLSearchParams({
-        auth: "create",
-        from: "quiz",
-        email: quizEmail,
-      });
-      window.location.assign(`${PATHS.signin}?${params.toString()}`);
+      window.location.assign(quizSignInHref(quizEmail, "create"));
     } catch (e) {
       console.error("switch to quiz email failed", e);
       setError("Couldn't switch accounts. Sign out from your profile icon, then sign in with your quiz email.");

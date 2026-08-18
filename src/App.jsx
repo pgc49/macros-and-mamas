@@ -16,7 +16,7 @@ import {
 } from "./utils/progressSeries";
 import { programRelativeWeekNum, resolveProgramStartWeekIso } from "./lib/cohorts";
 import { isBeforeGoalCreated, isFutureDayInWeek, mergeGoalItems } from "./lib/goals";
-import { PATHS, homePathFor, pathFromClientView, canAccessDashboard, goMarketingHome } from "./routing";
+import { PATHS, canonicalPath, homePathFor, pathFromClientView, canAccessDashboard, goMarketingHome } from "./routing";
 import { needsMembershipPaywall } from "./lib/membershipAccess";
 import { SalesPage } from "./views/SalesPage";
 import { WaitlistPage } from "./views/WaitlistPage";
@@ -41,7 +41,8 @@ import {
   isPublicTrackingPath,
   persistAttributionToProfile,
 } from "./lib/attribution";
-import { emailsMatch, resolveQuizEmail } from "./lib/quizCheckout";
+import { CanonicalizeTrailingSlash } from "./components/CanonicalizeTrailingSlash";
+import { emailsMatch, quizJoinHref, quizSignInHref, resolveQuizEmail } from "./lib/quizCheckout";
 import { ageFromDateOfBirth } from "./db/db";
 
 /**
@@ -98,7 +99,7 @@ function SignInGate({
   }
 
   if (user) {
-    const joinQuiz = fromQuiz ? `${PATHS.join}?from=quiz` : null;
+    const joinQuiz = fromQuiz ? quizJoinHref(quizEmail || user.email) : null;
     const deepAccount = location.state?.from && String(location.state.from).startsWith("/account")
       ? location.state.from
       : null;
@@ -453,18 +454,19 @@ export default function App() {
   /* After load / sign-in: send users from entry paths to the right home. */
   useEffect(() => {
     if (authLoading || !loaded || !user) return;
+    const path = canonicalPath(location.pathname);
     const entryPaths = [PATHS.home, PATHS.signin, "/home"];
-    if (!entryPaths.includes(location.pathname)) return;
-    if (routedAfterLoad.current && location.pathname === PATHS.home) return;
+    if (!entryPaths.includes(path)) return;
+    if (routedAfterLoad.current && path === PATHS.home) return;
 
     // Deep-links: after sign-in, return to support / account (not dashboard).
-    if (location.pathname === PATHS.signin && location.state?.from === PATHS.support) {
+    if (path === PATHS.signin && location.state?.from === PATHS.support) {
       routedAfterLoad.current = true;
       navigate(PATHS.support, { replace: true });
       return;
     }
     if (
-      location.pathname === PATHS.signin
+      path === PATHS.signin
       && location.state?.from
       && String(location.state.from).startsWith("/account")
     ) {
@@ -472,7 +474,7 @@ export default function App() {
       navigate(location.state.from, { replace: true });
       return;
     }
-    if (location.pathname === PATHS.signin && location.state?.from === PATHS.membership) {
+    if (path === PATHS.signin && location.state?.from === PATHS.membership) {
       routedAfterLoad.current = true;
       navigate(PATHS.membership, { replace: true });
       return;
@@ -481,13 +483,13 @@ export default function App() {
     // Quiz Pre-pay → /signin?from=quiz&email=…
     // Keep them on create/sign-in when another account is still signed in;
     // SignInGate signs that session out. Matching email → join with early rate.
-    if (location.pathname === PATHS.signin) {
+    if (path === PATHS.signin) {
       const params = new URLSearchParams(location.search);
       if (params.get("from") === "quiz") {
         const quizEmail = resolveQuizEmail(params);
         if (quizEmail && !emailsMatch(user.email, quizEmail)) return;
         routedAfterLoad.current = true;
-        navigate(`${PATHS.join}?from=quiz`, { replace: true });
+        navigate(quizJoinHref(quizEmail || user.email), { replace: true });
         return;
       }
     }
@@ -502,7 +504,7 @@ export default function App() {
     });
     // Signed-in visitors may still browse marketing at `/` — only auto-route
     // from `/signin` and legacy `/home`. From `/`, route enrolled clients + admins.
-    if (location.pathname === PATHS.home) {
+    if (path === PATHS.home) {
       if (isAdmin || refunded || paid) {
         routedAfterLoad.current = true;
         navigate(dest, { replace: true });
@@ -1504,6 +1506,8 @@ export default function App() {
   );
 
   return (
+    <>
+    <CanonicalizeTrailingSlash />
     <Routes>
       <Route
         path={PATHS.home}
@@ -1628,18 +1632,17 @@ export default function App() {
           !user
             ? (
               <Navigate
-                to={{
-                  pathname: PATHS.signin,
-                  search: (() => {
-                    const p = new URLSearchParams(location.search);
-                    p.set("auth", "create");
-                    if (!p.get("from") && p.get("email")) p.set("from", "quiz");
-                    // Persist quiz email for the create → pay handoff.
-                    const quizEmail = resolveQuizEmail(p);
-                    if (quizEmail && !p.get("email")) p.set("email", quizEmail);
-                    return `?${p.toString()}`;
-                  })(),
-                }}
+                to={(() => {
+                  const p = new URLSearchParams(location.search);
+                  if (!p.get("from") && p.get("email")) p.set("from", "quiz");
+                  const quizEmail = resolveQuizEmail(p);
+                  if (p.get("from") === "quiz") {
+                    return quizSignInHref(quizEmail || p.get("email"), "create");
+                  }
+                  p.set("auth", "create");
+                  if (quizEmail && !p.get("email")) p.set("email", quizEmail);
+                  return { pathname: PATHS.signin, search: `?${p.toString()}` };
+                })()}
                 replace
                 state={{ from: PATHS.join }}
               />
@@ -1825,5 +1828,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to={PATHS.home} replace />} />
     </Routes>
+    </>
   );
 }
