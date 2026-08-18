@@ -14,11 +14,15 @@ import {
   segmentForAnswers,
 } from '../_shared/rangesEngine.mjs';
 import {
-  APP_URL,
   FROM_CALLIE,
   escapeHtml,
   renderEmail,
 } from '../_shared/emailLayout.mjs';
+import {
+  RANGES_EMAIL_BOTTOM_CTA,
+  buildEligibleRangesEmailBody,
+  quizJoinUrl,
+} from '../_shared/rangesEmail.mjs';
 import { resolveMetaPixelId } from '../_shared/metaPixelId.js';
 
 interface Env {
@@ -293,9 +297,9 @@ async function sendRangesEmail(
   }
   const from = env.LEAD_FROM_EMAIL || FROM_CALLIE;
   const name = safeDisplayName(opts.firstName);
-  const joinUrl = `${APP_URL}/join?from=quiz`;
+  const joinUrl = quizJoinUrl(opts.email);
   const signupCta = {
-    cta_text: 'Finish signing up — lock in your spot',
+    cta_text: RANGES_EMAIL_BOTTOM_CTA,
     cta_url: joinUrl,
   };
 
@@ -308,13 +312,13 @@ async function sendRangesEmail(
   if (opts.segment === 'pregnancy_nurture') {
     subject = `${name}, a note for this season`;
     body = `
-<p>Congratulations. Pregnancy is an abundance season — not a cut. We're not sending macro ranges right now on purpose.</p>
+<p>Congratulations. Pregnancy is an abundance season, not a cut. We're not sending macro ranges right now on purpose.</p>
 <p>When you're ready postpartum, come back for your ranges. We'll keep a light note in your inbox with what to expect when the time is right.</p>
 <p>With care,<br/>Callie</p>`;
   } else if (opts.segment === 'waitlist_plantbased') {
     subject = opts.ranges ? `Your ranges, ${name}` : `${name}, an honest note about our playbook`;
     const veganBands = opts.ranges
-      ? `<p>Here are your bands — built the same way Callie builds them for the program:</p>
+      ? `<p>Here are your bands, built the same way Callie builds them for the program:</p>
 <ul>
 <li><strong>Protein:</strong> ${escapeHtml(opts.ranges.protein)}</li>
 <li><strong>Carbs:</strong> ${escapeHtml(opts.ranges.carbs)}</li>
@@ -323,45 +327,30 @@ async function sendRangesEmail(
 </ul>`
       : '';
     body = `
-<p><strong>A note on protein.</strong> Callie's program emphasizes animal protein — meat, dairy, and eggs. Hitting these protein targets on a fully vegan diet can be challenging. We'd rather be honest up front.</p>
+<p><strong>A note on protein.</strong> Callie's program emphasizes animal protein: meat, dairy, and eggs. Hitting these protein targets on a fully vegan diet can be challenging. We'd rather be honest up front.</p>
 ${veganBands}
 <p>If you still want to talk through whether the program is a fit, reply to this email. No hard sell.</p>
 <p>Callie</p>`;
   } else if (opts.ranges) {
     subject = `Your ranges, ${name}`;
-    const early = opts.earlyPp
-      ? `<p><strong>Here's a preview based on your answers.</strong> Early postpartum is welcome — if you join, Callie builds your final ranges gently and supply-aware for this season.</p>`
-      : '';
-    const reviewNote = opts.needsReview
-      ? `<p><strong>Callie will still review your finals personally</strong> — a couple of your answers mean she wants eyes on them before day one. The bands below are a preview so you can see how the app works.</p>`
-      : '';
     const feed =
       opts.monthsPostpartum === 'not_postpartum'
         ? ''
         : feedingLine(opts.feeding as 'exclusive');
     const feedHtml = feed ? `<p>${escapeHtml(feed)}</p>` : '';
-    body = `
-${early}
-${reviewNote}
-<p>Here are your bands — built the same way Callie builds them for the program:</p>
-<ul>
-<li><strong>Protein:</strong> ${escapeHtml(opts.ranges.protein)}</li>
-<li><strong>Carbs:</strong> ${escapeHtml(opts.ranges.carbs)}</li>
-<li><strong>Fat:</strong> ${escapeHtml(opts.ranges.fat)}</li>
-<li><strong>Calories land around:</strong> ${escapeHtml(opts.ranges.calories)}</li>
-</ul>
-${feedHtml}
-<p>These are bands, not one rigid number. Busier day → eat toward the top. Quieter day → the bottom. Both count as a win. Lead with protein; the rest gets easier.</p>
-<p><strong>Your next step:</strong> create your account and finish checkout to lock in your spot. Use this same email so your ranges stay attached.</p>
-<p>Ranges above are a preview. If you join, Callie builds and approves your final numbers before you start.</p>
-<p>Callie</p>
-<p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you took the ranges quiz. Reply anytime.</p>`;
+    body = buildEligibleRangesEmailBody({
+      earlyPp: opts.earlyPp,
+      needsReview: opts.needsReview,
+      feedHtml,
+      bands: opts.ranges,
+      joinUrl,
+    });
     cta = signupCta;
   } else if (opts.needsReview) {
     subject = `${name}, Callie wants to look at your ranges personally`;
     body = `
 <p>Your ranges need Callie's eyes on them. A couple of your answers mean an automated band isn't the right call. Callie will review this herself and send your ranges within 24 hours.</p>
-<p><strong>In the meantime:</strong> create your account and finish checkout to lock in your spot — use this same email so everything stays attached.</p>
+<p><strong>In the meantime:</strong> create your account and finish checkout to lock in your spot. Use this same email so everything stays attached.</p>
 <p>Callie</p>
 <p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you took the ranges quiz. Reply anytime.</p>`;
     cta = signupCta;

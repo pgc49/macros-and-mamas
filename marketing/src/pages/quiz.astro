@@ -17,6 +17,11 @@ import {
   waitlistPrice,
   weeklyPrice,
 } from '../config';
+import { PAYOFF_TESTIMONIALS, RESULTS_DISCLAIMER } from '../content/testimonials';
+
+const payoffQuotes = JSON.stringify(
+  PAYOFF_TESTIMONIALS.map((t) => ({ pull: t.pull, who: t.who })),
+);
 
 const title = 'Get your macro ranges — Macros and Mamas';
 const description = `About 90 seconds. Free ranges from Callie, then the exclusive $${waitlistPrice} early rate (full rate $${fullPrice}) for the next group.`;
@@ -58,6 +63,8 @@ const quizJsV = createHash('sha256')
         data-doors-close={doorsCloseDate}
         data-callie-photo={kitchenOptimized.src}
         data-post-pay-copy={postPayQueueCopy}
+        data-testimonials={payoffQuotes}
+        data-results-disclaimer={RESULTS_DISCLAIMER}
       >
         <p class="q-copy">Loading your quiz…</p>
       </div>

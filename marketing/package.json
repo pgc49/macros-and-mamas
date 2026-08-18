@@ -13,7 +13,7 @@
     "preview": "astro preview",
     "astro": "astro",
     "generate-types": "wrangler types",
-    "test": "node --test src/lib/rangesEngine.test.mjs"
+    "test": "node --test src/lib/rangesEngine.test.mjs src/lib/rangesEmail.test.mjs src/lib/quizPayoffCopy.test.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.7",

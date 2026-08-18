@@ -517,6 +517,10 @@ footer{padding:36px 0 36px;font-size:14px;color:var(--ink-soft)}
   .sticky-cta .btn{padding:11px 12px;font-size:14px;min-height:46px;max-width:46%}
 }
 @media(min-width:880px){.sticky-cta{display:none}footer{padding-bottom:36px}}
+@media(min-width:880px){
+  .quiz-page .sticky-cta.q-result-sticky{display:flex}
+  .quiz-page:has(.q-result-sticky){padding-bottom:calc(118px + env(safe-area-inset-bottom,0px))}
+}
 
 /* ================= QUIZ ================= */
 .quiz-page{padding:18px 0 72px;min-height:70vh}
@@ -524,7 +528,6 @@ footer{padding:36px 0 36px;font-size:14px;color:var(--ink-soft)}
 .quiz-wrap{max-width:480px}
 .quiz-wrap:has(.q-app-preview){max-width:520px}
 .q-result-sticky{z-index:80}
-@media(min-width:880px){.q-result-sticky{display:none}.quiz-page:has(.q-result-sticky){padding-bottom:72px}}
 /* Full-bleed under header: undo .wrap’s 22px padding — never 100vw (Safari sideways pan). */
 .q-progress{
   height:4px;background:var(--accent-soft);border-radius:0;overflow:hidden;margin:0 0 14px;
@@ -606,8 +609,9 @@ footer{padding:36px 0 36px;font-size:14px;color:var(--ink-soft)}
 .q-error{color:#9b1c3a;font-size:14px;margin-top:10px}
 .q-copy{font-size:15px;line-height:1.5;color:var(--ink-soft);margin:14px 0}
 .q-copy.muted{font-size:14px}
+.q-preview-once{font-size:14.5px;line-height:1.5;color:var(--ink-soft);margin:-2px 0 16px}
+.q-feed-line{margin:12px 0 0;font-size:14.5px;line-height:1.5;color:var(--ink-soft);font-style:italic}
 .q-banner{background:rgba(196,140,60,.12);border:1px solid rgba(196,140,60,.35);border-radius:16px;padding:12px 14px;font-size:14.5px;line-height:1.45;color:var(--ink);margin-bottom:14px}
-.q-banner-preview{background:var(--sage-soft);border-color:rgba(95,129,104,.35)}
 .q-result-card{margin:8px 0 18px;position:relative}
 .q-card-badge{display:inline-block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--accent-deep);background:var(--accent-soft);border-radius:999px;padding:5px 10px;margin-bottom:10px}
 .q-app-preview{margin:8px 0 20px}
@@ -664,6 +668,22 @@ button.mode:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .q-offer-after{font-size:14.5px;line-height:1.5;color:var(--ink);margin:12px 0 0;text-align:center}
 .q-offer-skip{font-size:13.5px;line-height:1.45;color:var(--ink-soft);margin:12px 0 0;text-align:center}
 .q-snap-proof{margin:4px 0 8px}
+.q-fast-offer{
+  margin:0 0 22px;padding:14px 16px 16px;border-radius:16px;
+  background:#fff;border:1.5px solid rgba(180,65,107,.35);text-align:center;
+}
+.q-fast-kicker{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--accent-deep);margin:0 0 8px}
+.q-fast-line{font-size:14.5px;line-height:1.45;color:var(--ink);margin:0 0 12px;font-weight:600}
+.quiz-page .btn.q-fast-btn{
+  display:inline-flex;align-items:center;justify-content:center;width:100%;
+  min-height:48px;padding:12px 18px;font-size:15px;line-height:1.25;border-radius:999px;box-sizing:border-box;
+}
+.q-fast-micro{font-size:12.5px;line-height:1.45;color:var(--ink-soft);margin:10px 0 0}
+.q-payoff-quotes{margin:18px 0 8px;background:transparent}
+.q-payoff-quotes .q-card{margin-top:10px;padding:20px 18px}
+.q-payoff-quotes .q-pull{font-size:clamp(20px,4.6vw,24px);margin:0 0 12px}
+.q-payoff-quotes .q-who{margin-top:0}
+.q-payoff-quotes .q-note{margin-top:12px;text-align:left}
 .quiz-inline{padding:48px 0;background:var(--wash, #f7f1f3);text-align:center}
 .quiz-inline .qi-card{max-width:520px;margin:0 auto;background:var(--card,#fff);border-radius:22px;padding:28px 20px 24px;box-shadow:0 10px 36px rgba(70,30,45,.06)}
 .quiz-inline h2{font-size:clamp(26px,5vw,34px);margin:0 0 10px}
