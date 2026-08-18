@@ -15,6 +15,29 @@ describe("product comms emails", () => {
   });
 });
 
+describe("quiz drip catalog", () => {
+  it("adds the 1/3/7 sales follow-ups and a pregnancy-only soft note", () => {
+    const ids = EMAIL_CATALOG.map((e) => e.id);
+    expect(ids).toEqual(expect.arrayContaining([
+      "quiz_ranges",
+      "quiz_drip_1d",
+      "quiz_drip_3d",
+      "quiz_drip_7d",
+      "quiz_pregnancy_note",
+    ]));
+    expect(ids).not.toContain("quiz_drip_plantbased");
+
+    const pregnancy = EMAIL_CATALOG.find((e) => e.id === "quiz_pregnancy_note");
+    expect(pregnancy.cta).toBeNull();
+    expect(pregnancy.bodyPreview).not.toMatch(/\$249|lock in your spot|\/join/i);
+    expect(pregnancy.trigger).toMatch(/plant-based/i);
+
+    const day1 = EMAIL_CATALOG.find((e) => e.id === "quiz_drip_1d");
+    expect(day1.cta).toMatch(/Finish signing up/);
+    expect(day1.trigger).toMatch(/hourly cron/i);
+  });
+});
+
 describe("comp migration lock", () => {
   it("freezes profiles.comp for non-admin clients", () => {
     const sql = readFileSync("supabase/migrations/061_comp_members.sql", "utf8");

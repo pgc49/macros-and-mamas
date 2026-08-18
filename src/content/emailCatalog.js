@@ -173,7 +173,7 @@ Callie
     number: "Q",
     name: "Quiz ranges",
     status: "live",
-    trigger: "Ranges quiz completed (eligible segments)",
+    trigger: "Ranges quiz completed (eligible segments). Logged once to email_events as quiz_ranges so the drip can see #1. Re-quiz still re-sends this email; it does not restart the drip.",
     subject: "Your ranges, [First name]",
     audience: "Lead",
     cta: "Lock my spot · $249",
@@ -192,7 +192,94 @@ If you join, Callie builds and approves your final numbers before you start.
 
 Callie
 
-(Reply anytime. Address footer on the branded template.)`,
+(Reply anytime. Address footer on the branded template. Unsubscribe link in the footer.)`,
+  },
+  {
+    id: "quiz_drip_1d",
+    number: "Q1",
+    name: "Quiz drip · day 1",
+    status: "live",
+    trigger: "Unpaid quiz lead, no account, sales segment (main / early_pp_nurture) — +1 day after quiz_ranges (hourly cron). Stops if they create an account, pay, unsubscribe, or land in pregnancy / plant-based.",
+    subject: "[First name], your ranges are still here",
+    audience: "Lead",
+    cta: "Finish signing up, lock in your spot",
+    bodyPreview: `Hi [First name],
+
+Here's a quick recap of your bands:
+• Protein / Carbs / Fat / Calories
+
+Your quiz also unlocked the $249 early rate ($50 off $299). The Aug 31 group is capped at 50 mamas, and doors close Aug 27 so Callie can hand-build every set of ranges before day one.
+
+[Finish signing up, lock in your spot]
+
+These are still bands, not one rigid number. Create your account and finish checkout to lock in your spot. Use this same email so your ranges stay attached.
+
+Callie
+
+(Reply anytime. Unsubscribe in the footer. Dates / $249 come from the same helpers as the first ranges email.)`,
+  },
+  {
+    id: "quiz_drip_3d",
+    number: "Q3",
+    name: "Quiz drip · day 3",
+    status: "live",
+    trigger: "Same unpaid quiz-lead drip — +3 days after quiz_ranges. Not a numbers dump. Same join CTA.",
+    subject: "[First name], the numbers are the easy part",
+    audience: "Lead",
+    cta: "Finish signing up, lock in your spot",
+    bodyPreview: `Hi [First name],
+
+The ranges I sent you are a starting point. They're not the whole program.
+
+What we actually do together is the weekly check-in. Milk changes, sleep falls apart, appetite swings. That's when the numbers need a person, not a calculator.
+
+If you want that, finish signing up and lock in your spot. Same email so your ranges stay attached.
+
+Callie
+
+(Reply anytime. Unsubscribe in the footer.)`,
+  },
+  {
+    id: "quiz_drip_7d",
+    number: "Q7",
+    name: "Quiz drip · day 7",
+    status: "live",
+    trigger: "Last unpaid quiz-lead sales nudge — +7 days after quiz_ranges. Then stop.",
+    subject: "[First name], still want in?",
+    audience: "Lead",
+    cta: "Finish signing up, lock in your spot",
+    bodyPreview: `Hi [First name],
+
+Last note from me on this. If you still want in, finish signing up and lock in your spot. If you have a question, reply. I read everything.
+
+Your quiz also unlocked the $249 early rate ($50 off $299). The Aug 31 group is capped at 50 mamas, and doors close Aug 27 so Callie can hand-build every set of ranges before day one.
+
+[Finish signing up, lock in your spot]
+
+Callie
+
+(Reply anytime. Unsubscribe in the footer. Door / offer dates are not hardcoded here; they reuse the first ranges email helpers.)`,
+  },
+  {
+    id: "quiz_pregnancy_note",
+    number: "QP",
+    name: "Quiz pregnancy note · day 3",
+    status: "live",
+    trigger: "pregnancy_nurture quiz leads only — one soft +3 day note. The first email promised a light note. No $249, no checkout CTA. Plant-based (waitlist_plantbased) gets no follow-up; the first email already said no hard sell.",
+    subject: "[First name], a light note like I promised",
+    audience: "Lead",
+    cta: null,
+    bodyPreview: `Hi [First name],
+
+Just a light note, like I promised. Pregnancy is still an abundance season, not a cut. We're not sending ranges or a signup push.
+
+When you're postpartum and ready, come back for your numbers. Until then, eat enough and rest when you can.
+
+Reply anytime if you want to talk. No rush.
+
+Callie
+
+(Unsubscribe in the footer. No join button.)`,
   },
   {
     id: "callie_payment",
@@ -251,6 +338,10 @@ export const EMAIL_TYPE_LABELS = {
   eligibility_refund: "Refund confirm",
   cohort_open: "Cohort open (waitlist)",
   quiz_ranges: "Quiz ranges",
+  quiz_drip_1d: "Quiz drip (+1d)",
+  quiz_drip_3d: "Quiz drip (+3d)",
+  quiz_drip_7d: "Quiz drip (+7d)",
+  quiz_pregnancy_note: "Quiz pregnancy note (+3d)",
   callie_payment: "Callie: new payment",
   callie_intake: "Callie: intake ready",
   callie_eligibility_hold: "Callie: eligibility hold",

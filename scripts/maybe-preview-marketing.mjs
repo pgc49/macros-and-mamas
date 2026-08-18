@@ -261,4 +261,17 @@ function copyMarketingFunctions() {
   console.log(
     "[overlay-marketing] functions/_shared/rangesEmail.mjs → marketing/src/lib",
   );
+  const extraShims = [
+    ["emailEvents.mjs", "email_events helpers"],
+    ["emailUnsubscribe.mjs", "unsubscribe helpers"],
+    ["quizDrip.mjs", "quiz drip decisions"],
+    ["quizDripEmail.mjs", "quiz drip copy"],
+  ];
+  for (const [file, label] of extraShims) {
+    writeFileSync(
+      join(root, "functions/_shared", file),
+      `/** Re-export ${label} for SPA Pages Functions (www cutover). */\n` +
+        `export * from '../../marketing/src/lib/${file}';\n`,
+    );
+  }
 }
