@@ -127,10 +127,9 @@ export async function raceDeadline(signal, work) {
 
 /** Register background work when waitUntil is bound; otherwise false so the caller can await. */
 export function enqueueBackground(waitUntil, work) {
-  const promise = Promise.resolve().then(work);
   if (typeof waitUntil !== "function") return false;
   try {
-    waitUntil(promise.catch((error) => {
+    waitUntil(Promise.resolve().then(work).catch((error) => {
       console.error("background notification work failed", error);
     }));
     return true;

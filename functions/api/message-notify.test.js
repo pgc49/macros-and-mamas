@@ -325,14 +325,14 @@ describe("durable DM notification processing", () => {
       expect.objectContaining({ id: 1 }),
       { success: true },
     );
-    expect(mocks.invoke).not.toHaveBeenCalledWith(env, "message-email", expect.anything());
-    resolveEmail();
-    await Promise.all(background);
     expect(mocks.invoke).toHaveBeenCalledWith(
       env,
       "message-email",
       expect.objectContaining({ email: "mama@example.com" }),
     );
+    expect(background).toHaveLength(1);
+    resolveEmail();
+    await Promise.all(background);
   });
 });
 
