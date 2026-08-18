@@ -12,7 +12,7 @@ export const EMAIL_CATALOG = [
     number: 1,
     name: "Finish joining",
     status: "live",
-    trigger: "Account created, still unpaid — +1 hour, again +24 hours, then stop (hourly cron)",
+    trigger: "Track B — account created, still unpaid. +1 hour, again +24 hours, then stop (hourly cron). Quiz-only leads with no profiles row never get this; they stay on the quiz drip until they create an account.",
     subject: "Your spot's waiting, mama",
     audience: "Client",
     cta: "Finish signing up — lock in your spot",
@@ -173,7 +173,7 @@ Callie
     number: "Q",
     name: "Quiz ranges",
     status: "live",
-    trigger: "Ranges quiz completed (eligible segments). Logged once to email_events as quiz_ranges so the drip can see #1. Re-quiz still re-sends this email; it does not restart the drip.",
+    trigger: "Track A — ranges quiz completed. Immediate email (voice unchanged). Logged once to email_events as quiz_ranges so the drip can see #1. Re-quiz still re-sends this email; it does not restart the drip. A profiles row moves them to Track B (finish-joining) and stops the quiz drip.",
     subject: "Your ranges, [First name]",
     audience: "Lead",
     cta: "Lock my spot · $249",
@@ -195,35 +195,11 @@ Callie
 (Reply anytime. Address footer on the branded template. Unsubscribe link in the footer.)`,
   },
   {
-    id: "quiz_drip_1d",
-    number: "Q1",
-    name: "Quiz drip · day 1",
+    id: "quiz_drip_2d",
+    number: "Q2",
+    name: "Quiz drip · day 2",
     status: "live",
-    trigger: "Unpaid quiz lead, no account, sales segment (main / early_pp_nurture) — +1 day after quiz_ranges (hourly cron). Stops if they create an account, pay, unsubscribe, or land in pregnancy / plant-based.",
-    subject: "[First name], your ranges are still here",
-    audience: "Lead",
-    cta: "Finish signing up, lock in your spot",
-    bodyPreview: `Hi [First name],
-
-Here's a quick recap of your bands:
-• Protein / Carbs / Fat / Calories
-
-Your quiz also unlocked the $249 early rate ($50 off $299). The Aug 31 group is capped at 50 mamas, and doors close Aug 27 so Callie can hand-build every set of ranges before day one.
-
-[Finish signing up, lock in your spot]
-
-These are still bands, not one rigid number. Create your account and finish checkout to lock in your spot. Use this same email so your ranges stay attached.
-
-Callie
-
-(Reply anytime. Unsubscribe in the footer. Dates / $249 come from the same helpers as the first ranges email.)`,
-  },
-  {
-    id: "quiz_drip_3d",
-    number: "Q3",
-    name: "Quiz drip · day 3",
-    status: "live",
-    trigger: "Same unpaid quiz-lead drip — +3 days after quiz_ranges. Not a numbers dump. Same join CTA.",
+    trigger: "Track A only — unpaid quiz lead, no profiles row, sales segment (main / early_pp_nurture). +2 days after quiz_ranges (hourly cron). Not a numbers dump; they already got their bands. Same join CTA. Stops if they create an account (finish-joining owns them), pay, unsubscribe, or land in pregnancy / plant-based.",
     subject: "[First name], the numbers are the easy part",
     audience: "Lead",
     cta: "Finish signing up, lock in your spot",
@@ -237,14 +213,14 @@ If you want that, finish signing up and lock in your spot. Same email so your ra
 
 Callie
 
-(Reply anytime. Unsubscribe in the footer.)`,
+(Reply anytime. Unsubscribe in the footer. Subject is distinct from "Your ranges" so Gmail does not thread this under the first email.)`,
   },
   {
     id: "quiz_drip_7d",
     number: "Q7",
     name: "Quiz drip · day 7",
     status: "live",
-    trigger: "Last unpaid quiz-lead sales nudge — +7 days after quiz_ranges. Then stop.",
+    trigger: "Track A last unpaid quiz-lead sales nudge — +7 days after quiz_ranges. Then stop. Never sent if a profiles row exists.",
     subject: "[First name], still want in?",
     audience: "Lead",
     cta: "Finish signing up, lock in your spot",
@@ -265,8 +241,8 @@ Callie
     number: "QP",
     name: "Quiz pregnancy note · day 3",
     status: "live",
-    trigger: "pregnancy_nurture quiz leads only — one soft +3 day note. The first email promised a light note. No $249, no checkout CTA. Plant-based (waitlist_plantbased) gets no follow-up; the first email already said no hard sell.",
-    subject: "[First name], a light note like I promised",
+    trigger: "Track A, pregnancy_nurture quiz leads only — one soft +3 day note. The first email promised a light note. No $249, no checkout CTA. Plant-based (waitlist_plantbased) gets no follow-up; the first email already said no hard sell. A profiles row stops this too.",
+    subject: "[First name], whenever you're ready",
     audience: "Lead",
     cta: null,
     bodyPreview: `Hi [First name],
@@ -338,8 +314,7 @@ export const EMAIL_TYPE_LABELS = {
   eligibility_refund: "Refund confirm",
   cohort_open: "Cohort open (waitlist)",
   quiz_ranges: "Quiz ranges",
-  quiz_drip_1d: "Quiz drip (+1d)",
-  quiz_drip_3d: "Quiz drip (+3d)",
+  quiz_drip_2d: "Quiz drip (+2d)",
   quiz_drip_7d: "Quiz drip (+7d)",
   quiz_pregnancy_note: "Quiz pregnancy note (+3d)",
   callie_payment: "Callie: new payment",

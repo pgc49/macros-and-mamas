@@ -24,7 +24,7 @@ import { hasEmailEventByEmail, logEmailEvent } from '../_shared/emailEvents.mjs'
 import {
   buildUnsubscribeUrl,
   isUnsubscribed,
-  listUnsubscribeHeaders,
+  quizMailHeaders,
 } from '../_shared/emailUnsubscribe.mjs';
 
 interface Env {
@@ -386,7 +386,7 @@ ${veganBands}
         reply_to: 'calista@nourishwithcalista.com',
         subject,
         html,
-        ...(unsubscribeUrl ? { headers: listUnsubscribeHeaders(unsubscribeUrl) } : {}),
+        ...(unsubscribeUrl ? { headers: quizMailHeaders(unsubscribeUrl) } : {}),
       }),
     });
     if (!resp.ok) {

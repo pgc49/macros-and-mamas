@@ -3,6 +3,7 @@ import { renderEmail } from "./emailLayout.mjs";
 import {
   buildUnsubscribeUrl,
   listUnsubscribeHeaders,
+  quizMailHeaders,
   signUnsubscribeToken,
   verifyUnsubscribeToken,
 } from "./emailUnsubscribe.mjs";
@@ -29,6 +30,10 @@ describe("unsubscribe tokens", () => {
       parsed.searchParams.get("t"),
     )).toBe(true);
     expect(listUnsubscribeHeaders(url)["List-Unsubscribe"]).toBe(`<${url}>`);
+    const quizHeaders = quizMailHeaders(url);
+    expect(quizHeaders["List-Unsubscribe"]).toBe(`<${url}>`);
+    expect(quizHeaders["In-Reply-To"]).toBeUndefined();
+    expect(quizHeaders["References"]).toBeUndefined();
   });
 });
 

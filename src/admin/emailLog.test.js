@@ -35,7 +35,7 @@ describe("emailTypeLabel", () => {
     expect(emailTypeLabel({ email_type: "message", meta: { route: "admin_to_mama" } }))
       .toBe("Message to mama");
     expect(emailTypeLabel({ email_type: "welcome" })).toBe("Welcome");
-    expect(emailTypeLabel({ email_type: "quiz_drip_3d" })).toBe("Quiz drip (+3d)");
+    expect(emailTypeLabel({ email_type: "quiz_drip_2d" })).toBe("Quiz drip (+2d)");
     expect(emailTypeLabel({ email_type: "quiz_pregnancy_note" })).toBe("Quiz pregnancy note (+3d)");
   });
 });

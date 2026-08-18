@@ -74,6 +74,17 @@ export function listUnsubscribeHeaders(unsubscribeUrl) {
   };
 }
 
+/** Quiz / drip extras only. Never thread under the first ranges email. */
+export function quizMailHeaders(unsubscribeUrl) {
+  const headers = listUnsubscribeHeaders(unsubscribeUrl);
+  for (const key of Object.keys(headers)) {
+    if (/^in-reply-to$/i.test(key) || /^references$/i.test(key)) {
+      delete headers[key];
+    }
+  }
+  return headers;
+}
+
 async function supabaseRest(env) {
   const base = (env?.SUPABASE_URL || env?.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = env?.SUPABASE_SERVICE_ROLE_KEY || "";

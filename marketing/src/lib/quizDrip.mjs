@@ -1,7 +1,10 @@
 /**
- * Quiz-lead sales drip decisions (pure).
- * Immediate ranges email is #1 (quiz_ranges). Follow-ups: +1d / +3d / +7d.
- * Pregnancy gets an optional light +3d note. Plant-based gets no follow-up.
+ * Track A — quiz submitted, no account (marketing_leads, no profiles row).
+ * Immediate ranges email is #1 (quiz_ranges). Follow-ups: +2d / +7d.
+ * Pregnancy gets one soft +3d note. Plant-based gets no follow-up.
+ *
+ * Track B — signed up, unpaid — is finish-joining only. A profiles row
+ * for the email stops this drip immediately. Do not merge the tracks.
  */
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -9,12 +12,11 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 export const ANCHOR_FALLBACK_MS = 8 * DAY_MS;
 
 export const QUIZ_RANGES_TYPE = "quiz_ranges";
-export const QUIZ_DRIP_1D = "quiz_drip_1d";
-export const QUIZ_DRIP_3D = "quiz_drip_3d";
+export const QUIZ_DRIP_2D = "quiz_drip_2d";
 export const QUIZ_DRIP_7D = "quiz_drip_7d";
 export const QUIZ_PREGNANCY_NOTE = "quiz_pregnancy_note";
 
-export const QUIZ_DRIP_SALES_TYPES = [QUIZ_DRIP_1D, QUIZ_DRIP_3D, QUIZ_DRIP_7D];
+export const QUIZ_DRIP_SALES_TYPES = [QUIZ_DRIP_2D, QUIZ_DRIP_7D];
 export const QUIZ_DRIP_ALL_TYPES = [
   QUIZ_RANGES_TYPE,
   ...QUIZ_DRIP_SALES_TYPES,
@@ -52,7 +54,7 @@ export function quizDripAnchorMs({ leadCreatedAt, quizRangesAt, now }) {
 
 /**
  * Prefer the latest due step (same pattern as finish-joining).
- * Missed earlier steps are skipped so a late cron does not dump 1+3+7 at once.
+ * Missed earlier steps are skipped so a late cron does not dump 2+7 at once.
  */
 export function pickDueQuizDripStep({ ageMs, sentTypes, segment }) {
   const sent = sentTypes instanceof Set ? sentTypes : new Set(sentTypes || []);
@@ -74,21 +76,12 @@ export function pickDueQuizDripStep({ ageMs, sentTypes, segment }) {
 
   if (age >= 7 * DAY_MS && !sent.has(QUIZ_DRIP_7D)) return QUIZ_DRIP_7D;
   if (
-    age >= 3 * DAY_MS
+    age >= 2 * DAY_MS
     && age < 7 * DAY_MS
-    && !sent.has(QUIZ_DRIP_3D)
+    && !sent.has(QUIZ_DRIP_2D)
     && !sent.has(QUIZ_DRIP_7D)
   ) {
-    return QUIZ_DRIP_3D;
-  }
-  if (
-    age >= 1 * DAY_MS
-    && age < 3 * DAY_MS
-    && !sent.has(QUIZ_DRIP_1D)
-    && !sent.has(QUIZ_DRIP_3D)
-    && !sent.has(QUIZ_DRIP_7D)
-  ) {
-    return QUIZ_DRIP_1D;
+    return QUIZ_DRIP_2D;
   }
   return null;
 }
@@ -107,6 +100,7 @@ export function decideQuizDripAction({
   if (unsubscribed) return { action: "skip", reason: "unsubscribed" };
   if (isPaidProfile(profile)) return { action: "skip", reason: "paid" };
   if (sent.has("welcome")) return { action: "skip", reason: "paid" };
+  // Track B: any profiles row means finish-joining owns this email.
   if (profile) return { action: "skip", reason: "has_profile" };
   if (sent.has("finish_joining_1h") || sent.has("finish_joining_24h")) {
     return { action: "skip", reason: "has_profile" };

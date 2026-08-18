@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ANCHOR_FALLBACK_MS,
   DAY_MS,
-  QUIZ_DRIP_1D,
-  QUIZ_DRIP_3D,
+  QUIZ_DRIP_2D,
   QUIZ_DRIP_7D,
   QUIZ_PREGNANCY_NOTE,
   decideQuizDripAction,
@@ -15,10 +14,8 @@ import {
 } from "./quizDrip.mjs";
 import {
   buildPregnancyNoteBody,
-  buildQuizDrip1Body,
-  buildQuizDrip3Body,
+  buildQuizDrip2Body,
   buildQuizDrip7Body,
-  formatStoredBands,
   quizDripSubject,
 } from "./quizDripEmail.mjs";
 import { COHORT_SHORT, DOORS_CLOSE, EARLY_PRICE } from "./rangesEmail.mjs";
@@ -31,14 +28,6 @@ function lead(over = {}) {
     first_name: "Dolly",
     segment: "main",
     created_at: new Date(NOW - 2 * DAY_MS).toISOString(),
-    protein_low_g: 120,
-    protein_high_g: 140,
-    carbs_low_g: 160,
-    carbs_high_g: 200,
-    fat_low_g: 55,
-    fat_high_g: 75,
-    calories_low: 1800,
-    calories_high: 2100,
     ...over,
   };
 }
@@ -54,49 +43,41 @@ function decide(over = {}) {
 }
 
 describe("pickDueQuizDripStep timing", () => {
-  it("sends day 1 after 1 day and before day 3", () => {
+  it("does not send a day-1 recap", () => {
     expect(pickDueQuizDripStep({
       ageMs: 1 * DAY_MS,
       sentTypes: new Set(),
       segment: "main",
-    })).toBe(QUIZ_DRIP_1D);
+    })).toBeNull();
     expect(pickDueQuizDripStep({
-      ageMs: 2.9 * DAY_MS,
+      ageMs: 26 * 60 * 60 * 1000,
       sentTypes: new Set(),
       segment: "early_pp_nurture",
-    })).toBe(QUIZ_DRIP_1D);
+    })).toBeNull();
   });
 
-  it("sends day 3 after 3 days and before day 7", () => {
+  it("sends the Callie note after 2 days and before day 7", () => {
     expect(pickDueQuizDripStep({
-      ageMs: 3 * DAY_MS,
-      sentTypes: new Set([QUIZ_DRIP_1D]),
+      ageMs: 2 * DAY_MS,
+      sentTypes: new Set(),
       segment: "main",
-    })).toBe(QUIZ_DRIP_3D);
+    })).toBe(QUIZ_DRIP_2D);
     expect(pickDueQuizDripStep({
       ageMs: 6.9 * DAY_MS,
       sentTypes: new Set(),
-      segment: "main",
-    })).toBe(QUIZ_DRIP_3D);
+      segment: "early_pp_nurture",
+    })).toBe(QUIZ_DRIP_2D);
   });
 
   it("sends day 7 after 7 days", () => {
     expect(pickDueQuizDripStep({
       ageMs: 7 * DAY_MS,
-      sentTypes: new Set([QUIZ_DRIP_1D, QUIZ_DRIP_3D]),
+      sentTypes: new Set([QUIZ_DRIP_2D]),
       segment: "main",
     })).toBe(QUIZ_DRIP_7D);
   });
 
-  it("does not send before day 1", () => {
-    expect(pickDueQuizDripStep({
-      ageMs: 20 * 60 * 60 * 1000,
-      sentTypes: new Set(),
-      segment: "main",
-    })).toBeNull();
-  });
-
-  it("skips a missed earlier step so a late cron does not dump 1+3+7", () => {
+  it("skips a missed earlier step so a late cron does not dump 2+7", () => {
     expect(pickDueQuizDripStep({
       ageMs: 8 * DAY_MS,
       sentTypes: new Set(),
@@ -106,13 +87,8 @@ describe("pickDueQuizDripStep timing", () => {
 
   it("does not resend an already-sent step", () => {
     expect(pickDueQuizDripStep({
-      ageMs: 1.5 * DAY_MS,
-      sentTypes: new Set([QUIZ_DRIP_1D]),
-      segment: "main",
-    })).toBeNull();
-    expect(pickDueQuizDripStep({
-      ageMs: 4 * DAY_MS,
-      sentTypes: new Set([QUIZ_DRIP_3D]),
+      ageMs: 3 * DAY_MS,
+      sentTypes: new Set([QUIZ_DRIP_2D]),
       segment: "main",
     })).toBeNull();
     expect(pickDueQuizDripStep({
@@ -132,7 +108,7 @@ describe("decideQuizDripAction stop conditions", () => {
     expect(decide({ sentTypes: new Set(["quiz_ranges", "welcome"]) }).reason).toBe("paid");
   });
 
-  it("stops when a profile exists so finish-joining owns them", () => {
+  it("stops the quiz drip the moment a profiles row exists (Track B)", () => {
     expect(decide({ profile: { email: "mama@example.com", paid: false } }).reason).toBe("has_profile");
     expect(decide({
       sentTypes: new Set(["quiz_ranges", "finish_joining_1h"]),
@@ -164,7 +140,7 @@ describe("decideQuizDripAction stop conditions", () => {
     const decision = decide({
       lead: lead({ created_at: new Date(NOW - 60 * 60 * 1000).toISOString() }),
       quizRangesAt: first,
-      sentTypes: new Set(["quiz_ranges", QUIZ_DRIP_1D]),
+      sentTypes: new Set(["quiz_ranges", QUIZ_DRIP_2D]),
     });
     expect(decision.action).toBe("skip");
     expect(decision.reason).toBe("not_due");
@@ -192,21 +168,37 @@ describe("quizDripAnchorMs", () => {
 });
 
 describe("planQuizLeadSends", () => {
-  it("plans a day-1 send for an unpaid main lead", () => {
+  it("plans a +2d send for an unpaid quiz-only lead", () => {
     const email = "mama@example.com";
-    const { plans, skipped } = planQuizLeadSends({
+    const { plans } = planQuizLeadSends({
       now: NOW,
       leads: [lead()],
       profileByEmail: new Map(),
       eventsByEmail: indexEmailEvents([{
         to_email: email,
         email_type: "quiz_ranges",
-        created_at: new Date(NOW - 26 * 60 * 60 * 1000).toISOString(),
+        created_at: new Date(NOW - 2 * DAY_MS).toISOString(),
       }]),
       unsubscribedEmails: new Set(),
     });
-    expect(plans).toEqual([expect.objectContaining({ email, step: QUIZ_DRIP_1D })]);
-    expect(skipped.unsubscribed || 0).toBe(0);
+    expect(plans).toEqual([expect.objectContaining({ email, step: QUIZ_DRIP_2D })]);
+  });
+
+  it("does not plan quiz drip when the same email has a profile", () => {
+    const email = "mama@example.com";
+    const { plans, skipped } = planQuizLeadSends({
+      now: NOW,
+      leads: [lead()],
+      profileByEmail: new Map([[email, { email, paid: false }]]),
+      eventsByEmail: indexEmailEvents([{
+        to_email: email,
+        email_type: "quiz_ranges",
+        created_at: new Date(NOW - 2 * DAY_MS).toISOString(),
+      }]),
+      unsubscribedEmails: new Set(),
+    });
+    expect(plans).toEqual([]);
+    expect(skipped.has_profile).toBe(1);
   });
 
   it("indexes paid profiles by email", () => {
@@ -219,25 +211,13 @@ describe("planQuizLeadSends", () => {
 });
 
 describe("quiz drip copy", () => {
-  it("day 1 recaps stored bands and keeps the $249 offer helpers", () => {
-    const bands = formatStoredBands(lead());
-    const html = buildQuizDrip1Body({
-      bands,
-      joinUrl: "https://www.macrosandmamas.com/join?from=quiz&email=mama%40example.com",
-    });
-    expect(html).toContain("120–140 g");
-    expect(html).toContain(`$${EARLY_PRICE}`);
-    expect(html).toContain(DOORS_CLOSE);
-    expect(html).toContain(COHORT_SHORT);
-    expect(html).not.toMatch(/—/);
-  });
-
-  it("day 3 is first-person and not a numbers dump", () => {
-    const html = buildQuizDrip3Body();
+  it("day 2 is first-person and not a numbers dump", () => {
+    const html = buildQuizDrip2Body();
     expect(html).toMatch(/weekly check-in/i);
     expect(html).not.toMatch(/Protein:/);
     expect(html).not.toMatch(/\$249/);
     expect(html).not.toMatch(/—/);
+    expect(quizDripSubject(QUIZ_DRIP_2D, "Dolly")).toBe("Dolly, the numbers are the easy part");
   });
 
   it("day 7 reuses the centralized offer / doors copy", () => {
@@ -246,6 +226,7 @@ describe("quiz drip copy", () => {
     });
     expect(html).toContain("Last note from me on this");
     expect(html).toContain(DOORS_CLOSE);
+    expect(html).toContain(COHORT_SHORT);
     expect(html).toContain(`$${EARLY_PRICE}`);
     expect(quizDripSubject(QUIZ_DRIP_7D, "Dolly")).toBe("Dolly, still want in?");
   });
@@ -255,5 +236,21 @@ describe("quiz drip copy", () => {
     expect(html).toMatch(/light note/i);
     expect(html).not.toMatch(/\$249|lock in|Finish signing up|\/join/i);
     expect(html).not.toMatch(/—/);
+  });
+
+  it("uses subjects that will not thread under the first ranges email", () => {
+    const firsts = [
+      "Your ranges, Dolly",
+      "Dolly, a note for this season",
+    ];
+    const followUps = [
+      quizDripSubject(QUIZ_DRIP_2D, "Dolly"),
+      quizDripSubject(QUIZ_DRIP_7D, "Dolly"),
+      quizDripSubject(QUIZ_PREGNANCY_NOTE, "Dolly"),
+    ];
+    for (const subject of followUps) {
+      expect(subject).not.toMatch(/your ranges/i);
+      expect(firsts).not.toContain(subject);
+    }
   });
 });

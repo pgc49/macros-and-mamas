@@ -7,7 +7,7 @@ import { quizJoinUrl } from "./rangesEmail.mjs";
 import {
   buildUnsubscribeUrl,
   isUnsubscribed,
-  listUnsubscribeHeaders,
+  quizMailHeaders,
 } from "./emailUnsubscribe.mjs";
 import { hasEmailEventByEmail, logEmailEvent } from "./emailEvents.mjs";
 import { buildQuizDripPayload } from "./quizDripEmail.mjs";
@@ -55,7 +55,7 @@ export async function sendQuizDripEmail(env, { email, firstName, lead, step }) {
         reply_to: "calista@nourishwithcalista.com",
         subject: payload.subject,
         html,
-        ...(unsubscribeUrl ? { headers: listUnsubscribeHeaders(unsubscribeUrl) } : {}),
+        ...(unsubscribeUrl ? { headers: quizMailHeaders(unsubscribeUrl) } : {}),
       }),
     });
     const data = await resp.json().catch(() => ({}));

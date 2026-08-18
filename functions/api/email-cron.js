@@ -7,7 +7,8 @@
 
    #1 Finish joining: unpaid, created ≥1h / ≥24h (max two sends)
    #3 Intake reminder: paid, no macros, paid_at ≥24h / ≥72h (max two)
-   Quiz drip: unpaid quiz leads, +1d / +3d / +7d after ranges email
+   Track A quiz drip: marketing_leads with no profile, +2d / +7d after ranges
+   Track B finish-joining: unpaid profiles only — do not merge the tracks
    ================================================================== */
 
 import {
@@ -40,8 +41,7 @@ export async function onRequestPost({ request, env }) {
       finish_joining_24h: 0,
       intake_reminder_24h: 0,
       intake_reminder_72h: 0,
-      quiz_drip_1d: 0,
-      quiz_drip_3d: 0,
+      quiz_drip_2d: 0,
       quiz_drip_7d: 0,
       quiz_pregnancy_note: 0,
       skipped: 0,
@@ -60,7 +60,8 @@ export async function onRequestPost({ request, env }) {
       const types = already.get(p.id) || new Set();
 
       try {
-        // #1 — unpaid abandoned checkout (skip new accounts while enrollment is closed)
+        // Track B — unpaid abandoned checkout (skip new accounts while enrollment is closed).
+        // Quiz-only leads with no profiles row never enter this loop.
         if (!p.paid && Number.isFinite(createdMs) && canNudgeUnpaid(env, createdMs)) {
           const age = now - createdMs;
           if (age >= 24 * HOUR && !types.has("finish_joining_24h")) {
@@ -137,8 +138,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     const drip = await runQuizLeadDrip({ env, base, key, now, profiles });
-    sent.quiz_drip_1d += drip.quiz_drip_1d;
-    sent.quiz_drip_3d += drip.quiz_drip_3d;
+    sent.quiz_drip_2d += drip.quiz_drip_2d;
     sent.quiz_drip_7d += drip.quiz_drip_7d;
     sent.quiz_pregnancy_note += drip.quiz_pregnancy_note;
     sent.skipped += drip.skipped;
@@ -225,8 +225,7 @@ async function fetchSentTypes(base, key) {
 
 export async function runQuizLeadDrip({ env, base, key, now, profiles }) {
   const sent = {
-    quiz_drip_1d: 0,
-    quiz_drip_3d: 0,
+    quiz_drip_2d: 0,
     quiz_drip_7d: 0,
     quiz_pregnancy_note: 0,
     skipped: 0,

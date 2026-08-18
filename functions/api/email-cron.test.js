@@ -49,8 +49,8 @@ afterEach(() => {
 });
 
 describe("runQuizLeadDrip", () => {
-  it("sends day 1 to an unpaid quiz lead and skips stop conditions", async () => {
-    const due = new Date(NOW - 26 * 60 * 60 * 1000).toISOString();
+  it("sends +2d to a quiz-only lead and skips paid, profile, and plant-based", async () => {
+    const due = new Date(NOW - 2 * 24 * 60 * 60 * 1000).toISOString();
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       const href = String(url);
       if (href.includes("/marketing_leads")) {
@@ -60,8 +60,12 @@ describe("runQuizLeadDrip", () => {
             first_name: "Due",
             segment: "main",
             created_at: due,
-            protein_low_g: 120,
-            protein_high_g: 140,
+          },
+          {
+            email: "signedup@example.com",
+            first_name: "Signed",
+            segment: "main",
+            created_at: due,
           },
           {
             email: "paid@example.com",
@@ -80,6 +84,7 @@ describe("runQuizLeadDrip", () => {
       if (href.includes("/email_events")) {
         return restOk([
           { to_email: "due@example.com", email_type: "quiz_ranges", created_at: due, status: "sent" },
+          { to_email: "signedup@example.com", email_type: "quiz_ranges", created_at: due, status: "sent" },
           { to_email: "paid@example.com", email_type: "quiz_ranges", created_at: due, status: "sent" },
           { to_email: "vegan@example.com", email_type: "quiz_ranges", created_at: due, status: "sent" },
         ]);
@@ -92,15 +97,18 @@ describe("runQuizLeadDrip", () => {
       base: env.SUPABASE_URL,
       key: env.SUPABASE_SERVICE_ROLE_KEY,
       now: NOW,
-      profiles: [{ id: "p1", email: "paid@example.com", paid: true }],
+      profiles: [
+        { id: "p-unpaid", email: "signedup@example.com", paid: false },
+        { id: "p1", email: "paid@example.com", paid: true },
+      ],
     });
 
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(mocks.send.mock.calls[0][1]).toEqual(expect.objectContaining({
       email: "due@example.com",
-      step: "quiz_drip_1d",
+      step: "quiz_drip_2d",
     }));
-    expect(sent.quiz_drip_1d).toBe(1);
+    expect(sent.quiz_drip_2d).toBe(1);
     expect(sent.errors).toBe(0);
   });
 
