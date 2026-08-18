@@ -35,6 +35,9 @@ jobs:
       - name: Meta Pixel unit tests
         run: npm run test:pixel
 
+      - name: Checkout pricing unit tests
+        run: npm run test:pricing
+
       - name: Production build
         run: npm run build
 
