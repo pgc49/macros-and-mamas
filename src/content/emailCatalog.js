@@ -176,19 +176,23 @@ Callie
     trigger: "Ranges quiz completed (eligible segments)",
     subject: "Your ranges, [First name]",
     audience: "Lead",
-    cta: "Finish signing up — lock in your spot",
+    cta: "Lock my spot · $249",
     bodyPreview: `Hi [First name],
 
-Here are your bands — built the same way Callie builds them for the program:
-• Protein / Carbs / Fat / Calories (preview bands)
+Here are your bands, built the same way Callie builds them for the program:
+• Protein / Carbs / Fat / Calories
 
-These are bands, not one rigid number. Create your account and finish checkout to lock in your spot — use this same email so your ranges stay attached.
+Your quiz also unlocked the $249 early rate ($50 off $299). The Aug 31 group is capped at 50 mamas, and doors close Aug 27 so Callie can hand-build every set of ranges before day one.
 
-Ranges above are a preview. If you join, Callie builds and approves your final numbers before you start.
+[Lock my spot · $249]
+
+These are bands, not one rigid number. Create your account and finish checkout to lock in your spot. Use this same email so your ranges stay attached.
+
+If you join, Callie builds and approves your final numbers before you start.
 
 Callie
 
-(No dollar amount in email — checkout shows the rate for that email.)`,
+(Reply anytime. Address footer on the branded template.)`,
   },
   {
     id: "callie_payment",

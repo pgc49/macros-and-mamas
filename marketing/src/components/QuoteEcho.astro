@@ -1,8 +1,10 @@
 ---
 /** Slim pull-quote band above pricing — Lauren's "best investment" line. */
-const pull =
-  "If I didn't lose another pound, this would still be the best investment I've made in myself in years.";
-const who = "— Lauren, nursing mama of two";
+import { testimonialById } from "../content/testimonials";
+
+const lauren = testimonialById("lauren");
+const pull = lauren?.pull || "";
+const who = lauren?.who || "";
 ---
 
 <section class="quote-echo" aria-label="Mama quote">

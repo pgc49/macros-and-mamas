@@ -20,12 +20,9 @@
   const META_PIXEL_ID = '1078367721716098';
   /** Segments that may enroll Aug 31 — only these fire Meta Lead. */
   const ENROLLABLE_SEGMENTS = { main: 1, early_pp_nurture: 1 };
-  /**
-   * Offer-card social proof. Empty = hidden in prod.
-   * Fill when Cohort 1 quotes are approved:
-   *   { quote: '...', who: 'First · 6 months postpartum' }
-   */
-  const QUIZ_OFFER_TESTIMONIALS = [];
+  /** The only “preview” sentence on the payoff (tone rule). */
+  const PREVIEW_ONCE =
+    'A preview built from your answers. If you join the 8 weeks, Callie builds and approves your final ranges herself before day one.';
 
   const Q1 = [
     { v: 'still_pregnant', l: 'Still pregnant' },
@@ -80,6 +77,7 @@
     },
     contact: { first_name: '', last_name: '', email: '', referred_by: '' },
     result: null,
+    leadSaved: false,
     busy: false,
     error: '',
     source: 'quiz_page',
@@ -370,81 +368,43 @@
     </div>`;
   }
 
-  /**
-   * Progress-tab vignette — matches philosophy card persona (protein 150–160g).
-   * Charts decorative (aria-hidden); weight caption carries the meaning.
-   */
-  function progressVignetteHtml() {
-    const min = 100;
-    const max = 180;
-    // Interleaved week: 5 in-band, 2 just under, 1 low bad day, 1 over, 1 kiss.
-    const barsG = [155, 138, 158, 125, 152, 172, 143, 150, 157, 154];
-    const bars = barsG
-      .map((g) => `<i style="height:${(((g - min) / (max - min)) * 100).toFixed(1)}%"></i>`)
-      .join('');
-    return `<div class="prog-demo">
-      <div class="prog-macro" aria-hidden="true">
-        <div class="prog-macro-head"><strong>Protein</strong><span>range 150–160g</span></div>
-        <div class="prog-bars-wrap"><div class="prog-sage-band"></div><div class="prog-bars">${bars}</div></div>
-      </div>
-      <div class="prog-wt">
-        <div class="prog-wt-chart" aria-hidden="true">
-          <div class="prog-macro-head"><strong>Weight</strong><span>over weeks</span></div>
-          <svg class="prog-wt-svg" viewBox="0 0 240 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="presentation">
-            <line x1="0" y1="16" x2="240" y2="16" stroke="#ECDEE2" stroke-width="1"></line>
-            <line x1="0" y1="32" x2="240" y2="32" stroke="#ECDEE2" stroke-width="1"></line>
-            <line x1="0" y1="48" x2="240" y2="48" stroke="#ECDEE2" stroke-width="1"></line>
-            <path d="M16 20 L88 28 L160 36 L224 44" stroke="#B4416B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
-            <circle cx="16" cy="20" r="3.5" fill="#B4416B"></circle>
-            <circle cx="88" cy="28" r="3.5" fill="#B4416B"></circle>
-            <circle cx="160" cy="36" r="3.5" fill="#B4416B"></circle>
-            <circle cx="224" cy="44" r="3.5" fill="#B4416B"></circle>
-          </svg>
-        </div>
-        <p class="prog-wt-caption">Trending about a pound a week, the pace that protects muscle and milk.</p>
-      </div>
-    </div>`;
-  }
-
-  /**
-   * Cold-traffic product proof — homepage beats Facebook never saw.
-   * Sits after Callie, before the ask.
-   */
-  function includesBlockHtml() {
+  function messagesProofHtml() {
     return `<div class="q-includes">
-      <div class="q-preview-kicker">What you get in the 8 weeks</div>
       <div class="q-include-card">
         <div class="m-kicker">Messages · 1:1 with Callie</div>
         <div class="bubble you">Week fell apart. Birthday cake for dinner Tuesday. Do I start over?</div>
         <div class="bubble callie">You don't start over, you just start logging again. One meal today with protein first. That's the whole assignment.</div>
         <p class="q-include-copy">When the week blows up, she answers your 1:1 herself — plus group coaching Mon–Fri, all in the app. Not a chatbot wearing her name.</p>
       </div>
-      <div class="q-include-card">
-        <div class="m-kicker">My meals · recipes</div>
-        <div class="q-meal-chips" aria-hidden="true">
-          <span>Greek yogurt bowl</span>
-          <span>Chicken meatballs + rice</span>
-          <span>Eggs &amp; toast</span>
-        </div>
-        <p class="q-include-copy">Meals and recipes that fit your ranges and what your family already eats. Save the ones you repeat for one-tap logging, with a week planner and grocery list built in.</p>
-      </div>
-      <div class="q-include-card">
-        <div class="m-kicker">Progress · ranges &amp; weight</div>
-        ${progressVignetteHtml()}
-        <p class="q-include-copy">See how you're landing in your macro ranges and how weight moves over weeks. Landing under the band some days is normal, and one rough day doesn't undo a good week. The picture over weeks is what you and Callie coach from.</p>
-      </div>
     </div>`;
   }
 
-  /** Hidden until QUIZ_OFFER_TESTIMONIALS has real quotes. */
-  function testimonialSlotHtml() {
-    if (!QUIZ_OFFER_TESTIMONIALS.length) return '';
-    const t = QUIZ_OFFER_TESTIMONIALS[0];
-    if (!t || !t.quote) return '';
-    return `<figure class="q-offer-quote">
-      <blockquote>${escapeHtml(t.quote)}</blockquote>
-      <figcaption>${escapeHtml(t.who || '')}</figcaption>
-    </figure>`;
+  function readJsonAttr(name, fallback) {
+    const raw = root.getAttribute(name);
+    if (!raw) return fallback;
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function testimonialsHtml() {
+    const quotes = readJsonAttr('data-testimonials', []);
+    const note = root.getAttribute('data-results-disclaimer') || "Every mama's results are her own.";
+    if (!Array.isArray(quotes) || !quotes.length) return '';
+    return `<div class="quotes q-payoff-quotes">
+      <div class="q-preview-kicker">Real words from members</div>
+      ${quotes
+        .map(
+          (t) => `<article class="q-card">
+        <p class="q-pull">${escapeHtml(t.pull || '')}</p>
+        <div class="q-who">${escapeHtml(t.who || '')}</div>
+      </article>`,
+        )
+        .join('')}
+      <p class="q-note">${escapeHtml(note)}</p>
+    </div>`;
   }
 
   function render() {
@@ -586,15 +546,15 @@
         <div class="mr-sub">Recognized from one photo, portions and all</div>
         <div class="mp"><span>480 <small>cal</small></span><span>32 <small>P</small></span><span>35 <small>C</small></span><span>24 <small>F</small></span></div>
       </div>
-      <p class="q-log-hint">Snap a plate or a restaurant menu. No photo? Type it — leftover mac and cheese and a handful of grapes, done.</p>
+      <p class="q-log-hint">This is the app you'd use. Snap a plate or a menu and it's logged against your ranges. No photo? Type it, with meals, a week planner, and groceries built in.</p>
     </div>`;
   }
 
   function rangesCardHtml(r) {
     const bands = r.ranges || {};
     const fmt = (n) => (n == null ? '' : Number(n).toLocaleString('en-US'));
-    return `<div class="ui-card q-result-card" aria-label="Preview of your macro ranges in the app">
-      <div class="q-card-badge">App preview</div>
+    return `<div class="ui-card q-result-card" id="qRangesCard" aria-label="Your macro ranges in the app">
+      <div class="q-card-badge">Your ranges</div>
       <div class="greet-sub">Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win.</div>
       ${rangeRowHtml('Protein', bands.protein_low_g, bands.protein_high_g, 'g')}
       ${rangeRowHtml('Carbs', bands.carbs_low_g, bands.carbs_high_g, 'g')}
@@ -602,21 +562,14 @@
       <div class="cal-line"><span class="label">Calories land around</span><span class="val">${fmt(bands.calories_low)}–${fmt(bands.calories_high)}</span></div>
       ${
         r.feeding_line
-          ? `<div class="human-note"><span class="dot"></span>${escapeHtml(r.feeding_line)}</div>`
+          ? `<p class="q-feed-line">${escapeHtml(r.feeding_line)}</p>`
           : ''
       }
     </div>`;
   }
 
-  function previewDisclaimer(r) {
-    const early = r.early_pp
-      ? `<p class="q-copy" style="margin-top:10px;margin-bottom:0">You're early postpartum — that's welcome here. If you join, Callie builds your final ranges gently and supply-aware for this season.</p>`
-      : '';
-    return `<div class="q-banner q-banner-preview">
-      <strong>This is a preview — not your final numbers.</strong>
-      Bands below are estimated from your answers. If you join the 8 weeks, Callie builds and approves your ranges herself before you start.
-      ${early}
-    </div>`;
+  function previewOnceHtml() {
+    return `<p class="q-preview-once">${escapeHtml(PREVIEW_ONCE)}</p>`;
   }
 
   /** One proof the app is real — before the ask; no second logger below. */
@@ -630,7 +583,7 @@
   }
 
   function veganNoteHtml() {
-    return `<div class="q-banner"><strong>A note on protein.</strong> Callie’s program emphasizes animal protein — meat, dairy, and eggs. Hitting these protein targets on a fully vegan diet can be challenging. Your ranges are below as a preview; if you want to talk through whether the program is a fit, reply to the email we send.</div>`;
+    return `<div class="q-banner"><strong>A note on protein.</strong> Callie’s program emphasizes animal protein — meat, dairy, and eggs. Hitting these protein targets on a fully vegan diet can be challenging. If you want to talk through whether the program is a fit, reply to the email we send.</div>`;
   }
 
   function checkoutHref() {
@@ -646,9 +599,22 @@
     return `${joinBase || '/join'}?${params.toString()}`;
   }
 
+  /** Compact fast-lane ask — one screen from ranges, before proof. */
+  function fastOfferHtml() {
+    const href = checkoutHref();
+    const save = saveAmount > 0 ? `$${saveAmount} off the full $${fullPrice}` : `full rate $${fullPrice}`;
+    const startShort = String(cohortStart || '').replace(/^Monday,\s+/i, '');
+    return `<div class="q-fast-offer">
+      <div class="q-fast-kicker">Your quiz unlocked the early rate</div>
+      <p class="q-fast-line">$${offerPrice} · ${save} · the ${escapeHtml(startShort)} group, capped at 50 mamas</p>
+      <a class="btn q-fast-btn" href="${href}">Lock my spot · $${offerPrice}</a>
+      <p class="q-fast-micro">Doors close ${escapeHtml(doorsClose)}. Not ready? Your ranges are already in your inbox.</p>
+    </div>`;
+  }
+
   function stickyCheckoutHtml() {
     const href = checkoutHref();
-    return `<div class="sticky-cta q-result-sticky on" id="quizStickyCta" aria-hidden="false">
+    return `<div class="sticky-cta q-result-sticky" id="quizStickyCta" aria-hidden="true">
       <div class="s-price"><strong>Doors close ${escapeHtml(doorsClose)} · 50 mamas max</strong></div>
       <a class="btn" href="${href}">Pre-pay $${offerPrice}</a>
     </div>`;
@@ -656,26 +622,57 @@
 
   function syncQuizSticky() {
     const bar = document.getElementById('quizStickyCta');
-    const offer = document.querySelector('.q-offer-card');
+    const ranges = document.getElementById('qRangesCard');
+    const offer = document.getElementById('qOfferCard');
     if (!bar) return;
-    if (!offer || !('IntersectionObserver' in window)) {
+
+    const disconnect = (obs) => {
+      if (!obs) return;
+      try { obs.disconnect(); } catch (e) { /* ignore */ }
+    };
+    disconnect(bar._mmRangesObs);
+    disconnect(bar._mmOfferObs);
+
+    if (!('IntersectionObserver' in window)) {
       bar.classList.add('on');
       bar.setAttribute('aria-hidden', 'false');
       return;
     }
-    if (bar._mmOfferObs) {
-      try { bar._mmOfferObs.disconnect(); } catch (e) { /* ignore */ }
+
+    let rangesOut = !ranges;
+    let offerInView = false;
+    const sync = () => {
+      const show = rangesOut && !offerInView;
+      bar.classList.toggle('on', show);
+      bar.setAttribute('aria-hidden', String(!show));
+    };
+
+    if (ranges) {
+      const rangesObs = new IntersectionObserver(
+        function (entries) {
+          const e = entries[0];
+          rangesOut = !e.isIntersecting && e.boundingClientRect.top < 0;
+          sync();
+        },
+        { threshold: 0 },
+      );
+      rangesObs.observe(ranges);
+      bar._mmRangesObs = rangesObs;
     }
-    const obs = new IntersectionObserver(
-      function (entries) {
-        const offerInView = entries[0] && entries[0].isIntersecting;
-        bar.classList.toggle('on', !offerInView);
-        bar.setAttribute('aria-hidden', String(!!offerInView));
-      },
-      { threshold: 0.35 },
-    );
-    obs.observe(offer);
-    bar._mmOfferObs = obs;
+
+    if (offer) {
+      const offerObs = new IntersectionObserver(
+        function (entries) {
+          offerInView = !!(entries[0] && entries[0].isIntersecting);
+          sync();
+        },
+        { threshold: 0, rootMargin: '0px 0px -12% 0px' },
+      );
+      offerObs.observe(offer);
+      bar._mmOfferObs = offerObs;
+    }
+
+    sync();
   }
 
   function renderResult() {
@@ -694,22 +691,25 @@
     const hasRanges = r.ranges && r.ranges.protein_low_g != null;
     const veganNote = r.segment === 'waitlist_plantbased' ? veganNoteHtml() : '';
     const rangesBlock = hasRanges
-      ? `${rangesCardHtml(r)}
-      <p class="q-copy">These are bands, not one rigid number. Busier day → eat toward the top. Quieter day → the bottom. Both count as a win. Lead with protein; the rest gets easier.</p>`
-      : `<p class="q-copy">Check your inbox — Callie is sending next steps. You can still lock your spot below.</p>`;
+      ? rangesCardHtml(r)
+      : `<p class="q-copy">Check your inbox. Callie is sending next steps. You can still lock your spot below.</p>`;
+    const unsavedNote = state.leadSaved
+      ? ''
+      : `<p class="q-copy">We couldn't email these just now. They're on this page, and you can still lock your spot below.</p>`;
 
     return screenShell(
-      `${escapeHtml(state.contact.first_name)}, your ranges`,
-      `${veganNote}
-      ${previewDisclaimer(r)}
+      `${escapeHtml(state.contact.first_name)}, your ranges are ready.`,
+      `${previewOnceHtml()}
+      ${unsavedNote}
+      ${veganNote}
       ${rangesBlock}
+      ${fastOfferHtml()}
       ${snapProofHtml()}
+      ${messagesProofHtml()}
       ${coachBlockHtml()}
-      ${includesBlockHtml()}
-      ${testimonialSlotHtml()}
+      ${testimonialsHtml()}
       ${offerBlock()}
-      ${stickyCheckoutHtml()}
-      <p class="q-copy muted">We emailed these ranges to you so you can keep them.</p>`,
+      ${stickyCheckoutHtml()}`,
     );
   }
 
@@ -730,7 +730,11 @@
       <a class="btn q-offer-btn" href="${joinHref}">Pre-pay $${offerPrice} — lock my spot</a>
       ${email ? `<p class="q-offer-continuing">Continuing as ${escapeHtml(email)}</p>` : ''}
       <p class="q-offer-after">${escapeHtml(postPayCopy)}</p>
-      <p class="q-offer-skip">Not ready yet? Your ranges stay in your inbox either way.</p>
+      <p class="q-offer-skip">${
+        state.leadSaved
+          ? 'Not ready yet? Your ranges stay in your inbox either way.'
+          : 'Not ready yet? Screenshot these ranges — we couldn\'t email them just now.'
+      }</p>
     </div>`;
   }
 
@@ -912,6 +916,65 @@
       };
     }
 
+    function rememberQuizEmail() {
+      try {
+        const leadEmail = String(state.contact.email || '').trim().toLowerCase();
+        if (leadEmail) sessionStorage.setItem('mm_quiz_email', leadEmail);
+      } catch (e) {}
+    }
+
+    function localPayoff() {
+      const build = globalThis.__mmBuildQuizPayoff;
+      if (typeof build !== 'function') return null;
+      try {
+        return build(payload.answers);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function showPayoff(data, saved) {
+      rememberQuizEmail();
+      if (saved) {
+        try {
+          localStorage.setItem('mm_lead_email', '1');
+        } catch (e) {}
+        try {
+          if (typeof window.fbq === 'function') {
+            const seg = String(data.segment || '');
+            const qualified =
+              data.qualified_lead === true ||
+              (data.qualified_lead == null && ENROLLABLE_SEGMENTS[seg]);
+            if (qualified) {
+              try {
+                window.fbq('init', META_PIXEL_ID, {
+                  em: String(state.contact.email || '').trim().toLowerCase(),
+                  fn: String(state.contact.first_name || '').trim().toLowerCase(),
+                  ln: String(state.contact.last_name || '').trim().toLowerCase(),
+                });
+              } catch (e) {}
+              window.fbq(
+                'track',
+                'Lead',
+                { content_name: 'ranges_quiz', content_category: seg },
+                { eventID: eventId },
+              );
+            } else {
+              window.fbq('trackCustom', 'QuizNurture', {
+                content_name: 'ranges_quiz',
+                content_category: seg || 'nurture',
+              });
+            }
+          }
+        } catch (e) {}
+      }
+      state.result = data;
+      state.leadSaved = saved;
+      state.busy = false;
+      state.error = '';
+      setStep('result');
+    }
+
     try {
       const resp = await fetch('/api/lead', {
         method: 'POST',
@@ -925,49 +988,13 @@
       if (!resp.ok) {
         throw new Error(data.error || 'save_failed');
       }
-      try {
-        localStorage.setItem('mm_lead_email', '1');
-      } catch (e) {}
-      try {
-        const leadEmail = String(state.contact.email || '').trim().toLowerCase();
-        if (leadEmail) sessionStorage.setItem('mm_quiz_email', leadEmail);
-      } catch (e) {}
-
-      // Meta Lead only for enrollable segments. Fully vegan + pregnant
-      // fire QuizNurture instead — never train delivery on non-qualified leads.
-      try {
-        if (typeof window.fbq === 'function') {
-          const seg = String(data.segment || '');
-          const qualified =
-            data.qualified_lead === true ||
-            (data.qualified_lead == null && ENROLLABLE_SEGMENTS[seg]);
-          if (qualified) {
-            try {
-              window.fbq('init', META_PIXEL_ID, {
-                em: String(state.contact.email || '').trim().toLowerCase(),
-                fn: String(state.contact.first_name || '').trim().toLowerCase(),
-                ln: String(state.contact.last_name || '').trim().toLowerCase(),
-              });
-            } catch (e) {}
-            window.fbq(
-              'track',
-              'Lead',
-              { content_name: 'ranges_quiz', content_category: seg },
-              { eventID: eventId },
-            );
-          } else {
-            window.fbq('trackCustom', 'QuizNurture', {
-              content_name: 'ranges_quiz',
-              content_category: seg || 'nurture',
-            });
-          }
-        }
-      } catch (e) {}
-
-      state.result = data;
-      state.busy = false;
-      setStep('result');
+      showPayoff(data, true);
     } catch (e) {
+      const fallback = localPayoff();
+      if (fallback) {
+        showPayoff(fallback, false);
+        return;
+      }
       state.busy = false;
       state.error = 'Could not save just now. Try again in a moment.';
       render();

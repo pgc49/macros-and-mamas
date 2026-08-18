@@ -166,3 +166,55 @@ export function feedingLine(feeding) {
       return 'Your body is still rebuilding. Undereating now is how people stall for a year.';
   }
 }
+
+function previewBands(computed) {
+  if (!computed || computed.needs_review || computed.protein_low_g == null) {
+    return null;
+  }
+  return {
+    protein_low_g: computed.protein_low_g,
+    protein_high_g: computed.protein_high_g,
+    carbs_low_g: computed.carbs_low_g,
+    carbs_high_g: computed.carbs_high_g,
+    fat_low_g: computed.fat_low_g,
+    fat_high_g: computed.fat_high_g,
+    calories_low: computed.calories_low,
+    calories_high: computed.calories_high,
+  };
+}
+
+/**
+ * Payoff payload shared by POST /api/lead and the quiz client fallback.
+ * Soft-computes preview bands (skipReview) so maintain/thyroid still see numbers.
+ */
+export function buildQuizPayoff(answers) {
+  const segment = segmentForAnswers(answers);
+  if (segment === 'pregnancy_nurture') {
+    return {
+      segment,
+      qualified_lead: false,
+      needs_review: false,
+      review_reason: null,
+      early_pp: false,
+      ranges: null,
+      feeding_line: null,
+    };
+  }
+
+  const hard = computeRanges(answers);
+  const ranges = previewBands(computeRanges(answers, { skipReview: true }));
+  const flaggedVegan = Array.isArray(answers.flags) && answers.flags.includes('vegan');
+  const showFeedingLine =
+    Boolean(ranges) && answers.months_postpartum !== 'not_postpartum';
+
+  return {
+    segment,
+    qualified_lead:
+      !flaggedVegan && (segment === 'main' || segment === 'early_pp_nurture'),
+    needs_review: Boolean(hard.needs_review),
+    review_reason: hard.needs_review ? String(hard.review_reason || '') : null,
+    early_pp: segment === 'early_pp_nurture',
+    ranges,
+    feeding_line: showFeedingLine ? feedingLine(answers.feeding) : null,
+  };
+}

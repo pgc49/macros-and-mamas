@@ -8,17 +8,17 @@
  *      WAITLIST KV (required — rate limit fails closed if unbound; same binding as /api/waitlist)
  */
 
+import { buildQuizPayoff, feedingLine } from '../_shared/rangesEngine.mjs';
 import {
-  computeRanges,
-  feedingLine,
-  segmentForAnswers,
-} from '../_shared/rangesEngine.mjs';
-import {
-  APP_URL,
   FROM_CALLIE,
   escapeHtml,
   renderEmail,
 } from '../_shared/emailLayout.mjs';
+import {
+  RANGES_EMAIL_BOTTOM_CTA,
+  buildEligibleRangesEmailBody,
+  quizJoinUrl,
+} from '../_shared/rangesEmail.mjs';
 import { resolveMetaPixelId } from '../_shared/metaPixelId.js';
 
 interface Env {
@@ -293,9 +293,9 @@ async function sendRangesEmail(
   }
   const from = env.LEAD_FROM_EMAIL || FROM_CALLIE;
   const name = safeDisplayName(opts.firstName);
-  const joinUrl = `${APP_URL}/join?from=quiz`;
+  const joinUrl = quizJoinUrl(opts.email);
   const signupCta = {
-    cta_text: 'Finish signing up — lock in your spot',
+    cta_text: RANGES_EMAIL_BOTTOM_CTA,
     cta_url: joinUrl,
   };
 
@@ -308,13 +308,13 @@ async function sendRangesEmail(
   if (opts.segment === 'pregnancy_nurture') {
     subject = `${name}, a note for this season`;
     body = `
-<p>Congratulations. Pregnancy is an abundance season — not a cut. We're not sending macro ranges right now on purpose.</p>
+<p>Congratulations. Pregnancy is an abundance season, not a cut. We're not sending macro ranges right now on purpose.</p>
 <p>When you're ready postpartum, come back for your ranges. We'll keep a light note in your inbox with what to expect when the time is right.</p>
 <p>With care,<br/>Callie</p>`;
   } else if (opts.segment === 'waitlist_plantbased') {
     subject = opts.ranges ? `Your ranges, ${name}` : `${name}, an honest note about our playbook`;
     const veganBands = opts.ranges
-      ? `<p>Here are your bands — built the same way Callie builds them for the program:</p>
+      ? `<p>Here are your bands, built the same way Callie builds them for the program:</p>
 <ul>
 <li><strong>Protein:</strong> ${escapeHtml(opts.ranges.protein)}</li>
 <li><strong>Carbs:</strong> ${escapeHtml(opts.ranges.carbs)}</li>
@@ -323,45 +323,30 @@ async function sendRangesEmail(
 </ul>`
       : '';
     body = `
-<p><strong>A note on protein.</strong> Callie's program emphasizes animal protein — meat, dairy, and eggs. Hitting these protein targets on a fully vegan diet can be challenging. We'd rather be honest up front.</p>
+<p><strong>A note on protein.</strong> Callie's program emphasizes animal protein: meat, dairy, and eggs. Hitting these protein targets on a fully vegan diet can be challenging. We'd rather be honest up front.</p>
 ${veganBands}
 <p>If you still want to talk through whether the program is a fit, reply to this email. No hard sell.</p>
 <p>Callie</p>`;
   } else if (opts.ranges) {
     subject = `Your ranges, ${name}`;
-    const early = opts.earlyPp
-      ? `<p><strong>Here's a preview based on your answers.</strong> Early postpartum is welcome — if you join, Callie builds your final ranges gently and supply-aware for this season.</p>`
-      : '';
-    const reviewNote = opts.needsReview
-      ? `<p><strong>Callie will still review your finals personally</strong> — a couple of your answers mean she wants eyes on them before day one. The bands below are a preview so you can see how the app works.</p>`
-      : '';
     const feed =
       opts.monthsPostpartum === 'not_postpartum'
         ? ''
         : feedingLine(opts.feeding as 'exclusive');
     const feedHtml = feed ? `<p>${escapeHtml(feed)}</p>` : '';
-    body = `
-${early}
-${reviewNote}
-<p>Here are your bands — built the same way Callie builds them for the program:</p>
-<ul>
-<li><strong>Protein:</strong> ${escapeHtml(opts.ranges.protein)}</li>
-<li><strong>Carbs:</strong> ${escapeHtml(opts.ranges.carbs)}</li>
-<li><strong>Fat:</strong> ${escapeHtml(opts.ranges.fat)}</li>
-<li><strong>Calories land around:</strong> ${escapeHtml(opts.ranges.calories)}</li>
-</ul>
-${feedHtml}
-<p>These are bands, not one rigid number. Busier day → eat toward the top. Quieter day → the bottom. Both count as a win. Lead with protein; the rest gets easier.</p>
-<p><strong>Your next step:</strong> create your account and finish checkout to lock in your spot. Use this same email so your ranges stay attached.</p>
-<p>Ranges above are a preview. If you join, Callie builds and approves your final numbers before you start.</p>
-<p>Callie</p>
-<p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you took the ranges quiz. Reply anytime.</p>`;
+    body = buildEligibleRangesEmailBody({
+      earlyPp: opts.earlyPp,
+      needsReview: opts.needsReview,
+      feedHtml,
+      bands: opts.ranges,
+      joinUrl,
+    });
     cta = signupCta;
   } else if (opts.needsReview) {
     subject = `${name}, Callie wants to look at your ranges personally`;
     body = `
 <p>Your ranges need Callie's eyes on them. A couple of your answers mean an automated band isn't the right call. Callie will review this herself and send your ranges within 24 hours.</p>
-<p><strong>In the meantime:</strong> create your account and finish checkout to lock in your spot — use this same email so everything stays attached.</p>
+<p><strong>In the meantime:</strong> create your account and finish checkout to lock in your spot. Use this same email so everything stays attached.</p>
 <p>Callie</p>
 <p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you took the ranges quiz. Reply anytime.</p>`;
     cta = signupCta;
@@ -444,49 +429,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   const answers = normalizeAnswers(body.answers || {});
-  const segment = segmentForAnswers(answers as Parameters<typeof segmentForAnswers>[0]);
-
-  // Pregnant: nurture only — no macro preview.
-  // Everyone else (including vegan + review flags): soft-compute preview bands
-  // for the payoff UI. Hard review flags still stored for Callie.
-  const hard =
-    segment === 'pregnancy_nurture'
-      ? { needs_review: false, review_reason: null as string | null }
-      : computeRanges(answers as Parameters<typeof computeRanges>[0]);
-
-  let preview: ReturnType<typeof computeRanges> | null = null;
-  if (segment !== 'pregnancy_nurture') {
-    const soft = computeRanges(
-      answers as Parameters<typeof computeRanges>[0],
-      { skipReview: true },
-    );
-    if (!soft.needs_review && 'protein_low_g' in soft) {
-      preview = soft;
-    }
-  }
-
-  const needsReview = Boolean(hard.needs_review);
-  const reviewReason = hard.needs_review
-    ? String(hard.review_reason || '')
-    : null;
+  const payoff = buildQuizPayoff(answers);
+  const segment = payoff.segment;
+  const needsReview = payoff.needs_review;
+  const reviewReason = payoff.review_reason;
+  const qualifiedLead = payoff.qualified_lead;
+  const earlyPp = payoff.early_pp;
 
   const eventId =
     String(body.event_id || '').trim() ||
     `lead_${crypto.randomUUID()}`;
 
-  const rangesPayload =
-    preview && 'protein_low_g' in preview
-      ? {
-          protein_low_g: preview.protein_low_g,
-          protein_high_g: preview.protein_high_g,
-          carbs_low_g: preview.carbs_low_g,
-          carbs_high_g: preview.carbs_high_g,
-          fat_low_g: preview.fat_low_g,
-          fat_high_g: preview.fat_high_g,
-          calories_low: preview.calories_low,
-          calories_high: preview.calories_high,
-        }
-      : {};
+  const rangesPayload = payoff.ranges || {};
 
   const referredBy = String(body.referred_by || '')
     .trim()
@@ -540,18 +494,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const ua = request.headers.get('user-agent') || '';
   const sourceUrl = 'https://www.macrosandmamas.com/quiz';
 
-  const earlyPp = segment === 'early_pp_nurture';
   const formatted =
     rangesPayload.protein_low_g != null
       ? formatBands(rangesPayload as Parameters<typeof formatBands>[0])
       : null;
-
-  // Meta Lead only for enrollable, non-vegan finishes.
-  // Fully vegan + pregnant must not optimize delivery toward non-buyers.
-  const flaggedVegan = answers.flags.includes('vegan');
-  const qualifiedLead =
-    !flaggedVegan &&
-    (segment === 'main' || segment === 'early_pp_nurture');
 
   context.waitUntil(
     Promise.all([
@@ -581,12 +527,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ]),
   );
 
-  // not_postpartum auto-sets feeding=not_feeding; don't show the postpartum
-  // “still rebuilding” sage callout on that path (payoff + email).
-  const showFeedingLine =
-    rangesPayload.protein_low_g != null &&
-    answers.months_postpartum !== 'not_postpartum';
-
   return json({
     ok: true,
     event_id: eventId,
@@ -595,9 +535,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     needs_review: needsReview,
     review_reason: reviewReason,
     early_pp: earlyPp,
-    ranges: rangesPayload.protein_low_g != null ? rangesPayload : null,
-    feeding_line: showFeedingLine
-      ? feedingLine(answers.feeding as 'exclusive')
-      : null,
+    ranges: payoff.ranges,
+    feeding_line: payoff.feeding_line,
   });
 };

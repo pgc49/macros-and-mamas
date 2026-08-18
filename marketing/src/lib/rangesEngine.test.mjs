@@ -9,6 +9,8 @@ import {
   computeRanges,
   sampleCardRanges,
   round5,
+  buildQuizPayoff,
+  feedingLine,
 } from './rangesEngine.mjs';
 
 function base(over = {}) {
@@ -162,5 +164,45 @@ describe('review triggers', () => {
     const soft = computeRanges(base({ goal: 'maintain' }), { skipReview: true });
     assert.equal(soft.needs_review, false);
     assert.ok(soft.protein_low_g > 0);
+  });
+});
+
+describe('buildQuizPayoff', () => {
+  it('returns preview bands + feeding line for exclusive nursing', () => {
+    const p = buildQuizPayoff(base({ goal_weight_lbs: 150 }));
+    assert.equal(p.segment, 'main');
+    assert.equal(p.qualified_lead, true);
+    assert.equal(p.needs_review, false);
+    assert.ok(p.ranges?.protein_low_g);
+    assert.equal(p.feeding_line, feedingLine('exclusive'));
+  });
+
+  it('skips ranges for pregnancy', () => {
+    const p = buildQuizPayoff(base({ months_postpartum: 'still_pregnant' }));
+    assert.equal(p.segment, 'pregnancy_nurture');
+    assert.equal(p.qualified_lead, false);
+    assert.equal(p.ranges, null);
+    assert.equal(p.feeding_line, null);
+  });
+
+  it('hides feeding line for not_postpartum', () => {
+    const p = buildQuizPayoff(
+      base({ months_postpartum: 'not_postpartum', feeding: 'not_feeding' }),
+    );
+    assert.ok(p.ranges?.protein_low_g);
+    assert.equal(p.feeding_line, null);
+  });
+
+  it('still shows preview bands when hard review fires', () => {
+    const p = buildQuizPayoff(base({ flags: ['thyroid'] }));
+    assert.equal(p.needs_review, true);
+    assert.ok(p.ranges?.protein_low_g);
+  });
+
+  it('does not qualify fully vegan finishes', () => {
+    const p = buildQuizPayoff(base({ flags: ['vegan'] }));
+    assert.equal(p.segment, 'waitlist_plantbased');
+    assert.equal(p.qualified_lead, false);
+    assert.ok(p.ranges?.protein_low_g);
   });
 });
