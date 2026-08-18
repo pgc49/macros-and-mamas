@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  completeSignIn,
   completeSignup,
   isExistingAccountError,
   isUnconfirmedEmailError,
@@ -121,5 +122,36 @@ describe("completeSignup", () => {
     });
     expect(result).toEqual({ ok: false, error: "Password should be at least 6 characters" });
     expect(signIn).not.toHaveBeenCalled();
+  });
+});
+
+describe("completeSignIn", () => {
+  it("is done when password sign-in succeeds", async () => {
+    const confirmFresh = vi.fn();
+    const result = await completeSignIn({
+      signIn: async () => ({ ok: true }),
+      confirmFresh,
+    });
+    expect(result).toEqual({ ok: true });
+    expect(confirmFresh).not.toHaveBeenCalled();
+  });
+
+  it("confirms a fresh signup then retries when email is not confirmed", async () => {
+    const confirmFresh = vi.fn(async () => {});
+    const signIn = vi.fn()
+      .mockResolvedValueOnce({ ok: false, error: "Email not confirmed" })
+      .mockResolvedValueOnce({ ok: true });
+    const result = await completeSignIn({ signIn, confirmFresh });
+    expect(result).toEqual({ ok: true });
+    expect(confirmFresh).toHaveBeenCalledTimes(1);
+    expect(signIn).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns the sign-in error when the password is wrong", async () => {
+    const result = await completeSignIn({
+      signIn: async () => ({ ok: false, error: "Invalid login credentials" }),
+      confirmFresh: vi.fn(),
+    });
+    expect(result).toEqual({ ok: false, error: "Invalid login credentials" });
   });
 });

@@ -7,6 +7,7 @@ import { PATHS } from "../routing";
 import { TERMS_VERSION } from "../content/terms";
 import { isEnrollmentOpen } from "../config";
 import { rememberQuizEmail } from "../lib/quizCheckout";
+import { isUnconfirmedEmailError } from "../auth/completeSignup";
 
 /**
  * One auth screen. Mode comes from the entry point:
@@ -90,7 +91,18 @@ export function SignInPage({
 
     const { error: err } = await signInWithPassword(email, password);
     setBusy(false);
-    if (err) setError(err.message || "Could not sign in.");
+    if (err) {
+      const msg = err.message || "Could not sign in.";
+      if (isUnconfirmedEmailError(msg)) {
+        setError("That account still needs email confirmation. Check inbox and spam, then try again.");
+        return;
+      }
+      if (fromQuiz && /invalid login/i.test(msg)) {
+        setError("That password doesn’t match this quiz email. Use the password you created a moment ago, or tap Forgot password.");
+        return;
+      }
+      setError(msg);
+    }
   };
 
   return (
@@ -105,10 +117,12 @@ export function SignInPage({
             : isCreate
               ? (isEnrollmentOpen()
                 ? (fromQuiz && prefillEmail
-                  ? "Set a password for the email from your ranges quiz, then pre-pay to lock your spot (starts Monday, Aug 31)."
+                  ? "Set a password for the email from your ranges quiz — or enter it again if you already created one — then pre-pay to lock your spot (starts Monday, Aug 31)."
                   : "Create your account with the same email you used on the ranges quiz, then pre-pay to lock your spot (starts Monday, Aug 31) and complete a short intake so Callie can build your macros.")
                 : "New spots aren’t open for checkout yet. Prefer the waitlist on the homepage — we’ll email you a join link when it’s time. Only create an account here if Callie invited you to finish joining.")
-              : "Sign in with the email you used when you enrolled."}
+              : (fromQuiz && prefillEmail
+                ? "Sign in with the password you created for this quiz email, then pre-pay to lock your spot."
+                : "Sign in with the email you used when you enrolled.")}
         </p>
 
         <Field label="Email">
@@ -119,7 +133,7 @@ export function SignInPage({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@email.com"
-            readOnly={Boolean(fromQuiz && prefillEmail && isCreate)}
+            readOnly={Boolean(fromQuiz && prefillEmail)}
           />
         </Field>
         {!forgotMode && (
@@ -204,7 +218,7 @@ export function SignInPage({
           disabled={busy || !email.trim() || (!forgotMode && !password) || (isCreate && !forgotMode && !agreeTerms)}
           onClick={submit}
         >
-          {busy ? "Working…" : forgotMode ? "Send reset link" : isCreate ? "Create account" : "Sign in"}
+          {busy ? "Working…" : forgotMode ? "Send reset link" : isCreate ? (fromQuiz ? "Continue" : "Create account") : "Sign in"}
         </Btn>
 
         {forgotMode && (

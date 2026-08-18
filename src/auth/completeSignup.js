@@ -62,3 +62,19 @@ export async function completeSignup({ signUp, signIn, confirmFresh }) {
 
   return { ok: false, error: signup.error || "Could not create account." };
 }
+
+/** Sign-in for the quiz URL — confirm a fresh account if that is the only blocker. */
+export async function completeSignIn({ signIn, confirmFresh }) {
+  const first = await signIn();
+  if (first.ok) return { ok: true };
+  const confirmed = await signInAfterConfirm({
+    signIn,
+    confirmFresh,
+    error: first.error,
+  });
+  if (confirmed?.ok) return { ok: true };
+  return {
+    ok: false,
+    error: confirmed?.error || first.error || "Could not sign in.",
+  };
+}

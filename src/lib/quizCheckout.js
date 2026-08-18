@@ -6,7 +6,9 @@
 const STORAGE_KEY = "mm_quiz_email";
 
 export function normalizeEmail(value) {
-  return String(value || "").trim().toLowerCase();
+  const raw = String(value || "").trim().toLowerCase();
+  // Unencoded + in query strings becomes a space (a+b@x.com → "a b@x.com").
+  return raw.replace(/^([^@\s]+)\s+([^@\s]+@)/, "$1+$2");
 }
 
 export function rememberQuizEmail(email) {

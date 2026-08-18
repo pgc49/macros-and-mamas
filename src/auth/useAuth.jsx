@@ -3,10 +3,23 @@ import * as Sentry from "@sentry/react";
 import { supabase } from "../lib/supabase";
 import { persistAttributionToProfile } from "../lib/attribution";
 import {
+  completeSignIn,
   completeSignup,
   isExistingAccountError,
   signupLooksLikeExistingUser,
 } from "./completeSignup";
+
+async function confirmFreshSignup(email) {
+  try {
+    await fetch("/api/confirm-fresh-signup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+  } catch (confirmErr) {
+    console.error("confirm-fresh-signup failed", confirmErr);
+  }
+}
 
 function syncSentryUser(nextUser) {
   if (nextUser?.id) {
@@ -98,11 +111,19 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signInWithPassword = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
+    const trimmed = email.trim();
+    const result = await completeSignIn({
+      confirmFresh: () => confirmFreshSignup(trimmed),
+      signIn: async () => {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: trimmed,
+          password,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true };
+      },
     });
-    return { error };
+    return { error: result.ok ? null : { message: result.error || "Could not sign in." } };
   };
 
   const stampTermsAndAttribution = async (userId, termsAcceptedAt, termsVersion) => {
@@ -127,17 +148,7 @@ export function AuthProvider({ children }) {
     }
     const trimmed = email.trim();
     const result = await completeSignup({
-      confirmFresh: async () => {
-        try {
-          await fetch("/api/confirm-fresh-signup", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email: trimmed }),
-          });
-        } catch (confirmErr) {
-          console.error("confirm-fresh-signup failed", confirmErr);
-        }
-      },
+      confirmFresh: () => confirmFreshSignup(trimmed),
       signUp: async () => {
         const { data, error } = await supabase.auth.signUp({
           email: trimmed,
