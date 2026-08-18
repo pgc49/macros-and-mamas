@@ -79,4 +79,70 @@ describe("AdminClientRoster", () => {
     expect(screen.getByText("Lauren Wells")).toBeTruthy();
     expect(screen.queryByText("Test Patrick")).toBeNull();
   });
+
+  it("can switch between Founding and Cohort 2", () => {
+    const setCohort = () => {};
+    renderRoster({
+      filter: "all",
+      cohort: "all",
+      setCohort,
+      roster: [
+        {
+          id: "f",
+          role: "client",
+          name: "Ava Founding",
+          email: "ava@example.com",
+          cohort_label: "2026-07",
+          stage: "active",
+          status: "active",
+          paid: true,
+        },
+        {
+          id: "c2",
+          role: "client",
+          name: "Dolly Chammas",
+          email: "dollychammas@gmail.com",
+          cohort_label: "2026-08",
+          stage: "paid_awaiting_intake",
+          status: "pending",
+          paid: true,
+        },
+      ],
+    });
+    expect(screen.getByRole("button", { name: "All groups" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Founding" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cohort 2" })).toBeTruthy();
+    expect(screen.getByText("Ava Founding")).toBeTruthy();
+    expect(screen.getByText("Dolly Chammas")).toBeTruthy();
+    cleanup();
+    renderRoster({
+      filter: "all",
+      cohort: "2026-08",
+      setCohort,
+      roster: [
+        {
+          id: "f",
+          role: "client",
+          name: "Ava Founding",
+          email: "ava@example.com",
+          cohort_label: "2026-07",
+          stage: "active",
+          status: "active",
+          paid: true,
+        },
+        {
+          id: "c2",
+          role: "client",
+          name: "Dolly Chammas",
+          email: "dollychammas@gmail.com",
+          cohort_label: "2026-08",
+          stage: "paid_awaiting_intake",
+          status: "pending",
+          paid: true,
+        },
+      ],
+    });
+    expect(screen.getByText("Dolly Chammas")).toBeTruthy();
+    expect(screen.queryByText("Ava Founding")).toBeNull();
+  });
 });

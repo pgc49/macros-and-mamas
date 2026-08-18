@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   filterRoster,
   formatLastMessaged,
+  listRosterCohorts,
   matchesRosterQuery,
   needsYou,
   rosterFilterCounts,
+  rosterStats,
   rosterTitle,
 } from "./clientRoster.js";
 
@@ -97,5 +99,42 @@ describe("needsYou + filterRoster", () => {
     expect(counts.needsYou).toBe(2);
     expect(counts.unpaid).toBe(1);
     expect(counts.active).toBe(2);
+  });
+});
+
+describe("cohort filter", () => {
+  const today = "2026-08-18";
+  const founding = mama({
+    id: "f",
+    name: "Ava",
+    cohort_label: "2026-07",
+    stage: "active",
+    status: "active",
+  });
+  const c2 = mama({
+    id: "c2",
+    name: "Dolly Chammas",
+    email: "dollychammas@gmail.com",
+    cohort_label: "2026-08",
+    stage: "paid_awaiting_intake",
+    status: "pending",
+    lastActiveDate: null,
+  });
+
+  it("lists Founding and Cohort 2 when both exist", () => {
+    const opts = listRosterCohorts([founding, c2]);
+    expect(opts.map((o) => o.id)).toEqual(["all", "2026-07", "2026-08"]);
+    expect(opts.find((o) => o.id === "2026-08").label).toBe("Cohort 2");
+  });
+
+  it("scopes the roster and stats to one cohort", () => {
+    const list = filterRoster([founding, c2], "all", { todayIso: today, cohort: "2026-08" });
+    expect(list.map((c) => c.id)).toEqual(["c2"]);
+    const stats = rosterStats([founding, c2], "2026-08");
+    expect(stats.signups).toBe(1);
+    expect(stats.paid).toBe(1);
+    expect(stats.active).toBe(0);
+    expect(stats.awaitingIntake).toBe(1);
+    expect(rosterFilterCounts([founding, c2], today, "2026-08").paid).toBe(1);
   });
 });

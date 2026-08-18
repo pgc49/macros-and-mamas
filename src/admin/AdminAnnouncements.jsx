@@ -234,8 +234,8 @@ export function AdminAnnouncements({ roster = [] }) {
         Announcements
       </h2>
       <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px", lineHeight: 1.5 }}>
-        Broadcast to mamas — text announcements land in Messages; Monday voice drops show on Today.
-        1:1 coaching stays under Messages.
+        Same note to many mamas at once — it lands in each mama&apos;s Messages thread plus a push
+        (email if push isn&apos;t on). Monday voice drops show on Today. Private replies stay in Messages.
       </p>
       {error && <div style={{ fontSize: 13, color: T.amber, marginBottom: 10 }}>{error}</div>}
 

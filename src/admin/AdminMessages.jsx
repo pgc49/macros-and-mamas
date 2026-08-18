@@ -822,7 +822,7 @@ export function AdminMessages({
         <>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 28, margin: "4px 0 6px" }}>Messages</h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px", lineHeight: 1.5 }}>
-            Groups and 1:1 threads — same chats mamas see. Search from the inbox, tap to open.
+            Reply to one mama, or open a group chat. To text many mamas the same note at once, use Announcements.
           </p>
         </>
       )}
