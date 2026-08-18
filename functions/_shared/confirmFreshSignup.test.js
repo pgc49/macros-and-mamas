@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  ADMIN_USERS_PER_PAGE,
   FRESH_SIGNUP_MS,
+  adminUsersListUrl,
+  findAdminUserByEmail,
   shouldConfirmFreshUser,
   userFromAdminList,
 } from "./confirmFreshSignup.js";
@@ -52,5 +55,42 @@ describe("userFromAdminList", () => {
   it("returns null when the email is absent", () => {
     expect(userFromAdminList({ users: [{ id: "a", email: "a@x.com" }] }, "b@x.com")).toBe(null);
     expect(userFromAdminList({}, "a@x.com")).toBe(null);
+  });
+});
+
+describe("findAdminUserByEmail", () => {
+  it("pages past the first 50 users when the email filter is ignored", async () => {
+    const page1 = Array.from({ length: ADMIN_USERS_PER_PAGE }, (_, i) => ({
+      id: `p1-${i}`,
+      email: `other${i}@x.com`,
+    }));
+    const fetchImpl = async (url) => {
+      const page = new URL(url).searchParams.get("page");
+      if (page === "1") {
+        return new Response(JSON.stringify({ users: page1 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        users: [{ id: "u51", email: "mama@x.com" }],
+      }), { status: 200 });
+    };
+
+    const user = await findAdminUserByEmail({
+      fetchImpl,
+      base: "https://example.supabase.co",
+      key: "service",
+      email: "mama@x.com",
+    });
+    expect(user?.id).toBe("u51");
+  });
+
+  it("builds a paged admin list URL", () => {
+    const url = adminUsersListUrl("https://example.supabase.co/", {
+      page: 2,
+      email: "mama@x.com",
+    });
+    expect(url).toContain("/auth/v1/admin/users");
+    expect(url).toContain("page=2");
+    expect(url).toContain("per_page=50");
+    expect(url).toContain("email=mama%40x.com");
   });
 });
