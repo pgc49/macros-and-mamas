@@ -27,6 +27,15 @@ export function cohortByLabel(label) {
   return COHORT_CALENDAR.find((c) => c.label === key) || null;
 }
 
+/** Short admin filter names — Founding vs the next group Callie is filling. */
+export function adminCohortName(label) {
+  const key = String(label || "").trim();
+  if (!key) return "Unassigned";
+  if (key === "2026-07") return "Founding";
+  if (key === "2026-08") return "Cohort 2";
+  return cohortByLabel(key)?.displayName || key;
+}
+
 export function freeMonthEndsAt(cohortOrLabel) {
   const cohort = typeof cohortOrLabel === "string"
     ? cohortByLabel(cohortOrLabel)

@@ -16,7 +16,7 @@ import {
 import { T, F, FD } from "../theme/tokens";
 import { addDaysIso, localDateIso, rateOf } from "../utils/dates";
 import { buildMacroHistory, buildTrends, buildWaterHistory } from "../utils/progressSeries";
-import { resolveProgramStartWeekIso } from "../lib/cohorts";
+import { adminCohortName, resolveProgramStartWeekIso } from "../lib/cohorts";
 import { mergeGoalItems } from "../lib/goals";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
@@ -28,7 +28,9 @@ import { AdminAnnouncements } from "./AdminAnnouncements";
 import { AdminClientTracking } from "./AdminClientTracking";
 import { AdminClientMessages } from "./AdminClientMessages";
 import { AdminCredits } from "./AdminCredits";
-import { AdminClientRoster, CopyPhoneButton } from "./AdminClientRoster";
+import { AdminClientRoster, CohortFilterBar, CopyPhoneButton } from "./AdminClientRoster";
+import { emailRecipient, emailTypeLabel } from "./emailLog";
+import { rosterStats } from "./clientRoster";
 import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
@@ -50,6 +52,8 @@ const AI_LABELS = {
   meal_suggest: "Suggest my week",
   meal_idea: "Meal ideas",
 };
+
+const EMPTY_ROSTER = [];
 
 const AI_KINDS = {
   config: "not configured",
@@ -74,12 +78,31 @@ function formatWhen(iso) {
   }
 }
 
-function StatPill({ label, value, bg, color }) {
-  return (
-    <div style={{ flex: "1 1 30%", minWidth: 100, background: bg, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+function StatPill({ label, value, bg, color, onClick }) {
+  const style = {
+    flex: "1 1 30%",
+    minWidth: 100,
+    background: bg,
+    borderRadius: 12,
+    padding: "12px 8px",
+    textAlign: "center",
+    border: "none",
+    fontFamily: F,
+    cursor: onClick ? "pointer" : "default",
+    appearance: "none",
+    WebkitAppearance: "none",
+  };
+  const inner = (
+    <>
       <div style={{ fontFamily: FD, fontSize: 24, color }}>{value}</div>
       <div style={{ fontSize: 11.5, fontWeight: 700, color, lineHeight: 1.3, marginTop: 2 }}>{label}</div>
-    </div>
+    </>
+  );
+  if (!onClick) return <div style={style}>{inner}</div>;
+  return (
+    <button type="button" onClick={onClick} style={style} aria-label={`${label}: ${value}. Open this list.`}>
+      {inner}
+    </button>
   );
 }
 
@@ -90,7 +113,7 @@ function TabBar({ tab, setTab, unreadMessages = 0 }) {
     ["credits", "Credits"],
     ["messages", "Messages"],
     ["announcements", "Announcements"],
-    ["emails", "Email templates"],
+    ["emails", "Emails"],
   ];
   return (
     <div style={{ display: "flex", gap: 6, margin: "10px 0 18px", flexWrap: "wrap" }}>
@@ -212,7 +235,7 @@ function EmailTimeline({ profileId }) {
   );
 }
 
-export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel }) {
+export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdminSel }) {
   const { user } = useAuth();
   const [tab, setTab] = useState(() => {
     if (typeof window === "undefined") return "overview";
@@ -220,7 +243,16 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
     if (q === "messages" || q === "announcements" || q === "emails" || q === "clients" || q === "credits") return q;
     return "overview";
   });
-  const [filter, setFilter] = useState("needs_you");
+  const [filter, setFilter] = useState(() => {
+    if (typeof window === "undefined") return "needs_you";
+    const q = new URLSearchParams(window.location.search).get("filter");
+    const allowed = new Set(["needs_you", "active", "awaiting_approval", "awaiting_intake", "paid", "unpaid", "refunded", "all"]);
+    return allowed.has(q) ? q : "needs_you";
+  });
+  const [cohortFilter, setCohortFilter] = useState(() => {
+    if (typeof window === "undefined") return "all";
+    return new URLSearchParams(window.location.search).get("cohort") || "all";
+  });
   const [recentEmails, setRecentEmails] = useState([]);
   const [aiFailures, setAiFailures] = useState([]);
   const [cohortWaitlist, setCohortWaitlist] = useState([]);
@@ -234,8 +266,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
     syncAppBadge(unreadMessages);
   }, [unreadMessages]);
 
-  const all = roster || [];
-  const nonAdmin = useMemo(() => all.filter((c) => c.role !== "admin"), [all]);
+  const all = roster || EMPTY_ROSTER;
 
   // Keep unread count fresh on Overview (and elsewhere) so Callie sees it without opening Messages.
   const refreshUnread = useCallback(async () => {
@@ -270,27 +301,30 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
     };
   }, [user?.id, refreshUnread]);
 
-  const computedStats = useMemo(() => {
-    if (stats) return stats;
-    return {
-      signups: nonAdmin.length,
-      paid: nonAdmin.filter((c) => c.paid && !c.refunded).length,
-      unpaid: nonAdmin.filter((c) => !c.paid && !c.refunded).length,
-      awaitingIntake: nonAdmin.filter((c) => c.stage === "paid_awaiting_intake").length,
-      awaitingApproval: nonAdmin.filter((c) => c.stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid)).length,
-      active: nonAdmin.filter((c) => c.stage === "active" || c.status === "active").length,
-      refunded: nonAdmin.filter((c) => c.stage === "refunded" || c.refunded).length,
-    };
-  }, [stats, nonAdmin]);
+  const computedStats = useMemo(
+    () => rosterStats(all, cohortFilter),
+    [all, cohortFilter],
+  );
+
+  const openClients = useCallback((nextFilter) => {
+    setFilter(nextFilter);
+    setTab("clients");
+  }, []);
 
   useEffect(() => {
     if (tab !== "overview") return;
     let cancelled = false;
-    db.loadRecentEmailEvents(12).then((rows) => {
-      if (!cancelled) setRecentEmails(rows);
-    });
     db.loadAiFailures(24, 50).then((rows) => {
       if (!cancelled) setAiFailures(rows);
+    });
+    return () => { cancelled = true; };
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "emails") return;
+    let cancelled = false;
+    db.loadRecentEmailEvents(60).then((rows) => {
+      if (!cancelled) setRecentEmails(rows || []);
     });
     return () => { cancelled = true; };
   }, [tab]);
@@ -446,6 +480,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 {STAGE_LABEL[stage] || stage}
                 {sel.paid ? " · Paid" : " · Unpaid"}
                 {sel.refunded ? " · Refunded" : ""}
+                {sel.cohort_label ? ` · ${adminCohortName(sel.cohort_label)}` : ""}
                 {sel.email ? <><br />✉️ {sel.email}</> : null}
                 {sel.age ? <><br />{sel.age} yrs</> : null}
                 {sel.currentWeight != null && sel.goalWeight != null ? <> · {sel.currentWeight} → {sel.goalWeight} lbs</> : null}
@@ -684,6 +719,7 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
       <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 4px" }}>Callie admin</h2>
       <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 4px", lineHeight: 1.45 }}>
         Your mamas — find who needs you, then jump into a 1:1.{" "}
+        Messages is replies. Announcements is a note to many mamas.{" "}
         <Link to={PATHS.dashboard} style={{ color: T.accent, fontWeight: 700 }}>Your dashboard</Link>
         {" · "}
         Admin only.
@@ -763,14 +799,15 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             </button>
           )}
 
+          <CohortFilterBar roster={all} cohort={cohortFilter} setCohort={setCohortFilter} />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-            <StatPill label="Signups" value={computedStats.signups} bg={T.accentSoft} color={T.accentDeep} />
-            <StatPill label="Paid" value={computedStats.paid} bg={T.sageSoft} color={T.sage} />
-            <StatPill label="Unpaid" value={computedStats.unpaid} bg={T.track} color={T.inkSoft} />
-            <StatPill label="Need intake" value={computedStats.awaitingIntake} bg={T.amberSoft} color={T.amber} />
-            <StatPill label="Need approval" value={computedStats.awaitingApproval} bg={T.amberSoft} color={T.amber} />
-            <StatPill label="Active" value={computedStats.active} bg={T.sageSoft} color={T.sage} />
-            <StatPill label="Refunded" value={computedStats.refunded} bg={T.track} color={T.inkSoft} />
+            <StatPill label="Signups" value={computedStats.signups} bg={T.accentSoft} color={T.accentDeep} onClick={() => openClients("all")} />
+            <StatPill label="Paid" value={computedStats.paid} bg={T.sageSoft} color={T.sage} onClick={() => openClients("paid")} />
+            <StatPill label="Unpaid" value={computedStats.unpaid} bg={T.track} color={T.inkSoft} onClick={() => openClients("unpaid")} />
+            <StatPill label="Need intake" value={computedStats.awaitingIntake} bg={T.amberSoft} color={T.amber} onClick={() => openClients("awaiting_intake")} />
+            <StatPill label="Need approval" value={computedStats.awaitingApproval} bg={T.amberSoft} color={T.amber} onClick={() => openClients("awaiting_approval")} />
+            <StatPill label="Active" value={computedStats.active} bg={T.sageSoft} color={T.sage} onClick={() => openClients("active")} />
+            <StatPill label="Refunded" value={computedStats.refunded} bg={T.track} color={T.inkSoft} onClick={() => openClients("refunded")} />
           </div>
 
           <Card>
@@ -800,21 +837,35 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
                 </p>
               )}
               {computedStats.awaitingApproval > 0
-                ? <p style={{ margin: "0 0 8px" }}><b style={{ color: T.ink }}>{computedStats.awaitingApproval}</b> mama{computedStats.awaitingApproval === 1 ? "" : "s"} waiting on macro approval.</p>
+                ? (
+                  <p style={{ margin: "0 0 8px" }}>
+                    <button type="button" onClick={() => openClients("awaiting_approval")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
+                      {computedStats.awaitingApproval} mama{computedStats.awaitingApproval === 1 ? "" : "s"} waiting on macro approval
+                    </button>
+                    .
+                  </p>
+                )
                 : <p style={{ margin: "0 0 8px" }}>No intakes waiting on approval.</p>}
               {computedStats.awaitingIntake > 0 && (
-                <p style={{ margin: "0 0 8px" }}><b style={{ color: T.ink }}>{computedStats.awaitingIntake}</b> paid but haven&apos;t finished intake yet.</p>
+                <p style={{ margin: "0 0 8px" }}>
+                  <button type="button" onClick={() => openClients("awaiting_intake")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
+                    {computedStats.awaitingIntake} paid but haven&apos;t finished intake yet
+                  </button>
+                  .
+                </p>
               )}
               {computedStats.unpaid > 0 && (
-                <p style={{ margin: 0 }}><b style={{ color: T.ink }}>{computedStats.unpaid}</b> signed up and haven&apos;t paid.</p>
+                <p style={{ margin: 0 }}>
+                  <button type="button" onClick={() => openClients("unpaid")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
+                    {computedStats.unpaid} signed up and haven&apos;t paid
+                  </button>
+                  .
+                </p>
               )}
             </div>
             <Btn
               style={{ width: "100%", marginTop: 14 }}
-              onClick={() => {
-                setFilter(computedStats.awaitingApproval > 0 ? "awaiting_approval" : "needs_you");
-                setTab("clients");
-              }}
+              onClick={() => openClients(computedStats.awaitingApproval > 0 ? "awaiting_approval" : "needs_you")}
             >
               {computedStats.awaitingApproval > 0 ? "Review approvals" : "Open client list"}
             </Btn>
@@ -852,21 +903,6 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
             )}
           </Card>
 
-          <Card style={{ marginTop: 12 }}>
-            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>Recent emails</div>
-            {!recentEmails.length ? (
-              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
-                No sends logged yet. After you run migration <code>006_email_events.sql</code>, new welcomes / intake / approve / refund emails show up here.
-              </div>
-            ) : (
-              recentEmails.map((e) => (
-                <div key={e.id} style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700 }}>{EMAIL_TYPE_LABELS[e.email_type] || e.email_type}</div>
-                  <div style={{ fontSize: 12, color: T.inkSoft }}>{e.subject || "—"} · {formatWhen(e.created_at)}</div>
-                </div>
-              ))
-            )}
-          </Card>
         </>
       )}
 
@@ -875,6 +911,8 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
           roster={all}
           filter={filter}
           setFilter={setFilter}
+          cohort={cohortFilter}
+          setCohort={setCohortFilter}
           onOpenClient={(id) => setAdminSel(id)}
           onMessageClient={(id) => {
             setAdminSel(id);
@@ -911,6 +949,55 @@ export function AdminPortal({ roster, setRoster, stats, adminSel, setAdminSel })
 
       {tab === "emails" && (
         <>
+          <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 14px" }}>
+            Who received each send — tap a mama to open her profile. Templates Callie uses are below.
+          </p>
+          <Card style={{ marginBottom: 14 }}>
+            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Sent emails</div>
+            {!recentEmails.length ? (
+              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
+                No sends logged yet.
+              </div>
+            ) : (
+              recentEmails.map((e) => {
+                const who = emailRecipient(e);
+                const client = e.profile_id ? all.find((c) => c.id === e.profile_id) : null;
+                const canOpen = !!client;
+                return (
+                  <div
+                    key={e.id}
+                    role={canOpen ? "button" : undefined}
+                    tabIndex={canOpen ? 0 : undefined}
+                    onClick={canOpen ? () => setAdminSel(e.profile_id) : undefined}
+                    onKeyDown={canOpen ? (ev) => {
+                      if (ev.key === "Enter" || ev.key === " ") {
+                        ev.preventDefault();
+                        setAdminSel(e.profile_id);
+                      }
+                    } : undefined}
+                    style={{
+                      padding: "10px 0",
+                      borderBottom: `1px solid ${T.border}`,
+                      cursor: canOpen ? "pointer" : "default",
+                    }}
+                  >
+                    <div style={{ fontSize: 15, fontWeight: 800, color: T.ink }}>
+                      {who.name}
+                    </div>
+                    {who.email ? (
+                      <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 1 }}>{who.email}</div>
+                    ) : null}
+                    <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 4 }}>
+                      {emailTypeLabel(e)}
+                      {e.subject ? ` · ${e.subject}` : ""}
+                      {" · "}
+                      {formatWhen(e.created_at)}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </Card>
           <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 14px" }}>
             Read-only view of Callie&apos;s lifecycle emails (first person, from her). #1 and #3 run on an hourly cron once CRON_SECRET is set. Cohort-open waitlist blast is ready for a manual send when enrollment reopens.
           </p>

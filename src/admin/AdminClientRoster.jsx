@@ -2,9 +2,11 @@ import { useMemo, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { localDateIso } from "../utils/dates";
 import { MealSearchInput } from "../components/ui";
+import { adminCohortName } from "../lib/cohorts";
 import {
   filterRoster,
   formatLastMessaged,
+  listRosterCohorts,
   rosterFilterCounts,
   rosterTitle,
 } from "./clientRoster";
@@ -73,25 +75,72 @@ const FILTERS = [
   ["active", "Active"],
   ["awaiting_approval", "Approve"],
   ["awaiting_intake", "Need intake"],
+  ["paid", "Paid"],
   ["unpaid", "Unpaid"],
   ["refunded", "Refunded"],
   ["all", "All"],
 ];
 
+export function CohortFilterBar({ roster = [], cohort = "all", setCohort }) {
+  const options = useMemo(() => listRosterCohorts(roster), [roster]);
+  if (options.length <= 1) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        flexWrap: "nowrap",
+        overflowX: "auto",
+        marginBottom: 10,
+        paddingBottom: 2,
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      {options.map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          onClick={() => setCohort?.(opt.id)}
+          style={{
+            flex: "0 0 auto",
+            minHeight: 36,
+            padding: "6px 12px",
+            borderRadius: 999,
+            border: `1.5px solid ${cohort === opt.id ? T.ink : T.border}`,
+            background: cohort === opt.id ? T.ink : "#fff",
+            color: cohort === opt.id ? "#fff" : T.inkSoft,
+            fontWeight: 700,
+            fontSize: 12.5,
+            cursor: "pointer",
+            fontFamily: F,
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function AdminClientRoster({
   roster = [],
   filter,
   setFilter,
+  cohort = "all",
+  setCohort,
   onOpenClient,
   onMessageClient,
   nowMs = Date.now(),
   todayIso = localDateIso(),
 }) {
   const [query, setQuery] = useState("");
-  const counts = useMemo(() => rosterFilterCounts(roster, todayIso), [roster, todayIso]);
+  const counts = useMemo(
+    () => rosterFilterCounts(roster, todayIso, cohort),
+    [roster, todayIso, cohort],
+  );
   const filtered = useMemo(
-    () => filterRoster(roster, filter, { query, todayIso }),
-    [roster, filter, query, todayIso],
+    () => filterRoster(roster, filter, { query, todayIso, cohort }),
+    [roster, filter, query, todayIso, cohort],
   );
 
   const countFor = (id) => {
@@ -100,6 +149,7 @@ export function AdminClientRoster({
     if (id === "awaiting_approval") return counts.awaitingApproval;
     if (id === "awaiting_intake") return counts.awaitingIntake;
     if (id === "unpaid") return counts.unpaid;
+    if (id === "paid") return counts.paid;
     if (id === "refunded") return counts.refunded;
     if (id === "all") return counts.all;
     return 0;
@@ -113,6 +163,7 @@ export function AdminClientRoster({
         placeholder="Search name, email, or phone"
         style={{ marginBottom: 10 }}
       />
+      <CohortFilterBar roster={roster} cohort={cohort} setCohort={setCohort} />
       <div
         style={{
           display: "flex",
@@ -220,6 +271,21 @@ export function AdminClientRoster({
                         }}
                       >
                         Admin
+                      </span>
+                    )}
+                    {cohort === "all" && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          fontFamily: F,
+                          padding: "2px 7px",
+                          borderRadius: 99,
+                          background: T.track,
+                          color: T.inkSoft,
+                        }}
+                      >
+                        {adminCohortName(c.cohort_label)}
                       </span>
                     )}
                     {unread > 0 && (

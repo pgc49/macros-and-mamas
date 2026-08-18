@@ -1,4 +1,40 @@
+import { adminCohortName } from "../lib/cohorts";
 import { addDaysIso, localDateIso } from "../utils/dates";
+
+export const UNASSIGNED_COHORT = "unassigned";
+
+export function cohortKey(client) {
+  const label = String(client?.cohort_label || "").trim();
+  return label || UNASSIGNED_COHORT;
+}
+
+export function matchesCohort(client, cohortFilter) {
+  if (!cohortFilter || cohortFilter === "all") return true;
+  return cohortKey(client) === cohortFilter;
+}
+
+export function listRosterCohorts(all) {
+  const present = new Set();
+  for (const c of all || []) {
+    if (String(c?.role || "").toLowerCase() === "admin") continue;
+    present.add(cohortKey(c));
+  }
+  const options = [{ id: "all", label: "All groups" }];
+  for (const row of [
+    { id: "2026-07", label: adminCohortName("2026-07") },
+    { id: "2026-08", label: adminCohortName("2026-08") },
+  ]) {
+    if (present.has(row.id)) options.push(row);
+  }
+  for (const id of [...present].sort()) {
+    if (id === "2026-07" || id === "2026-08" || id === UNASSIGNED_COHORT) continue;
+    options.push({ id, label: adminCohortName(id) });
+  }
+  if (present.has(UNASSIGNED_COHORT)) {
+    options.push({ id: UNASSIGNED_COHORT, label: "Unassigned" });
+  }
+  return options;
+}
 
 const PLACEHOLDER_NAMES = new Set(["new signup", "mama", "unnamed"]);
 
@@ -68,6 +104,8 @@ export function matchesRosterQuery(client, rawQuery) {
     client?.lastName,
     client?.email,
     client?.phone,
+    client?.cohort_label,
+    adminCohortName(client?.cohort_label),
     rosterTitle(client),
   ]
     .filter(Boolean)
@@ -90,14 +128,16 @@ function attentionRank(client, todayIso) {
   return 4;
 }
 
-export function filterRoster(all, filter, { query = "", todayIso = localDateIso() } = {}) {
+export function filterRoster(all, filter, { query = "", todayIso = localDateIso(), cohort = "all" } = {}) {
   const admins = (all || []).filter((c) => c.role === "admin").slice().sort(byName);
-  const clientsOnly = (all || []).filter((c) => c.role !== "admin");
+  const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
   let list = clientsOnly;
   if (filter === "needs_you") {
     list = clientsOnly.filter((c) => needsYou(c, todayIso));
   } else if (filter === "unpaid") {
     list = clientsOnly.filter((c) => c.stage === "signed_up");
+  } else if (filter === "paid") {
+    list = clientsOnly.filter((c) => c.paid && !c.refunded);
   } else if (filter === "awaiting_intake") {
     list = clientsOnly.filter((c) => c.stage === "paid_awaiting_intake");
   } else if (filter === "awaiting_approval") {
@@ -129,13 +169,13 @@ export function filterRoster(all, filter, { query = "", todayIso = localDateIso(
     });
   }
 
-  const showAdmins = filter === "all" || filter === "active";
+  const showAdmins = (filter === "all" || filter === "active") && (!cohort || cohort === "all");
   const adminHits = showAdmins ? admins.filter((c) => matchesRosterQuery(c, query)) : [];
   return [...adminHits, ...list];
 }
 
-export function rosterFilterCounts(all, todayIso = localDateIso()) {
-  const clientsOnly = (all || []).filter((c) => c.role !== "admin");
+export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all") {
+  const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
   return {
     needsYou: clientsOnly.filter((c) => needsYou(c, todayIso)).length,
     active: clientsOnly.filter((c) => c.stage === "active" || c.status === "active").length,
@@ -144,7 +184,23 @@ export function rosterFilterCounts(all, todayIso = localDateIso()) {
     ).length,
     awaitingIntake: clientsOnly.filter((c) => c.stage === "paid_awaiting_intake").length,
     unpaid: clientsOnly.filter((c) => c.stage === "signed_up").length,
+    paid: clientsOnly.filter((c) => c.paid && !c.refunded).length,
     refunded: clientsOnly.filter((c) => c.refunded || c.stage === "refunded").length,
     all: clientsOnly.length,
+  };
+}
+
+export function rosterStats(all, cohort = "all") {
+  const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
+  return {
+    signups: clientsOnly.length,
+    paid: clientsOnly.filter((c) => c.paid && !c.refunded).length,
+    unpaid: clientsOnly.filter((c) => !c.paid && !c.refunded).length,
+    awaitingIntake: clientsOnly.filter((c) => c.stage === "paid_awaiting_intake").length,
+    awaitingApproval: clientsOnly.filter(
+      (c) => c.stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid),
+    ).length,
+    active: clientsOnly.filter((c) => c.stage === "active" || c.status === "active").length,
+    refunded: clientsOnly.filter((c) => c.refunded || c.stage === "refunded").length,
   };
 }

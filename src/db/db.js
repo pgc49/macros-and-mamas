@@ -1793,9 +1793,16 @@ export const db = {
   },
 
   async loadRecentEmailEvents(limit = 20) {
+    const cols = "id, profile_id, email_type, to_email, subject, status, meta, created_at";
+    const withNames = await supabase
+      .from("email_events")
+      .select(`${cols}, profiles(name, last_name, email)`)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (!withNames.error) return withNames.data || [];
     const { data, error } = await supabase
       .from("email_events")
-      .select("id, profile_id, email_type, to_email, subject, status, created_at")
+      .select(cols)
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) {

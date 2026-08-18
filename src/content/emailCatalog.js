@@ -255,4 +255,5 @@ export const EMAIL_TYPE_LABELS = {
   callie_intake: "Callie: intake ready",
   callie_eligibility_hold: "Callie: eligibility hold",
   callie_refund: "Callie: refund",
+  message: "Message email",
 };
