@@ -169,7 +169,7 @@ function AnnouncementEmailPreview({ body }) {
  * Admin Announcements — broadcast text + Monday voice drop.
  * Messages tab stays 1:1 only.
  */
-export function AdminAnnouncements({ roster = [] }) {
+export function AdminAnnouncements({ roster = [], cohortFilter = "all" }) {
   const [announceBody, setAnnounceBody] = useState("");
   const [announceAudience, setAnnounceAudience] = useState("active");
   const [announceBusy, setAnnounceBusy] = useState(false);
@@ -307,6 +307,8 @@ export function AdminAnnouncements({ roster = [] }) {
       <AdminVoiceDropCard
         activeMamaCount={activeMamaCount}
         allMamaCount={allMamaCount}
+        cohortFilter={cohortFilter}
+        roster={roster}
       />
     </div>
   );

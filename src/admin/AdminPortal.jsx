@@ -944,7 +944,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
       )}
 
       {tab === "announcements" && (
-        <AdminAnnouncements roster={all} />
+        <AdminAnnouncements roster={all} cohortFilter={cohortFilter} />
       )}
 
       {tab === "emails" && (

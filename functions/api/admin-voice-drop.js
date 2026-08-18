@@ -5,6 +5,7 @@
 
    Body JSON (publish): {
      caption?, audience?: "admins"|"active"|"all_mamas",
+     cohortLabel?,  // required for audience=active so Founding PSAs skip C2
      audioPath, audioMime, audioBytes?, durationMs?,
      notify?: boolean  // push/email to audience (default false)
    }
@@ -20,6 +21,7 @@
    ================================================================== */
 
 import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/supabaseEmail.js";
+import { filterVoiceDropNotifyRows } from "../_shared/voiceDropAudience.js";
 
 const AUDIENCES = new Set(["admins", "active", "all_mamas"]);
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -39,7 +41,8 @@ export async function onRequestPost({ request, env, waitUntil }) {
     const caption = String(payload.caption || "").trim().slice(0, 500);
     const audience = AUDIENCES.has(String(payload.audience || "").toLowerCase())
       ? String(payload.audience).toLowerCase()
-      : "admins";
+      : "active";
+    const cohortLabel = String(payload.cohortLabel || payload.cohort_label || "").trim().slice(0, 40);
     const audioPath = String(payload.audioPath || "").trim().slice(0, 500);
     const audioMime = String(payload.audioMime || "").toLowerCase().split(";")[0].trim();
     const audioBytes = Number(payload.audioBytes) || null;
@@ -56,7 +59,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
     const publishedAt = new Date();
     const expiresAt = new Date(publishedAt.getTime() + TTL_MS);
 
-    await supersedeOpenDrops(env);
+    await supersedeOpenDrops(env, { audience, cohortLabel });
 
     const row = await insertVoiceDrop(env, {
       createdBy: user.id,
@@ -66,6 +69,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
       audioBytes,
       durationMs,
       audience,
+      cohortLabel,
       publishedAt: publishedAt.toISOString(),
       expiresAt: expiresAt.toISOString(),
     });
@@ -83,7 +87,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
       });
     }
 
-    const ids = await listNotifyIds(env, audience);
+    const ids = await listNotifyIds(env, audience, cohortLabel);
     const preview = caption
       ? caption.replace(/\s+/g, " ").trim().slice(0, 140)
       : "Monday voice drop from Callie — open Today to listen.";
@@ -143,7 +147,8 @@ async function resendNotify({ env, waitUntil, payload }) {
   const audience = AUDIENCES.has(String(drop.audience || "").toLowerCase())
     ? String(drop.audience).toLowerCase()
     : "active";
-  const ids = await listNotifyIds(env, audience);
+  const cohortLabel = String(drop.cohort_label || "").trim();
+  const ids = await listNotifyIds(env, audience, cohortLabel);
   const alreadyEmailed = await emailedProfileIdsForDrop(env, drop.id);
   const preview = String(drop.caption || "").trim()
     ? String(drop.caption).replace(/\s+/g, " ").trim().slice(0, 140)
@@ -240,12 +245,17 @@ async function notifyRecipients(env, {
   );
 }
 
-async function supersedeOpenDrops(env) {
+async function supersedeOpenDrops(env, { audience, cohortLabel } = {}) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   const now = new Date().toISOString();
+  const params = new URLSearchParams({ status: "eq.published" });
+  // Keep the other cohort's live Monday drop when publishing a cohort-scoped PSA.
+  if (audience === "active" && cohortLabel) {
+    params.set("cohort_label", `eq.${cohortLabel}`);
+  }
   await fetch(
-    `${base}/rest/v1/voice_drops?status=eq.published`,
+    `${base}/rest/v1/voice_drops?${params.toString()}`,
     {
       method: "PATCH",
       headers: {
@@ -278,6 +288,7 @@ async function insertVoiceDrop(env, row) {
       audio_bytes: row.audioBytes,
       duration_ms: row.durationMs,
       audience: row.audience,
+      cohort_label: row.cohortLabel || null,
       status: "published",
       published_at: row.publishedAt,
       expires_at: row.expiresAt,
@@ -295,7 +306,7 @@ async function loadVoiceDrop(env, dropId) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   const resp = await fetch(
-    `${base}/rest/v1/voice_drops?id=eq.${encodeURIComponent(dropId)}&select=id,caption,audience,status,published_at,expires_at,audio_path`,
+    `${base}/rest/v1/voice_drops?id=eq.${encodeURIComponent(dropId)}&select=id,caption,audience,cohort_label,status,published_at,expires_at,audio_path`,
     { headers: { apikey: key, authorization: `Bearer ${key}` } },
   );
   if (!resp.ok) return null;
@@ -322,11 +333,11 @@ async function emailedProfileIdsForDrop(env, dropId) {
   return out;
 }
 
-async function listNotifyIds(env, audience) {
+async function listNotifyIds(env, audience, cohortLabel) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   const resp = await fetch(
-    `${base}/rest/v1/profiles?select=id,role,status,refunded`,
+    `${base}/rest/v1/profiles?select=id,role,status,refunded,cohort_label`,
     { headers: { apikey: key, authorization: `Bearer ${key}` } },
   );
   if (!resp.ok) {
@@ -334,17 +345,7 @@ async function listNotifyIds(env, audience) {
     return [];
   }
   const rows = await resp.json().catch(() => []);
-  return (rows || [])
-    .filter((r) => {
-      if (r.refunded) return false;
-      const role = String(r.role || "").toLowerCase();
-      if (audience === "admins") return role === "admin";
-      if (role === "admin") return false;
-      if (audience === "active") return String(r.status || "") === "active";
-      return true; // all_mamas
-    })
-    .map((r) => r.id)
-    .filter(Boolean);
+  return filterVoiceDropNotifyRows(rows, { audience, cohortLabel });
 }
 
 async function sendPushToProfile(env, profileId, payload) {
