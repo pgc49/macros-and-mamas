@@ -86,6 +86,59 @@ export async function listDueNotificationJobs(env, limit = 20) {
   ];
 }
 
+export const NOTIFICATION_JOB_TIMEOUT_MS = 8_000;
+export const NOTIFICATION_JOB_TIMEOUT_ERROR = "timeout";
+
+/** Per-job abort so a drain can finish() the claim instead of abandoning it. */
+export function createJobDeadline(ms = NOTIFICATION_JOB_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    try {
+      controller.abort();
+    } catch {
+      /* already aborted */
+    }
+  }, Math.max(1, Number(ms) || NOTIFICATION_JOB_TIMEOUT_MS));
+  if (typeof timer.unref === "function") timer.unref();
+  return {
+    signal: controller.signal,
+    cancel() {
+      clearTimeout(timer);
+    },
+  };
+}
+
+/** Wait for work, or throw `timeout` if `signal` aborts first. Work is not cancelled. */
+export async function raceDeadline(signal, work) {
+  const promise = typeof work === "function" ? work() : work;
+  if (!signal) return promise;
+  if (signal.aborted) throw new Error(NOTIFICATION_JOB_TIMEOUT_ERROR);
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => reject(new Error(NOTIFICATION_JOB_TIMEOUT_ERROR));
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  }
+}
+
+/** Register background work when waitUntil is bound; otherwise false so the caller can await. */
+export function enqueueBackground(waitUntil, work) {
+  if (typeof waitUntil !== "function") return false;
+  try {
+    waitUntil(Promise.resolve().then(work).catch((error) => {
+      console.error("background notification work failed", error);
+    }));
+    return true;
+  } catch (error) {
+    console.warn("waitUntil rejected; running inline", error);
+    return false;
+  }
+}
+
 export function authorizeCron(request, env) {
   const secret = String(env.CRON_SECRET || "");
   if (!secret) return false;

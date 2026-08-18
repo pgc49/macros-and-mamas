@@ -10,9 +10,12 @@ import {
   authorizeCron,
   claimNotificationJob,
   finishNotificationJob,
+  raceDeadline,
 } from "../_shared/messageOutbox.js";
 
-export async function onRequestPost({ request, env }) {
+const CHANNEL_PUSH_CONCURRENCY = 8;
+
+export async function onRequestPost({ request, env, signal }) {
   let job = null;
   try {
     const body = await request.json().catch(() => ({}));
@@ -31,11 +34,6 @@ export async function onRequestPost({ request, env }) {
       if (!job) {
         return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0 });
       }
-      msg = await loadChannelMessage(env, messageId);
-      if (!msg) {
-        await finishNotificationJob(env, job, { success: true });
-        return json({ ok: true, skipped: "source_missing", pushSent: 0 });
-      }
     } else {
       msg = await loadChannelMessage(env, messageId);
       if (!msg) return json({ error: "not found" }, 404);
@@ -47,61 +45,14 @@ export async function onRequestPost({ request, env }) {
     if (!job) {
       return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0 });
     }
-    if (msg.deleted_at) {
-      await finishNotificationJob(env, job, { success: true });
-      return json({ ok: true, skipped: "deleted", pushSent: 0 });
-    }
-    if (msg.notified_at) {
-      await finishNotificationJob(env, job, { success: true });
-      return json({ ok: true, skipped: "already_notified", pushSent: 0 });
-    }
 
-    const [conversation, sender, members, replyTo, adminIds] = await Promise.all([
-      loadConversation(env, msg.conversation_id),
-      msg.sender_id ? loadProfile(env, msg.sender_id) : Promise.resolve(null),
-      listConversationMembers(env, msg.conversation_id),
-      msg.reply_to_id ? loadChannelMessage(env, msg.reply_to_id) : Promise.resolve(null),
-      listAdminIds(env),
-    ]);
-    if (!conversation) throw new Error("channel missing");
-
-    const senderIsAdmin = String(sender?.role || "").toLowerCase() === "admin";
-    const preview = messagePreview(msg);
-    const senderLabel = msg.kind === "system"
-      ? "Macros and Mamas"
-      : senderDisplayName(sender);
-    const recipients = members.filter((member) => shouldNotifyMember({
-      member,
-      senderId: msg.sender_id,
-      senderIsAdmin,
-      messageKind: msg.kind,
-      replyTo,
+    const result = await raceDeadline(signal, () => processClaimedChannel({
+      env,
+      messageId,
+      msg,
     }));
-    const adminSet = new Set(adminIds);
-
-    let pushSent = 0;
-    for (const member of recipients) {
-      pushSent += await sendPushToProfile(env, member.user_id, {
-        title: conversation.label || "Group chat",
-        body: preview
-          ? (msg.kind === "system" ? preview : `${senderLabel}: ${preview}`)
-          : `${senderLabel} posted in the group`,
-        url: channelNotificationUrl(
-          msg.conversation_id,
-          adminSet.has(member.user_id),
-        ),
-      });
-    }
-
-    await markChannelMessageNotified(env, messageId);
     await finishNotificationJob(env, job, { success: true });
-    return json({
-      ok: true,
-      route: "channel",
-      conversationId: msg.conversation_id,
-      recipients: recipients.length,
-      pushSent,
-    });
+    return json({ ok: true, ...result });
   } catch (e) {
     console.error("channel-notify failed", e);
     if (job) {
@@ -116,6 +67,78 @@ export async function onRequestPost({ request, env }) {
     }
     return json({ error: "notify failed" }, 500);
   }
+}
+
+async function processClaimedChannel({ env, messageId, msg }) {
+  const loaded = msg || await loadChannelMessage(env, messageId);
+  if (!loaded) {
+    return { skipped: "source_missing", pushSent: 0 };
+  }
+  if (loaded.deleted_at) {
+    return { skipped: "deleted", pushSent: 0 };
+  }
+  if (loaded.notified_at) {
+    return { skipped: "already_notified", pushSent: 0 };
+  }
+
+  const [conversation, sender, members, replyTo, adminIds] = await Promise.all([
+    loadConversation(env, loaded.conversation_id),
+    loaded.sender_id ? loadProfile(env, loaded.sender_id) : Promise.resolve(null),
+    listConversationMembers(env, loaded.conversation_id),
+    loaded.reply_to_id ? loadChannelMessage(env, loaded.reply_to_id) : Promise.resolve(null),
+    listAdminIds(env),
+  ]);
+  if (!conversation) throw new Error("channel missing");
+
+  const senderIsAdmin = String(sender?.role || "").toLowerCase() === "admin";
+  const preview = messagePreview(loaded);
+  const senderLabel = loaded.kind === "system"
+    ? "Macros and Mamas"
+    : senderDisplayName(sender);
+  const recipients = members.filter((member) => shouldNotifyMember({
+    member,
+    senderId: loaded.sender_id,
+    senderIsAdmin,
+    messageKind: loaded.kind,
+    replyTo,
+  }));
+  const adminSet = new Set(adminIds);
+
+  const pushSent = await sendChannelPushes(env, recipients, (member) => ({
+    title: conversation.label || "Group chat",
+    body: preview
+      ? (loaded.kind === "system" ? preview : `${senderLabel}: ${preview}`)
+      : `${senderLabel} posted in the group`,
+    url: channelNotificationUrl(
+      loaded.conversation_id,
+      adminSet.has(member.user_id),
+    ),
+  }));
+
+  await markChannelMessageNotified(env, messageId);
+  return {
+    route: "channel",
+    conversationId: loaded.conversation_id,
+    recipients: recipients.length,
+    pushSent,
+  };
+}
+
+async function sendChannelPushes(env, recipients, payloadFor) {
+  const queue = [...recipients];
+  let pushSent = 0;
+  const workers = Array.from(
+    { length: Math.min(CHANNEL_PUSH_CONCURRENCY, queue.length || 0) },
+    async () => {
+      while (queue.length) {
+        const member = queue.shift();
+        if (!member) break;
+        pushSent += await sendPushToProfile(env, member.user_id, payloadFor(member));
+      }
+    },
+  );
+  await Promise.all(workers);
+  return pushSent;
 }
 
 export function channelNotificationUrl(conversationId, isAdminRecipient) {

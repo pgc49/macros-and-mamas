@@ -11,11 +11,15 @@ const mocks = vi.hoisted(() => ({
   contact: vi.fn(),
 }));
 
-vi.mock("../_shared/messageOutbox.js", () => ({
-  authorizeCron: () => true,
-  claimNotificationJob: mocks.claim,
-  finishNotificationJob: mocks.finish,
-}));
+vi.mock("../_shared/messageOutbox.js", async () => {
+  const actual = await vi.importActual("../_shared/messageOutbox.js");
+  return {
+    ...actual,
+    authorizeCron: () => true,
+    claimNotificationJob: mocks.claim,
+    finishNotificationJob: mocks.finish,
+  };
+});
 
 vi.mock("../_shared/supabaseEmail.js", () => ({
   invokeEdgeFunction: mocks.invoke,
@@ -46,6 +50,7 @@ function request(messageId) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe("durable DM notification processing", () => {
@@ -141,6 +146,193 @@ describe("durable DM notification processing", () => {
       expect.objectContaining({ id: 1 }),
       expect.objectContaining({ success: false }),
     );
+  });
+
+  it("finishes a claimed job as timeout when the drain aborts after claim", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+    const controller = new AbortController();
+    const pending = onRequestPost({
+      request: request("10000000-0000-4000-8000-000000000013"),
+      env,
+      signal: controller.signal,
+    });
+    await vi.waitFor(() => expect(mocks.claim).toHaveBeenCalled());
+    controller.abort();
+
+    const response = await pending;
+    expect(response.status).toBe(500);
+    expect(mocks.finish).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: 1 }),
+      { success: false, error: "timeout" },
+    );
+  });
+
+  it("falls back to email when admin→mama push returns retryable dead-sub failures", async () => {
+    const senderId = "00000000-0000-4000-8000-000000000021";
+    const mamaId = "00000000-0000-4000-8000-000000000022";
+    const messageId = "10000000-0000-4000-8000-000000000022";
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options = {}) => {
+      const value = String(url);
+      if (value.includes("/rest/v1/messages?id=eq.")) {
+        return new Response(JSON.stringify([{
+          id: messageId,
+          client_id: mamaId,
+          sender_id: senderId,
+          body: "Announcement from Callie",
+          kind: "announcement",
+          deleted_at: null,
+          notified_at: null,
+        }]), { status: 200 });
+      }
+      if (value.includes(`/rest/v1/profiles?id=eq.${senderId}`)) {
+        return new Response(JSON.stringify([{
+          id: senderId,
+          name: "Callie",
+          email: "calista@nourishwithcalista.com",
+          role: "admin",
+        }]), { status: 200 });
+      }
+      if (value.includes(`/rest/v1/profiles?id=eq.${mamaId}`)) {
+        return new Response(JSON.stringify([{
+          id: mamaId,
+          name: "Mama",
+          email: "mama@example.com",
+          role: "client",
+        }]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/messages?") && options.method === "HEAD") {
+        return new Response(null, {
+          status: 200,
+          headers: { "content-range": "0-0/1" },
+        });
+      }
+      if (value.includes("/rest/v1/messages?") && options.method === "PATCH") {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unexpected fetch ${value}`);
+    });
+    mocks.invoke.mockImplementation(async (_env, name) => {
+      if (name === "send-push") {
+        return {
+          ok: true,
+          status: 200,
+          data: { sent: 0, attempted: 1, failures: [{ status: 403, message: "expired" }] },
+        };
+      }
+      if (name === "message-email") {
+        return { ok: true, status: 200, data: { id: "email-1" } };
+      }
+      throw new Error(`unexpected edge function ${name}`);
+    });
+    mocks.contact.mockResolvedValue({
+      email: "mama@example.com",
+      name: "Mama",
+    });
+
+    const response = await onRequestPost({
+      request: request(messageId),
+      env,
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.emailSent).toBe(true);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      env,
+      "message-email",
+      expect.objectContaining({ email: "mama@example.com" }),
+    );
+    expect(mocks.finish).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: 1 }),
+      { success: true },
+    );
+  });
+
+  it("queues no-push email off the claim/finish path when waitUntil is available", async () => {
+    const senderId = "00000000-0000-4000-8000-000000000023";
+    const mamaId = "00000000-0000-4000-8000-000000000024";
+    const messageId = "10000000-0000-4000-8000-000000000024";
+    let resolveEmail;
+    const emailGate = new Promise((resolve) => { resolveEmail = resolve; });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options = {}) => {
+      const value = String(url);
+      if (value.includes("/rest/v1/messages?id=eq.")) {
+        return new Response(JSON.stringify([{
+          id: messageId,
+          client_id: mamaId,
+          sender_id: senderId,
+          body: "Hi mama",
+          kind: "chat",
+          deleted_at: null,
+          notified_at: null,
+        }]), { status: 200 });
+      }
+      if (value.includes(`/rest/v1/profiles?id=eq.${senderId}`)) {
+        return new Response(JSON.stringify([{
+          id: senderId,
+          name: "Callie",
+          email: "calista@nourishwithcalista.com",
+          role: "admin",
+        }]), { status: 200 });
+      }
+      if (value.includes(`/rest/v1/profiles?id=eq.${mamaId}`)) {
+        return new Response(JSON.stringify([{
+          id: mamaId,
+          name: "Mama",
+          email: "mama@example.com",
+          role: "client",
+        }]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/messages?") && options.method === "HEAD") {
+        return new Response(null, {
+          status: 200,
+          headers: { "content-range": "0-0/1" },
+        });
+      }
+      if (value.includes("/rest/v1/messages?") && options.method === "PATCH") {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unexpected fetch ${value}`);
+    });
+    mocks.invoke.mockImplementation(async (_env, name) => {
+      if (name === "send-push") {
+        return { ok: true, status: 200, data: { sent: 0, attempted: 0 } };
+      }
+      if (name === "message-email") {
+        await emailGate;
+        return { ok: true, status: 200, data: { id: "email-2" } };
+      }
+      throw new Error(`unexpected edge function ${name}`);
+    });
+    mocks.contact.mockResolvedValue({
+      email: "mama@example.com",
+      name: "Mama",
+    });
+    const background = [];
+    const waitUntil = (promise) => { background.push(promise); };
+
+    const response = await onRequestPost({
+      request: request(messageId),
+      env,
+      waitUntil,
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.finish).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: 1 }),
+      { success: true },
+    );
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      env,
+      "message-email",
+      expect.objectContaining({ email: "mama@example.com" }),
+    );
+    expect(background).toHaveLength(1);
+    resolveEmail();
+    await Promise.all(background);
   });
 });
 

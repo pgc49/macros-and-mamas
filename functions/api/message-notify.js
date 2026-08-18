@@ -17,12 +17,14 @@ import { isUuid } from "../_shared/credits.js";
 import {
   authorizeCron,
   claimNotificationJob,
+  enqueueBackground,
   finishNotificationJob,
+  raceDeadline,
 } from "../_shared/messageOutbox.js";
 
 const DEFAULT_CALLIE_EMAIL = "calista@nourishwithcalista.com";
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, waitUntil, signal }) {
   let job = null;
   try {
     const cronAuth = authorizeCron(request, env);
@@ -39,11 +41,6 @@ export async function onRequestPost({ request, env }) {
       if (!job) {
         return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0, emailSent: false });
       }
-      msg = await loadMessage(env, messageId);
-      if (!msg) {
-        await finishNotificationJob(env, job, { success: true });
-        return json({ ok: true, skipped: "source_missing", pushSent: 0, emailSent: false });
-      }
     } else {
       msg = await loadMessage(env, messageId);
       if (!msg) return json({ error: "not found" }, 404);
@@ -57,134 +54,14 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: true, skipped: "queued_or_already_processed", pushSent: 0, emailSent: false });
     }
 
-    // Never notify on soft-deleted / empty identity rows.
-    if (msg.deleted_at) {
-      await finishNotificationJob(env, job, { success: true });
-      return json({ ok: true, skipped: "deleted", pushSent: 0, emailSent: false });
-    }
-    // Idempotent — one notify per message (survives client retries).
-    if (msg.notified_at) {
-      await finishNotificationJob(env, job, { success: true });
-      return json({ ok: true, skipped: "already_notified", pushSent: 0, emailSent: false });
-    }
-
-    const sender = await loadProfile(env, msg.sender_id);
-    const client = await loadProfile(env, msg.client_id);
-    if (!sender || !client) throw new Error("profile missing");
-
-    const senderIsAdmin = String(sender.role || "").toLowerCase() === "admin";
-    const clientIsAdmin = String(client.role || "").toLowerCase() === "admin";
-    const preview = messagePreview(msg);
-
-    let pushSent = 0;
-    let emailSent = false;
-    let route = "unknown";
-
-    if (!senderIsAdmin && !clientIsAdmin) {
-      // Mama → Callie (thread owned by mama). Push only — no ops email.
-      route = "mama_to_callie";
-      const coachIds = await listCallieAdminIds(env);
-      if (!coachIds.length) throw new Error("no Callie notification recipient configured");
-      for (const coachId of coachIds) {
-        if (coachId === msg.sender_id) continue;
-        const unreadCount = await countUnreadForProfile(env, coachId, { asAdmin: true });
-        pushSent += await sendPushToProfile(env, coachId, {
-          title: firstName(client.name) || "Mama",
-          body: preview || "Open Messages in admin",
-          url: `/admin?tab=messages&client=${encodeURIComponent(msg.client_id)}`,
-          unreadCount: unreadCount || 1,
-        });
-      }
-    } else if (senderIsAdmin && !clientIsAdmin) {
-      // Coach/admin → that mama only (never other admins, never other mamas).
-      route = "admin_to_mama";
-      if (msg.client_id !== msg.sender_id) {
-        const unreadCount = await countUnreadForProfile(env, msg.client_id, { asAdmin: false });
-        pushSent = await sendPushToProfile(env, msg.client_id, {
-          title: "Callie",
-          body: preview || "Open Messages in the app",
-          url: "/dashboard?tab=messages",
-          unreadCount: unreadCount || 1,
-        });
-        if (pushSent === 0) {
-          const contact = await loadUserContact(env, msg.client_id, { strict: true });
-          const email = contact.email || client.email || "";
-          if (email) {
-            const mail = await invokeEdgeFunction(env, "message-email", {
-              email,
-              name: contact.name || client.name || "Mama",
-              preview,
-            });
-            if (mail.ok) {
-              emailSent = true;
-              await logEmailEvent(env, {
-                profileId: msg.client_id,
-                emailType: "message",
-                toEmail: email,
-                meta: { messageId, route },
-              });
-            } else {
-              emailSent = await sendMamaEmailDirect(env, {
-                email,
-                name: contact.name || client.name || "Mama",
-                preview,
-              });
-              if (emailSent) {
-                await logEmailEvent(env, {
-                  profileId: msg.client_id,
-                  emailType: "message",
-                  toEmail: email,
-                  meta: { messageId, route, via: "resend-direct" },
-                });
-              }
-            }
-            if (!emailSent) throw new Error("mama email delivery failed");
-          }
-        }
-      }
-    } else if (senderIsAdmin && clientIsAdmin) {
-      // Admin ↔ admin DM: only the other party in THIS thread (never every admin).
-      route = "admin_to_admin";
-      const recipients = await adminDmRecipients(env, msg);
-      if (!recipients.length) throw new Error("admin DM recipient missing");
-      for (const adminId of recipients) {
-        const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
-        const n = await sendPushToProfile(env, adminId, {
-          title: firstName(sender.name) || "Admin",
-          body: preview || "Open Messages in admin",
-          url: "/admin?tab=messages",
-          unreadCount: unreadCount || 1,
-        });
-        pushSent += n;
-        if (n > 0) continue;
-        const contact = await loadUserContact(env, adminId, { strict: true });
-        const email = contact.email || "";
-        if (!email) continue;
-        let delivered = false;
-        const mail = await invokeEdgeFunction(env, "message-email", {
-          email,
-          name: contact.name || "Admin",
-          preview,
-        });
-        if (mail.ok) delivered = true;
-        else if (await sendMamaEmailDirect(env, {
-          email,
-          name: contact.name || "Admin",
-          preview,
-        })) {
-          delivered = true;
-        }
-        if (!delivered) throw new Error("admin email delivery failed");
-        emailSent = true;
-      }
-    } else {
-      // Mama should never own an admin-as-client_id thread; ignore safely.
-      route = "ignored";
-    }
-
-    await markMessageNotified(env, messageId);
+    const result = await raceDeadline(signal, () => processClaimedDm({
+      env,
+      messageId,
+      msg,
+      waitUntil,
+    }));
     await finishNotificationJob(env, job, { success: true });
-    return json({ ok: true, route, pushSent, emailSent });
+    return json({ ok: true, ...result });
   } catch (e) {
     console.error("message-notify failed", e);
     if (job) {
@@ -199,6 +76,190 @@ export async function onRequestPost({ request, env }) {
     }
     return json({ error: "notify failed" }, 500);
   }
+}
+
+async function processClaimedDm({ env, messageId, msg, waitUntil }) {
+  const loaded = msg || await loadMessage(env, messageId);
+  if (!loaded) {
+    return { skipped: "source_missing", pushSent: 0, emailSent: false };
+  }
+  // Never notify on soft-deleted / empty identity rows.
+  if (loaded.deleted_at) {
+    return { skipped: "deleted", pushSent: 0, emailSent: false };
+  }
+  // Idempotent — one notify per message (survives client retries).
+  if (loaded.notified_at) {
+    return { skipped: "already_notified", pushSent: 0, emailSent: false };
+  }
+
+  const sender = await loadProfile(env, loaded.sender_id);
+  const client = await loadProfile(env, loaded.client_id);
+  if (!sender || !client) throw new Error("profile missing");
+
+  const senderIsAdmin = String(sender.role || "").toLowerCase() === "admin";
+  const clientIsAdmin = String(client.role || "").toLowerCase() === "admin";
+  const preview = messagePreview(loaded);
+
+  let pushSent = 0;
+  let emailSent = false;
+  let route = "unknown";
+
+  if (!senderIsAdmin && !clientIsAdmin) {
+    // Mama → Callie (thread owned by mama). Push only — no ops email.
+    route = "mama_to_callie";
+    const coachIds = await listCallieAdminIds(env);
+    if (!coachIds.length) throw new Error("no Callie notification recipient configured");
+    for (const coachId of coachIds) {
+      if (coachId === loaded.sender_id) continue;
+      const unreadCount = await countUnreadForProfile(env, coachId, { asAdmin: true });
+      const push = await attemptPushToProfile(env, coachId, {
+        title: firstName(client.name) || "Mama",
+        body: preview || "Open Messages in admin",
+        url: `/admin?tab=messages&client=${encodeURIComponent(loaded.client_id)}`,
+        unreadCount: unreadCount || 1,
+      });
+      pushSent += push.sent;
+      if (push.sent === 0 && push.retryable) {
+        throw new Error("push provider temporarily failed");
+      }
+    }
+  } else if (senderIsAdmin && !clientIsAdmin) {
+    // Coach/admin → that mama only (never other admins, never other mamas).
+    route = "admin_to_mama";
+    if (loaded.client_id !== loaded.sender_id) {
+      const unreadCount = await countUnreadForProfile(env, loaded.client_id, { asAdmin: false });
+      const push = await attemptPushToProfile(env, loaded.client_id, {
+        title: "Callie",
+        body: preview || "Open Messages in the app",
+        url: "/dashboard?tab=messages",
+        unreadCount: unreadCount || 1,
+      });
+      pushSent = push.sent;
+      if (pushSent === 0) {
+        const mail = await deliverAdminMessageEmail({
+          env,
+          waitUntil,
+          profileId: loaded.client_id,
+          fallbackEmail: client.email || "",
+          fallbackName: client.name || "Mama",
+          preview,
+          messageId,
+          route,
+        });
+        emailSent = mail.sent;
+        if (!mail.queued && !mail.sent && !mail.skipped) {
+          throw new Error("mama email delivery failed");
+        }
+        if (mail.skipped && push.retryable) {
+          throw new Error("push provider temporarily failed");
+        }
+      }
+    }
+  } else if (senderIsAdmin && clientIsAdmin) {
+    // Admin ↔ admin DM: only the other party in THIS thread (never every admin).
+    route = "admin_to_admin";
+    const recipients = await adminDmRecipients(env, loaded);
+    if (!recipients.length) throw new Error("admin DM recipient missing");
+    for (const adminId of recipients) {
+      const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
+      const push = await attemptPushToProfile(env, adminId, {
+        title: firstName(sender.name) || "Admin",
+        body: preview || "Open Messages in admin",
+        url: "/admin?tab=messages",
+        unreadCount: unreadCount || 1,
+      });
+      pushSent += push.sent;
+      if (push.sent > 0) continue;
+      const mail = await deliverAdminMessageEmail({
+        env,
+        waitUntil,
+        profileId: adminId,
+        fallbackEmail: "",
+        fallbackName: "Admin",
+        preview,
+        messageId,
+        route,
+      });
+      if (mail.sent) emailSent = true;
+      if (!mail.queued && !mail.sent && !mail.skipped) {
+        throw new Error("admin email delivery failed");
+      }
+      if (mail.skipped && push.retryable) {
+        throw new Error("push provider temporarily failed");
+      }
+    }
+  } else {
+    // Mama should never own an admin-as-client_id thread; ignore safely.
+    route = "ignored";
+  }
+
+  await markMessageNotified(env, messageId);
+  return { route, pushSent, emailSent };
+}
+
+async function deliverAdminMessageEmail({
+  env,
+  waitUntil,
+  profileId,
+  fallbackEmail,
+  fallbackName,
+  preview,
+  messageId,
+  route,
+}) {
+  const contact = await loadUserContact(env, profileId, { strict: true });
+  const email = contact.email || fallbackEmail || "";
+  if (!email) return { sent: false, queued: false, skipped: true };
+  const name = contact.name || fallbackName || "Mama";
+
+  const send = () => sendAdminMessageEmail(env, {
+    profileId,
+    email,
+    name,
+    preview,
+    messageId,
+    route,
+  });
+
+  if (enqueueBackground(waitUntil, send)) {
+    return { sent: false, queued: true, skipped: false };
+  }
+  const sent = await send();
+  return { sent, queued: false, skipped: false };
+}
+
+async function sendAdminMessageEmail(env, {
+  profileId,
+  email,
+  name,
+  preview,
+  messageId,
+  route,
+}) {
+  const mail = await invokeEdgeFunction(env, "message-email", {
+    email,
+    name,
+    preview,
+  });
+  if (mail.ok) {
+    await logEmailEvent(env, {
+      profileId,
+      emailType: "message",
+      toEmail: email,
+      meta: { messageId, route },
+    });
+    return true;
+  }
+  const sent = await sendMamaEmailDirect(env, { email, name, preview });
+  if (sent) {
+    await logEmailEvent(env, {
+      profileId,
+      emailType: "message",
+      toEmail: email,
+      meta: { messageId, route, via: "resend-direct" },
+    });
+  }
+  return sent;
 }
 
 function messagePreview(msg) {
@@ -235,8 +296,8 @@ async function listCallieAdminIds(env) {
   return [];
 }
 
-async function sendPushToProfile(env, profileId, payload) {
-  if (!profileId) return 0;
+async function attemptPushToProfile(env, profileId, payload) {
+  if (!profileId) return { sent: 0, retryable: false };
   const result = await invokeEdgeFunction(env, "send-push", {
     profileId,
     title: payload.title,
@@ -249,13 +310,10 @@ async function sendPushToProfile(env, profileId, payload) {
   }
   const sent = Number(result.data?.sent) || 0;
   const failures = Array.isArray(result.data?.failures) ? result.data.failures : [];
-  const retryableFailure = failures.some((failure) => (
+  const retryable = sent === 0 && failures.some((failure) => (
     ![404, 410].includes(Number(failure?.status))
   ));
-  if (sent === 0 && retryableFailure) {
-    throw new Error("push provider temporarily failed");
-  }
-  return sent;
+  return { sent, retryable };
 }
 
 /**
