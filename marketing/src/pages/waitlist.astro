@@ -8,7 +8,7 @@ import { fullPrice, waitlistPrice } from '../config';
 
 <BaseLayout
   title="Join the waitlist — Macros and Mamas"
-  description={`Lock $${waitlistPrice} ($${fullPrice} full price). No charge today. Callie emails waitlist mamas first when enrollment opens.`}
+  description={`Lock $${waitlistPrice} ($${fullPrice} full price). No charge today. Callie emails waitlist mamas first.`}
   memberGuard={false}
 >
   <Header />
@@ -19,8 +19,8 @@ import { fullPrice, waitlistPrice } from '../config';
         >Save your spot. Lock ${waitlistPrice}.</h1
       >
       <p class="sub" style="margin:0 0 28px"
-        >No charge today. When enrollment opens, waitlist mamas hear first — and
-        your early rate is waiting.</p
+        >No charge today. Waitlist mamas hear first — and your early rate is
+        waiting.</p
       >
       <WaitlistForm id="waitlist-page-form" variant="page" source="waitlist_page" />
     </div>
