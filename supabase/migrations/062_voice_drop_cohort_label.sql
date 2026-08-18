@@ -1,4 +1,4 @@
--- 061_voice_drop_cohort_label.sql
+-- 062_voice_drop_cohort_label.sql
 -- Scope Monday voice drops to one cohort so Founding PSAs skip C2.
 
 alter table public.voice_drops
