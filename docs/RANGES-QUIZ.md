@@ -50,4 +50,6 @@ Never send feeding, postpartum months, or Q7 flags in Pixel/CAPI `custom_data`. 
 
 ## App engine
 
-Quiz math is the SoT. App `src/engine/computeMacros.js` is still the older single-number path — align new intakes in a follow-up; do not silently recompute active cohort macros.
+Quiz math is the SoT (`marketing/src/lib/rangesEngine.mjs`). Intake and admin draft from the same `computeRangeBands()` via `src/engine/computeMacros.js` (lows stored; dashboard still draws +10g / +150 cal). Do not silently recompute already-approved macros.
+
+Nursing uses ×13 with **no** 1800 calorie floor. Non-nursing still uses ×12 and a 1500 floor.

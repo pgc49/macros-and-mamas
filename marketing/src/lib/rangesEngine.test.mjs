@@ -6,6 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  computeRangeBands,
   computeRanges,
   sampleCardRanges,
   round5,
@@ -43,8 +44,9 @@ describe('computeRanges — Callie cases', () => {
     assert.equal(r.fat_high_g, 70);
     assert.equal(r.carbs_low_g, 160);
     assert.equal(r.carbs_high_g, 170);
-    assert.equal(r.calories_low, 1750);
-    assert.equal(r.calories_high, 1900);
+    // Exact P/C/F sum — not rounded to 25
+    assert.equal(r.calories_low, 1740);
+    assert.equal(r.calories_high, 1910);
   });
 
   it('goal 150 exclusive → sample card', () => {
@@ -56,8 +58,8 @@ describe('computeRanges — Callie cases', () => {
     assert.equal(r.fat_high_g, 75);
     assert.equal(r.carbs_low_g, 170);
     assert.equal(r.carbs_high_g, 180);
-    assert.equal(r.calories_low, 1875);
-    assert.equal(r.calories_high, 2025);
+    assert.equal(r.calories_low, 1865);
+    assert.equal(r.calories_high, 2035);
   });
 
   it('sampleCardRanges matches engine(150, exclusive)', () => {
@@ -75,13 +77,24 @@ describe('computeRanges — Callie cases', () => {
     });
   });
 
-  it('goal 130 exclusive → floor binds; carbs from 1800', () => {
+  it('goal 130 exclusive → ×13 with no nursing floor; carbs from 1690', () => {
     const r = computeRanges(base({ goal_weight_lbs: 130 }));
     assert.equal(r.needs_review, false);
-    assert.equal(r.carbs_low_g, 175);
-    assert.equal(r.carbs_high_g, 185);
-    assert.equal(r.calories_low, 1725);
-    assert.equal(r.calories_high, 1875);
+    assert.equal(r.protein_low_g, 130);
+    assert.equal(r.fat_high_g, 65);
+    // 1800 floor would have made carbs 175; ×13 only is 130*13=1690 → 145
+    assert.equal(r.carbs_low_g, 145);
+    assert.equal(r.carbs_high_g, 155);
+    assert.equal(r.calories_low, 1595);
+    assert.equal(r.calories_high, 1765);
+  });
+
+  it('nursing never applies the 1500 non-nursing floor', () => {
+    const r = computeRangeBands({ goalWeightLbs: 110, nursing: true });
+    assert.equal(r.ok, true);
+    assert.equal(r.calMin, 1430);
+    assert.equal(r.floorApplied, false);
+    assert.equal(r.carbs_low_g, 125);
   });
 
   it('goal 140 not_feeding → no floor bind path', () => {

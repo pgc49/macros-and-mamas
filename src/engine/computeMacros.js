@@ -1,40 +1,52 @@
-/* ------------------------------------------------------------------ */
-/*  Callie's macro engine — PRESERVE VERBATIM                          */
-/* ------------------------------------------------------------------ */
-const round5 = (n) => Math.round(n / 5) * 5;
+/**
+ * Intake / admin draft macros — same bands as the ranges quiz.
+ * Stores the low end of each band; the dashboard draws +10g / +150 cal.
+ * Does not rewrite already-approved macros.
+ */
+import { computeRangeBands } from "./rangesEngine.mjs";
 
 export function computeMacros(p) {
-  const gw = Number(p.goalWeight);
-  let mult = p.goal === "gain" ? 15 : p.goal === "maintain" ? 13.5 : 12;
-  let notes = [];
+  const nursing = !!p.breastfeeding;
+  const bands = computeRangeBands({
+    goalWeightLbs: p.goalWeight,
+    nursing,
+    bumpCarbsTo100: true,
+  });
 
-  if (p.breastfeeding && p.goal === "lose") {
-    mult = 13;
+  if (!bands.ok) {
+    return {
+      cal: 0,
+      protein: 0,
+      fat: 0,
+      carbs: 0,
+      notes: ["Need a goal weight to draft ranges."],
+    };
+  }
+
+  const notes = [];
+  if (nursing) {
     notes.push("Breastfeeding: calories set gentler (×13 instead of ×12) to protect supply.");
   }
-
-  let cal = Math.round(gw * mult);
-
-  const floor = p.breastfeeding ? 1800 : 1400;
-  if (cal < floor) {
-    cal = floor;
-    notes.push(`Raised to the ${floor} calorie floor — going lower risks ${p.breastfeeding ? "milk supply and " : ""}muscle loss.`);
+  if (bands.floorApplied) {
+    notes.push("Raised to the 1500 calorie floor — going lower risks muscle loss.");
+  }
+  if (bands.carbsBumped) {
+    notes.push("Carbs raised to 100g minimum.");
+  }
+  if (p.goal === "maintain") {
+    notes.push("Maintain goal — starting from cut-style bands. Edit before approving.");
+  } else if (p.goal === "gain") {
+    notes.push("Gain goal — starting from cut-style bands. Edit before approving.");
+  }
+  if (p.insulinResistance) {
+    notes.push("Insulin resistance flagged — formula does not cap carbs. Edit the band if you want it lower.");
   }
 
-  const protein = round5(0.9 * gw);
-  const fat = round5(0.4 * gw);
-  let carbs = round5((cal - protein * 4 - fat * 9) / 4);
-
-  if (p.insulinResistance && carbs > 100) {
-    carbs = 100;
-    cal = protein * 4 + fat * 9 + carbs * 4;
-    notes.push("Insulin resistance flagged: carbs capped at 100g (Callie's fat-loss shortcut).");
-  }
-  if (carbs < 100 && p.breastfeeding) {
-    carbs = 100;
-    cal = protein * 4 + fat * 9 + carbs * 4;
-    notes.push("Carbs raised to 100g minimum while breastfeeding.");
-  }
-
-  return { cal, protein, fat, carbs, notes };
+  return {
+    cal: bands.calories_low,
+    protein: bands.protein_low_g,
+    fat: bands.fat_low_g,
+    carbs: bands.carbs_low_g,
+    notes,
+  };
 }
