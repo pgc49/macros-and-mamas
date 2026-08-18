@@ -40,7 +40,7 @@ Do not create a second Pixel. Do not paste a second copy of the base code into G
 | `QuizNurture` (custom) | Pregnant / fully vegan quiz — not a Lead |
 | `QuizStart` / `QuizStep` / `QuizHalfway` / `QuizEmailGate` | Quiz progress (retargeting) |
 | `InitiateCheckout` | Mama clicks pay |
-| `Purchase` | Stripe paid (`/welcome` Pixel + webhook CAPI, same id) |
+| `Purchase` | Stripe paid (`/welcome` Pixel + webhook CAPI, **same Stripe `session.id`**) |
 
 Cold ads should still point at `https://www.macrosandmamas.com/quiz` (or `/` for retargeting), not the generic waitlist unless Matt is running a waitlist campaign.
 

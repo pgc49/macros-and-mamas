@@ -79,11 +79,6 @@ export async function startCheckout(opts = {}) {
     err.status = resp.status;
     throw err;
   }
-  try {
-    sessionStorage.setItem("mm_purchase_event_id", data.event_id || eventId);
-  } catch {
-    /* ignore */
-  }
   window.location.href = data.url;
 }
 
