@@ -5,7 +5,7 @@ import { chromium } from 'playwright';
 import { fileURLToPath } from 'url';
 import path from 'path';
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const files = ['ad-lauren-4x5','ad-coti-4x5','ad-guardrail-4x5','ad-2am-4x5'];
+const files = ['ad-lauren-4x5','ad-coti-4x5','ad-guardrail-4x5','ad-2am-4x5','ad-callie-4x5'];
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1080, height: 1350 }, deviceScaleFactor: 1 });
 for (const f of files) {
