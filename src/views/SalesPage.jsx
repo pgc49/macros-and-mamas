@@ -536,7 +536,7 @@ export function SalesPage({ onStartIntake, onSignIn }) {
             />
             <div>
               <p className="mm-meet-bio">
-                Hi, I&apos;m Callie — certified holistic nutritionist, blood chemistry certified, and a mama in the thick of it myself. I&apos;ve spent years helping women fix their energy, hormones, and gut by looking at what the data actually says instead of what diet culture yells. Macros and Mamas is everything I do with my 1:1 clients, built for postpartum. Ranges, not rules — because I will never hand you a 1,200-calorie plan and call it help.
+                Hi, I&apos;m Callie — certified functional nutritionist, blood chemistry certified, and a mama in the thick of it myself. I&apos;ve spent years helping women fix their energy, hormones, and gut by looking at what the data actually says instead of what diet culture yells. Macros and Mamas is everything I do with my 1:1 clients, built for postpartum. Ranges, not rules — because I will never hand you a 1,200-calorie plan and call it help.
               </p>
               <p className="mm-meet-bio">
                 I also founded{" "}

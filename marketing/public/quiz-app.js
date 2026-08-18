@@ -343,7 +343,7 @@
   }
 
   function quizIntroHtml() {
-    return `<p class="q-trust">About 90 seconds. Free ranges from Callie, certified holistic nutritionist and mama of two, built the same way she builds them for the program.</p>`;
+    return `<p class="q-trust">About 90 seconds. Free ranges from Callie, certified functional nutritionist and mama of two, built the same way she builds them for the program.</p>`;
   }
 
   /** Q1 only — signature band + length promise under the pills. */
@@ -362,7 +362,7 @@
       </div>
       <div class="q-coach-body">
         <strong>Your coach is Callie</strong>
-        <span class="q-coach-creds">Certified holistic nutritionist · blood chemistry certified · mama of two</span>
+        <span class="q-coach-creds">Certified functional nutritionist · blood chemistry certified · mama of two</span>
         <p class="q-coach-voice">“I've done the 2am math on milk supply and calories. Macros and Mamas is the program I needed and couldn't find.”</p>
       </div>
     </div>`;
