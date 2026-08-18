@@ -27,9 +27,10 @@ export const COHORT_CALENDAR = [
     displayName: "August Group",
     windowStart: "2026-08-10T00:00:00.000Z",
     windowEnd: "2026-09-21T00:00:00.000Z",
-    // Set when C2 program dates are locked.
-    programStart: null,
-    programEnd: null,
+    /** Monday of official Week 1 — matches join/marketing copy. */
+    programStart: "2026-08-31T00:00:00.000Z",
+    /** Exclusive alumni start (last program day = Oct 25). */
+    programEnd: "2026-10-26T00:00:00.000Z",
   },
 ];
 
