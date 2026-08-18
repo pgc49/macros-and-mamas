@@ -14,7 +14,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { type, name, email, reason, stats, amountUsd } = body;
+    const { type, name, email, reason, stats, amountUsd, referredBy } = body;
     if (!type) return jsonResponse({ error: "missing type" }, 400);
 
     const display = name || email || "Mama";
@@ -30,11 +30,13 @@ serve(async (req) => {
       subject = paidLabel
         ? `💰 New mama: ${display} — paid ${paidLabel}`
         : `💰 New mama: ${display} — paid`;
+      const referredByLine = String(referredBy || "").trim();
       text = [
         paidLabel
           ? `${display} just paid ${paidLabel}.`
           : `${display} just paid.`,
         email ? `Email: ${email}` : "",
+        referredByLine,
         `If intake stalls, nudge her from admin.`,
         ADMIN_PORTAL_URL,
       ]

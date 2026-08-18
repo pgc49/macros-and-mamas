@@ -10,6 +10,7 @@ import {
   rosterFilterCounts,
   rosterTitle,
 } from "./clientRoster";
+import { formatReferredByHint } from "./referredBy";
 
 export function CopyPhoneButton({ phone, compact = false }) {
   const [copied, setCopied] = useState(false);
@@ -218,6 +219,7 @@ export function AdminClientRoster({
             const short = stageShort(c);
             const messaged = formatLastMessaged(c.lastAdminAt, nowMs);
             const unread = Number(c.unreadFromMama) || 0;
+            const referredHint = formatReferredByHint(c.referredBy);
             return (
               <div
                 key={c.id}
@@ -331,6 +333,20 @@ export function AdminClientRoster({
                       }}
                     >
                       {c.email}
+                    </div>
+                  ) : null}
+                  {referredHint ? (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: T.inkSoft,
+                        marginTop: 2,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {referredHint}
                     </div>
                   ) : null}
                   <div

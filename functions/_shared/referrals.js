@@ -125,6 +125,55 @@ export async function findReferralCodeByCode(env, code) {
   return Array.isArray(rows) ? rows[0] || null : null;
 }
 
+async function advocateProfileName(env, advocateUserId) {
+  if (!advocateUserId) return "";
+  const rows = await sbFetch(
+    env,
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(advocateUserId)}&select=name,last_name&limit=1`,
+    { method: "GET" },
+  );
+  const profile = Array.isArray(rows) ? rows[0] : null;
+  if (!profile) return "";
+  return [profile.name, profile.last_name].filter(Boolean).join(" ").trim();
+}
+
+/**
+ * Paid / pending_payment attribution for a mama (Callie notify + fallback from checkout code).
+ * Never returns the advocate email as the name.
+ */
+export async function loadReferredByAttribution(env, { userId, fallbackCode } = {}) {
+  try {
+    if (userId) {
+      const rows = await sbFetch(
+        env,
+        `/rest/v1/referrals?referred_user_id=eq.${encodeURIComponent(userId)}`
+          + `&status=in.(paid,pending_payment)`
+          + `&select=code,advocate_user_id,status,created_at`
+          + `&order=created_at.desc&limit=5`,
+        { method: "GET" },
+      );
+      const list = Array.isArray(rows) ? rows : [];
+      const row = list.find((r) => r.status === "paid") || list[0];
+      if (row?.code) {
+        const advocateName = await advocateProfileName(env, row.advocate_user_id);
+        return { advocateName, code: row.code };
+      }
+    }
+
+    const code = normalizeReferralCode(fallbackCode);
+    if (!code) return null;
+    const codeRow = await findReferralCodeByCode(env, code);
+    if (!codeRow) return { advocateName: "", code };
+    if (userId && codeRow.user_id === userId) return null;
+    const advocateName = await advocateProfileName(env, codeRow.user_id);
+    return { advocateName, code: codeRow.code || code };
+  } catch (e) {
+    console.warn("loadReferredByAttribution failed", e);
+    const code = normalizeReferralCode(fallbackCode);
+    return code ? { advocateName: "", code } : null;
+  }
+}
+
 export async function findReferralCodeByPromoId(env, promoId) {
   if (!promoId) return null;
   const rows = await sbFetch(
