@@ -10,6 +10,7 @@ import {
   openBillingPortal,
   startMembershipCheckout,
 } from "../lib/billing";
+import { membershipOptInButtonLabel } from "../lib/membershipAccess";
 
 function money(amount, currency = "usd") {
   if (amount == null || Number.isNaN(Number(amount))) return "—";
@@ -245,7 +246,9 @@ export function PaymentsPage() {
         {(subscription?.status === "trialing" || subscription?.status === "active") && (
           <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 10, lineHeight: 1.45 }}>
             {subscription.status === "trialing" && subscription.trialEndsAt
-              ? `Trial / free month ends ${when(subscription.trialEndsAt)}.`
+              ? (subscription.hasFreeMonth
+                ? `Trial / free month ends ${when(subscription.trialEndsAt)}.`
+                : `First charge ${when(subscription.trialEndsAt)}.`)
               : null}
             {subscription.status === "active" && subscription.renewsAt
               ? `Renews ${when(subscription.renewsAt)}.`
@@ -271,9 +274,7 @@ export function PaymentsPage() {
             >
               {subBusy
                 ? "Starting checkout…"
-                : subscription.status === "required"
-                  ? "Subscribe to continue — $49/mo"
-                  : "Start free month — then $49/mo"}
+                : membershipOptInButtonLabel(subscription)}
             </Btn>
             {!subscription?.priceConfigured && (
               <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8 }}>

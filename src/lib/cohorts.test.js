@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   cohortByLabel,
   defaultVoiceDropCohort,
+  freeMonthEndsAt,
+  hasFoundingFreeMonth,
   programStartWeekIso,
   programWeekNumber,
   resolveProgramStartWeekIso,
@@ -22,6 +24,18 @@ describe("August cohort program clock", () => {
   it("does not fall a C2 mama back to Founding Week 4", () => {
     expect(resolveProgramStartWeekIso("2026-08", "2026-08-18T15:00:00.000Z")).toBe("2026-08-31");
     expect(resolveProgramStartWeekIso("2026-07", "2026-08-18T15:00:00.000Z")).toBe("2026-07-27");
+  });
+});
+
+describe("founding-only free month", () => {
+  it("keeps Founding free month through Oct 21", () => {
+    expect(hasFoundingFreeMonth("2026-07")).toBe(true);
+    expect(freeMonthEndsAt("2026-07")).toBe("2026-10-21T00:00:00.000Z");
+  });
+
+  it("does not give August a post-program free month", () => {
+    expect(hasFoundingFreeMonth("2026-08")).toBe(false);
+    expect(freeMonthEndsAt("2026-08")).toBeNull();
   });
 });
 

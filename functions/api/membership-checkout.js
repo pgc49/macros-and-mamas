@@ -1,8 +1,9 @@
 /* ==================================================================
    /functions/api/membership-checkout.js — Alumni $49 opt-in Checkout
    ==================================================================
-   POST → Stripe Checkout Session mode=subscription (trial pinned to
-   founding free-month end when still upcoming). Never auto-created.
+   POST → Stripe Checkout Session mode=subscription. Trial pinned to
+   founding free-month end, or to programEnd for later cohorts still
+   in the 8 weeks. After that date, no trial. Never auto-created.
    ================================================================== */
 
 import { alumniPriceId } from "../_shared/pricing.js";

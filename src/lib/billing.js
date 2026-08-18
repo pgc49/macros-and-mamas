@@ -51,7 +51,7 @@ export async function openBillingPortal() {
   return data;
 }
 
-/** Start alumni membership Checkout (subscription + free-month trial when eligible). */
+/** Start alumni membership Checkout (opt-in only; trial pinned when eligible). */
 export async function startMembershipCheckout() {
   const headers = await authHeaders();
   const resp = await fetch(CONFIG.MEMBERSHIP_CHECKOUT_ENDPOINT, {
