@@ -127,6 +127,17 @@ export function AuthProvider({ children }) {
     }
     const trimmed = email.trim();
     const result = await completeSignup({
+      confirmFresh: async () => {
+        try {
+          await fetch("/api/confirm-fresh-signup", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email: trimmed }),
+          });
+        } catch (confirmErr) {
+          console.error("confirm-fresh-signup failed", confirmErr);
+        }
+      },
       signUp: async () => {
         const { data, error } = await supabase.auth.signUp({
           email: trimmed,

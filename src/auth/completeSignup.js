@@ -9,32 +9,54 @@ export function isExistingAccountError(message) {
   return /already|registered|exists/i.test(String(message || ""));
 }
 
+export function isUnconfirmedEmailError(message) {
+  return /confirm|not confirmed|email not confirmed/i.test(String(message || ""));
+}
+
 /** Supabase hides "email already registered" as a user with empty identities. */
 export function signupLooksLikeExistingUser(data) {
   const identities = data?.user?.identities;
   return Array.isArray(identities) && identities.length === 0;
 }
 
-export async function completeSignup({ signUp, signIn }) {
+async function signInAfterConfirm({ signIn, confirmFresh, error }) {
+  if (!confirmFresh || !isUnconfirmedEmailError(error)) return null;
+  await confirmFresh();
+  return signIn();
+}
+
+export async function completeSignup({ signUp, signIn, confirmFresh }) {
   const signup = await signUp();
   if (signup.ok) {
     if (signup.session) return { ok: true };
     const signedIn = await signIn();
     if (signedIn.ok) return { ok: true };
+    const confirmed = await signInAfterConfirm({
+      signIn,
+      confirmFresh,
+      error: signedIn.error,
+    });
+    if (confirmed?.ok) return { ok: true };
     return {
       ok: false,
       needsEmailConfirm: true,
-      error: signedIn.error || null,
+      error: confirmed?.error || signedIn.error || null,
     };
   }
 
   if (signup.existingAccount) {
     const signedIn = await signIn();
     if (signedIn.ok) return { ok: true, recoveredExisting: true };
+    const confirmed = await signInAfterConfirm({
+      signIn,
+      confirmFresh,
+      error: signedIn.error,
+    });
+    if (confirmed?.ok) return { ok: true, recoveredExisting: true };
     return {
       ok: false,
       existingAccount: true,
-      error: signedIn.error || signup.error || "That email already has an account.",
+      error: confirmed?.error || signedIn.error || signup.error || "That email already has an account.",
     };
   }
 

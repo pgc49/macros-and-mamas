@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   completeSignup,
   isExistingAccountError,
+  isUnconfirmedEmailError,
   signupLooksLikeExistingUser,
 } from "./completeSignup";
 
@@ -11,6 +12,13 @@ describe("isExistingAccountError", () => {
     expect(isExistingAccountError("A user with this email address has already been registered")).toBe(true);
     expect(isExistingAccountError("User already exists")).toBe(true);
     expect(isExistingAccountError("Invalid login credentials")).toBe(false);
+  });
+});
+
+describe("isUnconfirmedEmailError", () => {
+  it("matches Supabase confirm-email failures", () => {
+    expect(isUnconfirmedEmailError("Email not confirmed")).toBe(true);
+    expect(isUnconfirmedEmailError("Invalid login credentials")).toBe(false);
   });
 });
 
@@ -56,12 +64,41 @@ describe("completeSignup", () => {
     });
   });
 
+  it("confirms a fresh signup then signs in when email confirmation blocked the session", async () => {
+    const confirmFresh = vi.fn(async () => {});
+    const signIn = vi.fn()
+      .mockResolvedValueOnce({ ok: false, error: "Email not confirmed" })
+      .mockResolvedValueOnce({ ok: true });
+    const result = await completeSignup({
+      signUp: async () => ({ ok: true, session: null }),
+      signIn,
+      confirmFresh,
+    });
+    expect(result).toEqual({ ok: true });
+    expect(confirmFresh).toHaveBeenCalledTimes(1);
+    expect(signIn).toHaveBeenCalledTimes(2);
+  });
+
   it("recovers when the email already exists and the password matches", async () => {
     const result = await completeSignup({
       signUp: async () => ({ ok: false, existingAccount: true, error: "User already registered" }),
       signIn: async () => ({ ok: true }),
     });
     expect(result).toEqual({ ok: true, recoveredExisting: true });
+  });
+
+  it("confirms then signs in when an existing unconfirmed email matches the password", async () => {
+    const confirmFresh = vi.fn(async () => {});
+    const signIn = vi.fn()
+      .mockResolvedValueOnce({ ok: false, error: "Email not confirmed" })
+      .mockResolvedValueOnce({ ok: true });
+    const result = await completeSignup({
+      signUp: async () => ({ ok: false, existingAccount: true, error: "User already registered" }),
+      signIn,
+      confirmFresh,
+    });
+    expect(result).toEqual({ ok: true, recoveredExisting: true });
+    expect(confirmFresh).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the existing-account error when the password does not sign in", async () => {
