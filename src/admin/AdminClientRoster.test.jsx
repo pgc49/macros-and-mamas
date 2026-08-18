@@ -1,0 +1,82 @@
+// @vitest-environment jsdom
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { AdminClientRoster } from "./AdminClientRoster.jsx";
+
+afterEach(() => {
+  cleanup();
+});
+
+function renderRoster(over = {}) {
+  const clients = over.roster || [
+    {
+      id: "unpaid-1",
+      role: "client",
+      name: "New signup",
+      firstName: "Test Patrick",
+      email: "pgchammas+demo@gmail.com",
+      phone: "",
+      stage: "signed_up",
+      status: "pending",
+      paid: false,
+      hasIntake: false,
+      unreadFromMama: 0,
+      lastAdminAt: null,
+      createdAt: "2026-08-18T03:00:00.000Z",
+    },
+    {
+      id: "active-1",
+      role: "client",
+      name: "Lauren Wells",
+      email: "lauren@example.com",
+      phone: "555-0199",
+      stage: "active",
+      status: "active",
+      week: 3,
+      paid: true,
+      hasIntake: true,
+      unreadFromMama: 1,
+      lastAdminAt: "2026-08-16T12:00:00.000Z",
+      lastActiveDate: "2026-08-18",
+    },
+  ];
+  const props = {
+    roster: clients,
+    filter: "unpaid",
+    setFilter: () => {},
+    onOpenClient: () => {},
+    onMessageClient: () => {},
+    nowMs: Date.parse("2026-08-18T15:00:00.000Z"),
+    todayIso: "2026-08-18",
+    ...over,
+  };
+  return render(<AdminClientRoster {...props} />);
+}
+
+describe("AdminClientRoster", () => {
+  it("shows first name and email for unpaid signups instead of New signup", () => {
+    renderRoster();
+    expect(screen.getByText("Test Patrick")).toBeTruthy();
+    expect(screen.getByText("pgchammas+demo@gmail.com")).toBeTruthy();
+    expect(screen.queryByText("New signup")).toBeNull();
+    expect(screen.getByText("Never messaged")).toBeTruthy();
+  });
+
+  it("shows last messaged and a message shortcut on active rows", () => {
+    const onMessageClient = () => {};
+    renderRoster({ filter: "active", onMessageClient });
+    expect(screen.getByText("Lauren Wells")).toBeTruthy();
+    expect(screen.getByText(/You messaged · 2d ago/)).toBeTruthy();
+    expect(screen.getByLabelText("Message Lauren Wells")).toBeTruthy();
+  });
+
+  it("filters the list from the search field", () => {
+    renderRoster({ filter: "all" });
+    fireEvent.change(screen.getByLabelText("Search name, email, or phone"), {
+      target: { value: "lauren@" },
+    });
+    expect(screen.getByText("Lauren Wells")).toBeTruthy();
+    expect(screen.queryByText("Test Patrick")).toBeNull();
+  });
+});

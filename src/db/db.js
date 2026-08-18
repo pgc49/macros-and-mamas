@@ -1574,12 +1574,19 @@ export const db = {
     // Enough history to know if she has logged within ~48h (yesterday or today).
     // Page past PostgREST’s 1000-row default — meal/water volume exceeds that in a cohort.
     const activitySince = addDaysIso(today, -14);
+    const emailList = [...new Set(
+      allProfiles
+        .map((p) => String(p.email || "").trim().toLowerCase())
+        .filter(Boolean),
+    )];
     const [
       { data: macrosRows, error: mErr },
       { data: weighRows, error: wErr },
       { data: checkRows, error: cErr },
       mealPage,
       waterPage,
+      leadPage,
+      msgStatsPage,
     ] = await Promise.all([
       supabase.from("macros").select("*").in("profile_id", ids),
       supabase.from("weighins").select("profile_id, date, weight").in("profile_id", ids).order("date", { ascending: true }),
@@ -1600,12 +1607,28 @@ export const db = {
           .gte("date", activitySince)
           .order("date", { ascending: false }),
       ),
+      emailList.length
+        ? supabase.from("marketing_leads").select("email, first_name, last_name").in("email", emailList)
+        : Promise.resolve({ data: [], error: null }),
+      supabase.rpc("admin_roster_message_stats"),
     ]);
     if (mErr) throw mErr;
     if (wErr) throw wErr;
     if (cErr) throw cErr;
     if (mealPage.error) console.warn("roster meal_logs lookup failed", mealPage.error);
     if (waterPage.error) console.warn("roster water_logs lookup failed", waterPage.error);
+    if (leadPage.error) console.warn("roster marketing_leads lookup failed", leadPage.error);
+    if (msgStatsPage.error) console.warn("roster message stats lookup failed", msgStatsPage.error);
+
+    const leadByEmail = {};
+    (leadPage.data || []).forEach((row) => {
+      const key = String(row.email || "").trim().toLowerCase();
+      if (key) leadByEmail[key] = row;
+    });
+    const msgById = {};
+    (msgStatsPage.data || []).forEach((row) => {
+      if (row?.client_id) msgById[row.client_id] = row;
+    });
 
     const macrosBy = Object.fromEntries((macrosRows || []).map((m) => [m.profile_id, m]));
     const weighBy = {};
@@ -1651,11 +1674,15 @@ export const db = {
       // Admins with dashboard access often skip pay — still show as active when they have macros
       if (isAdminRow && hasIntake && approved) stage = "active";
 
+      const lead = leadByEmail[String(p.email || "").trim().toLowerCase()] || {};
+      const leadName = [lead.first_name, lead.last_name].filter(Boolean).join(" ").trim();
+      const msg = msgById[p.id] || {};
+
       return {
         id: p.id,
-        name: fullName(p) || (hasIntake ? "Mama" : "New signup"),
-        firstName: p.name || "",
-        lastName: p.last_name || "",
+        name: fullName(p) || leadName || "",
+        firstName: p.name || lead.first_name || "",
+        lastName: p.last_name || lead.last_name || "",
         email: p.email || "",
         age: p.age,
         currentWeight: p.current_weight,
@@ -1715,6 +1742,8 @@ export const db = {
          * Used for the roster “quiet” flag — not auth last_sign_in.
          */
         lastActiveDate: lastActiveBy[p.id] || null,
+        lastAdminAt: msg.last_admin_at || null,
+        unreadFromMama: Number(msg.unread_from_mama) || 0,
       };
     });
 
