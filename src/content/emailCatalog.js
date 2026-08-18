@@ -203,7 +203,7 @@ Callie
     subject: "💰 New mama: [name] — paid $[amount]",
     audience: "Callie",
     cta: null,
-    bodyPreview: `Plain-text alert with name, email, actual Stripe amount, and link to https://admin.macrosandmamas.com/admin.`,
+    bodyPreview: `Plain-text alert with name, email, actual Stripe amount, referred-by when a code was used, and link to https://admin.macrosandmamas.com/admin.`,
   },
   {
     id: "callie_intake",

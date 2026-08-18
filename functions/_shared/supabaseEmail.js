@@ -4,6 +4,9 @@
  * Also logs each client-facing send to public.email_events (admin-only read).
  */
 
+import { loadReferredByAttribution } from "./referrals.js";
+import { formatReferredBy } from "./referredBy.js";
+
 export async function invokeEdgeFunction(env, slug, payload) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -145,7 +148,7 @@ export async function loadUserContact(env, userId, { strict = false } = {}) {
   };
 }
 
-export async function sendWelcomeEmails(env, { email, name, userId, amountUsd }) {
+export async function sendWelcomeEmails(env, { email, name, userId, amountUsd, referralCode } = {}) {
   if (!email) return;
 
   const amountNum = Number(amountUsd);
@@ -168,12 +171,23 @@ export async function sendWelcomeEmails(env, { email, name, userId, amountUsd })
   }
 
   if (!(await hasEmailEvent(env, userId, "callie_payment"))) {
+    let referredBy = "";
+    try {
+      const attribution = await loadReferredByAttribution(env, {
+        userId,
+        fallbackCode: referralCode,
+      });
+      referredBy = formatReferredBy(attribution);
+    } catch (e) {
+      console.warn("referred-by lookup for payment notify failed", e);
+    }
     const callie = await invokeEdgeFunction(env, "notify-callie", {
       type: "payment",
       email,
       name: name || email,
       userId,
       amountUsd: amountLabel,
+      referredBy: referredBy || undefined,
     });
     await logEmailEvent(env, {
       profileId: userId,
@@ -184,7 +198,12 @@ export async function sendWelcomeEmails(env, { email, name, userId, amountUsd })
         : `💰 New mama: ${name || email} — paid`,
       resendId: resendIdFrom(callie),
       status: callie.ok ? "sent" : "failed",
-      meta: { slug: "notify-callie", type: "payment", amount_usd: amountLabel },
+      meta: {
+        slug: "notify-callie",
+        type: "payment",
+        amount_usd: amountLabel,
+        referred_by: referredBy || null,
+      },
     });
   }
 }

@@ -86,6 +86,34 @@ describe("AdminClientRoster", () => {
     expect(screen.getByText("Comp")).toBeTruthy();
   });
 
+  it("shows a quiet via hint when a mama was referred", () => {
+    renderRoster({
+      filter: "all",
+      roster: [
+        {
+          id: "ref-1",
+          role: "client",
+          name: "Paid Mama",
+          email: "paid@example.com",
+          stage: "paid_awaiting_intake",
+          status: "pending",
+          paid: true,
+          hasIntake: false,
+          unreadFromMama: 0,
+          lastAdminAt: null,
+          referredBy: { advocateName: "Ava Stone", code: "AVA25" },
+        },
+      ],
+    });
+    expect(screen.getByText("via Ava")).toBeTruthy();
+    expect(screen.queryByText(/Referred by/)).toBeNull();
+  });
+
+  it("omits a referred-by hint when there is no referral", () => {
+    renderRoster({ filter: "all" });
+    expect(screen.queryByText(/^via /)).toBeNull();
+  });
+
   it("shows last messaged and a message shortcut on active rows", () => {
     const onMessageClient = () => {};
     renderRoster({ filter: "active", onMessageClient });

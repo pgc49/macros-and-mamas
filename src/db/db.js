@@ -6,6 +6,7 @@ import {
   isAllowedReactionEmoji,
 } from "../lib/messageReactions";
 import { chronologicalMessages } from "../lib/messageOrdering";
+import { referredByByUserId } from "../lib/referredBy";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
 
@@ -1588,6 +1589,7 @@ export const db = {
       waterPage,
       leadPage,
       msgStatsPage,
+      referralPage,
     ] = await Promise.all([
       supabase.from("macros").select("*").in("profile_id", ids),
       supabase.from("weighins").select("profile_id, date, weight").in("profile_id", ids).order("date", { ascending: true }),
@@ -1612,6 +1614,11 @@ export const db = {
         ? supabase.from("marketing_leads").select("email, first_name, last_name").in("email", emailList)
         : Promise.resolve({ data: [], error: null }),
       supabase.rpc("admin_roster_message_stats"),
+      supabase
+        .from("referrals")
+        .select("referred_user_id, advocate_user_id, code, status, created_at")
+        .in("referred_user_id", ids)
+        .in("status", ["paid", "pending_payment"]),
     ]);
     if (mErr) throw mErr;
     if (wErr) throw wErr;
@@ -1620,6 +1627,7 @@ export const db = {
     if (waterPage.error) console.warn("roster water_logs lookup failed", waterPage.error);
     if (leadPage.error) console.warn("roster marketing_leads lookup failed", leadPage.error);
     if (msgStatsPage.error) console.warn("roster message stats lookup failed", msgStatsPage.error);
+    if (referralPage.error) console.warn("roster referrals lookup failed", referralPage.error);
 
     const leadByEmail = {};
     (leadPage.data || []).forEach((row) => {
@@ -1630,6 +1638,8 @@ export const db = {
     (msgStatsPage.data || []).forEach((row) => {
       if (row?.client_id) msgById[row.client_id] = row;
     });
+    const profilesById = Object.fromEntries(allProfiles.map((p) => [p.id, p]));
+    const referredByById = referredByByUserId(referralPage.data || [], profilesById);
 
     const macrosBy = Object.fromEntries((macrosRows || []).map((m) => [m.profile_id, m]));
     const weighBy = {};
@@ -1746,6 +1756,7 @@ export const db = {
         lastActiveDate: lastActiveBy[p.id] || null,
         lastAdminAt: msg.last_admin_at || null,
         unreadFromMama: Number(msg.unread_from_mama) || 0,
+        referredBy: referredByById[p.id] || null,
       };
     });
 

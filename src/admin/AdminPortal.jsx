@@ -31,6 +31,7 @@ import { AdminCredits } from "./AdminCredits";
 import { AdminClientRoster, CohortFilterBar, CopyPhoneButton } from "./AdminClientRoster";
 import { emailRecipient, emailTypeLabel } from "./emailLog";
 import { rosterStats } from "./clientRoster";
+import { formatReferredBy } from "./referredBy";
 import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { supabase } from "../lib/supabase";
 import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
@@ -467,6 +468,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     const r = rateOf(sel.weighins || []);
     const flags = needsAttention(sel);
     const stage = sel.stage || (sel.status === "active" ? "active" : "awaiting_approval");
+    const referredLine = formatReferredBy(sel.referredBy);
     return (
       <Shell>
         <button
@@ -506,6 +508,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                 {sel.refunded ? " · Refunded" : ""}
                 {sel.cohort_label ? ` · ${adminCohortName(sel.cohort_label)}` : ""}
                 {sel.email ? <><br />✉️ {sel.email}</> : null}
+                {referredLine ? <><br />{referredLine}</> : null}
                 {sel.age ? <><br />{sel.age} yrs</> : null}
                 {sel.currentWeight != null && sel.goalWeight != null ? <> · {sel.currentWeight} → {sel.goalWeight} lbs</> : null}
                 {sel.pregnant ? <><br />⚠️ Pregnant — review 1:1 before approving or refunding</> : null}

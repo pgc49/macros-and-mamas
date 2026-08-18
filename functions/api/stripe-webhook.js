@@ -80,7 +80,8 @@ export async function onRequestPost({ request, env }) {
       ) {
         // Card: completed is paid. Klarna/Affirm/etc: completed may be unpaid,
         // then async_payment_succeeded fires when funds clear — same mark-paid path.
-        await handleCheckoutSessionCompleted(env, event);
+        // Attribute the referral before welcome / Callie notify so the payment
+        // email can include referred-by (those sends are idempotent).
         const session = event.data?.object || {};
         const forcePaid = eventType === "checkout.session.async_payment_succeeded";
         const payStatus = String(session.payment_status || "");
@@ -95,6 +96,7 @@ export async function onRequestPost({ request, env }) {
           // Retry attribution when money cleared; don't spam unpaid completed retries.
           if (sessionPaid) throw refErr;
         }
+        await handleCheckoutSessionCompleted(env, event);
       } else if (eventType === "invoice.paid") {
         const invoice = event.data?.object || {};
         const result = await handleInvoicePaidCredits(env, invoice);
@@ -283,7 +285,13 @@ async function handleCheckoutSessionCompleted(env, event) {
     const amountUsd =
       Number(session.metadata?.amount_usd) ||
       (session.amount_total != null ? Number(session.amount_total) / 100 : null);
-    await sendWelcomeEmails(env, { email, name, userId, amountUsd });
+    await sendWelcomeEmails(env, {
+      email,
+      name,
+      userId,
+      amountUsd,
+      referralCode: session.metadata?.referral_code,
+    });
   } catch (mailErr) {
     console.error("welcome email failed", mailErr);
   }
