@@ -18,6 +18,7 @@ import {
   sendWelcomeEmails,
 } from "../_shared/supabaseEmail.js";
 import { sendMetaCapiEvent } from "../_shared/metaCapi.js";
+import { purchaseEventIdFromStripeSession } from "../_shared/purchaseEventId.js";
 import { handleInvoicePaidCredits } from "../_shared/credits.js";
 import {
   handleChargeRefundedReferral,
@@ -251,23 +252,25 @@ async function handleCheckoutSessionCompleted(env, event) {
     const amount =
       Number(session.metadata?.amount_usd) ||
       (session.amount_total != null ? Number(session.amount_total) / 100 : 0);
-    const purchaseEventId = String(session.metadata?.event_id || session.id);
-    await sendMetaCapiEvent(env, {
-      eventName: "Purchase",
-      eventId: purchaseEventId,
-      email,
-      fbp: session.metadata?.fbp || "",
-      fbc: session.metadata?.fbc || "",
-      clientIp: session.metadata?.client_ip || "",
-      clientUa: session.metadata?.client_ua || "",
-      eventSourceUrl: "https://www.macrosandmamas.com/welcome",
-      customData: {
-        currency: "USD",
-        value: amount,
-        content_name: `purchase_${session.metadata?.price_tier || "unknown"}`,
-        order_id: String(session.id),
-      },
-    });
+    const purchaseEventId = purchaseEventIdFromStripeSession(session);
+    if (purchaseEventId) {
+      await sendMetaCapiEvent(env, {
+        eventName: "Purchase",
+        eventId: purchaseEventId,
+        email,
+        fbp: session.metadata?.fbp || "",
+        fbc: session.metadata?.fbc || "",
+        clientIp: session.metadata?.client_ip || "",
+        clientUa: session.metadata?.client_ua || "",
+        eventSourceUrl: "https://www.macrosandmamas.com/welcome",
+        customData: {
+          currency: "USD",
+          value: amount,
+          content_name: `purchase_${session.metadata?.price_tier || "unknown"}`,
+          order_id: String(session.id),
+        },
+      });
+    }
   } catch (metaErr) {
     console.error("Purchase CAPI failed", metaErr);
   }

@@ -4,6 +4,7 @@ import { Shell, Card, Btn } from "../components/ui";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
 import { trackPixel } from "../lib/attribution";
+import { purchaseEventIdFromWelcomeSearch } from "../lib/purchaseEventId";
 
 /**
  * Stripe success landing. Never trust the URL alone — poll until webhook
@@ -24,21 +25,23 @@ export function WelcomePage({ onPaid, navigate }) {
 
     const firePurchasePixel = () => {
       if (purchaseTracked.current) return;
-      purchaseTracked.current = true;
-      let storedId = "";
+      const sessionId = purchaseEventIdFromWelcomeSearch(window.location.search);
+      if (!sessionId) return;
       try {
-        storedId = sessionStorage.getItem("mm_purchase_event_id") || "";
+        const firedKey = `mm_purchase_pixel_${sessionId}`;
+        if (sessionStorage.getItem(firedKey)) {
+          purchaseTracked.current = true;
+          return;
+        }
+        sessionStorage.setItem(firedKey, "1");
       } catch {
-        storedId = "";
+        /* private mode — still fire once this mount */
       }
-      const sessionId = new URLSearchParams(window.location.search).get("session_id") || "";
-      // Must match webhook: metadata.event_id || session.id
-      const eventId = storedId || sessionId;
-      if (!eventId) return;
+      purchaseTracked.current = true;
       trackPixel(
         "Purchase",
-        { currency: "USD", content_name: "enrollment", order_id: sessionId || eventId },
-        eventId,
+        { currency: "USD", content_name: "enrollment", order_id: sessionId },
+        sessionId,
       );
     };
 
