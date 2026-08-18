@@ -1,12 +1,23 @@
 import {
   authorizeCron,
+  createJobDeadline,
   listDueNotificationJobs,
+  NOTIFICATION_JOB_TIMEOUT_MS,
 } from "../_shared/messageOutbox.js";
 import { onRequestPost as notifyDm } from "./message-notify.js";
 import { onRequestPost as notifyChannel } from "./channel-notify.js";
 
 /** Recovery drain: immediate browser calls handle normal delivery; cron retries missed jobs. */
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost(context) {
+  return drainNotificationOutbox(context);
+}
+
+export async function drainNotificationOutbox({
+  request,
+  env,
+  waitUntil,
+  timeoutMs = NOTIFICATION_JOB_TIMEOUT_MS,
+}) {
   if (!authorizeCron(request, env)) {
     return json({ error: "unauthorized" }, 401);
   }
@@ -19,6 +30,7 @@ export async function onRequestPost({ request, env }) {
       while (queue.length) {
         const job = queue.shift();
         const handler = job.message_type === "channel" ? notifyChannel : notifyDm;
+        const deadline = createJobDeadline(timeoutMs);
         try {
           const childRequest = new Request(request.url, {
             method: "POST",
@@ -28,10 +40,13 @@ export async function onRequestPost({ request, env }) {
             },
             body: JSON.stringify({ messageId: job.message_id }),
           });
-          const resp = await withDeadline(
-            handler({ request: childRequest, env }),
-            8_000,
-          );
+          // Await the handler after abort so it can finish() the in-flight claim.
+          const resp = await handler({
+            request: childRequest,
+            env,
+            waitUntil,
+            signal: deadline.signal,
+          });
           results.push({
             id: job.id,
             type: job.message_type,
@@ -46,6 +61,8 @@ export async function onRequestPost({ request, env }) {
             ok: false,
             status: 0,
           });
+        } finally {
+          deadline.cancel();
         }
       }
     });
@@ -63,18 +80,9 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-function withDeadline(promise, ms) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error("notification processing timed out")), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
 function json(value, status = 200) {
   return new Response(JSON.stringify(value), {
     status,
     headers: { "content-type": "application/json" },
   });
 }
-

@@ -10,6 +10,7 @@
    - notify best-effort; never fail the whole send after inserts succeed
    ================================================================== */
 
+import { createJobDeadline } from "../_shared/messageOutbox.js";
 import { onRequestPost as notifyDm } from "./message-notify.js";
 
 export async function onRequestPost({ request, env, waitUntil }) {
@@ -57,7 +58,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
       return json({ error: "Couldn’t save announcement messages — try again." }, 500);
     }
 
-    const notifyPromise = notifyAnnouncementJobs(request, env, inserted);
+    const notifyPromise = notifyAnnouncementJobs(request, env, waitUntil, inserted);
 
     // Prefer finishing notifies after the response so the admin UI isn't blocked /
     // timed out by 40+ push+email subrequests.
@@ -94,7 +95,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
   }
 }
 
-async function notifyAnnouncementJobs(request, env, rows) {
+async function notifyAnnouncementJobs(request, env, waitUntil, rows) {
   const queue = [...rows];
   const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
     let pushSent = 0;
@@ -102,23 +103,33 @@ async function notifyAnnouncementJobs(request, env, rows) {
     while (queue.length) {
       const row = queue.shift();
       if (!row?.id || !row.client_id) continue;
-      const response = await notifyDm({
-        request: new Request(request.url, {
-          method: "POST",
-          headers: {
-            authorization: request.headers.get("authorization") || "",
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ messageId: row.id }),
-        }),
-        env,
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(`announcement notify failed (${response.status})`);
+      const deadline = createJobDeadline();
+      try {
+        const response = await notifyDm({
+          request: new Request(request.url, {
+            method: "POST",
+            headers: {
+              authorization: request.headers.get("authorization") || "",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ messageId: row.id }),
+          }),
+          env,
+          waitUntil,
+          signal: deadline.signal,
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          console.warn("announcement notify failed", row.id, response.status);
+          continue;
+        }
+        pushSent += Number(result.pushSent) || 0;
+        if (result.emailSent) emailSent += 1;
+      } catch (e) {
+        console.warn("announcement notify failed", row.id, e);
+      } finally {
+        deadline.cancel();
       }
-      pushSent += Number(result.pushSent) || 0;
-      if (result.emailSent) emailSent += 1;
     }
     return { pushSent, emailSent };
   });

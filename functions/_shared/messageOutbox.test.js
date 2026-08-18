@@ -2,8 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   authorizeCron,
   claimNotificationJob,
+  createJobDeadline,
+  enqueueBackground,
   finishNotificationJob,
   listDueNotificationJobs,
+  raceDeadline,
 } from "./messageOutbox.js";
 
 const env = {
@@ -95,6 +98,27 @@ describe("message notification outbox", () => {
     expect(jobs).toHaveLength(12);
     expect(jobs.filter((job) => job.status === "pending")).toHaveLength(9);
     expect(jobs.filter((job) => job.status === "processing")).toHaveLength(3);
+  });
+
+  it("rejects with timeout when the job deadline aborts after claim", async () => {
+    const deadline = createJobDeadline(20);
+    const started = Date.now();
+    await expect(raceDeadline(deadline.signal, () => new Promise(() => {})))
+      .rejects.toThrow("timeout");
+    expect(Date.now() - started).toBeLessThan(200);
+    deadline.cancel();
+  });
+
+  it("runs work inline when waitUntil is missing", async () => {
+    expect(enqueueBackground(undefined, async () => "ok")).toBe(false);
+  });
+
+  it("registers waitUntil work without awaiting it", async () => {
+    let queued = null;
+    const waitUntil = (promise) => { queued = promise; };
+    expect(enqueueBackground(waitUntil, async () => "ok")).toBe(true);
+    expect(queued).toBeInstanceOf(Promise);
+    await expect(queued).resolves.toBe("ok");
   });
 });
 
