@@ -25,6 +25,54 @@ export const PRICE_TIERS = {
   full: { tier: "full", amount: 299, label: "Full" },
 };
 
+/**
+ * Stripe Checkout shows Price.nickname under the product name.
+ * Keep the $249 nickname in lockstep with PRICE_TIERS.waitlist.label —
+ * "Priority Waitlist Special" reads like a hold, not a paid seat.
+ */
+export function stripeNicknameForTier(tier) {
+  return PRICE_TIERS[tier]?.label || "";
+}
+
+/**
+ * Best-effort: align a Price nickname before creating Checkout.
+ * Failures must not block paying. No-ops when already in sync.
+ */
+export async function syncStripePriceNickname(secret, priceId, nickname) {
+  const key = String(secret || "").trim();
+  const id = String(priceId || "").trim();
+  const wanted = String(nickname || "").trim();
+  if (!key || !id || !wanted) return { ok: false, skipped: true };
+
+  const headers = { authorization: `Bearer ${key}` };
+  const url = `https://api.stripe.com/v1/prices/${encodeURIComponent(id)}`;
+  const get = await fetch(url, { headers });
+  if (!get.ok) {
+    console.error("stripe price get failed", get.status, await get.text());
+    return { ok: false };
+  }
+  const price = await get.json();
+  if (String(price.nickname || "").trim() === wanted) {
+    return { ok: true, unchanged: true };
+  }
+
+  const body = new URLSearchParams();
+  body.set("nickname", wanted);
+  const patch = await fetch(url, {
+    method: "POST",
+    headers: {
+      ...headers,
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  if (!patch.ok) {
+    console.error("stripe price nickname update failed", patch.status, await patch.text());
+    return { ok: false };
+  }
+  return { ok: true, updated: true };
+}
+
 /** Optional Lab Review add-on (one-time). */
 export const LAB_ADDON_AMOUNT = 349;
 export const LAB_ADDON_LABEL = "The Lab Review";

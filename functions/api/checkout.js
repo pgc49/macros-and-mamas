@@ -15,6 +15,8 @@ import {
   LAB_ADDON_AMOUNT,
   labAddonPriceId,
   resolveCheckoutOffer,
+  stripeNicknameForTier,
+  syncStripePriceNickname,
 } from "../_shared/pricing.js";
 import {
   clientIpFromRequest,
@@ -50,6 +52,18 @@ export async function onRequestPost({ request, env }) {
     if (!secret) {
       console.error("missing STRIPE_SECRET_KEY");
       return json({ error: "checkout unavailable" }, 503);
+    }
+
+    if (offer.tier === "waitlist") {
+      try {
+        await syncStripePriceNickname(
+          secret,
+          offer.priceId,
+          stripeNicknameForTier("waitlist"),
+        );
+      } catch (nickErr) {
+        console.error("stripe price nickname sync failed", nickErr);
+      }
     }
 
     let clientBody = {};

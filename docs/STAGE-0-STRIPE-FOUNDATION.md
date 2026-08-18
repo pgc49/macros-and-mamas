@@ -6,7 +6,7 @@ Read the build-plan README first. This stage is plumbing only — no referrals, 
 
 | Env / alias | Amount | Stripe id | Notes |
 | --- | --- | --- | --- |
-| `STRIPE_PRICE_ID_WAITLIST` / `PRICE_QUIZ_RATE` | $249 one-time | `price_1TxVoxRyN0PahoiMt0FVMFWg` | Quiz / early rate |
+| `STRIPE_PRICE_ID_WAITLIST` / `PRICE_QUIZ_RATE` | $249 one-time | `price_1TxVoxRyN0PahoiMt0FVMFWg` | Quiz / early rate. Checkout nickname: **Early rate** (not “Priority Waitlist Special”). |
 | `STRIPE_PRICE_ID_FULL` / `PRICE_FULL_RATE` | $299 one-time | `price_1TxVrJRyN0PahoiMLxAiTA68` | Full rate |
 | `STRIPE_PRICE_ID_FOUNDING` | $149 one-time | `price_1Tv5aDRyN0PahoiM7eTlp4QP` | Pre-close accounts |
 | `STRIPE_PRICE_ID_LAB_ADDON` / `PRICE_LAB_REVIEW` | $349 one-time | `price_1U1vfzRyN0PahoiM6AVgkMYh` | Lab Review add-on |
