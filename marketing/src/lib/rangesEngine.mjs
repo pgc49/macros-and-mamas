@@ -1,5 +1,6 @@
 /**
- * Callie's ranges engine — SOURCE OF TRUTH for the marketing quiz.
+ * Callie's ranges engine — SOURCE OF TRUTH for the marketing quiz
+ * and for admin/intake drafts (`src/engine/computeMacros.js`).
  * Derived from Callie's written method (QUIZ-SOURCE-OF-TRUTH).
  * Tunable constants live here; do not scatter magic numbers.
  */
@@ -9,7 +10,7 @@ export const CAL_MULT_NOT_NURSING = 12;
 export const PROTEIN_PER_LB = 1.0;
 export const FAT_TOP_PER_LB = 0.5;
 export const BAND_WIDTH_G = 10;
-export const FLOOR_NURSING = 1800;
+/** Non-nursing only. Nursing uses ×13 with no calorie floor. */
 export const FLOOR_NOT_NURSING = 1500;
 export const ACTIVITY_ROUND_UP = 0;
 
@@ -38,6 +39,77 @@ export function goalBmi(goalWeightLbs, heightIn) {
 
 function review(reason) {
   return { needs_review: true, review_reason: reason };
+}
+
+function bandFields(bands) {
+  return {
+    protein_low_g: bands.protein_low_g,
+    protein_high_g: bands.protein_high_g,
+    carbs_low_g: bands.carbs_low_g,
+    carbs_high_g: bands.carbs_high_g,
+    fat_low_g: bands.fat_low_g,
+    fat_high_g: bands.fat_high_g,
+    calories_low: bands.calories_low,
+    calories_high: bands.calories_high,
+  };
+}
+
+/**
+ * Core band math shared by the quiz and admin/intake drafts.
+ * Nursing = ×13, no calorie floor. Not nursing = ×12, 1500 floor.
+ * @param {{ goalWeightLbs: number, nursing: boolean, bumpCarbsTo100?: boolean }} input
+ */
+export function computeRangeBands({ goalWeightLbs, nursing, bumpCarbsTo100 = false }) {
+  const gw = Number(goalWeightLbs);
+  if (!(gw > 0)) {
+    return { ok: false, reason: 'incomplete_inputs' };
+  }
+
+  const nurse = !!nursing;
+  const mult = nurse ? CAL_MULT_NURSING : CAL_MULT_NOT_NURSING;
+  let calMin = gw * mult + ACTIVITY_ROUND_UP;
+  let floorApplied = false;
+  if (!nurse && calMin < FLOOR_NOT_NURSING) {
+    calMin = FLOOR_NOT_NURSING;
+    floorApplied = true;
+  }
+
+  const protein_low_g = round5(gw * PROTEIN_PER_LB);
+  const protein_high_g = protein_low_g + BAND_WIDTH_G;
+  const fat_high_g = round5(gw * FAT_TOP_PER_LB);
+  const fat_low_g = fat_high_g - BAND_WIDTH_G;
+
+  // Protein at goal weight grams, fat at TOP of band — per Callie.
+  const carbCals = calMin - gw * 4 - fat_high_g * 9;
+  let carbs_low_g = round5(carbCals / 4);
+  let carbsBumped = false;
+  if (bumpCarbsTo100 && carbs_low_g < 100) {
+    carbs_low_g = 100;
+    carbsBumped = true;
+  }
+  const carbs_high_g = carbs_low_g + BAND_WIDTH_G;
+
+  // Exact from displayed macros — do not round25 here or P/C/F won't sum to calories
+  // (skeptical users check this; the pitch is that calculators get the math wrong).
+  const calories_low = protein_low_g * 4 + carbs_low_g * 4 + fat_low_g * 9;
+  const calories_high = protein_high_g * 4 + carbs_high_g * 4 + fat_high_g * 9;
+
+  return {
+    ok: true,
+    reason: null,
+    nursing: nurse,
+    calMin,
+    floorApplied,
+    carbsBumped,
+    protein_low_g,
+    protein_high_g,
+    carbs_low_g,
+    carbs_high_g,
+    fat_low_g,
+    fat_high_g,
+    calories_low,
+    calories_high,
+  };
 }
 
 /**
@@ -78,44 +150,23 @@ export function computeRanges(answers, opts = {}) {
     return review('goal_over_25pct_below_current');
   }
 
-  const nursing = isNursing(feeding);
-  const mult = nursing ? CAL_MULT_NURSING : CAL_MULT_NOT_NURSING;
-  const floor = nursing ? FLOOR_NURSING : FLOOR_NOT_NURSING;
-
-  let calMin = gw * mult + ACTIVITY_ROUND_UP;
-  calMin = Math.max(calMin, floor);
-
-  const protein_low_g = round5(gw * PROTEIN_PER_LB);
-  const protein_high_g = protein_low_g + BAND_WIDTH_G;
-  const fat_high_g = round5(gw * FAT_TOP_PER_LB);
-  const fat_low_g = fat_high_g - BAND_WIDTH_G;
-
-  // Protein at goal weight grams, fat at TOP of band — per Callie.
-  const carbCals = calMin - gw * 4 - fat_high_g * 9;
-  let carbs_low_g = round5(carbCals / 4);
-  if (skipReview && carbs_low_g < 100) carbs_low_g = 100;
-  const carbs_high_g = carbs_low_g + BAND_WIDTH_G;
-
-  if (!skipReview && carbs_low_g < 100) {
-    return review('carbs_under_100');
+  const bands = computeRangeBands({
+    goalWeightLbs: gw,
+    nursing: isNursing(feeding),
+    bumpCarbsTo100: skipReview,
+  });
+  if (!bands.ok) {
+    return review(bands.reason || 'incomplete_inputs');
   }
 
-  // Exact from displayed macros — do not round25 here or P/C/F won't sum to calories
-  // (skeptical users check this; the pitch is that calculators get the math wrong).
-  const calories_low = protein_low_g * 4 + carbs_low_g * 4 + fat_low_g * 9;
-  const calories_high = protein_high_g * 4 + carbs_high_g * 4 + fat_high_g * 9;
+  if (!skipReview && bands.carbs_low_g < 100) {
+    return review('carbs_under_100');
+  }
 
   return {
     needs_review: false,
     review_reason: null,
-    protein_low_g,
-    protein_high_g,
-    carbs_low_g,
-    carbs_high_g,
-    fat_low_g,
-    fat_high_g,
-    calories_low,
-    calories_high,
+    ...bandFields(bands),
   };
 }
 
@@ -134,16 +185,7 @@ export function sampleCardRanges() {
   if (r.needs_review) {
     throw new Error('sample card engine unexpectedly needs review');
   }
-  return {
-    protein_low_g: r.protein_low_g,
-    protein_high_g: r.protein_high_g,
-    carbs_low_g: r.carbs_low_g,
-    carbs_high_g: r.carbs_high_g,
-    fat_low_g: r.fat_low_g,
-    fat_high_g: r.fat_high_g,
-    calories_low: r.calories_low,
-    calories_high: r.calories_high,
-  };
+  return bandFields(r);
 }
 
 export function segmentForAnswers(answers) {
@@ -171,16 +213,7 @@ function previewBands(computed) {
   if (!computed || computed.needs_review || computed.protein_low_g == null) {
     return null;
   }
-  return {
-    protein_low_g: computed.protein_low_g,
-    protein_high_g: computed.protein_high_g,
-    carbs_low_g: computed.carbs_low_g,
-    carbs_high_g: computed.carbs_high_g,
-    fat_low_g: computed.fat_low_g,
-    fat_high_g: computed.fat_high_g,
-    calories_low: computed.calories_low,
-    calories_high: computed.calories_high,
-  };
+  return bandFields(computed);
 }
 
 /**
