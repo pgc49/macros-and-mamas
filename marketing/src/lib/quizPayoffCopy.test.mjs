@@ -34,6 +34,13 @@ describe("quiz payoff copy", () => {
     assert.match(quizJs, /Messages · 1:1 with Callie/);
   });
 
+  it("uses functional nutritionist as Callie's title", () => {
+    assert.match(quizJs, /Callie, certified functional nutritionist and mama of two/);
+    assert.match(quizJs, /Certified functional nutritionist · blood chemistry certified · mama of two/);
+    assert.doesNotMatch(quizJs, /holistic nutritionist/i);
+    assert.doesNotMatch(quizJs, /Holistic Nutritionist/);
+  });
+
   it("still shows payoff when /api/lead fails", () => {
     assert.match(quizJs, /function localPayoff/);
     assert.match(quizJs, /__mmBuildQuizPayoff/);
