@@ -2,6 +2,11 @@ import { createContext, useContext, useEffect, useState } from "react";
 import * as Sentry from "@sentry/react";
 import { supabase } from "../lib/supabase";
 import { persistAttributionToProfile } from "../lib/attribution";
+import {
+  completeSignup,
+  isExistingAccountError,
+  signupLooksLikeExistingUser,
+} from "./completeSignup";
 
 function syncSentryUser(nextUser) {
   if (nextUser?.id) {
@@ -100,45 +105,80 @@ export function AuthProvider({ children }) {
     return { error };
   };
 
+  const stampTermsAndAttribution = async (userId, termsAcceptedAt, termsVersion) => {
+    const { error: stampErr } = await supabase
+      .from("profiles")
+      .update({
+        terms_accepted_at: termsAcceptedAt,
+        terms_version: termsVersion,
+      })
+      .eq("id", userId);
+    if (stampErr) console.error("terms stamp failed", stampErr);
+    try {
+      await persistAttributionToProfile(userId);
+    } catch (attrErr) {
+      console.error("attribution stamp failed", attrErr);
+    }
+  };
+
   const signUpWithPassword = async (email, password, { termsAcceptedAt, termsVersion } = {}) => {
     if (!termsAcceptedAt || !termsVersion) {
       return { error: { message: "You must agree to the Terms and Conditions to create an account." }, needsEmailConfirm: false };
     }
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: {
-          terms_accepted_at: termsAcceptedAt,
-          terms_version: termsVersion,
-        },
+    const trimmed = email.trim();
+    const result = await completeSignup({
+      signUp: async () => {
+        const { data, error } = await supabase.auth.signUp({
+          email: trimmed,
+          password,
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: {
+              terms_accepted_at: termsAcceptedAt,
+              terms_version: termsVersion,
+            },
+          },
+        });
+        if (error) {
+          return {
+            ok: false,
+            existingAccount: isExistingAccountError(error.message),
+            error: error.message,
+          };
+        }
+        // Confirm-email projects hide "already registered" as a user with no identities.
+        if (signupLooksLikeExistingUser(data)) {
+          return { ok: false, existingAccount: true, error: "User already registered" };
+        }
+        if (data.session?.user?.id) {
+          await stampTermsAndAttribution(data.session.user.id, termsAcceptedAt, termsVersion);
+        }
+        return { ok: true, session: data.session ?? null };
+      },
+      signIn: async () => {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: trimmed,
+          password,
+        });
+        if (error) return { ok: false, error: error.message };
+        if (data.session?.user?.id) {
+          await stampTermsAndAttribution(data.session.user.id, termsAcceptedAt, termsVersion);
+        }
+        return { ok: true };
       },
     });
-    // If email confirmation is required, session stays null until they confirm.
-    // Acceptance is also written onto profiles via the signup trigger + metadata.
-    const needsEmailConfirm = !error && !data.session;
 
-    // When a session exists immediately, stamp the profile row as a backup
-    // (trigger may race or an older trigger may not copy metadata yet).
-    if (!error && data.session?.user?.id) {
-      const { error: stampErr } = await supabase
-        .from("profiles")
-        .update({
-          terms_accepted_at: termsAcceptedAt,
-          terms_version: termsVersion,
-        })
-        .eq("id", data.session.user.id);
-      if (stampErr) console.error("terms stamp failed", stampErr);
-      // First-touch UTMs / anon_id → profiles (best-effort).
-      try {
-        await persistAttributionToProfile(data.session.user.id);
-      } catch (attrErr) {
-        console.error("attribution stamp failed", attrErr);
-      }
+    if (result.ok) {
+      return { error: null, needsEmailConfirm: false };
     }
-
-    return { error, needsEmailConfirm };
+    if (result.needsEmailConfirm) {
+      return { error: null, needsEmailConfirm: true };
+    }
+    return {
+      error: { message: result.error || "Could not create account." },
+      needsEmailConfirm: false,
+      existingAccount: Boolean(result.existingAccount),
+    };
   };
 
   const signOut = async () => {

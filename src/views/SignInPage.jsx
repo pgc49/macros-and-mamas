@@ -75,15 +75,15 @@ export function SignInPage({
       setBusy(false);
       if (err) {
         const msg = err.message || "Could not create account.";
-        if (/already|registered|exists/i.test(msg) && onSwitchMode) {
-          setError("That email already has an account. Sign in instead.");
+        if (/already|registered|exists|invalid login/i.test(msg) && onSwitchMode) {
+          setError("That email already has an account. Sign in with the password you just created.");
           return;
         }
         setError(msg);
         return;
       }
       if (needsEmailConfirm) {
-        setInfo("Check your email to confirm your account, then sign in. (Or turn off “Confirm email” in Supabase until custom SMTP is set up.)");
+        setInfo("Check your email to confirm your account, then sign in. Check spam too.");
       }
       return;
     }
