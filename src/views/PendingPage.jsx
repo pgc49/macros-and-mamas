@@ -11,7 +11,7 @@ export function PendingPage() {
           Callie is building your macros
         </h2>
         <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft }}>
-          Your answers are with her now. She reviews every mama&apos;s numbers personally before they go live — usually within a day. The moment she approves, your dashboard unlocks and your WhatsApp group invite arrives by text.
+          Your answers are with her now. She reviews every mama&apos;s numbers personally before they go live — usually within a day. The moment she approves, your dashboard unlocks and you can say hi in Messages — that&apos;s your group with Callie and the other mamas.
         </p>
       </Card>
     </Shell>

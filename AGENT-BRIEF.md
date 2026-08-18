@@ -74,8 +74,8 @@ this repo and they are your complete spec:
    the profile paid. Payment link is sent/shown only after Callie approves.
    Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (human sets them).
 6. Fill remaining `{{PLACEHOLDER}}` tokens from environment/config:
-   WhatsApp group URL and the three Fullscript links stay as env-driven
-   config the human fills; hide the buttons gracefully if unset.
+   the three Fullscript links stay as env-driven config the human fills;
+   hide the buttons gracefully if unset. Group chat is in-app Messages.
 7. README with local dev instructions (`npm run dev` + `wrangler pages dev`
    for functions) and the full list of secrets the human must set.
 

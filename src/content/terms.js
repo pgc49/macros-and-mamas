@@ -63,8 +63,8 @@ export const TERMS_SECTIONS = [
   {
     title: "7. Community Guidelines (Group Chat)",
     body: [
-      "The Program includes a group communication channel (currently a WhatsApp group). By joining:",
-      "(a) Your phone number will be visible to other group members. This is a feature of the platform, not something we control. If you are not comfortable with this, contact us before joining the group.",
+      "The Program includes a group communication channel (currently in-app Messages). By joining:",
+      "(a) Other members can see what you post in the group. If you are not comfortable with this, contact us before joining the group.",
       "(b) You agree to be respectful and supportive; to keep other members' personal information, photos, and stories confidential and not share them outside the group; not to give medical advice to other members; not to promote products, services, or businesses without our permission; and not to post content that is harassing, hateful, explicit, or otherwise inappropriate.",
       "(c) Statements by other participants are their own and are not advice from us. We are not responsible for the conduct or statements of participants.",
       "(d) We may remove any participant from the group and/or the Program, without refund, for conduct we determine in our sole discretion to be harmful to the group or in violation of these Terms.",
@@ -109,7 +109,7 @@ export const TERMS_SECTIONS = [
   {
     title: "13. Third-Party Services",
     body: [
-      "The Program relies on third-party services (including hosting, payment processing, AI model providers, and messaging platforms such as WhatsApp). We are not responsible for the availability, acts, omissions, or terms of third-party services, and your use of them may be subject to their own terms and privacy policies.",
+      "The Program relies on third-party services (including hosting, payment processing, AI model providers, and in-app messaging). We are not responsible for the availability, acts, omissions, or terms of third-party services, and your use of them may be subject to their own terms and privacy policies.",
     ],
   },
   {

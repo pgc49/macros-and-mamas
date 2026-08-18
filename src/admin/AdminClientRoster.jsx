@@ -33,7 +33,7 @@ export function CopyPhoneButton({ phone, compact = false }) {
     <button
       type="button"
       onClick={onCopy}
-      title="Copy phone for WhatsApp"
+      title="Copy phone"
       aria-label={copied ? "Phone copied" : `Copy phone ${phone}`}
       style={{
         display: "inline-flex",
@@ -271,6 +271,21 @@ export function AdminClientRoster({
                         }}
                       >
                         Admin
+                      </span>
+                    )}
+                    {c.comp && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          fontFamily: F,
+                          padding: "2px 7px",
+                          borderRadius: 99,
+                          background: T.sageSoft,
+                          color: T.sage,
+                        }}
+                      >
+                        Comp
                       </span>
                     )}
                     {cohort === "all" && (

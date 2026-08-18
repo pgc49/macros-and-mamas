@@ -138,3 +138,28 @@ describe("cohort filter", () => {
     expect(rosterFilterCounts([founding, c2], today, "2026-08").paid).toBe(1);
   });
 });
+
+describe("complimentary members", () => {
+  const today = "2026-08-18";
+  const stripePaid = mama({ id: "s", name: "Stripe Mama" });
+  const compMama = mama({
+    id: "c",
+    name: "Comp Mama",
+    paid: true,
+    comp: true,
+    stripe_customer_id: null,
+  });
+
+  it("excludes comps from paid / revenue counts and the Paid filter", () => {
+    const stats = rosterStats([stripePaid, compMama]);
+    expect(stats.paid).toBe(1);
+    expect(rosterFilterCounts([stripePaid, compMama], today).paid).toBe(1);
+    expect(filterRoster([stripePaid, compMama], "paid", { todayIso: today }).map((c) => c.id)).toEqual(["s"]);
+  });
+
+  it("still lists comps in All / Active so Callie can approve them", () => {
+    const list = filterRoster([stripePaid, compMama], "all", { todayIso: today });
+    expect(list.map((c) => c.id).sort()).toEqual(["c", "s"]);
+    expect(filterRoster([compMama], "active", { todayIso: today }).map((c) => c.id)).toEqual(["c"]);
+  });
+});

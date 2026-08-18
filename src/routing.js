@@ -16,7 +16,7 @@ export const PATHS = {
   terms: "/terms",
   privacy: "/privacy",
   resetPassword: "/reset-password",
-  /** Signed-in tech/support form — WhatsApp link prompts sign-in → GitHub issue. */
+  /** Signed-in tech/support form — coaching stays in Messages; this form is for Tech Guy. */
   support: "/support",
   /** Account hub + profile / payments (paid clients). */
   account: "/account",

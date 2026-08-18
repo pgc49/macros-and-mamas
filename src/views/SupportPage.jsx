@@ -19,7 +19,7 @@ function supportCopy({ fromAdmin, isAdmin, kind }) {
   return {
     eyebrow: "Tech help",
     title: "App help & feedback",
-    blurb: "Tell Tech Guy here — Callie's WhatsApp stays for coaching. Pick whether it's a bug or feedback so it lands in the right place.",
+    blurb: "Tell Tech Guy here — coaching stays in Messages with Callie. Pick whether it's a bug or feedback so it lands in the right place.",
   };
 }
 
