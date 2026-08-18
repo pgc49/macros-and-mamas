@@ -15,6 +15,11 @@ async function authHeaders() {
   };
 }
 
+/** Stripe Customer Portal CTA — hide when this account has no customer id. */
+export function canOpenBillingPortal(summary) {
+  return Boolean(summary?.portalAvailable);
+}
+
 /** GET /api/billing — program summary, payment history, subscription shell. */
 export async function fetchBillingSummary() {
   const headers = await authHeaders();

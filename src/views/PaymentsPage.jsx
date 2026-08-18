@@ -5,6 +5,7 @@ import { Shell, Card, Btn } from "../components/ui";
 import { PATHS } from "../routing";
 import { useAuth } from "../auth/useAuth.jsx";
 import {
+  canOpenBillingPortal,
   fetchBillingSummary,
   openBillingPortal,
   startMembershipCheckout,
@@ -373,32 +374,33 @@ export function PaymentsPage() {
         )}
       </Card>
 
-      <Card style={{ marginBottom: 28 }}>
-        <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 20, margin: "0 0 8px" }}>
-          Manage card
-        </h2>
-        <p style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
-          Update your card and view invoices in Stripe’s secure portal. Cancellation stays in-app.
-        </p>
-        <Btn
-          style={{ width: "100%" }}
-          disabled={portalBusy || !data?.portalAvailable}
-          onClick={openPortal}
-        >
-          {portalBusy ? "Opening…" : "Open billing portal"}
-        </Btn>
-        {!data?.portalAvailable && (
-          <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8 }}>
-            Portal unlocks after checkout creates a Stripe customer for this account.
+      {canOpenBillingPortal(data) ? (
+        <Card style={{ marginBottom: 28 }}>
+          <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 20, margin: "0 0 8px" }}>
+            Manage card
+          </h2>
+          <p style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
+            Update your card and view invoices in Stripe’s secure portal. Cancellation stays in-app.
+          </p>
+          <Btn
+            style={{ width: "100%" }}
+            disabled={portalBusy}
+            onClick={openPortal}
+          >
+            {portalBusy ? "Opening…" : "Open billing portal"}
+          </Btn>
+          {portalNote && (
+            <div style={{ fontSize: 13.5, color: T.amber, marginTop: 10, lineHeight: 1.45 }}>{portalNote}</div>
+          )}
+          <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 10, fontFamily: F }}>
+            Questions about a charge? Message Callie or use Report a problem from Account.
           </div>
-        )}
-        {portalNote && (
-          <div style={{ fontSize: 13.5, color: T.amber, marginTop: 10, lineHeight: 1.45 }}>{portalNote}</div>
-        )}
-        <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 10, fontFamily: F }}>
+        </Card>
+      ) : (
+        <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 28px", fontFamily: F, lineHeight: 1.45 }}>
           Questions about a charge? Message Callie or use Report a problem from Account.
-        </div>
-      </Card>
+        </p>
+      )}
     </Shell>
   );
 }
