@@ -370,6 +370,7 @@ export function AdminCredits({ roster = [] }) {
           </Card>
 
           <Card style={{ marginBottom: 14 }}>
+            <SectionTitle>Share codes</SectionTitle>
             <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5 }}>
               {paidTotal === 0
                 ? "Share codes show up once paid mamas are in the roster."
