@@ -38,6 +38,9 @@ jobs:
       - name: Checkout pricing unit tests
         run: npm run test:pricing
 
+      - name: Product leftover-hole unit tests
+        run: npm run test:product
+
       - name: Production build
         run: npm run build
 

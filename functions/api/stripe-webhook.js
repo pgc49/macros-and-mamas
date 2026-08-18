@@ -25,8 +25,6 @@ import {
   handleCheckoutReferral,
 } from "../_shared/referrals.js";
 import {
-  ensureChannelMembership,
-  getCohortConversation,
   handlePaidEnrollmentChannel,
 } from "../_shared/channels.js";
 import {
@@ -563,29 +561,8 @@ function timingSafeEqual(a, b) {
   return out === 0;
 }
 
-/** Join the right cohort channel after paid unlock (idempotent). */
+/** Join the right cohort channel after paid unlock (idempotent). Uses paid_at. */
 async function ensureCohortChannelAfterPaid(env, userId) {
-  const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
-  const key = env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!base || !key) return;
-  const resp = await fetch(
-    `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,cohort_label&limit=1`,
-    { headers: { apikey: key, authorization: `Bearer ${key}` } },
-  );
-  if (!resp.ok) throw new Error(`profile read ${resp.status}`);
-  const rows = await resp.json().catch(() => []);
-  const label = rows[0]?.cohort_label || "";
-  if (label) {
-    const conv = await getCohortConversation(env, label);
-    if (conv) {
-      await ensureChannelMembership(env, {
-        conversationId: conv.id,
-        userId,
-        notifyLevel: "highlights",
-      });
-    }
-    return;
-  }
   await handlePaidEnrollmentChannel(env, userId);
 }
 

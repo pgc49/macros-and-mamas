@@ -14,8 +14,10 @@ export const COHORT_CALENDAR = [
   {
     label: "2026-08",
     displayName: "August Group",
-    programStart: null,
-    programEnd: null,
+    /** Monday of official Week 1 — matches join/marketing copy. */
+    programStart: "2026-08-31T00:00:00.000Z",
+    /** Exclusive alumni start (last program day = Oct 25). */
+    programEnd: "2026-10-26T00:00:00.000Z",
   },
 ];
 
@@ -34,6 +36,19 @@ export function adminCohortName(label) {
   if (key === "2026-07") return "Founding";
   if (key === "2026-08") return "Cohort 2";
   return cohortByLabel(key)?.displayName || key;
+}
+
+/**
+ * Monday voice drop default: the roster cohort filter if it's a real group,
+ * otherwise the in-flight program (so "All groups" does not blast C1+C2).
+ */
+export function defaultVoiceDropCohort(rosterCohortFilter, now = new Date()) {
+  const key = String(rosterCohortFilter || "").trim();
+  if (key && key !== "all" && key !== "unassigned") return key;
+  const live = COHORT_CALENDAR.find(
+    (c) => c.programStart && !isProgramComplete(c, now),
+  );
+  return live?.label || COHORT_CALENDAR[0]?.label || "2026-07";
 }
 
 export function freeMonthEndsAt(cohortOrLabel) {

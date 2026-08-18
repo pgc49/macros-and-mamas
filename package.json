@@ -19,6 +19,7 @@
     "test:messaging": "vitest run src/routing.test.js src/components/messaging-hardening.test.jsx src/components/ui-shell.test.jsx src/admin/AdminMessages.test.jsx src/admin/clientRoster.test.js src/admin/AdminClientRoster.test.jsx src/admin/emailLog.test.js functions/_middleware.test.js functions/_shared/adminOrigin.test.js functions/_shared/messageOutbox.test.js functions/api/message-notify.test.js functions/api/channel-notify.test.js functions/api/message-outbox-cron.test.js",
     "test:pixel": "vitest run functions/_shared/metaPixelId.test.js src/lib/metaPixel.test.js",
     "test:pricing": "vitest run functions/_shared/pricing.test.js",
+    "test:product": "vitest run src/lib/spaOverlayRoutes.test.js src/lib/cohorts.test.js src/lib/billing.test.js functions/_shared/cohorts.test.js functions/_shared/channels.test.js functions/_shared/voiceDropAudience.test.js functions/_shared/confirmFreshSignup.test.js functions/api/confirm-fresh-signup.test.js",
     "qa:messaging": "npm run test:messaging && npm run qa:messages-thread && npm run qa:message-ordering && npm run qa:reactions && npm run qa:channels",
     "preview": "vite preview"
   },

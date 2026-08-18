@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
 import { programWeekNumber } from "../lib/cohorts";
+import { parseLiveChannelCohorts } from "../lib/liveChannelCohorts";
 import { adherenceForItems, programGoalItems } from "../lib/goals";
 import {
   aggregateReactions,
@@ -1961,12 +1962,8 @@ export const db = {
     const isAdmin = String(profile?.role || "").toLowerCase() === "admin";
     const myCohort = String(profile?.cohort_label || "");
     // Live cohort pills for admins/Callie. Mamas always see only their own cohort.
-    // C1 beta = Founding Members only; add 2026-08 when August Group goes live.
-    const liveAdminCohorts = new Set(
-      String(import.meta.env.VITE_LIVE_CHANNEL_COHORTS || "2026-07")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
+    const liveAdminCohorts = parseLiveChannelCohorts(
+      import.meta.env.VITE_LIVE_CHANNEL_COHORTS,
     );
     return (data || [])
       .map((row) => {
@@ -2450,12 +2447,14 @@ export const db = {
   /**
    * Publish Monday voice drop (Today banner only — no Messages copies).
    * audience: "admins" | "active" | "all_mamas"
+   * cohortLabel: required when audience is active (one cohort, not all).
    * notify: push/email when true (keep false while testing on preview).
    */
   async publishVoiceDrop({
     file,
     caption = "",
-    audience = "admins",
+    audience = "active",
+    cohortLabel = "",
     notify = false,
     durationMs = null,
   } = {}) {
@@ -2473,6 +2472,7 @@ export const db = {
       body: JSON.stringify({
         caption: String(caption || "").trim().slice(0, 500),
         audience,
+        cohortLabel: String(cohortLabel || "").trim(),
         notify: notify === true,
         audioPath: uploaded.path,
         audioMime: uploaded.mime,

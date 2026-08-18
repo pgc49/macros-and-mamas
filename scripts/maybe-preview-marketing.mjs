@@ -26,6 +26,7 @@ import {
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { ALL_SPA_ROUTES } from "../src/lib/spaOverlayRoutes.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 if (process.env.APP_SURFACE === "admin") {
@@ -59,24 +60,6 @@ const marketingDist = join(marketingDir, "dist");
 const out = join(root, "dist");
 const spaIndex = join(out, "index.html");
 
-/** Top-level SPA client routes from src/routing.js (not `/`, not marketing). */
-const ALL_SPA_ROUTES = [
-  "home",
-  "join",
-  "welcome",
-  "goodbye",
-  "onboarding",
-  "signin",
-  "pending",
-  "declined",
-  "dashboard",
-  "admin",
-  "terms",
-  "privacy",
-  "reset-password",
-  "support",
-  "account",
-];
 const customerSurface = process.env.APP_SURFACE === "customer";
 const SPA_ROUTES = customerSurface
   ? ALL_SPA_ROUTES.filter((route) => route !== "admin")

@@ -1,31 +1,7 @@
 import { CONFIG } from "./config";
+import { PATHS } from "./lib/appPaths";
 
-/** Canonical app paths */
-export const PATHS = {
-  home: "/",
-  join: "/join",
-  waitlist: "/waitlist",
-  welcome: "/welcome",
-  goodbye: "/goodbye",
-  onboarding: "/onboarding",
-  signin: "/signin",
-  pending: "/pending",
-  declined: "/declined",
-  dashboard: "/dashboard",
-  admin: "/admin",
-  terms: "/terms",
-  privacy: "/privacy",
-  resetPassword: "/reset-password",
-  /** Signed-in tech/support form — coaching stays in Messages; this form is for Tech Guy. */
-  support: "/support",
-  /** Account hub + profile / payments (paid clients). */
-  account: "/account",
-  accountProfile: "/account/profile",
-  accountPayments: "/account/payments",
-  accountShare: "/account/share",
-  /** Post–free-month paywall when monthly membership is required. */
-  membership: "/membership",
-};
+export { PATHS };
 
 /**
  * Full document load of `/` so www serves the Astro marketing homepage.

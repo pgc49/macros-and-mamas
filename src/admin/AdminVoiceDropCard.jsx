@@ -13,15 +13,27 @@ import {
   voiceFileExtension,
   voiceRecordingSupported,
 } from "../lib/voiceMemo";
+import { adminCohortName, COHORT_CALENDAR, defaultVoiceDropCohort } from "../lib/cohorts";
+
+function isAdminProfile(c) {
+  return String(c?.role || "").toLowerCase() === "admin";
+}
 
 /**
  * Admin: record + publish Monday voice drop (Today PSA, one audio file).
- * Default audience = admins, notify off — safe for Cloudflare preview testing.
+ * Default audience = that cohort's actives — forgetting the dropdown must not
+ * notify admins-only or blast every cohort.
  * Draft audio is persisted in IndexedDB so a failed publish doesn’t lose the take.
  */
-export function AdminVoiceDropCard({ activeMamaCount = 0, allMamaCount = 0 }) {
+export function AdminVoiceDropCard({
+  activeMamaCount = 0,
+  allMamaCount = 0,
+  cohortFilter = "all",
+  roster = [],
+}) {
   const [caption, setCaption] = useState("");
-  const [audience, setAudience] = useState("admins");
+  const [audience, setAudience] = useState("active");
+  const [cohortLabel, setCohortLabel] = useState(() => defaultVoiceDropCohort(cohortFilter));
   const [notify, setNotify] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordMs, setRecordMs] = useState(0);
@@ -56,6 +68,16 @@ export function AdminVoiceDropCard({ activeMamaCount = 0, allMamaCount = 0 }) {
   useEffect(() => {
     refreshLatest();
   }, [refreshLatest]);
+
+  useEffect(() => {
+    setCohortLabel(defaultVoiceDropCohort(cohortFilter));
+  }, [cohortFilter]);
+
+  const cohortActiveCount = (roster || []).filter((c) => {
+    if (isAdminProfile(c) || c.refunded) return false;
+    if (c.stage !== "active" && c.status !== "active") return false;
+    return String(c.cohort_label || "") === cohortLabel;
+  }).length;
 
   // Restore draft after refresh / failed publish.
   useEffect(() => {
@@ -241,7 +263,7 @@ export function AdminVoiceDropCard({ activeMamaCount = 0, allMamaCount = 0 }) {
       ? "admins only (test)"
       : audience === "all_mamas"
         ? `${allMamaCount} mamas`
-        : `${activeMamaCount} active mamas`;
+        : `${cohortActiveCount} active ${adminCohortName(cohortLabel)} mamas`;
     const notifyLine = notify
       ? " Push/email WILL go out (preview uses the live database)."
       : " No push/email.";
@@ -269,6 +291,7 @@ export function AdminVoiceDropCard({ activeMamaCount = 0, allMamaCount = 0 }) {
         file: preview.file,
         caption,
         audience,
+        cohortLabel: audience === "active" ? cohortLabel : "",
         notify,
         durationMs: preview.durationMs,
       });
@@ -337,6 +360,7 @@ export function AdminVoiceDropCard({ activeMamaCount = 0, allMamaCount = 0 }) {
         One audio PSA on Today for active listeners — not copied into Messages.
         Recordings up to about 50 MB are fine (a full ~10 minute memo usually fits).
         Drafts auto-save on this device if publish fails.
+        Defaults to the selected group&apos;s active mamas — not every cohort.
         Use <strong style={{ fontWeight: 700, color: T.ink }}>Admins only</strong> on Cloudflare preview
         so real mamas aren’t notified.
       </p>
@@ -533,10 +557,32 @@ export function AdminVoiceDropCard({ activeMamaCount = 0, allMamaCount = 0 }) {
             }}
           >
             <option value="admins">Admins only (preview / test)</option>
-            <option value="active">Active mamas ({activeMamaCount})</option>
+            <option value="active">Active mamas ({audience === "active" ? cohortActiveCount : activeMamaCount})</option>
             <option value="all_mamas">All mamas ({allMamaCount})</option>
           </select>
         </label>
+        {audience === "active" && (
+          <label style={{ fontSize: 13, fontWeight: 700, color: T.inkSoft, display: "flex", alignItems: "center", gap: 6 }}>
+            Group
+            <select
+              value={cohortLabel}
+              onChange={(e) => setCohortLabel(e.target.value)}
+              disabled={busy || recording}
+              style={{
+                ...inputStyle,
+                width: "auto",
+                padding: "8px 10px",
+                fontSize: 13,
+              }}
+            >
+              {COHORT_CALENDAR.map((c) => (
+                <option key={c.label} value={c.label}>
+                  {adminCohortName(c.label)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label style={{
           fontSize: 13,
           color: T.ink,

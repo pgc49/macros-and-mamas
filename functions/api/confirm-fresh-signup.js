@@ -9,8 +9,8 @@
    ================================================================== */
 
 import {
+  findAdminUserByEmail,
   shouldConfirmFreshUser,
-  userFromAdminList,
 } from "../_shared/confirmFreshSignup.js";
 
 const ALLOWED_HOSTS = new Set([
@@ -39,16 +39,18 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: true });
     }
 
-    const listResp = await fetch(
-      `${base}/auth/v1/admin/users?page=1&per_page=50&email=${encodeURIComponent(email)}`,
-      { headers: { apikey: key, authorization: `Bearer ${key}` } },
-    );
-    if (!listResp.ok) {
-      console.error("confirm-fresh-signup list failed", listResp.status, await listResp.text());
+    let user;
+    try {
+      user = await findAdminUserByEmail({
+        fetchImpl: fetch,
+        base,
+        key,
+        email,
+      });
+    } catch (listErr) {
+      console.error("confirm-fresh-signup list failed", listErr.status, listErr.detail || listErr);
       return json({ ok: true });
     }
-    const payload = await listResp.json().catch(() => ({}));
-    const user = userFromAdminList(payload, email);
     if (!shouldConfirmFreshUser(user)) {
       return json({ ok: true });
     }
