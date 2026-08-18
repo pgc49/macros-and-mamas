@@ -48,10 +48,6 @@ export const CONFIG = {
   SUPABASE_ANON_KEY,
   ADMIN_APP_URL: envUrl("VITE_ADMIN_APP_URL") || "https://admin.macrosandmamas.com",
 
-  // Private WhatsApp invite — shown in approve email; optional in-app tip.
-  WHATSAPP_GROUP_URL:
-    envUrl("VITE_WHATSAPP_GROUP_URL") ||
-    "https://chat.whatsapp.com/GxlqCrLUooN36ST2QqHrX3",
   FULLSCRIPT_ELECTROLYTES: envUrl("VITE_FULLSCRIPT_ELECTROLYTES_URL"),
   FULLSCRIPT_SLEEP: envUrl("VITE_FULLSCRIPT_SLEEP_URL"),
   FULLSCRIPT_DIGESTION: envUrl("VITE_FULLSCRIPT_DIGESTION_URL"),

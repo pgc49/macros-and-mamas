@@ -78,10 +78,6 @@ export const ADMIN_APP_URL = (
   Deno.env.get("ADMIN_APP_URL") || "https://admin.macrosandmamas.com"
 ).replace(/\/$/, "");
 export const ADMIN_PORTAL_URL = `${ADMIN_APP_URL}/admin`;
-/** Private WhatsApp invite — set WHATSAPP_GROUP_URL in function secrets to override. */
-export const WHATSAPP_GROUP_URL =
-  Deno.env.get("WHATSAPP_GROUP_URL") ||
-  "https://chat.whatsapp.com/GxlqCrLUooN36ST2QqHrX3";
 export const CALLIE_NOTIFY_EMAIL =
   Deno.env.get("CALLIE_NOTIFY_EMAIL") || "calista@nourishwithcalista.com";
 /** Co-owner ops alerts (payment / intake / refund). Comma-separated ok. */

@@ -150,11 +150,11 @@ export function IntakeFlow({ profile, step, setStep, set, setProfile, onSubmit }
           )}
           <Field label="Current weight (lbs)"><input style={inputStyle} inputMode="numeric" value={profile.currentWeight} onChange={(e) => set("currentWeight", e.target.value)} placeholder="162" /></Field>
           <Field label="Goal weight (lbs) — where you feel your best"><input style={inputStyle} inputMode="numeric" value={profile.goalWeight} onChange={(e) => set("goalWeight", e.target.value)} placeholder="145" /></Field>
-          <Field label="Cell number — your WhatsApp group invite comes by text">
+          <Field label="Cell number">
             <input style={inputStyle} inputMode="tel" value={profile.phone} onChange={(e) => set("phone", e.target.value)} placeholder="(555) 555-5555" />
           </Field>
           <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.5, marginBottom: 14 }}>
-            Callie personally invites every mama to the group chat. Heads up: members of a WhatsApp group can see each other&apos;s numbers.
+            Callie may text you if she needs to reach you. Your group chat lives in Messages in the app — other mamas won&apos;t see this number.
           </div>
           <Btn
             style={{ width: "100%", marginTop: 4 }}
