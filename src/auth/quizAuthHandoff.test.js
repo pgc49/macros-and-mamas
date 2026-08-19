@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  clearQuizPayHandoff,
+  isQuizPayHandoffActive,
   joinCheckoutDecision,
   joinPathWhenSignedOut,
+  markQuizPayHandoff,
   quizSessionMismatch,
   shouldAcceptGetSession,
   shouldSwitchCreateToSignIn,
@@ -79,6 +84,29 @@ describe("joinCheckoutDecision", () => {
       probeDone: true,
       supabaseHasSession: false,
     })).toBe("signin");
+  });
+
+  it("holds checkout after create-account even before the session probe", () => {
+    expect(joinCheckoutDecision({
+      user: null,
+      authLoading: false,
+      probeDone: true,
+      supabaseHasSession: false,
+      handoffActive: true,
+    })).toBe("hold");
+  });
+});
+
+afterEach(() => {
+  clearQuizPayHandoff();
+});
+
+describe("quiz pay handoff stamp", () => {
+  it("stays active just after mark and clears", () => {
+    markQuizPayHandoff("mama+quiz@example.com");
+    expect(isQuizPayHandoffActive()).toBe(true);
+    clearQuizPayHandoff();
+    expect(isQuizPayHandoffActive()).toBe(false);
   });
 });
 

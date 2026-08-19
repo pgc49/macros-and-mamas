@@ -43,7 +43,13 @@ import {
 } from "./lib/attribution";
 import { CanonicalizeTrailingSlash } from "./components/CanonicalizeTrailingSlash";
 import { emailsMatch, quizJoinHref, resolveQuizEmail } from "./lib/quizCheckout";
-import { joinCheckoutDecision, joinPathWhenSignedOut, quizSessionMismatch } from "./auth/quizAuthHandoff";
+import {
+  clearQuizPayHandoff,
+  isQuizPayHandoffActive,
+  joinCheckoutDecision,
+  joinPathWhenSignedOut,
+  quizSessionMismatch,
+} from "./auth/quizAuthHandoff";
 import { ageFromDateOfBirth } from "./db/db";
 
 /**
@@ -131,24 +137,40 @@ function JoinGate({ refunded, paid, isAdmin, approved, macros, membershipPaywall
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const [probe, setProbe] = useState({ done: false, hasSession: false });
+  const [handoffActive, setHandoffActive] = useState(() => isQuizPayHandoffActive());
 
   useEffect(() => {
     if (user) {
+      clearQuizPayHandoff();
+      setHandoffActive(false);
       setProbe({ done: true, hasSession: true });
       return undefined;
     }
     let cancelled = false;
-    supabase.auth.getSession()
-      .then(({ data }) => {
-        if (!cancelled) {
-          setProbe({ done: true, hasSession: Boolean(data.session?.user) });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setProbe({ done: true, hasSession: false });
-      });
+    const tick = () => {
+      supabase.auth.getSession()
+        .then(({ data }) => {
+          if (cancelled) return;
+          const has = Boolean(data.session?.user);
+          setProbe({ done: true, hasSession: has });
+          setHandoffActive(isQuizPayHandoffActive() && !has);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setProbe({ done: true, hasSession: false });
+            setHandoffActive(isQuizPayHandoffActive());
+          }
+        });
+    };
+    tick();
+    const interval = setInterval(tick, 300);
+    const giveUp = setTimeout(() => {
+      if (!cancelled) setHandoffActive(false);
+    }, 15000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
+      clearTimeout(giveUp);
     };
   }, [user]);
 
@@ -157,6 +179,7 @@ function JoinGate({ refunded, paid, isAdmin, approved, macros, membershipPaywall
     authLoading,
     probeDone: probe.done,
     supabaseHasSession: probe.hasSession,
+    handoffActive,
   });
   if (decision === "hold") {
     return (
