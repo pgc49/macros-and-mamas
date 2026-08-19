@@ -47,9 +47,9 @@ import {
   clearQuizPayHandoff,
   isQuizPayHandoffActive,
   joinCheckoutDecision,
-  joinPathWhenSignedOut,
   quizSessionMismatch,
 } from "./auth/quizAuthHandoff";
+import { signedOutJoinRedirect } from "./auth/quizSignupBounce";
 import { ageFromDateOfBirth } from "./db/db";
 
 /**
@@ -193,7 +193,7 @@ function JoinGate({ refunded, paid, isAdmin, approved, macros, membershipPaywall
     );
   }
   if (decision === "signin") {
-    const signedOutTo = joinPathWhenSignedOut({
+    const signedOutTo = signedOutJoinRedirect({
       user: null,
       authLoading: false,
       search: location.search,

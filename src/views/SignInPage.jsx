@@ -9,6 +9,7 @@ import { isEnrollmentOpen } from "../config";
 import { normalizeEmail, quizJoinHref, rememberQuizEmail } from "../lib/quizCheckout";
 import { isUnconfirmedEmailError } from "../auth/completeSignup";
 import { markQuizPayHandoff, shouldSwitchCreateToSignIn } from "../auth/quizAuthHandoff";
+import { captureQuizSignupBounce } from "../auth/quizSignupBounce";
 
 /**
  * One auth screen. Mode comes from the entry point:
@@ -86,6 +87,16 @@ export function SignInPage({
       if (err) {
         const msg = err.message || "Could not create account.";
         if (shouldSwitchCreateToSignIn({ existingAccount, message: msg }) && onSwitchMode) {
+          if (fromQuiz) {
+            captureQuizSignupBounce({
+              fromPath: PATHS.signin,
+              toPath: PATHS.signin,
+              userSet: false,
+              emailQueryPresent: Boolean(accountEmail),
+              existingAccountFlip: true,
+              search: "from=quiz",
+            });
+          }
           setError("That email already has an account. Sign in with the password you created, or tap Forgot password.");
           onSwitchMode("signin");
           return;

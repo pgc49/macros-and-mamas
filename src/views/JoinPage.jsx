@@ -12,6 +12,8 @@ import {
   rememberQuizEmail,
   resolveQuizEmail,
 } from "../lib/quizCheckout";
+import { captureQuizSignupBounce } from "../auth/quizSignupBounce";
+import { PATHS } from "../routing";
 
 const LAB_ADDON_PRICE = 349;
 const COHORT_START = CONFIG.COHORT_START || "Monday, Aug 31";
@@ -77,7 +79,16 @@ export function JoinPage({ profileCreatedAt = null }) {
     try {
       rememberQuizEmail(quizEmail);
       await signOut();
-      window.location.assign(quizSignInHref(quizEmail, "create"));
+      const to = quizSignInHref(quizEmail, "create");
+      captureQuizSignupBounce({
+        fromPath: PATHS.join,
+        toPath: to,
+        userSet: true,
+        emailQueryPresent: true,
+        existingAccountFlip: false,
+        search: "from=quiz",
+      });
+      window.location.assign(to);
     } catch (e) {
       console.error("switch to quiz email failed", e);
       setError("Couldn't switch accounts. Sign out from your profile icon, then sign in with your quiz email.");

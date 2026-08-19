@@ -4,10 +4,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
+const captureMessage = vi.fn();
+const signOut = vi.fn(async () => {});
+
+vi.mock("@sentry/react", () => ({
+  captureMessage: (...args) => captureMessage(...args),
+}));
+
 vi.mock("../auth/useAuth.jsx", () => ({
   useAuth: () => ({
     user: { email: "pgchammas+metatest@gmail.com" },
-    signOut: vi.fn(),
+    signOut,
   }),
 }));
 
@@ -20,6 +27,9 @@ import { JoinPage } from "./JoinPage";
 
 afterEach(() => {
   cleanup();
+  captureMessage.mockReset();
+  signOut.mockReset();
+  signOut.mockResolvedValue();
 });
 
 function renderJoin(path = "/join") {
@@ -44,6 +54,30 @@ describe("JoinPage referral field", () => {
     fireEvent.click(screen.getByText("Referral code"));
     expect(details?.open).toBe(true);
     expect(screen.getByPlaceholderText("e.g. SARAH25")).toBeTruthy();
+  });
+
+  it("captures a quiz bounce when /join switches back to the quiz email", async () => {
+    vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
+    renderJoin("/join?from=quiz&email=pgchammas%2Bquiz%40gmail.com");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Continue with quiz email/i })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Continue with quiz email/i }));
+    await waitFor(() => {
+      expect(captureMessage).toHaveBeenCalledWith(
+        "quiz_signup_bounce",
+        expect.objectContaining({
+          level: "warning",
+          extra: expect.objectContaining({
+            fromPath: "/join",
+            userSet: true,
+            emailQueryPresent: true,
+            existingAccountFlip: false,
+          }),
+        }),
+      );
+    });
+    vi.unstubAllGlobals();
   });
 
   it("opens with a prefilled code from ?ref=", async () => {

@@ -29,6 +29,7 @@ import { AdminClientTracking } from "./AdminClientTracking";
 import { AdminClientMessages } from "./AdminClientMessages";
 import { AdminCredits } from "./AdminCredits";
 import { AdminEmails } from "./AdminEmails";
+import { AdminQuizFunnelCard } from "./AdminQuizFunnelCard";
 import { AdminClientRoster, CohortFilterBar, CopyPhoneButton } from "./AdminClientRoster";
 import { rosterStats } from "./clientRoster";
 import { formatReferredBy, thankReferrerLabel } from "./referredBy";
@@ -810,6 +811,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
       {tab === "overview" && (
         <>
+          <AdminQuizFunnelCard />
           {unreadMessages > 0 && (
             <button
               type="button"

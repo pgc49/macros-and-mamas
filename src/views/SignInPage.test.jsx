@@ -7,6 +7,11 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 const signUpWithPassword = vi.fn(async () => ({ error: null }));
 const signInWithPassword = vi.fn(async () => ({ error: null }));
 const resetPasswordForEmail = vi.fn(async () => ({ error: null }));
+const captureMessage = vi.fn();
+
+vi.mock("@sentry/react", () => ({
+  captureMessage: (...args) => captureMessage(...args),
+}));
 
 vi.mock("../auth/useAuth.jsx", () => ({
   useAuth: () => ({
@@ -31,6 +36,7 @@ afterEach(() => {
   signUpWithPassword.mockReset();
   signInWithPassword.mockReset();
   resetPasswordForEmail.mockReset();
+  captureMessage.mockReset();
   signUpWithPassword.mockResolvedValue({ error: null });
   signInWithPassword.mockResolvedValue({ error: null });
   resetPasswordForEmail.mockResolvedValue({ error: null });
@@ -100,6 +106,26 @@ describe("SignInPage quiz handoff", () => {
       "secret1",
       expect.objectContaining({ termsVersion: expect.any(String) }),
     );
+    expect(captureMessage).toHaveBeenCalledWith(
+      "quiz_signup_bounce",
+      expect.objectContaining({
+        level: "warning",
+        extra: expect.objectContaining({ existingAccountFlip: true }),
+      }),
+    );
+  });
+
+  it("does not capture a bounce when create succeeds", async () => {
+    renderSignIn(quizCreate);
+    fireEvent.click(screen.getByLabelText(/I agree to the/i));
+    fireEvent.change(screen.getByPlaceholderText("At least 6 characters"), {
+      target: { value: "secret1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => {
+      expect(signUpWithPassword).toHaveBeenCalled();
+    });
+    expect(captureMessage).not.toHaveBeenCalled();
   });
 
   it("does not flip to sign-in when create fails with invalid login", async () => {
