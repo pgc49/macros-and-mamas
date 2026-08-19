@@ -3,6 +3,7 @@ import {
   DEFAULT_ADMIN_ORIGIN,
   adminOriginFromEnv,
   adminPortalUrl,
+  isAdminSignupLockedHost,
 } from "./adminOrigin.js";
 
 describe("admin origin helpers", () => {
@@ -24,5 +25,27 @@ describe("admin origin helpers", () => {
     expect(adminOriginFromEnv({ VITE_ADMIN_APP_URL: "http://evil.example" })).toBe(
       DEFAULT_ADMIN_ORIGIN,
     );
+  });
+});
+
+describe("isAdminSignupLockedHost", () => {
+  it("locks production admin and admin Pages preview hosts", () => {
+    expect(isAdminSignupLockedHost("admin.macrosandmamas.com", {})).toBe(true);
+    expect(isAdminSignupLockedHost("https://admin.macrosandmamas.com", {})).toBe(true);
+    expect(isAdminSignupLockedHost("macros-and-mamas-admin.pages.dev", {})).toBe(true);
+    expect(isAdminSignupLockedHost("deadbeef.macros-and-mamas-admin.pages.dev", {})).toBe(true);
+  });
+
+  it("locks a configured admin origin", () => {
+    expect(isAdminSignupLockedHost("preview-admin.example.com", {
+      VITE_ADMIN_APP_URL: "https://preview-admin.example.com",
+    })).toBe(true);
+  });
+
+  it("does not lock www, apex, localhost, or customer Pages previews", () => {
+    expect(isAdminSignupLockedHost("www.macrosandmamas.com", {})).toBe(false);
+    expect(isAdminSignupLockedHost("macrosandmamas.com", {})).toBe(false);
+    expect(isAdminSignupLockedHost("localhost", {})).toBe(false);
+    expect(isAdminSignupLockedHost("abc.macros-and-mamas.pages.dev", {})).toBe(false);
   });
 });

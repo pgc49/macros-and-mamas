@@ -12,6 +12,10 @@ import {
   findAdminUserByEmail,
   shouldConfirmFreshUser,
 } from "../_shared/confirmFreshSignup.js";
+import {
+  hostnameFromOriginOrHost,
+  isAdminSignupLockedHost,
+} from "../_shared/adminOrigin.js";
 
 const ALLOWED_HOSTS = new Set([
   "www.macrosandmamas.com",
@@ -22,7 +26,7 @@ const ALLOWED_HOSTS = new Set([
 
 export async function onRequestPost({ request, env }) {
   try {
-    if (!originAllowed(request)) {
+    if (!originAllowed(request, env)) {
       return json({ ok: false, error: "forbidden" }, 403);
     }
 
@@ -74,11 +78,21 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-function originAllowed(request) {
+export function originAllowed(request, env) {
+  const requestHost = hostnameFromOriginOrHost(request.url);
+  const originHost = hostnameFromOriginOrHost(request.headers.get("origin") || "");
+  const hostHeader = hostnameFromOriginOrHost(request.headers.get("host") || "");
+  if (
+    isAdminSignupLockedHost(requestHost, env)
+    || isAdminSignupLockedHost(originHost, env)
+    || isAdminSignupLockedHost(hostHeader, env)
+  ) {
+    return false;
+  }
+
   const origin = request.headers.get("origin") || "";
   if (!origin) {
-    const host = new URL(request.url).hostname.toLowerCase();
-    return ALLOWED_HOSTS.has(host) || host.endsWith(".pages.dev");
+    return ALLOWED_HOSTS.has(requestHost) || requestHost.endsWith(".pages.dev");
   }
   try {
     const host = new URL(origin).hostname.toLowerCase();
