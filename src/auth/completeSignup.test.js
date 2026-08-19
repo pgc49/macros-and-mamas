@@ -73,6 +73,22 @@ describe("completeSignup", () => {
     });
   });
 
+  it("retries confirm-fresh once more when the first confirm still has no session", async () => {
+    const confirmFresh = vi.fn(async () => {});
+    const signIn = vi.fn()
+      .mockResolvedValueOnce({ ok: false, error: "Invalid login credentials" })
+      .mockResolvedValueOnce({ ok: false, error: "Invalid login credentials" })
+      .mockResolvedValueOnce({ ok: true });
+    const result = await completeSignup({
+      signUp: async () => ({ ok: true, session: null }),
+      signIn,
+      confirmFresh,
+    });
+    expect(result).toEqual({ ok: true });
+    expect(confirmFresh).toHaveBeenCalledTimes(2);
+    expect(signIn).toHaveBeenCalledTimes(3);
+  });
+
   it("confirms a fresh signup when follow-up sign-in only says invalid login", async () => {
     const confirmFresh = vi.fn(async () => {});
     const signIn = vi.fn()

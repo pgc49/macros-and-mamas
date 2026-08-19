@@ -8,7 +8,7 @@ import { TERMS_VERSION } from "../content/terms";
 import { isEnrollmentOpen } from "../config";
 import { normalizeEmail, quizJoinHref, rememberQuizEmail } from "../lib/quizCheckout";
 import { isUnconfirmedEmailError } from "../auth/completeSignup";
-import { shouldSwitchCreateToSignIn } from "../auth/quizAuthHandoff";
+import { markQuizPayHandoff, shouldSwitchCreateToSignIn } from "../auth/quizAuthHandoff";
 
 /**
  * One auth screen. Mode comes from the entry point:
@@ -32,6 +32,7 @@ export function SignInPage({
   }, [fromQuiz, prefillEmail]);
 
   const goQuizJoin = (value = email) => {
+    markQuizPayHandoff(value);
     if (!fromQuiz) return;
     navigate(quizJoinHref(value), { replace: true });
   };
@@ -93,6 +94,10 @@ export function SignInPage({
         return;
       }
       if (needsEmailConfirm) {
+        if (fromQuiz) {
+          setError("Your account is created. Tap Continue again to open checkout.");
+          return;
+        }
         setInfo("Check your email to confirm your account, then sign in. Check spam too.");
         return;
       }

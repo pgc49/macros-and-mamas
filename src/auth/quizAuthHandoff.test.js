@@ -1,7 +1,14 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  clearQuizPayHandoff,
+  isQuizPayHandoffActive,
+  joinCheckoutDecision,
   joinPathWhenSignedOut,
+  markQuizPayHandoff,
   quizSessionMismatch,
+  shouldAcceptGetSession,
   shouldSwitchCreateToSignIn,
 } from "./quizAuthHandoff";
 
@@ -48,6 +55,66 @@ describe("joinPathWhenSignedOut", () => {
       authLoading: false,
       search: "from=quiz&email=mama+quiz@example.com",
     })).toBe("/signin?from=quiz&auth=create&email=mama%2Bquiz%40example.com");
+  });
+});
+
+describe("joinCheckoutDecision", () => {
+  it("holds /join until the session probe finishes", () => {
+    expect(joinCheckoutDecision({
+      user: null,
+      authLoading: false,
+      probeDone: false,
+      supabaseHasSession: false,
+    })).toBe("hold");
+  });
+
+  it("stays on checkout when Supabase has a session even if React user is late", () => {
+    expect(joinCheckoutDecision({
+      user: null,
+      authLoading: false,
+      probeDone: true,
+      supabaseHasSession: true,
+    })).toBe("stay");
+  });
+
+  it("sends a probed signed-out visitor to create-account", () => {
+    expect(joinCheckoutDecision({
+      user: null,
+      authLoading: false,
+      probeDone: true,
+      supabaseHasSession: false,
+    })).toBe("signin");
+  });
+
+  it("holds checkout after create-account even before the session probe", () => {
+    expect(joinCheckoutDecision({
+      user: null,
+      authLoading: false,
+      probeDone: true,
+      supabaseHasSession: false,
+      handoffActive: true,
+    })).toBe("hold");
+  });
+});
+
+afterEach(() => {
+  clearQuizPayHandoff();
+});
+
+describe("quiz pay handoff stamp", () => {
+  it("stays active just after mark and clears", () => {
+    markQuizPayHandoff("mama+quiz@example.com");
+    expect(isQuizPayHandoffActive()).toBe(true);
+    clearQuizPayHandoff();
+    expect(isQuizPayHandoffActive()).toBe(false);
+  });
+});
+
+describe("shouldAcceptGetSession", () => {
+  it("ignores a stale anonymous getSession after signup applied a user", () => {
+    expect(shouldAcceptGetSession(null, true)).toBe(false);
+    expect(shouldAcceptGetSession({ user: { id: "u1" } }, false)).toBe(true);
+    expect(shouldAcceptGetSession(null, false)).toBe(true);
   });
 });
 

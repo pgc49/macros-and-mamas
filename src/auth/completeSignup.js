@@ -46,6 +46,11 @@ export async function completeSignup({ signUp, signIn, confirmFresh }) {
       allowInvalidLogin: true,
     });
     if (confirmed?.ok) return { ok: true };
+    if (confirmFresh) {
+      await confirmFresh();
+      const again = await signIn();
+      if (again.ok) return { ok: true };
+    }
     return {
       ok: false,
       needsEmailConfirm: true,
@@ -63,6 +68,11 @@ export async function completeSignup({ signUp, signIn, confirmFresh }) {
       allowInvalidLogin: true,
     });
     if (confirmed?.ok) return { ok: true, recoveredExisting: true };
+    if (confirmFresh) {
+      await confirmFresh();
+      const again = await signIn();
+      if (again.ok) return { ok: true, recoveredExisting: true };
+    }
     return {
       ok: false,
       existingAccount: true,

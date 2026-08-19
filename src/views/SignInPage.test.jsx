@@ -123,6 +123,27 @@ describe("SignInPage quiz handoff", () => {
     expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
   });
 
+  it("keeps a quiz visitor on Continue when email confirm still has no session", async () => {
+    signUpWithPassword.mockResolvedValueOnce({
+      error: null,
+      needsEmailConfirm: true,
+    });
+    const onSwitchMode = vi.fn();
+    renderSignIn(quizCreate, { onSwitchMode });
+
+    fireEvent.click(screen.getByLabelText(/I agree to the/i));
+    fireEvent.change(screen.getByPlaceholderText("At least 6 characters"), {
+      target: { value: "secret1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/tap Continue again to open checkout/i)).toBeTruthy();
+    });
+    expect(onSwitchMode).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
+  });
+
   it("continues to quiz join after create succeeds", async () => {
     renderSignIn(quizCreate);
 
