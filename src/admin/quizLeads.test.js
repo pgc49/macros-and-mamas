@@ -72,11 +72,11 @@ describe("isMetaAdLead / isMetaClickLead", () => {
     }
   });
 
-  it("fbc without ad UTMs is Meta click, not Ad", () => {
+  it("fbc without ad UTMs is Meta link, not Ad", () => {
     expect(isMetaClickLead(lead({ fbc: "fb.1.1.abc" }))).toBe(true);
     expect(isMetaAdLead(lead({ fbc: "fb.1.1.abc" }))).toBe(false);
     expect(quizLeadSourceKind(lead({ fbc: "fb.1.1.abc" }))).toBe("meta_click");
-    expect(quizLeadSourceLabel(lead({ fbc: "fb.1.1.abc" }))).toBe("Meta click");
+    expect(quizLeadSourceLabel(lead({ fbc: "fb.1.1.abc" }))).toBe("Meta link");
     expect(isMetaAdLead(lead({ utm_source: "meta" }))).toBe(false);
     expect(isMetaAdLead(lead({ utm_source: "meta", utm_medium: "social" }))).toBe(false);
   });
@@ -101,19 +101,19 @@ describe("isMetaAdLead / isMetaClickLead", () => {
 });
 
 describe("quizLeadSourceKind", () => {
-  it("labels Meta ad, Meta click, and referral separately; referral stacks", () => {
+  it("labels Meta ad, Meta link, and referral separately; referral stacks", () => {
     expect(quizLeadSourceKind(lead({ utm_source: "meta", utm_medium: "cpc" }))).toBe("meta_ad");
     expect(quizLeadSourceKind(lead({ fbc: "fb.1.1.abc" }))).toBe("meta_click");
     expect(quizLeadSourceKind(lead({ referred_by: "Callie", fbc: "fb.1.1.abc" }))).toBe("meta_click_referral");
     expect(quizLeadSourceKind(lead({ referred_by: "Callie" }))).toBe("referral");
     expect(quizLeadSourceKind(lead())).toBe("organic");
     expect(quizLeadSourceLabel(lead({ referred_by: "Callie" }))).toBe("Referral · Callie");
-    expect(quizLeadSourceLabel(lead({ fbc: "fb.1.1.abc" }))).toBe("Meta click");
+    expect(quizLeadSourceLabel(lead({ fbc: "fb.1.1.abc" }))).toBe("Meta link");
     expect(quizLeadSourceLabel(lead({ utm_source: "meta", utm_medium: "cpc" }))).toBe("Meta ad");
     expect(quizLeadSourceLabel(lead({ fbp: "fb.1.1.xyz" }))).toBe("Organic");
   });
 
-  it("Alex-shaped: fbc + KRISTEN25 is Meta click · Kristen, not Ad", () => {
+  it("Alex-shaped: fbc + KRISTEN25 is Meta link · Kristen, not Ad", () => {
     const alex = lead({
       email: "alex@example.com",
       fbc: "fb.1.1.igclick",
@@ -127,7 +127,7 @@ describe("quizLeadSourceKind", () => {
     expect(isReferralLead(alex)).toBe(true);
     expect(quizLeadSourceKind(alex)).toBe("meta_click_referral");
     expect(quizReferralWho(alex)).toBe("Kristen");
-    expect(quizLeadSourceLabel(alex)).toBe("Meta click · Kristen");
+    expect(quizLeadSourceLabel(alex)).toBe("Meta link · Kristen");
   });
 
   it("Jennifer-shaped: promo MEGAN25 with no fbc is Referral · Megan, not organic", () => {
@@ -269,7 +269,7 @@ describe("enrichQuizLeads + filterQuizLeads", () => {
     expect(byId.alex.sourceKind).toBe("meta_click_referral");
     expect(byId.alex.referralCode).toBe("KRISTEN25");
     expect(byId.alex.referralAdvocateFirstName).toBe("Kristen");
-    expect(quizLeadSourceLabel(byId.alex)).toBe("Meta click · Kristen");
+    expect(quizLeadSourceLabel(byId.alex)).toBe("Meta link · Kristen");
 
     expect(byId.jennifer.isMeta).toBe(false);
     expect(byId.jennifer.isReferral).toBe(true);
@@ -391,6 +391,6 @@ describe("loadQuizLeads", () => {
     expect(rows[0].funnelStatus).toBe("signed_up_unpaid");
     expect(rows[0].sourceKind).toBe("meta_click_referral");
     expect(rows[0].referralAdvocateFirstName).toBe("Kristen");
-    expect(quizLeadSourceLabel(rows[0])).toBe("Meta click · Kristen");
+    expect(quizLeadSourceLabel(rows[0])).toBe("Meta link · Kristen");
   });
 });

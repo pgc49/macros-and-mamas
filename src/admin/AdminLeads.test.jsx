@@ -136,7 +136,7 @@ describe("AdminLeads", () => {
     expect(screen.getByText("Megan Wells")).toBeTruthy();
     expect(screen.getByText(/Referral · Sarah · Paid/)).toBeTruthy();
     expect(screen.getByText("Alex Harrer")).toBeTruthy();
-    expect(screen.getByText(/Meta click · Kristen · Paid/)).toBeTruthy();
+    expect(screen.getByText(/Meta link · Kristen · Paid/)).toBeTruthy();
     expect(screen.getByText("3 quiz completes")).toBeTruthy();
     expect(screen.queryByText(/Ads Manager/i)).toBeTruthy();
     expect(screen.queryByText(/Sentry/i)).toBeNull();
