@@ -94,6 +94,17 @@ jobs:
             cp supabase/tests/push_subscription_origin.sql "$DB_ROOT/supabase/tests/"
           fi
           cp supabase/tests/voice_drop_storage_rls.sql "$DB_ROOT/supabase/tests/"
+          if [ -f supabase/tests/bootstrap_waitlist.sql ]; then
+            cp supabase/tests/bootstrap_waitlist.sql \
+              "$DB_ROOT/supabase/migrations/20260101000001_bootstrap_waitlist.sql"
+          fi
+          if [ -f supabase/migrations/064_waitlist_no_anon_insert.sql ]; then
+            cp supabase/migrations/064_waitlist_no_anon_insert.sql \
+              "$DB_ROOT/supabase/migrations/20260101000002_waitlist_no_anon_insert.sql"
+          fi
+          if [ -f supabase/tests/waitlist_no_anon_insert.sql ]; then
+            cp supabase/tests/waitlist_no_anon_insert.sql "$DB_ROOT/supabase/tests/"
+          fi
           echo "DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
 
       - name: Start disposable Supabase
