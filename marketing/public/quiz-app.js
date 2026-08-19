@@ -370,8 +370,8 @@
 
   function appTourHtml() {
     return `<div class="q-app-preview q-app-tour" id="qAppTour">
-      <div class="q-preview-kicker">In the app</div>
-      <p class="q-tour-lead">Four ways to log. Callie's recipes. Her in the thread when the week blows up.</p>
+      <div class="q-preview-kicker">App preview</div>
+      <p class="q-tour-lead">A small snapshot of the inside. Simple tracking, easy logging, and Callie plus a community of women on the same journey — one tap away.</p>
       <div class="q-tour-tabs" role="tablist" aria-label="App screens">
         <button type="button" class="q-tour-tab on" role="tab" aria-selected="true" id="qTourTabToday" aria-controls="qTourToday" data-tour="today">Today</button>
         <button type="button" class="q-tour-tab" role="tab" aria-selected="false" id="qTourTabMeals" aria-controls="qTourMeals" data-tour="meals">Meals</button>

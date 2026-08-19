@@ -13,7 +13,6 @@ describe("quiz payoff copy", () => {
     assert.match(quizJs, /your ranges are ready\./);
     assert.equal((quizJs.match(/A preview built from your answers/g) || []).length, 1);
     assert.doesNotMatch(quizJs, /This is a preview/);
-    assert.doesNotMatch(quizJs, /App preview/);
     assert.doesNotMatch(quizJs, /not your final numbers/);
     assert.doesNotMatch(quizJs, /These are bands, not one rigid number/);
     assert.doesNotMatch(quizJs, /We emailed these ranges/);
@@ -33,6 +32,10 @@ describe("quiz payoff copy", () => {
   it("tours Today, Meals, and Messages without extra proof cards", () => {
     assert.doesNotMatch(quizJs, /My meals · recipes/);
     assert.doesNotMatch(quizJs, /Progress · ranges/);
+    assert.match(quizJs, /App preview/);
+    assert.match(quizJs, /A small snapshot of the inside/);
+    assert.match(quizJs, /Simple tracking, easy logging/);
+    assert.doesNotMatch(quizJs, /Four ways to log/);
     assert.match(quizJs, /Today · log a meal/);
     assert.match(quizJs, /All meals · Callie's recipes/);
     assert.match(quizJs, /Messages · 1:1 with Callie/);
