@@ -30,6 +30,7 @@ afterEach(() => {
   captureMessage.mockReset();
   signOut.mockReset();
   signOut.mockResolvedValue();
+  sessionStorage.clear();
 });
 
 function renderJoin(path = "/join") {
