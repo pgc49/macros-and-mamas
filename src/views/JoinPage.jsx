@@ -12,6 +12,7 @@ import {
   rememberQuizEmail,
   resolveQuizEmail,
 } from "../lib/quizCheckout";
+import { urlQuizEmail } from "../auth/quizAuthHandoff";
 import { captureQuizSignupBounce } from "../auth/quizSignupBounce";
 import { PATHS } from "../routing";
 
@@ -26,8 +27,11 @@ export function JoinPage({ profileCreatedAt = null }) {
   const [searchParams] = useSearchParams();
   const quizEmail = resolveQuizEmail(searchParams);
   const sessionEmail = normalizeEmail(user?.email);
+  // Gate on the URL address only — a leftover stored email would otherwise
+  // block a correctly signed-in mama from paying.
+  const linkEmail = urlQuizEmail(searchParams);
   const emailMismatch = Boolean(
-    quizEmail && sessionEmail && !emailsMatch(sessionEmail, quizEmail),
+    linkEmail && sessionEmail && !emailsMatch(sessionEmail, linkEmail),
   );
 
   const [busy, setBusy] = useState(false);
@@ -73,13 +77,13 @@ export function JoinPage({ profileCreatedAt = null }) {
   }, [profileCreatedAt, sessionEmail]);
 
   const switchToQuizEmail = async () => {
-    if (!quizEmail) return;
+    if (!linkEmail) return;
     setSwitching(true);
     setError("");
     try {
-      rememberQuizEmail(quizEmail);
+      rememberQuizEmail(linkEmail);
       await signOut();
-      const to = quizSignInHref(quizEmail, "create");
+      const to = quizSignInHref(linkEmail, "create");
       captureQuizSignupBounce({
         fromPath: PATHS.join,
         toPath: to,
@@ -170,7 +174,7 @@ export function JoinPage({ profileCreatedAt = null }) {
           </h2>
           <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft, margin: "0 0 16px" }}>
             Your early rate is unlocked for{" "}
-            <strong style={{ color: T.ink }}>{quizEmail}</strong>.
+            <strong style={{ color: T.ink }}>{linkEmail}</strong>.
             {" "}You’re signed in as{" "}
             <strong style={{ color: T.ink }}>{sessionEmail}</strong>
             {" "}— switch accounts to check out with the email that took the quiz.

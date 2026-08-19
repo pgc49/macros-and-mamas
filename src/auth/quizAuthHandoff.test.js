@@ -10,6 +10,7 @@ import {
   quizSessionMismatch,
   shouldAcceptGetSession,
   shouldSwitchCreateToSignIn,
+  urlQuizEmail,
 } from "./quizAuthHandoff";
 
 describe("quizSessionMismatch", () => {
@@ -107,6 +108,16 @@ describe("quiz pay handoff stamp", () => {
     expect(isQuizPayHandoffActive()).toBe(true);
     clearQuizPayHandoff();
     expect(isQuizPayHandoffActive()).toBe(false);
+  });
+});
+
+describe("urlQuizEmail", () => {
+  it("reads the URL address and ignores a stale stored one", () => {
+    sessionStorage.setItem("mm_quiz_email", "old+attempt@example.com");
+    expect(urlQuizEmail(new URLSearchParams("from=quiz"))).toBe("");
+    expect(urlQuizEmail(new URLSearchParams("from=quiz&email=mama%2Bnew%40example.com")))
+      .toBe("mama+new@example.com");
+    sessionStorage.removeItem("mm_quiz_email");
   });
 });
 

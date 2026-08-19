@@ -55,6 +55,18 @@ export function quizSessionMismatch({ user, fromQuiz, quizEmail }) {
 }
 
 /**
+ * Quiz email straight from the URL, never sessionStorage.
+ * A stored address from an earlier attempt must not make the signed-in
+ * account look wrong and block her checkout.
+ */
+export function urlQuizEmail(searchParams) {
+  const raw = searchParams?.get?.("email")
+    || new URLSearchParams(searchParams || "").get("email")
+    || "";
+  return normalizeEmail(raw);
+}
+
+/**
  * /join bounce rules for the paid-quiz funnel.
  * stay  — show checkout (React user or a live Supabase session)
  * hold  — still reading auth; never bounce on this paint
