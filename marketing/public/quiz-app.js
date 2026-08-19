@@ -363,18 +363,79 @@
       <div class="q-coach-body">
         <strong>Your coach is Callie</strong>
         <span class="q-coach-creds">Certified functional nutritionist · blood chemistry certified · mama of two</span>
-        <p class="q-coach-voice">“I've done the 2am math on milk supply and calories. Macros and Mamas is the program I needed and couldn't find.”</p>
+        <p class="q-coach-voice">“I personally make it a priority to connect with each client 1:1 to ensure they get the most out of this program. Macros and Mamas is the program I needed and couldn't find.”</p>
       </div>
     </div>`;
   }
 
-  function messagesProofHtml() {
-    return `<div class="q-includes">
-      <div class="q-include-card">
+  function appTourHtml() {
+    return `<div class="q-app-preview q-app-tour" id="qAppTour">
+      <div class="q-preview-kicker">App preview</div>
+      <p class="q-tour-lead">A small snapshot of the inside. Simple tracking, easy logging, and Callie plus a community of women on the same journey — one tap away.</p>
+      <div class="q-tour-tabs" role="tablist" aria-label="App screens">
+        <button type="button" class="q-tour-tab on" role="tab" aria-selected="true" id="qTourTabToday" aria-controls="qTourToday" data-tour="today">Today</button>
+        <button type="button" class="q-tour-tab" role="tab" aria-selected="false" id="qTourTabMeals" aria-controls="qTourMeals" data-tour="meals">Meals</button>
+        <button type="button" class="q-tour-tab" role="tab" aria-selected="false" id="qTourTabMessages" aria-controls="qTourMessages" data-tour="messages">Messages</button>
+      </div>
+      <div class="mini q-log-card q-tour-panel" id="qTourToday" data-tour-panel="today" role="tabpanel" aria-labelledby="qTourTabToday">
+        <div class="m-kicker">Today · log a meal</div>
+        <div class="modes" aria-hidden="true">
+          <div class="mode act"><span class="mi">📸</span><span class="ml">Snap</span><span class="ms">plate or menu</span></div>
+          <div class="mode"><span class="mi">✏️</span><span class="ml">Describe</span><span class="ms">type it</span></div>
+          <div class="mode"><span class="mi">🍳</span><span class="ml">My plan</span><span class="ms">exact</span></div>
+          <div class="mode"><span class="mi mi-hash">#</span><span class="ml">Macros</span><span class="ms">I know them</span></div>
+        </div>
+        <p class="q-tour-section">Today's log</p>
+        <div class="q-log-row">
+          <span class="q-log-slot">Breakfast</span>
+          <strong>Protein oatmeal</strong>
+          <span class="q-log-macros">310 cal · P 30g · C 40g · F 4g</span>
+        </div>
+        <div class="q-log-row">
+          <span class="q-log-slot">Lunch</span>
+          <strong>Grilled Chicken Big Salad</strong>
+          <span class="q-log-macros">420 cal · P 59g · C 10g · F 14g</span>
+        </div>
+        <div class="q-tour-ranges" aria-hidden="true">
+          <span class="q-tour-chip"><b>730</b> cal</span>
+          <span class="q-tour-chip"><b>89g</b> P</span>
+          <span class="q-tour-chip"><b>50g</b> C</span>
+          <span class="q-tour-chip"><b>18g</b> F</span>
+        </div>
+        <div class="q-tour-water">
+          <span class="q-tour-water-label">Water · 40 of 88 oz</span>
+          <span class="q-tour-water-btn">+ My bottle · 32 oz</span>
+        </div>
+      </div>
+      <div class="mini q-log-card q-tour-panel" id="qTourMeals" data-tour-panel="meals" role="tabpanel" aria-labelledby="qTourTabMeals" hidden>
+        <div class="m-kicker">All meals · Callie's recipes</div>
+        <div class="q-meal-chips" aria-hidden="true">
+          <span class="on">All meals</span>
+          <span>Plan</span>
+          <span>Breakfast</span>
+          <span>My meals</span>
+        </div>
+        <div class="q-recipe-card" aria-hidden="true">
+          <div class="q-recipe-top">
+            <span class="q-recipe-tag">Breakfast · open recipe</span>
+            <span class="q-recipe-add">Add to Today</span>
+          </div>
+          <strong class="q-recipe-name">Protein oatmeal</strong>
+          <p class="q-recipe-macros">per serving <b>310 cal</b> · P 30g · C 40g · F 4g</p>
+          <div class="q-recipe-slots">
+            <span class="on">Breakfast</span>
+            <span>Lunch</span>
+            <span>Dinner</span>
+            <span>Snack</span>
+          </div>
+        </div>
+        <p class="q-include-copy">Search her recipes or save your own. Tap Add to Today — you stay here and keep going.</p>
+      </div>
+      <div class="mini q-log-card q-tour-panel" id="qTourMessages" data-tour-panel="messages" role="tabpanel" aria-labelledby="qTourTabMessages" hidden>
         <div class="m-kicker">Messages · 1:1 with Callie</div>
         <div class="bubble you">Week fell apart. Birthday cake for dinner Tuesday. Do I start over?</div>
         <div class="bubble callie">You don't start over, you just start logging again. One meal today with protein first. That's the whole assignment.</div>
-        <p class="q-include-copy">When the week blows up, she answers your 1:1 herself — plus group coaching Mon–Fri, all in the app. Not a chatbot wearing her name.</p>
+        <p class="q-include-copy">When the week blows up, she answers your 1:1 herself — and the other mamas are right there in the thread. Not a chatbot wearing her name.</p>
       </div>
     </div>`;
   }
@@ -532,24 +593,6 @@
     </div>`;
   }
 
-  /** One logging vignette for the payoff — snap + describe covered in the hint. */
-  function snapLogHtml() {
-    return `<div class="q-log-demo">
-      <div class="q-snap-actions" aria-hidden="true">
-        <span class="q-snap-pill">Open camera</span>
-        <span class="q-snap-pill ghost">Photo library</span>
-        <span class="q-snap-pill ghost">Menu</span>
-      </div>
-      <div class="meal-res">
-        <img class="mr-photo" src="/meal-bowl.jpg" alt="Example logged plate: chicken meatballs, rice, and Caesar salad" width="640" height="400" loading="lazy" />
-        <div class="mr-name">Chicken meatballs, rice &amp; Caesar</div>
-        <div class="mr-sub">Recognized from one photo, portions and all</div>
-        <div class="mp"><span>480 <small>cal</small></span><span>32 <small>P</small></span><span>35 <small>C</small></span><span>24 <small>F</small></span></div>
-      </div>
-      <p class="q-log-hint">This is the app you'd use. Snap a plate or a menu and it's logged against your ranges. No photo? Type it, with meals, a week planner, and groceries built in.</p>
-    </div>`;
-  }
-
   function rangesCardHtml(r) {
     const bands = r.ranges || {};
     const fmt = (n) => (n == null ? '' : Number(n).toLocaleString('en-US'));
@@ -570,16 +613,6 @@
 
   function previewOnceHtml() {
     return `<p class="q-preview-once">${escapeHtml(PREVIEW_ONCE)}</p>`;
-  }
-
-  /** One proof the app is real — before the ask; no second logger below. */
-  function snapProofHtml() {
-    return `<div class="q-app-preview q-snap-proof">
-      <div class="q-preview-kicker">In the app</div>
-      <div class="mini q-log-card">
-        ${snapLogHtml()}
-      </div>
-    </div>`;
   }
 
   function veganNoteHtml() {
@@ -703,9 +736,8 @@
       ${unsavedNote}
       ${veganNote}
       ${rangesBlock}
+      ${appTourHtml()}
       ${fastOfferHtml()}
-      ${snapProofHtml()}
-      ${messagesProofHtml()}
       ${coachBlockHtml()}
       ${testimonialsHtml()}
       ${offerBlock()}
@@ -851,6 +883,28 @@
     if (state.step === 'gate') {
       root.querySelector('#submit')?.addEventListener('click', submit);
     }
+
+    bindAppTour();
+  }
+
+  function bindAppTour() {
+    const tour = root.querySelector('#qAppTour');
+    if (!tour) return;
+    const tabs = [...tour.querySelectorAll('[data-tour]')];
+    const panels = [...tour.querySelectorAll('[data-tour-panel]')];
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const id = tab.getAttribute('data-tour');
+        tabs.forEach((t) => {
+          const on = t === tab;
+          t.classList.toggle('on', on);
+          t.setAttribute('aria-selected', String(on));
+        });
+        panels.forEach((p) => {
+          p.hidden = p.getAttribute('data-tour-panel') !== id;
+        });
+      });
+    });
   }
 
   async function submit() {
