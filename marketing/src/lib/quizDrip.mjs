@@ -1,0 +1,204 @@
+/**
+ * Track A — quiz submitted, no account (marketing_leads, no profiles row).
+ * Immediate ranges email is #1 (quiz_ranges). Follow-ups: +2d / +7d.
+ * Pregnancy gets one soft +3d note. Plant-based gets no follow-up.
+ *
+ * Track B — signed up, unpaid — is finish-joining only. A profiles row
+ * for the email stops this drip immediately. Do not merge the tracks.
+ */
+
+export const DAY_MS = 24 * 60 * 60 * 1000;
+/** Recent leads whose #1 send was not logged can still enter the drip. */
+export const ANCHOR_FALLBACK_MS = 8 * DAY_MS;
+
+export const QUIZ_RANGES_TYPE = "quiz_ranges";
+export const QUIZ_DRIP_2D = "quiz_drip_2d";
+export const QUIZ_DRIP_7D = "quiz_drip_7d";
+export const QUIZ_PREGNANCY_NOTE = "quiz_pregnancy_note";
+
+export const QUIZ_DRIP_SALES_TYPES = [QUIZ_DRIP_2D, QUIZ_DRIP_7D];
+export const QUIZ_DRIP_ALL_TYPES = [
+  QUIZ_RANGES_TYPE,
+  ...QUIZ_DRIP_SALES_TYPES,
+  QUIZ_PREGNANCY_NOTE,
+];
+
+export const QUIZ_SALES_SEGMENTS = new Set(["main", "early_pp_nurture"]);
+export const QUIZ_NO_SALES_SEGMENTS = new Set([
+  "pregnancy_nurture",
+  "waitlist_plantbased",
+]);
+
+const ACCOUNT_EVENT_TYPES = new Set([
+  "welcome",
+  "finish_joining_1h",
+  "finish_joining_24h",
+]);
+
+export function isPaidProfile(profile) {
+  if (!profile) return false;
+  if (profile.paid === true) return true;
+  if (profile.paid_at) return true;
+  return false;
+}
+
+export function quizDripAnchorMs({ leadCreatedAt, quizRangesAt, now }) {
+  if (Number.isFinite(quizRangesAt)) return quizRangesAt;
+  const created = typeof leadCreatedAt === "number"
+    ? leadCreatedAt
+    : Date.parse(leadCreatedAt);
+  if (!Number.isFinite(created) || !Number.isFinite(now)) return null;
+  if (now - created <= ANCHOR_FALLBACK_MS) return created;
+  return null;
+}
+
+/**
+ * Prefer the latest due step (same pattern as finish-joining).
+ * Missed earlier steps are skipped so a late cron does not dump 2+7 at once.
+ */
+export function pickDueQuizDripStep({ ageMs, sentTypes, segment }) {
+  const sent = sentTypes instanceof Set ? sentTypes : new Set(sentTypes || []);
+  const seg = String(segment || "");
+  const age = Number(ageMs);
+
+  if (!Number.isFinite(age) || age < 0) return null;
+
+  if (seg === "waitlist_plantbased") return null;
+
+  if (seg === "pregnancy_nurture") {
+    if (age >= 3 * DAY_MS && !sent.has(QUIZ_PREGNANCY_NOTE)) {
+      return QUIZ_PREGNANCY_NOTE;
+    }
+    return null;
+  }
+
+  if (!QUIZ_SALES_SEGMENTS.has(seg)) return null;
+
+  if (age >= 7 * DAY_MS && !sent.has(QUIZ_DRIP_7D)) return QUIZ_DRIP_7D;
+  if (
+    age >= 2 * DAY_MS
+    && age < 7 * DAY_MS
+    && !sent.has(QUIZ_DRIP_2D)
+    && !sent.has(QUIZ_DRIP_7D)
+  ) {
+    return QUIZ_DRIP_2D;
+  }
+  return null;
+}
+
+export function decideQuizDripAction({
+  now,
+  lead,
+  profile = null,
+  unsubscribed = false,
+  sentTypes = new Set(),
+  quizRangesAt = null,
+} = {}) {
+  const sent = sentTypes instanceof Set ? sentTypes : new Set(sentTypes || []);
+  const segment = String(lead?.segment || "");
+
+  if (unsubscribed) return { action: "skip", reason: "unsubscribed" };
+  if (isPaidProfile(profile)) return { action: "skip", reason: "paid" };
+  if (sent.has("welcome")) return { action: "skip", reason: "paid" };
+  // Track B: any profiles row means finish-joining owns this email.
+  if (profile) return { action: "skip", reason: "has_profile" };
+  if (sent.has("finish_joining_1h") || sent.has("finish_joining_24h")) {
+    return { action: "skip", reason: "has_profile" };
+  }
+  if (segment === "waitlist_plantbased") {
+    return { action: "skip", reason: "waitlist_plantbased" };
+  }
+
+  const anchor = quizDripAnchorMs({
+    leadCreatedAt: lead?.created_at,
+    quizRangesAt,
+    now,
+  });
+  if (anchor == null) return { action: "skip", reason: "no_anchor" };
+
+  const ageMs = now - anchor;
+  const step = pickDueQuizDripStep({ ageMs, sentTypes: sent, segment });
+  if (!step) return { action: "skip", reason: "not_due" };
+  if (sent.has(step)) return { action: "skip", reason: "already_sent" };
+
+  return { action: "send", step, ageMs, reason: step };
+}
+
+export function indexEmailEvents(rows) {
+  const byEmail = new Map();
+  for (const row of rows || []) {
+    const email = String(row.to_email || "").trim().toLowerCase();
+    if (!email) continue;
+    if (!byEmail.has(email)) {
+      byEmail.set(email, { types: new Set(), quizRangesAt: null });
+    }
+    const entry = byEmail.get(email);
+    const type = String(row.email_type || "");
+    if (type) entry.types.add(type);
+    if (type === QUIZ_RANGES_TYPE) {
+      const at = Date.parse(row.created_at);
+      if (Number.isFinite(at)) {
+        if (entry.quizRangesAt == null || at < entry.quizRangesAt) {
+          entry.quizRangesAt = at;
+        }
+      }
+    }
+  }
+  return byEmail;
+}
+
+export function indexProfilesByEmail(profiles) {
+  const map = new Map();
+  for (const p of profiles || []) {
+    const email = String(p.email || "").trim().toLowerCase();
+    if (!email) continue;
+    const prev = map.get(email);
+    if (!prev || isPaidProfile(p)) map.set(email, p);
+  }
+  return map;
+}
+
+export function planQuizLeadSends({
+  now,
+  leads,
+  profileByEmail,
+  eventsByEmail,
+  unsubscribedEmails,
+} = {}) {
+  const plans = [];
+  const skipped = {};
+  const bump = (reason) => {
+    skipped[reason] = (skipped[reason] || 0) + 1;
+  };
+
+  for (const lead of leads || []) {
+    const email = String(lead.email || "").trim().toLowerCase();
+    if (!email) {
+      bump("no_email");
+      continue;
+    }
+    const events = eventsByEmail?.get(email) || { types: new Set(), quizRangesAt: null };
+    const decision = decideQuizDripAction({
+      now,
+      lead,
+      profile: profileByEmail?.get(email) || null,
+      unsubscribed: Boolean(unsubscribedEmails?.has(email)),
+      sentTypes: events.types,
+      quizRangesAt: events.quizRangesAt,
+    });
+    if (decision.action !== "send") {
+      bump(decision.reason || "skipped");
+      continue;
+    }
+    plans.push({ email, lead, step: decision.step, ageMs: decision.ageMs });
+  }
+
+  return { plans, skipped };
+}
+
+export function quizCronEventTypes() {
+  return [
+    ...QUIZ_DRIP_ALL_TYPES,
+    ...ACCOUNT_EVENT_TYPES,
+  ];
+}

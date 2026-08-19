@@ -20,6 +20,12 @@ import {
   quizJoinUrl,
 } from '../_shared/rangesEmail.mjs';
 import { resolveMetaPixelId } from '../_shared/metaPixelId.js';
+import { hasEmailEventByEmail, logEmailEvent } from '../_shared/emailEvents.mjs';
+import {
+  buildUnsubscribeUrl,
+  isUnsubscribed,
+  quizMailHeaders,
+} from '../_shared/emailUnsubscribe.mjs';
 
 interface Env {
   WAITLIST?: KVNamespace;
@@ -291,6 +297,10 @@ async function sendRangesEmail(
     console.error('[lead] missing RESEND_API_KEY');
     return;
   }
+  if (await isUnsubscribed(env, opts.email)) {
+    console.info('[lead] skip ranges email, unsubscribed');
+    return;
+  }
   const from = env.LEAD_FROM_EMAIL || FROM_CALLIE;
   const name = safeDisplayName(opts.firstName);
   const joinUrl = quizJoinUrl(opts.email);
@@ -355,10 +365,12 @@ ${veganBands}
     body = `<p>Thanks for checking in. We'll be in touch.</p><p>Callie</p>`;
   }
 
+  const unsubscribeUrl = await buildUnsubscribeUrl(env, opts.email);
   const html = renderEmail({
     header,
     body,
     ...cta,
+    unsubscribe_url: unsubscribeUrl || undefined,
   });
 
   try {
@@ -374,10 +386,24 @@ ${veganBands}
         reply_to: 'calista@nourishwithcalista.com',
         subject,
         html,
+        ...(unsubscribeUrl ? { headers: quizMailHeaders(unsubscribeUrl) } : {}),
       }),
     });
     if (!resp.ok) {
       console.error('[lead] Resend failed', resp.status, await resp.text());
+      return;
+    }
+    const data = (await resp.json().catch(() => ({}))) as { id?: string };
+    // Log once so the drip can see #1. Re-quiz still sends; it does not insert again.
+    if (!(await hasEmailEventByEmail(env, opts.email, 'quiz_ranges'))) {
+      await logEmailEvent(env, {
+        emailType: 'quiz_ranges',
+        toEmail: opts.email,
+        subject,
+        resendId: data?.id || null,
+        status: 'sent',
+        meta: { source: 'lead', segment: opts.segment },
+      });
     }
   } catch (e) {
     console.error('[lead] Resend error', e);

@@ -12,7 +12,7 @@ export const EMAIL_CATALOG = [
     number: 1,
     name: "Finish joining",
     status: "live",
-    trigger: "Account created, still unpaid — +1 hour, again +24 hours, then stop (hourly cron)",
+    trigger: "Track B — account created, still unpaid. +1 hour, again +24 hours, then stop (hourly cron). Quiz-only leads with no profiles row never get this; they stay on the quiz drip until they create an account.",
     subject: "Your spot's waiting, mama",
     audience: "Client",
     cta: "Finish signing up — lock in your spot",
@@ -173,7 +173,7 @@ Callie
     number: "Q",
     name: "Quiz ranges",
     status: "live",
-    trigger: "Ranges quiz completed (eligible segments)",
+    trigger: "Track A — ranges quiz completed. Immediate email (voice unchanged). Logged once to email_events as quiz_ranges so the drip can see #1. Re-quiz still re-sends this email; it does not restart the drip. A profiles row moves them to Track B (finish-joining) and stops the quiz drip.",
     subject: "Your ranges, [First name]",
     audience: "Lead",
     cta: "Lock my spot · $249",
@@ -192,7 +192,70 @@ If you join, Callie builds and approves your final numbers before you start.
 
 Callie
 
-(Reply anytime. Address footer on the branded template.)`,
+(Reply anytime. Address footer on the branded template. Unsubscribe link in the footer.)`,
+  },
+  {
+    id: "quiz_drip_2d",
+    number: "Q2",
+    name: "Quiz drip · day 2",
+    status: "live",
+    trigger: "Track A only — unpaid quiz lead, no profiles row, sales segment (main / early_pp_nurture). +2 days after quiz_ranges (hourly cron). Not a numbers dump; they already got their bands. Same join CTA. Stops if they create an account (finish-joining owns them), pay, unsubscribe, or land in pregnancy / plant-based.",
+    subject: "[First name], the numbers are the easy part",
+    audience: "Lead",
+    cta: "Finish signing up, lock in your spot",
+    bodyPreview: `Hi [First name],
+
+The ranges I sent you are a starting point. They're not the whole program.
+
+What we actually do together is the weekly check-in. Milk changes, sleep falls apart, appetite swings. That's when the numbers need a person, not a calculator.
+
+If you want that, finish signing up and lock in your spot. Same email so your ranges stay attached.
+
+Callie
+
+(Reply anytime. Unsubscribe in the footer. Subject is distinct from "Your ranges" so Gmail does not thread this under the first email.)`,
+  },
+  {
+    id: "quiz_drip_7d",
+    number: "Q7",
+    name: "Quiz drip · day 7",
+    status: "live",
+    trigger: "Track A last unpaid quiz-lead sales nudge — +7 days after quiz_ranges. Then stop. Never sent if a profiles row exists.",
+    subject: "[First name], still want in?",
+    audience: "Lead",
+    cta: "Finish signing up, lock in your spot",
+    bodyPreview: `Hi [First name],
+
+Last note from me on this. If you still want in, finish signing up and lock in your spot. If you have a question, reply. I read everything.
+
+Your quiz also unlocked the $249 early rate ($50 off $299). The Aug 31 group is capped at 50 mamas, and doors close Aug 27 so Callie can hand-build every set of ranges before day one.
+
+[Finish signing up, lock in your spot]
+
+Callie
+
+(Reply anytime. Unsubscribe in the footer. Door / offer dates are not hardcoded here; they reuse the first ranges email helpers.)`,
+  },
+  {
+    id: "quiz_pregnancy_note",
+    number: "QP",
+    name: "Quiz pregnancy note · day 3",
+    status: "live",
+    trigger: "Track A, pregnancy_nurture quiz leads only — one soft +3 day note. The first email promised a light note. No $249, no checkout CTA. Plant-based (waitlist_plantbased) gets no follow-up; the first email already said no hard sell. A profiles row stops this too.",
+    subject: "[First name], whenever you're ready",
+    audience: "Lead",
+    cta: null,
+    bodyPreview: `Hi [First name],
+
+Just a light note, like I promised. Pregnancy is still an abundance season, not a cut. We're not sending ranges or a signup push.
+
+When you're postpartum and ready, come back for your numbers. Until then, eat enough and rest when you can.
+
+Reply anytime if you want to talk. No rush.
+
+Callie
+
+(Unsubscribe in the footer. No join button.)`,
   },
   {
     id: "callie_payment",
@@ -251,6 +314,9 @@ export const EMAIL_TYPE_LABELS = {
   eligibility_refund: "Refund confirm",
   cohort_open: "Cohort open (waitlist)",
   quiz_ranges: "Quiz ranges",
+  quiz_drip_2d: "Quiz drip (+2d)",
+  quiz_drip_7d: "Quiz drip (+7d)",
+  quiz_pregnancy_note: "Quiz pregnancy note (+3d)",
   callie_payment: "Callie: new payment",
   callie_intake: "Callie: intake ready",
   callie_eligibility_hold: "Callie: eligibility hold",

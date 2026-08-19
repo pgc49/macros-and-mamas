@@ -78,6 +78,8 @@ export async function logEmailEvent(env, {
   }
 }
 
+export { hasEmailEventByEmail } from "../../marketing/src/lib/emailEvents.mjs";
+
 /** True if this profile already has a sent/logged email of this type (idempotency). */
 export async function hasEmailEvent(env, profileId, emailType) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");

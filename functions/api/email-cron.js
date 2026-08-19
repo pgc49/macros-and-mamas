@@ -1,11 +1,14 @@
 /* ==================================================================
    /functions/api/email-cron.js — hourly lifecycle nudges (#1, #3)
+   + quiz-lead drip (marketing_leads, no profile row)
    ==================================================================
    Auth: Authorization: Bearer $CRON_SECRET  (Cloudflare secret)
    Or invoke via GitHub Actions schedule (no local CLI needed).
 
    #1 Finish joining: unpaid, created ≥1h / ≥24h (max two sends)
    #3 Intake reminder: paid, no macros, paid_at ≥24h / ≥72h (max two)
+   Track A quiz drip: marketing_leads with no profile, +2d / +7d after ranges
+   Track B finish-joining: unpaid profiles only — do not merge the tracks
    ================================================================== */
 
 import {
@@ -13,6 +16,14 @@ import {
   sendFinishJoiningEmail,
   sendIntakeReminderEmail,
 } from "../_shared/supabaseEmail.js";
+import { fetchUnsubscribedEmails } from "../_shared/emailUnsubscribe.mjs";
+import {
+  indexEmailEvents,
+  indexProfilesByEmail,
+  planQuizLeadSends,
+  quizCronEventTypes,
+} from "../_shared/quizDrip.mjs";
+import { sendQuizDripEmail } from "../_shared/quizDripSend.js";
 
 const HOUR = 60 * 60 * 1000;
 
@@ -30,6 +41,9 @@ export async function onRequestPost({ request, env }) {
       finish_joining_24h: 0,
       intake_reminder_24h: 0,
       intake_reminder_72h: 0,
+      quiz_drip_2d: 0,
+      quiz_drip_7d: 0,
+      quiz_pregnancy_note: 0,
       skipped: 0,
       errors: 0,
     };
@@ -46,7 +60,8 @@ export async function onRequestPost({ request, env }) {
       const types = already.get(p.id) || new Set();
 
       try {
-        // #1 — unpaid abandoned checkout (skip new accounts while enrollment is closed)
+        // Track B — unpaid abandoned checkout (skip new accounts while enrollment is closed).
+        // Quiz-only leads with no profiles row never enter this loop.
         if (!p.paid && Number.isFinite(createdMs) && canNudgeUnpaid(env, createdMs)) {
           const age = now - createdMs;
           if (age >= 24 * HOUR && !types.has("finish_joining_24h")) {
@@ -122,6 +137,13 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
+    const drip = await runQuizLeadDrip({ env, base, key, now, profiles });
+    sent.quiz_drip_2d += drip.quiz_drip_2d;
+    sent.quiz_drip_7d += drip.quiz_drip_7d;
+    sent.quiz_pregnancy_note += drip.quiz_pregnancy_note;
+    sent.skipped += drip.skipped;
+    sent.errors += drip.errors;
+
     return json({ ok: true, sent }, 200);
   } catch (e) {
     console.error("email-cron failed", e);
@@ -158,7 +180,7 @@ function canNudgeUnpaid(env, createdMs) {
 
 async function fetchAllProfiles(base, key) {
   const resp = await fetch(
-    `${base}/rest/v1/profiles?select=id,name,role,paid,refunded,created_at,paid_at&order=created_at.asc`,
+    `${base}/rest/v1/profiles?select=id,name,email,role,paid,refunded,created_at,paid_at&order=created_at.asc`,
     { headers: { apikey: key, authorization: `Bearer ${key}` } }
   );
   if (!resp.ok) throw new Error(`profiles ${resp.status}`);
@@ -199,6 +221,82 @@ async function fetchSentTypes(base, key) {
     map.get(r.profile_id).add(r.email_type);
   }
   return map;
+}
+
+export async function runQuizLeadDrip({ env, base, key, now, profiles }) {
+  const sent = {
+    quiz_drip_2d: 0,
+    quiz_drip_7d: 0,
+    quiz_pregnancy_note: 0,
+    skipped: 0,
+    errors: 0,
+  };
+
+  const unsub = await fetchUnsubscribedEmails(env);
+  if (!unsub.ok) {
+    console.error("email-cron quiz drip skipped: unsubscribe list unavailable");
+    sent.errors += 1;
+    return sent;
+  }
+
+  const [leads, eventRows] = await Promise.all([
+    fetchMarketingLeads(base, key),
+    fetchQuizEmailEvents(base, key),
+  ]);
+
+  const { plans, skipped } = planQuizLeadSends({
+    now,
+    leads,
+    profileByEmail: indexProfilesByEmail(profiles),
+    eventsByEmail: indexEmailEvents(eventRows),
+    unsubscribedEmails: unsub.emails,
+  });
+  sent.skipped += Object.values(skipped).reduce((n, v) => n + v, 0);
+
+  for (const plan of plans) {
+    try {
+      const r = await sendQuizDripEmail(env, {
+        email: plan.email,
+        firstName: plan.lead.first_name,
+        lead: plan.lead,
+        step: plan.step,
+      });
+      if (r?.ok && sent[plan.step] != null) sent[plan.step] += 1;
+      else if (r?.skipped) sent.skipped += 1;
+      else sent.errors += 1;
+    } catch (e) {
+      console.error("email-cron quiz drip failed", plan.email, e);
+      sent.errors += 1;
+    }
+  }
+
+  return sent;
+}
+
+async function fetchMarketingLeads(base, key) {
+  const resp = await fetch(
+    `${base}/rest/v1/marketing_leads?select=id,email,first_name,segment,created_at,protein_low_g,protein_high_g,carbs_low_g,carbs_high_g,fat_low_g,fat_high_g,calories_low,calories_high&order=created_at.desc&limit=1000`,
+    { headers: { apikey: key, authorization: `Bearer ${key}` } },
+  );
+  if (!resp.ok) {
+    console.error("marketing_leads fetch failed", resp.status, await resp.text());
+    return [];
+  }
+  return resp.json().catch(() => []);
+}
+
+async function fetchQuizEmailEvents(base, key) {
+  const types = quizCronEventTypes();
+  const filter = types.map((t) => `"${t}"`).join(",");
+  const resp = await fetch(
+    `${base}/rest/v1/email_events?select=to_email,email_type,created_at,status&email_type=in.(${filter})&status=eq.sent`,
+    { headers: { apikey: key, authorization: `Bearer ${key}` } },
+  );
+  if (!resp.ok) {
+    console.error("quiz email_events fetch failed", resp.status, await resp.text());
+    return [];
+  }
+  return resp.json().catch(() => []);
 }
 
 function json(obj, status = 200) {

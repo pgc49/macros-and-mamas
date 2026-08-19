@@ -1,4 +1,4 @@
-# Hourly nudge runner for emails #1 and #3 (no Mac / CLI needed).
+# Hourly nudge runner for Track B finish-joining (#1), intake (#3), and Track A quiz drip.
 # One-time setup (when at a computer):
 #   1. Cloudflare Pages → Settings → Environment variables (Production):
 #        CRON_SECRET = long random string (encrypt/secret)
