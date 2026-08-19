@@ -28,14 +28,13 @@ import { AdminAnnouncements } from "./AdminAnnouncements";
 import { AdminClientTracking } from "./AdminClientTracking";
 import { AdminClientMessages } from "./AdminClientMessages";
 import { AdminCredits } from "./AdminCredits";
+import { AdminEmails } from "./AdminEmails";
 import { AdminClientRoster, CohortFilterBar, CopyPhoneButton } from "./AdminClientRoster";
-import { emailRecipient, emailTypeLabel } from "./emailLog";
 import { rosterStats } from "./clientRoster";
 import { formatReferredBy, thankReferrerLabel } from "./referredBy";
 import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { supabase } from "../lib/supabase";
-import { EMAIL_CATALOG, EMAIL_TYPE_LABELS } from "../content/emailCatalog";
-import { CONFIG } from "../config";
+import { EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 import { useAuth } from "../auth/useAuth.jsx";
 import { syncAppBadge } from "../lib/push";
 
@@ -254,9 +253,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     if (typeof window === "undefined") return "all";
     return new URLSearchParams(window.location.search).get("cohort") || "all";
   });
-  const [recentEmails, setRecentEmails] = useState([]);
   const [aiFailures, setAiFailures] = useState([]);
-  const [cohortWaitlist, setCohortWaitlist] = useState([]);
   const [clientProgress, setClientProgress] = useState(null);
   const [progressLoading, setProgressLoading] = useState(false);
   const [progressError, setProgressError] = useState(null);
@@ -317,24 +314,6 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     let cancelled = false;
     db.loadAiFailures(24, 50).then((rows) => {
       if (!cancelled) setAiFailures(rows);
-    });
-    return () => { cancelled = true; };
-  }, [tab]);
-
-  useEffect(() => {
-    if (tab !== "emails") return;
-    let cancelled = false;
-    db.loadRecentEmailEvents(60).then((rows) => {
-      if (!cancelled) setRecentEmails(rows || []);
-    });
-    return () => { cancelled = true; };
-  }, [tab]);
-
-  useEffect(() => {
-    if (tab !== "emails") return;
-    let cancelled = false;
-    db.loadCohortWaitlist(CONFIG.WAITLIST_COHORT, 200).then((rows) => {
-      if (!cancelled) setCohortWaitlist(rows || []);
     });
     return () => { cancelled = true; };
   }, [tab]);
@@ -1025,140 +1004,9 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
       )}
 
       {tab === "emails" && (
-        <>
-          <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 14px" }}>
-            Who received each send — tap a mama to open her profile. Templates Callie uses are below.
-          </p>
-          <Card style={{ marginBottom: 14 }}>
-            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Sent emails</div>
-            {!recentEmails.length ? (
-              <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
-                No sends logged yet.
-              </div>
-            ) : (
-              recentEmails.map((e) => {
-                const who = emailRecipient(e);
-                const client = e.profile_id ? all.find((c) => c.id === e.profile_id) : null;
-                const canOpen = !!client;
-                return (
-                  <div
-                    key={e.id}
-                    role={canOpen ? "button" : undefined}
-                    tabIndex={canOpen ? 0 : undefined}
-                    onClick={canOpen ? () => setAdminSel(e.profile_id) : undefined}
-                    onKeyDown={canOpen ? (ev) => {
-                      if (ev.key === "Enter" || ev.key === " ") {
-                        ev.preventDefault();
-                        setAdminSel(e.profile_id);
-                      }
-                    } : undefined}
-                    style={{
-                      padding: "10px 0",
-                      borderBottom: `1px solid ${T.border}`,
-                      cursor: canOpen ? "pointer" : "default",
-                    }}
-                  >
-                    <div style={{ fontSize: 15, fontWeight: 800, color: T.ink }}>
-                      {who.name}
-                    </div>
-                    {who.email ? (
-                      <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 1 }}>{who.email}</div>
-                    ) : null}
-                    <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 4 }}>
-                      {emailTypeLabel(e)}
-                      {e.subject ? ` · ${e.subject}` : ""}
-                      {" · "}
-                      {formatWhen(e.created_at)}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </Card>
-          <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 14px" }}>
-            Read-only view of Callie&apos;s lifecycle emails (first person, from her). #1 and #3 run on an hourly cron once CRON_SECRET is set. Cohort-open waitlist blast is ready for a manual send when enrollment reopens.
-          </p>
-          <Card style={{ marginBottom: 14 }}>
-            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>
-              Cohort waitlist · {CONFIG.WAITLIST_COHORT.replace("_", " ")}
-            </div>
-            <div style={{ fontSize: 14, lineHeight: 1.55, color: T.inkSoft, marginBottom: 8 }}>
-              <b style={{ color: T.ink }}>{cohortWaitlist.length}</b> on the list
-              {cohortWaitlist.filter((r) => !r.paid_at && !r.converted_at).length !== cohortWaitlist.length
-                ? ` · ${cohortWaitlist.filter((r) => !r.paid_at && !r.converted_at).length} still unpaid / unconverted`
-                : ""}
-              . When you open cohort two, Patrick runs a dry-run then the real Resend blast with a Create account &amp; join button.
-            </div>
-            {!cohortWaitlist.length ? (
-              <div style={{ fontSize: 13.5, color: T.inkSoft }}>No waitlist signups yet.</div>
-            ) : (
-              cohortWaitlist.slice(0, 12).map((r) => (
-                <div
-                  key={r.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    padding: "8px 0",
-                    borderTop: `1px solid ${T.border}`,
-                    fontSize: 13,
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, color: T.ink }}>
-                      {[r.first_name, r.last_name].filter(Boolean).join(" ") || "—"}
-                    </div>
-                    <div style={{ color: T.inkSoft, overflow: "hidden", textOverflow: "ellipsis" }}>{r.email}</div>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: T.inkSoft, whiteSpace: "nowrap" }}>{formatWhen(r.created_at)}</div>
-                </div>
-              ))
-            )}
-            {cohortWaitlist.length > 12 && (
-              <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8 }}>
-                +{cohortWaitlist.length - 12} more in Supabase
-              </div>
-            )}
-          </Card>
-          {EMAIL_CATALOG.map((em) => (
-            <Card key={em.id} style={{ marginBottom: 12, opacity: em.status === "scheduled" ? 0.85 : 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: T.accentDeep, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 }}>
-                {typeof em.number === "number" ? `Email #${em.number}` : `Notify ${em.number}`} · {em.audience}
-                {em.status === "scheduled" || em.status === "ready"
-                  ? " · Ready (manual send)"
-                  : em.status === "retired"
-                    ? " · Retired"
-                    : " · Live"}
-              </div>
-              <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>{em.name}</div>
-              <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 8 }}>
-                <b>When:</b> {em.trigger}
-              </div>
-              <div style={{ fontSize: 13.5, marginBottom: 8 }}>
-                <b>Subject:</b> {em.subject}
-              </div>
-              {em.cta && (
-                <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 8 }}>
-                  <b>Button:</b> {em.cta}
-                </div>
-              )}
-              <pre style={{
-                margin: 0,
-                whiteSpace: "pre-wrap",
-                fontFamily: F,
-                fontSize: 13,
-                lineHeight: 1.55,
-                color: T.ink,
-                background: T.bg,
-                borderRadius: 12,
-                padding: "12px 14px",
-              }}
-              >
-                {em.bodyPreview}
-              </pre>
-            </Card>
-          ))}
-        </>
+        <ErrorBoundary message="Emails admin hit an error. Other admin tabs still work — refresh or switch tabs.">
+          <AdminEmails roster={all} onOpenMama={setAdminSel} />
+        </ErrorBoundary>
       )}
     </Shell>
   );

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { EMAIL_CATALOG } from "./emailCatalog.js";
+import { EMAIL_CATALOG, EMAIL_JOURNEYS, catalogByJourney, catalogNumberLabel } from "./emailCatalog.js";
 
 /** Operational / post-pay copy — not Callie-approved sales or quiz emails. */
 const PRODUCT_COMMS_IDS = new Set(["welcome", "intake_received", "macros_live"]);
@@ -42,6 +42,56 @@ describe("quiz drip catalog", () => {
 
     const finish = EMAIL_CATALOG.find((e) => e.id === "finish_joining");
     expect(finish.trigger).toMatch(/Track B/);
+  });
+});
+
+describe("email catalog journey", () => {
+  it("walks Quiz → unpaid signup → paid → other, then Callie separately", () => {
+    expect(EMAIL_JOURNEYS.map((j) => j.id)).toEqual([
+      "quiz",
+      "unpaid",
+      "paid",
+      "other",
+      "callie",
+    ]);
+
+    const journeys = catalogByJourney();
+    expect(journeys[0].ids).toEqual([
+      "quiz_ranges",
+      "quiz_drip_2d",
+      "quiz_drip_7d",
+      "quiz_pregnancy_note",
+    ]);
+    expect(journeys[0].note).toMatch(/plant-based/i);
+    expect(journeys[1].ids).toEqual(["finish_joining"]);
+    expect(journeys[2].ids).toEqual([
+      "welcome",
+      "intake_reminder",
+      "intake_received",
+      "macros_live",
+    ]);
+    expect(journeys[3].ids).toEqual(["eligibility_refund", "cohort_open"]);
+    expect(journeys[4].ids).toEqual([
+      "callie_payment",
+      "callie_intake",
+      "callie_eligibility_hold",
+      "callie_refund",
+    ]);
+    expect(journeys[4].note).toMatch(/not to mamas/i);
+
+    const grouped = journeys.flatMap((j) => j.ids);
+    expect(grouped.sort()).toEqual(EMAIL_CATALOG.map((e) => e.id).sort());
+    expect(journeys.every((j) => j.templates.length === j.ids.length)).toBe(true);
+
+    expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "welcome"))).toBe("#2");
+    expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "quiz_drip_2d"))).toBe("Q2");
+  });
+
+  it("keeps a full body preview on every live template", () => {
+    for (const row of EMAIL_CATALOG) {
+      expect(row.subject, row.id).toMatch(/\S/);
+      expect(String(row.bodyPreview || "").trim().length, row.id).toBeGreaterThan(40);
+    }
   });
 });
 
