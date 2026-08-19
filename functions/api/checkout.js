@@ -24,6 +24,7 @@ import {
   sendMetaCapiEvent,
 } from "../_shared/metaCapi.js";
 import { resolvePromotionForCheckout } from "../_shared/referrals.js";
+import { checkoutRedirectUrls } from "../_shared/checkoutOrigin.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -125,11 +126,11 @@ export async function onRequestPost({ request, env }) {
       ? Math.max(0, offer.amount - 25) + (wantLabReview ? LAB_ADDON_AMOUNT : 0)
       : totalAmount;
 
-    const origin = new URL(request.url).origin;
+    const { success_url, cancel_url, eventSourceUrl } = checkoutRedirectUrls(request, env);
     const body = new URLSearchParams();
     body.set("mode", "payment");
-    body.set("success_url", `${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`);
-    body.set("cancel_url", `${origin}/join`);
+    body.set("success_url", success_url);
+    body.set("cancel_url", cancel_url);
     body.set("client_reference_id", user.id);
     // Always create a Stripe Customer so Payments portal + stage 4 have an id.
     // Does NOT set setup_future_usage — cards are not saved for one-tap yet (stage 4).
@@ -196,7 +197,7 @@ export async function onRequestPost({ request, env }) {
         phone: profile?.phone || "",
         fbp,
         fbc,
-        eventSourceUrl: `${origin}/join`,
+        eventSourceUrl,
         clientIp,
         clientUa,
         customData: {

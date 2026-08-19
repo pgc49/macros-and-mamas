@@ -42,6 +42,7 @@ import {
   persistAttributionToProfile,
 } from "./lib/attribution";
 import { CanonicalizeTrailingSlash } from "./components/CanonicalizeTrailingSlash";
+import { AdminEnrollmentRedirect } from "./components/AdminEnrollmentRedirect";
 import { emailsMatch, quizJoinHref } from "./lib/quizCheckout";
 import {
   clearQuizPayHandoff,
@@ -1596,9 +1597,9 @@ export default function App() {
   );
 
   return (
-    <>
-    <CanonicalizeTrailingSlash />
-    <Routes>
+    <AdminEnrollmentRedirect>
+      <CanonicalizeTrailingSlash />
+      <Routes>
       <Route
         path={PATHS.home}
         element={(
@@ -1888,7 +1889,7 @@ export default function App() {
       />
 
       <Route path="*" element={<Navigate to={PATHS.home} replace />} />
-    </Routes>
-    </>
+      </Routes>
+    </AdminEnrollmentRedirect>
   );
 }
