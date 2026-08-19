@@ -137,6 +137,30 @@
     }
   }
 
+  function readCookie(name) {
+    try {
+      const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+      return m ? decodeURIComponent(m[1]) : '';
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * fbevents.js writes _fbp after the page-load attribution snapshot, so a
+   * first-touch ad visitor submitted Lead with no fbp and Meta lost a match
+   * signal on the event we optimize /quiz campaigns against. Re-read the
+   * cookies at submit; prefer Meta's own _fbc over the fbclid we synthesized.
+   */
+  function attrForSubmit() {
+    const stored = attr();
+    return {
+      ...stored,
+      fbp: readCookie('_fbp') || stored.fbp || '',
+      fbc: readCookie('_fbc') || stored.fbc || '',
+    };
+  }
+
   function heightIn() {
     return Number(state.answers.height_ft) * 12 + Number(state.answers.height_in_part);
   }
@@ -923,7 +947,7 @@
     state.error = '';
     render();
 
-    const a = attr();
+    const a = attrForSubmit();
     const eventId =
       'lead_' +
       (crypto.randomUUID
