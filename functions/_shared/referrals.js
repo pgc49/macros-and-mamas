@@ -605,33 +605,84 @@ export async function handleCheckoutReferral(env, session, { forcePaid = false }
   return { ok: true, referral, credit: null };
 }
 
-async function extractPromotionCodeId(env, session) {
-  const fromMeta = String(session.metadata?.referral_promo_id || "").trim();
-  if (fromMeta) return fromMeta;
-
-  // Hosted Checkout with allow_promotion_codes — retrieve with expand.
-  const secret = env.STRIPE_SECRET_KEY;
-  if (!secret || !session.id) return "";
-  try {
-    const url =
-      `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(session.id)}`
-      + `?expand[]=total_details.breakdown.discounts.discount.promotion_code`
-      + `&expand[]=discounts.promotion_code`;
-    const resp = await fetch(url, {
-      headers: { authorization: `Bearer ${secret}` },
-    });
-    if (!resp.ok) return "";
-    const full = await resp.json().catch(() => ({}));
-    const discounts = full.discounts || [];
-    for (const d of discounts) {
-      const pc = d.promotion_code;
-      if (typeof pc === "string" && pc.startsWith("promo_")) return pc;
-      if (pc && typeof pc === "object" && pc.id) return pc.id;
-    }
-  } catch (e) {
-    console.error("extractPromotionCodeId failed", e);
+function promoIdFromValue(pc) {
+  if (typeof pc === "string" && pc.startsWith("promo_")) return pc;
+  if (pc && typeof pc === "object") {
+    const id = String(pc.id || "").trim();
+    if (id.startsWith("promo_")) return id;
   }
   return "";
+}
+
+/**
+ * Promo id already on a Checkout Session object (webhook payload or retrieve).
+ * Reads session.discounts[].promotion_code (string or {id}) and
+ * total_details.breakdown.discounts when present. Does not call Stripe.
+ */
+export function promotionCodeIdFromSessionObject(session) {
+  const discounts = Array.isArray(session?.discounts) ? session.discounts : [];
+  for (const d of discounts) {
+    const id = promoIdFromValue(d?.promotion_code);
+    if (id) return id;
+  }
+  const breakdown = session?.total_details?.breakdown?.discounts;
+  if (Array.isArray(breakdown)) {
+    for (const entry of breakdown) {
+      const id = promoIdFromValue(entry?.discount?.promotion_code)
+        || promoIdFromValue(entry?.promotion_code);
+      if (id) return id;
+    }
+  }
+  return "";
+}
+
+const INVALID_PROMO_EXPAND = "total_details.breakdown.discounts.discount.promotion_code";
+
+async function retrieveCheckoutSession(secret, sessionId, { expand = false } = {}) {
+  let url = `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`;
+  if (expand) {
+    // Stripe allows at most 4 nested expand levels. discounts.promotion_code is 2.
+    // Never expand total_details.breakdown.discounts.discount.promotion_code (5).
+    url += "?expand[]=discounts.promotion_code";
+  }
+  if (url.includes(INVALID_PROMO_EXPAND)) {
+    throw new Error("refusing invalid Stripe expand");
+  }
+  const resp = await fetch(url, {
+    headers: { authorization: `Bearer ${secret}` },
+  });
+  if (!resp.ok) return null;
+  return resp.json().catch(() => null);
+}
+
+/**
+ * Resolve the promotion code id used on a Checkout Session.
+ * 1) webhook payload discounts (typed-on-Checkout; metadata often missing)
+ * 2) metadata.referral_promo_id (Join field stamped at session create)
+ * 3) retrieve with expand[]=discounts.promotion_code only
+ * 4) unexpanded retrieve — discounts[].promotion_code is still a promo_… string
+ */
+export async function extractPromotionCodeId(env, session) {
+  const fromPayload = promotionCodeIdFromSessionObject(session);
+  if (fromPayload) return fromPayload;
+
+  const fromMeta = String(session?.metadata?.referral_promo_id || "").trim();
+  if (fromMeta) return fromMeta;
+
+  const secret = env?.STRIPE_SECRET_KEY;
+  if (!secret || !session?.id) return "";
+
+  try {
+    const expanded = await retrieveCheckoutSession(secret, session.id, { expand: true });
+    const fromExpanded = promotionCodeIdFromSessionObject(expanded);
+    if (fromExpanded) return fromExpanded;
+
+    const plain = await retrieveCheckoutSession(secret, session.id, { expand: false });
+    return promotionCodeIdFromSessionObject(plain);
+  } catch (e) {
+    console.error("extractPromotionCodeId failed", e);
+    return "";
+  }
 }
 
 export async function handleChargeRefundedReferral(env, charge) {
