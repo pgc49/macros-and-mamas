@@ -35,6 +35,23 @@ import {
   syncSubscriptionToProfile,
 } from "../_shared/membership.js";
 
+/**
+ * Dollars Stripe actually charged. amount_total is cents.
+ * metadata.amount_usd is list (or Join-stamped) price — only a fallback when
+ * amount_total is missing. Typed-on-Checkout promos leave metadata at list price.
+ */
+export function chargedAmountUsd(session, missing = null) {
+  if (session?.amount_total != null && session.amount_total !== "") {
+    const n = Number(session.amount_total);
+    if (Number.isFinite(n)) return n / 100;
+  }
+  if (session?.metadata?.amount_usd != null && session.metadata.amount_usd !== "") {
+    const n = Number(session.metadata.amount_usd);
+    if (Number.isFinite(n)) return n;
+  }
+  return missing;
+}
+
 /** Event types we expect to receive; handlers land in later stages. */
 const KNOWN_EVENT_TYPES = new Set([
   "checkout.session.completed",
@@ -248,9 +265,7 @@ async function handleCheckoutSessionCompleted(env, event) {
   try {
     const contact = await loadUserContact(env, userId);
     const match = matchFieldsFromProfileAndCheckout(contact, session);
-    const amount =
-      Number(session.metadata?.amount_usd) ||
-      (session.amount_total != null ? Number(session.amount_total) / 100 : 0);
+    const amount = chargedAmountUsd(session, 0);
     const purchaseEventId = purchaseEventIdFromStripeSession(session);
     if (purchaseEventId) {
       await sendMetaCapiEvent(env, {
@@ -279,9 +294,7 @@ async function handleCheckoutSessionCompleted(env, event) {
     const contact = await loadUserContact(env, userId);
     const email = contact.email || session.customer_email || session.customer_details?.email;
     const name = contact.name || session.customer_details?.name || null;
-    const amountUsd =
-      Number(session.metadata?.amount_usd) ||
-      (session.amount_total != null ? Number(session.amount_total) / 100 : null);
+    const amountUsd = chargedAmountUsd(session);
     await sendWelcomeEmails(env, {
       email,
       name,
