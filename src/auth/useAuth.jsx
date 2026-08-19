@@ -234,13 +234,18 @@ export function AuthProvider({ children }) {
     };
   };
 
+  /**
+   * Sign out this browser only. Supabase defaults to `global`, which revokes
+   * every session for the user — one tab could kill a signup happening in
+   * another tab (and a phone session too).
+   */
   const signOut = async () => {
     userRef.current = null;
     setSession(null);
     setUser(null);
     setProfile(null);
     syncSentryUser(null);
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
   };
 
   const resetPasswordForEmail = async (email) => {

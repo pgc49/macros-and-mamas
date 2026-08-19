@@ -81,6 +81,15 @@ describe("JoinPage referral field", () => {
     vi.unstubAllGlobals();
   });
 
+  it("still shows checkout when only a stale stored quiz email disagrees", async () => {
+    sessionStorage.setItem("mm_quiz_email", "pgchammas+oldattempt@gmail.com");
+    renderJoin("/join?from=quiz");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /lock my spot/i })).toBeTruthy();
+    });
+    expect(screen.queryByText(/Use your quiz email to checkout/i)).toBeNull();
+  });
+
   it("opens with a prefilled code from ?ref=", async () => {
     renderJoin("/join?ref=PATRICK25");
     await waitFor(() => {

@@ -42,19 +42,24 @@ import {
   persistAttributionToProfile,
 } from "./lib/attribution";
 import { CanonicalizeTrailingSlash } from "./components/CanonicalizeTrailingSlash";
-import { emailsMatch, quizJoinHref, resolveQuizEmail } from "./lib/quizCheckout";
+import { emailsMatch, quizJoinHref } from "./lib/quizCheckout";
 import {
   clearQuizPayHandoff,
   isQuizPayHandoffActive,
   joinCheckoutDecision,
-  quizSessionMismatch,
+  urlQuizEmail,
 } from "./auth/quizAuthHandoff";
 import { signedOutJoinRedirect } from "./auth/quizSignupBounce";
 import { ageFromDateOfBirth } from "./db/db";
 
 /**
  * /signin entry: quiz Pre-pay carries ?from=quiz&email=.
- * If another account is already signed in, sign out so checkout can use the quiz email.
+ *
+ * Never sign anyone out here. Supabase syncs sessions across tabs, so an older
+ * tab sitting on a previous quiz email would see a brand-new signup and log it
+ * out everywhere — the mama was signed out the moment her account was created.
+ * A different signed-in account is handled by the explicit switch button on
+ * /join instead.
  */
 function SignInGate({
   authMode,
@@ -67,36 +72,17 @@ function SignInGate({
   refunded,
   membershipPaywall = false,
 }) {
-  const { user, signOut, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const [switching, setSwitching] = useState(false);
   const fromQuiz = searchParams.get("from") === "quiz";
-  const quizEmail = resolveQuizEmail(searchParams);
-  const mismatch = quizSessionMismatch({ user, fromQuiz, quizEmail });
 
-  useEffect(() => {
-    if (authLoading || !mismatch) return undefined;
-    let cancelled = false;
-    setSwitching(true);
-    signOut()
-      .catch((err) => console.error("quiz checkout account switch failed", err))
-      .finally(() => {
-        if (!cancelled) setSwitching(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoading, mismatch, signOut]);
-
-  if (authLoading || switching || mismatch) {
+  if (authLoading) {
     return (
       <Shell>
         <Card style={{ marginTop: 30, textAlign: "center", padding: 28 }}>
           <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: T.inkSoft }}>
-            {mismatch || switching
-              ? "Switching to your quiz email so checkout can unlock…"
-              : "Loading…"}
+            Loading…
           </p>
         </Card>
       </Shell>
@@ -104,7 +90,9 @@ function SignInGate({
   }
 
   if (user) {
-    const joinQuiz = fromQuiz ? quizJoinHref(quizEmail || user.email) : null;
+    const joinQuiz = fromQuiz
+      ? quizJoinHref(urlQuizEmail(searchParams) || user.email)
+      : null;
     const deepAccount = location.state?.from && String(location.state.from).startsWith("/account")
       ? location.state.from
       : null;
@@ -577,7 +565,7 @@ export default function App() {
     if (path === PATHS.signin) {
       const params = new URLSearchParams(location.search);
       if (params.get("from") === "quiz") {
-        const quizEmail = resolveQuizEmail(params);
+        const quizEmail = urlQuizEmail(params);
         if (quizEmail && !emailsMatch(user.email, quizEmail)) return;
         routedAfterLoad.current = true;
         navigate(quizJoinHref(quizEmail || user.email), { replace: true });
