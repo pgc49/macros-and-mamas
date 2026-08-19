@@ -5,13 +5,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function request(body, origin = "https://www.macrosandmamas.com") {
-  return new Request("https://www.macrosandmamas.com/api/confirm-fresh-signup", {
+function request(
+  body,
+  origin = "https://www.macrosandmamas.com",
+  url = "https://www.macrosandmamas.com/api/confirm-fresh-signup",
+  extraHeaders = {},
+) {
+  const headers = {
+    "content-type": "application/json",
+    ...extraHeaders,
+  };
+  if (origin) headers.origin = origin;
+  return new Request(url, {
     method: "POST",
-    headers: {
-      origin,
-      "content-type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
   });
 }
@@ -30,6 +37,61 @@ describe("POST /api/confirm-fresh-signup", () => {
     });
     expect(res.status).toBe(403);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects the production admin origin and Host", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const fromOrigin = await onRequestPost({
+      request: request(
+        { email: "mama@x.com" },
+        "https://admin.macrosandmamas.com",
+        "https://admin.macrosandmamas.com/api/confirm-fresh-signup",
+      ),
+      env,
+    });
+    const fromHost = await onRequestPost({
+      request: request(
+        { email: "mama@x.com" },
+        "",
+        "https://admin.macrosandmamas.com/api/confirm-fresh-signup",
+        { host: "admin.macrosandmamas.com" },
+      ),
+      env,
+    });
+    expect(fromOrigin.status).toBe(403);
+    expect(fromHost.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects admin Pages preview hosts even though they are *.pages.dev", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const res = await onRequestPost({
+      request: request(
+        { email: "mama@x.com" },
+        "https://deadbeef.macros-and-mamas-admin.pages.dev",
+        "https://deadbeef.macros-and-mamas-admin.pages.dev/api/confirm-fresh-signup",
+      ),
+      env,
+    });
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still allows a customer Pages preview to confirm a www-style signup", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ users: [] }), { status: 200 }),
+    );
+    const res = await onRequestPost({
+      request: request(
+        { email: "mama@x.com" },
+        "https://abc.macros-and-mamas.pages.dev",
+        "https://abc.macros-and-mamas.pages.dev/api/confirm-fresh-signup",
+      ),
+      env,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("confirms a fresh unconfirmed user", async () => {

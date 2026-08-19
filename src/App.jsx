@@ -50,6 +50,8 @@ import {
   urlQuizEmail,
 } from "./auth/quizAuthHandoff";
 import { signedOutJoinRedirect } from "./auth/quizSignupBounce";
+import { isAdminSignupLockedSurface } from "./auth/adminSignupLock";
+import { nextAuthSwitch, resolveSignInMode } from "./auth/signInMode";
 import { ageFromDateOfBirth } from "./db/db";
 
 /**
@@ -103,20 +105,19 @@ function SignInGate({
     return <Navigate to={to} replace />;
   }
 
+  const signupLocked = isAdminSignupLockedSurface();
   return (
     <SignInPage
-      mode={
-        new URLSearchParams(location.search).get("auth") === "signin"
-        || location.state?.from === PATHS.support
-        || (location.state?.from && String(location.state.from).startsWith("/account"))
-          ? "signin"
-          : location.state?.from === PATHS.join
-            || new URLSearchParams(location.search).get("auth") === "create"
-            ? (CONFIG.ENROLLMENT_OPEN ? "create" : "signin")
-            : authMode
-      }
-      onSwitchMode={onSwitchMode}
+      mode={resolveSignInMode({
+        authMode,
+        search: location.search,
+        from: location.state?.from,
+        enrollmentOpen: CONFIG.ENROLLMENT_OPEN,
+        signupLocked,
+      })}
+      onSwitchMode={signupLocked ? undefined : onSwitchMode}
       onBack={onBack}
+      signupLocked={signupLocked}
     />
   );
 }
@@ -280,7 +281,10 @@ export default function App() {
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [signInNext, setSignInNext] = useState("intake"); // "intake" → create; "app" → returning
+  const signupLocked = isAdminSignupLockedSurface();
+  const [signInNext, setSignInNext] = useState(() => (
+    isAdminSignupLockedSurface() ? "app" : "intake"
+  )); // "intake" → create; "app" → returning
   const [tab, setTab] = useState(() => {
     if (typeof window === "undefined") return "today";
     const q = new URLSearchParams(window.location.search).get("tab");
@@ -594,9 +598,12 @@ export default function App() {
     navigate(dest, { replace: true });
   }, [authLoading, loaded, user, isAdmin, approved, paid, macros, refunded, membershipPaywall, location.pathname, location.search, location.state, navigate]);
 
-  const authMode = signInNext === "intake" ? "create" : "signin";
+  const authMode = signupLocked
+    ? "signin"
+    : signInNext === "intake" ? "create" : "signin";
   /** Toggle create/signin and keep ?auth= in sync (URL was winning over button clicks). */
   const switchAuthMode = (next) => {
+    if (nextAuthSwitch(next, { signupLocked }) == null) return;
     const create = next === "create";
     setSignInNext(create ? "intake" : "app");
     const p = new URLSearchParams(location.search);
@@ -1769,9 +1776,10 @@ export default function App() {
           !user
             ? (
               <SignInPage
-                mode="create"
-                onSwitchMode={switchAuthMode}
+                mode={signupLocked ? "signin" : "create"}
+                onSwitchMode={signupLocked ? undefined : switchAuthMode}
                 onBack={goMarketingHome}
+                signupLocked={signupLocked}
               />
             )
             : refunded

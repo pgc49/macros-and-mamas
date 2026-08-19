@@ -9,8 +9,13 @@ import {
   signupLooksLikeExistingUser,
 } from "./completeSignup";
 import { shouldAcceptGetSession } from "./quizAuthHandoff";
+import {
+  blockedAdminSignupResult,
+  isAdminSignupLockedSurface,
+} from "./adminSignupLock";
 
 async function confirmFreshSignup(email) {
+  if (isAdminSignupLockedSurface()) return;
   try {
     await fetch("/api/confirm-fresh-signup", {
       method: "POST",
@@ -172,6 +177,9 @@ export function AuthProvider({ children }) {
   };
 
   const signUpWithPassword = async (email, password, { termsAcceptedAt, termsVersion } = {}) => {
+    if (isAdminSignupLockedSurface()) {
+      return blockedAdminSignupResult();
+    }
     if (!termsAcceptedAt || !termsVersion) {
       return { error: { message: "You must agree to the Terms and Conditions to create an account." }, needsEmailConfirm: false };
     }

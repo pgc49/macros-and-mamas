@@ -186,3 +186,40 @@ describe("SignInPage quiz handoff", () => {
     });
   });
 });
+
+describe("SignInPage admin host lock", () => {
+  it("stays on Welcome back / Sign in and hides Create an account", () => {
+    const onSwitchMode = vi.fn();
+    render(
+      <MemoryRouter>
+        <SignInPage mode="create" onSwitchMode={onSwitchMode} signupLocked />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("Welcome back")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+    expect(screen.queryByText("Create your account")).toBeNull();
+    expect(screen.queryByText("Create an account")).toBeNull();
+    expect(screen.queryByLabelText(/I agree to the/i)).toBeNull();
+    expect(screen.getByText("Forgot password?")).toBeTruthy();
+    expect(onSwitchMode).not.toHaveBeenCalled();
+  });
+
+  it("does not call signUpWithPassword when create mode was passed on the admin host", async () => {
+    render(
+      <MemoryRouter>
+        <SignInPage mode="create" onSwitchMode={() => {}} signupLocked />
+      </MemoryRouter>,
+    );
+    fireEvent.change(screen.getByPlaceholderText("you@email.com"), {
+      target: { value: "coach@example.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("At least 6 characters"), {
+      target: { value: "secret1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => {
+      expect(signInWithPassword).toHaveBeenCalledWith("coach@example.com", "secret1");
+    });
+    expect(signUpWithPassword).not.toHaveBeenCalled();
+  });
+});

@@ -10,6 +10,7 @@ import { normalizeEmail, quizJoinHref, rememberQuizEmail } from "../lib/quizChec
 import { isUnconfirmedEmailError } from "../auth/completeSignup";
 import { markQuizPayHandoff, shouldSwitchCreateToSignIn } from "../auth/quizAuthHandoff";
 import { captureQuizSignupBounce } from "../auth/quizSignupBounce";
+import { isAdminSignupLockedSurface } from "../auth/adminSignupLock";
 
 /**
  * One auth screen. Mode comes from the entry point:
@@ -20,6 +21,7 @@ export function SignInPage({
   onBack,
   mode = "signin", // "create" | "signin"
   onSwitchMode,
+  signupLocked = isAdminSignupLockedSurface(),
 }) {
   const { signInWithPassword, signUpWithPassword, resetPasswordForEmail } = useAuth();
   const navigate = useNavigate();
@@ -44,7 +46,8 @@ export function SignInPage({
   const [info, setInfo] = useState("");
   const [forgotMode, setForgotMode] = useState(false);
 
-  const isCreate = mode === "create";
+  const canSwitchMode = !signupLocked && onSwitchMode;
+  const isCreate = !signupLocked && mode === "create";
 
   const submit = async () => {
     const accountEmail = normalizeEmail(email);
@@ -86,7 +89,7 @@ export function SignInPage({
       setBusy(false);
       if (err) {
         const msg = err.message || "Could not create account.";
-        if (shouldSwitchCreateToSignIn({ existingAccount, message: msg }) && onSwitchMode) {
+        if (shouldSwitchCreateToSignIn({ existingAccount, message: msg }) && canSwitchMode) {
           if (fromQuiz) {
             captureQuizSignupBounce({
               fromPath: PATHS.signin,
@@ -222,7 +225,7 @@ export function SignInPage({
         {error && (
           <div style={{ background: T.amberSoft, borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 13.5, color: T.amber, lineHeight: 1.5 }}>
             {error}
-            {/already has an account/i.test(error) && onSwitchMode && (
+            {/already has an account/i.test(error) && canSwitchMode && (
               <>
                 {" "}
                 <button
@@ -262,7 +265,7 @@ export function SignInPage({
           </p>
         )}
 
-        {onSwitchMode && !forgotMode && (
+        {canSwitchMode && !forgotMode && (
           <p style={{ textAlign: "center", fontSize: 13.5, color: T.inkSoft, margin: "16px 0 0" }}>
             {isCreate ? (
               <>
