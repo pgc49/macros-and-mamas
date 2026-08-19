@@ -13,6 +13,7 @@ import {
   blockedAdminSignupResult,
   isAdminSignupLockedSurface,
 } from "./adminSignupLock";
+import { confirmEmailRedirectTo, resetPasswordRedirectTo } from "./authRedirects";
 
 async function confirmFreshSignup(email) {
   if (isAdminSignupLockedSurface()) return;
@@ -122,7 +123,7 @@ export function AuthProvider({ children }) {
       if (event === "PASSWORD_RECOVERY") {
         const path = window.location.pathname;
         if (path !== "/reset-password") {
-          window.location.assign(`${window.location.origin}/reset-password`);
+          window.location.assign(resetPasswordRedirectTo());
         }
       }
     });
@@ -191,7 +192,7 @@ export function AuthProvider({ children }) {
           email: trimmed,
           password,
           options: {
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: confirmEmailRedirectTo(),
             data: {
               terms_accepted_at: termsAcceptedAt,
               terms_version: termsVersion,
@@ -258,7 +259,7 @@ export function AuthProvider({ children }) {
 
   const resetPasswordForEmail = async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: resetPasswordRedirectTo(),
     });
     return { error };
   };

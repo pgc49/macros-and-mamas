@@ -8,6 +8,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { clearBootReloadFlag, installBootRecovery } from "./lib/bootRecovery";
 import App from "./App.jsx";
 import { CONFIG } from "./config";
+import { adminEnrollmentRedirectHref } from "./lib/adminEnrollmentRedirect";
 
 const customerAdminRedirect = import.meta.env.VITE_APP_SURFACE === "customer"
   && (
@@ -15,11 +16,19 @@ const customerAdminRedirect = import.meta.env.VITE_APP_SURFACE === "customer"
     || window.location.pathname.startsWith("/admin/")
   );
 
+const adminEnrollmentRedirect = adminEnrollmentRedirectHref({
+  pathname: window.location.pathname,
+  search: window.location.search,
+  hash: window.location.hash,
+});
+
 if (customerAdminRedirect) {
   const target = new URL("/admin", CONFIG.ADMIN_APP_URL);
   target.search = window.location.search;
   target.hash = window.location.hash;
   window.location.replace(target.toString());
+} else if (adminEnrollmentRedirect) {
+  window.location.replace(adminEnrollmentRedirect);
 } else {
   installBootRecovery();
 
