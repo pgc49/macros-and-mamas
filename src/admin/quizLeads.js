@@ -1,13 +1,14 @@
 /**
  * Admin Quiz leads list: marketing_leads + profile funnel status + referrals.
- * Join is in JS on lower(email). Meta click = fbc or meta utm_source — never fbp alone.
+ * Join is in JS on lower(email).
+ * Meta ad = campaign UTMs. Meta click = fbc without those UTMs. Never fbp alone.
  */
 import { supabase } from "../lib/supabase";
 import { PACIFIC_TZ } from "./quizFunnel";
 
 export const QUIZ_LEAD_FILTERS = [
   ["all", "All"],
-  ["meta", "Meta"],
+  ["meta", "Ad"],
   ["referral", "Referral"],
   ["no_account", "No account"],
   ["signed_up_unpaid", "Signed up unpaid"],
@@ -15,6 +16,7 @@ export const QUIZ_LEAD_FILTERS = [
 ];
 
 const META_UTM = new Set(["facebook", "ig", "instagram", "fb", "meta"]);
+const PAID_MEDIUM = new Set(["cpc", "paid", "paidsocial"]);
 
 const LEAD_COLS = [
   "id",
@@ -75,11 +77,27 @@ export function normalizeLeadEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
-/** Ad click only: click id (fbc) or a Meta utm_source. Pixel id (fbp) is not an ad click. */
+function metaUtmSource(lead) {
+  return String(lead?.utm_source || "").trim().toLowerCase();
+}
+
+function metaUtmMedium(lead) {
+  return String(lead?.utm_medium || "").trim().toLowerCase();
+}
+
+/** Ads Manager campaign: Meta utm_source + paid medium. Pixel id (fbp) is not an ad. */
+export function isMetaAdLead(lead) {
+  return META_UTM.has(metaUtmSource(lead)) && PAID_MEDIUM.has(metaUtmMedium(lead));
+}
+
+/** Clicked a Facebook/Instagram link (fbc) but UTMs do not say this ad campaign. */
+export function isMetaClickLead(lead) {
+  return nonempty(lead?.fbc) && !isMetaAdLead(lead);
+}
+
+/** Meta tab filter = Ads Manager campaign, not every fbc click. */
 export function isMetaLead(lead) {
-  if (nonempty(lead?.fbc)) return true;
-  const utm = String(lead?.utm_source || "").trim().toLowerCase();
-  return META_UTM.has(utm);
+  return isMetaAdLead(lead);
 }
 
 function advocateFirstName(profile) {
@@ -101,21 +119,27 @@ export function isReferralLead(lead) {
   return nonempty(quizReferralWho(lead));
 }
 
-/** Traffic source: Meta and referral can both be true. Organic only if neither. */
+/** Traffic source: Meta ad / Meta click / referral can stack. Organic only if none. */
 export function quizLeadSourceKind(lead) {
-  const meta = isMetaLead(lead);
+  const ad = isMetaAdLead(lead);
+  const click = isMetaClickLead(lead);
   const referral = isReferralLead(lead);
-  if (meta && referral) return "meta_referral";
-  if (meta) return "meta";
+  if (ad && referral) return "meta_ad_referral";
+  if (click && referral) return "meta_click_referral";
+  if (ad) return "meta_ad";
+  if (click) return "meta_click";
   if (referral) return "referral";
   return "organic";
 }
 
 export function quizLeadSourceLabel(lead) {
-  const meta = isMetaLead(lead);
+  const ad = isMetaAdLead(lead);
+  const click = isMetaClickLead(lead);
   const who = quizReferralWho(lead);
-  if (meta && who) return `Meta · Referral · ${who}`;
-  if (meta) return "Meta";
+  if (ad && who) return `Meta ad · ${who}`;
+  if (click && who) return `Meta click · ${who}`;
+  if (ad) return "Meta ad";
+  if (click) return "Meta click";
   if (who) return `Referral · ${who}`;
   return "Organic";
 }
@@ -192,7 +216,9 @@ export function enrichQuizLeads(leads, profiles, referrals = []) {
     return {
       ...row,
       sourceKind: quizLeadSourceKind(row),
-      isMeta: isMetaLead(row),
+      isMeta: isMetaAdLead(row),
+      isMetaAd: isMetaAdLead(row),
+      isMetaClick: isMetaClickLead(row),
       isReferral: isReferralLead(row),
     };
   });

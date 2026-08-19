@@ -19,14 +19,15 @@ const MEGAN = "11111111-1111-4111-8111-111111111111";
 
 const rows = [
   {
-    id: "lead-meta",
-    email: "quiz@example.com",
-    first_name: "Quiz",
-    last_name: "Only",
+    id: "lead-ellie",
+    email: "ellie@example.com",
+    first_name: "Ellie",
+    last_name: "Rose",
     created_at: "2026-08-19T18:30:00.000Z",
     fbc: "fb.1.1.abc",
     fbp: "fb.1.1.xyz",
     utm_source: "meta",
+    utm_medium: "cpc",
     referred_by: null,
     flags: ["vegan"],
     segment: "waitlist_plantbased",
@@ -40,8 +41,10 @@ const rows = [
     calories_high: 1900,
     profileId: null,
     funnelStatus: "quiz_only",
-    sourceKind: "meta",
+    sourceKind: "meta_ad",
     isMeta: true,
+    isMetaAd: true,
+    isMetaClick: false,
     isReferral: false,
   },
   {
@@ -94,8 +97,10 @@ const rows = [
     calories_high: 2000,
     profileId: "alex-id",
     funnelStatus: "paid",
-    sourceKind: "meta_referral",
-    isMeta: true,
+    sourceKind: "meta_click_referral",
+    isMeta: false,
+    isMetaAd: false,
+    isMetaClick: true,
     isReferral: true,
   },
 ];
@@ -115,46 +120,46 @@ describe("AdminLeads", () => {
 
     expect(screen.getByText(/Quiz completes — the Meta Lead we fire/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Meta" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Ad" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Referral" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "No account" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Signed up unpaid" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Paid" })).toBeTruthy();
 
     await waitFor(() => {
-      expect(screen.getByText("Quiz Only")).toBeTruthy();
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
     });
-    expect(screen.getByText("quiz@example.com")).toBeTruthy();
-    expect(screen.getByText(/Meta · Quiz only/)).toBeTruthy();
+    expect(screen.getByText("ellie@example.com")).toBeTruthy();
+    expect(screen.getByText(/Meta ad · Quiz only/)).toBeTruthy();
     expect(screen.getByText("Plant-based · Vegan")).toBeTruthy();
     expect(screen.getByText("90–110P · 150–190C · 45–60F · 1700–1900 cal")).toBeTruthy();
     expect(screen.getByText("Megan Wells")).toBeTruthy();
     expect(screen.getByText(/Referral · Sarah · Paid/)).toBeTruthy();
     expect(screen.getByText("Alex Harrer")).toBeTruthy();
-    expect(screen.getByText(/Meta · Referral · Kristen · Paid/)).toBeTruthy();
+    expect(screen.getByText(/Meta click · Kristen · Paid/)).toBeTruthy();
     expect(screen.getByText("3 quiz completes")).toBeTruthy();
     expect(screen.queryByText(/Ads Manager/i)).toBeTruthy();
     expect(screen.queryByText(/Sentry/i)).toBeNull();
   });
 
-  it("filters to Meta leads (ad click only) and Referral leads", async () => {
+  it("filters Ad to campaign UTMs only; Referral keeps promo and quiz referred_by", async () => {
     render(<AdminLeads />);
     await waitFor(() => {
       expect(screen.getByText("Megan Wells")).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Meta" }));
-    expect(screen.getByRole("button", { name: "Meta" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("Quiz Only")).toBeTruthy();
-    expect(screen.getByText("Alex Harrer")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Ad" }));
+    expect(screen.getByRole("button", { name: "Ad" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    expect(screen.queryByText("Alex Harrer")).toBeNull();
     expect(screen.queryByText("Megan Wells")).toBeNull();
-    expect(screen.getByText("2 of 3")).toBeTruthy();
+    expect(screen.getByText("1 of 3")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Referral" }));
     expect(screen.getByRole("button", { name: "Referral" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Megan Wells")).toBeTruthy();
     expect(screen.getByText("Alex Harrer")).toBeTruthy();
-    expect(screen.queryByText("Quiz Only")).toBeNull();
+    expect(screen.queryByText("Ellie Rose")).toBeNull();
     expect(screen.getByText("2 of 3")).toBeTruthy();
   });
 
@@ -168,7 +173,7 @@ describe("AdminLeads", () => {
     expect(onOpenMama).toHaveBeenCalledWith(MEGAN);
 
     onOpenMama.mockClear();
-    fireEvent.click(screen.getByText("Quiz Only"));
+    fireEvent.click(screen.getByText("Ellie Rose"));
     expect(onOpenMama).not.toHaveBeenCalled();
   });
 });
