@@ -110,16 +110,26 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  const applySession = (session) => {
+    if (!session?.user) return;
+    // Set React auth before /join mounts. Waiting only on onAuthStateChange
+    // let Join bounce a successful signup back to the sign-in screen.
+    setSession(session);
+    setUser(session.user);
+    syncSentryUser(session.user);
+  };
+
   const signInWithPassword = async (email, password) => {
     const trimmed = email.trim();
     const result = await completeSignIn({
       confirmFresh: () => confirmFreshSignup(trimmed),
       signIn: async () => {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: trimmed,
           password,
         });
         if (error) return { ok: false, error: error.message };
+        applySession(data.session);
         return { ok: true };
       },
     });
@@ -172,6 +182,7 @@ export function AuthProvider({ children }) {
         if (signupLooksLikeExistingUser(data)) {
           return { ok: false, existingAccount: true, error: "User already registered" };
         }
+        if (data.session) applySession(data.session);
         if (data.session?.user?.id) {
           await stampTermsAndAttribution(data.session.user.id, termsAcceptedAt, termsVersion);
         }
@@ -183,6 +194,7 @@ export function AuthProvider({ children }) {
           password,
         });
         if (error) return { ok: false, error: error.message };
+        applySession(data.session);
         if (data.session?.user?.id) {
           await stampTermsAndAttribution(data.session.user.id, termsAcceptedAt, termsVersion);
         }
