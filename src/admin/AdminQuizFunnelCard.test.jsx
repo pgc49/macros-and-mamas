@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadQuizFunnelPulse = vi.fn();
@@ -40,5 +40,15 @@ describe("AdminQuizFunnelCard", () => {
     expect(screen.getByText("1")).toBeTruthy();
     expect(screen.getByText("Paid")).toBeTruthy();
     expect(loadQuizFunnelPulse).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the Leads tab from today's Quiz leads count", async () => {
+    const onOpenLeads = vi.fn();
+    render(<AdminQuizFunnelCard onOpenLeads={onOpenLeads} />);
+    await waitFor(() => {
+      expect(screen.getByText("7")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Quiz leads: 7/ }));
+    expect(onOpenLeads).toHaveBeenCalledTimes(1);
   });
 });
