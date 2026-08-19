@@ -77,11 +77,17 @@ describe("POST /api/confirm-fresh-signup", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("still allows a customer Pages preview to confirm a www-style signup", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(JSON.stringify({ users: [] }), { status: 200 }),
-    );
-    const res = await onRequestPost({
+  it("rejects arbitrary *.pages.dev origins, including unnamed customer hashes", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const foreign = await onRequestPost({
+      request: request(
+        { email: "mama@x.com" },
+        "https://evil.pages.dev",
+        "https://www.macrosandmamas.com/api/confirm-fresh-signup",
+      ),
+      env,
+    });
+    const unnamed = await onRequestPost({
       request: request(
         { email: "mama@x.com" },
         "https://abc.macros-and-mamas.pages.dev",
@@ -89,9 +95,32 @@ describe("POST /api/confirm-fresh-signup", () => {
       ),
       env,
     });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(foreign.status).toBe(403);
+    expect(unnamed.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still confirms from www and an explicit named customer preview", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ users: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ users: [] }), { status: 200 }));
+    const fromWww = await onRequestPost({
+      request: request({ email: "mama@x.com" }),
+      env,
+    });
+    const fromNamed = await onRequestPost({
+      request: request(
+        { email: "mama@x.com" },
+        "https://preview.macros-and-mamas.pages.dev",
+        "https://preview.macros-and-mamas.pages.dev/api/confirm-fresh-signup",
+      ),
+      env,
+    });
+    expect(fromWww.status).toBe(200);
+    expect(fromNamed.status).toBe(200);
+    expect(await fromWww.json()).toEqual({ ok: true });
+    expect(await fromNamed.json()).toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("confirms a fresh unconfirmed user", async () => {
