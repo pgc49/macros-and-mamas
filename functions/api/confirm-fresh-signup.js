@@ -6,23 +6,17 @@
    only unconfirmed users created in the last 24h, then the client
    signs in with the password they just typed.
    Always returns { ok: true } so the endpoint cannot enumerate emails.
+   Origin allowlist is exact www + named customer previews only — no
+   *.pages.dev wildcard, and admin hosts stay rejected.
    ================================================================== */
 
 import {
   findAdminUserByEmail,
   shouldConfirmFreshUser,
 } from "../_shared/confirmFreshSignup.js";
-import {
-  hostnameFromOriginOrHost,
-  isAdminSignupLockedHost,
-} from "../_shared/adminOrigin.js";
+import { originAllowed } from "../_shared/confirmFreshSignupOrigin.js";
 
-const ALLOWED_HOSTS = new Set([
-  "www.macrosandmamas.com",
-  "macrosandmamas.com",
-  "localhost",
-  "127.0.0.1",
-]);
+export { originAllowed };
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -75,30 +69,6 @@ export async function onRequestPost({ request, env }) {
   } catch (e) {
     console.error("confirm-fresh-signup failed", e);
     return json({ ok: true });
-  }
-}
-
-export function originAllowed(request, env) {
-  const requestHost = hostnameFromOriginOrHost(request.url);
-  const originHost = hostnameFromOriginOrHost(request.headers.get("origin") || "");
-  const hostHeader = hostnameFromOriginOrHost(request.headers.get("host") || "");
-  if (
-    isAdminSignupLockedHost(requestHost, env)
-    || isAdminSignupLockedHost(originHost, env)
-    || isAdminSignupLockedHost(hostHeader, env)
-  ) {
-    return false;
-  }
-
-  const origin = request.headers.get("origin") || "";
-  if (!origin) {
-    return ALLOWED_HOSTS.has(requestHost) || requestHost.endsWith(".pages.dev");
-  }
-  try {
-    const host = new URL(origin).hostname.toLowerCase();
-    return ALLOWED_HOSTS.has(host) || host.endsWith(".pages.dev");
-  } catch {
-    return false;
   }
 }
 
