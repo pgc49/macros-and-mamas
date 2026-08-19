@@ -29,6 +29,7 @@ import { AdminClientTracking } from "./AdminClientTracking";
 import { AdminClientMessages } from "./AdminClientMessages";
 import { AdminCredits } from "./AdminCredits";
 import { AdminEmails } from "./AdminEmails";
+import { AdminLeads } from "./AdminLeads";
 import { AdminQuizFunnelCard } from "./AdminQuizFunnelCard";
 import { AdminClientRoster, CohortFilterBar, CopyPhoneButton } from "./AdminClientRoster";
 import { rosterStats } from "./clientRoster";
@@ -111,6 +112,7 @@ function TabBar({ tab, setTab, unreadMessages = 0 }) {
   const tabs = [
     ["overview", "Overview"],
     ["clients", "Clients"],
+    ["leads", "Leads"],
     ["credits", "Credits"],
     ["messages", "Messages"],
     ["announcements", "Announcements"],
@@ -241,7 +243,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   const [tab, setTab] = useState(() => {
     if (typeof window === "undefined") return "overview";
     const q = new URLSearchParams(window.location.search).get("tab");
-    if (q === "messages" || q === "announcements" || q === "emails" || q === "clients" || q === "credits") return q;
+    if (q === "messages" || q === "announcements" || q === "emails" || q === "clients" || q === "credits" || q === "leads") return q;
     return "overview";
   });
   const [filter, setFilter] = useState(() => {
@@ -811,7 +813,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
       {tab === "overview" && (
         <>
-          <AdminQuizFunnelCard />
+          <AdminQuizFunnelCard onOpenLeads={() => setTab("leads")} />
           {unreadMessages > 0 && (
             <button
               type="button"
@@ -977,6 +979,12 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
             setTab("messages");
           }}
         />
+      )}
+
+      {tab === "leads" && (
+        <ErrorBoundary message="Leads admin hit an error. Other admin tabs still work — refresh or switch tabs.">
+          <AdminLeads onOpenMama={setAdminSel} />
+        </ErrorBoundary>
       )}
 
       {tab === "credits" && (

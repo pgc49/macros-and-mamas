@@ -7,28 +7,37 @@ import { T, F, FD } from "../theme/tokens";
 import { Card } from "../components/ui";
 import { loadQuizFunnelPulse } from "./quizFunnel";
 
-function PulsePill({ label, value, bg, color }) {
-  return (
-    <div
-      style={{
-        flex: "1 1 30%",
-        minWidth: 100,
-        background: bg,
-        borderRadius: 12,
-        padding: "12px 8px",
-        textAlign: "center",
-        fontFamily: F,
-      }}
-    >
+function PulsePill({ label, value, bg, color, onClick }) {
+  const style = {
+    flex: "1 1 30%",
+    minWidth: 100,
+    background: bg,
+    borderRadius: 12,
+    padding: "12px 8px",
+    textAlign: "center",
+    fontFamily: F,
+    border: "none",
+    cursor: onClick ? "pointer" : "default",
+    appearance: "none",
+    WebkitAppearance: "none",
+  };
+  const inner = (
+    <>
       <div style={{ fontFamily: FD, fontSize: 24, color }}>{value}</div>
       <div style={{ fontSize: 11.5, fontWeight: 700, color, lineHeight: 1.3, marginTop: 2 }}>
         {label}
       </div>
-    </div>
+    </>
+  );
+  if (!onClick) return <div style={style}>{inner}</div>;
+  return (
+    <button type="button" onClick={onClick} style={style} aria-label={`${label}: ${value}. Open quiz leads.`}>
+      {inner}
+    </button>
   );
 }
 
-export function AdminQuizFunnelCard() {
+export function AdminQuizFunnelCard({ onOpenLeads }) {
   const [pulse, setPulse] = useState(null);
   const [error, setError] = useState("");
 
@@ -63,7 +72,13 @@ export function AdminQuizFunnelCard() {
         <div style={{ fontSize: 13.5, color: T.inkSoft }}>Loading today&apos;s funnel…</div>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          <PulsePill label="Quiz leads" value={pulse.quizLeads} bg={T.accentSoft} color={T.accentDeep} />
+          <PulsePill
+            label="Quiz leads"
+            value={pulse.quizLeads}
+            bg={T.accentSoft}
+            color={T.accentDeep}
+            onClick={onOpenLeads}
+          />
           <PulsePill label="Unpaid signups" value={pulse.unpaidSignups} bg={T.track} color={T.inkSoft} />
           <PulsePill label="Paid" value={pulse.paid} bg={T.sageSoft} color={T.sage} />
         </div>
