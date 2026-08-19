@@ -34,8 +34,8 @@ export function testimonialById(id: string): Testimonial | undefined {
   return TESTIMONIALS.find((t) => t.id === id);
 }
 
-/** Quiz payoff order: Lauren, then Coti. */
-export const PAYOFF_TESTIMONIALS: Testimonial[] = ["lauren", "coti"]
+/** Quiz payoff: Becca on the app, then Lauren and Coti. */
+export const PAYOFF_TESTIMONIALS: Testimonial[] = ["becca", "lauren", "coti"]
   .map((id) => testimonialById(id))
   .filter((t): t is Testimonial => Boolean(t));
 

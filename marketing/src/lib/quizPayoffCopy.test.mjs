@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const quizJs = readFileSync(join(root, "public/quiz-app.js"), "utf8");
+const testimonialsTs = readFileSync(join(root, "src/content/testimonials.ts"), "utf8");
 
 describe("quiz payoff copy", () => {
   it("uses the ready H1 and a single preview sentence", () => {
@@ -18,20 +19,37 @@ describe("quiz payoff copy", () => {
     assert.doesNotMatch(quizJs, /We emailed these ranges/);
   });
 
-  it("places a compact offer before proof and keeps the pre-pay card", () => {
+  it("shows the app tour before the compact offer and keeps the pre-pay card", () => {
+    assert.match(quizJs, /function appTourHtml/);
     assert.match(quizJs, /function fastOfferHtml/);
     assert.match(quizJs, /Lock my spot · \$/);
     assert.match(quizJs, /Your quiz unlocked the early rate/);
+    const tourAt = quizJs.indexOf("${appTourHtml()}");
     const fastAt = quizJs.indexOf("${fastOfferHtml()}");
-    const snapAt = quizJs.indexOf("${snapProofHtml()}");
     const offerAt = quizJs.indexOf("${offerBlock()}");
-    assert.ok(fastAt > 0 && snapAt > fastAt && offerAt > snapAt);
+    assert.ok(tourAt > 0 && fastAt > tourAt && offerAt > fastAt);
   });
 
-  it("drops My meals and Progress proof cards", () => {
+  it("tours Today, Meals, and Messages without extra proof cards", () => {
     assert.doesNotMatch(quizJs, /My meals · recipes/);
     assert.doesNotMatch(quizJs, /Progress · ranges/);
+    assert.match(quizJs, /Today · log a meal/);
+    assert.match(quizJs, /All meals · Callie's recipes/);
     assert.match(quizJs, /Messages · 1:1 with Callie/);
+    assert.match(quizJs, /Add to Today/);
+    assert.match(quizJs, /Water · 40 of 88 oz/);
+    assert.doesNotMatch(quizJs, /function snapProofHtml/);
+    assert.doesNotMatch(quizJs, /function messagesProofHtml/);
+  });
+
+  it("uses Callie's 1:1 program note, not the 2am quiz quote", () => {
+    assert.match(quizJs, /connect with each client 1:1/);
+    assert.match(quizJs, /the program I needed and couldn't find/);
+    assert.doesNotMatch(quizJs, /2am math on milk supply/);
+  });
+
+  it("leads payoff quotes with Becca, then Lauren and Coti", () => {
+    assert.match(testimonialsTs, /\["becca", "lauren", "coti"\]/);
   });
 
   it("uses functional nutritionist as Callie's title", () => {
