@@ -155,6 +155,8 @@ export function filterRoster(all, filter, { query = "", todayIso = localDateIso(
 
   if (filter === "unpaid") {
     list = list.slice().sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  } else if (filter === "active") {
+    list = list.slice().sort(byName);
   } else {
     list = list.slice().sort((a, b) => {
       const rank = attentionRank(a, todayIso) - attentionRank(b, todayIso);

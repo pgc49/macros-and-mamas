@@ -122,6 +122,19 @@ describe("AdminClientRoster", () => {
     expect(screen.getByLabelText("Message Lauren Wells")).toBeTruthy();
   });
 
+  it("says Active is alphabetical and Needs you is urgency-first", () => {
+    renderRoster({ filter: "active" });
+    expect(screen.getByText(/Alphabetical/)).toBeTruthy();
+    expect(screen.queryByText(/Waiting on you first/)).toBeNull();
+    cleanup();
+    renderRoster({ filter: "needs_you" });
+    expect(screen.getByText(/Waiting on you first, then oldest message/)).toBeTruthy();
+    expect(screen.queryByText(/Alphabetical/)).toBeNull();
+    cleanup();
+    renderRoster({ filter: "unpaid" });
+    expect(screen.getByText(/Newest signups first/)).toBeTruthy();
+  });
+
   it("filters the list from the search field", () => {
     renderRoster({ filter: "all" });
     fireEvent.change(screen.getByLabelText("Search name, email, or phone"), {

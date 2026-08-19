@@ -94,6 +94,41 @@ describe("needsYou + filterRoster", () => {
     expect(list.map((c) => c.id)).toEqual(["u", "q"]);
   });
 
+  it("sorts Active A–Z even when one mama has unread or is quiet", () => {
+    const unreadZ = mama({ id: "z", name: "Zoe Unread", unreadFromMama: 2 });
+    const quietM = mama({
+      id: "m",
+      name: "Mia Quiet",
+      lastActiveDate: "2026-08-10",
+      lastMealDate: "2026-08-10",
+    });
+    const neverA = mama({ id: "a", name: "Ava Never", lastAdminAt: null });
+    const calmB = mama({ id: "b", name: "Bea Calm" });
+    const list = filterRoster([unreadZ, quietM, neverA, calmB], "active", { todayIso: today });
+    expect(list.map((c) => c.name)).toEqual(["Ava Never", "Bea Calm", "Mia Quiet", "Zoe Unread"]);
+  });
+
+  it("keeps Needs you urgency-first even when names would invert that", () => {
+    const unreadZ = mama({ id: "z", name: "Zoe Unread", unreadFromMama: 2 });
+    const quietA = mama({
+      id: "a",
+      name: "Ava Quiet",
+      lastActiveDate: "2026-08-10",
+      lastMealDate: "2026-08-10",
+    });
+    const list = filterRoster([quietA, unreadZ], "needs_you", { todayIso: today });
+    expect(list.map((c) => c.id)).toEqual(["z", "a"]);
+  });
+
+  it("pins admins at the top of Active, then clients A–Z", () => {
+    const patrick = mama({ id: "p", role: "admin", name: "Patrick" });
+    const callie = mama({ id: "c", role: "admin", name: "Callie" });
+    const unreadZ = mama({ id: "z", name: "Zoe", unreadFromMama: 3 });
+    const alex = mama({ id: "x", name: "Alexandra" });
+    const list = filterRoster([unreadZ, patrick, alex, callie], "active", { todayIso: today });
+    expect(list.map((c) => c.id)).toEqual(["c", "p", "x", "z"]);
+  });
+
   it("counts needs-you separately from unpaid", () => {
     const counts = rosterFilterCounts([unread, quiet, unpaid], today);
     expect(counts.needsYou).toBe(2);
