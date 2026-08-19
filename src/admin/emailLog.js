@@ -32,3 +32,21 @@ export function emailRecipient(event) {
   }
   return { name: email || "Unknown recipient", email, coach: false };
 }
+
+/** Client-side search for the admin send log — name, email, type, or subject. */
+export function filterEmailEvents(events, query) {
+  const q = String(query || "").trim().toLowerCase();
+  const rows = Array.isArray(events) ? events : [];
+  if (!q) return rows;
+  return rows.filter((event) => {
+    const who = emailRecipient(event);
+    const hay = [
+      who.name,
+      who.email,
+      emailTypeLabel(event),
+      event?.email_type,
+      event?.subject,
+    ].join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+}

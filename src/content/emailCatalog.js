@@ -303,6 +303,61 @@ Callie
   },
 ];
 
+/**
+ * Customer-journey grouping for Admin → Emails → Templates.
+ * Order is the path a mama walks. Callie notifies stay in their own group.
+ */
+export const EMAIL_JOURNEYS = [
+  {
+    id: "quiz",
+    title: "Quiz, no account",
+    track: "Track A",
+    note: "Plant-based gets the first email only — no follow-up drip.",
+    ids: ["quiz_ranges", "quiz_drip_2d", "quiz_drip_7d", "quiz_pregnancy_note"],
+  },
+  {
+    id: "unpaid",
+    title: "Signed up, no payment",
+    track: "Track B",
+    note: "+1 hour and +24 hours use the same Finish joining template.",
+    ids: ["finish_joining"],
+  },
+  {
+    id: "paid",
+    title: "Paid",
+    track: null,
+    note: null,
+    ids: ["welcome", "intake_reminder", "intake_received", "macros_live"],
+  },
+  {
+    id: "other",
+    title: "Other",
+    track: null,
+    note: "Waitlist open is a manual blast, not a send from this log. Eligibility refund is only if Callie refunds in Stripe.",
+    ids: ["eligibility_refund", "cohort_open"],
+  },
+  {
+    id: "callie",
+    title: "Callie",
+    track: "Operator",
+    note: "These go to Callie, not to mamas. They are operator alerts, not the customer journey.",
+    ids: ["callie_payment", "callie_intake", "callie_eligibility_hold", "callie_refund"],
+  },
+];
+
+export function catalogByJourney(catalog = EMAIL_CATALOG) {
+  const byId = new Map(catalog.map((row) => [row.id, row]));
+  return EMAIL_JOURNEYS.map((journey) => ({
+    ...journey,
+    templates: journey.ids.map((id) => byId.get(id)).filter(Boolean),
+  }));
+}
+
+export function catalogNumberLabel(row) {
+  if (row == null) return "";
+  return typeof row.number === "number" ? `#${row.number}` : String(row.number);
+}
+
 export const EMAIL_TYPE_LABELS = {
   finish_joining_1h: "Finish joining (+1h)",
   finish_joining_24h: "Finish joining (+24h)",
