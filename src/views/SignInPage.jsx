@@ -8,6 +8,7 @@ import { TERMS_VERSION } from "../content/terms";
 import { isEnrollmentOpen } from "../config";
 import { normalizeEmail, quizJoinHref, rememberQuizEmail } from "../lib/quizCheckout";
 import { isUnconfirmedEmailError } from "../auth/completeSignup";
+import { shouldSwitchCreateToSignIn } from "../auth/quizAuthHandoff";
 
 /**
  * One auth screen. Mode comes from the entry point:
@@ -76,14 +77,14 @@ export function SignInPage({
 
     if (isCreate) {
       const termsAcceptedAt = new Date().toISOString();
-      const { error: err, needsEmailConfirm } = await signUpWithPassword(accountEmail, password, {
+      const { error: err, needsEmailConfirm, existingAccount } = await signUpWithPassword(accountEmail, password, {
         termsAcceptedAt,
         termsVersion: TERMS_VERSION,
       });
       setBusy(false);
       if (err) {
         const msg = err.message || "Could not create account.";
-        if (/already|registered|exists|invalid login/i.test(msg) && onSwitchMode) {
+        if (shouldSwitchCreateToSignIn({ existingAccount, message: msg }) && onSwitchMode) {
           setError("That email already has an account. Sign in with the password you created, or tap Forgot password.");
           onSwitchMode("signin");
           return;

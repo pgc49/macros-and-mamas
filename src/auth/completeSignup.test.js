@@ -3,6 +3,7 @@ import {
   completeSignIn,
   completeSignup,
   isExistingAccountError,
+  isLikelyUnconfirmedLoginError,
   isUnconfirmedEmailError,
   signupLooksLikeExistingUser,
 } from "./completeSignup";
@@ -20,6 +21,13 @@ describe("isUnconfirmedEmailError", () => {
   it("matches Supabase confirm-email failures", () => {
     expect(isUnconfirmedEmailError("Email not confirmed")).toBe(true);
     expect(isUnconfirmedEmailError("Invalid login credentials")).toBe(false);
+  });
+});
+
+describe("isLikelyUnconfirmedLoginError", () => {
+  it("also treats generic invalid login as a confirm-email follow-up", () => {
+    expect(isLikelyUnconfirmedLoginError("Invalid login credentials")).toBe(true);
+    expect(isLikelyUnconfirmedLoginError("Password should be at least 6 characters")).toBe(false);
   });
 });
 
@@ -63,6 +71,21 @@ describe("completeSignup", () => {
       needsEmailConfirm: true,
       error: "Email not confirmed",
     });
+  });
+
+  it("confirms a fresh signup when follow-up sign-in only says invalid login", async () => {
+    const confirmFresh = vi.fn(async () => {});
+    const signIn = vi.fn()
+      .mockResolvedValueOnce({ ok: false, error: "Invalid login credentials" })
+      .mockResolvedValueOnce({ ok: true });
+    const result = await completeSignup({
+      signUp: async () => ({ ok: true, session: null }),
+      signIn,
+      confirmFresh,
+    });
+    expect(result).toEqual({ ok: true });
+    expect(confirmFresh).toHaveBeenCalledTimes(1);
+    expect(signIn).toHaveBeenCalledTimes(2);
   });
 
   it("confirms a fresh signup then signs in when email confirmation blocked the session", async () => {

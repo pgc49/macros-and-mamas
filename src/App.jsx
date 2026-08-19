@@ -42,7 +42,8 @@ import {
   persistAttributionToProfile,
 } from "./lib/attribution";
 import { CanonicalizeTrailingSlash } from "./components/CanonicalizeTrailingSlash";
-import { emailsMatch, quizJoinHref, quizSignInHref, resolveQuizEmail } from "./lib/quizCheckout";
+import { emailsMatch, quizJoinHref, resolveQuizEmail } from "./lib/quizCheckout";
+import { joinPathWhenSignedOut, quizSessionMismatch } from "./auth/quizAuthHandoff";
 import { ageFromDateOfBirth } from "./db/db";
 
 /**
@@ -66,9 +67,7 @@ function SignInGate({
   const [switching, setSwitching] = useState(false);
   const fromQuiz = searchParams.get("from") === "quiz";
   const quizEmail = resolveQuizEmail(searchParams);
-  const mismatch = Boolean(
-    user && fromQuiz && quizEmail && !emailsMatch(user.email, quizEmail),
-  );
+  const mismatch = quizSessionMismatch({ user, fromQuiz, quizEmail });
 
   useEffect(() => {
     if (authLoading || !mismatch) return undefined;
@@ -126,6 +125,47 @@ function SignInGate({
       onBack={onBack}
     />
   );
+}
+
+function JoinGate({ refunded, paid, isAdmin, approved, macros, membershipPaywall, profileCreatedAt }) {
+  const { user, loading: authLoading } = useAuth();
+  const location = useLocation();
+  if (authLoading) {
+    return (
+      <Shell>
+        <Card style={{ marginTop: 30, textAlign: "center", padding: 28 }}>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: T.inkSoft }}>
+            Opening checkout…
+          </p>
+        </Card>
+      </Shell>
+    );
+  }
+  const signedOutTo = joinPathWhenSignedOut({
+    user,
+    authLoading,
+    search: location.search,
+  });
+  if (signedOutTo) {
+    return <Navigate to={signedOutTo} replace state={{ from: PATHS.join }} />;
+  }
+  if (refunded) return <Navigate to={PATHS.goodbye} replace />;
+  if (paid || isAdmin) {
+    return (
+      <Navigate
+        to={homePathFor({
+          isAdmin,
+          approved,
+          paid,
+          macros,
+          refunded,
+          membershipPaywall,
+        })}
+        replace
+      />
+    );
+  }
+  return <JoinPage profileCreatedAt={profileCreatedAt} />;
 }
 
 const APP_SURFACE = import.meta.env.VITE_APP_SURFACE || "combined";
@@ -1628,47 +1668,17 @@ export default function App() {
 
       <Route
         path={PATHS.join}
-        element={
-          !user
-            ? (
-              <Navigate
-                to={(() => {
-                  const p = new URLSearchParams(location.search);
-                  if (!p.get("from") && p.get("email")) p.set("from", "quiz");
-                  const quizEmail = resolveQuizEmail(p);
-                  if (p.get("from") === "quiz") {
-                    return quizSignInHref(quizEmail || p.get("email"), "create");
-                  }
-                  p.set("auth", "create");
-                  if (quizEmail && !p.get("email")) p.set("email", quizEmail);
-                  return { pathname: PATHS.signin, search: `?${p.toString()}` };
-                })()}
-                replace
-                state={{ from: PATHS.join }}
-              />
-            )
-            : refunded
-              ? <Navigate to={PATHS.goodbye} replace />
-              : paid || isAdmin
-                ? (
-                  <Navigate
-                    to={homePathFor({
-                      isAdmin,
-                      approved,
-                      paid,
-                      macros,
-                      refunded,
-                      membershipPaywall,
-                    })}
-                    replace
-                  />
-                )
-                : (
-                  <JoinPage
-                    profileCreatedAt={profile?.createdAt || null}
-                  />
-                )
-        }
+        element={(
+          <JoinGate
+            refunded={refunded}
+            paid={paid}
+            isAdmin={isAdmin}
+            approved={approved}
+            macros={macros}
+            membershipPaywall={membershipPaywall}
+            profileCreatedAt={profile?.createdAt || null}
+          />
+        )}
       />
 
       <Route

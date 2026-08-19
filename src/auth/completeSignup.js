@@ -19,8 +19,16 @@ export function signupLooksLikeExistingUser(data) {
   return Array.isArray(identities) && identities.length === 0;
 }
 
-async function signInAfterConfirm({ signIn, confirmFresh, error }) {
-  if (!confirmFresh || !isUnconfirmedEmailError(error)) return null;
+/** Confirm-email projects sometimes hide that as generic invalid login. */
+export function isLikelyUnconfirmedLoginError(message) {
+  return isUnconfirmedEmailError(message) || /invalid login/i.test(String(message || ""));
+}
+
+async function signInAfterConfirm({ signIn, confirmFresh, error, allowInvalidLogin = false }) {
+  if (!confirmFresh) return null;
+  const canConfirm = isUnconfirmedEmailError(error)
+    || (allowInvalidLogin && isLikelyUnconfirmedLoginError(error));
+  if (!canConfirm) return null;
   await confirmFresh();
   return signIn();
 }
@@ -35,6 +43,7 @@ export async function completeSignup({ signUp, signIn, confirmFresh }) {
       signIn,
       confirmFresh,
       error: signedIn.error,
+      allowInvalidLogin: true,
     });
     if (confirmed?.ok) return { ok: true };
     return {
@@ -51,6 +60,7 @@ export async function completeSignup({ signUp, signIn, confirmFresh }) {
       signIn,
       confirmFresh,
       error: signedIn.error,
+      allowInvalidLogin: true,
     });
     if (confirmed?.ok) return { ok: true, recoveredExisting: true };
     return {
