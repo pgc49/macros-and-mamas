@@ -1005,23 +1005,36 @@ export const db = {
     };
   },
 
+  /**
+   * Eligibility-hold waitlist (pregnant / early_nursing) — POST /api/intake-waitlist.
+   * Do not insert with the anon key; RLS no longer allows public inserts.
+   * Live marketing / SPA form is joinCohortWaitlist → /api/waitlist.
+   */
   async joinWaitlist({ email, reason, monthsPp = null }) {
-    const { data: { user } } = await supabase.auth.getUser();
-    let eligibleOn = null;
-    if (reason === "early_nursing" && monthsPp != null && !Number.isNaN(Number(monthsPp))) {
-      const monthsUntil = Math.max(0, 3 - Number(monthsPp));
-      const d = new Date();
-      d.setMonth(d.getMonth() + Math.ceil(monthsUntil));
-      eligibleOn = d.toISOString().slice(0, 10);
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    if (session?.access_token) {
+      headers.Authorization = `Bearer ${session.access_token}`;
     }
-    const { error } = await supabase.from("waitlist").insert({
-      email: email.trim().toLowerCase(),
-      reason,
-      months_pp: monthsPp,
-      eligible_on: eligibleOn,
-      profile_id: user?.id || null,
+    const resp = await fetch("/api/intake-waitlist", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        email: String(email || "").trim().toLowerCase().slice(0, 200),
+        reason: String(reason || "").slice(0, 40),
+        months_pp: monthsPp,
+      }),
     });
-    if (error) throw error;
+    const data = await resp.json().catch(() => ({}));
+    if (resp.status === 429 || data?.error === "rate_limited") {
+      throw new Error("rate_limited");
+    }
+    if (!resp.ok || data?.ok === false) {
+      throw new Error(data?.error || `waitlist_failed_${resp.status}`);
+    }
   },
 
   /**

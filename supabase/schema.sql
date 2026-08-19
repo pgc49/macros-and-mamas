@@ -297,14 +297,10 @@ create policy "meal_logs_delete_own"
   to authenticated
   using (profile_id = auth.uid());
 
--- waitlist (intake gates)
+-- waitlist (intake gates) — service-role writes only via /api/intake-waitlist
 alter table public.waitlist enable row level security;
 
 drop policy if exists "waitlist_insert_public" on public.waitlist;
-create policy "waitlist_insert_public"
-  on public.waitlist for insert
-  to anon, authenticated
-  with check (true);
 
 drop policy if exists "waitlist_select_admin" on public.waitlist;
 create policy "waitlist_select_admin"
