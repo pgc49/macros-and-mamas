@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import * as Sentry from "@sentry/react";
 import { supabase } from "../lib/supabase";
 import { persistAttributionToProfile } from "../lib/attribution";
@@ -8,6 +8,7 @@ import {
   isExistingAccountError,
   signupLooksLikeExistingUser,
 } from "./completeSignup";
+import { shouldAcceptGetSession } from "./quizAuthHandoff";
 
 async function confirmFreshSignup(email) {
   try {
@@ -62,6 +63,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const userRef = useRef(null);
 
   const refreshProfile = async (userId = user?.id) => {
     if (!userId) {
@@ -79,8 +81,13 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       const next = data.session ?? null;
+      if (!shouldAcceptGetSession(next, Boolean(userRef.current))) {
+        setLoading(false);
+        return;
+      }
       setSession(next);
       setUser(next?.user ?? null);
+      userRef.current = next?.user ?? null;
       syncSentryUser(next?.user ?? null);
       if (next?.user) await refreshProfile(next.user.id);
       else setProfile(null);
@@ -88,11 +95,22 @@ export function AuthProvider({ children }) {
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-      setSession(nextSession);
-      setUser(nextSession?.user ?? null);
-      syncSentryUser(nextSession?.user ?? null);
-      if (nextSession?.user) await refreshProfile(nextSession.user.id);
-      else setProfile(null);
+      if (event === "SIGNED_OUT") {
+        userRef.current = null;
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        syncSentryUser(null);
+        setLoading(false);
+        return;
+      }
+      if (nextSession?.user) {
+        userRef.current = nextSession.user;
+        setSession(nextSession);
+        setUser(nextSession.user);
+        syncSentryUser(nextSession.user);
+        await refreshProfile(nextSession.user.id);
+      }
       setLoading(false);
 
       // Recovery link lands with a temporary session — send them to set a new password.
@@ -110,13 +128,14 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const applySession = (session) => {
-    if (!session?.user) return;
+  const applySession = (nextSession) => {
+    if (!nextSession?.user) return;
     // Set React auth before /join mounts. Waiting only on onAuthStateChange
     // let Join bounce a successful signup back to the sign-in screen.
-    setSession(session);
-    setUser(session.user);
-    syncSentryUser(session.user);
+    userRef.current = nextSession.user;
+    setSession(nextSession);
+    setUser(nextSession.user);
+    syncSentryUser(nextSession.user);
   };
 
   const signInWithPassword = async (email, password) => {
@@ -216,9 +235,12 @@ export function AuthProvider({ children }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    userRef.current = null;
+    setSession(null);
+    setUser(null);
     setProfile(null);
     syncSentryUser(null);
+    await supabase.auth.signOut();
   };
 
   const resetPasswordForEmail = async (email) => {

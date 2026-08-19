@@ -43,7 +43,7 @@ import {
 } from "./lib/attribution";
 import { CanonicalizeTrailingSlash } from "./components/CanonicalizeTrailingSlash";
 import { emailsMatch, quizJoinHref, resolveQuizEmail } from "./lib/quizCheckout";
-import { joinPathWhenSignedOut, quizSessionMismatch } from "./auth/quizAuthHandoff";
+import { joinCheckoutDecision, joinPathWhenSignedOut, quizSessionMismatch } from "./auth/quizAuthHandoff";
 import { ageFromDateOfBirth } from "./db/db";
 
 /**
@@ -130,7 +130,35 @@ function SignInGate({
 function JoinGate({ refunded, paid, isAdmin, approved, macros, membershipPaywall, profileCreatedAt }) {
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
-  if (authLoading) {
+  const [probe, setProbe] = useState({ done: false, hasSession: false });
+
+  useEffect(() => {
+    if (user) {
+      setProbe({ done: true, hasSession: true });
+      return undefined;
+    }
+    let cancelled = false;
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        if (!cancelled) {
+          setProbe({ done: true, hasSession: Boolean(data.session?.user) });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setProbe({ done: true, hasSession: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const decision = joinCheckoutDecision({
+    user,
+    authLoading,
+    probeDone: probe.done,
+    supabaseHasSession: probe.hasSession,
+  });
+  if (decision === "hold") {
     return (
       <Shell>
         <Card style={{ marginTop: 30, textAlign: "center", padding: 28 }}>
@@ -141,12 +169,12 @@ function JoinGate({ refunded, paid, isAdmin, approved, macros, membershipPaywall
       </Shell>
     );
   }
-  const signedOutTo = joinPathWhenSignedOut({
-    user,
-    authLoading,
-    search: location.search,
-  });
-  if (signedOutTo) {
+  if (decision === "signin") {
+    const signedOutTo = joinPathWhenSignedOut({
+      user: null,
+      authLoading: false,
+      search: location.search,
+    });
     return <Navigate to={signedOutTo} replace state={{ from: PATHS.join }} />;
   }
   if (refunded) return <Navigate to={PATHS.goodbye} replace />;
@@ -1413,7 +1441,11 @@ export default function App() {
     [waterLogsByDate, waterOz],
   );
 
-  if (authLoading || (user && !loaded)) {
+  const payFunnelPath = (() => {
+    const here = canonicalPath(location.pathname);
+    return here === PATHS.signin || here === PATHS.join;
+  })();
+  if (authLoading || (user && !loaded && !payFunnelPath)) {
     return (
       <Shell>
         <div style={{ padding: "40px 8px", textAlign: "center", color: T.inkSoft, fontFamily: FD, fontSize: 18 }}>

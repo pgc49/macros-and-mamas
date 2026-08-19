@@ -93,6 +93,10 @@ export function SignInPage({
         return;
       }
       if (needsEmailConfirm) {
+        if (fromQuiz) {
+          setError("Your account is created. Tap Continue again to open checkout.");
+          return;
+        }
         setInfo("Check your email to confirm your account, then sign in. Check spam too.");
         return;
       }

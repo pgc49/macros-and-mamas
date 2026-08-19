@@ -13,6 +13,29 @@ export function quizSessionMismatch({ user, fromQuiz, quizEmail }) {
 }
 
 /**
+ * /join bounce rules for the paid-quiz funnel.
+ * stay  — show checkout (React user or a live Supabase session)
+ * hold  — still reading auth; never bounce on this paint
+ * signin — truly signed out; send them to create-account
+ */
+export function joinCheckoutDecision({
+  user,
+  authLoading,
+  probeDone,
+  supabaseHasSession,
+} = {}) {
+  if (user || supabaseHasSession) return "stay";
+  if (authLoading || !probeDone) return "hold";
+  return "signin";
+}
+
+/** Stale getSession(null) must not wipe a signup we just applied. */
+export function shouldAcceptGetSession(incomingSession, hasAppliedUser) {
+  if (incomingSession?.user) return true;
+  return !hasAppliedUser;
+}
+
+/**
  * Where /join should send a signed-out visitor. Null while auth is still
  * applying the session from create-account — bouncing to /signin here is
  * what made "Continue" look like it failed.
