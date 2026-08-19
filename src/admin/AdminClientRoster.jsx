@@ -82,6 +82,12 @@ const FILTERS = [
   ["all", "All"],
 ];
 
+function rosterSortHint(filter) {
+  if (filter === "unpaid") return "Newest signups first. ";
+  if (filter === "active") return "Alphabetical. ";
+  return "Waiting on you first, then oldest message. ";
+}
+
 export function CohortFilterBar({ roster = [], cohort = "all", setCohort }) {
   const options = useMemo(() => listRosterCohorts(roster), [roster]);
   if (options.length <= 1) return null;
@@ -205,7 +211,7 @@ export function AdminClientRoster({
         })}
       </div>
       <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.4 }}>
-        {filter === "unpaid" ? "Newest signups first. " : "Waiting on you first, then oldest message. "}
+        {rosterSortHint(filter)}
         Tap a row for her profile.
       </p>
       {!filtered.length ? (
