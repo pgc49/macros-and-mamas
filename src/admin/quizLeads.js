@@ -1,7 +1,7 @@
 /**
  * Admin Quiz leads list: marketing_leads + profile funnel status + referrals.
  * Join is in JS on lower(email).
- * Meta ad = campaign UTMs. Meta click = fbc without those UTMs. Never fbp alone.
+ * Meta ad = campaign UTMs. Meta link = fbc without those UTMs. Never fbp alone.
  */
 import { supabase } from "../lib/supabase";
 import { PACIFIC_TZ } from "./quizFunnel";
@@ -119,7 +119,7 @@ export function isReferralLead(lead) {
   return nonempty(quizReferralWho(lead));
 }
 
-/** Traffic source: Meta ad / Meta click / referral can stack. Organic only if none. */
+/** Traffic source: Meta ad / Meta link / referral can stack. Organic only if none. */
 export function quizLeadSourceKind(lead) {
   const ad = isMetaAdLead(lead);
   const click = isMetaClickLead(lead);
@@ -137,9 +137,9 @@ export function quizLeadSourceLabel(lead) {
   const click = isMetaClickLead(lead);
   const who = quizReferralWho(lead);
   if (ad && who) return `Meta ad · ${who}`;
-  if (click && who) return `Meta click · ${who}`;
+  if (click && who) return `Meta link · ${who}`;
   if (ad) return "Meta ad";
-  if (click) return "Meta click";
+  if (click) return "Meta link";
   if (who) return `Referral · ${who}`;
   return "Organic";
 }
