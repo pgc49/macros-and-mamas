@@ -128,7 +128,7 @@ describe("AdminEmails", () => {
     expect(screen.getByText("Quiz drip · day 2")).toBeTruthy();
     expect(screen.getByText(/The ranges I sent you are a starting point/)).toBeTruthy();
     expect(screen.getByText("[First name], the numbers are the easy part")).toBeTruthy();
-    expect(screen.getByText("Finish joining")).toBeTruthy();
+    expect(screen.getByText("Finish joining · +1h")).toBeTruthy();
     expect(screen.getByText("Your macros are live")).toBeTruthy();
     expect(screen.queryByText("Megan Wells")).toBeNull();
     expect(screen.queryByText("Sent emails")).toBeNull();

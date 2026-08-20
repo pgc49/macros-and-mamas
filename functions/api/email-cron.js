@@ -5,9 +5,9 @@
    Auth: Authorization: Bearer $CRON_SECRET  (Cloudflare secret)
    Or invoke via GitHub Actions schedule (no local CLI needed).
 
-   #1 Finish joining: unpaid, created ≥1h / ≥24h (max two sends)
+   #1 Finish joining: unpaid, created ≥1h / ≥24h, plus one Aug 26 PT last note
    #3 Intake reminder: paid, no macros, paid_at ≥24h / ≥72h (max two)
-   Track A quiz drip: marketing_leads with no profile, +2d / +7d after ranges
+   Track A quiz drip: marketing_leads with no profile, +2d / last (+6d or Aug 26 PT)
    Track B finish-joining: unpaid profiles only — do not merge the tracks
    ================================================================== */
 
@@ -16,13 +16,21 @@ import {
   sendFinishJoiningEmail,
   sendIntakeReminderEmail,
 } from "../_shared/supabaseEmail.js";
-import { fetchUnsubscribedEmails } from "../_shared/emailUnsubscribe.mjs";
+import {
+  fetchUnsubscribedEmails,
+  normalizeEmail,
+} from "../_shared/emailUnsubscribe.mjs";
 import {
   indexEmailEvents,
   indexProfilesByEmail,
   planQuizLeadSends,
   quizCronEventTypes,
 } from "../_shared/quizDrip.mjs";
+import {
+  decideFinishJoiningAction,
+  finishJoiningVariant,
+} from "../_shared/finishJoining.mjs";
+import { emailHasQuizUnlock } from "../_shared/pricing.js";
 import { sendQuizDripEmail } from "../_shared/quizDripSend.js";
 
 const HOUR = 60 * 60 * 1000;
@@ -39,6 +47,7 @@ export async function onRequestPost({ request, env }) {
     const sent = {
       finish_joining_1h: 0,
       finish_joining_24h: 0,
+      finish_joining_close: 0,
       intake_reminder_24h: 0,
       intake_reminder_72h: 0,
       quiz_drip_2d: 0,
@@ -51,6 +60,11 @@ export async function onRequestPost({ request, env }) {
     const profiles = await fetchAllProfiles(base, key);
     const macrosIds = await fetchMacroProfileIds(base, key);
     const already = await fetchSentTypes(base, key);
+    const unsub = await fetchUnsubscribedEmails(env);
+    if (!unsub.ok) {
+      console.error("email-cron finish-joining skipped: unsubscribe list unavailable");
+      sent.errors += 1;
+    }
 
     for (const p of profiles) {
       if (p.role === "admin" || p.refunded) continue;
@@ -62,38 +76,34 @@ export async function onRequestPost({ request, env }) {
       try {
         // Track B — unpaid abandoned checkout (skip new accounts while enrollment is closed).
         // Quiz-only leads with no profiles row never enter this loop.
-        if (!p.paid && Number.isFinite(createdMs) && canNudgeUnpaid(env, createdMs)) {
-          const age = now - createdMs;
-          if (age >= 24 * HOUR && !types.has("finish_joining_24h")) {
-            // Prefer 24h if due; still ok if 1h never sent
+        if (!p.paid && Number.isFinite(createdMs) && unsub.ok) {
+          const decision = decideFinishJoiningAction({
+            now,
+            profile: p,
+            unsubscribed: false,
+            sentTypes: types,
+            nudgeAllowed: canNudgeUnpaid(env, createdMs),
+          });
+          if (decision.action === "send") {
             const contact = await loadUserContact(env, p.id);
-            if (contact.email) {
+            const email = contact.email;
+            if (!email) {
+              sent.skipped += 1;
+            } else if (unsub.emails.has(normalizeEmail(email))) {
+              sent.skipped += 1;
+            } else {
+              const quizUnlock = await emailHasQuizUnlock(env, email);
               const r = await sendFinishJoiningEmail(env, {
-                email: contact.email,
+                email,
                 name: contact.name || p.name,
                 userId: p.id,
-                variant: "24h",
+                variant: finishJoiningVariant(decision.step),
+                quizUnlock,
               });
-              if (r?.ok) sent.finish_joining_24h += 1;
+              if (r?.ok && sent[decision.step] != null) sent[decision.step] += 1;
+              else if (r?.skipped) sent.skipped += 1;
               else sent.errors += 1;
-            } else sent.skipped += 1;
-          } else if (
-            age >= 1 * HOUR
-            && age < 24 * HOUR
-            && !types.has("finish_joining_1h")
-            && !types.has("finish_joining_24h")
-          ) {
-            const contact = await loadUserContact(env, p.id);
-            if (contact.email) {
-              const r = await sendFinishJoiningEmail(env, {
-                email: contact.email,
-                name: contact.name || p.name,
-                userId: p.id,
-                variant: "1h",
-              });
-              if (r?.ok) sent.finish_joining_1h += 1;
-              else sent.errors += 1;
-            } else sent.skipped += 1;
+            }
           }
         }
 
@@ -201,6 +211,7 @@ async function fetchSentTypes(base, key) {
   const types = [
     "finish_joining_1h",
     "finish_joining_24h",
+    "finish_joining_close",
     "intake_reminder_24h",
     "intake_reminder_72h",
   ];

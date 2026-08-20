@@ -15,6 +15,23 @@ describe("product comms emails", () => {
   });
 });
 
+describe("unpaid sales catalog", () => {
+  it("keeps Track B commercial mail off WhatsApp and the hard 50-cap", () => {
+    const unpaid = EMAIL_CATALOG.filter((e) => String(e.id).startsWith("finish_joining"));
+    expect(unpaid).toHaveLength(3);
+    for (const row of unpaid) {
+      expect(row.bodyPreview, row.id).not.toMatch(/whatsapp/i);
+      expect(row.bodyPreview, row.id).not.toMatch(/—/);
+      expect(row.cta, row.id).not.toMatch(/—/);
+      expect(row.bodyPreview, row.id).not.toMatch(/capped at 50/i);
+      expect(row.bodyPreview, row.id).toMatch(/Unsubscribe/);
+    }
+    const ranges = EMAIL_CATALOG.find((e) => e.id === "quiz_ranges");
+    expect(ranges.bodyPreview).not.toMatch(/capped at 50/);
+    expect(ranges.bodyPreview).toMatch(/The group starts Monday, Aug 31/);
+  });
+});
+
 describe("quiz drip catalog", () => {
   it("adds the 1/3/7 sales follow-ups and a pregnancy-only soft note", () => {
     const ids = EMAIL_CATALOG.map((e) => e.id);
@@ -39,9 +56,18 @@ describe("quiz drip catalog", () => {
     expect(day2.trigger).toMatch(/Track A/i);
     expect(day2.trigger).toMatch(/\+2 days/);
     expect(day2.subject).not.toMatch(/your ranges/i);
+    expect(day2.bodyPreview).toMatch(/Your quiz rate is \$249/);
+    expect(day2.bodyPreview).toMatch(/Doors close Aug 27/);
 
-    const finish = EMAIL_CATALOG.find((e) => e.id === "finish_joining");
+    const last = EMAIL_CATALOG.find((e) => e.id === "quiz_drip_7d");
+    expect(last.trigger).toMatch(/Aug 26/);
+    expect(last.trigger).toMatch(/Aug 27/);
+    expect(last.bodyPreview).not.toMatch(/capped at 50/);
+    expect(last.bodyPreview).toMatch(/The group starts Monday, Aug 31/);
+
+    const finish = EMAIL_CATALOG.find((e) => e.id === "finish_joining_1h");
     expect(finish.trigger).toMatch(/Track B/);
+    expect(EMAIL_CATALOG.find((e) => e.id === "finish_joining_close").trigger).toMatch(/Aug 26/);
   });
 });
 
@@ -63,7 +89,11 @@ describe("email catalog journey", () => {
       "quiz_pregnancy_note",
     ]);
     expect(journeys[0].note).toMatch(/plant-based/i);
-    expect(journeys[1].ids).toEqual(["finish_joining"]);
+    expect(journeys[1].ids).toEqual([
+      "finish_joining_1h",
+      "finish_joining_24h",
+      "finish_joining_close",
+    ]);
     expect(journeys[2].ids).toEqual([
       "welcome",
       "intake_reminder",

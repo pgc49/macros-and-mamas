@@ -27,17 +27,22 @@ export function renderEmail({
   body,
   cta_text,
   cta_url,
+  unsubscribe_url,
+  unsubscribe_label,
 }: {
   header: string;
   body: string;
   cta_text?: string;
   cta_url?: string;
+  unsubscribe_url?: string;
+  unsubscribe_label?: string;
 }) {
   // header / cta_text may include mama-controlled names — always escape.
   // body is trusted markup from our edge functions (call sites escape any user bits).
   const safeHeader = escapeHtml(header);
   const safeCtaText = cta_text ? escapeHtml(cta_text) : "";
   const safeCtaUrl = safeHttpsUrl(cta_url);
+  const safeUnsubUrl = safeHttpsUrl(unsubscribe_url);
   const cta =
     safeCtaText && safeCtaUrl
       ? `<p style="margin:28px 0 8px">
@@ -48,6 +53,9 @@ export function renderEmail({
           </a>
         </p>`
       : "";
+  const unsub = safeUnsubUrl
+    ? `<br/><a href="${escapeHtml(safeUnsubUrl)}" style="color:#6E5D66;text-decoration:underline">${escapeHtml(unsubscribe_label || "Unsubscribe from these emails")}</a>`
+    : "";
 
   return `<!doctype html>
 <html>
@@ -64,7 +72,7 @@ export function renderEmail({
       ${cta}
     </div>
     <p style="font-size:12px;line-height:1.5;color:#6E5D66;font-family:Helvetica,Arial,sans-serif;margin:18px 8px 0">
-      ${LLC_FOOTER}
+      ${LLC_FOOTER}${unsub}
     </p>
   </div>
 </body>

@@ -1,13 +1,21 @@
 /**
  * Track A — quiz submitted, no account (marketing_leads, no profiles row).
- * Immediate ranges email is #1 (quiz_ranges). Follow-ups: +2d / +7d.
+ * Immediate ranges email is #1 (quiz_ranges). Follow-ups: +2d, then last
+ * at +6d or Wed Aug 26 PT (whichever first). Never send last on/after Aug 27 PT.
  * Pregnancy gets one soft +3d note. Plant-based gets no follow-up.
  *
  * Track B — signed up, unpaid — is finish-joining only. A profiles row
  * for the email stops this drip immediately. Do not merge the tracks.
  */
 
+import {
+  isLastUnpaidSalesDayPt,
+  isOnOrAfterDoorsClosePt,
+} from "./cohortEmailWindow.mjs";
+
 export const DAY_MS = 24 * 60 * 60 * 1000;
+/** Last quiz sales email: +6 days, or Aug 26 PT if that comes first. */
+export const QUIZ_LAST_MIN_AGE_MS = 6 * DAY_MS;
 /** Recent leads whose #1 send was not logged can still enter the drip. */
 export const ANCHOR_FALLBACK_MS = 8 * DAY_MS;
 
@@ -33,6 +41,7 @@ const ACCOUNT_EVENT_TYPES = new Set([
   "welcome",
   "finish_joining_1h",
   "finish_joining_24h",
+  "finish_joining_close",
 ]);
 
 export function isPaidProfile(profile) {
@@ -52,11 +61,20 @@ export function quizDripAnchorMs({ leadCreatedAt, quizRangesAt, now }) {
   return null;
 }
 
+export function quizLastSalesDue({ ageMs, now } = {}) {
+  const age = Number(ageMs);
+  if (!Number.isFinite(age) || age < 0) return false;
+  if (Number.isFinite(now) && isOnOrAfterDoorsClosePt(now)) return false;
+  if (age >= QUIZ_LAST_MIN_AGE_MS) return true;
+  if (Number.isFinite(now) && isLastUnpaidSalesDayPt(now)) return true;
+  return false;
+}
+
 /**
  * Prefer the latest due step (same pattern as finish-joining).
- * Missed earlier steps are skipped so a late cron does not dump 2+7 at once.
+ * Missed earlier steps are skipped so a late cron does not dump mid+last at once.
  */
-export function pickDueQuizDripStep({ ageMs, sentTypes, segment }) {
+export function pickDueQuizDripStep({ ageMs, sentTypes, segment, now } = {}) {
   const sent = sentTypes instanceof Set ? sentTypes : new Set(sentTypes || []);
   const seg = String(segment || "");
   const age = Number(ageMs);
@@ -74,10 +92,11 @@ export function pickDueQuizDripStep({ ageMs, sentTypes, segment }) {
 
   if (!QUIZ_SALES_SEGMENTS.has(seg)) return null;
 
-  if (age >= 7 * DAY_MS && !sent.has(QUIZ_DRIP_7D)) return QUIZ_DRIP_7D;
+  const lastDue = quizLastSalesDue({ ageMs: age, now });
+  if (lastDue && !sent.has(QUIZ_DRIP_7D)) return QUIZ_DRIP_7D;
   if (
     age >= 2 * DAY_MS
-    && age < 7 * DAY_MS
+    && !lastDue
     && !sent.has(QUIZ_DRIP_2D)
     && !sent.has(QUIZ_DRIP_7D)
   ) {
@@ -102,7 +121,11 @@ export function decideQuizDripAction({
   if (sent.has("welcome")) return { action: "skip", reason: "paid" };
   // Track B: any profiles row means finish-joining owns this email.
   if (profile) return { action: "skip", reason: "has_profile" };
-  if (sent.has("finish_joining_1h") || sent.has("finish_joining_24h")) {
+  if (
+    sent.has("finish_joining_1h")
+    || sent.has("finish_joining_24h")
+    || sent.has("finish_joining_close")
+  ) {
     return { action: "skip", reason: "has_profile" };
   }
   if (segment === "waitlist_plantbased") {
@@ -117,7 +140,7 @@ export function decideQuizDripAction({
   if (anchor == null) return { action: "skip", reason: "no_anchor" };
 
   const ageMs = now - anchor;
-  const step = pickDueQuizDripStep({ ageMs, sentTypes: sent, segment });
+  const step = pickDueQuizDripStep({ ageMs, sentTypes: sent, segment, now });
   if (!step) return { action: "skip", reason: "not_due" };
   if (sent.has(step)) return { action: "skip", reason: "already_sent" };
 
