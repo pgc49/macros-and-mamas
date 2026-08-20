@@ -36,8 +36,9 @@ describe("quiz ranges email", () => {
   it("includes the offer unlock and two CTAs", () => {
     assert.match(body, /unlocked the \$249 early rate/);
     assert.match(body, /\$50 off \$299/);
-    assert.match(body, /capped at 50 mamas/);
-    assert.match(body, /doors close Aug 27/);
+    assert.doesNotMatch(body, /capped at 50/);
+    assert.match(body, /The group starts Monday, Aug 31/);
+    assert.match(body, /Doors close Aug 27 so I can hand-build/);
     const lockButtons = withBottom.match(/Lock my spot · \$249/g) || [];
     const finishButtons = withBottom.match(/Finish signing up, lock in your spot/g) || [];
     assert.equal(lockButtons.length, 1);

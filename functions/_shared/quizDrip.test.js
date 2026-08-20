@@ -4,6 +4,7 @@ import {
   DAY_MS,
   QUIZ_DRIP_2D,
   QUIZ_DRIP_7D,
+  QUIZ_LAST_MIN_AGE_MS,
   QUIZ_PREGNANCY_NOTE,
   decideQuizDripAction,
   indexEmailEvents,
@@ -11,6 +12,7 @@ import {
   pickDueQuizDripStep,
   planQuizLeadSends,
   quizDripAnchorMs,
+  quizLastSalesDue,
 } from "./quizDrip.mjs";
 import {
   buildPregnancyNoteBody,
@@ -56,25 +58,45 @@ describe("pickDueQuizDripStep timing", () => {
     })).toBeNull();
   });
 
-  it("sends the Callie note after 2 days and before day 7", () => {
+  it("sends the Callie note after 2 days and before the last step", () => {
     expect(pickDueQuizDripStep({
       ageMs: 2 * DAY_MS,
       sentTypes: new Set(),
       segment: "main",
     })).toBe(QUIZ_DRIP_2D);
     expect(pickDueQuizDripStep({
-      ageMs: 6.9 * DAY_MS,
+      ageMs: 5.9 * DAY_MS,
       sentTypes: new Set(),
       segment: "early_pp_nurture",
     })).toBe(QUIZ_DRIP_2D);
   });
 
-  it("sends day 7 after 7 days", () => {
+  it("sends the last sales email at +6 days", () => {
+    expect(QUIZ_LAST_MIN_AGE_MS).toBe(6 * DAY_MS);
     expect(pickDueQuizDripStep({
-      ageMs: 7 * DAY_MS,
+      ageMs: 6 * DAY_MS,
       sentTypes: new Set([QUIZ_DRIP_2D]),
       segment: "main",
     })).toBe(QUIZ_DRIP_7D);
+  });
+
+  it("makes last due on Aug 26 PT even before +6 days, and never on Aug 27 PT", () => {
+    const aug26 = Date.parse("2026-08-26T18:00:00.000-07:00");
+    const aug27 = Date.parse("2026-08-27T00:30:00.000-07:00");
+    expect(quizLastSalesDue({ ageMs: 5 * DAY_MS, now: aug26 })).toBe(true);
+    expect(pickDueQuizDripStep({
+      ageMs: 2 * DAY_MS,
+      sentTypes: new Set(),
+      segment: "main",
+      now: aug26,
+    })).toBe(QUIZ_DRIP_7D);
+    expect(quizLastSalesDue({ ageMs: 7 * DAY_MS, now: aug27 })).toBe(false);
+    expect(pickDueQuizDripStep({
+      ageMs: 7 * DAY_MS,
+      sentTypes: new Set(),
+      segment: "main",
+      now: aug27,
+    })).toBe(QUIZ_DRIP_2D);
   });
 
   it("skips a missed earlier step so a late cron does not dump 2+7", () => {
@@ -215,7 +237,9 @@ describe("quiz drip copy", () => {
     const html = buildQuizDrip2Body();
     expect(html).toMatch(/weekly check-in/i);
     expect(html).not.toMatch(/Protein:/);
-    expect(html).not.toMatch(/\$249/);
+    expect(html).toContain("Doors close Aug 27");
+    expect(html).toContain("Monday, Aug 31");
+    expect(html).toContain("$249");
     expect(html).not.toMatch(/—/);
     expect(quizDripSubject(QUIZ_DRIP_2D, "Dolly")).toBe("Dolly, the numbers are the easy part");
   });
@@ -224,9 +248,10 @@ describe("quiz drip copy", () => {
     const html = buildQuizDrip7Body({
       joinUrl: "https://www.macrosandmamas.com/join?from=quiz&email=x",
     });
-    expect(html).toContain("Last note from me on this");
+    expect(html).toContain("Last note from me on this. Doors close Aug 27. We start Monday, Aug 31.");
     expect(html).toContain(DOORS_CLOSE);
     expect(html).toContain(COHORT_SHORT);
+    expect(html).not.toMatch(/capped at 50/);
     expect(html).toContain(`$${EARLY_PRICE}`);
     expect(quizDripSubject(QUIZ_DRIP_7D, "Dolly")).toBe("Dolly, still want in?");
   });

@@ -8,23 +8,71 @@
 
 export const EMAIL_CATALOG = [
   {
-    id: "finish_joining",
+    id: "finish_joining_1h",
     number: 1,
-    name: "Finish joining",
+    name: "Finish joining · +1h",
     status: "live",
-    trigger: "Track B — account created, still unpaid. +1 hour, again +24 hours, then stop (hourly cron). Quiz-only leads with no profiles row never get this; they stay on the quiz drip until they create an account.",
+    trigger: "Track B — account created, still unpaid. +1 hour (hourly cron). Quiz-only leads with no profiles row never get this; they stay on the quiz drip until they create an account. $249 line only if this email has a quiz unlock. Prefills /join?email=. Unsubscribe footer + List-Unsubscribe.",
     subject: "Your spot's waiting, mama",
     audience: "Client",
-    cta: "Finish signing up — lock in your spot",
+    cta: "Finish signing up, lock in your spot",
     bodyPreview: `Hi [First name],
 
-You started joining Macros and Mamas — I'm glad you're here.
+You started joining Macros and Mamas. I'm glad you're here.
 
-When you're ready: personalized macros I build myself, our moms WhatsApp group, and a Monday voice note to keep it simple. Finish signing up below to lock in your spot.
+When you're ready: macros I build myself, our group Mon through Fri, and a short Monday voice note to keep the week simple. We start Aug 31. Doors close Aug 27.
+
+Finish signing up below to lock in your spot.
+
+Your quiz rate is $249.
 
 Callie
 
-(24h follow-up nudges again without a dollar amount — checkout shows the right rate. Reply to stop anytime.)`,
+(You're getting this because you started an account. Reply anytime. Unsubscribe in the footer. $249 line only when quiz unlock is true.)`,
+  },
+  {
+    id: "finish_joining_24h",
+    number: "1b",
+    name: "Finish joining · +24h",
+    status: "live",
+    trigger: "Track B — unpaid profile, +24 hours after account create (hourly cron). Different body from +1h. Same $249 rule, prefilled join URL, and unsubscribe footer. Prefer this over +1h if both are due.",
+    subject: "Your spot's waiting, mama",
+    audience: "Client",
+    cta: "Finish signing up, lock in your spot",
+    bodyPreview: `Hi [First name],
+
+Just checking in. I'd still love to have you in this group.
+
+Inside: macros built by me, not a calculator. Our group Mon through Fri. A short Monday voice note to set the week.
+
+We start Aug 31. Doors close Aug 27 so I can hand-build ranges before day one. Finish signing up when you're ready.
+
+Your quiz rate is $249.
+
+Callie
+
+(You're getting this because you started an account. Reply anytime. Unsubscribe in the footer. $249 line only when quiz unlock is true.)`,
+  },
+  {
+    id: "finish_joining_close",
+    number: "1c",
+    name: "Finish joining · last note",
+    status: "live",
+    trigger: "Track B last unpaid note — one send on Wed Aug 26 PT for unpaid profiles who have not paid and have not already received this type. Then stop. Never sent on or after Aug 27 PT. Idempotent via email_events. Prefer this over +1h / +24h if both are due.",
+    subject: "[First name], last note from me",
+    audience: "Client",
+    cta: "Finish signing up, lock in your spot",
+    bodyPreview: `Hi [First name],
+
+Last note from me. Doors close Aug 27. We start Monday.
+
+If you still want in, finish signing up. If something's unclear, reply. I read everything.
+
+Your quiz rate is $249.
+
+Callie
+
+(Safe first name, fallback Mama. $249 line only when quiz unlock is true. Prefills /join?email=. Unsubscribe in the footer.)`,
   },
   {
     id: "welcome",
@@ -182,7 +230,7 @@ Callie
 Here are your bands, built the same way Callie builds them for the program:
 • Protein / Carbs / Fat / Calories
 
-Your quiz also unlocked the $249 early rate ($50 off $299). The Aug 31 group is capped at 50 mamas, and doors close Aug 27 so Callie can hand-build every set of ranges before day one.
+Your quiz also unlocked the $249 early rate ($50 off $299). The group starts Monday, Aug 31. Doors close Aug 27 so I can hand-build every set of ranges before day one.
 
 [Lock my spot · $249]
 
@@ -209,7 +257,9 @@ The ranges I sent you are a starting point. They're not the whole program.
 
 What we actually do together is the weekly check-in. Milk changes, sleep falls apart, appetite swings. That's when the numbers need a person, not a calculator.
 
-If you want that, finish signing up and lock in your spot. Same email so your ranges stay attached.
+This group starts Monday, Aug 31. Doors close Aug 27 so I can build everyone's ranges first.
+
+If you want that, finish signing up. Same email so your ranges stay attached. Your quiz rate is $249.
 
 Callie
 
@@ -218,23 +268,25 @@ Callie
   {
     id: "quiz_drip_7d",
     number: "Q7",
-    name: "Quiz drip · day 7",
+    name: "Quiz drip · last",
     status: "live",
-    trigger: "Track A last unpaid quiz-lead sales nudge — +7 days after quiz_ranges. Then stop. Never sent if a profiles row exists.",
+    trigger: "Track A last unpaid quiz-lead sales nudge — due on Wed Aug 26 PT, or at +6 days after quiz_ranges, whichever comes first. Never sent on or after Aug 27 PT. Prefer last over +2d if both are due. Then stop. Never sent if a profiles row exists.",
     subject: "[First name], still want in?",
     audience: "Lead",
     cta: "Finish signing up, lock in your spot",
     bodyPreview: `Hi [First name],
 
-Last note from me on this. If you still want in, finish signing up and lock in your spot. If you have a question, reply. I read everything.
+Last note from me on this. Doors close Aug 27. We start Monday, Aug 31.
 
-Your quiz also unlocked the $249 early rate ($50 off $299). The Aug 31 group is capped at 50 mamas, and doors close Aug 27 so Callie can hand-build every set of ranges before day one.
+If you still want in, finish signing up and lock in your spot. If you have a question, reply. I read everything.
 
-[Finish signing up, lock in your spot]
+Your quiz also unlocked the $249 early rate ($50 off $299). The group starts Monday, Aug 31. Doors close Aug 27 so I can hand-build every set of ranges before day one.
+
+[Lock my spot · $249]
 
 Callie
 
-(Reply anytime. Unsubscribe in the footer. Door / offer dates are not hardcoded here; they reuse the first ranges email helpers.)`,
+(Reply anytime. Unsubscribe in the footer. Offer block reuses the first ranges email helper.)`,
   },
   {
     id: "quiz_pregnancy_note",
@@ -319,8 +371,8 @@ export const EMAIL_JOURNEYS = [
     id: "unpaid",
     title: "Signed up, no payment",
     track: "Track B",
-    note: "+1 hour and +24 hours use the same Finish joining template.",
-    ids: ["finish_joining"],
+    note: "+1 hour, +24 hours, then one last note on Wed Aug 26 PT. Tracks stay separate from the quiz drip.",
+    ids: ["finish_joining_1h", "finish_joining_24h", "finish_joining_close"],
   },
   {
     id: "paid",
@@ -361,6 +413,7 @@ export function catalogNumberLabel(row) {
 export const EMAIL_TYPE_LABELS = {
   finish_joining_1h: "Finish joining (+1h)",
   finish_joining_24h: "Finish joining (+24h)",
+  finish_joining_close: "Finish joining (last note)",
   welcome: "Welcome",
   intake_reminder_24h: "Intake reminder (+24h)",
   intake_reminder_72h: "Intake reminder (+72h)",
@@ -370,7 +423,7 @@ export const EMAIL_TYPE_LABELS = {
   cohort_open: "Cohort open (waitlist)",
   quiz_ranges: "Quiz ranges",
   quiz_drip_2d: "Quiz drip (+2d)",
-  quiz_drip_7d: "Quiz drip (+7d)",
+  quiz_drip_7d: "Quiz drip (last)",
   quiz_pregnancy_note: "Quiz pregnancy note (+3d)",
   callie_payment: "Callie: new payment",
   callie_intake: "Callie: intake ready",

@@ -6,6 +6,9 @@
  * Subjects stay distinct from the first ranges email so Gmail does not thread.
  */
 import {
+  COHORT_SHORT,
+  DOORS_CLOSE,
+  EARLY_PRICE,
   RANGES_EMAIL_BOTTOM_CTA,
   rangesOfferBlock,
 } from "./rangesEmail.mjs";
@@ -39,14 +42,16 @@ export function buildQuizDrip2Body() {
   return `
 <p>The ranges I sent you are a starting point. They're not the whole program.</p>
 <p>What we actually do together is the weekly check-in. Milk changes, sleep falls apart, appetite swings. That's when the numbers need a person, not a calculator.</p>
-<p>If you want that, finish signing up and lock in your spot. Same email so your ranges stay attached.</p>
+<p>This group starts Monday, ${COHORT_SHORT}. Doors close ${DOORS_CLOSE} so I can build everyone's ranges first.</p>
+<p>If you want that, finish signing up. Same email so your ranges stay attached. Your quiz rate is $${EARLY_PRICE}.</p>
 <p>Callie</p>
 ${QUIZ_FOOTNOTE}`;
 }
 
 export function buildQuizDrip7Body({ joinUrl } = {}) {
   return `
-<p>Last note from me on this. If you still want in, finish signing up and lock in your spot. If you have a question, reply. I read everything.</p>
+<p>Last note from me on this. Doors close ${DOORS_CLOSE}. We start Monday, ${COHORT_SHORT}.</p>
+<p>If you still want in, finish signing up and lock in your spot. If you have a question, reply. I read everything.</p>
 ${rangesOfferBlock(joinUrl)}
 <p>Callie</p>
 ${QUIZ_FOOTNOTE}`;

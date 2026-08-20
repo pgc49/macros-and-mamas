@@ -112,6 +112,46 @@ describe("runQuizLeadDrip", () => {
     expect(sent.errors).toBe(0);
   });
 
+  it("plans the last quiz email on Aug 26 PT for a lead younger than +6 days", async () => {
+    const now = Date.parse("2026-08-26T18:00:00.000-07:00");
+    const rangesAt = new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString();
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      const href = String(url);
+      if (href.includes("/marketing_leads")) {
+        return restOk([{
+          email: "last@example.com",
+          first_name: "Last",
+          segment: "main",
+          created_at: rangesAt,
+        }]);
+      }
+      if (href.includes("/email_events")) {
+        return restOk([{
+          to_email: "last@example.com",
+          email_type: "quiz_ranges",
+          created_at: rangesAt,
+          status: "sent",
+        }]);
+      }
+      return restOk([]);
+    }));
+
+    const sent = await runQuizLeadDrip({
+      env,
+      base: env.SUPABASE_URL,
+      key: env.SUPABASE_SERVICE_ROLE_KEY,
+      now,
+      profiles: [],
+    });
+
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(mocks.send.mock.calls[0][1]).toEqual(expect.objectContaining({
+      email: "last@example.com",
+      step: "quiz_drip_7d",
+    }));
+    expect(sent.quiz_drip_7d).toBe(1);
+  });
+
   it("does not send when the unsubscribe list cannot be read", async () => {
     mocks.unsub.mockResolvedValue({ ok: false, emails: new Set() });
     const fetchMock = vi.fn();

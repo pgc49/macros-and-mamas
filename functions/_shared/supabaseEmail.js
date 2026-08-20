@@ -6,6 +6,9 @@
 
 import { loadReferredByAttribution } from "./referrals.js";
 import { formatReferredBy } from "./referredBy.js";
+import { buildUnsubscribeUrl, isUnsubscribed } from "./emailUnsubscribe.mjs";
+import { buildFinishJoiningPayload } from "./finishJoiningEmail.mjs";
+import { finishJoiningEmailType } from "./finishJoining.mjs";
 
 export async function invokeEdgeFunction(env, slug, payload) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
@@ -81,7 +84,7 @@ export async function logEmailEvent(env, {
 export { hasEmailEventByEmail } from "../../marketing/src/lib/emailEvents.mjs";
 
 /** True if this profile already has a sent/logged email of this type (idempotency). */
-export async function hasEmailEvent(env, profileId, emailType) {
+export async function hasEmailEvent(env, profileId, emailType, { sentOnly = false } = {}) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key || !profileId || !emailType) return false;
@@ -90,6 +93,7 @@ export async function hasEmailEvent(env, profileId, emailType) {
       `${base}/rest/v1/email_events`
       + `?profile_id=eq.${encodeURIComponent(profileId)}`
       + `&email_type=eq.${encodeURIComponent(emailType)}`
+      + (sentOnly ? "&status=eq.sent" : "")
       + `&select=id&limit=1`;
     const resp = await fetch(url, {
       headers: { apikey: key, authorization: `Bearer ${key}` },
@@ -273,21 +277,54 @@ export async function sendCohortOpenEmail(env, { email, name, waitlistId = null,
   return result;
 }
 
-export async function sendFinishJoiningEmail(env, { email, name, userId, variant }) {
+export async function sendFinishJoiningEmail(env, {
+  email,
+  name,
+  userId,
+  variant,
+  quizUnlock = false,
+} = {}) {
   if (!email) return { ok: false };
-  const subject = "Your spot's waiting, mama";
-  const emailType = variant === "24h" ? "finish_joining_24h" : "finish_joining_1h";
+  const emailType = finishJoiningEmailType(variant);
+  if (await isUnsubscribed(env, email)) {
+    return { ok: false, skipped: "unsubscribed" };
+  }
+  if (await hasEmailEvent(env, userId, emailType, { sentOnly: true })) {
+    return { ok: false, skipped: "already_sent" };
+  }
+
+  const unsubscribeUrl = await buildUnsubscribeUrl(env, email);
+  const payload = buildFinishJoiningPayload({
+    variant,
+    name,
+    email,
+    quizUnlock,
+  });
   const result = await invokeEdgeFunction(env, "finish-joining", {
-    email, name, userId, variant: variant === "24h" ? "24h" : "1h",
+    email,
+    name,
+    userId,
+    variant: payload.variant,
+    subject: payload.subject,
+    header: payload.header,
+    body: payload.body,
+    cta_text: payload.cta_text,
+    cta_url: payload.cta_url,
+    unsubscribe_url: unsubscribeUrl || undefined,
+    quizUnlock: Boolean(quizUnlock),
   });
   await logEmailEvent(env, {
     profileId: userId,
     emailType,
     toEmail: email,
-    subject,
+    subject: payload.subject,
     resendId: resendIdFrom(result),
     status: result.ok ? "sent" : "failed",
-    meta: { slug: "finish-joining", variant },
+    meta: {
+      slug: "finish-joining",
+      variant: payload.variant,
+      quiz_unlock: Boolean(quizUnlock),
+    },
   });
   return result;
 }

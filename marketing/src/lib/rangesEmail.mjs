@@ -37,7 +37,7 @@ export function rangesOfferBlock(joinUrl, {
   cohortShort = COHORT_SHORT,
 } = {}) {
   const save = Math.max(0, Number(fullPrice) - Number(earlyPrice));
-  return `<p><strong>Your quiz also unlocked the $${earlyPrice} early rate</strong> ($${save} off $${fullPrice}). The ${cohortShort} group is capped at 50 mamas, and doors close ${doorsClose} so Callie can hand-build every set of ranges before day one.</p>
+  return `<p><strong>Your quiz also unlocked the $${earlyPrice} early rate</strong> ($${save} off $${fullPrice}). The group starts Monday, ${cohortShort}. Doors close ${doorsClose} so I can hand-build every set of ranges before day one.</p>
 ${emailCtaButton(`Lock my spot · $${earlyPrice}`, joinUrl)}`;
 }
 

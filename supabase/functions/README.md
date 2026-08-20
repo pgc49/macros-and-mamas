@@ -9,7 +9,7 @@ Stripe keys stay on **Cloudflare** — do not add them here.
 
 | Slug | Email | Trigger |
 |------|--------|---------|
-| `finish-joining` | #1 Finish joining | Cloudflare `/api/email-cron` (1h / 24h) |
+| `finish-joining` | #1 Finish joining | Cloudflare `/api/email-cron` (1h / 24h / Aug 26 close) |
 | `welcome-email` | #2 Welcome | Cloudflare `stripe-webhook` after paid |
 | `intake-reminder` | #3 Intake reminder | Cloudflare `/api/email-cron` (24h / 72h) |
 | `intake-received` | #4 Intake received | Cloudflare `/api/intake-submitted` |
