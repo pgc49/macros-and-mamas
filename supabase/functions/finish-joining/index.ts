@@ -110,6 +110,7 @@ serve(async (req) => {
       subject,
       html: renderEmail({
         header,
+        body,
         cta_text: ctaText,
         cta_url: joinUrl,
         unsubscribe_url: unsubscribeUrl || undefined,
