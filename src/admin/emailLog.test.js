@@ -103,4 +103,13 @@ describe("leadMailtoHref", () => {
     expect(leadMailtoHref("  ")).toBe("");
     expect(leadMailtoHref("not-an-email")).toBe("");
   });
+
+  it("can prefill a personal subject and body", () => {
+    expect(leadMailtoHref("ellie@example.com", {
+      subject: "Quick note from Callie",
+      body: "Hi Ellie,\n\nCallie",
+    })).toBe(
+      "mailto:ellie@example.com?subject=Quick%20note%20from%20Callie&body=Hi%20Ellie%2C%0A%0ACallie",
+    );
+  });
 });

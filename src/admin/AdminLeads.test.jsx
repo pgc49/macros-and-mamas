@@ -24,6 +24,7 @@ vi.mock("../db/db", () => ({
 }));
 
 import { AdminLeads } from "./AdminLeads.jsx";
+import { draftLeadPersonalNote, personalNoteMailtoHref } from "./leadPersonalNote.js";
 
 const MEGAN = "11111111-1111-4111-8111-111111111111";
 
@@ -38,9 +39,21 @@ const rows = [
     fbp: "fb.1.1.xyz",
     utm_source: "meta",
     utm_medium: "cpc",
+    utm_campaign: "aug_founding",
+    utm_content: "story_1",
+    landing_path: "/quiz",
+    months_postpartum: "3_12_months",
+    feeding_status: "exclusive",
+    goal: "lose_sustainable",
+    activity_level: "moderate",
+    height_in: 64,
+    current_weight_lbs: 160,
+    goal_weight_lbs: 150,
     referred_by: null,
     flags: ["vegan"],
     segment: "waitlist_plantbased",
+    needs_review: true,
+    review_reason: "carbs_under_100",
     protein_low_g: 90,
     protein_high_g: 110,
     carbs_low_g: 150,
@@ -66,7 +79,17 @@ const rows = [
     fbp: null,
     fbc: null,
     utm_source: null,
+    utm_medium: null,
+    utm_campaign: null,
+    utm_content: null,
+    landing_path: null,
     referred_by: "Sarah",
+    profileCreatedAt: "2026-08-18T17:00:00.000Z",
+    profilePaidAt: "2026-08-18T18:00:00.000Z",
+    phone: "555-0199",
+    profileStatus: "active",
+    macrosExists: true,
+    macrosApproved: true,
     flags: [],
     segment: "main",
     protein_low_g: 110,
@@ -166,7 +189,7 @@ describe("AdminLeads", () => {
     });
     expect(screen.getByText("ellie@example.com")).toBeTruthy();
     expect(screen.getByText(/Meta ad · Quiz only/)).toBeTruthy();
-    expect(screen.getByText("Plant-based · Vegan")).toBeTruthy();
+    expect(screen.getByText("Plant-based · Vegan · Needs review")).toBeTruthy();
     expect(screen.getByText("90–110P · 150–190C · 45–60F · 1700–1900 cal")).toBeTruthy();
     expect(screen.getByText("Megan Wells")).toBeTruthy();
     expect(screen.getByText(/Referral · Sarah · Paid/)).toBeTruthy();
@@ -213,6 +236,9 @@ describe("AdminLeads", () => {
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
       "mailto:megan@example.com?subject=Macros%20and%20Mamas",
     );
+    expect(screen.getByText("Personal note")).toBeTruthy();
+    expect(screen.getByText("She's already in — no outreach draft.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Copy personal note" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open client card" }));
     expect(onOpenMama).toHaveBeenCalledWith(MEGAN);
 
@@ -243,7 +269,7 @@ describe("AdminLeads", () => {
     expect(screen.getByText("the numbers are the easy part")).toBeTruthy();
     expect(screen.getByText(/Failed/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
-      "mailto:ellie@example.com?subject=Macros%20and%20Mamas",
+      personalNoteMailtoHref("ellie@example.com", draftLeadPersonalNote(rows[0])),
     );
     expect(screen.queryByText("No emails sent yet.")).toBeNull();
   });
@@ -362,5 +388,285 @@ describe("AdminLeads", () => {
       expect(screen.getByText("No emails sent yet.")).toBeTruthy();
     });
     expect(dbMock.loadEmailEventsByEmail).toHaveBeenCalledWith("ellie@example.com");
+  });
+
+  it("shows quiz, landing, and campaign on quiz-only lead detail", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeTruthy();
+    });
+    expect(screen.getByText("First quiz")).toBeTruthy();
+    expect(screen.queryByText("Quiz completed")).toBeNull();
+    expect(screen.queryByText(/last quiz|last visit/i)).toBeNull();
+    expect(screen.getByText("Aug 19, 11:30 AM PT")).toBeTruthy();
+    expect(screen.getByText("Landing")).toBeTruthy();
+    expect(screen.getByText("/quiz")).toBeTruthy();
+    expect(screen.getByText("Campaign")).toBeTruthy();
+    expect(screen.getByText("meta / cpc / aug_founding / story_1")).toBeTruthy();
+    expect(screen.getByText("Source")).toBeTruthy();
+    expect(screen.getAllByText("Meta ad").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("Account created")).toBeNull();
+    expect(screen.queryByText("Paid")).toBeNull();
+    expect(screen.queryByText(/0 visits/i)).toBeNull();
+    expect(screen.queryByText(/fb\.1\.1/)).toBeNull();
+  });
+
+  it("shows account and paid timestamps on a paid lead", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Megan Wells")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Megan Wells"));
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeTruthy();
+    });
+    expect(screen.getByText("First quiz")).toBeTruthy();
+    expect(screen.getByText("Account created")).toBeTruthy();
+    expect(screen.getByText("Aug 18, 10:00 AM PT")).toBeTruthy();
+    expect(screen.getByText("Paid")).toBeTruthy();
+    expect(screen.getByText("Aug 18, 11:00 AM PT")).toBeTruthy();
+    expect(screen.getByText("Referral · Sarah")).toBeTruthy();
+    expect(screen.getByText("Phone")).toBeTruthy();
+    expect(screen.getByText("555-0199")).toBeTruthy();
+    expect(screen.getByText("Intake")).toBeTruthy();
+    expect(screen.getByText("Approved")).toBeTruthy();
+  });
+
+  it("omits missing landing path and campaign UTMs on lead detail", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Megan Wells")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Megan Wells"));
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeTruthy();
+    });
+    expect(screen.queryByText("Landing")).toBeNull();
+    expect(screen.queryByText("Campaign")).toBeNull();
+    expect(screen.queryByText(/utm_/)).toBeNull();
+    expect(screen.queryByText("Waitlist")).toBeNull();
+    expect(screen.queryByText("Eligibility")).toBeNull();
+  });
+
+  it("shows waitlist, eligibility, and quiz vs signup campaign when those rows exist", async () => {
+    loadQuizLeads.mockResolvedValue([
+      {
+        ...rows[0],
+        email: "ivy@example.com",
+        first_name: "Ivy",
+        last_name: "Lane",
+        utm_source: "meta",
+        utm_medium: "cpc",
+        utm_campaign: "aug_founding",
+        utm_content: null,
+        landing_path: "/quiz",
+        profileId: "ivy-id",
+        funnelStatus: "signed_up_unpaid",
+        profileCreatedAt: "2026-08-18T17:00:00.000Z",
+        profileAttribution: {
+          utm_source: "google",
+          utm_medium: "cpc",
+          utm_campaign: "brand",
+          landing_path: "/join",
+        },
+        phone: "555-0144",
+        cohortWaitlist: {
+          created_at: "2026-08-10T19:00:00.000Z",
+          converted_at: "2026-08-18T17:00:00.000Z",
+        },
+        eligibilityWaitlist: {
+          reason: "pregnant",
+          created_at: "2026-08-09T18:00:00.000Z",
+        },
+        macrosExists: true,
+        macrosApproved: false,
+      },
+    ]);
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ivy Lane")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Ivy Lane"));
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeTruthy();
+    });
+    expect(screen.getByText("First quiz")).toBeTruthy();
+    expect(screen.getByText("555-0144")).toBeTruthy();
+    expect(screen.getByText("quiz meta / cpc / aug_founding · signup google / cpc / brand")).toBeTruthy();
+    expect(screen.getByText("Aug 10, 12:00 PM PT · converted")).toBeTruthy();
+    expect(screen.getByText("Pregnant · Aug 9, 11:00 AM PT")).toBeTruthy();
+    expect(screen.getByText("Submitted")).toBeTruthy();
+    expect(screen.getByText("Signed up, unpaid")).toBeTruthy();
+    expect(screen.queryByText(/last quiz|last visit|0 visits|checkout-started|sentry/i)).toBeNull();
+  });
+
+  it("shows quiz answers and computed ranges on lead detail", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByText("Answers")).toBeTruthy();
+    });
+    expect(screen.getByText("Results")).toBeTruthy();
+    expect(screen.getByText("Where are you right now?")).toBeTruthy();
+    expect(screen.getByText("3–12 months")).toBeTruthy();
+    expect(screen.getByText("Are you feeding your baby breast milk right now?")).toBeTruthy();
+    expect(screen.getByText("Exclusive breast milk")).toBeTruthy();
+    expect(screen.getByText("Height")).toBeTruthy();
+    expect(screen.getByText("5 ft 4 in")).toBeTruthy();
+    expect(screen.getByText("Current weight (lb)")).toBeTruthy();
+    expect(screen.getByText("160 lb")).toBeTruthy();
+    expect(screen.getByText("What weight do you feel like yourself at?")).toBeTruthy();
+    expect(screen.getByText("150 lb")).toBeTruthy();
+    expect(screen.getByText("What are you actually after?")).toBeTruthy();
+    expect(screen.getByText("Lose fat — keep muscle and milk")).toBeTruthy();
+    expect(screen.getByText("How much are you moving right now?")).toBeTruthy();
+    expect(screen.getByText("Moderate movement")).toBeTruthy();
+    expect(screen.getByText("Anything we should know?")).toBeTruthy();
+    expect(screen.getByText("Fully vegan")).toBeTruthy();
+    expect(screen.getByText("Ranges")).toBeTruthy();
+    expect(screen.getByText("90–110P · 150–190C · 45–60F · 1700–1900 cal")).toBeTruthy();
+    expect(screen.getByText("Plant-based · Vegan · Needs review")).toBeTruthy();
+    expect(screen.getByText("Carbs under 100")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Email" })).toBeTruthy();
+    expect(screen.getByText("Activity")).toBeTruthy();
+    expect(screen.queryByText("Quiz results")).toBeNull();
+    expect(screen.getByText("Personal note")).toBeTruthy();
+    expect(screen.getByText("Quick note from Callie")).toBeTruthy();
+    expect(screen.getByText(/fully vegan/)).toBeTruthy();
+    expect(screen.getByText(/may not be the right fit/)).toBeTruthy();
+    expect(screen.queryByText(/Doors close August 27/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Copy personal note" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
+      personalNoteMailtoHref("ellie@example.com", draftLeadPersonalNote(rows[0])),
+    );
+  });
+
+  it("omits blank quiz answers and results on a sparse lead", async () => {
+    loadQuizLeads.mockResolvedValue([
+      {
+        id: "lead-sparse",
+        email: "sparse@example.com",
+        first_name: "Sam",
+        last_name: "Bare",
+        created_at: "2026-08-19T18:30:00.000Z",
+        flags: [],
+        segment: "main",
+        landing_path: "/quiz",
+        utm_source: "meta",
+        utm_medium: "cpc",
+        protein_low_g: null,
+        protein_high_g: null,
+        carbs_low_g: null,
+        carbs_high_g: null,
+        fat_low_g: null,
+        fat_high_g: null,
+        calories_low: null,
+        calories_high: null,
+        months_postpartum: "",
+        feeding_status: null,
+        goal: null,
+        activity_level: null,
+        height_in: null,
+        current_weight_lbs: null,
+        goal_weight_lbs: null,
+        needs_review: false,
+        profileId: null,
+        funnelStatus: "quiz_only",
+        sourceKind: "meta_ad",
+        isMeta: true,
+      },
+    ]);
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Sam Bare")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Sam Bare"));
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeTruthy();
+    });
+    expect(screen.queryByText("Answers")).toBeNull();
+    expect(screen.queryByText("Results")).toBeNull();
+    expect(screen.queryByText("Quiz results")).toBeNull();
+    expect(screen.queryByText("Ranges")).toBeNull();
+    expect(screen.queryByText("Where are you right now?")).toBeNull();
+    expect(screen.queryByText("Height")).toBeNull();
+    expect(screen.queryByText("Current weight (lb)")).toBeNull();
+    expect(screen.queryByText("Review")).toBeNull();
+    expect(screen.getByText("Landing")).toBeTruthy();
+    expect(screen.getByText("/quiz")).toBeTruthy();
+  });
+
+  it("shows a copy-ready invite note and prefills mailto for an eligible unpaid lead", async () => {
+    const nora = {
+      ...rows[0],
+      id: "lead-nora",
+      email: "nora@example.com",
+      first_name: "Nora",
+      last_name: "Lane",
+      months_postpartum: "0_3_months",
+      feeding_status: "exclusive",
+      flags: [],
+      segment: "early_pp_nurture",
+      needs_review: false,
+      review_reason: null,
+      funnelStatus: "quiz_only",
+      profileId: null,
+    };
+    loadQuizLeads.mockResolvedValue([nora]);
+    const draft = draftLeadPersonalNote(nora);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Nora Lane")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Nora Lane"));
+    await waitFor(() => {
+      expect(screen.getByText("Personal note")).toBeTruthy();
+    });
+    expect(screen.getByText("Subject")).toBeTruthy();
+    expect(screen.getByText("Quick note from Callie")).toBeTruthy();
+    expect(screen.getByText(/a lot of body and milk change at once/)).toBeTruthy();
+    expect(screen.getByText(/Doors close August 27/)).toBeTruthy();
+    expect(screen.getByText(/I'd love to have you join/)).toBeTruthy();
+    expect(screen.queryByText("She's already in — no outreach draft.")).toBeNull();
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
+      personalNoteMailtoHref("nora@example.com", draft),
+    );
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toContain("subject=");
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toContain("body=");
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy personal note" }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(draft.copyText);
+      expect(screen.getByRole("button", { name: "Personal note copied" })).toBeTruthy();
+    });
+    expect(draft.copyText).toMatch(/^Subject: Quick note from Callie/);
+    expect(draft.copyText).toContain(draft.body);
+  });
+
+  it("hides the join pitch on a paid lead", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Megan Wells")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Megan Wells"));
+    await waitFor(() => {
+      expect(screen.getByText("She's already in — no outreach draft.")).toBeTruthy();
+    });
+    expect(screen.queryByText("Quick note from Callie")).toBeNull();
+    expect(screen.queryByText(/Doors close August 27/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy personal note" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
+      "mailto:megan@example.com?subject=Macros%20and%20Mamas",
+    );
   });
 });

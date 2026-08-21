@@ -30,6 +30,7 @@ const LEAD_COLS = [
   "flags",
   "segment",
   "needs_review",
+  "review_reason",
   "protein_low_g",
   "protein_high_g",
   "carbs_low_g",
@@ -38,6 +39,12 @@ const LEAD_COLS = [
   "fat_high_g",
   "calories_low",
   "calories_high",
+  "goal",
+  "activity_level",
+  "height_in",
+  "current_weight_lbs",
+  "goal_weight_lbs",
+  "baby_birthday",
   "fbp",
   "fbc",
   "event_id",
@@ -49,9 +56,31 @@ const LEAD_COLS = [
   "referred_by",
 ].join(",");
 
-const PROFILE_COLS = "id, email, name, paid, paid_at, role, refunded, created_at";
+const PROFILE_COLS = [
+  "id",
+  "email",
+  "name",
+  "paid",
+  "paid_at",
+  "role",
+  "refunded",
+  "created_at",
+  "phone",
+  "status",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "landing_path",
+].join(",");
 
 const REFERRAL_COLS = "id, code, referred_email, referred_user_id, advocate_user_id, status, created_at";
+
+const COHORT_WAITLIST_COLS = "id, email, phone, cohort, converted_at, paid_at, created_at, profile_id";
+
+const ELIGIBILITY_WAITLIST_COLS = "id, email, reason, created_at, eligible_on, profile_id";
+
+const MACROS_COLS = "profile_id, approved";
 
 const REFERRAL_STATUS_RANK = { paid: 0, pending_payment: 1, refunded: 2 };
 
@@ -67,6 +96,56 @@ const FLAG_LABEL = {
   blood_sugar: "Blood sugar",
   thyroid: "Thyroid",
   c_section: "C-section",
+};
+
+/** Live quiz Q7 option copy — Answers block, not the short admin tag. */
+const QUIZ_FLAG_LABEL = {
+  vegetarian: "Vegetarian / pescatarian",
+  vegan: "Fully vegan",
+  blood_sugar: "Blood sugar concerns",
+  thyroid: "Thyroid",
+  c_section: "Recent C-section",
+  none: "None of these",
+};
+
+const MONTHS_PP_LABEL = {
+  still_pregnant: "Still pregnant",
+  "0_3_months": "0–3 months",
+  "3_12_months": "3–12 months",
+  "1_2_years": "1–2 years",
+  "2_plus_years": "2+ years",
+  not_postpartum: "Not postpartum",
+};
+
+const FEEDING_LABEL = {
+  exclusive: "Exclusive breast milk",
+  combination: "Combination feeding",
+  weaning: "Weaning",
+  not_feeding: "Not feeding breast milk",
+};
+
+const REVIEW_REASON_LABEL = {
+  incomplete_inputs: "Incomplete inputs",
+  goal_maintain: "Goal: maintain",
+  goal_gain: "Goal: gain",
+  thyroid: "Thyroid",
+  goal_bmi_under_19: "Goal BMI under 19",
+  goal_over_25pct_below_current: "Goal over 25% below current",
+  carbs_under_100: "Carbs under 100",
+};
+
+const GOAL_LABEL = {
+  lose_sustainable: "Lose fat — keep muscle and milk",
+  lose_efficient: "Lose fat — keep muscle and milk",
+  maintain: "Maintain where I am",
+  gain: "Gain / rebuild",
+};
+
+const ACTIVITY_LABEL = {
+  minimal: "Minimal / survival",
+  light: "Light walks",
+  moderate: "Moderate movement",
+  high: "Training consistently",
 };
 
 function nonempty(value) {
@@ -200,21 +279,99 @@ export function indexReferralsByEmail(referrals, profiles) {
   return out;
 }
 
-export function enrichQuizLeads(leads, profiles, referrals = []) {
+function indexNewestByEmail(rows) {
+  const grouped = new Map();
+  for (const row of rows || []) {
+    const key = normalizeLeadEmail(row?.email);
+    if (!key) continue;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(row);
+  }
+  const out = new Map();
+  for (const [key, list] of grouped) {
+    out.set(key, pickNewest(list));
+  }
+  return out;
+}
+
+function indexNewestByProfileId(rows) {
+  const grouped = new Map();
+  for (const row of rows || []) {
+    const id = row?.profile_id;
+    if (!id) continue;
+    if (!grouped.has(id)) grouped.set(id, []);
+    grouped.get(id).push(row);
+  }
+  const out = new Map();
+  for (const [key, list] of grouped) {
+    out.set(key, pickNewest(list));
+  }
+  return out;
+}
+
+function pickNewest(list) {
+  return [...(list || [])].sort((a, b) => (
+    String(b?.created_at || "").localeCompare(String(a?.created_at || ""))
+  ))[0] || null;
+}
+
+function pickRelatedRow(byEmail, byProfileId, email, profileId) {
+  const fromEmail = byEmail.get(normalizeLeadEmail(email)) || null;
+  const fromId = profileId ? byProfileId.get(profileId) || null : null;
+  if (fromEmail && fromId && fromEmail !== fromId) {
+    return pickNewest([fromEmail, fromId]);
+  }
+  return fromEmail || fromId;
+}
+
+function indexMacrosByProfileId(rows) {
+  const map = new Map();
+  for (const row of rows || []) {
+    if (row?.profile_id) map.set(row.profile_id, row);
+  }
+  return map;
+}
+
+export function enrichQuizLeads(leads, profiles, referrals = [], extras = {}) {
   const byEmail = indexProfilesByEmail(profiles);
   const referralByEmail = indexReferralsByEmail(referrals, profiles);
+  const cohortByEmail = indexNewestByEmail(extras.cohortWaitlist);
+  const cohortByProfileId = indexNewestByProfileId(extras.cohortWaitlist);
+  const eligibilityByEmail = indexNewestByEmail(extras.eligibilityWaitlist);
+  const eligibilityByProfileId = indexNewestByProfileId(extras.eligibilityWaitlist);
+  const macrosByProfileId = indexMacrosByProfileId(extras.macros);
   return (leads || []).map((lead) => {
     const profile = byEmail.get(normalizeLeadEmail(lead?.email)) || null;
     const referral = referralByEmail.get(normalizeLeadEmail(lead?.email)) || null;
+    const profileId = profile?.id || null;
+    const cohort = pickRelatedRow(cohortByEmail, cohortByProfileId, lead?.email, profileId);
+    const eligibility = pickRelatedRow(eligibilityByEmail, eligibilityByProfileId, lead?.email, profileId);
+    const macros = profileId ? macrosByProfileId.get(profileId) || null : null;
     const row = {
       ...lead,
       referralCode: referral?.code || null,
       referralAdvocateFirstName: referral?.advocateFirstName || null,
-      profileId: profile?.id || null,
+      profileId,
       profileCreatedAt: profile?.created_at || null,
       profilePaidAt: profile?.paid_at || null,
       profileRefunded: Boolean(profile?.refunded),
       profileRole: profile?.role || null,
+      profilePhone: String(profile?.phone || "").trim() || null,
+      profileStatus: profile?.status || null,
+      profileAttribution: profile
+        ? {
+          utm_source: profile.utm_source || null,
+          utm_medium: profile.utm_medium || null,
+          utm_campaign: profile.utm_campaign || null,
+          utm_content: profile.utm_content || null,
+          landing_path: profile.landing_path || null,
+        }
+        : null,
+      phone: String(profile?.phone || "").trim() || String(cohort?.phone || "").trim() || null,
+      cohortWaitlist: cohort,
+      eligibilityWaitlist: eligibility,
+      macrosExists: Boolean(macros),
+      macrosApproved: Boolean(macros?.approved),
       funnelStatus: quizLeadFunnelStatus(profile),
     };
     return {
@@ -291,13 +448,227 @@ export function formatLeadTags(lead) {
   return tags.join(" · ");
 }
 
+function humanizeCode(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return raw.replace(/_/g, " ");
+}
+
+export function formatLeadCampaign(lead) {
+  return [lead?.utm_source, lead?.utm_medium, lead?.utm_campaign, lead?.utm_content]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" / ");
+}
+
+/** Quiz UTMs are last overwrite on the lead. Profile UTMs are first-touch. */
+export function formatCampaignCompare(lead) {
+  const quiz = formatLeadCampaign(lead);
+  const signup = formatLeadCampaign(lead?.profileAttribution);
+  if (quiz && signup && quiz !== signup) return `quiz ${quiz} · signup ${signup}`;
+  return quiz || signup;
+}
+
+export function formatLeadPhone(lead) {
+  return String(lead?.phone || lead?.profilePhone || lead?.cohortWaitlist?.phone || "").trim();
+}
+
+export function formatCohortWaitlistLine(row) {
+  if (!row) return "";
+  const bits = [formatLeadWhen(row.created_at) || "Joined"];
+  if (row.converted_at) bits.push("converted");
+  if (row.paid_at) bits.push("paid");
+  return bits.join(" · ");
+}
+
+export function formatEligibilityWaitlistLine(row) {
+  if (!row) return "";
+  const reason = row.reason === "early_nursing"
+    ? "Early nursing"
+    : row.reason === "pregnant"
+      ? "Pregnant"
+      : humanizeCode(row.reason);
+  return [reason, formatLeadWhen(row.created_at)].filter(Boolean).join(" · ");
+}
+
+export function formatIntakeLine(lead) {
+  if (lead?.macrosApproved || String(lead?.profileStatus || "").toLowerCase() === "active") {
+    return "Approved";
+  }
+  if (lead?.macrosExists) return "Submitted";
+  return "";
+}
+
+export function formatMonthsPostpartum(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return MONTHS_PP_LABEL[raw] || humanizeCode(raw);
+}
+
+export function formatFeedingStatus(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return FEEDING_LABEL[raw] || humanizeCode(raw);
+}
+
+export function formatReviewReason(lead) {
+  if (!lead?.needs_review) return "";
+  const raw = String(lead?.review_reason || "").trim();
+  if (!raw) return "";
+  return REVIEW_REASON_LABEL[raw] || humanizeCode(raw);
+}
+
+export function formatQuizGoal(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return GOAL_LABEL[raw] || humanizeCode(raw);
+}
+
+export function formatQuizActivity(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return ACTIVITY_LABEL[raw] || humanizeCode(raw);
+}
+
+export function formatQuizHeight(value) {
+  const inches = Number(value);
+  if (!Number.isFinite(inches) || inches <= 0) return "";
+  const ft = Math.floor(inches / 12);
+  const rem = Math.round(inches % 12);
+  if (ft > 0) return `${ft} ft ${rem} in`;
+  return `${rem} in`;
+}
+
+export function formatQuizFlags(lead) {
+  const flags = Array.isArray(lead?.flags) ? lead.flags : [];
+  const labels = [];
+  for (const flag of flags) {
+    const raw = String(flag || "").trim();
+    if (!raw) continue;
+    const label = QUIZ_FLAG_LABEL[raw] || FLAG_LABEL[raw] || humanizeCode(raw);
+    if (label && !labels.includes(label)) labels.push(label);
+  }
+  return labels.join(" · ");
+}
+
+export function formatBabyBirthday(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const isoDay = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  const at = Date.parse(isoDay ? `${isoDay[1]}T12:00:00` : raw);
+  if (!Number.isFinite(at)) return raw;
+  try {
+    return new Date(at).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return raw;
+  }
+}
+
+export function formatQuizWeight(value) {
+  const lbs = Number(value);
+  if (!Number.isFinite(lbs) || lbs <= 0) return "";
+  return `${Math.round(lbs)} lb`;
+}
+
+export function formatQuizReviewLine(lead) {
+  if (!lead?.needs_review) return "";
+  return formatReviewReason(lead) || "Needs review";
+}
+
+function hasAccount(lead) {
+  return Boolean(
+    lead?.profileId
+    || lead?.profileCreatedAt
+    || lead?.funnelStatus === "signed_up_unpaid"
+    || lead?.funnelStatus === "paid",
+  );
+}
+
+/**
+ * Read-only rows for lead detail. Only persisted fields; empty bits omitted.
+ * created_at is first quiz insert — never "last quiz" or a visit count.
+ */
+export function leadInsightRows(lead) {
+  const rows = [];
+  const push = (label, value) => {
+    const text = String(value || "").trim();
+    if (!text) return;
+    rows.push({ label, value: text });
+  };
+
+  push("First quiz", formatLeadWhen(lead?.created_at));
+  push("Phone", formatLeadPhone(lead));
+  push("Landing", String(lead?.landing_path || "").trim());
+  push("Campaign", formatCampaignCompare(lead));
+  push("Source", quizLeadSourceLabel(lead));
+
+  const who = quizReferralWho(lead);
+  const source = quizLeadSourceLabel(lead);
+  if (who && !source.includes(who)) push("Referred by", who);
+
+  if (hasAccount(lead)) {
+    push("Account created", formatLeadWhen(lead?.profileCreatedAt));
+    if (lead?.funnelStatus === "paid") {
+      push("Paid", formatLeadWhen(lead?.profilePaidAt) || "Paid");
+    } else if (lead?.funnelStatus === "signed_up_unpaid") {
+      push("Paid", "Signed up, unpaid");
+    }
+  }
+
+  push("Intake", formatIntakeLine(lead));
+  push("Waitlist", formatCohortWaitlistLine(lead?.cohortWaitlist));
+  push("Eligibility", formatEligibilityWaitlistLine(lead?.eligibilityWaitlist));
+
+  return rows;
+}
+
+function pushInsightRow(rows, label, value) {
+  const text = String(value || "").trim();
+  if (!text) return;
+  rows.push({ label, value: text });
+}
+
+/**
+ * Quiz inputs Callie can scan — live quiz question + option wording.
+ * Hide unanswered. Do not invent numbers.
+ */
+export function leadQuizAnswerRows(lead) {
+  const rows = [];
+  pushInsightRow(rows, "Where are you right now?", formatMonthsPostpartum(lead?.months_postpartum));
+  pushInsightRow(rows, "Are you feeding your baby breast milk right now?", formatFeedingStatus(lead?.feeding_status));
+  pushInsightRow(rows, "Height", formatQuizHeight(lead?.height_in));
+  pushInsightRow(rows, "Current weight (lb)", formatQuizWeight(lead?.current_weight_lbs));
+  pushInsightRow(rows, "What weight do you feel like yourself at?", formatQuizWeight(lead?.goal_weight_lbs));
+  pushInsightRow(rows, "What are you actually after?", formatQuizGoal(lead?.goal));
+  pushInsightRow(rows, "How much are you moving right now?", formatQuizActivity(lead?.activity_level));
+  pushInsightRow(rows, "Anything we should know?", formatQuizFlags(lead));
+  pushInsightRow(rows, "Baby's birthday", formatBabyBirthday(lead?.baby_birthday));
+  return rows;
+}
+
+/**
+ * Computed ranges (what we told her). Segment/tags if useful.
+ * Answers live in leadQuizAnswerRows — do not bury inputs here.
+ */
+export function leadQuizResultRows(lead) {
+  const rows = [];
+  pushInsightRow(rows, "Ranges", formatMacroRanges(lead));
+  pushInsightRow(rows, "Tags", formatLeadTags(lead));
+  pushInsightRow(rows, "Review", formatQuizReviewLine(lead));
+  return rows;
+}
+
 async function throwIfError(result) {
   if (result.error) throw result.error;
   return result.data || [];
 }
 
 export async function loadQuizLeads({ client = supabase } = {}) {
-  const [leads, profiles, referrals] = await Promise.all([
+  const [leads, profiles, referrals, cohortWaitlist, eligibilityWaitlist, macros] = await Promise.all([
     throwIfError(
       await client
         .from("marketing_leads")
@@ -314,6 +685,25 @@ export async function loadQuizLeads({ client = supabase } = {}) {
         .from("referrals")
         .select(REFERRAL_COLS),
     ),
+    throwIfError(
+      await client
+        .from("cohort_waitlist")
+        .select(COHORT_WAITLIST_COLS),
+    ),
+    throwIfError(
+      await client
+        .from("waitlist")
+        .select(ELIGIBILITY_WAITLIST_COLS),
+    ),
+    throwIfError(
+      await client
+        .from("macros")
+        .select(MACROS_COLS),
+    ),
   ]);
-  return enrichQuizLeads(leads, profiles, referrals);
+  return enrichQuizLeads(leads, profiles, referrals, {
+    cohortWaitlist,
+    eligibilityWaitlist,
+    macros,
+  });
 }
