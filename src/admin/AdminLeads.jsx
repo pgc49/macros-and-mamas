@@ -8,7 +8,7 @@ import { T, F, FD } from "../theme/tokens";
 import { Card } from "../components/ui";
 import { db } from "../db/db";
 import { copyText } from "../utils/clipboard";
-import { emailTypeLabel, leadMailtoHref } from "./emailLog";
+import { emailTypeLabel, eventsForLeadEmail, leadMailtoHref } from "./emailLog";
 import {
   QUIZ_LEAD_FILTERS,
   filterQuizLeads,
@@ -131,7 +131,7 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
     setEvents(null);
     db.loadEmailEventsByEmail(email)
       .then((rows) => {
-        if (!cancelled) setEvents(rows || []);
+        if (!cancelled) setEvents(eventsForLeadEmail(rows, email));
       })
       .catch((e) => {
         console.error("lead email history load failed", e);
