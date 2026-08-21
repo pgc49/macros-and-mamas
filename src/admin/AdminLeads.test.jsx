@@ -4,6 +4,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadQuizLeads = vi.fn();
+const { dbMock } = vi.hoisted(() => ({
+  dbMock: {
+    loadEmailEventsByEmail: vi.fn(),
+  },
+}));
 
 vi.mock("./quizLeads", async () => {
   const actual = await vi.importActual("./quizLeads");
@@ -12,6 +17,10 @@ vi.mock("./quizLeads", async () => {
     loadQuizLeads: (...args) => loadQuizLeads(...args),
   };
 });
+
+vi.mock("../db/db", () => ({
+  db: dbMock,
+}));
 
 import { AdminLeads } from "./AdminLeads.jsx";
 
@@ -105,6 +114,27 @@ const rows = [
   },
 ];
 
+const ellieEvents = [
+  {
+    id: "evt-ranges",
+    profile_id: null,
+    email_type: "quiz_ranges",
+    to_email: "ellie@example.com",
+    subject: "Your ranges",
+    status: "sent",
+    created_at: "2026-08-19T18:31:00.000Z",
+  },
+  {
+    id: "evt-drip",
+    profile_id: null,
+    email_type: "quiz_drip_2d",
+    to_email: "ELLIE@example.com",
+    subject: "the numbers are the easy part",
+    status: "failed",
+    created_at: "2026-08-21T12:00:00.000Z",
+  },
+];
+
 afterEach(() => {
   cleanup();
 });
@@ -112,6 +142,8 @@ afterEach(() => {
 beforeEach(() => {
   loadQuizLeads.mockReset();
   loadQuizLeads.mockResolvedValue(rows);
+  dbMock.loadEmailEventsByEmail.mockReset();
+  dbMock.loadEmailEventsByEmail.mockResolvedValue([]);
 });
 
 describe("AdminLeads", () => {
@@ -163,17 +195,103 @@ describe("AdminLeads", () => {
     expect(screen.getByText("2 of 3")).toBeTruthy();
   });
 
-  it("opens a mama profile when she has an account", async () => {
+  it("opens lead detail for quiz-only and account leads; client card is secondary", async () => {
     const onOpenMama = vi.fn();
     render(<AdminLeads onOpenMama={onOpenMama} />);
     await waitFor(() => {
       expect(screen.getByText("Megan Wells")).toBeTruthy();
     });
+
     fireEvent.click(screen.getByText("Megan Wells"));
+    expect(onOpenMama).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByText("megan@example.com")).toBeTruthy();
+    });
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
+      "mailto:megan@example.com?subject=Macros%20and%20Mamas",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open client card" }));
     expect(onOpenMama).toHaveBeenCalledWith(MEGAN);
 
+    fireEvent.click(screen.getByRole("button", { name: "← Quiz leads" }));
     onOpenMama.mockClear();
     fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByText("ellie@example.com")).toBeTruthy();
+    });
     expect(onOpenMama).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Open client card" })).toBeNull();
+  });
+
+  it("shows send history keyed by email for a quiz-only lead", async () => {
+    dbMock.loadEmailEventsByEmail.mockResolvedValue(ellieEvents);
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByText("Quiz ranges")).toBeTruthy();
+    });
+    expect(dbMock.loadEmailEventsByEmail).toHaveBeenCalledWith("ellie@example.com");
+    expect(screen.getByText("Your ranges")).toBeTruthy();
+    expect(screen.getByText("Quiz drip (+2d)")).toBeTruthy();
+    expect(screen.getByText("the numbers are the easy part")).toBeTruthy();
+    expect(screen.getByText(/Failed/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
+      "mailto:ellie@example.com?subject=Macros%20and%20Mamas",
+    );
+    expect(screen.queryByText("No emails sent yet.")).toBeNull();
+  });
+
+  it("copies the lead email and confirms", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Copy ellie@example.com" })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy ellie@example.com" }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("ellie@example.com");
+      expect(screen.getByRole("button", { name: "Email copied" })).toBeTruthy();
+      expect(screen.getByText("Copied")).toBeTruthy();
+    });
+  });
+
+  it("does not open detail when a lead has no email", async () => {
+    loadQuizLeads.mockResolvedValue([
+      {
+        ...rows[0],
+        email: "",
+        first_name: "No",
+        last_name: "Address",
+      },
+    ]);
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("No Address")).toBeTruthy();
+    });
+    expect(screen.getByText("No Address").closest("button")?.disabled).toBe(true);
+    expect(dbMock.loadEmailEventsByEmail).not.toHaveBeenCalled();
+  });
+
+  it("says no emails sent yet when the address has no log rows", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByText("No emails sent yet.")).toBeTruthy();
+    });
+    expect(dbMock.loadEmailEventsByEmail).toHaveBeenCalledWith("ellie@example.com");
   });
 });

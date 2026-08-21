@@ -1,5 +1,25 @@
 import { EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 
+export function normalizeEmailAddress(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+/** Sends actually addressed to this lead. Case-insensitive to_email; ignores Callie notifies. */
+export function eventsForLeadEmail(events, email) {
+  const target = normalizeEmailAddress(email);
+  if (!target) return [];
+  return (Array.isArray(events) ? events : []).filter(
+    (event) => normalizeEmailAddress(event?.to_email) === target,
+  );
+}
+
+/** Opens Callie's default mail app. No body — she writes the note. */
+export function leadMailtoHref(email) {
+  const to = String(email || "").trim();
+  if (!to.includes("@")) return "";
+  return `mailto:${to}?subject=${encodeURIComponent("Macros and Mamas")}`;
+}
+
 export function emailTypeLabel(event) {
   const type = String(event?.email_type || "").trim();
   if (type === "message") {
