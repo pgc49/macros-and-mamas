@@ -30,6 +30,7 @@ const LEAD_COLS = [
   "flags",
   "segment",
   "needs_review",
+  "review_reason",
   "protein_low_g",
   "protein_high_g",
   "carbs_low_g",
@@ -67,6 +68,32 @@ const FLAG_LABEL = {
   blood_sugar: "Blood sugar",
   thyroid: "Thyroid",
   c_section: "C-section",
+};
+
+const MONTHS_PP_LABEL = {
+  still_pregnant: "Still pregnant",
+  "0_3_months": "0–3 months",
+  "3_12_months": "3–12 months",
+  "1_2_years": "1–2 years",
+  "2_plus_years": "2+ years",
+  not_postpartum: "Not postpartum",
+};
+
+const FEEDING_LABEL = {
+  exclusive: "Exclusive breast milk",
+  combination: "Combination feeding",
+  weaning: "Weaning",
+  not_feeding: "Not feeding breast milk",
+};
+
+const REVIEW_REASON_LABEL = {
+  incomplete_inputs: "Incomplete inputs",
+  goal_maintain: "Goal: maintain",
+  goal_gain: "Goal: gain",
+  thyroid: "Thyroid",
+  goal_bmi_under_19: "Goal BMI under 19",
+  goal_over_25pct_below_current: "Goal over 25% below current",
+  carbs_under_100: "Carbs under 100",
 };
 
 function nonempty(value) {
@@ -289,6 +316,86 @@ export function formatLeadTags(lead) {
   }
   if (lead?.needs_review) tags.push("Needs review");
   return tags.join(" · ");
+}
+
+function humanizeCode(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return raw.replace(/_/g, " ");
+}
+
+export function formatLeadCampaign(lead) {
+  return [lead?.utm_source, lead?.utm_medium, lead?.utm_campaign, lead?.utm_content]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" / ");
+}
+
+export function formatMonthsPostpartum(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return MONTHS_PP_LABEL[raw] || humanizeCode(raw);
+}
+
+export function formatFeedingStatus(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return FEEDING_LABEL[raw] || humanizeCode(raw);
+}
+
+export function formatReviewReason(lead) {
+  if (!lead?.needs_review) return "";
+  const raw = String(lead?.review_reason || "").trim();
+  if (!raw) return "";
+  return REVIEW_REASON_LABEL[raw] || humanizeCode(raw);
+}
+
+function hasAccount(lead) {
+  return Boolean(
+    lead?.profileId
+    || lead?.profileCreatedAt
+    || lead?.funnelStatus === "signed_up_unpaid"
+    || lead?.funnelStatus === "paid",
+  );
+}
+
+/**
+ * Read-only rows for lead detail. Only persisted fields; empty bits omitted.
+ * No visit counts — we do not store per-person pageviews.
+ */
+export function leadInsightRows(lead) {
+  const rows = [];
+  const push = (label, value) => {
+    const text = String(value || "").trim();
+    if (!text) return;
+    rows.push({ label, value: text });
+  };
+
+  push("Quiz completed", formatLeadWhen(lead?.created_at));
+  push("Landing", String(lead?.landing_path || "").trim());
+  push("Campaign", formatLeadCampaign(lead));
+  push("Source", quizLeadSourceLabel(lead));
+
+  const who = quizReferralWho(lead);
+  const source = quizLeadSourceLabel(lead);
+  if (who && !source.includes(who)) push("Referred by", who);
+
+  push("Tags", formatLeadTags(lead));
+  push("Ranges", formatMacroRanges(lead));
+  push("Postpartum", formatMonthsPostpartum(lead?.months_postpartum));
+  push("Feeding", formatFeedingStatus(lead?.feeding_status));
+  push("Review", formatReviewReason(lead));
+
+  if (hasAccount(lead)) {
+    push("Account created", formatLeadWhen(lead?.profileCreatedAt));
+    if (lead?.funnelStatus === "paid") {
+      push("Paid", formatLeadWhen(lead?.profilePaidAt) || "Paid");
+    } else if (lead?.funnelStatus === "signed_up_unpaid") {
+      push("Paid", "Signed up, unpaid");
+    }
+  }
+
+  return rows;
 }
 
 async function throwIfError(result) {

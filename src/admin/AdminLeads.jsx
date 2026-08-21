@@ -22,6 +22,7 @@ import {
   formatLeadWhen,
   formatMacroRanges,
   leadDisplayName,
+  leadInsightRows,
   loadQuizLeads,
   quizLeadFunnelLabel,
   quizLeadSourceLabel,
@@ -89,6 +90,35 @@ function FilterBar({ filter, setFilter }) {
         >
           {label}
         </button>
+      ))}
+    </div>
+  );
+}
+
+function InsightRow({ label, value, first }) {
+  return (
+    <div
+      style={{
+        padding: "10px 0",
+        borderTop: first ? "none" : `1px solid ${T.border}`,
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft }}>{label}</div>
+      <div style={{ fontSize: 14, color: T.ink, marginTop: 2, wordBreak: "break-word", lineHeight: 1.4 }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function LeadInsights({ lead }) {
+  const rows = leadInsightRows(lead);
+  if (!rows.length) return null;
+  return (
+    <div style={{ marginTop: 22 }}>
+      <SectionTitle>Activity</SectionTitle>
+      {rows.map((row, i) => (
+        <InsightRow key={row.label} label={row.label} value={row.value} first={i === 0} />
       ))}
     </div>
   );
@@ -217,6 +247,8 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
             </button>
           ) : null}
         </div>
+
+        <LeadInsights lead={lead} />
 
         <div style={{ marginTop: 22 }}>
           <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 6 }}>

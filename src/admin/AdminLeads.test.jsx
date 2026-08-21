@@ -38,6 +38,11 @@ const rows = [
     fbp: "fb.1.1.xyz",
     utm_source: "meta",
     utm_medium: "cpc",
+    utm_campaign: "aug_founding",
+    utm_content: "story_1",
+    landing_path: "/quiz",
+    months_postpartum: "3_12_months",
+    feeding_status: "exclusive",
     referred_by: null,
     flags: ["vegan"],
     segment: "waitlist_plantbased",
@@ -66,7 +71,13 @@ const rows = [
     fbp: null,
     fbc: null,
     utm_source: null,
+    utm_medium: null,
+    utm_campaign: null,
+    utm_content: null,
+    landing_path: null,
     referred_by: "Sarah",
+    profileCreatedAt: "2026-08-18T17:00:00.000Z",
+    profilePaidAt: "2026-08-18T18:00:00.000Z",
     flags: [],
     segment: "main",
     protein_low_g: 110,
@@ -362,5 +373,59 @@ describe("AdminLeads", () => {
       expect(screen.getByText("No emails sent yet.")).toBeTruthy();
     });
     expect(dbMock.loadEmailEventsByEmail).toHaveBeenCalledWith("ellie@example.com");
+  });
+
+  it("shows quiz, landing, and campaign on quiz-only lead detail", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeTruthy();
+    });
+    expect(screen.getByText("Quiz completed")).toBeTruthy();
+    expect(screen.getByText("Aug 19, 11:30 AM PT")).toBeTruthy();
+    expect(screen.getByText("Landing")).toBeTruthy();
+    expect(screen.getByText("/quiz")).toBeTruthy();
+    expect(screen.getByText("Campaign")).toBeTruthy();
+    expect(screen.getByText("meta / cpc / aug_founding / story_1")).toBeTruthy();
+    expect(screen.getByText("Source")).toBeTruthy();
+    expect(screen.getAllByText("Meta ad").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("Account created")).toBeNull();
+    expect(screen.queryByText("Paid")).toBeNull();
+    expect(screen.queryByText(/0 visits/i)).toBeNull();
+    expect(screen.queryByText(/fb\.1\.1/)).toBeNull();
+  });
+
+  it("shows account and paid timestamps on a paid lead", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Megan Wells")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Megan Wells"));
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeTruthy();
+    });
+    expect(screen.getByText("Quiz completed")).toBeTruthy();
+    expect(screen.getByText("Account created")).toBeTruthy();
+    expect(screen.getByText("Aug 18, 10:00 AM PT")).toBeTruthy();
+    expect(screen.getByText("Paid")).toBeTruthy();
+    expect(screen.getByText("Aug 18, 11:00 AM PT")).toBeTruthy();
+    expect(screen.getByText("Referral · Sarah")).toBeTruthy();
+  });
+
+  it("omits missing landing path and campaign UTMs on lead detail", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Megan Wells")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Megan Wells"));
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeTruthy();
+    });
+    expect(screen.queryByText("Landing")).toBeNull();
+    expect(screen.queryByText("Campaign")).toBeNull();
+    expect(screen.queryByText(/utm_/)).toBeNull();
   });
 });

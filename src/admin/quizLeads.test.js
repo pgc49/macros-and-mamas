@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   enrichQuizLeads,
   filterQuizLeads,
+  formatLeadCampaign,
   formatLeadTags,
   formatLeadWhen,
   formatMacroRanges,
+  leadInsightRows,
   isMetaAdLead,
   isMetaClickLead,
   isMetaLead,
@@ -220,8 +222,8 @@ describe("enrichQuizLeads + filterQuizLeads", () => {
   ];
   const profiles = [
     { id: "admin", email: "admin@example.com", role: "admin", paid: true, name: "Callie" },
-    { id: "unpaid-id", email: "unpaid@example.com", role: "client", paid: false, name: "Una" },
-    { id: "paid-id", email: "PAID@example.com", role: "client", paid: true, name: "Paid" },
+    { id: "unpaid-id", email: "unpaid@example.com", role: "client", paid: false, name: "Una", created_at: "2026-08-18T17:00:00.000Z" },
+    { id: "paid-id", email: "PAID@example.com", role: "client", paid: true, name: "Paid", created_at: "2026-08-18T17:00:00.000Z", paid_at: "2026-08-18T18:00:00.000Z" },
     { id: ALEX, email: "alex@example.com", role: "client", paid: true, name: "Alex" },
     { id: JENNIFER, email: "jennifer@example.com", role: "client", paid: true, name: "Jennifer" },
     { id: KRISTEN, email: "kristen@example.com", role: "client", paid: true, name: "Kristen Wells" },
@@ -255,7 +257,9 @@ describe("enrichQuizLeads + filterQuizLeads", () => {
     expect(byId.ellie.isMetaAd).toBe(true);
     expect(byId["organic-unpaid"].funnelStatus).toBe("signed_up_unpaid");
     expect(byId["organic-unpaid"].profileId).toBe("unpaid-id");
+    expect(byId["organic-unpaid"].profileCreatedAt).toBe("2026-08-18T17:00:00.000Z");
     expect(byId["organic-paid"].funnelStatus).toBe("paid");
+    expect(byId["organic-paid"].profilePaidAt).toBe("2026-08-18T18:00:00.000Z");
     expect(byId["organic-paid"].sourceKind).toBe("organic");
   });
 
@@ -331,6 +335,108 @@ describe("lead display helpers", () => {
   });
 });
 
+function insightMap(leadRow) {
+  return Object.fromEntries(leadInsightRows(leadRow).map((row) => [row.label, row.value]));
+}
+
+describe("leadInsightRows", () => {
+  it("quiz-only lead shows quiz + landing + campaign and no account rows", () => {
+    const byLabel = insightMap(lead({
+      created_at: "2026-08-19T18:30:00.000Z",
+      landing_path: "/quiz",
+      utm_source: "meta",
+      utm_medium: "cpc",
+      utm_campaign: "aug_founding",
+      utm_content: "story_1",
+      months_postpartum: "3_12_months",
+      feeding_status: "exclusive",
+      flags: ["vegan"],
+      segment: "waitlist_plantbased",
+      funnelStatus: "quiz_only",
+      profileId: null,
+    }));
+    expect(byLabel["Quiz completed"]).toBe("Aug 19, 11:30 AM PT");
+    expect(byLabel.Landing).toBe("/quiz");
+    expect(byLabel.Campaign).toBe("meta / cpc / aug_founding / story_1");
+    expect(byLabel.Source).toBe("Meta ad");
+    expect(byLabel.Tags).toBe("Plant-based · Vegan");
+    expect(byLabel.Postpartum).toBe("3–12 months");
+    expect(byLabel.Feeding).toBe("Exclusive breast milk");
+    expect(byLabel["Account created"]).toBeUndefined();
+    expect(byLabel.Paid).toBeUndefined();
+    expect(Object.values(byLabel).join(" ")).not.toMatch(/fbp|fbc|event_id|visit/i);
+  });
+
+  it("paid lead also shows account + paid timestamps", () => {
+    const byLabel = insightMap(lead({
+      created_at: "2026-08-18T16:00:00.000Z",
+      referred_by: "Sarah",
+      funnelStatus: "paid",
+      profileId: MEGAN,
+      profileCreatedAt: "2026-08-18T17:00:00.000Z",
+      profilePaidAt: "2026-08-18T18:00:00.000Z",
+    }));
+    expect(byLabel["Quiz completed"]).toBe("Aug 18, 9:00 AM PT");
+    expect(byLabel.Source).toBe("Referral · Sarah");
+    expect(byLabel["Referred by"]).toBeUndefined();
+    expect(byLabel["Account created"]).toBe("Aug 18, 10:00 AM PT");
+    expect(byLabel.Paid).toBe("Aug 18, 11:00 AM PT");
+  });
+
+  it("signed-up unpaid shows account created and signed up, unpaid", () => {
+    const byLabel = insightMap(lead({
+      funnelStatus: "signed_up_unpaid",
+      profileId: MEGAN,
+      profileCreatedAt: "2026-08-18T17:00:00.000Z",
+    }));
+    expect(byLabel["Account created"]).toBe("Aug 18, 10:00 AM PT");
+    expect(byLabel.Paid).toBe("Signed up, unpaid");
+  });
+
+  it("omits missing UTMs, landing path, and review when nothing is stored", () => {
+    const rows = leadInsightRows(lead({
+      landing_path: "",
+      utm_source: null,
+      utm_medium: "  ",
+      utm_campaign: null,
+      utm_content: "",
+      months_postpartum: "",
+      feeding_status: null,
+      needs_review: false,
+      review_reason: "thyroid",
+      protein_low_g: null,
+      protein_high_g: null,
+      carbs_low_g: null,
+      carbs_high_g: null,
+      fat_low_g: null,
+      fat_high_g: null,
+      calories_low: null,
+      calories_high: null,
+    }));
+    const labels = rows.map((row) => row.label);
+    expect(labels).toContain("Quiz completed");
+    expect(labels).toContain("Source");
+    expect(labels).not.toContain("Landing");
+    expect(labels).not.toContain("Campaign");
+    expect(labels).not.toContain("Account created");
+    expect(labels).not.toContain("Paid");
+    expect(labels).not.toContain("Review");
+    expect(labels).not.toContain("Postpartum");
+    expect(labels).not.toContain("Feeding");
+    expect(labels).not.toContain("Ranges");
+    expect(formatLeadCampaign(lead({ utm_source: "meta", utm_content: "story_1" })))
+      .toBe("meta / story_1");
+    expect(rows.some((row) => /0 visits|visit count/i.test(`${row.label} ${row.value}`))).toBe(false);
+  });
+
+  it("shows review reason only when needs_review is set", () => {
+    expect(insightMap(lead({ needs_review: true, review_reason: "carbs_under_100" })).Review)
+      .toBe("Carbs under 100");
+    expect(insightMap(lead({ needs_review: false, review_reason: "carbs_under_100" })).Review)
+      .toBeUndefined();
+  });
+});
+
 function mockClient({ leads = [], profiles = [], referrals = [], error = null } = {}) {
   const calls = [];
   return {
@@ -384,6 +490,9 @@ describe("loadQuizLeads", () => {
       cols: expect.stringContaining("email"),
       order: { col: "created_at", ascending: false },
     });
+    expect(client.calls[0].cols).toEqual(expect.stringContaining("landing_path"));
+    expect(client.calls[0].cols).toEqual(expect.stringContaining("review_reason"));
+    expect(client.calls[0].cols).not.toMatch(/\bvisits?\b/);
     expect(client.calls.map((c) => c.table).sort()).toEqual(["marketing_leads", "profiles", "referrals"]);
     expect(client.calls.find((c) => c.table === "referrals").cols).toEqual(expect.stringContaining("referred_email"));
     expect(rows).toHaveLength(1);
