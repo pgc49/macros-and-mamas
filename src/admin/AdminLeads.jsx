@@ -10,6 +10,12 @@ import { db } from "../db/db";
 import { copyText } from "../utils/clipboard";
 import { emailTypeLabel, eventsForLeadEmail, leadMailtoHref } from "./emailLog";
 import {
+  dripStopCopy,
+  formatDripWhen,
+  nextDripLine,
+  planLeadDrips,
+} from "./leadDripSchedule";
+import {
   QUIZ_LEAD_FILTERS,
   filterQuizLeads,
   formatLeadTags,
@@ -118,24 +124,39 @@ function CopyEmailButton({ email }) {
 
 function LeadDetail({ lead, onBack, onOpenMama }) {
   const [events, setEvents] = useState(null);
+  const [unsubscribed, setUnsubscribed] = useState(false);
   const email = leadEmail(lead);
   const mailto = leadMailtoHref(email);
   const canOpenCard = !!lead.profileId && typeof onOpenMama === "function";
+  const plan = useMemo(
+    () => planLeadDrips({ lead, events: events || [], unsubscribed }),
+    [lead, events, unsubscribed],
+  );
+  const stopLine = dripStopCopy(plan.stopReason);
 
   useEffect(() => {
     let cancelled = false;
     if (!email) {
       setEvents([]);
+      setUnsubscribed(false);
       return undefined;
     }
     setEvents(null);
-    db.loadEmailEventsByEmail(email)
-      .then((rows) => {
-        if (!cancelled) setEvents(eventsForLeadEmail(rows, email));
+    Promise.all([
+      db.loadEmailEventsByEmail(email),
+      db.isEmailUnsubscribed(email).catch(() => false),
+    ])
+      .then(([rows, unsub]) => {
+        if (cancelled) return;
+        setEvents(eventsForLeadEmail(rows, email));
+        setUnsubscribed(Boolean(unsub));
       })
       .catch((e) => {
         console.error("lead email history load failed", e);
-        if (!cancelled) setEvents([]);
+        if (!cancelled) {
+          setEvents([]);
+          setUnsubscribed(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -161,7 +182,7 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
         ← Quiz leads
       </button>
       <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
-        Copy her address or email her from your phone. History is what we actually sent.
+        Copy her address or email her from your phone. Sent is what went out; scheduled is what cron still owes her.
       </p>
       <Card style={{ marginBottom: 28 }}>
         <div style={{ fontFamily: FD, fontSize: 22 }}>{leadDisplayName(lead)}</div>
@@ -198,7 +219,32 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
         </div>
 
         <div style={{ marginTop: 22 }}>
-          <SectionTitle>Emails sent</SectionTitle>
+          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 6 }}>
+            {events == null ? "Next: …" : nextDripLine(plan)}
+          </div>
+          {events != null && stopLine ? (
+            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, marginBottom: 8 }}>
+              {stopLine}
+            </div>
+          ) : null}
+          {events != null && plan.remaining.length > 0 ? (
+            <>
+              <SectionTitle>Still scheduled</SectionTitle>
+              {plan.remaining.map((item) => (
+                <div
+                  key={`${item.emailType}-${item.atMs}`}
+                  style={{ fontSize: 14, color: T.ink, padding: "8px 0", borderTop: `1px solid ${T.border}` }}
+                >
+                  {emailTypeLabel({ email_type: item.emailType })}
+                  {" · "}
+                  {formatDripWhen(item)}
+                </div>
+              ))}
+            </>
+          ) : null}
+          <div style={{ marginTop: plan.remaining.length ? 16 : 8 }}>
+            <SectionTitle>Emails sent</SectionTitle>
+          </div>
         </div>
         {events == null ? (
           <EmptyLine>Loading emails…</EmptyLine>
@@ -268,7 +314,7 @@ export function AdminLeads({ onOpenMama }) {
     <div>
       <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
         Quiz completes — the Meta Lead we fire, not Ads Manager.
-        Tap a lead to see her email and what we've sent.
+        Tap a lead to see her email, what we've sent, and what's still scheduled.
       </p>
       <FilterBar filter={filter} setFilter={setFilter} />
       <Card style={{ marginBottom: 28 }}>

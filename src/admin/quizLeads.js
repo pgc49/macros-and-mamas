@@ -49,7 +49,7 @@ const LEAD_COLS = [
   "referred_by",
 ].join(",");
 
-const PROFILE_COLS = "id, email, name, paid, paid_at, role, refunded";
+const PROFILE_COLS = "id, email, name, paid, paid_at, role, refunded, created_at";
 
 const REFERRAL_COLS = "id, code, referred_email, referred_user_id, advocate_user_id, status, created_at";
 
@@ -211,6 +211,10 @@ export function enrichQuizLeads(leads, profiles, referrals = []) {
       referralCode: referral?.code || null,
       referralAdvocateFirstName: referral?.advocateFirstName || null,
       profileId: profile?.id || null,
+      profileCreatedAt: profile?.created_at || null,
+      profilePaidAt: profile?.paid_at || null,
+      profileRefunded: Boolean(profile?.refunded),
+      profileRole: profile?.role || null,
       funnelStatus: quizLeadFunnelStatus(profile),
     };
     return {

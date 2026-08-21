@@ -1828,6 +1828,21 @@ export const db = {
     );
   },
 
+  async isEmailUnsubscribed(email) {
+    const target = String(email || "").trim().toLowerCase();
+    if (!target) return false;
+    const { data, error } = await supabase
+      .from("email_unsubscribes")
+      .select("email")
+      .eq("email", target)
+      .maybeSingle();
+    if (error) {
+      console.warn("isEmailUnsubscribed failed", error);
+      return false;
+    }
+    return Boolean(data?.email);
+  },
+
   /** Admin: cohort waitlist rows for the next open blast. */
   async loadCohortWaitlist(cohort = "cohort_2", limit = 200) {
     const { data, error } = await supabase

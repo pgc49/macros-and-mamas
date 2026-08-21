@@ -7,6 +7,7 @@ const loadQuizLeads = vi.fn();
 const { dbMock } = vi.hoisted(() => ({
   dbMock: {
     loadEmailEventsByEmail: vi.fn(),
+    isEmailUnsubscribed: vi.fn(),
   },
 }));
 
@@ -144,6 +145,8 @@ beforeEach(() => {
   loadQuizLeads.mockResolvedValue(rows);
   dbMock.loadEmailEventsByEmail.mockReset();
   dbMock.loadEmailEventsByEmail.mockResolvedValue([]);
+  dbMock.isEmailUnsubscribed.mockReset();
+  dbMock.isEmailUnsubscribed.mockResolvedValue(false);
 });
 
 describe("AdminLeads", () => {
@@ -281,6 +284,72 @@ describe("AdminLeads", () => {
     });
     expect(screen.getByText("No Address").closest("button")?.disabled).toBe(true);
     expect(dbMock.loadEmailEventsByEmail).not.toHaveBeenCalled();
+  });
+
+  it("shows the next quiz drip and expected time after ranges for a no-account lead", async () => {
+    const now = Date.parse("2026-08-21T18:00:00.000Z");
+    const rangesAt = Date.parse("2026-08-20T12:00:00.000Z");
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now);
+    loadQuizLeads.mockResolvedValue([
+      {
+        ...rows[0],
+        email: "dolly@example.com",
+        first_name: "Dolly",
+        last_name: "Chammas",
+        segment: "main",
+        flags: [],
+        profileId: null,
+        funnelStatus: "quiz_only",
+        created_at: new Date(rangesAt).toISOString(),
+      },
+    ]);
+    dbMock.loadEmailEventsByEmail.mockResolvedValue([
+      {
+        id: "evt-ranges",
+        profile_id: null,
+        email_type: "quiz_ranges",
+        to_email: "dolly@example.com",
+        subject: "Your ranges",
+        status: "sent",
+        created_at: new Date(rangesAt).toISOString(),
+      },
+    ]);
+
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Dolly Chammas")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Dolly Chammas"));
+    await waitFor(() => {
+      expect(screen.getByText(/Next: Quiz drip \(\+2d\) · /)).toBeTruthy();
+    });
+    expect(screen.getByText(/Next: Quiz drip \(\+2d\) · /).textContent).not.toMatch(/Due now/);
+    expect(screen.getByText("Still scheduled")).toBeTruthy();
+    expect(screen.getAllByText(/Quiz drip \(\+2d\) · /).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Your ranges")).toBeTruthy();
+    nowSpy.mockRestore();
+  });
+
+  it("shows no next drip for paid, unsubscribed, or finished leads", async () => {
+    const onOpenMama = vi.fn();
+    render(<AdminLeads onOpenMama={onOpenMama} />);
+    await waitFor(() => {
+      expect(screen.getByText("Megan Wells")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Megan Wells"));
+    await waitFor(() => {
+      expect(screen.getByText("No more drips scheduled")).toBeTruthy();
+    });
+    expect(screen.getByText("She already paid — no conversion drips.")).toBeTruthy();
+    expect(screen.queryByText("Still scheduled")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "← Quiz leads" }));
+    dbMock.isEmailUnsubscribed.mockResolvedValue(true);
+    fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByText("No more drips scheduled")).toBeTruthy();
+    });
+    expect(screen.getByText("Unsubscribed.")).toBeTruthy();
   });
 
   it("says no emails sent yet when the address has no log rows", async () => {
