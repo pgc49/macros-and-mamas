@@ -24,6 +24,7 @@ vi.mock("../db/db", () => ({
 }));
 
 import { AdminLeads } from "./AdminLeads.jsx";
+import { draftLeadPersonalNote, personalNoteMailtoHref } from "./leadPersonalNote.js";
 
 const MEGAN = "11111111-1111-4111-8111-111111111111";
 
@@ -235,6 +236,9 @@ describe("AdminLeads", () => {
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
       "mailto:megan@example.com?subject=Macros%20and%20Mamas",
     );
+    expect(screen.getByText("Personal note")).toBeTruthy();
+    expect(screen.getByText("She's already in — no outreach draft.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Copy personal note" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open client card" }));
     expect(onOpenMama).toHaveBeenCalledWith(MEGAN);
 
@@ -265,7 +269,7 @@ describe("AdminLeads", () => {
     expect(screen.getByText("the numbers are the easy part")).toBeTruthy();
     expect(screen.getByText(/Failed/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
-      "mailto:ellie@example.com?subject=Macros%20and%20Mamas",
+      personalNoteMailtoHref("ellie@example.com", draftLeadPersonalNote(rows[0])),
     );
     expect(screen.queryByText("No emails sent yet.")).toBeNull();
   });
@@ -533,6 +537,15 @@ describe("AdminLeads", () => {
     expect(screen.getByRole("link", { name: "Email" })).toBeTruthy();
     expect(screen.getByText("Activity")).toBeTruthy();
     expect(screen.queryByText("Quiz results")).toBeNull();
+    expect(screen.getByText("Personal note")).toBeTruthy();
+    expect(screen.getByText("Quick note from Callie")).toBeTruthy();
+    expect(screen.getByText(/fully vegan/)).toBeTruthy();
+    expect(screen.getByText(/may not be the right fit/)).toBeTruthy();
+    expect(screen.queryByText(/Doors close August 27/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Copy personal note" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
+      personalNoteMailtoHref("ellie@example.com", draftLeadPersonalNote(rows[0])),
+    );
   });
 
   it("omits blank quiz answers and results on a sparse lead", async () => {
@@ -588,5 +601,72 @@ describe("AdminLeads", () => {
     expect(screen.queryByText("Review")).toBeNull();
     expect(screen.getByText("Landing")).toBeTruthy();
     expect(screen.getByText("/quiz")).toBeTruthy();
+  });
+
+  it("shows a copy-ready invite note and prefills mailto for an eligible unpaid lead", async () => {
+    const nora = {
+      ...rows[0],
+      id: "lead-nora",
+      email: "nora@example.com",
+      first_name: "Nora",
+      last_name: "Lane",
+      months_postpartum: "0_3_months",
+      feeding_status: "exclusive",
+      flags: [],
+      segment: "early_pp_nurture",
+      needs_review: false,
+      review_reason: null,
+      funnelStatus: "quiz_only",
+      profileId: null,
+    };
+    loadQuizLeads.mockResolvedValue([nora]);
+    const draft = draftLeadPersonalNote(nora);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Nora Lane")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Nora Lane"));
+    await waitFor(() => {
+      expect(screen.getByText("Personal note")).toBeTruthy();
+    });
+    expect(screen.getByText("Subject")).toBeTruthy();
+    expect(screen.getByText("Quick note from Callie")).toBeTruthy();
+    expect(screen.getByText(/a lot of body and milk change at once/)).toBeTruthy();
+    expect(screen.getByText(/Doors close August 27/)).toBeTruthy();
+    expect(screen.getByText(/I'd love to have you join/)).toBeTruthy();
+    expect(screen.queryByText("She's already in — no outreach draft.")).toBeNull();
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
+      personalNoteMailtoHref("nora@example.com", draft),
+    );
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toContain("subject=");
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toContain("body=");
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy personal note" }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(draft.copyText);
+      expect(screen.getByRole("button", { name: "Personal note copied" })).toBeTruthy();
+    });
+    expect(draft.copyText).toMatch(/^Subject: Quick note from Callie/);
+    expect(draft.copyText).toContain(draft.body);
+  });
+
+  it("hides the join pitch on a paid lead", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Megan Wells")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Megan Wells"));
+    await waitFor(() => {
+      expect(screen.getByText("She's already in — no outreach draft.")).toBeTruthy();
+    });
+    expect(screen.queryByText("Quick note from Callie")).toBeNull();
+    expect(screen.queryByText(/Doors close August 27/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy personal note" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
+      "mailto:megan@example.com?subject=Macros%20and%20Mamas",
+    );
   });
 });

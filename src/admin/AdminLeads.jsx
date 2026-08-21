@@ -1,7 +1,7 @@
 /**
  * Admin Leads tab — every quiz complete (the Meta Lead we fire).
  * Not Meta Ads Manager. Quiz-only emails live here; Clients is profiles.
- * Tap a lead to see her address, mailto, and send history for that email.
+ * Tap a lead to see her address, a copy-ready Callie note, mailto, and send history.
  */
 import { useEffect, useMemo, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
@@ -15,6 +15,7 @@ import {
   nextDripLine,
   planLeadDrips,
 } from "./leadDripSchedule";
+import { draftLeadPersonalNote, personalNoteMailtoHref } from "./leadPersonalNote";
 import {
   QUIZ_LEAD_FILTERS,
   filterQuizLeads,
@@ -146,6 +147,69 @@ function LeadInsights({ lead }) {
   );
 }
 
+function CopyNoteButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  const onCopy = async () => {
+    try {
+      await copyText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch (err) {
+      console.error("clipboard write failed", err);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      aria-label={copied ? "Personal note copied" : "Copy personal note"}
+      style={{
+        ...actionBtnBase,
+        marginTop: 12,
+        border: `1.5px solid ${copied ? T.sage : T.border}`,
+        background: copied ? T.sageSoft : "#fff",
+        color: copied ? T.sage : T.ink,
+      }}
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+function LeadPersonalNote({ lead }) {
+  const draft = draftLeadPersonalNote(lead);
+  if (draft.kind === "paid") {
+    return (
+      <div style={{ marginTop: 22 }}>
+        <SectionTitle>Personal note</SectionTitle>
+        <EmptyLine>{draft.message}</EmptyLine>
+      </div>
+    );
+  }
+  return (
+    <div style={{ marginTop: 22 }}>
+      <SectionTitle>Personal note</SectionTitle>
+      <InsightRow label="Subject" value={draft.subject} first />
+      <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft, marginTop: 10 }}>Body</div>
+      <pre
+        style={{
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          fontFamily: F,
+          fontSize: 14,
+          lineHeight: 1.5,
+          color: T.ink,
+          margin: "6px 0 0",
+          padding: "12px 0 0",
+        }}
+      >
+        {draft.body}
+      </pre>
+      <CopyNoteButton text={draft.copyText} />
+    </div>
+  );
+}
+
 function CopyEmailButton({ email }) {
   const [copied, setCopied] = useState(false);
   const onCopy = async () => {
@@ -178,7 +242,10 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
   const [events, setEvents] = useState(null);
   const [unsubscribed, setUnsubscribed] = useState(false);
   const email = leadEmail(lead);
-  const mailto = leadMailtoHref(email);
+  const draft = useMemo(() => draftLeadPersonalNote(lead), [lead]);
+  const mailto = draft.kind === "draft"
+    ? (personalNoteMailtoHref(email, draft) || leadMailtoHref(email, { subject: draft.subject }))
+    : leadMailtoHref(email);
   const canOpenCard = !!lead.profileId && typeof onOpenMama === "function";
   const plan = useMemo(
     () => planLeadDrips({ lead, events: events || [], unsubscribed }),
@@ -272,6 +339,7 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
 
         <LeadQuizAnswers lead={lead} />
         <LeadQuizResults lead={lead} />
+        <LeadPersonalNote lead={lead} />
         <LeadInsights lead={lead} />
 
         <div style={{ marginTop: 22 }}>

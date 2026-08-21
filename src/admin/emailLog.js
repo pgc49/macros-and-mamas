@@ -13,11 +13,19 @@ export function eventsForLeadEmail(events, email) {
   );
 }
 
-/** Opens Callie's default mail app. No body — she writes the note. */
-export function leadMailtoHref(email) {
+/** Opens Callie's default mail app. Pass subject/body to prefill a draft. */
+export function leadMailtoHref(email, { subject, body, maxLen } = {}) {
   const to = String(email || "").trim();
   if (!to.includes("@")) return "";
-  return `mailto:${to}?subject=${encodeURIComponent("Macros and Mamas")}`;
+  const subj = subject == null ? "Macros and Mamas" : String(subject);
+  const parts = [];
+  if (subj) parts.push(`subject=${encodeURIComponent(subj)}`);
+  if (body) parts.push(`body=${encodeURIComponent(body)}`);
+  const href = `mailto:${to}${parts.length ? `?${parts.join("&")}` : ""}`;
+  if (body && maxLen && href.length > maxLen) {
+    return `mailto:${to}?subject=${encodeURIComponent(subj)}`;
+  }
+  return href;
 }
 
 export function emailTypeLabel(event) {
