@@ -44,6 +44,7 @@ const LEAD_COLS = [
   "height_in",
   "current_weight_lbs",
   "goal_weight_lbs",
+  "baby_birthday",
   "fbp",
   "fbc",
   "event_id",
@@ -97,6 +98,16 @@ const FLAG_LABEL = {
   c_section: "C-section",
 };
 
+/** Live quiz Q7 option copy — Answers block, not the short admin tag. */
+const QUIZ_FLAG_LABEL = {
+  vegetarian: "Vegetarian / pescatarian",
+  vegan: "Fully vegan",
+  blood_sugar: "Blood sugar concerns",
+  thyroid: "Thyroid",
+  c_section: "Recent C-section",
+  none: "None of these",
+};
+
 const MONTHS_PP_LABEL = {
   still_pregnant: "Still pregnant",
   "0_3_months": "0–3 months",
@@ -126,7 +137,7 @@ const REVIEW_REASON_LABEL = {
 const GOAL_LABEL = {
   lose_sustainable: "Lose fat — keep muscle and milk",
   lose_efficient: "Lose fat — keep muscle and milk",
-  maintain: "Maintain",
+  maintain: "Maintain where I am",
   gain: "Gain / rebuild",
 };
 
@@ -524,8 +535,37 @@ export function formatQuizHeight(value) {
   if (!Number.isFinite(inches) || inches <= 0) return "";
   const ft = Math.floor(inches / 12);
   const rem = Math.round(inches % 12);
-  if (ft > 0) return `${ft}′${rem}″`;
-  return `${rem}″`;
+  if (ft > 0) return `${ft} ft ${rem} in`;
+  return `${rem} in`;
+}
+
+export function formatQuizFlags(lead) {
+  const flags = Array.isArray(lead?.flags) ? lead.flags : [];
+  const labels = [];
+  for (const flag of flags) {
+    const raw = String(flag || "").trim();
+    if (!raw) continue;
+    const label = QUIZ_FLAG_LABEL[raw] || FLAG_LABEL[raw] || humanizeCode(raw);
+    if (label && !labels.includes(label)) labels.push(label);
+  }
+  return labels.join(" · ");
+}
+
+export function formatBabyBirthday(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const isoDay = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  const at = Date.parse(isoDay ? `${isoDay[1]}T12:00:00` : raw);
+  if (!Number.isFinite(at)) return raw;
+  try {
+    return new Date(at).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return raw;
+  }
 }
 
 export function formatQuizWeight(value) {
@@ -586,29 +626,39 @@ export function leadInsightRows(lead) {
   return rows;
 }
 
+function pushInsightRow(rows, label, value) {
+  const text = String(value || "").trim();
+  if (!text) return;
+  rows.push({ label, value: text });
+}
+
 /**
- * Computed ranges + quiz answers for lead detail. Empty bits omitted.
- * Do not invent numbers. Ranges/tags live here, not in Activity.
+ * Quiz inputs Callie can scan — live quiz question + option wording.
+ * Hide unanswered. Do not invent numbers.
+ */
+export function leadQuizAnswerRows(lead) {
+  const rows = [];
+  pushInsightRow(rows, "Where are you right now?", formatMonthsPostpartum(lead?.months_postpartum));
+  pushInsightRow(rows, "Are you feeding your baby breast milk right now?", formatFeedingStatus(lead?.feeding_status));
+  pushInsightRow(rows, "Height", formatQuizHeight(lead?.height_in));
+  pushInsightRow(rows, "Current weight (lb)", formatQuizWeight(lead?.current_weight_lbs));
+  pushInsightRow(rows, "What weight do you feel like yourself at?", formatQuizWeight(lead?.goal_weight_lbs));
+  pushInsightRow(rows, "What are you actually after?", formatQuizGoal(lead?.goal));
+  pushInsightRow(rows, "How much are you moving right now?", formatQuizActivity(lead?.activity_level));
+  pushInsightRow(rows, "Anything we should know?", formatQuizFlags(lead));
+  pushInsightRow(rows, "Baby's birthday", formatBabyBirthday(lead?.baby_birthday));
+  return rows;
+}
+
+/**
+ * Computed ranges (what we told her). Segment/tags if useful.
+ * Answers live in leadQuizAnswerRows — do not bury inputs here.
  */
 export function leadQuizResultRows(lead) {
   const rows = [];
-  const push = (label, value) => {
-    const text = String(value || "").trim();
-    if (!text) return;
-    rows.push({ label, value: text });
-  };
-
-  push("Ranges", formatMacroRanges(lead));
-  push("Tags", formatLeadTags(lead));
-  push("Postpartum", formatMonthsPostpartum(lead?.months_postpartum));
-  push("Feeding", formatFeedingStatus(lead?.feeding_status));
-  push("Goal", formatQuizGoal(lead?.goal));
-  push("Activity level", formatQuizActivity(lead?.activity_level));
-  push("Height", formatQuizHeight(lead?.height_in));
-  push("Current weight", formatQuizWeight(lead?.current_weight_lbs));
-  push("Goal weight", formatQuizWeight(lead?.goal_weight_lbs));
-  push("Review", formatQuizReviewLine(lead));
-
+  pushInsightRow(rows, "Ranges", formatMacroRanges(lead));
+  pushInsightRow(rows, "Tags", formatLeadTags(lead));
+  pushInsightRow(rows, "Review", formatQuizReviewLine(lead));
   return rows;
 }
 

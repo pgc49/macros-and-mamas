@@ -500,31 +500,42 @@ describe("AdminLeads", () => {
     expect(screen.queryByText(/last quiz|last visit|0 visits|checkout-started|sentry/i)).toBeNull();
   });
 
-  it("shows quiz ranges and flags on lead detail Quiz results", async () => {
+  it("shows quiz answers and computed ranges on lead detail", async () => {
     render(<AdminLeads />);
     await waitFor(() => {
       expect(screen.getByText("Ellie Rose")).toBeTruthy();
     });
     fireEvent.click(screen.getByText("Ellie Rose"));
     await waitFor(() => {
-      expect(screen.getByText("Quiz results")).toBeTruthy();
+      expect(screen.getByText("Answers")).toBeTruthy();
     });
+    expect(screen.getByText("Results")).toBeTruthy();
+    expect(screen.getByText("Where are you right now?")).toBeTruthy();
+    expect(screen.getByText("3–12 months")).toBeTruthy();
+    expect(screen.getByText("Are you feeding your baby breast milk right now?")).toBeTruthy();
+    expect(screen.getByText("Exclusive breast milk")).toBeTruthy();
+    expect(screen.getByText("Height")).toBeTruthy();
+    expect(screen.getByText("5 ft 4 in")).toBeTruthy();
+    expect(screen.getByText("Current weight (lb)")).toBeTruthy();
+    expect(screen.getByText("160 lb")).toBeTruthy();
+    expect(screen.getByText("What weight do you feel like yourself at?")).toBeTruthy();
+    expect(screen.getByText("150 lb")).toBeTruthy();
+    expect(screen.getByText("What are you actually after?")).toBeTruthy();
+    expect(screen.getByText("Lose fat — keep muscle and milk")).toBeTruthy();
+    expect(screen.getByText("How much are you moving right now?")).toBeTruthy();
+    expect(screen.getByText("Moderate movement")).toBeTruthy();
+    expect(screen.getByText("Anything we should know?")).toBeTruthy();
+    expect(screen.getByText("Fully vegan")).toBeTruthy();
     expect(screen.getByText("Ranges")).toBeTruthy();
     expect(screen.getByText("90–110P · 150–190C · 45–60F · 1700–1900 cal")).toBeTruthy();
     expect(screen.getByText("Plant-based · Vegan · Needs review")).toBeTruthy();
-    expect(screen.getByText("3–12 months")).toBeTruthy();
-    expect(screen.getByText("Exclusive breast milk")).toBeTruthy();
-    expect(screen.getByText("Lose fat — keep muscle and milk")).toBeTruthy();
-    expect(screen.getByText("Moderate movement")).toBeTruthy();
-    expect(screen.getByText("5′4″")).toBeTruthy();
-    expect(screen.getByText("160 lb")).toBeTruthy();
-    expect(screen.getByText("150 lb")).toBeTruthy();
     expect(screen.getByText("Carbs under 100")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Email" })).toBeTruthy();
     expect(screen.getByText("Activity")).toBeTruthy();
+    expect(screen.queryByText("Quiz results")).toBeNull();
   });
 
-  it("omits Quiz results blanks on a sparse lead", async () => {
+  it("omits blank quiz answers and results on a sparse lead", async () => {
     loadQuizLeads.mockResolvedValue([
       {
         id: "lead-sparse",
@@ -567,14 +578,13 @@ describe("AdminLeads", () => {
     await waitFor(() => {
       expect(screen.getByText("Activity")).toBeTruthy();
     });
+    expect(screen.queryByText("Answers")).toBeNull();
+    expect(screen.queryByText("Results")).toBeNull();
     expect(screen.queryByText("Quiz results")).toBeNull();
     expect(screen.queryByText("Ranges")).toBeNull();
-    expect(screen.queryByText("Tags")).toBeNull();
-    expect(screen.queryByText("Postpartum")).toBeNull();
-    expect(screen.queryByText("Feeding")).toBeNull();
-    expect(screen.queryByText("Goal")).toBeNull();
+    expect(screen.queryByText("Where are you right now?")).toBeNull();
     expect(screen.queryByText("Height")).toBeNull();
-    expect(screen.queryByText("Current weight")).toBeNull();
+    expect(screen.queryByText("Current weight (lb)")).toBeNull();
     expect(screen.queryByText("Review")).toBeNull();
     expect(screen.getByText("Landing")).toBeTruthy();
     expect(screen.getByText("/quiz")).toBeTruthy();

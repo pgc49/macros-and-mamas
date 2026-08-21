@@ -13,9 +13,11 @@ import {
   formatMacroRanges,
   formatQuizActivity,
   formatQuizGoal,
+  formatQuizFlags,
   formatQuizHeight,
   formatQuizWeight,
   leadInsightRows,
+  leadQuizAnswerRows,
   leadQuizResultRows,
   isMetaAdLead,
   isMetaClickLead,
@@ -565,63 +567,89 @@ function quizResultMap(leadRow) {
   return Object.fromEntries(leadQuizResultRows(leadRow).map((row) => [row.label, row.value]));
 }
 
-describe("leadQuizResultRows", () => {
-  it("shows ranges, tags, answers, and review when those fields are stored", () => {
-    const byLabel = quizResultMap(lead({
-      flags: ["vegan"],
-      segment: "waitlist_plantbased",
-      months_postpartum: "3_12_months",
-      feeding_status: "exclusive",
-      goal: "lose_sustainable",
-      activity_level: "moderate",
-      height_in: 64,
-      current_weight_lbs: 160,
-      goal_weight_lbs: 150,
-      needs_review: true,
-      review_reason: "carbs_under_100",
-    }));
-    expect(byLabel.Ranges).toBe("110–130P · 140–180C · 50–65F · 1800–2000 cal");
-    expect(byLabel.Tags).toBe("Plant-based · Vegan · Needs review");
-    expect(byLabel.Postpartum).toBe("3–12 months");
-    expect(byLabel.Feeding).toBe("Exclusive breast milk");
-    expect(byLabel.Goal).toBe("Lose fat — keep muscle and milk");
-    expect(byLabel["Activity level"]).toBe("Moderate movement");
-    expect(byLabel.Height).toBe("5′4″");
-    expect(byLabel["Current weight"]).toBe("160 lb");
-    expect(byLabel["Goal weight"]).toBe("150 lb");
-    expect(byLabel.Review).toBe("Carbs under 100");
-    expect(formatQuizGoal("maintain")).toBe("Maintain");
+function quizAnswerMap(leadRow) {
+  return Object.fromEntries(leadQuizAnswerRows(leadRow).map((row) => [row.label, row.value]));
+}
+
+const FULL_QUIZ = {
+  flags: ["vegan"],
+  segment: "waitlist_plantbased",
+  months_postpartum: "3_12_months",
+  feeding_status: "exclusive",
+  goal: "lose_sustainable",
+  activity_level: "moderate",
+  height_in: 64,
+  current_weight_lbs: 160,
+  goal_weight_lbs: 150,
+  baby_birthday: "2025-06-01",
+  needs_review: true,
+  review_reason: "carbs_under_100",
+};
+
+const BLANK_QUIZ = {
+  flags: [],
+  segment: "main",
+  months_postpartum: "",
+  feeding_status: null,
+  goal: "",
+  activity_level: "  ",
+  height_in: null,
+  current_weight_lbs: 0,
+  goal_weight_lbs: "",
+  baby_birthday: null,
+  needs_review: false,
+  review_reason: "thyroid",
+  protein_low_g: null,
+  protein_high_g: null,
+  carbs_low_g: null,
+  carbs_high_g: null,
+  fat_low_g: null,
+  fat_high_g: null,
+  calories_low: null,
+  calories_high: null,
+};
+
+describe("leadQuizAnswerRows", () => {
+  it("shows persisted quiz inputs with live quiz wording", () => {
+    const byLabel = quizAnswerMap(lead(FULL_QUIZ));
+    expect(byLabel["Where are you right now?"]).toBe("3–12 months");
+    expect(byLabel["Are you feeding your baby breast milk right now?"]).toBe("Exclusive breast milk");
+    expect(byLabel.Height).toBe("5 ft 4 in");
+    expect(byLabel["Current weight (lb)"]).toBe("160 lb");
+    expect(byLabel["What weight do you feel like yourself at?"]).toBe("150 lb");
+    expect(byLabel["What are you actually after?"]).toBe("Lose fat — keep muscle and milk");
+    expect(byLabel["How much are you moving right now?"]).toBe("Moderate movement");
+    expect(byLabel["Anything we should know?"]).toBe("Fully vegan");
+    expect(byLabel["Baby's birthday"]).toBe("Jun 1, 2025");
+    expect(byLabel.Ranges).toBeUndefined();
+    expect(formatQuizGoal("maintain")).toBe("Maintain where I am");
     expect(formatQuizActivity("light")).toBe("Light walks");
+    expect(formatQuizFlags(lead({ flags: ["vegetarian", "c_section"] })))
+      .toBe("Vegetarian / pescatarian · Recent C-section");
     expect(formatQuizHeight(0)).toBe("");
     expect(formatQuizWeight(null)).toBe("");
   });
 
-  it("omits blanks and does not invent numbers on a sparse lead", () => {
-    const rows = leadQuizResultRows(lead({
-      flags: [],
-      segment: "main",
-      months_postpartum: "",
-      feeding_status: null,
-      goal: "",
-      activity_level: "  ",
-      height_in: null,
-      current_weight_lbs: 0,
-      goal_weight_lbs: "",
-      needs_review: false,
-      review_reason: "thyroid",
-      protein_low_g: null,
-      protein_high_g: null,
-      carbs_low_g: null,
-      carbs_high_g: null,
-      fat_low_g: null,
-      fat_high_g: null,
-      calories_low: null,
-      calories_high: null,
-    }));
-    expect(rows).toEqual([]);
+  it("omits unanswered quiz inputs", () => {
+    expect(leadQuizAnswerRows(lead(BLANK_QUIZ))).toEqual([]);
+  });
+});
+
+describe("leadQuizResultRows", () => {
+  it("shows computed ranges and tags, not as a substitute for answers", () => {
+    const byLabel = quizResultMap(lead(FULL_QUIZ));
+    expect(byLabel.Ranges).toBe("110–130P · 140–180C · 50–65F · 1800–2000 cal");
+    expect(byLabel.Tags).toBe("Plant-based · Vegan · Needs review");
+    expect(byLabel.Review).toBe("Carbs under 100");
+    expect(byLabel["Where are you right now?"]).toBeUndefined();
+    expect(byLabel.Height).toBeUndefined();
     expect(quizResultMap(lead({ needs_review: true })).Review).toBe("Needs review");
     expect(quizResultMap(lead({ needs_review: false, review_reason: "carbs_under_100" })).Review)
       .toBeUndefined();
+  });
+
+  it("omits blank results and does not invent numbers", () => {
+    expect(leadQuizResultRows(lead(BLANK_QUIZ))).toEqual([]);
   });
 });
 
@@ -718,6 +746,7 @@ describe("loadQuizLeads", () => {
     expect(client.calls[0].cols).toEqual(expect.stringContaining("height_in"));
     expect(client.calls[0].cols).toEqual(expect.stringContaining("current_weight_lbs"));
     expect(client.calls[0].cols).toEqual(expect.stringContaining("goal_weight_lbs"));
+    expect(client.calls[0].cols).toEqual(expect.stringContaining("baby_birthday"));
     expect(client.calls[0].cols).not.toMatch(/\bvisits?\b/);
     expect(client.calls.map((c) => c.table).sort()).toEqual([
       "cohort_waitlist",
