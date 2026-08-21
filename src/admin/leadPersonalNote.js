@@ -13,6 +13,7 @@ const BANNED = [
   "i hope this email finds you well",
   "holistic nutritionist",
   "limited spots remaining",
+  "limited spots!!",
 ];
 
 function leadFlags(lead) {
@@ -256,18 +257,20 @@ export function buildPersonalNoteBody({ firstName, observation, soft }) {
     "",
     observation,
     "",
+    "I'm also deep in the throes of motherhood, and Macros and Mamas is realistic and truly sustainable. I really want to support you to get those results.",
+    "",
   ];
   if (soft) {
     lines.push(
       "This cohort may not be the right fit right now. I'll tell you when it is.",
       "",
-      "Happy to answer questions in the meantime.",
+      "I'd love to personally answer any questions or wonderings — just reply.",
     );
   } else {
     lines.push(
       "I'd love to have you join. Doors close August 27.",
       "",
-      "Reply anytime if you have a question — I'm here.",
+      "I'd love to personally answer any questions or wonderings — just reply.",
     );
   }
   lines.push("", "Callie");
