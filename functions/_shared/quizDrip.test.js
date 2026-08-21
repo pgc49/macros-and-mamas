@@ -11,6 +11,7 @@ import {
   indexProfilesByEmail,
   pickDueQuizDripStep,
   planQuizLeadSends,
+  planRemainingQuizDrips,
   quizDripAnchorMs,
   quizLastSalesDue,
 } from "./quizDrip.mjs";
@@ -229,6 +230,61 @@ describe("planQuizLeadSends", () => {
       { email: "mama@example.com", paid: true, paid_at: "2026-08-01" },
     ]);
     expect(map.get("mama@example.com").paid).toBe(true);
+  });
+});
+
+describe("planRemainingQuizDrips", () => {
+  it("lists +2d then last after ranges, and marks a due step as due", () => {
+    const rangesAt = Date.parse("2026-08-20T12:00:00.000Z");
+    const now = Date.parse("2026-08-21T18:00:00.000Z");
+    const planned = planRemainingQuizDrips({
+      now,
+      lead: lead({
+        segment: "main",
+        created_at: new Date(rangesAt).toISOString(),
+      }),
+      sentTypes: new Set(["quiz_ranges"]),
+      quizRangesAt: rangesAt,
+    });
+    expect(planned.stopReason).toBeNull();
+    expect(planned.remaining.map((r) => r.emailType)).toEqual([QUIZ_DRIP_2D, QUIZ_DRIP_7D]);
+    expect(planned.remaining[0]).toEqual(expect.objectContaining({
+      emailType: QUIZ_DRIP_2D,
+      atMs: rangesAt + 2 * DAY_MS,
+      due: false,
+    }));
+  });
+
+  it("shows the +2d as due now when cron has not sent it yet", () => {
+    const rangesAt = NOW - 2 * DAY_MS;
+    const planned = planRemainingQuizDrips({
+      now: NOW,
+      lead: lead({ created_at: new Date(rangesAt).toISOString() }),
+      sentTypes: new Set(["quiz_ranges"]),
+      quizRangesAt: rangesAt,
+    });
+    expect(planned.remaining[0]).toEqual(expect.objectContaining({
+      emailType: QUIZ_DRIP_2D,
+      due: true,
+    }));
+  });
+
+  it("returns no remaining when unsubscribed, paid, or plant-based", () => {
+    const args = {
+      now: NOW,
+      lead: lead(),
+      sentTypes: new Set(["quiz_ranges"]),
+      quizRangesAt: NOW - DAY_MS,
+    };
+    expect(planRemainingQuizDrips({ ...args, unsubscribed: true }).stopReason).toBe("unsubscribed");
+    expect(planRemainingQuizDrips({
+      ...args,
+      profile: { paid: true },
+    }).remaining).toEqual([]);
+    expect(planRemainingQuizDrips({
+      ...args,
+      lead: lead({ segment: "waitlist_plantbased" }),
+    }).stopReason).toBe("waitlist_plantbased");
   });
 });
 

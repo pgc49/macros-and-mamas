@@ -6,6 +6,7 @@
 import {
   isLastUnpaidSalesDayPt,
   isOnOrAfterDoorsClosePt,
+  lastUnpaidSalesDayStartMs,
 } from "./cohortEmailWindow.mjs";
 
 export const HOUR_MS = 60 * 60 * 1000;
@@ -89,4 +90,54 @@ export function decideFinishJoiningAction({
   if (sent.has(step)) return { action: "skip", reason: "already_sent" };
 
   return { action: "send", step, ageMs, reason: step };
+}
+
+function finishJoiningProbeTimes({ now, createdMs }) {
+  const times = [now, createdMs + HOUR_MS, createdMs + 24 * HOUR_MS];
+  const lastStart = lastUnpaidSalesDayStartMs();
+  if (Number.isFinite(lastStart)) times.push(lastStart);
+  return [...new Set(times.filter((t) => Number.isFinite(t) && t >= now))].sort((a, b) => a - b);
+}
+
+/**
+ * Remaining Track B drips cron still owes this unpaid profile, with expected times.
+ * Uses pickDueFinishJoiningStep at now and at each upcoming due instant.
+ */
+export function planRemainingFinishJoining({
+  now,
+  profile = null,
+  unsubscribed = false,
+  sentTypes = new Set(),
+  nudgeAllowed = true,
+} = {}) {
+  const sent = sentTypes instanceof Set ? new Set(sentTypes) : new Set(sentTypes || []);
+
+  if (unsubscribed) return { remaining: [], stopReason: "unsubscribed" };
+  if (!nudgeAllowed) return { remaining: [], stopReason: "enrollment_closed" };
+  if (!profile) return { remaining: [], stopReason: "no_profile" };
+  if (profile.role === "admin") return { remaining: [], stopReason: "admin" };
+  if (profile.refunded) return { remaining: [], stopReason: "refunded" };
+  if (profile.paid === true || profile.paid_at) return { remaining: [], stopReason: "paid" };
+
+  const createdMs = profile.created_at ? Date.parse(profile.created_at) : NaN;
+  if (!Number.isFinite(createdMs) || !Number.isFinite(now)) {
+    return { remaining: [], stopReason: "no_anchor" };
+  }
+
+  const remaining = [];
+  for (const at of finishJoiningProbeTimes({ now, createdMs })) {
+    const step = pickDueFinishJoiningStep({
+      ageMs: at - createdMs,
+      sentTypes: sent,
+      now: at,
+    });
+    if (!step || sent.has(step)) continue;
+    remaining.push({
+      emailType: step,
+      atMs: at,
+      due: at <= now,
+    });
+    sent.add(step);
+  }
+  return { remaining, stopReason: remaining.length ? null : "not_due" };
 }

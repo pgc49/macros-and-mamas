@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { emailRecipient, emailTypeLabel, filterEmailEvents } from "./emailLog.js";
+import {
+  emailRecipient,
+  emailTypeLabel,
+  eventsForLeadEmail,
+  filterEmailEvents,
+  leadMailtoHref,
+} from "./emailLog.js";
 
 describe("emailRecipient", () => {
   it("shows first name and email for a mama send", () => {
@@ -68,5 +74,33 @@ describe("filterEmailEvents", () => {
     expect(filterEmailEvents(rows, "quiz drip").map((r) => r.id)).toEqual(["2"]);
     expect(filterEmailEvents(rows, "welcome").map((r) => r.id)).toEqual(["1"]);
     expect(filterEmailEvents(rows, "").map((r) => r.id)).toEqual(["1", "2", "3"]);
+  });
+});
+
+describe("eventsForLeadEmail", () => {
+  const rows = [
+    { id: "drip", email_type: "quiz_drip_2d", to_email: "Ellie@Example.com", profile_id: null },
+    { id: "welcome", email_type: "welcome", to_email: "ellie@example.com", profile_id: "p1" },
+    { id: "other", email_type: "quiz_ranges", to_email: "other@example.com" },
+    { id: "callie", email_type: "callie_payment", to_email: "callie", profile_id: "p1" },
+  ];
+
+  it("matches by case-insensitive to_email, including quiz-only sends", () => {
+    expect(eventsForLeadEmail(rows, "ELLIE@example.com").map((r) => r.id)).toEqual(["drip", "welcome"]);
+  });
+
+  it("does not use profile_id and skips Callie notifies", () => {
+    expect(eventsForLeadEmail(rows, "ellie@example.com").some((r) => r.to_email === "callie")).toBe(false);
+    expect(eventsForLeadEmail(rows, "")).toEqual([]);
+  });
+});
+
+describe("leadMailtoHref", () => {
+  it("prefills To and a simple subject with no body", () => {
+    expect(leadMailtoHref("ellie@example.com")).toBe(
+      "mailto:ellie@example.com?subject=Macros%20and%20Mamas",
+    );
+    expect(leadMailtoHref("  ")).toBe("");
+    expect(leadMailtoHref("not-an-email")).toBe("");
   });
 });

@@ -11,6 +11,7 @@
 import {
   isLastUnpaidSalesDayPt,
   isOnOrAfterDoorsClosePt,
+  lastUnpaidSalesDayStartMs,
 } from "./cohortEmailWindow.mjs";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -224,4 +225,82 @@ export function quizCronEventTypes() {
     ...QUIZ_DRIP_ALL_TYPES,
     ...ACCOUNT_EVENT_TYPES,
   ];
+}
+
+function quizDripStopReason({
+  profile = null,
+  unsubscribed = false,
+  sentTypes = new Set(),
+  segment = "",
+} = {}) {
+  const sent = sentTypes instanceof Set ? sentTypes : new Set(sentTypes || []);
+  if (unsubscribed) return "unsubscribed";
+  if (isPaidProfile(profile)) return "paid";
+  if (sent.has("welcome")) return "paid";
+  if (profile) return "has_profile";
+  if (
+    sent.has("finish_joining_1h")
+    || sent.has("finish_joining_24h")
+    || sent.has("finish_joining_close")
+  ) {
+    return "has_profile";
+  }
+  if (segment === "waitlist_plantbased") return "waitlist_plantbased";
+  return null;
+}
+
+function quizProbeTimes({ now, anchor, segment }) {
+  const times = [now];
+  if (segment === "pregnancy_nurture") {
+    times.push(anchor + 3 * DAY_MS);
+  } else if (QUIZ_SALES_SEGMENTS.has(segment)) {
+    times.push(anchor + 2 * DAY_MS);
+    times.push(anchor + QUIZ_LAST_MIN_AGE_MS);
+    const lastStart = lastUnpaidSalesDayStartMs();
+    if (Number.isFinite(lastStart)) times.push(lastStart);
+  }
+  return [...new Set(times.filter((t) => Number.isFinite(t) && t >= now))].sort((a, b) => a - b);
+}
+
+/**
+ * Remaining Track A drips cron still owes this quiz-only lead, with expected times.
+ * Uses pickDueQuizDripStep at now and at each upcoming due instant — not a second calendar.
+ */
+export function planRemainingQuizDrips({
+  now,
+  lead,
+  profile = null,
+  unsubscribed = false,
+  sentTypes = new Set(),
+  quizRangesAt = null,
+} = {}) {
+  const sent = sentTypes instanceof Set ? new Set(sentTypes) : new Set(sentTypes || []);
+  const segment = String(lead?.segment || "");
+  const stopReason = quizDripStopReason({ profile, unsubscribed, sentTypes: sent, segment });
+  if (stopReason) return { remaining: [], stopReason };
+
+  const anchor = quizDripAnchorMs({
+    leadCreatedAt: lead?.created_at,
+    quizRangesAt,
+    now,
+  });
+  if (anchor == null) return { remaining: [], stopReason: "no_anchor" };
+
+  const remaining = [];
+  for (const at of quizProbeTimes({ now, anchor, segment })) {
+    const step = pickDueQuizDripStep({
+      ageMs: at - anchor,
+      sentTypes: sent,
+      segment,
+      now: at,
+    });
+    if (!step || sent.has(step)) continue;
+    remaining.push({
+      emailType: step,
+      atMs: at,
+      due: at <= now,
+    });
+    sent.add(step);
+  }
+  return { remaining, stopReason: remaining.length ? null : "not_due" };
 }

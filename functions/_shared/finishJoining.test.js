@@ -6,6 +6,7 @@ import {
   HOUR_MS,
   decideFinishJoiningAction,
   pickDueFinishJoiningStep,
+  planRemainingFinishJoining,
 } from "./finishJoining.mjs";
 import {
   buildFinishJoining24hBody,
@@ -93,6 +94,32 @@ describe("decideFinishJoiningAction", () => {
       profile: unpaid,
       nudgeAllowed: false,
     }).reason).toBe("enrollment_closed");
+  });
+
+  it("lists remaining +1h / +24h / close before Wednesday", () => {
+    const created = Date.parse("2026-08-24T12:00:00.000-07:00");
+    const planned = planRemainingFinishJoining({
+      now: created + 10 * 60 * 1000,
+      profile: { ...unpaid, created_at: new Date(created).toISOString(), paid: false },
+      sentTypes: new Set(),
+    });
+    expect(planned.remaining.map((r) => r.emailType)).toEqual([
+      FINISH_JOINING_1H,
+      FINISH_JOINING_24H,
+      FINISH_JOINING_CLOSE,
+    ]);
+  });
+
+  it("returns no remaining when paid or unsubscribed", () => {
+    expect(planRemainingFinishJoining({
+      now: AUG25,
+      profile: { ...unpaid, paid: true },
+    })).toEqual(expect.objectContaining({ remaining: [], stopReason: "paid" }));
+    expect(planRemainingFinishJoining({
+      now: AUG25,
+      profile: unpaid,
+      unsubscribed: true,
+    }).stopReason).toBe("unsubscribed");
   });
 
   it("plans the Wednesday last note for an unpaid profile", () => {

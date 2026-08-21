@@ -1,10 +1,20 @@
 /**
  * Admin Leads tab — every quiz complete (the Meta Lead we fire).
  * Not Meta Ads Manager. Quiz-only emails live here; Clients is profiles.
+ * Tap a lead to see her address, mailto, and send history for that email.
  */
 import { useEffect, useMemo, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card } from "../components/ui";
+import { db } from "../db/db";
+import { copyText } from "../utils/clipboard";
+import { emailTypeLabel, eventsForLeadEmail, leadMailtoHref } from "./emailLog";
+import {
+  dripStopCopy,
+  formatDripWhen,
+  nextDripLine,
+  planLeadDrips,
+} from "./leadDripSchedule";
 import {
   QUIZ_LEAD_FILTERS,
   filterQuizLeads,
@@ -24,6 +34,37 @@ function EmptyLine({ children }) {
 function SectionTitle({ children }) {
   return <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>{children}</div>;
 }
+
+function leadEmail(lead) {
+  return String(lead?.email || "").trim();
+}
+
+function formatWhen(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+const actionBtnBase = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 44,
+  padding: "8px 16px",
+  borderRadius: 999,
+  fontFamily: F,
+  fontSize: 14,
+  fontWeight: 700,
+  lineHeight: 1.2,
+  cursor: "pointer",
+  textDecoration: "none",
+  boxSizing: "border-box",
+};
 
 function FilterBar({ filter, setFilter }) {
   return (
@@ -53,10 +94,192 @@ function FilterBar({ filter, setFilter }) {
   );
 }
 
+function CopyEmailButton({ email }) {
+  const [copied, setCopied] = useState(false);
+  const onCopy = async () => {
+    try {
+      await copyText(email);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch (err) {
+      console.error("clipboard write failed", err);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      aria-label={copied ? "Email copied" : `Copy ${email}`}
+      style={{
+        ...actionBtnBase,
+        border: `1.5px solid ${copied ? T.sage : T.border}`,
+        background: copied ? T.sageSoft : "#fff",
+        color: copied ? T.sage : T.ink,
+      }}
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+function LeadDetail({ lead, onBack, onOpenMama }) {
+  const [events, setEvents] = useState(null);
+  const [unsubscribed, setUnsubscribed] = useState(false);
+  const email = leadEmail(lead);
+  const mailto = leadMailtoHref(email);
+  const canOpenCard = !!lead.profileId && typeof onOpenMama === "function";
+  const plan = useMemo(
+    () => planLeadDrips({ lead, events: events || [], unsubscribed }),
+    [lead, events, unsubscribed],
+  );
+  const stopLine = dripStopCopy(plan.stopReason);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!email) {
+      setEvents([]);
+      setUnsubscribed(false);
+      return undefined;
+    }
+    setEvents(null);
+    Promise.all([
+      db.loadEmailEventsByEmail(email),
+      db.isEmailUnsubscribed(email).catch(() => false),
+    ])
+      .then(([rows, unsub]) => {
+        if (cancelled) return;
+        setEvents(eventsForLeadEmail(rows, email));
+        setUnsubscribed(Boolean(unsub));
+      })
+      .catch((e) => {
+        console.error("lead email history load failed", e);
+        if (!cancelled) {
+          setEvents([]);
+          setUnsubscribed(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [email]);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onBack}
+        style={{
+          fontFamily: F,
+          fontSize: 13.5,
+          fontWeight: 700,
+          color: T.accentDeep,
+          background: "none",
+          border: "none",
+          padding: "0 0 12px",
+          cursor: "pointer",
+        }}
+      >
+        ← Quiz leads
+      </button>
+      <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
+        Copy her address or email her from your phone. Sent is what went out; scheduled is what cron still owes her.
+      </p>
+      <Card style={{ marginBottom: 28 }}>
+        <div style={{ fontFamily: FD, fontSize: 22 }}>{leadDisplayName(lead)}</div>
+        {email ? (
+          <div style={{ fontSize: 16, color: T.ink, fontWeight: 700, marginTop: 8, wordBreak: "break-word" }}>
+            {email}
+          </div>
+        ) : (
+          <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 8 }}>No email on this lead.</div>
+        )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+          {mailto ? (
+            <>
+              <CopyEmailButton email={email} />
+              <a href={mailto} style={{ ...actionBtnBase, border: "none", background: T.accent, color: "#fff" }}>
+                Email
+              </a>
+            </>
+          ) : null}
+          {canOpenCard ? (
+            <button
+              type="button"
+              onClick={() => onOpenMama(lead.profileId)}
+              style={{
+                ...actionBtnBase,
+                border: `1.5px solid ${T.accent}`,
+                background: "transparent",
+                color: T.accent,
+              }}
+            >
+              Open client card
+            </button>
+          ) : null}
+        </div>
+
+        <div style={{ marginTop: 22 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 6 }}>
+            {events == null ? "Next: …" : nextDripLine(plan)}
+          </div>
+          {events != null && stopLine ? (
+            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, marginBottom: 8 }}>
+              {stopLine}
+            </div>
+          ) : null}
+          {events != null && plan.remaining.length > 0 ? (
+            <>
+              <SectionTitle>Still scheduled</SectionTitle>
+              {plan.remaining.map((item) => (
+                <div
+                  key={`${item.emailType}-${item.atMs}`}
+                  style={{ fontSize: 14, color: T.ink, padding: "8px 0", borderTop: `1px solid ${T.border}` }}
+                >
+                  {emailTypeLabel({ email_type: item.emailType })}
+                  {" · "}
+                  {formatDripWhen(item)}
+                </div>
+              ))}
+            </>
+          ) : null}
+          <div style={{ marginTop: plan.remaining.length ? 16 : 8 }}>
+            <SectionTitle>Emails sent</SectionTitle>
+          </div>
+        </div>
+        {events == null ? (
+          <EmptyLine>Loading emails…</EmptyLine>
+        ) : events.length === 0 ? (
+          <EmptyLine>No emails sent yet.</EmptyLine>
+        ) : (
+          events.map((e, i) => (
+            <div
+              key={e.id}
+              style={{
+                padding: "14px 0",
+                borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{emailTypeLabel(e)}</div>
+              {e.subject ? (
+                <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 2 }}>{e.subject}</div>
+              ) : null}
+              <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 2 }}>
+                {formatWhen(e.created_at)}
+                {e.status === "failed" ? " · Failed" : ""}
+              </div>
+            </div>
+          ))
+        )}
+      </Card>
+    </div>
+  );
+}
+
 export function AdminLeads({ onOpenMama }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
+  const [selected, setSelected] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,11 +300,21 @@ export function AdminLeads({ onOpenMama }) {
 
   const matches = useMemo(() => filterQuizLeads(rows || [], filter), [rows, filter]);
 
+  if (selected) {
+    return (
+      <LeadDetail
+        lead={selected}
+        onBack={() => setSelected(null)}
+        onOpenMama={onOpenMama}
+      />
+    );
+  }
+
   return (
     <div>
       <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
         Quiz completes — the Meta Lead we fire, not Ads Manager.
-        Tap a mama with an account to open her client card.
+        Tap a lead to see her email, what we've sent, and what's still scheduled.
       </p>
       <FilterBar filter={filter} setFilter={setFilter} />
       <Card style={{ marginBottom: 28 }}>
@@ -102,13 +335,13 @@ export function AdminLeads({ onOpenMama }) {
                 : `${matches.length} of ${rows.length}`}
             </p>
             {matches.map((row, i) => {
-              const canOpen = !!row.profileId && typeof onOpenMama === "function";
+              const canOpen = !!leadEmail(row);
               return (
                 <button
                   key={row.id}
                   type="button"
                   disabled={!canOpen}
-                  onClick={canOpen ? () => onOpenMama(row.profileId) : undefined}
+                  onClick={canOpen ? () => setSelected(row) : undefined}
                   style={{
                     display: "block",
                     width: "100%",

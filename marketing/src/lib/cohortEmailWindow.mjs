@@ -31,3 +31,21 @@ export function isOnOrAfterDoorsClosePt(nowMs) {
 export function isLastUnpaidSalesDayPt(nowMs) {
   return pacificYmd(nowMs) === LAST_UNPAID_SALES_YMD;
 }
+
+/** First millisecond of a Pacific calendar day (DST-safe). */
+export function firstInstantOfPacificYmd(ymd) {
+  const target = String(ymd || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(target)) return NaN;
+  const utcMidnight = Date.parse(`${target}T00:00:00.000Z`);
+  if (!Number.isFinite(utcMidnight)) return NaN;
+  let t = utcMidnight - 16 * 60 * 60 * 1000;
+  const end = utcMidnight + 16 * 60 * 60 * 1000;
+  while (t <= end && pacificYmd(t) !== target) t += 60 * 60 * 1000;
+  if (pacificYmd(t) !== target) return NaN;
+  while (pacificYmd(t - 1) === target) t -= 1;
+  return t;
+}
+
+export function lastUnpaidSalesDayStartMs() {
+  return firstInstantOfPacificYmd(LAST_UNPAID_SALES_YMD);
+}

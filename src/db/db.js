@@ -1804,6 +1804,45 @@ export const db = {
     return data || [];
   },
 
+  /**
+   * Admin: every logged send to this address (quiz drips included; profile_id may be null).
+   * Case-insensitive exact match on to_email — not the last-N global log.
+   */
+  async loadEmailEventsByEmail(email, limit = 50) {
+    const raw = String(email || "").trim();
+    if (!raw) return [];
+    const target = raw.toLowerCase();
+    const pattern = raw.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
+    const { data, error } = await supabase
+      .from("email_events")
+      .select("id, profile_id, email_type, to_email, subject, status, resend_id, meta, created_at")
+      .ilike("to_email", pattern)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("loadEmailEventsByEmail failed", error);
+      return [];
+    }
+    return (data || []).filter(
+      (row) => String(row?.to_email || "").trim().toLowerCase() === target,
+    );
+  },
+
+  async isEmailUnsubscribed(email) {
+    const target = String(email || "").trim().toLowerCase();
+    if (!target) return false;
+    const { data, error } = await supabase
+      .from("email_unsubscribes")
+      .select("email")
+      .eq("email", target)
+      .maybeSingle();
+    if (error) {
+      console.warn("isEmailUnsubscribed failed", error);
+      return false;
+    }
+    return Boolean(data?.email);
+  },
+
   /** Admin: cohort waitlist rows for the next open blast. */
   async loadCohortWaitlist(cohort = "cohort_2", limit = 200) {
     const { data, error } = await supabase
