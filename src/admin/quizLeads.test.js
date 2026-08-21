@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   enrichQuizLeads,
   filterQuizLeads,
+  formatCampaignCompare,
+  formatCohortWaitlistLine,
+  formatEligibilityWaitlistLine,
+  formatIntakeLine,
   formatLeadCampaign,
+  formatLeadPhone,
   formatLeadTags,
   formatLeadWhen,
   formatMacroRanges,
@@ -286,6 +291,34 @@ describe("enrichQuizLeads + filterQuizLeads", () => {
     expect(quizLeadSourceLabel(byId["pixel-only"])).toBe("Organic");
   });
 
+  it("joins phone, waitlists, intake, and first-touch UTMs from extra tables", () => {
+    const extra = enrichQuizLeads(
+      [lead({ id: "joined", email: "Mama@example.com" })],
+      [{
+        id: MEGAN,
+        email: "mama@example.com",
+        role: "client",
+        paid: false,
+        phone: "555-0199",
+        status: "pending",
+        utm_source: "google",
+        utm_medium: "cpc",
+        landing_path: "/join",
+      }],
+      [],
+      {
+        cohortWaitlist: [{ email: "mama@example.com", phone: "555-0100", created_at: "2026-08-10T19:00:00.000Z" }],
+        eligibilityWaitlist: [{ email: "Mama@example.com", reason: "pregnant", created_at: "2026-08-09T18:00:00.000Z" }],
+        macros: [{ profile_id: MEGAN, approved: true }],
+      },
+    )[0];
+    expect(extra.phone).toBe("555-0199");
+    expect(extra.macrosApproved).toBe(true);
+    expect(extra.eligibilityWaitlist.reason).toBe("pregnant");
+    expect(extra.profileAttribution.utm_source).toBe("google");
+    expect(leadInsightRows(extra).some((row) => row.label === "Landing" && row.value === "/join")).toBe(false);
+  });
+
   it("filters Ad to campaign UTMs only; Referral keeps promo and quiz referred_by", () => {
     expect(filterQuizLeads(rows, "all").map((r) => r.id)).toEqual([
       "ellie",
@@ -355,7 +388,8 @@ describe("leadInsightRows", () => {
       funnelStatus: "quiz_only",
       profileId: null,
     }));
-    expect(byLabel["Quiz completed"]).toBe("Aug 19, 11:30 AM PT");
+    expect(byLabel["First quiz"]).toBe("Aug 19, 11:30 AM PT");
+    expect(byLabel["Quiz completed"]).toBeUndefined();
     expect(byLabel.Landing).toBe("/quiz");
     expect(byLabel.Campaign).toBe("meta / cpc / aug_founding / story_1");
     expect(byLabel.Source).toBe("Meta ad");
@@ -364,7 +398,11 @@ describe("leadInsightRows", () => {
     expect(byLabel.Feeding).toBe("Exclusive breast milk");
     expect(byLabel["Account created"]).toBeUndefined();
     expect(byLabel.Paid).toBeUndefined();
-    expect(Object.values(byLabel).join(" ")).not.toMatch(/fbp|fbc|event_id|visit/i);
+    expect(byLabel.Phone).toBeUndefined();
+    expect(byLabel.Waitlist).toBeUndefined();
+    expect(byLabel.Eligibility).toBeUndefined();
+    expect(byLabel.Intake).toBeUndefined();
+    expect(Object.values(byLabel).join(" ")).not.toMatch(/fbp|fbc|event_id|visit|last quiz|last visit|join views|checkout-started|sentry/i);
   });
 
   it("paid lead also shows account + paid timestamps", () => {
@@ -376,7 +414,7 @@ describe("leadInsightRows", () => {
       profileCreatedAt: "2026-08-18T17:00:00.000Z",
       profilePaidAt: "2026-08-18T18:00:00.000Z",
     }));
-    expect(byLabel["Quiz completed"]).toBe("Aug 18, 9:00 AM PT");
+    expect(byLabel["First quiz"]).toBe("Aug 18, 9:00 AM PT");
     expect(byLabel.Source).toBe("Referral · Sarah");
     expect(byLabel["Referred by"]).toBeUndefined();
     expect(byLabel["Account created"]).toBe("Aug 18, 10:00 AM PT");
@@ -414,7 +452,8 @@ describe("leadInsightRows", () => {
       calories_high: null,
     }));
     const labels = rows.map((row) => row.label);
-    expect(labels).toContain("Quiz completed");
+    expect(labels).toContain("First quiz");
+    expect(labels).not.toContain("Quiz completed");
     expect(labels).toContain("Source");
     expect(labels).not.toContain("Landing");
     expect(labels).not.toContain("Campaign");
@@ -424,9 +463,13 @@ describe("leadInsightRows", () => {
     expect(labels).not.toContain("Postpartum");
     expect(labels).not.toContain("Feeding");
     expect(labels).not.toContain("Ranges");
+    expect(labels).not.toContain("Phone");
+    expect(labels).not.toContain("Waitlist");
+    expect(labels).not.toContain("Eligibility");
+    expect(labels).not.toContain("Intake");
     expect(formatLeadCampaign(lead({ utm_source: "meta", utm_content: "story_1" })))
       .toBe("meta / story_1");
-    expect(rows.some((row) => /0 visits|visit count/i.test(`${row.label} ${row.value}`))).toBe(false);
+    expect(rows.some((row) => /0 visits|visit count|last quiz|last visit/i.test(`${row.label} ${row.value}`))).toBe(false);
   });
 
   it("shows review reason only when needs_review is set", () => {
@@ -435,9 +478,92 @@ describe("leadInsightRows", () => {
     expect(insightMap(lead({ needs_review: false, review_reason: "carbs_under_100" })).Review)
       .toBeUndefined();
   });
+
+  it("shows phone from profile, else homepage waitlist, and hides when neither", () => {
+    expect(formatLeadPhone(lead({ phone: "555-0199" }))).toBe("555-0199");
+    expect(insightMap(lead({
+      phone: "555-0199",
+      profilePhone: "555-0199",
+    })).Phone).toBe("555-0199");
+    expect(insightMap(lead({
+      cohortWaitlist: { phone: "555-0100", created_at: "2026-08-10T19:00:00.000Z" },
+    })).Phone).toBe("555-0100");
+    expect(insightMap(lead()).Phone).toBeUndefined();
+  });
+
+  it("shows homepage waitlist when/converted/paid and eligibility reason", () => {
+    const byLabel = insightMap(lead({
+      cohortWaitlist: {
+        created_at: "2026-08-10T19:00:00.000Z",
+        converted_at: "2026-08-12T17:00:00.000Z",
+        paid_at: "2026-08-12T18:00:00.000Z",
+      },
+      eligibilityWaitlist: {
+        reason: "early_nursing",
+        created_at: "2026-08-09T18:00:00.000Z",
+      },
+    }));
+    expect(byLabel.Waitlist).toBe("Aug 10, 12:00 PM PT · converted · paid");
+    expect(byLabel.Eligibility).toBe("Early nursing · Aug 9, 11:00 AM PT");
+    expect(formatCohortWaitlistLine({ created_at: "2026-08-10T19:00:00.000Z" }))
+      .toBe("Aug 10, 12:00 PM PT");
+    expect(formatEligibilityWaitlistLine({ reason: "pregnant", created_at: "2026-08-09T18:00:00.000Z" }))
+      .toBe("Pregnant · Aug 9, 11:00 AM PT");
+  });
+
+  it("shows intake from macros row or active status", () => {
+    expect(formatIntakeLine(lead({ macrosExists: true, macrosApproved: false }))).toBe("Submitted");
+    expect(insightMap(lead({ macrosExists: true, macrosApproved: true })).Intake).toBe("Approved");
+    expect(insightMap(lead({ profileStatus: "active" })).Intake).toBe("Approved");
+    expect(insightMap(lead({ funnelStatus: "signed_up_unpaid", profileId: MEGAN })).Intake).toBeUndefined();
+  });
+
+  it("compares quiz campaign to signup first-touch only when they differ", () => {
+    expect(formatCampaignCompare(lead({
+      utm_source: "meta",
+      utm_medium: "cpc",
+      utm_campaign: "aug_founding",
+      profileAttribution: {
+        utm_source: "google",
+        utm_medium: "cpc",
+        utm_campaign: "brand",
+      },
+    }))).toBe("quiz meta / cpc / aug_founding · signup google / cpc / brand");
+    expect(formatCampaignCompare(lead({
+      utm_source: "meta",
+      utm_medium: "cpc",
+      profileAttribution: { utm_source: "meta", utm_medium: "cpc" },
+    }))).toBe("meta / cpc");
+    expect(insightMap(lead({
+      landing_path: "/quiz",
+      utm_source: "meta",
+      utm_medium: "cpc",
+      profileAttribution: {
+        utm_source: "ig",
+        utm_medium: "paid",
+        landing_path: "/join",
+      },
+    })).Campaign).toBe("quiz meta / cpc · signup ig / paid");
+  });
 });
 
-function mockClient({ leads = [], profiles = [], referrals = [], error = null } = {}) {
+function mockClient({
+  leads = [],
+  profiles = [],
+  referrals = [],
+  cohortWaitlist = [],
+  eligibilityWaitlist = [],
+  macros = [],
+  error = null,
+} = {}) {
+  const dataByTable = {
+    marketing_leads: leads,
+    profiles,
+    referrals,
+    cohort_waitlist: cohortWaitlist,
+    waitlist: eligibilityWaitlist,
+    macros,
+  };
   const calls = [];
   return {
     calls,
@@ -454,12 +580,7 @@ function mockClient({ leads = [], profiles = [], referrals = [], error = null } 
         },
         then(resolve) {
           calls.push({ table: q.table, cols: q.cols, order: q.order });
-          const data = q.table === "marketing_leads"
-            ? leads
-            : q.table === "referrals"
-              ? referrals
-              : profiles;
-          resolve({ data, error });
+          resolve({ data: dataByTable[q.table] || [], error });
         },
       };
       return q;
@@ -472,7 +593,17 @@ describe("loadQuizLeads", () => {
     const client = mockClient({
       leads: [lead({ id: "joined", email: "Mama@example.com", fbc: "fb.1.1.abc", referred_by: null })],
       profiles: [
-        { id: MEGAN, email: "mama@example.com", role: "client", paid: false, name: "Mama" },
+        {
+          id: MEGAN,
+          email: "mama@example.com",
+          role: "client",
+          paid: false,
+          name: "Mama",
+          phone: "555-0199",
+          status: "pending",
+          utm_source: "google",
+          landing_path: "/join",
+        },
         { id: KRISTEN, email: "kristen@example.com", role: "client", paid: true, name: "Kristen" },
       ],
       referrals: [{
@@ -483,6 +614,18 @@ describe("loadQuizLeads", () => {
         status: "paid",
         created_at: "2026-08-18T12:00:00.000Z",
       }],
+      cohortWaitlist: [{
+        email: "mama@example.com",
+        phone: "555-0100",
+        created_at: "2026-08-10T19:00:00.000Z",
+        converted_at: "2026-08-18T17:00:00.000Z",
+      }],
+      eligibilityWaitlist: [{
+        email: "mama@example.com",
+        reason: "pregnant",
+        created_at: "2026-08-09T18:00:00.000Z",
+      }],
+      macros: [{ profile_id: MEGAN, approved: false }],
     });
     const rows = await loadQuizLeads({ client });
     expect(client.calls[0]).toEqual({
@@ -493,13 +636,36 @@ describe("loadQuizLeads", () => {
     expect(client.calls[0].cols).toEqual(expect.stringContaining("landing_path"));
     expect(client.calls[0].cols).toEqual(expect.stringContaining("review_reason"));
     expect(client.calls[0].cols).not.toMatch(/\bvisits?\b/);
-    expect(client.calls.map((c) => c.table).sort()).toEqual(["marketing_leads", "profiles", "referrals"]);
+    expect(client.calls.map((c) => c.table).sort()).toEqual([
+      "cohort_waitlist",
+      "macros",
+      "marketing_leads",
+      "profiles",
+      "referrals",
+      "waitlist",
+    ]);
     expect(client.calls.find((c) => c.table === "referrals").cols).toEqual(expect.stringContaining("referred_email"));
+    expect(client.calls.find((c) => c.table === "profiles").cols).toEqual(expect.stringContaining("phone"));
+    expect(client.calls.find((c) => c.table === "profiles").cols).toEqual(expect.stringContaining("utm_source"));
+    expect(client.calls.find((c) => c.table === "profiles").cols).not.toMatch(/fbp|fbc|anon_id/);
     expect(rows).toHaveLength(1);
     expect(rows[0].profileId).toBe(MEGAN);
     expect(rows[0].funnelStatus).toBe("signed_up_unpaid");
     expect(rows[0].sourceKind).toBe("meta_click_referral");
     expect(rows[0].referralAdvocateFirstName).toBe("Kristen");
+    expect(rows[0].phone).toBe("555-0199");
+    expect(rows[0].macrosExists).toBe(true);
+    expect(rows[0].macrosApproved).toBe(false);
+    expect(rows[0].cohortWaitlist.converted_at).toBe("2026-08-18T17:00:00.000Z");
+    expect(rows[0].eligibilityWaitlist.reason).toBe("pregnant");
+    expect(rows[0].profileAttribution.utm_source).toBe("google");
     expect(quizLeadSourceLabel(rows[0])).toBe("Meta link · Kristen");
+    const insights = Object.fromEntries(leadInsightRows(rows[0]).map((row) => [row.label, row.value]));
+    expect(insights["First quiz"]).toBeTruthy();
+    expect(insights.Phone).toBe("555-0199");
+    expect(insights.Waitlist).toMatch(/converted/);
+    expect(insights.Eligibility).toMatch(/Pregnant/);
+    expect(insights.Intake).toBe("Submitted");
+    expect(insights.Campaign).toBe("google");
   });
 });

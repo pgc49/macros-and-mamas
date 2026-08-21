@@ -78,6 +78,10 @@ const rows = [
     referred_by: "Sarah",
     profileCreatedAt: "2026-08-18T17:00:00.000Z",
     profilePaidAt: "2026-08-18T18:00:00.000Z",
+    phone: "555-0199",
+    profileStatus: "active",
+    macrosExists: true,
+    macrosApproved: true,
     flags: [],
     segment: "main",
     protein_low_g: 110,
@@ -384,7 +388,9 @@ describe("AdminLeads", () => {
     await waitFor(() => {
       expect(screen.getByText("Activity")).toBeTruthy();
     });
-    expect(screen.getByText("Quiz completed")).toBeTruthy();
+    expect(screen.getByText("First quiz")).toBeTruthy();
+    expect(screen.queryByText("Quiz completed")).toBeNull();
+    expect(screen.queryByText(/last quiz|last visit/i)).toBeNull();
     expect(screen.getByText("Aug 19, 11:30 AM PT")).toBeTruthy();
     expect(screen.getByText("Landing")).toBeTruthy();
     expect(screen.getByText("/quiz")).toBeTruthy();
@@ -407,12 +413,16 @@ describe("AdminLeads", () => {
     await waitFor(() => {
       expect(screen.getByText("Activity")).toBeTruthy();
     });
-    expect(screen.getByText("Quiz completed")).toBeTruthy();
+    expect(screen.getByText("First quiz")).toBeTruthy();
     expect(screen.getByText("Account created")).toBeTruthy();
     expect(screen.getByText("Aug 18, 10:00 AM PT")).toBeTruthy();
     expect(screen.getByText("Paid")).toBeTruthy();
     expect(screen.getByText("Aug 18, 11:00 AM PT")).toBeTruthy();
     expect(screen.getByText("Referral · Sarah")).toBeTruthy();
+    expect(screen.getByText("Phone")).toBeTruthy();
+    expect(screen.getByText("555-0199")).toBeTruthy();
+    expect(screen.getByText("Intake")).toBeTruthy();
+    expect(screen.getByText("Approved")).toBeTruthy();
   });
 
   it("omits missing landing path and campaign UTMs on lead detail", async () => {
@@ -427,5 +437,59 @@ describe("AdminLeads", () => {
     expect(screen.queryByText("Landing")).toBeNull();
     expect(screen.queryByText("Campaign")).toBeNull();
     expect(screen.queryByText(/utm_/)).toBeNull();
+    expect(screen.queryByText("Waitlist")).toBeNull();
+    expect(screen.queryByText("Eligibility")).toBeNull();
+  });
+
+  it("shows waitlist, eligibility, and quiz vs signup campaign when those rows exist", async () => {
+    loadQuizLeads.mockResolvedValue([
+      {
+        ...rows[0],
+        email: "ivy@example.com",
+        first_name: "Ivy",
+        last_name: "Lane",
+        utm_source: "meta",
+        utm_medium: "cpc",
+        utm_campaign: "aug_founding",
+        utm_content: null,
+        landing_path: "/quiz",
+        profileId: "ivy-id",
+        funnelStatus: "signed_up_unpaid",
+        profileCreatedAt: "2026-08-18T17:00:00.000Z",
+        profileAttribution: {
+          utm_source: "google",
+          utm_medium: "cpc",
+          utm_campaign: "brand",
+          landing_path: "/join",
+        },
+        phone: "555-0144",
+        cohortWaitlist: {
+          created_at: "2026-08-10T19:00:00.000Z",
+          converted_at: "2026-08-18T17:00:00.000Z",
+        },
+        eligibilityWaitlist: {
+          reason: "pregnant",
+          created_at: "2026-08-09T18:00:00.000Z",
+        },
+        macrosExists: true,
+        macrosApproved: false,
+      },
+    ]);
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ivy Lane")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Ivy Lane"));
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeTruthy();
+    });
+    expect(screen.getByText("First quiz")).toBeTruthy();
+    expect(screen.getByText("555-0144")).toBeTruthy();
+    expect(screen.getByText("quiz meta / cpc / aug_founding · signup google / cpc / brand")).toBeTruthy();
+    expect(screen.getByText("Aug 10, 12:00 PM PT · converted")).toBeTruthy();
+    expect(screen.getByText("Pregnant · Aug 9, 11:00 AM PT")).toBeTruthy();
+    expect(screen.getByText("Submitted")).toBeTruthy();
+    expect(screen.getByText("Signed up, unpaid")).toBeTruthy();
+    expect(screen.queryByText(/last quiz|last visit|0 visits|checkout-started|sentry/i)).toBeNull();
   });
 });
