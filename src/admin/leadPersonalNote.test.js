@@ -28,6 +28,7 @@ const BANNED = [
   /i hope this email finds you well/i,
   /holistic nutritionist/i,
   /limited spots remaining/i,
+  /limited spots!!/i,
   /50 mamas/i,
   /months_postpartum/,
   /feeding_status/,
@@ -44,6 +45,10 @@ function assertVoice(draft) {
   expect(draft.body).toMatch(/Callie\s*$/);
   expect(draft.body).toMatch(/You've probably gotten some automated emails from me/);
   expect(draft.body).toMatch(/I wanted to reach out personally/);
+  expect(draft.body).toMatch(/questions or wonderings/i);
+  expect(draft.body).toMatch(/throes of motherhood/i);
+  expect(draft.body).toMatch(/truly sustainable/i);
+  expect(draft.body).toMatch(/support you to get those results/i);
 }
 
 describe("leadNoteFirstName", () => {
@@ -112,7 +117,7 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.body).toMatch(/0–3 months/);
     expect(draft.body).toMatch(/I'd love to have you join/);
     expect(draft.body).toMatch(/Doors close August 27/);
-    expect(draft.body).toMatch(/Reply anytime if you have a question/);
+    expect(draft.body).toMatch(/I'd love to personally answer any questions or wonderings/);
     expect(draft.body).not.toMatch(/may not be the right fit/);
     expect(draft.copyText).toBe(formatPersonalNoteCopy({
       subject: draft.subject,
@@ -138,7 +143,7 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.body).toMatch(/still pregnant/);
     expect(draft.body).toMatch(/may not be the right fit/);
     expect(draft.body).toMatch(/I'll tell you when it is/);
-    expect(draft.body).toMatch(/Happy to answer questions/);
+    expect(draft.body).toMatch(/I'd love to personally answer any questions or wonderings/);
     expect(draft.body).not.toMatch(/Doors close August 27/);
     expect(draft.body).not.toMatch(/I'd love to have you join/);
     assertVoice(draft);
@@ -209,7 +214,7 @@ describe("draftLeadPersonalNote", () => {
     }));
     const sentences = draft.body.split(/(?<=[.!?])\s+/).filter((s) => /[.!?]/.test(s));
     expect(sentences.length).toBeGreaterThanOrEqual(4);
-    expect(sentences.length).toBeLessThanOrEqual(7);
+    expect(sentences.length).toBeLessThanOrEqual(9);
     expect(draft.body).toMatch(/\nCallie\s*$/);
   });
 });

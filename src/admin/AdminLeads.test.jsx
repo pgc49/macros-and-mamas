@@ -541,7 +541,12 @@ describe("AdminLeads", () => {
     expect(screen.getByText("Quick note from Callie")).toBeTruthy();
     expect(screen.getByText(/fully vegan/)).toBeTruthy();
     expect(screen.getByText(/may not be the right fit/)).toBeTruthy();
+    expect(screen.getByText(/questions or wonderings/i)).toBeTruthy();
+    expect(screen.getByText(/throes of motherhood/i)).toBeTruthy();
+    expect(screen.getByText(/truly sustainable/i)).toBeTruthy();
+    expect(screen.getByText(/support you to get those results/i)).toBeTruthy();
     expect(screen.queryByText(/Doors close August 27/)).toBeNull();
+    expect(screen.queryByText(/I'd love to have you join/)).toBeNull();
     expect(screen.getByRole("button", { name: "Copy personal note" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
       personalNoteMailtoHref("ellie@example.com", draftLeadPersonalNote(rows[0])),
@@ -637,6 +642,10 @@ describe("AdminLeads", () => {
     expect(screen.getByText(/a lot of body and milk change at once/)).toBeTruthy();
     expect(screen.getByText(/Doors close August 27/)).toBeTruthy();
     expect(screen.getByText(/I'd love to have you join/)).toBeTruthy();
+    expect(screen.getByText(/questions or wonderings/i)).toBeTruthy();
+    expect(screen.getByText(/throes of motherhood/i)).toBeTruthy();
+    expect(screen.getByText(/truly sustainable/i)).toBeTruthy();
+    expect(screen.getByText(/support you to get those results/i)).toBeTruthy();
     expect(screen.queryByText("She's already in — no outreach draft.")).toBeNull();
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
       personalNoteMailtoHref("nora@example.com", draft),
@@ -664,6 +673,7 @@ describe("AdminLeads", () => {
     });
     expect(screen.queryByText("Quick note from Callie")).toBeNull();
     expect(screen.queryByText(/Doors close August 27/)).toBeNull();
+    expect(screen.queryByText(/questions or wonderings/i)).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy personal note" })).toBeNull();
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
       "mailto:megan@example.com?subject=Macros%20and%20Mamas",
