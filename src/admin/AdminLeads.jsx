@@ -23,6 +23,7 @@ import {
   formatMacroRanges,
   leadDisplayName,
   leadInsightRows,
+  leadQuizResultRows,
   loadQuizLeads,
   quizLeadFunnelLabel,
   quizLeadSourceLabel,
@@ -107,6 +108,19 @@ function InsightRow({ label, value, first }) {
       <div style={{ fontSize: 14, color: T.ink, marginTop: 2, wordBreak: "break-word", lineHeight: 1.4 }}>
         {value}
       </div>
+    </div>
+  );
+}
+
+function LeadQuizResults({ lead }) {
+  const rows = leadQuizResultRows(lead);
+  if (!rows.length) return null;
+  return (
+    <div style={{ marginTop: 22 }}>
+      <SectionTitle>Quiz results</SectionTitle>
+      {rows.map((row, i) => (
+        <InsightRow key={row.label} label={row.label} value={row.value} first={i === 0} />
+      ))}
     </div>
   );
 }
@@ -248,6 +262,7 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
           ) : null}
         </div>
 
+        <LeadQuizResults lead={lead} />
         <LeadInsights lead={lead} />
 
         <div style={{ marginTop: 22 }}>

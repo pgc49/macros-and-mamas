@@ -11,7 +11,12 @@ import {
   formatLeadTags,
   formatLeadWhen,
   formatMacroRanges,
+  formatQuizActivity,
+  formatQuizGoal,
+  formatQuizHeight,
+  formatQuizWeight,
   leadInsightRows,
+  leadQuizResultRows,
   isMetaAdLead,
   isMetaClickLead,
   isMetaLead,
@@ -393,9 +398,11 @@ describe("leadInsightRows", () => {
     expect(byLabel.Landing).toBe("/quiz");
     expect(byLabel.Campaign).toBe("meta / cpc / aug_founding / story_1");
     expect(byLabel.Source).toBe("Meta ad");
-    expect(byLabel.Tags).toBe("Plant-based · Vegan");
-    expect(byLabel.Postpartum).toBe("3–12 months");
-    expect(byLabel.Feeding).toBe("Exclusive breast milk");
+    expect(byLabel.Tags).toBeUndefined();
+    expect(byLabel.Ranges).toBeUndefined();
+    expect(byLabel.Postpartum).toBeUndefined();
+    expect(byLabel.Feeding).toBeUndefined();
+    expect(byLabel.Review).toBeUndefined();
     expect(byLabel["Account created"]).toBeUndefined();
     expect(byLabel.Paid).toBeUndefined();
     expect(byLabel.Phone).toBeUndefined();
@@ -472,11 +479,18 @@ describe("leadInsightRows", () => {
     expect(rows.some((row) => /0 visits|visit count|last quiz|last visit/i.test(`${row.label} ${row.value}`))).toBe(false);
   });
 
-  it("shows review reason only when needs_review is set", () => {
-    expect(insightMap(lead({ needs_review: true, review_reason: "carbs_under_100" })).Review)
-      .toBe("Carbs under 100");
-    expect(insightMap(lead({ needs_review: false, review_reason: "carbs_under_100" })).Review)
-      .toBeUndefined();
+  it("keeps review and ranges out of Activity so Quiz results can own them", () => {
+    const byLabel = insightMap(lead({
+      needs_review: true,
+      review_reason: "carbs_under_100",
+      months_postpartum: "3_12_months",
+      feeding_status: "exclusive",
+    }));
+    expect(byLabel.Review).toBeUndefined();
+    expect(byLabel.Ranges).toBeUndefined();
+    expect(byLabel.Tags).toBeUndefined();
+    expect(byLabel.Postpartum).toBeUndefined();
+    expect(byLabel.Feeding).toBeUndefined();
   });
 
   it("shows phone from profile, else homepage waitlist, and hides when neither", () => {
@@ -544,6 +558,70 @@ describe("leadInsightRows", () => {
         landing_path: "/join",
       },
     })).Campaign).toBe("quiz meta / cpc · signup ig / paid");
+  });
+});
+
+function quizResultMap(leadRow) {
+  return Object.fromEntries(leadQuizResultRows(leadRow).map((row) => [row.label, row.value]));
+}
+
+describe("leadQuizResultRows", () => {
+  it("shows ranges, tags, answers, and review when those fields are stored", () => {
+    const byLabel = quizResultMap(lead({
+      flags: ["vegan"],
+      segment: "waitlist_plantbased",
+      months_postpartum: "3_12_months",
+      feeding_status: "exclusive",
+      goal: "lose_sustainable",
+      activity_level: "moderate",
+      height_in: 64,
+      current_weight_lbs: 160,
+      goal_weight_lbs: 150,
+      needs_review: true,
+      review_reason: "carbs_under_100",
+    }));
+    expect(byLabel.Ranges).toBe("110–130P · 140–180C · 50–65F · 1800–2000 cal");
+    expect(byLabel.Tags).toBe("Plant-based · Vegan · Needs review");
+    expect(byLabel.Postpartum).toBe("3–12 months");
+    expect(byLabel.Feeding).toBe("Exclusive breast milk");
+    expect(byLabel.Goal).toBe("Lose fat — keep muscle and milk");
+    expect(byLabel["Activity level"]).toBe("Moderate movement");
+    expect(byLabel.Height).toBe("5′4″");
+    expect(byLabel["Current weight"]).toBe("160 lb");
+    expect(byLabel["Goal weight"]).toBe("150 lb");
+    expect(byLabel.Review).toBe("Carbs under 100");
+    expect(formatQuizGoal("maintain")).toBe("Maintain");
+    expect(formatQuizActivity("light")).toBe("Light walks");
+    expect(formatQuizHeight(0)).toBe("");
+    expect(formatQuizWeight(null)).toBe("");
+  });
+
+  it("omits blanks and does not invent numbers on a sparse lead", () => {
+    const rows = leadQuizResultRows(lead({
+      flags: [],
+      segment: "main",
+      months_postpartum: "",
+      feeding_status: null,
+      goal: "",
+      activity_level: "  ",
+      height_in: null,
+      current_weight_lbs: 0,
+      goal_weight_lbs: "",
+      needs_review: false,
+      review_reason: "thyroid",
+      protein_low_g: null,
+      protein_high_g: null,
+      carbs_low_g: null,
+      carbs_high_g: null,
+      fat_low_g: null,
+      fat_high_g: null,
+      calories_low: null,
+      calories_high: null,
+    }));
+    expect(rows).toEqual([]);
+    expect(quizResultMap(lead({ needs_review: true })).Review).toBe("Needs review");
+    expect(quizResultMap(lead({ needs_review: false, review_reason: "carbs_under_100" })).Review)
+      .toBeUndefined();
   });
 });
 
@@ -635,6 +713,11 @@ describe("loadQuizLeads", () => {
     });
     expect(client.calls[0].cols).toEqual(expect.stringContaining("landing_path"));
     expect(client.calls[0].cols).toEqual(expect.stringContaining("review_reason"));
+    expect(client.calls[0].cols).toEqual(expect.stringContaining("goal"));
+    expect(client.calls[0].cols).toEqual(expect.stringContaining("activity_level"));
+    expect(client.calls[0].cols).toEqual(expect.stringContaining("height_in"));
+    expect(client.calls[0].cols).toEqual(expect.stringContaining("current_weight_lbs"));
+    expect(client.calls[0].cols).toEqual(expect.stringContaining("goal_weight_lbs"));
     expect(client.calls[0].cols).not.toMatch(/\bvisits?\b/);
     expect(client.calls.map((c) => c.table).sort()).toEqual([
       "cohort_waitlist",

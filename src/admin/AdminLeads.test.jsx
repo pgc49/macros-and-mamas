@@ -43,9 +43,16 @@ const rows = [
     landing_path: "/quiz",
     months_postpartum: "3_12_months",
     feeding_status: "exclusive",
+    goal: "lose_sustainable",
+    activity_level: "moderate",
+    height_in: 64,
+    current_weight_lbs: 160,
+    goal_weight_lbs: 150,
     referred_by: null,
     flags: ["vegan"],
     segment: "waitlist_plantbased",
+    needs_review: true,
+    review_reason: "carbs_under_100",
     protein_low_g: 90,
     protein_high_g: 110,
     carbs_low_g: 150,
@@ -181,7 +188,7 @@ describe("AdminLeads", () => {
     });
     expect(screen.getByText("ellie@example.com")).toBeTruthy();
     expect(screen.getByText(/Meta ad · Quiz only/)).toBeTruthy();
-    expect(screen.getByText("Plant-based · Vegan")).toBeTruthy();
+    expect(screen.getByText("Plant-based · Vegan · Needs review")).toBeTruthy();
     expect(screen.getByText("90–110P · 150–190C · 45–60F · 1700–1900 cal")).toBeTruthy();
     expect(screen.getByText("Megan Wells")).toBeTruthy();
     expect(screen.getByText(/Referral · Sarah · Paid/)).toBeTruthy();
@@ -491,5 +498,85 @@ describe("AdminLeads", () => {
     expect(screen.getByText("Submitted")).toBeTruthy();
     expect(screen.getByText("Signed up, unpaid")).toBeTruthy();
     expect(screen.queryByText(/last quiz|last visit|0 visits|checkout-started|sentry/i)).toBeNull();
+  });
+
+  it("shows quiz ranges and flags on lead detail Quiz results", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByText("Quiz results")).toBeTruthy();
+    });
+    expect(screen.getByText("Ranges")).toBeTruthy();
+    expect(screen.getByText("90–110P · 150–190C · 45–60F · 1700–1900 cal")).toBeTruthy();
+    expect(screen.getByText("Plant-based · Vegan · Needs review")).toBeTruthy();
+    expect(screen.getByText("3–12 months")).toBeTruthy();
+    expect(screen.getByText("Exclusive breast milk")).toBeTruthy();
+    expect(screen.getByText("Lose fat — keep muscle and milk")).toBeTruthy();
+    expect(screen.getByText("Moderate movement")).toBeTruthy();
+    expect(screen.getByText("5′4″")).toBeTruthy();
+    expect(screen.getByText("160 lb")).toBeTruthy();
+    expect(screen.getByText("150 lb")).toBeTruthy();
+    expect(screen.getByText("Carbs under 100")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Email" })).toBeTruthy();
+    expect(screen.getByText("Activity")).toBeTruthy();
+  });
+
+  it("omits Quiz results blanks on a sparse lead", async () => {
+    loadQuizLeads.mockResolvedValue([
+      {
+        id: "lead-sparse",
+        email: "sparse@example.com",
+        first_name: "Sam",
+        last_name: "Bare",
+        created_at: "2026-08-19T18:30:00.000Z",
+        flags: [],
+        segment: "main",
+        landing_path: "/quiz",
+        utm_source: "meta",
+        utm_medium: "cpc",
+        protein_low_g: null,
+        protein_high_g: null,
+        carbs_low_g: null,
+        carbs_high_g: null,
+        fat_low_g: null,
+        fat_high_g: null,
+        calories_low: null,
+        calories_high: null,
+        months_postpartum: "",
+        feeding_status: null,
+        goal: null,
+        activity_level: null,
+        height_in: null,
+        current_weight_lbs: null,
+        goal_weight_lbs: null,
+        needs_review: false,
+        profileId: null,
+        funnelStatus: "quiz_only",
+        sourceKind: "meta_ad",
+        isMeta: true,
+      },
+    ]);
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Sam Bare")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Sam Bare"));
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeTruthy();
+    });
+    expect(screen.queryByText("Quiz results")).toBeNull();
+    expect(screen.queryByText("Ranges")).toBeNull();
+    expect(screen.queryByText("Tags")).toBeNull();
+    expect(screen.queryByText("Postpartum")).toBeNull();
+    expect(screen.queryByText("Feeding")).toBeNull();
+    expect(screen.queryByText("Goal")).toBeNull();
+    expect(screen.queryByText("Height")).toBeNull();
+    expect(screen.queryByText("Current weight")).toBeNull();
+    expect(screen.queryByText("Review")).toBeNull();
+    expect(screen.getByText("Landing")).toBeTruthy();
+    expect(screen.getByText("/quiz")).toBeTruthy();
   });
 });

@@ -39,6 +39,11 @@ const LEAD_COLS = [
   "fat_high_g",
   "calories_low",
   "calories_high",
+  "goal",
+  "activity_level",
+  "height_in",
+  "current_weight_lbs",
+  "goal_weight_lbs",
   "fbp",
   "fbc",
   "event_id",
@@ -116,6 +121,20 @@ const REVIEW_REASON_LABEL = {
   goal_bmi_under_19: "Goal BMI under 19",
   goal_over_25pct_below_current: "Goal over 25% below current",
   carbs_under_100: "Carbs under 100",
+};
+
+const GOAL_LABEL = {
+  lose_sustainable: "Lose fat — keep muscle and milk",
+  lose_efficient: "Lose fat — keep muscle and milk",
+  maintain: "Maintain",
+  gain: "Gain / rebuild",
+};
+
+const ACTIVITY_LABEL = {
+  minimal: "Minimal / survival",
+  light: "Light walks",
+  moderate: "Moderate movement",
+  high: "Training consistently",
 };
 
 function nonempty(value) {
@@ -488,6 +507,38 @@ export function formatReviewReason(lead) {
   return REVIEW_REASON_LABEL[raw] || humanizeCode(raw);
 }
 
+export function formatQuizGoal(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return GOAL_LABEL[raw] || humanizeCode(raw);
+}
+
+export function formatQuizActivity(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return ACTIVITY_LABEL[raw] || humanizeCode(raw);
+}
+
+export function formatQuizHeight(value) {
+  const inches = Number(value);
+  if (!Number.isFinite(inches) || inches <= 0) return "";
+  const ft = Math.floor(inches / 12);
+  const rem = Math.round(inches % 12);
+  if (ft > 0) return `${ft}′${rem}″`;
+  return `${rem}″`;
+}
+
+export function formatQuizWeight(value) {
+  const lbs = Number(value);
+  if (!Number.isFinite(lbs) || lbs <= 0) return "";
+  return `${Math.round(lbs)} lb`;
+}
+
+export function formatQuizReviewLine(lead) {
+  if (!lead?.needs_review) return "";
+  return formatReviewReason(lead) || "Needs review";
+}
+
 function hasAccount(lead) {
   return Boolean(
     lead?.profileId
@@ -519,12 +570,6 @@ export function leadInsightRows(lead) {
   const source = quizLeadSourceLabel(lead);
   if (who && !source.includes(who)) push("Referred by", who);
 
-  push("Tags", formatLeadTags(lead));
-  push("Ranges", formatMacroRanges(lead));
-  push("Postpartum", formatMonthsPostpartum(lead?.months_postpartum));
-  push("Feeding", formatFeedingStatus(lead?.feeding_status));
-  push("Review", formatReviewReason(lead));
-
   if (hasAccount(lead)) {
     push("Account created", formatLeadWhen(lead?.profileCreatedAt));
     if (lead?.funnelStatus === "paid") {
@@ -537,6 +582,32 @@ export function leadInsightRows(lead) {
   push("Intake", formatIntakeLine(lead));
   push("Waitlist", formatCohortWaitlistLine(lead?.cohortWaitlist));
   push("Eligibility", formatEligibilityWaitlistLine(lead?.eligibilityWaitlist));
+
+  return rows;
+}
+
+/**
+ * Computed ranges + quiz answers for lead detail. Empty bits omitted.
+ * Do not invent numbers. Ranges/tags live here, not in Activity.
+ */
+export function leadQuizResultRows(lead) {
+  const rows = [];
+  const push = (label, value) => {
+    const text = String(value || "").trim();
+    if (!text) return;
+    rows.push({ label, value: text });
+  };
+
+  push("Ranges", formatMacroRanges(lead));
+  push("Tags", formatLeadTags(lead));
+  push("Postpartum", formatMonthsPostpartum(lead?.months_postpartum));
+  push("Feeding", formatFeedingStatus(lead?.feeding_status));
+  push("Goal", formatQuizGoal(lead?.goal));
+  push("Activity level", formatQuizActivity(lead?.activity_level));
+  push("Height", formatQuizHeight(lead?.height_in));
+  push("Current weight", formatQuizWeight(lead?.current_weight_lbs));
+  push("Goal weight", formatQuizWeight(lead?.goal_weight_lbs));
+  push("Review", formatQuizReviewLine(lead));
 
   return rows;
 }
