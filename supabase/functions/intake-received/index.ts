@@ -21,13 +21,13 @@ serve(async (req) => {
     const { data, error } = await resend.emails.send({
       from: FROM_CALLIE,
       to: [email],
-      subject: "Got it — I'm building your macros right now",
+      subject: "Got it. I'm building your macros right now",
       html: renderEmail({
         header: `Hi ${first},`,
         body: `
-          <p>I have your intake — thank you. I'm reviewing your numbers personally and you'll usually have them within a day.</p>
-          <p>When I approve, your dashboard unlocks and you can say hi in Messages — that's your group with me and the other mamas.</p>
-          <p>If your before photos and first weigh-in are still on the list — now's the moment.</p>
+          <p>I have your intake. Thank you. I'm reviewing your numbers personally and you'll usually have them within a day.</p>
+          <p>When I approve, your dashboard unlocks and you can say hi in Messages. That's your group with me and the other mamas.</p>
+          <p>If your before photos and first weigh-in are still on the list, now's the moment.</p>
           <p>Callie</p>
         `,
         cta_text: "See my pending status",

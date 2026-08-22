@@ -19,7 +19,7 @@
 import { invokeEdgeFunction, logEmailEvent } from "../_shared/supabaseEmail.js";
 
 const EMAIL_TYPE = "cohort_open";
-const SUBJECT = "Spots are open — lock in your spot";
+const SUBJECT = "Spots are open. Lock in your spot";
 
 export async function onRequestPost({ request, env }) {
   try {

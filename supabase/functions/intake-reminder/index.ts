@@ -29,12 +29,12 @@ serve(async (req) => {
         header: `Hi ${first},`,
         body: isFollowUp
           ? `
-          <p>Your spot is paid for, but your numbers are still waiting on you — about 3 minutes and I'll get to work.</p>
+          <p>Your spot is paid for, but your numbers are still waiting on you. About 3 minutes and I'll get to work.</p>
           <p>If anything's confusing, just reply to this email. I read everything, and I'd rather unblock you than lose you.</p>
           <p>Callie</p>
         `
           : `
-          <p>Your spot is paid for, but your numbers are waiting on you — 3 minutes and I'll get to work.</p>
+          <p>Your spot is paid for, but your numbers are waiting on you. 3 minutes and I'll get to work.</p>
           <p>Finish your intake whenever you can; that's what I need before I build your ranges.</p>
           <p>Callie</p>
         `,

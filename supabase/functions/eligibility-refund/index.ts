@@ -22,19 +22,19 @@ serve(async (req) => {
     let subject = "Your refund is on its way";
     let lead = "";
     if (r === "pregnant") {
-      subject = "Congratulations — and your refund is on its way";
+      subject = "Congratulations, and your refund is on its way";
       lead =
-        "This program isn't recommended during pregnancy — your body needs abundance right now, not a deficit. Come back after baby arrives; we'd love to have you then.";
+        "This program isn't recommended during pregnancy. Your body needs abundance right now, not a deficit. Come back after baby arrives; we'd love to have you then.";
     } else if (r === "early" || r === "early_nursing") {
-      subject = "Not yet, on purpose — refund confirmed";
+      subject = "Not yet, on purpose. Refund confirmed";
       lead =
         "You're under three months postpartum while nursing, and we won't risk your milk supply while it's still establishing. Circle back once you pass the three-month mark; the program will be here.";
     } else if (r === "diet") {
-      subject = "Not the right fit — refund confirmed";
+      subject = "Not the right fit. Refund confirmed";
       lead =
         "The program is built around animal protein, and I'd rather point you toward a coach who specializes in plant-based macros than give you a plan that fights you.";
     } else {
-      lead = "This cohort isn't the right fit for you right now — and that's okay.";
+      lead = "This cohort isn't the right fit for you right now, and that's okay.";
     }
 
     const { data, error } = await resend.emails.send({
@@ -45,7 +45,7 @@ serve(async (req) => {
         header: `Hi ${first},`,
         body: `
           <p>${lead}</p>
-          <p><b>Your payment has been fully refunded</b> — it'll land back on your card in a few days.</p>
+          <p><b>Your payment has been fully refunded.</b> It'll land back on your card in a few days.</p>
           <p>If you left your email for the waitlist, I'll personally check in when the time is right.</p>
           <p>Take care of yourself, mama.<br/>Callie</p>
         `,

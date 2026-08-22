@@ -237,7 +237,7 @@ describe("AdminLeads", () => {
       "mailto:megan@example.com?subject=Macros%20and%20Mamas",
     );
     expect(screen.getByText("Personal note")).toBeTruthy();
-    expect(screen.getByText("She's already in — no outreach draft.")).toBeTruthy();
+    expect(screen.getByText("She's already in. No outreach draft.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Copy personal note" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open client card" }));
     expect(onOpenMama).toHaveBeenCalledWith(MEGAN);
@@ -637,7 +637,7 @@ describe("AdminLeads", () => {
     expect(screen.getByText(/a lot of body and milk change at once/)).toBeTruthy();
     expect(screen.getByText(/Doors close August 27/)).toBeTruthy();
     expect(screen.getByText(/I'd love to have you join/)).toBeTruthy();
-    expect(screen.queryByText("She's already in — no outreach draft.")).toBeNull();
+    expect(screen.queryByText("She's already in. No outreach draft.")).toBeNull();
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
       personalNoteMailtoHref("nora@example.com", draft),
     );
@@ -660,7 +660,7 @@ describe("AdminLeads", () => {
     });
     fireEvent.click(screen.getByText("Megan Wells"));
     await waitFor(() => {
-      expect(screen.getByText("She's already in — no outreach draft.")).toBeTruthy();
+      expect(screen.getByText("She's already in. No outreach draft.")).toBeTruthy();
     });
     expect(screen.queryByText("Quick note from Callie")).toBeNull();
     expect(screen.queryByText(/Doors close August 27/)).toBeNull();

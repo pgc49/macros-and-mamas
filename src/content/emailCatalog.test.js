@@ -117,6 +117,18 @@ describe("email catalog journey", () => {
     expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "quiz_drip_2d"))).toBe("Q2");
   });
 
+  it("keeps em dashes out of emails Callie sends to mamas", () => {
+    const mamaFacing = EMAIL_CATALOG.filter((row) =>
+      row.audience === "Client" || row.audience === "Lead" || row.audience === "Waitlist"
+    );
+    expect(mamaFacing.length).toBeGreaterThan(8);
+    for (const row of mamaFacing) {
+      expect(row.subject, row.id).not.toMatch(/—/);
+      expect(row.bodyPreview, row.id).not.toMatch(/—/);
+      if (row.cta) expect(row.cta, row.id).not.toMatch(/—/);
+    }
+  });
+
   it("keeps a full body preview on every live template", () => {
     for (const row of EMAIL_CATALOG) {
       expect(row.subject, row.id).toMatch(/\S/);

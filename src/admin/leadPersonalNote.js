@@ -1,10 +1,11 @@
 /**
  * Deterministic personal note for Callie to copy from admin lead detail.
  * No LLM. No send. Built only from persisted quiz fields we already show.
+ * First-person Callie: heart, acknowledgment, no em dashes.
  */
 
 export const PERSONAL_NOTE_SUBJECT = "Quick note from Callie";
-export const PAID_NOTE_COPY = "She's already in — no outreach draft.";
+export const PAID_NOTE_COPY = "She's already in. No outreach draft.";
 
 /** Some mail apps choke past ~2k. Still show Copy when we drop the body. */
 export const MAILTO_MAX_LEN = 2000;
@@ -14,6 +15,8 @@ const BANNED = [
   "holistic nutritionist",
   "limited spots remaining",
 ];
+
+const EM_DASH = "\u2014";
 
 function leadFlags(lead) {
   return (Array.isArray(lead?.flags) ? lead.flags : [])
@@ -60,6 +63,12 @@ export function isSoftPitchLead(lead) {
     || monthsOf(lead) === "still_pregnant";
 }
 
+/** Exclusive, combination, or weaning: still in a breastfeeding season. */
+export function isStillBreastfeeding(lead) {
+  const feeding = feedingOf(lead);
+  return feeding === "exclusive" || feeding === "combination" || feeding === "weaning";
+}
+
 /** First name from the quiz. Never invent a city or baby name. */
 export function leadNoteFirstName(lead) {
   const raw = String(lead?.first_name || "").trim().split(/\s+/)[0] || "";
@@ -87,32 +96,32 @@ export function pickLeadObservation(lead) {
     if (hasFlag(lead, "vegan")) {
       return {
         key: "vegan",
-        text: "I saw you're fully vegan — happy to talk through how we handle that.",
+        text: "I saw you're fully vegan. Happy to talk through how we handle that.",
       };
     }
     if (hasFlag(lead, "vegetarian")) {
       return {
         key: "vegetarian",
-        text: "I saw you're vegetarian / pescatarian — happy to talk through how we build around that.",
+        text: "I saw you're vegetarian / pescatarian. Happy to talk through how we build around that.",
       };
     }
     return {
       key: "plant_based",
-      text: "I saw plant-based on your quiz — I want to be straight with you about whether this group is a fit.",
+      text: "I saw plant-based on your quiz. I want to be straight with you about whether this group is a fit.",
     };
   }
   if (hasFlag(lead, "vegetarian")) {
     return {
       key: "vegetarian",
-      text: "I saw you're vegetarian / pescatarian — happy to talk through how we build around that.",
+      text: "I saw you're vegetarian / pescatarian. Happy to talk through how we build around that.",
     };
   }
   if (months === "still_pregnant" || segment === "pregnancy_nurture") {
     return {
       key: "pregnant",
       text: months === "still_pregnant"
-        ? "I saw you're still pregnant — that's an abundance season, not a cut."
-        : "I saw pregnancy on your quiz — that's an abundance season, not a cut.",
+        ? "I saw you're still pregnant. That's an abundance season, not a cut."
+        : "I saw pregnancy on your quiz. That's an abundance season, not a cut.",
     };
   }
   if (hasFlag(lead, "c_section")) {
@@ -124,7 +133,7 @@ export function pickLeadObservation(lead) {
   if (hasFlag(lead, "thyroid")) {
     return {
       key: "thyroid",
-      text: "I saw thyroid on your quiz. That's something I work with when we set ranges — we don't ignore it.",
+      text: "I saw thyroid on your quiz. That's something I work with when we set ranges. We don't ignore it.",
     };
   }
   if (hasFlag(lead, "blood_sugar")) {
@@ -156,7 +165,7 @@ export function pickLeadObservation(lead) {
   if (feeding === "weaning") {
     return {
       key: "feeding_weaning",
-      text: "I saw you're weaning. Appetite can swing in that window — that's something I watch.",
+      text: "I saw you're weaning. Appetite can swing in that window, and that's something I watch.",
     };
   }
   if (feeding === "not_feeding") {
@@ -247,27 +256,43 @@ export function formatPersonalNoteCopy({ subject, body }) {
   return `Subject: ${subject}\n\n${body}`;
 }
 
-export function buildPersonalNoteBody({ firstName, observation, soft }) {
+function nursingSolidarityLine() {
+  return "I'm still breastfeeding too. I'm nursing my 8 month old and managing a 4 year old, so I know what this season asks of you.";
+}
+
+function heartLine(lead) {
+  if (monthsOf(lead) === "not_postpartum") {
+    return "This program is for women giving their all to their children and families, but it's okay to put time into yourself and pour back into your own cup.";
+  }
+  return "This program is for women giving their all to their children and families. Postpartum is such a selfless time, but it's okay to put time into yourself and pour back into your own cup.";
+}
+
+export function buildPersonalNoteBody({ firstName, observation, soft, nursing, lead }) {
   const name = firstName || "mama";
   const lines = [
     `Hi ${name},`,
     "",
-    "You've probably gotten some automated emails from me — I wanted to reach out personally.",
+    "You've probably gotten some automated emails from me. I wanted to reach out personally.",
     "",
     observation,
     "",
   ];
+  if (nursing) {
+    lines.push(nursingSolidarityLine(), "");
+  }
   if (soft) {
     lines.push(
       "This cohort may not be the right fit right now. I'll tell you when it is.",
       "",
-      "Happy to answer questions in the meantime.",
+      "Reply anytime if you have a question about the program. I'm here.",
     );
   } else {
     lines.push(
+      heartLine(lead),
+      "",
       "I'd love to have you join. Doors close August 27.",
       "",
-      "Reply anytime if you have a question — I'm here.",
+      "Reply anytime if you have a question about the program. I'm here.",
     );
   }
   lines.push("", "Callie");
@@ -275,7 +300,11 @@ export function buildPersonalNoteBody({ firstName, observation, soft }) {
 }
 
 function assertVoice(text) {
-  const lower = String(text || "").toLowerCase();
+  const raw = String(text || "");
+  if (raw.includes(EM_DASH)) {
+    throw new Error("personal note used an em dash");
+  }
+  const lower = raw.toLowerCase();
   for (const phrase of BANNED) {
     if (lower.includes(phrase)) {
       throw new Error(`personal note used banned phrase: ${phrase}`);
@@ -304,10 +333,13 @@ export function draftLeadPersonalNote(lead) {
   const firstName = leadNoteFirstName(lead);
   const observation = pickLeadObservation(lead);
   const soft = isSoftPitchLead(lead);
+  const nursing = isStillBreastfeeding(lead);
   const body = assertVoice(buildPersonalNoteBody({
     firstName,
     observation: observation.text,
     soft,
+    nursing,
+    lead,
   }));
   const subject = PERSONAL_NOTE_SUBJECT;
   return {
