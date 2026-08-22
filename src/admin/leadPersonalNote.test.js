@@ -6,6 +6,7 @@ import {
   draftLeadPersonalNote,
   formatPersonalNoteCopy,
   isSoftPitchLead,
+  isStillBreastfeeding,
   leadNoteFirstName,
   personalNoteMailtoHref,
   pickLeadObservation,
@@ -44,6 +45,8 @@ function assertVoice(draft) {
   expect(draft.body).toMatch(/Callie\s*$/);
   expect(draft.body).toMatch(/You've probably gotten some automated emails from me/);
   expect(draft.body).toMatch(/I wanted to reach out personally/);
+  expect(draft.body).toMatch(/Reply anytime if you have a question about the program/);
+  expect(draft.body).not.toMatch(/—/);
 }
 
 describe("leadNoteFirstName", () => {
@@ -93,6 +96,9 @@ describe("pickLeadObservation", () => {
     expect(new Set(keys).size).toBe(5);
     const texts = [pregnant, earlyPp, cSection, thyroid, plant].map((row) => row.text);
     expect(new Set(texts).size).toBe(5);
+    for (const text of texts) {
+      expect(text).not.toMatch(/—/);
+    }
   });
 });
 
@@ -112,8 +118,17 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.body).toMatch(/0–3 months/);
     expect(draft.body).toMatch(/I'd love to have you join/);
     expect(draft.body).toMatch(/Doors close August 27/);
-    expect(draft.body).toMatch(/Reply anytime if you have a question/);
+    expect(draft.body).toMatch(/Reply anytime if you have a question about the program/);
+    expect(draft.body).toMatch(/I'm still breastfeeding too/);
+    expect(draft.body).toMatch(/8 month old/);
+    expect(draft.body).toMatch(/4 year old/);
+    expect(draft.body).toMatch(/pour back into your own cup/);
+    expect(draft.body).toMatch(/giving their all/);
     expect(draft.body).not.toMatch(/may not be the right fit/);
+    expect(isStillBreastfeeding(lead({
+      months_postpartum: "0_3_months",
+      feeding_status: "exclusive",
+    }))).toBe(true);
     expect(draft.copyText).toBe(formatPersonalNoteCopy({
       subject: draft.subject,
       body: draft.body,
@@ -138,9 +153,11 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.body).toMatch(/still pregnant/);
     expect(draft.body).toMatch(/may not be the right fit/);
     expect(draft.body).toMatch(/I'll tell you when it is/);
-    expect(draft.body).toMatch(/Happy to answer questions/);
+    expect(draft.body).toMatch(/Reply anytime if you have a question about the program/);
     expect(draft.body).not.toMatch(/Doors close August 27/);
     expect(draft.body).not.toMatch(/I'd love to have you join/);
+    expect(draft.body).not.toMatch(/I'm still breastfeeding too/);
+    expect(draft.body).not.toMatch(/pour back into your own cup/);
     assertVoice(draft);
   });
 
@@ -202,15 +219,29 @@ describe("draftLeadPersonalNote", () => {
     expect(JSON.stringify(draft)).not.toMatch(/I'd love to have you join/);
   });
 
-  it("stays short and signs Callie", () => {
+  it("stays a short letter and signs Callie", () => {
     const draft = draftLeadPersonalNote(lead({
       months_postpartum: "3_12_months",
       feeding_status: "exclusive",
     }));
     const sentences = draft.body.split(/(?<=[.!?])\s+/).filter((s) => /[.!?]/.test(s));
-    expect(sentences.length).toBeGreaterThanOrEqual(4);
-    expect(sentences.length).toBeLessThanOrEqual(7);
+    expect(sentences.length).toBeGreaterThanOrEqual(6);
+    expect(sentences.length).toBeLessThanOrEqual(14);
     expect(draft.body).toMatch(/\nCallie\s*$/);
+    expect(draft.body).not.toMatch(/—/);
+  });
+
+  it("adds Callie's breastfeeding note for combination feeding too", () => {
+    const draft = draftLeadPersonalNote(lead({
+      first_name: "Ava",
+      months_postpartum: "3_12_months",
+      feeding_status: "combination",
+    }));
+    expect(draft.observationKey).toBe("feeding_combination");
+    expect(draft.body).toMatch(/I'm still breastfeeding too/);
+    expect(draft.body).toMatch(/8 month old/);
+    expect(draft.body).not.toMatch(/—/);
+    assertVoice(draft);
   });
 });
 
