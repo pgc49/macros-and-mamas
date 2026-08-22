@@ -124,6 +124,8 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.body).toMatch(/4 year old/);
     expect(draft.body).toMatch(/pour back into your own cup/);
     expect(draft.body).toMatch(/giving their all to their children and families/);
+    expect(draft.body).toMatch(/but it's okay to put time into yourself/);
+    expect(draft.body).not.toMatch(/you still need to/);
     expect(draft.body).not.toMatch(/and their work/);
     expect(draft.body).not.toMatch(/may not be the right fit/);
     expect(isStillBreastfeeding(lead({
