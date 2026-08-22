@@ -85,7 +85,7 @@ Callie
     cta: "Complete my intake",
     bodyPreview: `Hi [First name],
 
-Welcome to Macros and Mamas — I'm so glad you're here!
+Welcome to Macros and Mamas. I'm so glad you're here!
 
 I want to tell you what makes this different, because you've probably tried the other way. This is not a 1,200-calorie plan. We don't crash, we don't punish, and we don't earn our food. We eat enough, we lift, and we lose fat while keeping the muscle that makes us strong enough for everything our lives ask of us. If you ever lose faster than about a pound to a pound and a half a week, I'll be the one telling you to eat more. That's the whole philosophy, and I mean it.
 
@@ -93,15 +93,15 @@ I also want to reinforce that tracking your macros and meals doesn't have to hap
 
 Here's what happens next:
 
-First, complete your intake — it takes about 3 minutes. That's where I learn your goals, your season of life, and even the foods you love. The moment you finish, I get to work.
+First, complete your intake. It takes about 3 minutes. That's where I learn your goals, your season of life, and even the foods you love. The moment you finish, I get to work.
 
-Then your macros get built — not by a calculator — by me. I personally review every mama's numbers before they go live. You'll get them within a day of finishing your intake, as flexible ranges, because real life doesn't happen in exact grams.
+Then your macros get built by me, not by a calculator. I personally review every mama's numbers before they go live. You'll get them within a day of finishing your intake, as flexible ranges, because real life doesn't happen in exact grams.
 
-Once your macros are approved, you'll find me in Messages in the app — your group with the other mamas. That's where I live Monday through Friday — voice notes, plate pics, wins, questions, all of it. Every Monday I drop a short voice note that sets the week's focus. Listen while you pump, nurse, walk, or hide in the pantry. No judgment!
+Once your macros are approved, you'll find me in Messages in the app, your group with the other mamas. That's where I live Monday through Friday. Voice notes, plate pics, wins, questions, all of it. Every Monday I drop a short voice note that sets the week's focus. Listen while you pump, nurse, walk, or hide in the pantry. No judgment!
 
-While you're at it, do these two things — today if you can:
-1. Take your before photos. Same outfit, same spot, same lighting — front, side, and back. Your face doesn't need to be in them. You will not believe how much you'll want these in eight weeks!
-2. Weigh yourself tomorrow morning — first thing, before coffee, before your morning hydration, and right after you pee! That's your starting point, and it's the last time that number gets to feel like a verdict. From here on, it's just data.
+While you're at it, do these two things, today if you can:
+1. Take your before photos. Same outfit, same spot, same lighting. Front, side, and back. Your face doesn't need to be in them. You will not believe how much you'll want these in eight weeks!
+2. Weigh yourself tomorrow morning, first thing, before coffee, before your morning hydration, and right after you pee! That's your starting point, and it's the last time that number gets to feel like a verdict. From here on, it's just data.
 
 That's it. No prep, no pantry purge, no guilt about whatever you ate today.
 
@@ -121,13 +121,13 @@ Callie`,
     cta: "Complete my intake",
     bodyPreview: `Hi [First name],
 
-Your spot is paid for, but your numbers are waiting on you — 3 minutes and I'll get to work.
+Your spot is paid for, but your numbers are waiting on you. 3 minutes and I'll get to work.
 
 Finish your intake whenever you can; that's what I need before I build your ranges.
 
 Callie
 
-(72h follow-up adds: reply if anything's confusing — I read everything.)`,
+(72h follow-up adds: reply if anything's confusing. I read everything.)`,
   },
   {
     id: "intake_received",
@@ -135,16 +135,16 @@ Callie
     name: "Intake received",
     status: "live",
     trigger: "Client finishes intake",
-    subject: "Got it — I'm building your macros right now",
+    subject: "Got it. I'm building your macros right now",
     audience: "Client",
     cta: "See my pending status",
     bodyPreview: `Hi [First name],
 
-I have your intake — thank you. I'm reviewing your numbers personally and you'll usually have them within a day.
+I have your intake. Thank you. I'm reviewing your numbers personally and you'll usually have them within a day.
 
-When I approve, your dashboard unlocks and you can say hi in Messages — that's your group with me and the other mamas.
+When I approve, your dashboard unlocks and you can say hi in Messages. That's your group with me and the other mamas.
 
-If your before photos and first weigh-in are still on the list — now's the moment.
+If your before photos and first weigh-in are still on the list, now's the moment.
 
 Callie`,
   },
@@ -159,9 +159,9 @@ Callie`,
     cta: "Open my dashboard",
     bodyPreview: `Hi [First name],
 
-I just finished your numbers — they're live in your dashboard right now, built from everything you told me. Remember: these are ranges, not rules. Active day, eat the top. Slow day, the bottom. Both count.
+I just finished your numbers. They're live in your dashboard right now, built from everything you told me. Remember: these are ranges, not rules. Active day, eat the top. Slow day, the bottom. Both count.
 
-Join the mamas group — I'm in there Monday through Friday answering in voice notes. Open Messages in the app and come say hi so I can welcome you properly:
+Join the mamas group. I'm in there Monday through Friday answering in voice notes. Open Messages in the app and come say hi so I can welcome you properly:
 [Open Messages → /dashboard?tab=messages]
 
 Your first 48 hours, and this is the whole assignment:
@@ -169,7 +169,7 @@ Your first 48 hours, and this is the whole assignment:
 2. Tomorrow morning: log your weigh-in.
 3. In the group: say hi. That's it.
 
-One phone tip that makes this feel like an app: open macrosandmamas.com in Safari (iPhone) or Chrome (Android), tap Share, then Add to Home Screen. You'll get an icon on your phone — tap it anytime and you're right back in your dashboard. No App Store needed.
+One phone tip that makes this feel like an app: open macrosandmamas.com in Safari (iPhone) or Chrome (Android), tap Share, then Add to Home Screen. You'll get an icon on your phone. Tap it anytime and you're right back in your dashboard. No App Store needed.
 
 Small on purpose. Mamas who do these three in the first two days are the ones standing in their week-8 photos amazed. Let's go.
 
@@ -188,7 +188,7 @@ Callie`,
 
 Warm decline copy for the specific reason (first person, from me).
 
-Your payment has been fully refunded — it'll land back on your card in a few days.
+Your payment has been fully refunded. It'll land back on your card in a few days.
 
 If you left your email for the waitlist, I'll personally check in when the time is right.
 
@@ -201,12 +201,12 @@ Callie`,
     name: "Waitlist open (blast)",
     status: "ready",
     trigger: "Manual one-shot when enrollment reopens — POST /api/cohort-waitlist-blast (CRON_SECRET). Pulls cohort_waitlist; CTA → create account & pay.",
-    subject: "Spots are open — lock in your spot",
+    subject: "Spots are open. Lock in your spot",
     audience: "Waitlist",
-    cta: "Finish signing up — lock in your spot",
+    cta: "Finish signing up. Lock in your spot",
     bodyPreview: `Hi [First name],
 
-You asked to be first in line for the next Macros and Mamas group — and spots are open.
+You asked to be first in line for the next Macros and Mamas group, and spots are open.
 
 Create your account (or sign in), then finish checkout to lock in your spot. Inside: macros I build myself, our moms WhatsApp group Mon–Fri, and a short Monday voice note to keep the week simple.
 

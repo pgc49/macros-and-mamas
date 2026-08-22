@@ -29,8 +29,8 @@ serve(async (req) => {
       html: renderEmail({
         header: `Hi ${first},`,
         body: `
-          <p>I just finished your numbers — they're live in your dashboard right now, built from everything you told me. Remember: these are ranges, not rules. Active day, eat the top. Slow day, the bottom. Both count.</p>
-          <p><b>Join the mamas group</b> — I'm in there Monday through Friday answering in voice notes. Open Messages in the app and come say hi so I can welcome you properly:</p>
+          <p>I just finished your numbers. They're live in your dashboard right now, built from everything you told me. Remember: these are ranges, not rules. Active day, eat the top. Slow day, the bottom. Both count.</p>
+          <p><b>Join the mamas group.</b> I'm in there Monday through Friday answering in voice notes. Open Messages in the app and come say hi so I can welcome you properly:</p>
           <p><a href="${APP_URL}/dashboard?tab=messages" style="color:#B4416B;font-weight:700">Open Messages</a></p>
           <p><b>Your first 48 hours, and this is the whole assignment:</b></p>
           <ol>
@@ -38,7 +38,7 @@ serve(async (req) => {
             <li><b>Tomorrow morning:</b> log your weigh-in.</li>
             <li><b>In the group:</b> say hi. That's it.</li>
           </ol>
-          <p><b>One phone tip that makes this feel like an app:</b> open macrosandmamas.com in Safari (iPhone) or Chrome (Android), tap Share, then <b>Add to Home Screen</b>. You'll get an icon on your phone — tap it anytime and you're right back in your dashboard. No App Store needed.</p>
+          <p><b>One phone tip that makes this feel like an app:</b> open macrosandmamas.com in Safari (iPhone) or Chrome (Android), tap Share, then <b>Add to Home Screen</b>. You'll get an icon on your phone. Tap it anytime and you're right back in your dashboard. No App Store needed.</p>
           <p>Small on purpose. Mamas who do these three in the first two days are the ones standing in their week-8 photos amazed. Let's go.</p>
           <p>Callie</p>
         `,

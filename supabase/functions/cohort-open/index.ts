@@ -23,17 +23,17 @@ serve(async (req) => {
       from: FROM_CALLIE,
       to: [email],
       reply_to: "calista@nourishwithcalista.com",
-      subject: "Spots are open — lock in your spot",
+      subject: "Spots are open. Lock in your spot",
       html: renderEmail({
         header: `Hi ${first},`,
         body: `
-          <p>You asked to be first in line for the next Macros and Mamas group — and spots are open.</p>
+          <p>You asked to be first in line for the next Macros and Mamas group, and spots are open.</p>
           <p>Create your account (or sign in), then finish checkout to lock in your spot. Inside: macros I build myself, our moms WhatsApp group Mon–Fri, and a short Monday voice note to keep the week simple.</p>
           <p>Tap below when you're ready. I'd love to have you.</p>
           <p>Callie</p>
           <p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you joined the waitlist. Reply and ask me to stop anytime.</p>
         `,
-        cta_text: "Finish signing up — lock in your spot",
+        cta_text: "Finish signing up. Lock in your spot",
         // /signin defaults to create for cold visitors; unpaid users land on /join to pay.
         cta_url: `${APP_URL}/signin`,
       }),

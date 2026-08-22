@@ -216,7 +216,7 @@ export async function sendWelcomeEmails(env, { email, name, userId, amountUsd, r
 
 export async function sendIntakeEmails(env, { email, name, userId, stats }) {
   if (email) {
-    const subject = "Got it — I'm building your macros right now";
+    const subject = "Got it. I'm building your macros right now";
     const result = await invokeEdgeFunction(env, "intake-received", { email, name, userId });
     await logEmailEvent(env, {
       profileId: userId,
@@ -263,7 +263,7 @@ export async function sendApprovedEmail(env, { email, name, userId }) {
 
 export async function sendCohortOpenEmail(env, { email, name, waitlistId = null, profileId = null }) {
   if (!email) return { ok: false };
-  const subject = "Spots are open — lock in your spot";
+  const subject = "Spots are open. Lock in your spot";
   const result = await invokeEdgeFunction(env, "cohort-open", { email, name });
   await logEmailEvent(env, {
     profileId: profileId || null,
