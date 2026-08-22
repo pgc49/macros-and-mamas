@@ -262,9 +262,9 @@ function nursingSolidarityLine() {
 
 function heartLine(lead) {
   if (monthsOf(lead) === "not_postpartum") {
-    return "This program is for women giving their all to their children and their work. You still need to pour back into your own cup.";
+    return "This program is for women giving their all to their children and families. You still need to pour back into your own cup.";
   }
-  return "This program is for women giving their all to their children and their work. Postpartum is such a selfless time, and you still need to pour back into your own cup.";
+  return "This program is for women giving their all to their children and families. Postpartum is such a selfless time, and you still need to pour back into your own cup.";
 }
 
 export function buildPersonalNoteBody({ firstName, observation, soft, nursing, lead }) {

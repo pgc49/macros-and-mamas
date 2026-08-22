@@ -123,7 +123,8 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.body).toMatch(/8 month old/);
     expect(draft.body).toMatch(/4 year old/);
     expect(draft.body).toMatch(/pour back into your own cup/);
-    expect(draft.body).toMatch(/giving their all/);
+    expect(draft.body).toMatch(/giving their all to their children and families/);
+    expect(draft.body).not.toMatch(/and their work/);
     expect(draft.body).not.toMatch(/may not be the right fit/);
     expect(isStillBreastfeeding(lead({
       months_postpartum: "0_3_months",
