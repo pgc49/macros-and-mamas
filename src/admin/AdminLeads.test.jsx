@@ -634,10 +634,12 @@ describe("AdminLeads", () => {
     });
     expect(screen.getByText("Subject")).toBeTruthy();
     expect(screen.getByText("Quick note from Callie")).toBeTruthy();
-    expect(screen.getByText(/a lot of body and milk change at once/)).toBeTruthy();
-    expect(screen.getByText(/Our next cohort begins August 31st/)).toBeTruthy();
-    expect(screen.getByText(/program registration closes this Thursday/)).toBeTruthy();
-    expect(screen.getByText(/I'd love to have you join/)).toBeTruthy();
+    expect(screen.getByText(/Hi, Nora!/)).toBeTruthy();
+    expect(screen.getByText(/This is me, Callie writing a personal message to you, Nora!/)).toBeTruthy();
+    expect(screen.getByText(/I saw you're exclusively breastfeeding/)).toBeTruthy();
+    expect(screen.getByText(/I too have felt how hard it is to take care of yourself while you're still feeding/)).toBeTruthy();
+    expect(screen.getByText(/I personally will be in your DMs helping guide you through the next 8 weeks/)).toBeTruthy();
+    expect(screen.getByText(/Registration closes on Thursday and I hope you'll join/)).toBeTruthy();
     expect(screen.queryByText("She's already in. No outreach draft.")).toBeNull();
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
       personalNoteMailtoHref("nora@example.com", draft),
