@@ -6,6 +6,8 @@
 
 export const PERSONAL_NOTE_SUBJECT = "Quick note from Callie";
 export const PAID_NOTE_COPY = "She's already in. No outreach draft.";
+export const INVITE_JOIN_LINE =
+  "Our next cohort begins August 31st and program registration closes this Thursday. I'd love to have you join.";
 
 /** Some mail apps choke past ~2k. Still show Copy when we drop the body. */
 export const MAILTO_MAX_LEN = 2000;
@@ -14,6 +16,8 @@ const BANNED = [
   "i hope this email finds you well",
   "holistic nutritionist",
   "limited spots remaining",
+  "not feeding breast milk",
+  "doors close",
 ];
 
 const EM_DASH = "\u2014";
@@ -127,7 +131,9 @@ export function pickLeadObservation(lead) {
   if (hasFlag(lead, "c_section")) {
     return {
       key: "c_section",
-      text: "I saw you noted a recent C-section. Recovery and milk both matter here.",
+      text: isStillBreastfeeding(lead)
+        ? "I saw you noted a recent C-section. Recovery and milk both matter here."
+        : "I saw you noted a recent C-section. Recovery matters here, and we go at your pace.",
     };
   }
   if (hasFlag(lead, "thyroid")) {
@@ -143,11 +149,14 @@ export function pickLeadObservation(lead) {
     };
   }
   if (months === "0_3_months" || segment === "early_pp_nurture") {
+    const earlySeason = months === "0_3_months"
+      ? "I saw you're in those first 0–3 months postpartum."
+      : "I saw you're in those early postpartum months.";
     return {
       key: "early_pp",
-      text: months === "0_3_months"
-        ? "I saw you're in those first 0–3 months postpartum. That's a lot of body and milk change at once."
-        : "I saw you're in those early postpartum months. That's a lot of body and milk change at once.",
+      text: isStillBreastfeeding(lead)
+        ? `${earlySeason} That's a lot of body and milk change at once.`
+        : `${earlySeason} That's a lot of change at once.`,
     };
   }
   if (feeding === "exclusive") {
@@ -168,12 +177,6 @@ export function pickLeadObservation(lead) {
       text: "I saw you're weaning. Appetite can swing in that window, and that's something I watch.",
     };
   }
-  if (feeding === "not_feeding") {
-    return {
-      key: "feeding_not",
-      text: "I saw you're not feeding breast milk right now. We can still build this around your real life.",
-    };
-  }
   if (months === "3_12_months") {
     return {
       key: "pp_3_12",
@@ -192,16 +195,12 @@ export function pickLeadObservation(lead) {
       text: "I saw you're 2+ years postpartum.",
     };
   }
-  if (months === "not_postpartum") {
-    return {
-      key: "not_postpartum",
-      text: "I saw you're not postpartum right now.",
-    };
-  }
   if (goal === "lose_sustainable" || goal === "lose_efficient") {
     return {
       key: "goal_lose",
-      text: "I saw you want to lose fat and keep muscle and milk. That's exactly how I coach.",
+      text: isStillBreastfeeding(lead)
+        ? "I saw you want to lose fat and keep muscle and milk. That's exactly how I coach."
+        : "I saw you want to lose fat and keep muscle. That's exactly how I coach.",
     };
   }
   if (goal === "maintain") {
@@ -290,7 +289,7 @@ export function buildPersonalNoteBody({ firstName, observation, soft, nursing, l
     lines.push(
       heartLine(lead),
       "",
-      "I'd love to have you join. Doors close August 27.",
+      INVITE_JOIN_LINE,
       "",
       "Reply anytime if you have a question about the program. I'm here.",
     );

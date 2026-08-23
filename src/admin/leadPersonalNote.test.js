@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAILTO_MAX_LEN,
   PAID_NOTE_COPY,
+  INVITE_JOIN_LINE,
   PERSONAL_NOTE_SUBJECT,
   draftLeadPersonalNote,
   formatPersonalNoteCopy,
@@ -47,6 +48,8 @@ function assertVoice(draft) {
   expect(draft.body).toMatch(/I wanted to reach out personally/);
   expect(draft.body).toMatch(/Reply anytime if you have a question about the program/);
   expect(draft.body).not.toMatch(/—/);
+  expect(draft.body).not.toMatch(/not feeding breast milk/i);
+  expect(draft.body).not.toMatch(/doors close/i);
 }
 
 describe("leadNoteFirstName", () => {
@@ -117,7 +120,9 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.body).toMatch(/^Hi Nora,/);
     expect(draft.body).toMatch(/0–3 months/);
     expect(draft.body).toMatch(/I'd love to have you join/);
-    expect(draft.body).toMatch(/Doors close August 27/);
+    expect(draft.body).toContain(INVITE_JOIN_LINE);
+    expect(draft.body).toMatch(/August 31st/);
+    expect(draft.body).toMatch(/this Thursday/);
     expect(draft.body).toMatch(/Reply anytime if you have a question about the program/);
     expect(draft.body).toMatch(/I'm still breastfeeding too/);
     expect(draft.body).toMatch(/8 month old/);
@@ -157,7 +162,8 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.body).toMatch(/may not be the right fit/);
     expect(draft.body).toMatch(/I'll tell you when it is/);
     expect(draft.body).toMatch(/Reply anytime if you have a question about the program/);
-    expect(draft.body).not.toMatch(/Doors close August 27/);
+    expect(draft.body).not.toMatch(/Doors close/);
+    expect(draft.body).not.toMatch(/August 31st/);
     expect(draft.body).not.toMatch(/I'd love to have you join/);
     expect(draft.body).not.toMatch(/I'm still breastfeeding too/);
     expect(draft.body).not.toMatch(/pour back into your own cup/);
@@ -175,7 +181,8 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.pitch).toBe("soft");
     expect(draft.body).toMatch(/fully vegan/);
     expect(draft.body).toMatch(/may not be the right fit/);
-    expect(draft.body).not.toMatch(/Doors close August 27/);
+    expect(draft.body).not.toMatch(/Doors close/);
+    expect(draft.body).not.toMatch(/August 31st/);
     assertVoice(draft);
   });
 
@@ -189,7 +196,7 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.observationKey).toBe("c_section");
     expect(draft.pitch).toBe("invite");
     expect(draft.body).toMatch(/C-section/);
-    expect(draft.body).toMatch(/Doors close August 27/);
+    expect(draft.body).toContain(INVITE_JOIN_LINE);
     expect(draft.body).not.toMatch(/0–3 months/);
     assertVoice(draft);
   });
@@ -204,7 +211,24 @@ describe("draftLeadPersonalNote", () => {
     expect(draft.observationKey).toBe("thyroid");
     expect(draft.pitch).toBe("invite");
     expect(draft.body).toMatch(/thyroid/);
-    expect(draft.body).toMatch(/Doors close August 27/);
+    expect(draft.body).toContain(INVITE_JOIN_LINE);
+    assertVoice(draft);
+  });
+
+  it("does not mention breastfeeding when she is not feeding", () => {
+    const draft = draftLeadPersonalNote(lead({
+      first_name: "Patty",
+      months_postpartum: "3_12_months",
+      feeding_status: "not_feeding",
+      segment: "main",
+    }));
+    expect(draft.observationKey).toBe("pp_3_12");
+    expect(draft.body).toMatch(/3–12 months postpartum/);
+    expect(draft.body).toContain(INVITE_JOIN_LINE);
+    expect(draft.body).not.toMatch(/breastfeed/i);
+    expect(draft.body).not.toMatch(/breast milk/i);
+    expect(draft.body).not.toMatch(/not feeding/i);
+    expect(draft.body).not.toMatch(/I'm still breastfeeding too/);
     assertVoice(draft);
   });
 

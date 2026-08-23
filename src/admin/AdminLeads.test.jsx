@@ -635,7 +635,8 @@ describe("AdminLeads", () => {
     expect(screen.getByText("Subject")).toBeTruthy();
     expect(screen.getByText("Quick note from Callie")).toBeTruthy();
     expect(screen.getByText(/a lot of body and milk change at once/)).toBeTruthy();
-    expect(screen.getByText(/Doors close August 27/)).toBeTruthy();
+    expect(screen.getByText(/Our next cohort begins August 31st/)).toBeTruthy();
+    expect(screen.getByText(/program registration closes this Thursday/)).toBeTruthy();
     expect(screen.getByText(/I'd love to have you join/)).toBeTruthy();
     expect(screen.queryByText("She's already in. No outreach draft.")).toBeNull();
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
