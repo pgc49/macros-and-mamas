@@ -1,11 +1,15 @@
 /**
  * Deterministic personal note for Callie to copy from admin lead detail.
  * No LLM. No send. Built only from persisted quiz fields we already show.
- * First-person Callie: heart, acknowledgment, no em dashes.
+ * First-person Callie: one quiz observation, one "I too have felt" line, no em dashes.
  */
 
 export const PERSONAL_NOTE_SUBJECT = "Quick note from Callie";
 export const PAID_NOTE_COPY = "She's already in. No outreach draft.";
+export const INVITE_GUIDE_LINE =
+  "I personally will be in your DMs helping guide you through the next 8 weeks. If you have any questions prior to signing up I'm available and checking emails.";
+export const INVITE_JOIN_LINE =
+  "Registration closes on Thursday and I hope you'll join.";
 
 /** Some mail apps choke past ~2k. Still show Copy when we drop the body. */
 export const MAILTO_MAX_LEN = 2000;
@@ -14,6 +18,8 @@ const BANNED = [
   "i hope this email finds you well",
   "holistic nutritionist",
   "limited spots remaining",
+  "not feeding breast milk",
+  "doors close",
 ];
 
 const EM_DASH = "\u2014";
@@ -38,14 +44,6 @@ function monthsOf(lead) {
 
 function feedingOf(lead) {
   return String(lead?.feeding_status || "").trim();
-}
-
-function goalOf(lead) {
-  return String(lead?.goal || "").trim();
-}
-
-function activityOf(lead) {
-  return String(lead?.activity_level || "").trim();
 }
 
 export function isPaidLead(lead) {
@@ -77,20 +75,30 @@ export function leadNoteFirstName(lead) {
   return cleaned;
 }
 
-function hasProteinRange(lead) {
-  return lead?.protein_low_g != null || lead?.protein_high_g != null;
+export function poundsToLose(lead) {
+  const current = Number(lead?.current_weight_lbs);
+  const goal = Number(lead?.goal_weight_lbs);
+  if (!(current > 0) || !(goal > 0) || current < goal + 5) return null;
+  return Math.round(current - goal);
+}
+
+function weightObservation(lead) {
+  const pounds = poundsToLose(lead);
+  if (pounds == null) return null;
+  return {
+    key: "weight_lose",
+    text: `I saw you're looking to lose about ${pounds} pounds.`,
+  };
 }
 
 /**
- * One observation grounded in this lead's quiz. Priority is specific → general
- * so pregnant / early-PP / C-section / thyroid / plant-based stay distinct.
+ * One quiz observation: breastfeeding (only if she is), postpartum season,
+ * or pounds she wants to lose. Never name what she is not doing.
  */
 export function pickLeadObservation(lead) {
   const months = monthsOf(lead);
   const segment = segmentOf(lead);
   const feeding = feedingOf(lead);
-  const goal = goalOf(lead);
-  const activity = activityOf(lead);
 
   if (hasFlag(lead, "vegan") || segment === "waitlist_plantbased") {
     if (hasFlag(lead, "vegan")) {
@@ -110,12 +118,6 @@ export function pickLeadObservation(lead) {
       text: "I saw plant-based on your quiz. I want to be straight with you about whether this group is a fit.",
     };
   }
-  if (hasFlag(lead, "vegetarian")) {
-    return {
-      key: "vegetarian",
-      text: "I saw you're vegetarian / pescatarian. Happy to talk through how we build around that.",
-    };
-  }
   if (months === "still_pregnant" || segment === "pregnancy_nurture") {
     return {
       key: "pregnant",
@@ -124,60 +126,36 @@ export function pickLeadObservation(lead) {
         : "I saw pregnancy on your quiz. That's an abundance season, not a cut.",
     };
   }
-  if (hasFlag(lead, "c_section")) {
+  if (feeding === "exclusive") {
     return {
-      key: "c_section",
-      text: "I saw you noted a recent C-section. Recovery and milk both matter here.",
+      key: "feeding_exclusive",
+      text: "I saw you're exclusively breastfeeding.",
     };
   }
-  if (hasFlag(lead, "thyroid")) {
+  if (feeding === "combination") {
     return {
-      key: "thyroid",
-      text: "I saw thyroid on your quiz. That's something I work with when we set ranges. We don't ignore it.",
+      key: "feeding_combination",
+      text: "I saw you're combining breast milk and formula.",
     };
   }
-  if (hasFlag(lead, "blood_sugar")) {
+  if (feeding === "weaning") {
     return {
-      key: "blood_sugar",
-      text: "I saw you flagged blood sugar concerns. We factor that in instead of throwing a generic cut at it.",
+      key: "feeding_weaning",
+      text: "I saw you're weaning.",
     };
   }
   if (months === "0_3_months" || segment === "early_pp_nurture") {
     return {
       key: "early_pp",
       text: months === "0_3_months"
-        ? "I saw you're in those first 0–3 months postpartum. That's a lot of body and milk change at once."
-        : "I saw you're in those early postpartum months. That's a lot of body and milk change at once.",
-    };
-  }
-  if (feeding === "exclusive") {
-    return {
-      key: "feeding_exclusive",
-      text: "I saw you're feeding exclusive breast milk right now. Your numbers have to protect milk, not just the scale.",
-    };
-  }
-  if (feeding === "combination") {
-    return {
-      key: "feeding_combination",
-      text: "I saw you're combination feeding. We can build around that mix.",
-    };
-  }
-  if (feeding === "weaning") {
-    return {
-      key: "feeding_weaning",
-      text: "I saw you're weaning. Appetite can swing in that window, and that's something I watch.",
-    };
-  }
-  if (feeding === "not_feeding") {
-    return {
-      key: "feeding_not",
-      text: "I saw you're not feeding breast milk right now. We can still build this around your real life.",
+        ? "I saw you're in those first 0–3 months postpartum."
+        : "I saw you're in those early postpartum months.",
     };
   }
   if (months === "3_12_months") {
     return {
       key: "pp_3_12",
-      text: "I saw you're about 3–12 months postpartum. That's still a real season.",
+      text: "I saw you're about 3–12 months postpartum.",
     };
   }
   if (months === "1_2_years") {
@@ -192,107 +170,57 @@ export function pickLeadObservation(lead) {
       text: "I saw you're 2+ years postpartum.",
     };
   }
-  if (months === "not_postpartum") {
-    return {
-      key: "not_postpartum",
-      text: "I saw you're not postpartum right now.",
-    };
-  }
-  if (goal === "lose_sustainable" || goal === "lose_efficient") {
-    return {
-      key: "goal_lose",
-      text: "I saw you want to lose fat and keep muscle and milk. That's exactly how I coach.",
-    };
-  }
-  if (goal === "maintain") {
-    return {
-      key: "goal_maintain",
-      text: "I saw you're looking to maintain where you are.",
-    };
-  }
-  if (goal === "gain") {
-    return {
-      key: "goal_gain",
-      text: "I saw you're looking to gain / rebuild.",
-    };
-  }
-  if (activity === "minimal") {
-    return {
-      key: "activity_minimal",
-      text: "I saw you're in survival-mode movement right now. That's honest, and we start there.",
-    };
-  }
-  if (activity === "light") {
-    return {
-      key: "activity_light",
-      text: "I saw you're mostly doing light walks right now.",
-    };
-  }
-  if (activity === "moderate") {
-    return {
-      key: "activity_moderate",
-      text: "I saw you're moving at a moderate clip right now.",
-    };
-  }
-  if (activity === "high") {
-    return {
-      key: "activity_high",
-      text: "I saw you're already training consistently.",
-    };
-  }
-  if (hasProteinRange(lead)) {
-    return {
-      key: "ranges",
-      text: "I already sent you starting ranges. They're a starting point, not the whole program.",
-    };
-  }
-  return {
+  return weightObservation(lead) || {
     key: "fallback",
-    text: "I looked back at your quiz. Happy to talk through whatever's on your mind.",
+    text: "I looked back at your quiz.",
   };
+}
+
+export function pickPersonalConnection(observationKey) {
+  if (String(observationKey || "").startsWith("feeding_")) {
+    return "I too have felt how hard it is to take care of yourself while you're still feeding. That's why I built this program.";
+  }
+  if (
+    observationKey === "early_pp"
+    || observationKey === "pp_3_12"
+    || observationKey === "pp_1_2"
+    || observationKey === "pp_2_plus"
+  ) {
+    return "I too have felt inflamed, soft, and lethargic after having my babies. That's why I built this program.";
+  }
+  if (observationKey === "weight_lose") {
+    return "I too have felt like I was giving everything away and had nothing left for my own body. That's why I built this program.";
+  }
+  return "I too have felt like I was pouring into everyone else and forgetting myself. That's why I built this program.";
 }
 
 export function formatPersonalNoteCopy({ subject, body }) {
   return `Subject: ${subject}\n\n${body}`;
 }
 
-function nursingSolidarityLine() {
-  return "I'm still breastfeeding too. I'm nursing my 8 month old and managing a 4 year old, so I know what this season asks of you.";
-}
-
-function heartLine(lead) {
-  if (monthsOf(lead) === "not_postpartum") {
-    return "This program is for women giving their all to their children and families, but it's okay to put time into yourself and pour back into your own cup.";
-  }
-  return "This program is for women giving their all to their children and families. Postpartum is such a selfless time, but it's okay to put time into yourself and pour back into your own cup.";
-}
-
-export function buildPersonalNoteBody({ firstName, observation, soft, nursing, lead }) {
+export function buildPersonalNoteBody({ firstName, observation, connection, soft }) {
   const name = firstName || "mama";
   const lines = [
-    `Hi ${name},`,
+    `Hi, ${name}!`,
     "",
-    "You've probably gotten some automated emails from me. I wanted to reach out personally.",
+    `I'm sure you've gotten some automated emails from me. This is me, Callie writing a personal message to you, ${name}!`,
     "",
     observation,
     "",
   ];
-  if (nursing) {
-    lines.push(nursingSolidarityLine(), "");
-  }
   if (soft) {
     lines.push(
       "This cohort may not be the right fit right now. I'll tell you when it is.",
       "",
-      "Reply anytime if you have a question about the program. I'm here.",
+      "If you have any questions I'm available and checking emails.",
     );
   } else {
     lines.push(
-      heartLine(lead),
+      connection,
       "",
-      "I'd love to have you join. Doors close August 27.",
+      INVITE_GUIDE_LINE,
       "",
-      "Reply anytime if you have a question about the program. I'm here.",
+      INVITE_JOIN_LINE,
     );
   }
   lines.push("", "Callie");
@@ -333,13 +261,12 @@ export function draftLeadPersonalNote(lead) {
   const firstName = leadNoteFirstName(lead);
   const observation = pickLeadObservation(lead);
   const soft = isSoftPitchLead(lead);
-  const nursing = isStillBreastfeeding(lead);
+  const connection = pickPersonalConnection(observation.key);
   const body = assertVoice(buildPersonalNoteBody({
     firstName,
     observation: observation.text,
+    connection,
     soft,
-    nursing,
-    lead,
   }));
   const subject = PERSONAL_NOTE_SUBJECT;
   return {
