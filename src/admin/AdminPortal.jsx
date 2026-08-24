@@ -427,6 +427,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
             ...x,
             comp: !!data.comp,
             paid: data.paid != null ? !!data.paid : x.paid,
+            cohort_label: data.cohort_label != null ? data.cohort_label : x.cohort_label,
           } : x)));
         }
       } else {
@@ -615,7 +616,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                 {sel.comp ? "Clear complimentary" : "Mark complimentary"}
               </Btn>
               <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6, lineHeight: 1.45 }}>
-                Comp keeps dashboard access without counting as Stripe-paid. Sends the You&apos;re in welcome email once. Does not write Stripe ids.
+                Comp keeps dashboard access without counting as Stripe-paid. Puts her in the current group and sends the You&apos;re in welcome email once. Does not write Stripe ids.
               </div>
             </div>
           )}
