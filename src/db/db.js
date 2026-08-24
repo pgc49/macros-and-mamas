@@ -1911,6 +1911,7 @@ export const db = {
   /**
    * Admin-only: mark / unmark a complimentary seat.
    * Marking sets paid=true so she keeps dashboard access. Never writes Stripe ids.
+   * Prefer POST /api/admin-comp so the You're in welcome email can send.
    */
   async setClientComp(clientId, comp) {
     if (!clientId) throw new Error("client required");

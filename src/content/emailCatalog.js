@@ -79,7 +79,7 @@ Callie
     number: 2,
     name: "Welcome",
     status: "live",
-    trigger: "Right after Stripe payment succeeds",
+    trigger: "Right after Stripe payment succeeds, or when Callie marks complimentary in admin. Same email, sent once. Comp does not notify Callie of a payment.",
     subject: "You're in, mama 🤍 (here's what happens next)",
     audience: "Client",
     cta: "Complete my intake",

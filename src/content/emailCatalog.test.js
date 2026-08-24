@@ -114,6 +114,7 @@ describe("email catalog journey", () => {
     expect(journeys.every((j) => j.templates.length === j.ids.length)).toBe(true);
 
     expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "welcome"))).toBe("#2");
+    expect(EMAIL_CATALOG.find((e) => e.id === "welcome").trigger).toMatch(/complimentary/i);
     expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "quiz_drip_2d"))).toBe("Q2");
   });
 

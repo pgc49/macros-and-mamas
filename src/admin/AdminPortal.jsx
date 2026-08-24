@@ -406,10 +406,40 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
       paid: next ? true : x.paid,
     } : x)));
     try {
-      await db.setClientComp(c.id, next);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const resp = await fetch("/api/admin-comp", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            clientId: c.id,
+            comp: next,
+            name: c.firstName || c.name || "",
+          }),
+        });
+        if (!resp.ok) throw new Error(`admin-comp ${resp.status}`);
+        const data = await resp.json().catch(() => ({}));
+        if (data?.comp != null) {
+          setRoster((rs) => rs.map((x) => (x.id === c.id ? {
+            ...x,
+            comp: !!data.comp,
+            paid: data.paid != null ? !!data.paid : x.paid,
+          } : x)));
+        }
+      } else {
+        await db.setClientComp(c.id, next);
+      }
     } catch (e) {
       console.error("setClientComp failed", e);
-      setRoster((rs) => rs.map((x) => (x.id === c.id ? { ...x, comp: c.comp, paid: c.paid } : x)));
+      try {
+        await db.setClientComp(c.id, next);
+      } catch (e2) {
+        console.error("setClientComp fallback failed", e2);
+        setRoster((rs) => rs.map((x) => (x.id === c.id ? { ...x, comp: c.comp, paid: c.paid } : x)));
+      }
     }
   };
 
@@ -585,7 +615,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                 {sel.comp ? "Clear complimentary" : "Mark complimentary"}
               </Btn>
               <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6, lineHeight: 1.45 }}>
-                Comp keeps dashboard access without counting as Stripe-paid. Does not write Stripe ids.
+                Comp keeps dashboard access without counting as Stripe-paid. Sends the You&apos;re in welcome email once. Does not write Stripe ids.
               </div>
             </div>
           )}

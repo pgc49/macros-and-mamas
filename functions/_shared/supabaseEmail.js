@@ -154,6 +154,31 @@ export async function loadUserContact(env, userId, { strict = false } = {}) {
   };
 }
 
+/**
+ * Mama-facing welcome (#2). Idempotent via email_events.
+ * Stripe checkout and admin complimentary both use this.
+ * Does not notify Callie — payment pings stay on the Stripe path only.
+ */
+export async function sendWelcomeMamaEmail(env, { email, name, userId, source = "stripe" } = {}) {
+  if (!email) return { ok: false, skipped: "no_email" };
+  if (await hasEmailEvent(env, userId, "welcome")) {
+    return { ok: false, skipped: "already_sent" };
+  }
+
+  const subject = "You're in, mama 🤍 (here's what happens next)";
+  const result = await invokeEdgeFunction(env, "welcome-email", { email, name, userId });
+  await logEmailEvent(env, {
+    profileId: userId,
+    emailType: "welcome",
+    toEmail: email,
+    subject,
+    resendId: resendIdFrom(result),
+    status: result.ok ? "sent" : "failed",
+    meta: { slug: "welcome-email", source },
+  });
+  return result;
+}
+
 export async function sendWelcomeEmails(env, { email, name, userId, amountUsd, referralCode } = {}) {
   if (!email) return;
 
@@ -162,19 +187,7 @@ export async function sendWelcomeEmails(env, { email, name, userId, amountUsd, r
     Number.isFinite(amountNum) && amountNum > 0 ? Math.round(amountNum) : null;
 
   // Idempotent — Stripe may retry checkout.session.completed.
-  if (!(await hasEmailEvent(env, userId, "welcome"))) {
-    const subject = "You're in, mama 🤍 (here's what happens next)";
-    const result = await invokeEdgeFunction(env, "welcome-email", { email, name, userId });
-    await logEmailEvent(env, {
-      profileId: userId,
-      emailType: "welcome",
-      toEmail: email,
-      subject,
-      resendId: resendIdFrom(result),
-      status: result.ok ? "sent" : "failed",
-      meta: { slug: "welcome-email" },
-    });
-  }
+  await sendWelcomeMamaEmail(env, { email, name, userId, source: "stripe" });
 
   if (!(await hasEmailEvent(env, userId, "callie_payment"))) {
     let referredBy = "";
