@@ -659,13 +659,12 @@
   /** Compact fast-lane ask — one screen from ranges, before proof. */
   function fastOfferHtml() {
     const href = checkoutHref();
-    const save = saveAmount > 0 ? `$${saveAmount} off the full $${fullPrice}` : `full rate $${fullPrice}`;
     const startShort = String(cohortStart || '').replace(/^Monday,\s+/i, '');
     return `<div class="q-fast-offer">
       <div class="q-fast-kicker">Your quiz unlocked the early rate</div>
-      <p class="q-fast-line">$${offerPrice} · ${save} · the ${escapeHtml(startShort)} group, capped at 50 mamas</p>
-      <p class="q-fast-deliverable">8 weeks 1:1 with Callie. She builds your final ranges by hand and adjusts them as your body changes.</p>
-      <p class="q-fast-split">Split it at checkout: 4 interest-free payments of $62.25, or monthly.</p>
+      <p class="q-fast-line">$${offerPrice} · full rate $${fullPrice} · ${escapeHtml(startShort)} group</p>
+      <p class="q-fast-deliverable">8 weeks 1:1 with Callie. She builds your ranges by hand and adjusts them as your body changes.</p>
+      <p class="q-fast-split">Split it at checkout: 4 interest-free payments of $62.25.</p>
       <a class="btn q-fast-btn" href="${href}">Lock my spot · $${offerPrice}</a>
       <p class="q-fast-micro">Doors close ${escapeHtml(doorsClose)}. Not ready? Your ranges are already in your inbox.</p>
     </div>`;
@@ -728,7 +727,7 @@
           offerInView = !!(entries[0] && entries[0].isIntersecting);
           sync();
         },
-        { threshold: 0, rootMargin: '0px 0px -12% 0px' },
+        { threshold: 0 },
       );
       offerObs.observe(offer);
       bar._mmOfferObs = offerObs;
@@ -781,14 +780,15 @@
     return `<div class="q-offer-card" id="qOfferCard">
       <div class="q-offer-kicker">Exclusive · early rate from your quiz</div>
       <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
-      <p class="q-offer-lede">You’re joining the group that starts <strong>${escapeHtml(cohortStart)}</strong>. Doors close ${escapeHtml(doorsClose)} so Callie can hand-build every set of ranges before day one, and so the whole group starts week one together. The group is capped at 50 mamas.</p>
+      <p class="q-offer-lede">Doors close ${escapeHtml(doorsClose)} so Callie can hand-build every set of ranges before day one. The whole group starts together ${escapeHtml(cohortStart)}, capped at 50 mamas.</p>
       <div class="q-offer-price-row">
         <span class="q-offer-now">$${offerPrice}</span>
         <span class="q-offer-full">Full rate $${fullPrice}</span>
         <span class="q-offer-save">Save $${saveAmount}</span>
       </div>
-      <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks. Checkout can split it into 4 interest-free payments of $62.25.</p>
+      <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks.</p>
       <p class="q-offer-includes">custom ranges built by Callie · 1:1 messaging · the app · weekly adjustments.</p>
+      <p class="q-offer-split">Checkout can split it into 4 interest-free payments of $62.25.</p>
       <a class="btn q-offer-btn" href="${joinHref}">Lock my spot · $${offerPrice}</a>
       ${email ? `<p class="q-offer-continuing">Continuing as ${escapeHtml(email)}</p>` : ''}
       <p class="q-offer-after">${escapeHtml(postPayCopy)}</p>
