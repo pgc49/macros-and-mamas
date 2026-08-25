@@ -787,7 +787,7 @@
         <span class="q-offer-save">Save $${saveAmount}</span>
       </div>
       <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks.</p>
-      <p class="q-offer-includes">custom ranges built by Callie · 1:1 messaging · the app · weekly adjustments.</p>
+      <p class="q-offer-includes">custom ranges built by Callie · 1:1 messaging · the app · weekly check-ins.</p>
       <p class="q-offer-split">Checkout can split it into 4 interest-free payments of $62.25.</p>
       <a class="btn q-offer-btn" href="${joinHref}">Lock my spot · $${offerPrice}</a>
       ${email ? `<p class="q-offer-continuing">Continuing as ${escapeHtml(email)}</p>` : ''}
