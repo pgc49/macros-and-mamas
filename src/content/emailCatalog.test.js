@@ -63,10 +63,19 @@ describe("quiz drip catalog", () => {
     expect(last.trigger).toMatch(/Aug 26/);
     expect(last.trigger).toMatch(/Aug 27/);
     expect(last.bodyPreview).not.toMatch(/capped at 50/);
+    expect(last.bodyPreview).toMatch(/The ranges I sent you are the easy part/);
     expect(last.bodyPreview).toMatch(/The group starts Monday, Aug 31/);
+    expect(last.bodyPreview).toMatch(/Checkout offers 4 interest-free payments of \$62\.25/);
+
+    const quizRanges = EMAIL_CATALOG.find((e) => e.id === "quiz_ranges");
+    expect(quizRanges.bodyPreview).toMatch(/Checkout offers 4 interest-free payments of \$62\.25/);
+    expect(day2.bodyPreview).toMatch(/Checkout offers 4 interest-free payments of \$62\.25/);
+    expect(EMAIL_CATALOG.find((e) => e.id === "quiz_pregnancy_note").bodyPreview)
+      .not.toMatch(/\$62\.25|split it/i);
 
     const finish = EMAIL_CATALOG.find((e) => e.id === "finish_joining_1h");
     expect(finish.trigger).toMatch(/Track B/);
+    expect(finish.bodyPreview).toMatch(/Checkout offers 4 interest-free payments of \$62\.25/);
     expect(EMAIL_CATALOG.find((e) => e.id === "finish_joining_close").trigger).toMatch(/Aug 26/);
   });
 });
@@ -119,13 +128,15 @@ describe("email catalog journey", () => {
   });
 
   it("keeps em dashes out of emails Callie sends to mamas", () => {
+    const cotiQuote =
+      "I've never been able to lose weight while nursing — with any of my children — until now.";
     const mamaFacing = EMAIL_CATALOG.filter((row) =>
       row.audience === "Client" || row.audience === "Lead" || row.audience === "Waitlist"
     );
     expect(mamaFacing.length).toBeGreaterThan(8);
     for (const row of mamaFacing) {
       expect(row.subject, row.id).not.toMatch(/—/);
-      expect(row.bodyPreview, row.id).not.toMatch(/—/);
+      expect(String(row.bodyPreview || "").replaceAll(cotiQuote, ""), row.id).not.toMatch(/—/);
       if (row.cta) expect(row.cta, row.id).not.toMatch(/—/);
     }
   });

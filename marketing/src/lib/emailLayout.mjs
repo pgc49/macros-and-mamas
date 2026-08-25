@@ -27,10 +27,10 @@ function safeHttpsUrl(url) {
 }
 
 /**
- * @param {{ header: string, body: string, cta_text?: string, cta_url?: string, unsubscribe_url?: string }} opts
- * header / cta_text are escaped; body is trusted markup (escape any user bits at call site).
+ * @param {{ header: string, body: string, cta_text?: string, cta_url?: string, cta_note?: string, unsubscribe_url?: string }} opts
+ * header / cta_text / cta_note are escaped; body is trusted markup (escape any user bits at call site).
  */
-export function renderEmail({ header, body, cta_text, cta_url, unsubscribe_url }) {
+export function renderEmail({ header, body, cta_text, cta_url, cta_note, unsubscribe_url }) {
   const safeHeader = escapeHtml(header);
   const safeCtaText = cta_text ? escapeHtml(cta_text) : "";
   const safeCtaUrl = safeHttpsUrl(cta_url);
@@ -45,6 +45,9 @@ export function renderEmail({ header, body, cta_text, cta_url, unsubscribe_url }
           </a>
         </p>`
       : "";
+  const note = cta_note
+    ? `<p style="font-size:14px;line-height:1.5;color:#33272E;margin:8px 0 0">${escapeHtml(cta_note)}</p>`
+    : "";
   const unsub = safeUnsubUrl
     ? `<br/><a href="${escapeHtml(safeUnsubUrl)}" style="color:#6E5D66;text-decoration:underline">Unsubscribe from quiz emails</a>`
     : "";
@@ -62,6 +65,7 @@ export function renderEmail({ header, body, cta_text, cta_url, unsubscribe_url }
         ${body}
       </div>
       ${cta}
+      ${note}
     </div>
     <p style="font-size:12px;line-height:1.5;color:#6E5D66;font-family:Helvetica,Arial,sans-serif;margin:18px 8px 0">
       ${LLC_FOOTER}${unsub}

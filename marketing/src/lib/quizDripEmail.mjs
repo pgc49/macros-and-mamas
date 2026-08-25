@@ -10,8 +10,12 @@ import {
   DOORS_CLOSE,
   EARLY_PRICE,
   RANGES_EMAIL_BOTTOM_CTA,
+  SPLIT_AT_CHECKOUT,
   rangesOfferBlock,
 } from "./rangesEmail.mjs";
+
+export const COTI_NURSING_QUOTE =
+  "I've never been able to lose weight while nursing — with any of my children — until now.";
 import {
   QUIZ_DRIP_2D,
   QUIZ_DRIP_7D,
@@ -50,8 +54,9 @@ ${QUIZ_FOOTNOTE}`;
 
 export function buildQuizDrip7Body({ joinUrl } = {}) {
   return `
-<p>Last note from me on this. Doors close ${DOORS_CLOSE}. We start Monday, ${COHORT_SHORT}.</p>
-<p>If you still want in, finish signing up and lock in your spot. If you have a question, reply. I read everything.</p>
+<p>The ranges I sent you are the easy part. The 8 weeks is me adjusting them when milk, sleep, and appetite change.</p>
+<p>Coti, a nursing mama of three in this group, said it better than I can: "${COTI_NURSING_QUOTE}"</p>
+<p>Doors close tomorrow night. We start Monday, ${COHORT_SHORT}.</p>
 ${rangesOfferBlock(joinUrl)}
 <p>Callie</p>
 ${QUIZ_FOOTNOTE}`;
@@ -73,6 +78,7 @@ export function buildQuizDripPayload({ step, firstName, joinUrl }) {
   const salesCta = {
     cta_text: RANGES_EMAIL_BOTTOM_CTA,
     cta_url: joinUrl,
+    cta_note: SPLIT_AT_CHECKOUT,
   };
 
   if (step === QUIZ_DRIP_2D) {

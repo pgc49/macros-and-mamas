@@ -9,7 +9,7 @@ the signup funnel, or ad tracking.
 The path that takes money is:
 
 ```
-/quiz (Meta ads land here) -> ranges + Pre-pay CTA -> /signin?from=quiz&auth=create&email=
+/quiz (Meta ads land here) -> ranges + Lock my spot CTA -> /signin?from=quiz&auth=create&email=
   -> create account + Terms -> /join -> Stripe Checkout -> intake -> Callie approves -> /dashboard
 ```
 

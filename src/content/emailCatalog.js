@@ -26,6 +26,8 @@ Finish signing up below to lock in your spot.
 
 Your quiz rate is $249.
 
+Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 a week.
+
 Callie
 
 (You're getting this because you started an account. Reply anytime. Unsubscribe in the footer. $249 line only when quiz unlock is true.)`,
@@ -49,6 +51,8 @@ We start Aug 31. Doors close Aug 27 so I can hand-build ranges before day one. F
 
 Your quiz rate is $249.
 
+Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 a week.
+
 Callie
 
 (You're getting this because you started an account. Reply anytime. Unsubscribe in the footer. $249 line only when quiz unlock is true.)`,
@@ -69,6 +73,8 @@ Last note from me. Doors close Aug 27. We start Monday.
 If you still want in, finish signing up. If something's unclear, reply. I read everything.
 
 Your quiz rate is $249.
+
+Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 a week.
 
 Callie
 
@@ -234,6 +240,8 @@ Your quiz also unlocked the $249 early rate ($50 off $299). The group starts Mon
 
 [Lock my spot · $249]
 
+Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 a week.
+
 These are bands, not one rigid number. Create your account and finish checkout to lock in your spot. Use this same email so your ranges stay attached.
 
 If you join, Callie builds and approves your final numbers before you start.
@@ -261,6 +269,8 @@ This group starts Monday, Aug 31. Doors close Aug 27 so I can build everyone's r
 
 If you want that, finish signing up. Same email so your ranges stay attached. Your quiz rate is $249.
 
+Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 a week.
+
 Callie
 
 (Reply anytime. Unsubscribe in the footer. Subject is distinct from "Your ranges" so Gmail does not thread this under the first email.)`,
@@ -276,13 +286,17 @@ Callie
     cta: "Finish signing up, lock in your spot",
     bodyPreview: `Hi [First name],
 
-Last note from me on this. Doors close Aug 27. We start Monday, Aug 31.
+The ranges I sent you are the easy part. The 8 weeks is me adjusting them when milk, sleep, and appetite change.
 
-If you still want in, finish signing up and lock in your spot. If you have a question, reply. I read everything.
+Coti, a nursing mama of three in this group, said it better than I can: "I've never been able to lose weight while nursing — with any of my children — until now."
+
+Doors close tomorrow night. We start Monday, Aug 31.
 
 Your quiz also unlocked the $249 early rate ($50 off $299). The group starts Monday, Aug 31. Doors close Aug 27 so I can hand-build every set of ranges before day one.
 
 [Lock my spot · $249]
+
+Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 a week.
 
 Callie
 

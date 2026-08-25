@@ -149,11 +149,11 @@ export function SignInPage({
             : isCreate
               ? (isEnrollmentOpen()
                 ? (fromQuiz && prefillEmail
-                  ? "Set a password for the email from your ranges quiz — or enter it again if you already created one — then pre-pay to lock your spot (starts Monday, Aug 31)."
-                  : "Create your account with the same email you used on the ranges quiz, then pre-pay to lock your spot (starts Monday, Aug 31) and complete a short intake so Callie can build your macros.")
+                  ? "Set a password for the email from your ranges quiz — or enter it again if you already created one — then lock your spot (starts Monday, Aug 31)."
+                  : "Create your account with the same email you used on the ranges quiz, then lock your spot (starts Monday, Aug 31) and complete a short intake so Callie can build your macros.")
                 : "New spots aren’t open for checkout yet. Prefer the waitlist on the homepage — we’ll email you a join link when it’s time. Only create an account here if Callie invited you to finish joining.")
               : (fromQuiz && prefillEmail
-                ? "Sign in with the password you created for this quiz email, then pre-pay to lock your spot."
+                ? "Sign in with the password you created for this quiz email, then lock your spot."
                 : "Sign in with the email you used when you enrolled.")}
         </p>
 

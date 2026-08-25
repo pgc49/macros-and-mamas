@@ -323,6 +323,7 @@ export async function sendFinishJoiningEmail(env, {
     body: payload.body,
     cta_text: payload.cta_text,
     cta_url: payload.cta_url,
+    cta_note: payload.cta_note,
     unsubscribe_url: unsubscribeUrl || undefined,
     quizUnlock: Boolean(quizUnlock),
   });

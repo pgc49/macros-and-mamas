@@ -23,11 +23,11 @@ export const doorsCloseReason =
   `Doors close ${doorsCloseDate}, or when the 50 spots fill · starts ${cohortStartDate}`;
 
 export const queuePositionCopy =
-  `Pre-pay and you're in Callie's queue. She builds and approves ranges in the order they come in, so the earlier you're in, the earlier your app opens and the more time you have to get comfortable before ${cohortStartDateCompact}.`;
+  `Lock your spot and you're in Callie's queue. She builds and approves ranges in the order they come in, so the earlier you're in, the earlier your app opens and the more time you have to get comfortable before ${cohortStartDateCompact}.`;
 
-/** Quiz offer — what happens after pre-pay (queue promise + password/intake in one beat). */
+/** Quiz offer — what happens after she locks her spot (queue promise + password/intake in one beat). */
 export const postPayQueueCopy =
-  `After you pre-pay, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.`;
+  `After you lock your spot, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.`;
 
 /** Early rate — revealed only after an eligible quiz finish (Strategy A). */
 export const waitlistPrice = 249;

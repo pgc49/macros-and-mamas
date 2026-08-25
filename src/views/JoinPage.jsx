@@ -320,7 +320,7 @@ export function JoinPage({ profileCreatedAt = null }) {
         )}
         {!isFounding && (
           <p style={{ marginTop: 14, fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
-            You’re pre-paying for your spot
+            You’re locking your spot
             {" "}— starts <strong style={{ color: T.ink }}>{COHORT_START_SHORT}</strong>.
             {isEarly ? (
               <> Keep using this same email so your quiz ranges stay attached.</>

@@ -18,11 +18,18 @@ describe("quiz payoff copy", () => {
     assert.doesNotMatch(quizJs, /We emailed these ranges/);
   });
 
-  it("shows the app tour before the compact offer and keeps the pre-pay card", () => {
+  it("shows the app tour before the compact offer and keeps the lock-your-spot card", () => {
     assert.match(quizJs, /function appTourHtml/);
     assert.match(quizJs, /function fastOfferHtml/);
     assert.match(quizJs, /Lock my spot · \$/);
     assert.match(quizJs, /Your quiz unlocked the early rate/);
+    assert.match(quizJs, /8 weeks 1:1 with Callie/);
+    assert.match(quizJs, /4 interest-free payments of \$62\.25, or monthly/);
+    assert.match(quizJs, /Checkout can split it into 4 interest-free payments of \$62\.25/);
+    assert.match(quizJs, /custom ranges built by Callie · 1:1 messaging · the app · weekly adjustments/);
+    assert.match(quizJs, /or 4 payments of \$62 at checkout/);
+    assert.doesNotMatch(quizJs, /[Pp]re-pay|[Pp]repay/);
+    assert.doesNotMatch(quizJs, /interest-free monthly/i);
     const tourAt = quizJs.indexOf("${appTourHtml()}");
     const fastAt = quizJs.indexOf("${fastOfferHtml()}");
     const offerAt = quizJs.indexOf("${offerBlock()}");

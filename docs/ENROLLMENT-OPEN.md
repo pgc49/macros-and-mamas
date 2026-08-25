@@ -52,7 +52,7 @@ Never sell seats without an expected start date + doors-close date on the page.
 `marketing/wrangler.toml` → `PUBLIC_ENROLLMENT_MODE = "waitlist"`:
 
 - Homepage lists **$299** and pushes the quiz to unlock **$249**
-- Post-quiz offer shows early rate + pre-pay CTA
+- Post-quiz offer shows early rate + Lock my spot CTA
 
 ## Later
 

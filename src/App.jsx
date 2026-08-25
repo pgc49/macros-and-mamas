@@ -56,7 +56,7 @@ import { nextAuthSwitch, resolveSignInMode } from "./auth/signInMode";
 import { ageFromDateOfBirth } from "./db/db";
 
 /**
- * /signin entry: quiz Pre-pay carries ?from=quiz&email=.
+ * /signin entry: quiz Lock my spot carries ?from=quiz&email=.
  *
  * Never sign anyone out here. Supabase syncs sessions across tabs, so an older
  * tab sitting on a previous quiz email would see a brand-new signup and log it
@@ -564,7 +564,7 @@ export default function App() {
       return;
     }
 
-    // Quiz Pre-pay → /signin?from=quiz&email=…
+    // Quiz Lock my spot → /signin?from=quiz&email=…
     // Keep them on create/sign-in when another account is still signed in;
     // SignInGate signs that session out. Matching email → join with early rate.
     if (path === PATHS.signin) {

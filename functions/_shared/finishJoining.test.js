@@ -158,6 +158,20 @@ describe("finish joining copy", () => {
     expect(buildFinishJoining24hBody({ quizUnlock: true })).toContain("Your quiz rate is $249.");
     expect(buildFinishJoiningCloseBody({ quizUnlock: true })).toContain("Your quiz rate is $249.");
     expect(buildFinishJoiningCloseBody()).not.toMatch(/\$249/);
+    const unlocked = buildFinishJoiningPayload({
+      variant: "1h",
+      name: "Dolly",
+      email: "mama@example.com",
+      quizUnlock: true,
+    });
+    expect(unlocked.cta_note).toMatch(/Checkout offers 4 interest-free payments of \$62\.25/);
+    const locked = buildFinishJoiningPayload({
+      variant: "1h",
+      name: "Dolly",
+      email: "mama@example.com",
+      quizUnlock: false,
+    });
+    expect(locked.cta_note).toBeUndefined();
   });
 
   it("builds the Wednesday last note with a safe first-name subject", () => {

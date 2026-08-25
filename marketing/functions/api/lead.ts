@@ -16,6 +16,7 @@ import {
 } from '../_shared/emailLayout.mjs';
 import {
   RANGES_EMAIL_BOTTOM_CTA,
+  SPLIT_AT_CHECKOUT,
   buildEligibleRangesEmailBody,
   quizJoinUrl,
 } from '../_shared/rangesEmail.mjs';
@@ -307,13 +308,14 @@ async function sendRangesEmail(
   const signupCta = {
     cta_text: RANGES_EMAIL_BOTTOM_CTA,
     cta_url: joinUrl,
+    cta_note: SPLIT_AT_CHECKOUT,
   };
 
   let subject = '';
   // renderEmail() HTML-escapes header; keep name free of CR/LF for subject safety.
   let header = `Hi ${name},`;
   let body = '';
-  let cta: { cta_text?: string; cta_url?: string } = {};
+  let cta: { cta_text?: string; cta_url?: string; cta_note?: string } = {};
 
   if (opts.segment === 'pregnancy_nurture') {
     subject = `${name}, a note for this season`;

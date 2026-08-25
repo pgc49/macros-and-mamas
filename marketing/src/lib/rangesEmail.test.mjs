@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   EARLY_PRICE,
   RANGES_EMAIL_BOTTOM_CTA,
+  SPLIT_AT_CHECKOUT,
   buildEligibleRangesEmailBody,
   emailCtaButton,
   quizJoinUrl,
@@ -33,12 +34,16 @@ describe("quiz ranges email", () => {
     assert.equal(DASH_RE.test(RANGES_EMAIL_BOTTOM_CTA), false);
   });
 
-  it("includes the offer unlock and two CTAs", () => {
+  it("includes the offer unlock, two CTAs, and the checkout split line", () => {
     assert.match(body, /unlocked the \$249 early rate/);
     assert.match(body, /\$50 off \$299/);
     assert.doesNotMatch(body, /capped at 50/);
     assert.match(body, /The group starts Monday, Aug 31/);
     assert.match(body, /Doors close Aug 27 so I can hand-build/);
+    assert.match(body, /Checkout offers 4 interest-free payments of \$62\.25/);
+    assert.match(body, new RegExp(SPLIT_AT_CHECKOUT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.doesNotMatch(body, /approved|guaranteed|Klarna|Affirm/i);
+    assert.doesNotMatch(body, /interest-free monthly/i);
     const lockButtons = withBottom.match(/Lock my spot · \$249/g) || [];
     const finishButtons = withBottom.match(/Finish signing up, lock in your spot/g) || [];
     assert.equal(lockButtons.length, 1);

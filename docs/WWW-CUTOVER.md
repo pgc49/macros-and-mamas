@@ -76,7 +76,7 @@ Do these **before** sending paid traffic:
 2. **Cold `/`** — `https://www.macrosandmamas.com/` → Astro marketing (quiz CTA), not SPA loader.
 3. **`/dashboard`** — SPA app shell loads.
 4. **`/join`** without quiz email → unlock CTA (`quiz_required`). After quiz → $249 + cohort date.
-5. **`/quiz`** — complete submit → ranges / Pre-pay offer + email + `marketing_leads` row.
+5. **`/quiz`** — complete submit → ranges / Lock my spot offer + email + `marketing_leads` row.
 6. **`/nope`** — real 404 page, not the homepage.
 7. **Sign in** — existing members OK.
 8. **View source on `/`** — Astro HTML (Marcellus / `_astro/`), not `Couldn’t load the app`.

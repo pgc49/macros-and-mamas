@@ -4,7 +4,7 @@
  */
 import { APP_URL } from "./emailLayout.mjs";
 import { safeDisplayName } from "./quizDripEmail.mjs";
-import { COHORT_SHORT, DOORS_CLOSE, EARLY_PRICE } from "./rangesEmail.mjs";
+import { COHORT_SHORT, DOORS_CLOSE, EARLY_PRICE, SPLIT_AT_CHECKOUT } from "./rangesEmail.mjs";
 import {
   FINISH_JOINING_1H,
   FINISH_JOINING_24H,
@@ -99,6 +99,7 @@ export function buildFinishJoiningPayload({
     body,
     cta_text: FINISH_JOINING_CTA,
     cta_url: finishJoinUrl(email),
+    cta_note: quizUnlock ? SPLIT_AT_CHECKOUT : undefined,
   };
 }
 

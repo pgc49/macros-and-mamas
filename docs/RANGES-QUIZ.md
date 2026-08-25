@@ -38,7 +38,7 @@ Six pills: Still pregnant · 0–3 months · 3–12 months · 1–2 years · 2+ 
 - **Not postpartum** → skip feeding; go straight to height/weight
 - Other PP options → feeding question, then height/weight
 
-Successful (non-pregnant / non-vegan) results show an **app-style product preview**: ranges card with band motif + interactive Log a meal carousel (Snap / Describe / My plan / Macros), plus an exclusive **pre-pay $249 / lock your spot** offer ($50 off full). Copy qualifies numbers as a preview — final ranges require Callie’s approval if they join.
+Successful (non-pregnant / non-vegan) results show an **app-style product preview**: ranges card with band motif + interactive Log a meal carousel (Snap / Describe / My plan / Macros), plus an exclusive **Lock my spot · $249** offer ($50 off full). Copy qualifies numbers as a preview — final ranges require Callie’s approval if they join.
 
 Checkout enforces the unlock server-side: `/api/checkout` only returns the $249 tier when `marketing_leads` has an eligible row for that email (see `docs/ENROLLMENT-OPEN.md`).
 

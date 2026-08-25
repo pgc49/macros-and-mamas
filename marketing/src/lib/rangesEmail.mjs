@@ -8,6 +8,10 @@ export const EARLY_PRICE = 249;
 export const FULL_PRICE = 299;
 export const DOORS_CLOSE = "Aug 27";
 export const COHORT_SHORT = "Aug 31";
+/** Klarna pay-in-4 on the $249 session. Do not attach "interest-free" to monthly. */
+export const PAY_IN_4_AMOUNT = "62.25";
+export const SPLIT_AT_CHECKOUT =
+  "Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 a week.";
 
 const CTA_BTN_STYLE =
   "display:inline-block;background:#B4416B;color:#ffffff;text-decoration:none;"
@@ -30,6 +34,10 @@ export function emailCtaButton(text, url) {
         </p>`;
 }
 
+export function splitAtCheckoutHtml() {
+  return `<p>${SPLIT_AT_CHECKOUT}</p>`;
+}
+
 export function rangesOfferBlock(joinUrl, {
   earlyPrice = EARLY_PRICE,
   fullPrice = FULL_PRICE,
@@ -38,7 +46,8 @@ export function rangesOfferBlock(joinUrl, {
 } = {}) {
   const save = Math.max(0, Number(fullPrice) - Number(earlyPrice));
   return `<p><strong>Your quiz also unlocked the $${earlyPrice} early rate</strong> ($${save} off $${fullPrice}). The group starts Monday, ${cohortShort}. Doors close ${doorsClose} so I can hand-build every set of ranges before day one.</p>
-${emailCtaButton(`Lock my spot · $${earlyPrice}`, joinUrl)}`;
+${emailCtaButton(`Lock my spot · $${earlyPrice}`, joinUrl)}
+${splitAtCheckoutHtml()}`;
 }
 
 export function buildEligibleRangesEmailBody({

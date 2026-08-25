@@ -15,7 +15,7 @@
   const calliePhoto = root.dataset.calliePhoto || '/callie-kitchen.jpg';
   const postPayCopy =
     root.dataset.postPayCopy
-    || "After you pre-pay, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.";
+    || "After you lock your spot, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.";
   const ATTR_KEY = 'mm_attribution_v1';
   const META_PIXEL_ID = '1078367721716098';
   /** Segments that may enroll Aug 31 — only these fire Meta Lead. */
@@ -664,6 +664,8 @@
     return `<div class="q-fast-offer">
       <div class="q-fast-kicker">Your quiz unlocked the early rate</div>
       <p class="q-fast-line">$${offerPrice} · ${save} · the ${escapeHtml(startShort)} group, capped at 50 mamas</p>
+      <p class="q-fast-deliverable">8 weeks 1:1 with Callie. She builds your final ranges by hand and adjusts them as your body changes.</p>
+      <p class="q-fast-split">Split it at checkout: 4 interest-free payments of $62.25, or monthly.</p>
       <a class="btn q-fast-btn" href="${href}">Lock my spot · $${offerPrice}</a>
       <p class="q-fast-micro">Doors close ${escapeHtml(doorsClose)}. Not ready? Your ranges are already in your inbox.</p>
     </div>`;
@@ -672,8 +674,11 @@
   function stickyCheckoutHtml() {
     const href = checkoutHref();
     return `<div class="sticky-cta q-result-sticky" id="quizStickyCta" aria-hidden="true">
-      <div class="s-price"><strong>Doors close ${escapeHtml(doorsClose)} · 50 mamas max</strong></div>
-      <a class="btn" href="${href}">Pre-pay $${offerPrice}</a>
+      <div class="s-price">
+        <strong>Doors close ${escapeHtml(doorsClose)}</strong>
+        or 4 payments of $62 at checkout
+      </div>
+      <a class="btn" href="${href}">Lock my spot</a>
     </div>`;
   }
 
@@ -769,7 +774,7 @@
     );
   }
 
-  /** Quiz-gated exclusive pre-pay — shown for every non-pregnant finish. */
+  /** Quiz-gated exclusive lock-your-spot offer — shown for every non-pregnant finish. */
   function offerBlock() {
     const email = String(state.contact.email || '').trim().toLowerCase();
     const joinHref = checkoutHref();
@@ -782,8 +787,9 @@
         <span class="q-offer-full">Full rate $${fullPrice}</span>
         <span class="q-offer-save">Save $${saveAmount}</span>
       </div>
-      <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks · everything included</p>
-      <a class="btn q-offer-btn" href="${joinHref}">Pre-pay $${offerPrice} — lock my spot</a>
+      <p class="q-offer-week">$${weeklyPrice}/week for 8 weeks. Checkout can split it into 4 interest-free payments of $62.25.</p>
+      <p class="q-offer-includes">custom ranges built by Callie · 1:1 messaging · the app · weekly adjustments.</p>
+      <a class="btn q-offer-btn" href="${joinHref}">Lock my spot · $${offerPrice}</a>
       ${email ? `<p class="q-offer-continuing">Continuing as ${escapeHtml(email)}</p>` : ''}
       <p class="q-offer-after">${escapeHtml(postPayCopy)}</p>
       <p class="q-offer-skip">${
