@@ -73,25 +73,32 @@ describe("pickDueQuizDripStep timing", () => {
     })).toBe(QUIZ_DRIP_2D);
   });
 
-  it("sends the last sales email at +6 days unless that step is paused", () => {
+  it("sends the last sales email at +6 days after the morning window opens", () => {
     expect(QUIZ_LAST_MIN_AGE_MS).toBe(6 * DAY_MS);
+    const morning = Date.parse("2026-08-26T08:15:00.000-07:00");
     expect(pickDueQuizDripStep({
       ageMs: 6 * DAY_MS,
       sentTypes: new Set([QUIZ_DRIP_2D]),
       segment: "main",
+      now: morning,
     })).toBe(QUIZ_DRIP_7D_PAUSED ? null : QUIZ_DRIP_7D);
   });
 
-  it("makes last due on Aug 26 PT even before +6 days, and never on Aug 27 PT", () => {
-    const aug26 = Date.parse("2026-08-26T18:00:00.000-07:00");
+  it("makes last due on Aug 26 PT after 8am, and never on Aug 27 PT", () => {
+    const beforeMorning = Date.parse("2026-08-26T07:45:00.000-07:00");
+    const morning = Date.parse("2026-08-26T08:15:00.000-07:00");
+    const aug26eve = Date.parse("2026-08-26T18:00:00.000-07:00");
     const aug27 = Date.parse("2026-08-27T00:30:00.000-07:00");
-    expect(quizLastSalesDue({ ageMs: 5 * DAY_MS, now: aug26 })).toBe(true);
+    expect(quizLastSalesDue({ ageMs: 5 * DAY_MS, now: beforeMorning })).toBe(false);
+    expect(quizLastSalesDue({ ageMs: 6 * DAY_MS, now: beforeMorning })).toBe(false);
+    expect(quizLastSalesDue({ ageMs: 5 * DAY_MS, now: morning })).toBe(true);
     expect(pickDueQuizDripStep({
       ageMs: 2 * DAY_MS,
       sentTypes: new Set(),
       segment: "main",
-      now: aug26,
+      now: morning,
     })).toBe(QUIZ_DRIP_7D_PAUSED ? null : QUIZ_DRIP_7D);
+    expect(quizLastSalesDue({ ageMs: 5 * DAY_MS, now: aug26eve })).toBe(true);
     expect(quizLastSalesDue({ ageMs: 7 * DAY_MS, now: aug27 })).toBe(false);
     expect(pickDueQuizDripStep({
       ageMs: 7 * DAY_MS,
@@ -106,17 +113,18 @@ describe("pickDueQuizDripStep timing", () => {
       ageMs: 8 * DAY_MS,
       sentTypes: new Set(),
       segment: "main",
+      now: Date.parse("2026-08-26T08:15:00.000-07:00"),
     })).toBe(QUIZ_DRIP_7D_PAUSED ? null : QUIZ_DRIP_7D);
   });
 
   it("resumes the last sales email when that step is not paused", () => {
     expect(QUIZ_DRIP_7D_PAUSED).toBe(false);
-    const aug26 = Date.parse("2026-08-26T18:00:00.000-07:00");
+    const morning = Date.parse("2026-08-26T08:15:00.000-07:00");
     expect(pickDueQuizDripStep({
       ageMs: 2 * DAY_MS,
       sentTypes: new Set(),
       segment: "main",
-      now: aug26,
+      now: morning,
     })).toBe(QUIZ_DRIP_7D);
   });
 

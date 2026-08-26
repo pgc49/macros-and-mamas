@@ -280,7 +280,7 @@ Callie
     number: "Q7",
     name: "Quiz drip · last",
     status: "live",
-    trigger: "Track A last unpaid quiz-lead sales nudge — due on Wed Aug 26 PT, or at +6 days after quiz_ranges, whichever comes first. Never sent on or after Aug 27 PT. Prefer last over +2d if both are due. Then stop. Never sent if a profiles row exists.",
+    trigger: "Track A last unpaid quiz-lead sales nudge — due on Wed Aug 26 PT after 8:00 AM, or at +6 days after quiz_ranges once that morning window is open, whichever comes first. Never sent on or after Aug 27 PT. Prefer last over +2d if both are due. Then stop. Never sent if a profiles row exists.",
     subject: "[First name], still want in?",
     audience: "Lead",
     cta: "Finish signing up, lock in your spot",

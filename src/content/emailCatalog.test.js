@@ -62,6 +62,7 @@ describe("quiz drip catalog", () => {
     const last = EMAIL_CATALOG.find((e) => e.id === "quiz_drip_7d");
     expect(last.status).toBe("live");
     expect(last.trigger).toMatch(/Aug 26/);
+    expect(last.trigger).toMatch(/8:00 AM/);
     expect(last.trigger).toMatch(/Aug 27/);
     expect(last.bodyPreview).not.toMatch(/capped at 50/);
     expect(last.bodyPreview).toMatch(/later keeps not coming/);

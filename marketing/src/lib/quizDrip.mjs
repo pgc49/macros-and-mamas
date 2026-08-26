@@ -10,8 +10,9 @@
 
 import {
   isLastUnpaidSalesDayPt,
+  isLastQuizSalesWindowOpenPt,
   isOnOrAfterDoorsClosePt,
-  lastUnpaidSalesDayStartMs,
+  lastQuizSalesOpenMs,
 } from "./cohortEmailWindow.mjs";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -67,9 +68,11 @@ export function quizDripAnchorMs({ leadCreatedAt, quizRangesAt, now }) {
 export function quizLastSalesDue({ ageMs, now } = {}) {
   const age = Number(ageMs);
   if (!Number.isFinite(age) || age < 0) return false;
-  if (Number.isFinite(now) && isOnOrAfterDoorsClosePt(now)) return false;
+  if (!Number.isFinite(now)) return false;
+  if (isOnOrAfterDoorsClosePt(now)) return false;
+  if (!isLastQuizSalesWindowOpenPt(now)) return false;
   if (age >= QUIZ_LAST_MIN_AGE_MS) return true;
-  if (Number.isFinite(now) && isLastUnpaidSalesDayPt(now)) return true;
+  if (isLastUnpaidSalesDayPt(now)) return true;
   return false;
 }
 
@@ -262,7 +265,7 @@ function quizProbeTimes({ now, anchor, segment }) {
   } else if (QUIZ_SALES_SEGMENTS.has(segment)) {
     times.push(anchor + 2 * DAY_MS);
     times.push(anchor + QUIZ_LAST_MIN_AGE_MS);
-    const lastStart = lastUnpaidSalesDayStartMs();
+    const lastStart = lastQuizSalesOpenMs();
     if (Number.isFinite(lastStart)) times.push(lastStart);
   }
   return [...new Set(times.filter((t) => Number.isFinite(t) && t >= now))].sort((a, b) => a - b);

@@ -2,11 +2,14 @@
  * Honest cohort dates for unpaid sales mail (PT).
  * Doors close Aug 27 so Callie can hand-build ranges before Mon Aug 31.
  * Last unpaid sales mail may send on Aug 26 PT, never on or after Aug 27 PT.
+ * Track A last quiz email waits until 8:00 AM PT that morning (hourly cron is :15 UTC).
  */
 
 export const PACIFIC_TZ = "America/Los_Angeles";
 export const DOORS_CLOSE_YMD = "2026-08-27";
 export const LAST_UNPAID_SALES_YMD = "2026-08-26";
+/** First hour (0–23 PT) the last quiz sales email may send on Aug 26. */
+export const LAST_QUIZ_SALES_HOUR_PT = 8;
 
 export function pacificYmd(nowMs) {
   if (!Number.isFinite(nowMs)) return "";
@@ -48,4 +51,18 @@ export function firstInstantOfPacificYmd(ymd) {
 
 export function lastUnpaidSalesDayStartMs() {
   return firstInstantOfPacificYmd(LAST_UNPAID_SALES_YMD);
+}
+
+/** First millisecond the last Track A quiz email may send (Aug 26 8:00 AM PT). */
+export function lastQuizSalesOpenMs() {
+  const start = lastUnpaidSalesDayStartMs();
+  if (!Number.isFinite(start)) return NaN;
+  return start + LAST_QUIZ_SALES_HOUR_PT * 60 * 60 * 1000;
+}
+
+export function isLastQuizSalesWindowOpenPt(nowMs) {
+  if (!Number.isFinite(nowMs)) return false;
+  if (isOnOrAfterDoorsClosePt(nowMs)) return false;
+  const open = lastQuizSalesOpenMs();
+  return Number.isFinite(open) && nowMs >= open;
 }
