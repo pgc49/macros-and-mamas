@@ -60,13 +60,13 @@ describe("quiz drip catalog", () => {
     expect(day2.bodyPreview).toMatch(/Doors close Aug 27/);
 
     const last = EMAIL_CATALOG.find((e) => e.id === "quiz_drip_7d");
-    expect(last.status).toBe("paused");
-    expect(last.trigger).toMatch(/PAUSED/);
+    expect(last.status).toBe("live");
     expect(last.trigger).toMatch(/Aug 26/);
     expect(last.trigger).toMatch(/Aug 27/);
     expect(last.bodyPreview).not.toMatch(/capped at 50/);
-    expect(last.bodyPreview).toMatch(/The ranges I sent you are the easy part/);
-    expect(last.bodyPreview).toMatch(/The group starts Monday, Aug 31/);
+    expect(last.bodyPreview).toMatch(/later keeps not coming/);
+    expect(last.bodyPreview).toMatch(/Doors close Thursday/);
+    expect(last.bodyPreview).toMatch(/your spot is \$249/);
     expect(last.bodyPreview).toMatch(/Checkout offers 4 interest-free payments of \$62\.25/);
 
     const quizRanges = EMAIL_CATALOG.find((e) => e.id === "quiz_ranges");

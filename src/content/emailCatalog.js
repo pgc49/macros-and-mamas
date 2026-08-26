@@ -279,28 +279,35 @@ Callie
     id: "quiz_drip_7d",
     number: "Q7",
     name: "Quiz drip · last",
-    status: "paused",
-    trigger: "PAUSED — cron will not send this while Callie rewrites it. Was: Track A last unpaid quiz-lead sales nudge — due on Wed Aug 26 PT, or at +6 days after quiz_ranges, whichever comes first. Never sent on or after Aug 27 PT. Prefer last over +2d if both are due. Then stop. Never sent if a profiles row exists.",
+    status: "live",
+    trigger: "Track A last unpaid quiz-lead sales nudge — due on Wed Aug 26 PT, or at +6 days after quiz_ranges, whichever comes first. Never sent on or after Aug 27 PT. Prefer last over +2d if both are due. Then stop. Never sent if a profiles row exists.",
     subject: "[First name], still want in?",
     audience: "Lead",
     cta: "Finish signing up, lock in your spot",
     bodyPreview: `Hi [First name],
 
-The ranges I sent you are the easy part. The 8 weeks is me adjusting them when milk, sleep, and appetite change.
+A few days ago you took 90 seconds to answer some questions and got your macros back. Maybe you're still nursing and running on fumes. Maybe you're years past that stage, but somehow still last on your own list. Either way, I've looked at a lot of these questionnaires this week, and I keep seeing the same story: women who show up for everyone else, every single day, and quietly keep telling themselves "I'll get to me later."
 
-Coti, a nursing mama of three in this group, said it better than I can: "I've never been able to lose weight while nursing — with any of my children — until now."
+I want to gently say something to you: later keeps not coming. And you deserve better than that.
 
-Doors close tomorrow night. We start Monday, Aug 31.
+Here's what I know after doing this work for years: timing is never going to feel perfect. There will always be a reason to wait: a sleep regression, a busy season at work, a kid who needs you at 2am. But your health isn't a reward you get after everything else is handled. It's the thing that lets you handle everything else.
 
-Your quiz also unlocked the $249 early rate ($50 off $299). The group starts Monday, Aug 31. Doors close Aug 27 so I can hand-build every set of ranges before day one.
+Your macros were just the starting point. The real transformation happens inside Macros and Mamas, where you're not figuring this out alone at 11pm with fifteen browser tabs open. You'll have me in your corner, plus a whole cohort of women who get it, for accountability, for troubleshooting the hard weeks, for celebrating the wins that feel small but aren't.
+
+Doors close Thursday. Because you took the quiz, your spot is $249 (that's $50 off, already applied).
+
+If you've been waiting for a sign that it's your turn, this is it.
 
 [Lock my spot · $249]
 
-Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 a week.
+I'd be so honored to walk this with you.
 
+With love,
 Callie
 
-(Reply anytime. Unsubscribe in the footer. Offer block reuses the first ranges email helper.)`,
+Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 a week.
+
+(Reply anytime. Unsubscribe in the footer.)`,
   },
   {
     id: "quiz_pregnancy_note",

@@ -11,7 +11,7 @@ import {
   EARLY_PRICE,
   RANGES_EMAIL_BOTTOM_CTA,
   SPLIT_AT_CHECKOUT,
-  rangesOfferBlock,
+  emailCtaButton,
 } from "./rangesEmail.mjs";
 
 export const COTI_NURSING_QUOTE =
@@ -54,11 +54,15 @@ ${QUIZ_FOOTNOTE}`;
 
 export function buildQuizDrip7Body({ joinUrl } = {}) {
   return `
-<p>The ranges I sent you are the easy part. The 8 weeks is me adjusting them when milk, sleep, and appetite change.</p>
-<p>Coti, a nursing mama of three in this group, said it better than I can: "${COTI_NURSING_QUOTE}"</p>
-<p>Doors close tomorrow night. We start Monday, ${COHORT_SHORT}.</p>
-${rangesOfferBlock(joinUrl)}
-<p>Callie</p>
+<p>A few days ago you took 90 seconds to answer some questions and got your macros back. Maybe you're still nursing and running on fumes. Maybe you're years past that stage, but somehow still last on your own list. Either way, I've looked at a lot of these questionnaires this week, and I keep seeing the same story: women who show up for everyone else, every single day, and quietly keep telling themselves "I'll get to me later."</p>
+<p>I want to gently say something to you: later keeps not coming. And you deserve better than that.</p>
+<p>Here's what I know after doing this work for years: timing is never going to feel perfect. There will always be a reason to wait: a sleep regression, a busy season at work, a kid who needs you at 2am. But your health isn't a reward you get after everything else is handled. It's the thing that lets you handle everything else.</p>
+<p>Your macros were just the starting point. The real transformation happens inside Macros and Mamas, where you're not figuring this out alone at 11pm with fifteen browser tabs open. You'll have me in your corner, plus a whole cohort of women who get it, for accountability, for troubleshooting the hard weeks, for celebrating the wins that feel small but aren't.</p>
+<p>Doors close Thursday. Because you took the quiz, your spot is $${EARLY_PRICE} (that's $50 off, already applied).</p>
+<p>If you've been waiting for a sign that it's your turn, this is it.</p>
+${emailCtaButton(`Lock my spot · $${EARLY_PRICE}`, joinUrl)}
+<p>I'd be so honored to walk this with you.</p>
+<p>With love,<br/>Callie</p>
 ${QUIZ_FOOTNOTE}`;
 }
 

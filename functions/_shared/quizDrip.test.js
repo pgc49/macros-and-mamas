@@ -17,13 +17,12 @@ import {
   quizLastSalesDue,
 } from "./quizDrip.mjs";
 import {
-  COTI_NURSING_QUOTE,
   buildPregnancyNoteBody,
   buildQuizDrip2Body,
   buildQuizDrip7Body,
   quizDripSubject,
 } from "./quizDripEmail.mjs";
-import { COHORT_SHORT, DOORS_CLOSE, EARLY_PRICE, SPLIT_AT_CHECKOUT } from "./rangesEmail.mjs";
+import { EARLY_PRICE } from "./rangesEmail.mjs";
 
 const NOW = Date.parse("2026-08-18T12:00:00.000Z");
 
@@ -110,20 +109,15 @@ describe("pickDueQuizDripStep timing", () => {
     })).toBe(QUIZ_DRIP_7D_PAUSED ? null : QUIZ_DRIP_7D);
   });
 
-  it("does not send or substitute the last sales email while it is paused", () => {
-    expect(QUIZ_DRIP_7D_PAUSED).toBe(true);
+  it("resumes the last sales email when that step is not paused", () => {
+    expect(QUIZ_DRIP_7D_PAUSED).toBe(false);
     const aug26 = Date.parse("2026-08-26T18:00:00.000-07:00");
     expect(pickDueQuizDripStep({
       ageMs: 2 * DAY_MS,
       sentTypes: new Set(),
       segment: "main",
       now: aug26,
-    })).toBeNull();
-    expect(pickDueQuizDripStep({
-      ageMs: 6 * DAY_MS,
-      sentTypes: new Set([QUIZ_DRIP_2D]),
-      segment: "main",
-    })).toBeNull();
+    })).toBe(QUIZ_DRIP_7D);
   });
 
   it("does not resend an already-sent step", () => {
@@ -320,20 +314,20 @@ describe("quiz drip copy", () => {
     expect(quizDripSubject(QUIZ_DRIP_2D, "Dolly")).toBe("Dolly, the numbers are the easy part");
   });
 
-  it("day 7 leads with the bridge, Coti's quote, then the offer", () => {
+  it("day 7 is Callie's later-keeps-not-coming letter with the quiz rate", () => {
     const html = buildQuizDrip7Body({
       joinUrl: "https://www.macrosandmamas.com/join?from=quiz&email=x",
     });
-    expect(html).toContain("The ranges I sent you are the easy part.");
-    expect(html).toContain("when milk, sleep, and appetite change");
-    expect(html).toContain(COTI_NURSING_QUOTE);
-    expect(html).toContain("Doors close tomorrow night.");
-    expect(html).toContain(DOORS_CLOSE);
-    expect(html).toContain(COHORT_SHORT);
-    expect(html).toContain(SPLIT_AT_CHECKOUT);
+    expect(html).toContain("later keeps not coming");
+    expect(html).toContain("Doors close Thursday.");
+    expect(html).toContain(`your spot is $${EARLY_PRICE}`);
+    expect(html).toContain("$50 off, already applied");
+    expect(html).toContain("this is it.");
+    expect(html).toContain("Lock my spot · $249");
+    expect(html).toContain("https://www.macrosandmamas.com/join?from=quiz&amp;email=x");
+    expect(html).toContain("With love,");
     expect(html).not.toMatch(/capped at 50/);
-    expect(html).toContain(`$${EARLY_PRICE}`);
-    expect(html.replace(COTI_NURSING_QUOTE, "")).not.toMatch(/—/);
+    expect(html).not.toMatch(/—/);
     expect(html).not.toMatch(/!/);
     expect(quizDripSubject(QUIZ_DRIP_7D, "Dolly")).toBe("Dolly, still want in?");
   });
