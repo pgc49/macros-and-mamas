@@ -4,6 +4,7 @@ import {
   DAY_MS,
   QUIZ_DRIP_2D,
   QUIZ_DRIP_7D,
+  QUIZ_DRIP_7D_PAUSED,
   QUIZ_LAST_MIN_AGE_MS,
   QUIZ_PREGNANCY_NOTE,
   decideQuizDripAction,
@@ -73,13 +74,13 @@ describe("pickDueQuizDripStep timing", () => {
     })).toBe(QUIZ_DRIP_2D);
   });
 
-  it("sends the last sales email at +6 days", () => {
+  it("sends the last sales email at +6 days unless that step is paused", () => {
     expect(QUIZ_LAST_MIN_AGE_MS).toBe(6 * DAY_MS);
     expect(pickDueQuizDripStep({
       ageMs: 6 * DAY_MS,
       sentTypes: new Set([QUIZ_DRIP_2D]),
       segment: "main",
-    })).toBe(QUIZ_DRIP_7D);
+    })).toBe(QUIZ_DRIP_7D_PAUSED ? null : QUIZ_DRIP_7D);
   });
 
   it("makes last due on Aug 26 PT even before +6 days, and never on Aug 27 PT", () => {
@@ -91,7 +92,7 @@ describe("pickDueQuizDripStep timing", () => {
       sentTypes: new Set(),
       segment: "main",
       now: aug26,
-    })).toBe(QUIZ_DRIP_7D);
+    })).toBe(QUIZ_DRIP_7D_PAUSED ? null : QUIZ_DRIP_7D);
     expect(quizLastSalesDue({ ageMs: 7 * DAY_MS, now: aug27 })).toBe(false);
     expect(pickDueQuizDripStep({
       ageMs: 7 * DAY_MS,
@@ -106,7 +107,23 @@ describe("pickDueQuizDripStep timing", () => {
       ageMs: 8 * DAY_MS,
       sentTypes: new Set(),
       segment: "main",
-    })).toBe(QUIZ_DRIP_7D);
+    })).toBe(QUIZ_DRIP_7D_PAUSED ? null : QUIZ_DRIP_7D);
+  });
+
+  it("does not send or substitute the last sales email while it is paused", () => {
+    expect(QUIZ_DRIP_7D_PAUSED).toBe(true);
+    const aug26 = Date.parse("2026-08-26T18:00:00.000-07:00");
+    expect(pickDueQuizDripStep({
+      ageMs: 2 * DAY_MS,
+      sentTypes: new Set(),
+      segment: "main",
+      now: aug26,
+    })).toBeNull();
+    expect(pickDueQuizDripStep({
+      ageMs: 6 * DAY_MS,
+      sentTypes: new Set([QUIZ_DRIP_2D]),
+      segment: "main",
+    })).toBeNull();
   });
 
   it("does not resend an already-sent step", () => {
@@ -248,7 +265,9 @@ describe("planRemainingQuizDrips", () => {
       quizRangesAt: rangesAt,
     });
     expect(planned.stopReason).toBeNull();
-    expect(planned.remaining.map((r) => r.emailType)).toEqual([QUIZ_DRIP_2D, QUIZ_DRIP_7D]);
+    expect(planned.remaining.map((r) => r.emailType)).toEqual(
+      QUIZ_DRIP_7D_PAUSED ? [QUIZ_DRIP_2D] : [QUIZ_DRIP_2D, QUIZ_DRIP_7D],
+    );
     expect(planned.remaining[0]).toEqual(expect.objectContaining({
       emailType: QUIZ_DRIP_2D,
       atMs: rangesAt + 2 * DAY_MS,

@@ -3,6 +3,7 @@ import {
   DAY_MS,
   QUIZ_DRIP_2D,
   QUIZ_DRIP_7D,
+  QUIZ_DRIP_7D_PAUSED,
 } from "../../functions/_shared/quizDrip.mjs";
 import {
   dripStopCopy,
@@ -60,7 +61,9 @@ describe("planLeadDrips", () => {
       atMs: RANGES_AT + 2 * DAY_MS,
       due: false,
     }));
-    expect(plan.remaining.map((r) => r.emailType)).toEqual([QUIZ_DRIP_2D, QUIZ_DRIP_7D]);
+    expect(plan.remaining.map((r) => r.emailType)).toEqual(
+      QUIZ_DRIP_7D_PAUSED ? [QUIZ_DRIP_2D] : [QUIZ_DRIP_2D, QUIZ_DRIP_7D],
+    );
     expect(nextDripLine(plan, NOW)).toMatch(/^Next: Quiz drip \(\+2d\) · /);
     expect(nextDripLine(plan, NOW)).not.toMatch(/Due now/);
   });

@@ -11,10 +11,14 @@ import {
 } from "./emailUnsubscribe.mjs";
 import { hasEmailEventByEmail, logEmailEvent } from "./emailEvents.mjs";
 import { buildQuizDripPayload } from "./quizDripEmail.mjs";
+import { QUIZ_DRIP_7D, QUIZ_DRIP_7D_PAUSED } from "./quizDrip.mjs";
 
 export async function sendQuizDripEmail(env, { email, firstName, lead, step }) {
   const to = String(email || "").trim().toLowerCase();
   if (!to || !env?.RESEND_API_KEY) return { ok: false, error: "missing" };
+  if (step === QUIZ_DRIP_7D && QUIZ_DRIP_7D_PAUSED) {
+    return { ok: false, skipped: "paused" };
+  }
 
   if (await isUnsubscribed(env, to)) {
     return { ok: false, skipped: "unsubscribed" };

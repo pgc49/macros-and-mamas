@@ -66,6 +66,7 @@ function statusCopy(status) {
   if (status === "ready" || status === "scheduled") return "Ready (manual send)";
   if (status === "retired") return "Retired";
   if (status === "manual") return "Manual";
+  if (status === "paused") return "Paused";
   return "Live";
 }
 

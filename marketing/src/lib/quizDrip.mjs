@@ -24,6 +24,8 @@ export const QUIZ_RANGES_TYPE = "quiz_ranges";
 export const QUIZ_DRIP_2D = "quiz_drip_2d";
 export const QUIZ_DRIP_7D = "quiz_drip_7d";
 export const QUIZ_PREGNANCY_NOTE = "quiz_pregnancy_note";
+/** Hold the last sales email so Callie can rewrite it. Flip to false to resume. */
+export const QUIZ_DRIP_7D_PAUSED = true;
 
 export const QUIZ_DRIP_SALES_TYPES = [QUIZ_DRIP_2D, QUIZ_DRIP_7D];
 export const QUIZ_DRIP_ALL_TYPES = [
@@ -94,7 +96,11 @@ export function pickDueQuizDripStep({ ageMs, sentTypes, segment, now } = {}) {
   if (!QUIZ_SALES_SEGMENTS.has(seg)) return null;
 
   const lastDue = quizLastSalesDue({ ageMs: age, now });
-  if (lastDue && !sent.has(QUIZ_DRIP_7D)) return QUIZ_DRIP_7D;
+  if (lastDue && !sent.has(QUIZ_DRIP_7D)) {
+    // Do not fall through to +2d on the last-day window.
+    if (QUIZ_DRIP_7D_PAUSED) return null;
+    return QUIZ_DRIP_7D;
+  }
   if (
     age >= 2 * DAY_MS
     && !lastDue

@@ -112,7 +112,7 @@ describe("runQuizLeadDrip", () => {
     expect(sent.errors).toBe(0);
   });
 
-  it("plans the last quiz email on Aug 26 PT for a lead younger than +6 days", async () => {
+  it("does not send the last quiz email on Aug 26 PT while that step is paused", async () => {
     const now = Date.parse("2026-08-26T18:00:00.000-07:00");
     const rangesAt = new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString();
     vi.stubGlobal("fetch", vi.fn(async (url) => {
@@ -144,12 +144,8 @@ describe("runQuizLeadDrip", () => {
       profiles: [],
     });
 
-    expect(mocks.send).toHaveBeenCalledTimes(1);
-    expect(mocks.send.mock.calls[0][1]).toEqual(expect.objectContaining({
-      email: "last@example.com",
-      step: "quiz_drip_7d",
-    }));
-    expect(sent.quiz_drip_7d).toBe(1);
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(sent.quiz_drip_7d).toBe(0);
   });
 
   it("does not send when the unsubscribe list cannot be read", async () => {
