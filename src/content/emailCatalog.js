@@ -468,6 +468,7 @@ export const EMAIL_TYPE_LABELS = {
   quiz_drip_2d: "Quiz drip (+2d)",
   quiz_drip_7d: "Quiz drip (last)",
   quiz_one_more: "Quiz one more note",
+  approval_weekend_heads_up: "Approval weekend heads-up",
   quiz_pregnancy_note: "Quiz pregnancy note (+3d)",
   callie_payment: "Callie: new payment",
   callie_intake: "Callie: intake ready",

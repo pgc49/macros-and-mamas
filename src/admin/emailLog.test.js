@@ -43,6 +43,7 @@ describe("emailTypeLabel", () => {
     expect(emailTypeLabel({ email_type: "welcome" })).toBe("Welcome");
     expect(emailTypeLabel({ email_type: "quiz_drip_2d" })).toBe("Quiz drip (+2d)");
     expect(emailTypeLabel({ email_type: "quiz_pregnancy_note" })).toBe("Quiz pregnancy note (+3d)");
+    expect(emailTypeLabel({ email_type: "approval_weekend_heads_up" })).toBe("Approval weekend heads-up");
   });
 });
 
