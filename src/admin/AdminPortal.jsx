@@ -261,6 +261,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   const [progressLoading, setProgressLoading] = useState(false);
   const [progressError, setProgressError] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [leadsFilter, setLeadsFilter] = useState("all");
   const debounceRef = useRef({});
 
   useEffect(() => {
@@ -843,7 +844,12 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
       {tab === "overview" && (
         <>
-          <AdminQuizFunnelCard onOpenLeads={() => setTab("leads")} />
+          <AdminQuizFunnelCard
+            onOpenLeads={(nextFilter) => {
+              setLeadsFilter(nextFilter || "all");
+              setTab("leads");
+            }}
+          />
           {unreadMessages > 0 && (
             <button
               type="button"
@@ -1013,7 +1019,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
       {tab === "leads" && (
         <ErrorBoundary message="Leads admin hit an error. Other admin tabs still work — refresh or switch tabs.">
-          <AdminLeads onOpenMama={setAdminSel} />
+          <AdminLeads onOpenMama={setAdminSel} initialFilter={leadsFilter} />
         </ErrorBoundary>
       )}
 

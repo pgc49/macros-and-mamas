@@ -310,6 +310,26 @@ Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 
 (Reply anytime. Unsubscribe in the footer.)`,
   },
   {
+    id: "quiz_one_more",
+    number: "Q+",
+    name: "Quiz · one more note",
+    status: "manual",
+    trigger: "Manual admin blast from Overview → Funnel. Unique quiz emails who submitted ranges and have not paid. Skips unsubscribed, pregnancy, and plant-based. Idempotent via email_events (quiz_one_more). CTA → /join. Does not change Terms or promise a refund.",
+    subject: "One last time, [First name]",
+    audience: "Lead",
+    cta: "Lock my spot",
+    bodyPreview: `Hi, [First name]!
+
+One last time: you matter. Your health matters. I'd love to support you in making it a priority!
+
+www.macrosandmamas.com/join
+
+With gratitude,
+Callie
+
+(Reply anytime. Unsubscribe in the footer. No money-back promise. Terms still say purchases are final except eligibility declines.)`,
+  },
+  {
     id: "quiz_pregnancy_note",
     number: "QP",
     name: "Quiz pregnancy note · day 3",
@@ -406,8 +426,8 @@ export const EMAIL_JOURNEYS = [
     id: "other",
     title: "Other",
     track: null,
-    note: "Waitlist open is a manual blast, not a send from this log. Eligibility refund is only if Callie refunds in Stripe.",
-    ids: ["eligibility_refund", "cohort_open"],
+    note: "Waitlist open and the unpaid-ranges one-more note are manual blasts, not cron. Eligibility refund is only if Callie refunds in Stripe.",
+    ids: ["eligibility_refund", "cohort_open", "quiz_one_more"],
   },
   {
     id: "callie",
@@ -445,6 +465,7 @@ export const EMAIL_TYPE_LABELS = {
   quiz_ranges: "Quiz ranges",
   quiz_drip_2d: "Quiz drip (+2d)",
   quiz_drip_7d: "Quiz drip (last)",
+  quiz_one_more: "Quiz one more note",
   quiz_pregnancy_note: "Quiz pregnancy note (+3d)",
   callie_payment: "Callie: new payment",
   callie_intake: "Callie: intake ready",

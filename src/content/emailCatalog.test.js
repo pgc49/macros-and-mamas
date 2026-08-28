@@ -112,7 +112,7 @@ describe("email catalog journey", () => {
       "intake_received",
       "macros_live",
     ]);
-    expect(journeys[3].ids).toEqual(["eligibility_refund", "cohort_open"]);
+    expect(journeys[3].ids).toEqual(["eligibility_refund", "cohort_open", "quiz_one_more"]);
     expect(journeys[4].ids).toEqual([
       "callie_payment",
       "callie_intake",
@@ -128,6 +128,11 @@ describe("email catalog journey", () => {
     expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "welcome"))).toBe("#2");
     expect(EMAIL_CATALOG.find((e) => e.id === "welcome").trigger).toMatch(/complimentary/i);
     expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "quiz_drip_2d"))).toBe("Q2");
+    expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "quiz_one_more"))).toBe("Q+");
+    const oneMore = EMAIL_CATALOG.find((e) => e.id === "quiz_one_more");
+    expect(oneMore.bodyPreview).toMatch(/you matter/i);
+    expect(oneMore.bodyPreview).not.toMatch(/—/);
+    expect(oneMore.trigger).toMatch(/Does not change Terms/);
   });
 
   it("keeps em dashes out of emails Callie sends to mamas", () => {

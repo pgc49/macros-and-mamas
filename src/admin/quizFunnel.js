@@ -1,8 +1,18 @@
 /**
- * Today's quiz → unpaid signup → paid pulse (Pacific calendar day).
+ * Today's quiz → unpaid signup → paid pulse (Pacific calendar day)
+ * plus the all-time unpaid-ranges funnel (true leads).
  * Counts come from Supabase (admin RLS). Bounce volume lives in Sentry.
  */
 import { supabase } from "../lib/supabase";
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function isPaidClient(profile) {
+  if (!profile || profile.role === "admin") return false;
+  return Boolean(profile.paid || profile.comp);
+}
 
 export const PACIFIC_TZ = "America/Los_Angeles";
 
@@ -71,7 +81,34 @@ export function summarizeQuizFunnel({ leads = [], profiles = [], startIso } = {}
     quizLeads: countQuizLeads(leads, startIso),
     unpaidSignups: countUnpaidSignups(profiles, startIso),
     paid: countPaidToday(profiles, startIso),
+    ...summarizeOpenFunnel({ leads, profiles }),
   };
+}
+
+/**
+ * Unique quiz emails that got ranges. Unpaid = submitted ranges, never paid
+ * (or complimentary). That is the true lead list for a last-nudge email.
+ */
+export function summarizeOpenFunnel({ leads = [], profiles = [] } = {}) {
+  const paidEmails = new Set(
+    (profiles || [])
+      .filter(isPaidClient)
+      .map((row) => normalizeEmail(row.email))
+      .filter(Boolean),
+  );
+  const seen = new Set();
+  let rangesSubmitted = 0;
+  let unpaidLeads = 0;
+  let paidFromQuiz = 0;
+  for (const lead of leads || []) {
+    const email = normalizeEmail(lead?.email);
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    rangesSubmitted += 1;
+    if (paidEmails.has(email)) paidFromQuiz += 1;
+    else unpaidLeads += 1;
+  }
+  return { rangesSubmitted, unpaidLeads, paidFromQuiz };
 }
 
 async function countExact(query) {
@@ -80,9 +117,15 @@ async function countExact(query) {
   return count || 0;
 }
 
+async function fetchRows(query) {
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
 export async function loadQuizFunnelPulse({ now = new Date(), client = supabase } = {}) {
   const startIso = pacificTodayStartIso(now);
-  const [quizLeads, unpaidSignups, paid] = await Promise.all([
+  const [quizLeads, unpaidSignups, paid, leadRows, profileRows] = await Promise.all([
     countExact(
       client
         .from("marketing_leads")
@@ -105,6 +148,14 @@ export async function loadQuizFunnelPulse({ now = new Date(), client = supabase 
         .neq("role", "admin")
         .gte("paid_at", startIso),
     ),
+    fetchRows(client.from("marketing_leads").select("email")),
+    fetchRows(client.from("profiles").select("email,paid,comp,role").neq("role", "admin")),
   ]);
-  return { startIso, quizLeads, unpaidSignups, paid };
+  return {
+    startIso,
+    quizLeads,
+    unpaidSignups,
+    paid,
+    ...summarizeOpenFunnel({ leads: leadRows, profiles: profileRows }),
+  };
 }

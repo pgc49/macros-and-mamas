@@ -5,6 +5,7 @@ import {
   countUnpaidSignups,
   loadQuizFunnelPulse,
   pacificTodayStartIso,
+  summarizeOpenFunnel,
   summarizeQuizFunnel,
 } from "./quizFunnel";
 
@@ -52,11 +53,36 @@ describe("funnel count filters", () => {
       quizLeads: 2,
       unpaidSignups: 1,
       paid: 1,
+      rangesSubmitted: 0,
+      unpaidLeads: 0,
+      paidFromQuiz: 0,
     });
   });
 });
 
-function mockClient(counts) {
+describe("open funnel (true leads)", () => {
+  it("counts unique quiz emails that submitted ranges and have not paid", () => {
+    const open = summarizeOpenFunnel({
+      leads: [
+        { email: "Amy@example.com" },
+        { email: "amy@example.com" },
+        { email: "paid@example.com" },
+        { email: "skip@example.com" },
+      ],
+      profiles: [
+        { email: "paid@example.com", paid: true, role: "client" },
+        { email: "comp@example.com", paid: false, comp: true, role: "client" },
+      ],
+    });
+    expect(open).toEqual({
+      rangesSubmitted: 3,
+      unpaidLeads: 2,
+      paidFromQuiz: 1,
+    });
+  });
+});
+
+function mockClient({ counts, leads = [], profiles = [] }) {
   const calls = [];
   return {
     calls,
@@ -64,7 +90,11 @@ function mockClient(counts) {
       const q = {
         table,
         filters: {},
-        select() { return q; },
+        head: false,
+        select(_cols, opts) {
+          q.head = Boolean(opts?.head);
+          return q;
+        },
         eq(key, value) {
           q.filters[`eq.${key}`] = value;
           return q;
@@ -78,13 +108,20 @@ function mockClient(counts) {
           return q;
         },
         then(resolve) {
-          calls.push({ table: q.table, filters: { ...q.filters } });
-          const key = q.table === "marketing_leads"
-            ? "quizLeads"
-            : q.filters["eq.paid"] === true
-              ? "paid"
-              : "unpaidSignups";
-          resolve({ count: counts[key] ?? 0, error: null });
+          calls.push({ table: q.table, filters: { ...q.filters }, head: q.head });
+          if (q.head) {
+            const key = q.table === "marketing_leads"
+              ? "quizLeads"
+              : q.filters["eq.paid"] === true
+                ? "paid"
+                : "unpaidSignups";
+            resolve({ count: counts[key] ?? 0, error: null });
+            return;
+          }
+          resolve({
+            data: q.table === "marketing_leads" ? leads : profiles,
+            error: null,
+          });
         },
       };
       return q;
@@ -93,8 +130,17 @@ function mockClient(counts) {
 }
 
 describe("loadQuizFunnelPulse", () => {
-  it("queries today's PT window with the unpaid / paid filters", async () => {
-    const client = mockClient({ quizLeads: 4, unpaidSignups: 2, paid: 1 });
+  it("queries today's PT window and the all-time unpaid range funnel", async () => {
+    const client = mockClient({
+      counts: { quizLeads: 4, unpaidSignups: 2, paid: 1 },
+      leads: [
+        { email: "amy@example.com" },
+        { email: "paid@example.com" },
+      ],
+      profiles: [
+        { email: "paid@example.com", paid: true, role: "client" },
+      ],
+    });
     const pulse = await loadQuizFunnelPulse({
       now: new Date("2026-08-19T10:00:00.000Z"),
       client,
@@ -105,16 +151,21 @@ describe("loadQuizFunnelPulse", () => {
       quizLeads: 4,
       unpaidSignups: 2,
       paid: 1,
+      rangesSubmitted: 2,
+      unpaidLeads: 1,
+      paidFromQuiz: 1,
     });
-    expect(client.calls).toEqual([
-      { table: "marketing_leads", filters: { "gte.created_at": START } },
+    expect(client.calls.filter((c) => c.head)).toEqual([
+      { table: "marketing_leads", filters: { "gte.created_at": START }, head: true },
       {
         table: "profiles",
         filters: { "eq.paid": false, "neq.role": "admin", "gte.created_at": START },
+        head: true,
       },
       {
         table: "profiles",
         filters: { "eq.paid": true, "neq.role": "admin", "gte.paid_at": START },
+        head: true,
       },
     ]);
   });

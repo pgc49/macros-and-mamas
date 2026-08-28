@@ -178,6 +178,7 @@ describe("AdminLeads", () => {
 
     expect(screen.getByText(/Quiz completes — the Meta Lead we fire/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Unpaid" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Ad" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Referral" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "No account" })).toBeTruthy();
@@ -198,6 +199,17 @@ describe("AdminLeads", () => {
     expect(screen.getByText("3 quiz completes")).toBeTruthy();
     expect(screen.queryByText(/Ads Manager/i)).toBeTruthy();
     expect(screen.queryByText(/Sentry/i)).toBeNull();
+  });
+
+  it("filters Unpaid to range leads who have not paid", async () => {
+    render(<AdminLeads initialFilter="unpaid" />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Unpaid" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText("Megan Wells")).toBeNull();
+    expect(screen.queryByText("Alex Harrer")).toBeNull();
+    expect(screen.getByText("1 of 3")).toBeTruthy();
   });
 
   it("filters Ad to campaign UTMs only; Referral keeps promo and quiz referred_by", async () => {

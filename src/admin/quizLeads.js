@@ -8,11 +8,12 @@ import { PACIFIC_TZ } from "./quizFunnel";
 
 export const QUIZ_LEAD_FILTERS = [
   ["all", "All"],
-  ["meta", "Ad"],
-  ["referral", "Referral"],
+  ["unpaid", "Unpaid"],
   ["no_account", "No account"],
   ["signed_up_unpaid", "Signed up unpaid"],
   ["paid", "Paid"],
+  ["meta", "Ad"],
+  ["referral", "Referral"],
 ];
 
 const META_UTM = new Set(["facebook", "ig", "instagram", "fb", "meta"]);
@@ -390,6 +391,11 @@ export function filterQuizLeads(rows, filter = "all") {
   if (!filter || filter === "all") return list;
   if (filter === "meta") return list.filter((row) => row.isMeta);
   if (filter === "referral") return list.filter((row) => row.isReferral);
+  if (filter === "unpaid") {
+    return list.filter((row) => (
+      row.funnelStatus === "quiz_only" || row.funnelStatus === "signed_up_unpaid"
+    ));
+  }
   if (filter === "no_account") return list.filter((row) => row.funnelStatus === "quiz_only");
   if (filter === "signed_up_unpaid") return list.filter((row) => row.funnelStatus === "signed_up_unpaid");
   if (filter === "paid") return list.filter((row) => row.funnelStatus === "paid");

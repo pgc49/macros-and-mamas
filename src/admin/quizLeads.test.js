@@ -337,6 +337,7 @@ describe("enrichQuizLeads + filterQuizLeads", () => {
     ]);
     expect(filterQuizLeads(rows, "meta").map((r) => r.id)).toEqual(["ellie"]);
     expect(filterQuizLeads(rows, "referral").map((r) => r.id)).toEqual(["alex", "jennifer"]);
+    expect(filterQuizLeads(rows, "unpaid").map((r) => r.id)).toEqual(["ellie", "organic-unpaid", "pixel-only"]);
     expect(filterQuizLeads(rows, "no_account").map((r) => r.id)).toEqual(["ellie", "pixel-only"]);
     expect(filterQuizLeads(rows, "signed_up_unpaid").map((r) => r.id)).toEqual(["organic-unpaid"]);
     expect(filterQuizLeads(rows, "paid").map((r) => r.id)).toEqual(["organic-paid", "alex", "jennifer"]);

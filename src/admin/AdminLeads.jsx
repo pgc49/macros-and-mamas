@@ -399,11 +399,15 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
   );
 }
 
-export function AdminLeads({ onOpenMama }) {
+export function AdminLeads({ onOpenMama, initialFilter = "all" }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(initialFilter);
   const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    setFilter(initialFilter || "all");
+  }, [initialFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -438,6 +442,7 @@ export function AdminLeads({ onOpenMama }) {
     <div>
       <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
         Quiz completes — the Meta Lead we fire, not Ads Manager.
+        Unpaid is the true lead list: ranges in, no payment yet.
         Tap a lead to see her email, what we've sent, and what's still scheduled.
       </p>
       <FilterBar filter={filter} setFilter={setFilter} />
