@@ -322,12 +322,14 @@ Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 
 
 One last time: you matter. Your health matters. I'd love to support you in making it a priority!
 
+DMs are open, but course registration will close tonight.
+
 www.macrosandmamas.com/join
 
 With gratitude,
 Callie
 
-(Reply anytime. Unsubscribe in the footer. No money-back promise. Terms still say purchases are final except eligibility declines.)`,
+(First name from the quiz. Reply anytime. Unsubscribe in the footer. No money-back promise. Terms still say purchases are final except eligibility declines.)`,
   },
   {
     id: "quiz_pregnancy_note",

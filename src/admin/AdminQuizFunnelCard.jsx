@@ -214,7 +214,7 @@ export function AdminQuizFunnelCard({ onOpenLeads }) {
         <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
           <div style={{ fontFamily: FD, fontSize: 16, marginBottom: 8 }}>One more note</div>
           <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 10px" }}>
-            Goes to unpaid range leads. Skips unsubscribed, pregnancy, and plant-based.
+            Each email says Hi, her first name. Skips unsubscribed, pregnancy, and plant-based.
             Do not promise a week-back refund here. Terms still say purchases are final
             except if we decline enrollment.
           </p>

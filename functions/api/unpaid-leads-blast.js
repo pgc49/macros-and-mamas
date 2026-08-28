@@ -29,7 +29,7 @@ export async function onRequestPost({ request, env }) {
 
     const [leads, profiles, events, unsub] = await Promise.all([
       sbGet(env, "/rest/v1/marketing_leads?select=id,email,first_name,segment,created_at&order=created_at.desc&limit=2000"),
-      sbGet(env, "/rest/v1/profiles?role=neq.admin&select=id,email,paid,comp,role"),
+      sbGet(env, "/rest/v1/profiles?role=neq.admin&select=id,email,name,paid,comp,role"),
       sbGet(
         env,
         `/rest/v1/email_events?email_type=eq.${encodeURIComponent(UNPAID_ONE_MORE_TYPE)}&status=eq.sent&select=to_email,email_type,status&limit=5000`,
@@ -48,6 +48,7 @@ export async function onRequestPost({ request, env }) {
       alreadySent: alreadySentSet(events),
     });
 
+    const sampleName = recipients[0]?.firstName || "Mama";
     const summary = {
       dryRun,
       unpaidLeads,
@@ -55,8 +56,9 @@ export async function onRequestPost({ request, env }) {
       sent: 0,
       skipped,
       errors: 0,
-      subject: unpaidOneMoreSubject("Mama"),
-      preview: unpaidOneMorePreviewText("Mama"),
+      subject: unpaidOneMoreSubject(sampleName),
+      preview: unpaidOneMorePreviewText(sampleName),
+      usesFirstName: true,
       samples: recipients.slice(0, 5).map((row) => ({
         email: row.email,
         name: row.firstName || "Mama",

@@ -88,6 +88,7 @@ describe("AdminQuizFunnelCard", () => {
       expect(screen.getByText(/40 will get this/)).toBeTruthy();
     });
     expect(screen.getByText(/you matter/i)).toBeTruthy();
+    expect(screen.getByText(/Each email says Hi, her first name/)).toBeTruthy();
     expect(screen.getByText(/Do not promise a week-back refund/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Send to 40" })).toBeTruthy();
   });

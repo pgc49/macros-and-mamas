@@ -3,6 +3,7 @@ import {
   UNPAID_ONE_MORE_TYPE,
   alreadySentSet,
   buildUnpaidOneMorePayload,
+  firstNameFromLead,
   selectEmailableUnpaidLeads,
   selectUnpaidRangeLeads,
   unpaidOneMorePreviewText,
@@ -44,6 +45,7 @@ describe("unpaid range lead audience", () => {
       alreadySent: new Set(["again@example.com"]),
     });
     expect(recipients.map((row) => row.email)).toEqual(["amy@example.com"]);
+    expect(recipients[0].firstName).toBe("Amy");
     expect(skipped).toEqual({
       paid: 1,
       unsubscribed: 1,
@@ -64,12 +66,13 @@ describe("unpaid range lead audience", () => {
 });
 
 describe("one more note copy", () => {
-  it("keeps Callie's short note and no refund promise", () => {
-    const payload = buildUnpaidOneMorePayload({ firstName: "Claire", email: "claire@example.com" });
+  it("keeps Callie's short note, first name, and tonight's close", () => {
+    const payload = buildUnpaidOneMorePayload({ firstName: "claire", email: "claire@example.com" });
     expect(payload.emailType).toBe(UNPAID_ONE_MORE_TYPE);
     expect(payload.subject).toBe("One last time, Claire");
     expect(payload.header).toBe("Hi, Claire!");
     expect(payload.body).toMatch(/you matter/i);
+    expect(payload.body).toMatch(/DMs are open, but course registration will close tonight/);
     expect(payload.body).toMatch(/Unsubscribe/);
     expect(payload.body).not.toMatch(/—/);
     expect(payload.body).not.toMatch(/money back|refund|guarantee/i);
@@ -77,8 +80,18 @@ describe("one more note copy", () => {
     expect(payload.cta_url).toContain("/join?");
     expect(payload.cta_url).toContain("claire%40example.com");
 
-    const preview = unpaidOneMorePreviewText("Claire");
+    const preview = unpaidOneMorePreviewText("claire");
+    expect(preview).toMatch(/Hi, Claire!/);
     expect(preview).toMatch(/www\.macrosandmamas\.com\/join/);
     expect(unpaidOneMoreSubject("")).toBe("One last time, Mama");
+  });
+
+  it("uses the quiz first name, then the profile name", () => {
+    expect(firstNameFromLead({ first_name: "claire" })).toBe("Claire");
+    expect(firstNameFromLead(
+      { email: "amy@example.com" },
+      new Map([["amy@example.com", "amy"]]),
+    )).toBe("Amy");
+    expect(firstNameFromLead({ email: "none@example.com" })).toBe("Mama");
   });
 });

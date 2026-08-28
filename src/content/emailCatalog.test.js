@@ -131,6 +131,7 @@ describe("email catalog journey", () => {
     expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "quiz_one_more"))).toBe("Q+");
     const oneMore = EMAIL_CATALOG.find((e) => e.id === "quiz_one_more");
     expect(oneMore.bodyPreview).toMatch(/you matter/i);
+    expect(oneMore.bodyPreview).toMatch(/DMs are open, but course registration will close tonight/);
     expect(oneMore.bodyPreview).not.toMatch(/—/);
     expect(oneMore.trigger).toMatch(/Does not change Terms/);
   });

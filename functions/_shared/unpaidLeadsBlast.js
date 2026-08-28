@@ -59,12 +59,13 @@ export function paidClientEmails(profiles) {
 export function selectUnpaidRangeLeads(leads, profiles) {
   const paid = paidClientEmails(profiles);
   const latest = latestLeadByEmail(leads);
+  const names = profileFirstNamesByEmail(profiles);
   const out = [];
   for (const [email, lead] of latest) {
     if (paid.has(email)) continue;
     out.push({
       email,
-      firstName: lead?.first_name || "",
+      firstName: recipientFirstName(lead, names),
       segment: lead?.segment || "",
       profileId: lead?.profileId || lead?.profile_id || null,
       leadId: lead?.id || null,
@@ -87,6 +88,7 @@ export function selectEmailableUnpaidLeads({
   };
   const paid = paidClientEmails(profiles);
   const latest = latestLeadByEmail(leads);
+  const names = profileFirstNamesByEmail(profiles);
   const recipients = [];
 
   for (const [email, lead] of latest) {
@@ -108,7 +110,7 @@ export function selectEmailableUnpaidLeads({
     }
     recipients.push({
       email,
-      firstName: lead?.first_name || "",
+      firstName: recipientFirstName(lead, names),
       segment: lead?.segment || "",
       profileId: lead?.profileId || lead?.profile_id || null,
       leadId: lead?.id || null,
@@ -118,13 +120,42 @@ export function selectEmailableUnpaidLeads({
   return { recipients, skipped, unpaidLeads: recipients.length + skipped.unsubscribed + skipped.not_sales + skipped.already_sent };
 }
 
+/** Greeting name from the quiz first_name, else the profile first token. */
+export function prettyFirstName(raw) {
+  const cleaned = safeDisplayName(raw);
+  if (cleaned === "Mama") return cleaned;
+  return cleaned.replace(/^[a-z]/, (letter) => letter.toUpperCase());
+}
+
+export function firstNameFromLead(lead, profileNames = new Map()) {
+  const fromLead = String(lead?.first_name || "").trim();
+  if (fromLead) return prettyFirstName(fromLead);
+  const email = normalizeLeadEmail(lead?.email);
+  if (email && profileNames.has(email)) return prettyFirstName(profileNames.get(email));
+  return "Mama";
+}
+
+export function profileFirstNamesByEmail(profiles) {
+  const map = new Map();
+  for (const profile of profiles || []) {
+    const email = normalizeLeadEmail(profile?.email);
+    const first = String(profile?.name || "").trim().split(/\s+/)[0] || "";
+    if (email && first) map.set(email, first);
+  }
+  return map;
+}
+
+function recipientFirstName(lead, profileNames) {
+  return firstNameFromLead(lead, profileNames);
+}
+
 export function unpaidOneMoreSubject(firstName) {
-  const who = safeDisplayName(firstName);
+  const who = prettyFirstName(firstName);
   return `One last time, ${who}`;
 }
 
 export function buildUnpaidOneMorePayload({ firstName, email } = {}) {
-  const name = safeDisplayName(firstName);
+  const name = prettyFirstName(firstName);
   const joinUrl = quizJoinUrl(email);
   return {
     emailType: UNPAID_ONE_MORE_TYPE,
@@ -132,6 +163,7 @@ export function buildUnpaidOneMorePayload({ firstName, email } = {}) {
     header: `Hi, ${name}!`,
     body: [
       "<p>One last time: you matter. Your health matters. I'd love to support you in making it a priority!</p>",
+      "<p>DMs are open, but course registration will close tonight.</p>",
       "<p>With gratitude,<br/>Callie</p>",
       `<p style="font-size:12px;color:#6E5D66;margin-top:24px">You're getting this because you took the ranges quiz. Reply anytime. Unsubscribe in the footer.</p>`,
     ].join(""),
@@ -141,11 +173,13 @@ export function buildUnpaidOneMorePayload({ firstName, email } = {}) {
 }
 
 export function unpaidOneMorePreviewText(firstName = "Mama") {
-  const name = safeDisplayName(firstName);
+  const name = prettyFirstName(firstName);
   return [
     `Hi, ${name}!`,
     "",
     "One last time: you matter. Your health matters. I'd love to support you in making it a priority!",
+    "",
+    "DMs are open, but course registration will close tonight.",
     "",
     "www.macrosandmamas.com/join",
     "",
