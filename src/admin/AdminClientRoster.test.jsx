@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { AdminClientRoster } from "./AdminClientRoster.jsx";
+import { AdminClientRoster, ReadyToApproveBanner } from "./AdminClientRoster.jsx";
 
 afterEach(() => {
   cleanup();
@@ -208,5 +208,73 @@ describe("AdminClientRoster", () => {
     });
     expect(screen.getByText("Dolly Chammas")).toBeTruthy();
     expect(screen.queryByText("Ava Founding")).toBeNull();
+  });
+
+  it("filters Ready to approve to paid + intake, not Founding quiet or paid-no-intake", () => {
+    const setFilter = () => {};
+    renderRoster({
+      filter: "awaiting_approval",
+      setFilter,
+      roster: [
+        {
+          id: "ready",
+          role: "client",
+          name: "August Ready",
+          email: "aug@example.com",
+          cohort_label: "2026-08",
+          stage: "awaiting_approval",
+          status: "pending",
+          paid: true,
+          hasIntake: true,
+          unreadFromMama: 0,
+          lastAdminAt: null,
+        },
+        {
+          id: "quiet",
+          role: "client",
+          name: "Founding Quiet",
+          email: "founding@example.com",
+          cohort_label: "2026-07",
+          stage: "active",
+          status: "active",
+          paid: true,
+          hasIntake: true,
+          unreadFromMama: 0,
+          lastAdminAt: null,
+          lastActiveDate: "2026-08-10",
+        },
+        {
+          id: "intake",
+          role: "client",
+          name: "Paid No Intake",
+          email: "needintake@example.com",
+          cohort_label: "2026-08",
+          stage: "paid_awaiting_intake",
+          status: "pending",
+          paid: true,
+          hasIntake: false,
+          unreadFromMama: 0,
+          lastAdminAt: null,
+        },
+      ],
+    });
+    expect(screen.getByText("August Ready")).toBeTruthy();
+    expect(screen.queryByText("Founding Quiet")).toBeNull();
+    expect(screen.queryByText("Paid No Intake")).toBeNull();
+    expect(screen.getByRole("button", { name: /Ready to approve · 1/ })).toBeTruthy();
+    expect(screen.getByText(/Paid, intake in — waiting on your approve tap/)).toBeTruthy();
+  });
+});
+
+describe("ReadyToApproveBanner", () => {
+  it("shows the live count and opens the queue on click", () => {
+    let opened = false;
+    const { rerender } = render(<ReadyToApproveBanner count={21} onOpen={() => { opened = true; }} />);
+    expect(screen.getByText("21 ready to approve")).toBeTruthy();
+    expect(screen.getByText(/Paid and intake in — waiting on your tap/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "21 ready to approve. Open this queue." }));
+    expect(opened).toBe(true);
+    rerender(<ReadyToApproveBanner count={0} onOpen={() => {}} />);
+    expect(screen.queryByText(/ready to approve/)).toBeNull();
   });
 });
