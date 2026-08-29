@@ -9,6 +9,7 @@ import {
 } from "../lib/push";
 import {
   NOTIFICATIONS_TIP_STORAGE_KEY,
+  queryFlag,
   shouldShowNotificationsTip,
 } from "../lib/notificationsTip";
 
@@ -45,6 +46,7 @@ export function NotificationsTip({
     cohortLabel,
     permission,
     dismissedLocally: dismissed,
+    demo: queryFlag("demoNotificationsTip"),
   });
 
   if (!visible) return null;

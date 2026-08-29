@@ -18,6 +18,15 @@ describe("shouldShowNotificationsTip", () => {
     })).toBe(false);
   });
 
+  it("shows via ?demoNotificationsTip=1 even without a C2 profile", () => {
+    expect(shouldShowNotificationsTip({
+      cohortLabel: "2026-07",
+      permission: "default",
+      dismissedLocally: false,
+      demo: true,
+    })).toBe(true);
+  });
+
   it("hides once notifications are on or the card was dismissed", () => {
     expect(shouldShowNotificationsTip({
       cohortLabel: "2026-08",
