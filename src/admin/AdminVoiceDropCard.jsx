@@ -14,13 +14,15 @@ import {
   voiceRecordingSupported,
 } from "../lib/voiceMemo";
 import { adminCohortName, COHORT_CALENDAR, defaultVoiceDropCohort } from "../lib/cohorts";
+import { voiceDropAudienceName } from "../lib/voiceDrop";
 
 function isAdminProfile(c) {
   return String(c?.role || "").toLowerCase() === "admin";
 }
 
 /**
- * Admin: record + publish Monday voice drop (Today PSA, one audio file).
+ * Admin: record + publish Monday voice drop (Today PSA).
+ * Founding and Cohort 2 can each have a live drop at the same time.
  * Default audience = that cohort's actives — forgetting the dropdown must not
  * notify admins-only or blast every cohort.
  * Draft audio is persisted in IndexedDB so a failed publish doesn’t lose the take.
@@ -41,6 +43,7 @@ export function AdminVoiceDropCard({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
+  const [liveDrops, setLiveDrops] = useState([]);
   const [latest, setLatest] = useState(null);
   const [draftRestored, setDraftRestored] = useState(false);
   const recorderRef = useRef(null);
@@ -58,8 +61,9 @@ export function AdminVoiceDropCard({
 
   const refreshLatest = useCallback(async () => {
     try {
-      const row = await db.loadLatestVoiceDropAdmin();
-      setLatest(row);
+      const status = await db.loadVoiceDropAdminStatus();
+      setLiveDrops(status.live || []);
+      setLatest(status.latest || null);
     } catch (e) {
       console.warn(e);
     }
@@ -267,9 +271,12 @@ export function AdminVoiceDropCard({
     const notifyLine = notify
       ? " Push/email WILL go out (preview uses the live database)."
       : " No push/email.";
+    const replaceLine = audience === "active"
+      ? " It shows on Today for 7 days. The other group's live drop stays up."
+      : " It shows on Today for 7 days (or until the next matching drop).";
     if (!window.confirm(
       `Publish this Monday voice drop to ${who}?`
-      + " It shows on Today for 7 days (or until the next drop)."
+      + replaceLine
       + " Messages stay 1:1 — no thread copies."
       + notifyLine,
     )) {
@@ -321,15 +328,11 @@ export function AdminVoiceDropCard({
     }
   };
 
-  const latestLive = latest
-    && latest.status === "published"
-    && latest.expires_at
-    && new Date(latest.expires_at).getTime() > Date.now();
-
-  const resendNotify = async () => {
-    if (!latest?.id || busy || !latestLive) return;
+  const resendNotify = async (dropId) => {
+    const id = String(dropId || "").trim();
+    if (!id || busy) return;
     if (!window.confirm(
-      "Resend push/email for the live Monday voice drop? Mamas who already got the email won’t be emailed again.",
+      "Resend push/email for this live Monday voice drop? Mamas who already got the email won’t be emailed again.",
     )) {
       return;
     }
@@ -337,7 +340,7 @@ export function AdminVoiceDropCard({
     setError("");
     setMsg("");
     try {
-      const result = await db.resendVoiceDropNotify(latest.id);
+      const result = await db.resendVoiceDropNotify(id);
       setMsg(
         result.notifying
           ? "Resending push/email in the background."
@@ -357,55 +360,27 @@ export function AdminVoiceDropCard({
     <Card style={{ marginBottom: 14, padding: 14 }}>
       <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>Monday voice drop</div>
       <p style={{ fontSize: 13, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45 }}>
-        One audio PSA on Today for active listeners — not copied into Messages.
-        Recordings up to about 50 MB are fine (a full ~10 minute memo usually fits).
+        Founding and Cohort 2 can each have their own live drop at the same time.
+        Set <strong style={{ fontWeight: 700, color: T.ink }}>To: Active mamas</strong> and pick the
+        {" "}<strong style={{ fontWeight: 700, color: T.ink }}>Group</strong> — publishing one
+        does not replace the other.
+        Not copied into Messages. Recordings up to about 50 MB are fine.
         Drafts auto-save on this device if publish fails.
-        Defaults to the selected group&apos;s active mamas — not every cohort.
         Use <strong style={{ fontWeight: 700, color: T.ink }}>Admins only</strong> on Cloudflare preview
         so real mamas aren’t notified.
       </p>
 
-      {latest && (
-        <div style={{
-          marginBottom: 12,
-          padding: "10px 12px",
-          borderRadius: 12,
-          background: latestLive ? T.sageSoft : T.track,
-          border: `1px solid ${T.border}`,
-        }}
-        >
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: T.inkSoft, marginBottom: 4 }}>
-            {latestLive ? "Live now" : "Last drop"}
-            {" · "}
-            {latest.audience}
-            {" · "}
-            {latest.status}
-          </div>
-          {latest.caption ? (
-            <div style={{ fontSize: 13.5, color: T.ink, marginBottom: 6, fontFamily: F }}>
-              {latest.caption}
-            </div>
-          ) : null}
-          {latest.audioUrl ? (
-            <audio controls preload="metadata" src={latest.audioUrl} style={{ width: "100%", height: 36 }} />
-          ) : null}
-          <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6 }}>
-            {latest.published_at
-              ? `Published ${new Date(latest.published_at).toLocaleString()}`
-              : ""}
-            {latestLive && latest.expires_at
-              ? ` · expires ${new Date(latest.expires_at).toLocaleDateString()}`
-              : ""}
-          </div>
-          {latestLive && (
-            <div style={{ marginTop: 10 }}>
-              <Btn small ghost disabled={busy} onClick={resendNotify}>
-                Resend push / email
-              </Btn>
-            </div>
-          )}
-        </div>
-      )}
+      {liveDrops.length > 0 ? liveDrops.map((drop) => (
+        <VoiceDropStatusCard
+          key={drop.id}
+          drop={drop}
+          live
+          busy={busy}
+          onResend={() => resendNotify(drop.id)}
+        />
+      )) : latest ? (
+        <VoiceDropStatusCard drop={latest} live={false} busy={busy} />
+      ) : null}
 
       <textarea
         value={caption}
@@ -583,6 +558,11 @@ export function AdminVoiceDropCard({
             </select>
           </label>
         )}
+        {audience === "active" ? (
+          <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 8px", lineHeight: 1.4, width: "100%" }}>
+            Monday: publish once for Founding, then switch Group to Cohort 2 and publish again.
+          </p>
+        ) : null}
         <label style={{
           fontSize: 13,
           color: T.ink,
@@ -621,6 +601,50 @@ export function AdminVoiceDropCard({
         <div style={{ fontSize: 13, color: "#3E5A46", marginTop: 10 }}>{msg}</div>
       )}
     </Card>
+  );
+}
+
+function VoiceDropStatusCard({ drop, live, busy = false, onResend = null }) {
+  return (
+    <div style={{
+      marginBottom: 12,
+      padding: "10px 12px",
+      borderRadius: 12,
+      background: live ? T.sageSoft : T.track,
+      border: `1px solid ${T.border}`,
+    }}
+    >
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: T.inkSoft, marginBottom: 4 }}>
+        {live ? "Live now" : "Last drop"}
+        {" · "}
+        {voiceDropAudienceName(drop.audience, drop.cohort_label)}
+        {" · "}
+        {drop.status}
+      </div>
+      {drop.caption ? (
+        <div style={{ fontSize: 13.5, color: T.ink, marginBottom: 6, fontFamily: F }}>
+          {drop.caption}
+        </div>
+      ) : null}
+      {drop.audioUrl ? (
+        <audio controls preload="metadata" src={drop.audioUrl} style={{ width: "100%", height: 36 }} />
+      ) : null}
+      <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 6 }}>
+        {drop.published_at
+          ? `Published ${new Date(drop.published_at).toLocaleString()}`
+          : ""}
+        {live && drop.expires_at
+          ? ` · expires ${new Date(drop.expires_at).toLocaleDateString()}`
+          : ""}
+      </div>
+      {live && onResend ? (
+        <div style={{ marginTop: 10 }}>
+          <Btn small ghost disabled={busy} onClick={onResend}>
+            Resend push / email
+          </Btn>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

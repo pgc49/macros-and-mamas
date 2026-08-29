@@ -24,7 +24,8 @@ function persistDismissedId(id) {
 
 /**
  * Today-page PSA for Callie's Monday voice drop.
- * One live drop at a time; dismiss is per drop id (next Monday reappears).
+ * RLS returns this mama's drop (Founding and Cohort 2 can both be live).
+ * Dismiss is per drop id (next Monday reappears).
  */
 export function MondayVoiceDropBanner() {
   const [drop, setDrop] = useState(null);

@@ -31,6 +31,7 @@ import { ResetPasswordPage } from "./views/ResetPasswordPage";
 import { TermsPage } from "./views/TermsPage";
 import { PrivacyPage } from "./views/PrivacyPage";
 import { ClientApp } from "./views/ClientApp";
+import { OnboardingBannersPreview } from "./views/OnboardingBannersPreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
@@ -1611,6 +1612,9 @@ export default function App() {
       />
 
       <Route path="/home" element={<Navigate to={PATHS.dashboard} replace />} />
+      {import.meta.env.DEV ? (
+        <Route path="/dev/onboarding-banners" element={<OnboardingBannersPreview />} />
+      ) : null}
 
       <Route path={PATHS.terms} element={<TermsPage />} />
       <Route path={PATHS.privacy} element={<PrivacyPage />} />

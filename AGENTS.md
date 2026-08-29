@@ -74,6 +74,36 @@ hop into the SPA.
 - After changing anything here, verify against the database: the new `marketing_leads` row should have both
   `fbp` and `fbc`, and the `profiles` row should have `fbclid`, `utm_*`, and `attributed_at`.
 
+## Testing before every release
+
+Do this on every change that will ship — not only the funnel. Green CI is not a substitute for
+clicking through the thing a mama or Callie will see.
+
+1. **`npm run test` and `npm run lint`** before you ask to merge or push `main`.
+2. **Browser, not just unit tests, when UI/layout/routing/state changed.** Open the app and exercise
+   the changed flow the way a mama or Callie would: click, type, submit, navigate. A single screenshot
+   of the new screen is not enough. Check the other tabs/routes that read the same state, plus empty
+   and error states.
+3. **Prefer the Cloudflare PR preview** (`*.pages.dev` on the PR) for anything that needs a real
+   session, admin, Messages, Today banners, or voice drops. Local Vite is fine for copy/layout when a
+   DEV preview route or `?demo…=1` flag exists. Do not claim “tested in preview” if you only ran local.
+4. **Funnel changes** still need the incognito + leftover-session checks in “Verifying funnel changes”
+   above. Those are extra, not instead of 1–3.
+5. After `main` deploys, confirm the live page/asset actually updated before telling anyone it shipped.
+
+### Test accounts (preview + production-shaped data)
+
+Cloudflare previews share the live Supabase project. Signing in as a paying mama to “just check” is
+not allowed. We need dedicated, labeled accounts the agent can use on preview:
+
+- One **Cohort 2** mama (`cohort_label=2026-08`, paid/active, not a real customer)
+- One **Founding** mama (`cohort_label=2026-07`, paid/active, not a real customer)
+- Admin dogfood stays Callie/Patrick — **never** use `pgchammas@gmail.com` as a throwaway
+
+Until those exist, say so in the write-up, test what you can locally, and do not invent a login.
+When they are created, list the emails here (plus “comp, do not email/blast”) so every agent uses the
+same three.
+
 ## Deploys
 
 - `npm run test` (pixel + pricing + product suites) and `npm run lint` before pushing.

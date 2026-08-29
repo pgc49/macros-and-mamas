@@ -21,7 +21,7 @@
    ================================================================== */
 
 import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/supabaseEmail.js";
-import { filterVoiceDropNotifyRows } from "../_shared/voiceDropAudience.js";
+import { filterVoiceDropNotifyRows, voiceDropSupersedeQuery } from "../_shared/voiceDropAudience.js";
 
 const AUDIENCES = new Set(["admins", "active", "all_mamas"]);
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -249,11 +249,10 @@ async function supersedeOpenDrops(env, { audience, cohortLabel } = {}) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   const now = new Date().toISOString();
-  const params = new URLSearchParams({ status: "eq.published" });
-  // Keep the other cohort's live Monday drop when publishing a cohort-scoped PSA.
-  if (audience === "active" && cohortLabel) {
-    params.set("cohort_label", `eq.${cohortLabel}`);
-  }
+  const filters = voiceDropSupersedeQuery({ audience, cohortLabel });
+  // Missing cohort on an active publish must not take down the other group's drop.
+  if (!filters) return;
+  const params = new URLSearchParams(filters);
   await fetch(
     `${base}/rest/v1/voice_drops?${params.toString()}`,
     {
