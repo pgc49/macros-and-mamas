@@ -236,7 +236,7 @@ Callie
 Here are your bands, built the same way Callie builds them for the program:
 • Protein / Carbs / Fat / Calories
 
-Your quiz also unlocked the $249 early rate ($50 off $299). The group starts Monday, Aug 31. Doors close Aug 27 so I can hand-build every set of ranges before day one.
+Your quiz also unlocked the $249 early rate ($50 off $299). The group starts Monday, Aug 31.
 
 [Lock my spot · $249]
 
@@ -265,7 +265,7 @@ The ranges I sent you are a starting point. They're not the whole program.
 
 What we actually do together is the weekly check-in. Milk changes, sleep falls apart, appetite swings. That's when the numbers need a person, not a calculator.
 
-This group starts Monday, Aug 31. Doors close Aug 27 so I can build everyone's ranges first.
+This group starts Monday, Aug 31.
 
 If you want that, finish signing up. Same email so your ranges stay attached. Your quiz rate is $249.
 
@@ -294,7 +294,7 @@ Here's what I know after doing this work for years: timing is never going to fee
 
 Your macros were just the starting point. The real transformation happens inside Macros and Mamas, where you're not figuring this out alone at 11pm with fifteen browser tabs open. You'll have me in your corner, plus a whole cohort of women who get it, for accountability, for troubleshooting the hard weeks, for celebrating the wins that feel small but aren't.
 
-Doors close Thursday. Because you took the quiz, your spot is $249 (that's $50 off, already applied).
+The group starts Monday, Aug 31. Because you took the quiz, your spot is $249 (that's $50 off, already applied).
 
 If you've been waiting for a sign that it's your turn, this is it.
 

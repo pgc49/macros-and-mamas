@@ -41,11 +41,10 @@ export function splitAtCheckoutHtml() {
 export function rangesOfferBlock(joinUrl, {
   earlyPrice = EARLY_PRICE,
   fullPrice = FULL_PRICE,
-  doorsClose = DOORS_CLOSE,
   cohortShort = COHORT_SHORT,
 } = {}) {
   const save = Math.max(0, Number(fullPrice) - Number(earlyPrice));
-  return `<p><strong>Your quiz also unlocked the $${earlyPrice} early rate</strong> ($${save} off $${fullPrice}). The group starts Monday, ${cohortShort}. Doors close ${doorsClose} so I can hand-build every set of ranges before day one.</p>
+  return `<p><strong>Your quiz also unlocked the $${earlyPrice} early rate</strong> ($${save} off $${fullPrice}). The group starts Monday, ${cohortShort}.</p>
 ${emailCtaButton(`Lock my spot · $${earlyPrice}`, joinUrl)}
 ${splitAtCheckoutHtml()}`;
 }

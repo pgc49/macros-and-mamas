@@ -39,7 +39,9 @@ describe("quiz ranges email", () => {
     assert.match(body, /\$50 off \$299/);
     assert.doesNotMatch(body, /capped at 50/);
     assert.match(body, /The group starts Monday, Aug 31/);
-    assert.match(body, /Doors close Aug 27 so I can hand-build/);
+    assert.doesNotMatch(body, /Aug 27/);
+    assert.doesNotMatch(body, /Doors close/i);
+    assert.doesNotMatch(body, /Thursday/);
     assert.match(body, /Checkout offers 4 interest-free payments of \$62\.25/);
     assert.match(body, new RegExp(SPLIT_AT_CHECKOUT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.doesNotMatch(body, /approved|guaranteed|Klarna|Affirm/i);
