@@ -131,6 +131,9 @@ describe("AdminClientRoster", () => {
     expect(screen.getByText(/Waiting on you first, then oldest message/)).toBeTruthy();
     expect(screen.queryByText(/Alphabetical/)).toBeNull();
     cleanup();
+    renderRoster({ filter: "digest" });
+    expect(screen.getByText(/Daily list — quiet logs and paid, no intake/)).toBeTruthy();
+    cleanup();
     renderRoster({ filter: "unpaid" });
     expect(screen.getByText(/Newest signups first/)).toBeTruthy();
   });
@@ -263,6 +266,68 @@ describe("AdminClientRoster", () => {
     expect(screen.queryByText("Paid No Intake")).toBeNull();
     expect(screen.getByRole("button", { name: /Ready to approve · 1/ })).toBeTruthy();
     expect(screen.getByText(/Paid, intake in — waiting on your approve tap/)).toBeTruthy();
+  });
+
+  it("keeps Founding quiet on Quiet, not Needs you or Ready to approve", () => {
+    const splitRoster = [
+      {
+        id: "ready",
+        role: "client",
+        name: "August Ready",
+        email: "aug@example.com",
+        cohort_label: "2026-08",
+        stage: "awaiting_approval",
+        status: "pending",
+        paid: true,
+        hasIntake: true,
+        unreadFromMama: 0,
+        lastAdminAt: null,
+      },
+      {
+        id: "quiet",
+        role: "client",
+        name: "Founding Quiet",
+        email: "founding@example.com",
+        cohort_label: "2026-07",
+        stage: "active",
+        status: "active",
+        paid: true,
+        hasIntake: true,
+        unreadFromMama: 0,
+        lastAdminAt: null,
+        lastActiveDate: "2026-08-10",
+      },
+      {
+        id: "intake",
+        role: "client",
+        name: "Paid No Intake",
+        email: "needintake@example.com",
+        cohort_label: "2026-08",
+        stage: "paid_awaiting_intake",
+        status: "pending",
+        paid: true,
+        hasIntake: false,
+        unreadFromMama: 0,
+        lastAdminAt: null,
+      },
+    ];
+    renderRoster({ filter: "needs_you", roster: splitRoster, todayIso: "2026-08-29" });
+    expect(screen.getByText("August Ready")).toBeTruthy();
+    expect(screen.queryByText("Founding Quiet")).toBeNull();
+    expect(screen.queryByText("Paid No Intake")).toBeNull();
+    expect(screen.getByRole("button", { name: /Needs you · 1/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Quiet · 2/ })).toBeTruthy();
+    cleanup();
+    renderRoster({ filter: "digest", roster: splitRoster, todayIso: "2026-08-29" });
+    expect(screen.getByText("Founding Quiet")).toBeTruthy();
+    expect(screen.getByText("Paid No Intake")).toBeTruthy();
+    expect(screen.queryByText("August Ready")).toBeNull();
+    cleanup();
+    renderRoster({ filter: "awaiting_approval", roster: splitRoster, todayIso: "2026-08-29" });
+    expect(screen.getByText("August Ready")).toBeTruthy();
+    expect(screen.queryByText("Founding Quiet")).toBeNull();
+    expect(screen.queryByText("Paid No Intake")).toBeNull();
+    expect(screen.getByRole("button", { name: /Ready to approve · 1/ })).toBeTruthy();
   });
 });
 

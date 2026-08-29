@@ -96,11 +96,43 @@ export function isReadyToApprove(client) {
   return Boolean(client.status === "pending" && client.hasIntake && client.paid);
 }
 
-export function needsYou(client, todayIso = localDateIso()) {
+export function isPaidAwaitingIntake(client) {
+  if (!client || String(client.role || "").toLowerCase() === "admin") return false;
+  if (client.refunded || client.stage === "refunded") return false;
+  return client.stage === "paid_awaiting_intake";
+}
+
+/** Pregnant / early-BF / nursing / diet safety on a waiting (not-yet-approved) intake. */
+export function hasWaitingIntakeSafetyFlag(client) {
+  if (!client || String(client.role || "").toLowerCase() === "admin") return false;
+  if (client.refunded || client.stage === "refunded") return false;
+  const waiting = client.stage === "awaiting_approval"
+    || Boolean(client.status === "pending" && client.hasIntake);
+  if (!waiting) return false;
+  if (client.pregnant) return true;
+  if (client.breastfeeding) return true;
+  if (client.diet && client.diet !== "none") return true;
+  return false;
+}
+
+/**
+ * Interrupt queue (Needs you). Quiet logs and paid-no-intake are digest, not here.
+ * Failed pay is not on the roster — refunds stay on the existing Refunded filter.
+ */
+export function needsYou(client, _todayIso = localDateIso()) {
   if (!client || client.role === "admin") return false;
   if (Number(client.unreadFromMama) > 0) return true;
   if (isReadyToApprove(client)) return true;
-  return isQuietActive(client, todayIso);
+  if (hasWaitingIntakeSafetyFlag(client)) return true;
+  return false;
+}
+
+/** Daily digest: quiet actives + paid-no-intake. Interrupt items stay on Needs you. */
+export function isDigestItem(client, todayIso = localDateIso()) {
+  if (!client || client.role === "admin") return false;
+  if (needsYou(client)) return false;
+  if (isQuietActive(client, todayIso)) return true;
+  return isPaidAwaitingIntake(client);
 }
 
 export function matchesRosterQuery(client, rawQuery) {
@@ -128,10 +160,12 @@ function byName(a, b) {
 
 function attentionRank(client, todayIso) {
   if (Number(client.unreadFromMama) > 0) return 0;
-  if (isReadyToApprove(client)) return 1;
-  if (isQuietActive(client, todayIso)) return 2;
-  if (client.stage === "active" && !client.lastAdminAt) return 3;
-  return 4;
+  if (hasWaitingIntakeSafetyFlag(client)) return 1;
+  if (isReadyToApprove(client)) return 2;
+  if (isQuietActive(client, todayIso)) return 3;
+  if (isPaidAwaitingIntake(client)) return 4;
+  if (client.stage === "active" && !client.lastAdminAt) return 5;
+  return 6;
 }
 
 export function filterRoster(all, filter, { query = "", todayIso = localDateIso(), cohort = "all" } = {}) {
@@ -140,12 +174,14 @@ export function filterRoster(all, filter, { query = "", todayIso = localDateIso(
   let list = clientsOnly;
   if (filter === "needs_you") {
     list = clientsOnly.filter((c) => needsYou(c, todayIso));
+  } else if (filter === "digest") {
+    list = clientsOnly.filter((c) => isDigestItem(c, todayIso));
   } else if (filter === "unpaid") {
     list = clientsOnly.filter((c) => c.stage === "signed_up");
   } else if (filter === "paid") {
     list = clientsOnly.filter((c) => isStripeCollected(c));
   } else if (filter === "awaiting_intake") {
-    list = clientsOnly.filter((c) => c.stage === "paid_awaiting_intake");
+    list = clientsOnly.filter((c) => isPaidAwaitingIntake(c));
   } else if (filter === "awaiting_approval") {
     list = clientsOnly.filter((c) => isReadyToApprove(c));
   } else if (filter === "active") {
@@ -184,9 +220,11 @@ export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all
   const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
   return {
     needsYou: clientsOnly.filter((c) => needsYou(c, todayIso)).length,
+    digest: clientsOnly.filter((c) => isDigestItem(c, todayIso)).length,
+    quiet: clientsOnly.filter((c) => isQuietActive(c, todayIso) && !needsYou(c, todayIso)).length,
     active: clientsOnly.filter((c) => c.stage === "active" || c.status === "active").length,
     awaitingApproval: clientsOnly.filter((c) => isReadyToApprove(c)).length,
-    awaitingIntake: clientsOnly.filter((c) => c.stage === "paid_awaiting_intake").length,
+    awaitingIntake: clientsOnly.filter((c) => isPaidAwaitingIntake(c)).length,
     unpaid: clientsOnly.filter((c) => c.stage === "signed_up").length,
     paid: clientsOnly.filter((c) => isStripeCollected(c)).length,
     refunded: clientsOnly.filter((c) => c.refunded || c.stage === "refunded").length,
@@ -200,7 +238,7 @@ export function rosterStats(all, cohort = "all") {
     signups: clientsOnly.length,
     paid: clientsOnly.filter((c) => isStripeCollected(c)).length,
     unpaid: clientsOnly.filter((c) => !c.paid && !c.refunded).length,
-    awaitingIntake: clientsOnly.filter((c) => c.stage === "paid_awaiting_intake").length,
+    awaitingIntake: clientsOnly.filter((c) => isPaidAwaitingIntake(c)).length,
     awaitingApproval: clientsOnly.filter((c) => isReadyToApprove(c)).length,
     active: clientsOnly.filter((c) => c.stage === "active" || c.status === "active").length,
     refunded: clientsOnly.filter((c) => c.refunded || c.stage === "refunded").length,

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   filterRoster,
   formatLastMessaged,
+  hasWaitingIntakeSafetyFlag,
+  isDigestItem,
   isReadyToApprove,
   listRosterCohorts,
   matchesRosterQuery,
@@ -78,9 +80,10 @@ describe("needsYou + filterRoster", () => {
     lastActiveDate: null,
   });
 
-  it("flags unread and quiet actives", () => {
+  it("flags unread as interrupt, not quiet actives", () => {
     expect(needsYou(unread, today)).toBe(true);
-    expect(needsYou(quiet, today)).toBe(true);
+    expect(needsYou(quiet, today)).toBe(false);
+    expect(isDigestItem(quiet, today)).toBe(true);
     expect(needsYou(unpaid, today)).toBe(false);
   });
 
@@ -90,9 +93,9 @@ describe("needsYou + filterRoster", () => {
     expect(matchesRosterQuery(unpaid, "new@")).toBe(true);
   });
 
-  it("sorts unread ahead of quiet on needs-you", () => {
-    const list = filterRoster([quiet, unread], "needs_you", { todayIso: today });
-    expect(list.map((c) => c.id)).toEqual(["u", "q"]);
+  it("keeps quiet on the digest list, not Needs you", () => {
+    expect(filterRoster([quiet, unread], "needs_you", { todayIso: today }).map((c) => c.id)).toEqual(["u"]);
+    expect(filterRoster([quiet, unread], "digest", { todayIso: today }).map((c) => c.id)).toEqual(["q"]);
   });
 
   it("sorts Active A–Z even when one mama has unread or is quiet", () => {
@@ -111,13 +114,14 @@ describe("needsYou + filterRoster", () => {
 
   it("keeps Needs you urgency-first even when names would invert that", () => {
     const unreadZ = mama({ id: "z", name: "Zoe Unread", unreadFromMama: 2 });
-    const quietA = mama({
+    const readyA = mama({
       id: "a",
-      name: "Ava Quiet",
-      lastActiveDate: "2026-08-10",
-      lastMealDate: "2026-08-10",
+      name: "Ava Ready",
+      stage: "awaiting_approval",
+      status: "pending",
+      lastActiveDate: null,
     });
-    const list = filterRoster([quietA, unreadZ], "needs_you", { todayIso: today });
+    const list = filterRoster([readyA, unreadZ], "needs_you", { todayIso: today });
     expect(list.map((c) => c.id)).toEqual(["z", "a"]);
   });
 
@@ -130,9 +134,11 @@ describe("needsYou + filterRoster", () => {
     expect(list.map((c) => c.id)).toEqual(["c", "p", "x", "z"]);
   });
 
-  it("counts needs-you separately from unpaid", () => {
+  it("counts interrupt separately from digest and unpaid", () => {
     const counts = rosterFilterCounts([unread, quiet, unpaid], today);
-    expect(counts.needsYou).toBe(2);
+    expect(counts.needsYou).toBe(1);
+    expect(counts.digest).toBe(1);
+    expect(counts.quiet).toBe(1);
     expect(counts.unpaid).toBe(1);
     expect(counts.active).toBe(2);
   });
@@ -175,8 +181,8 @@ describe("cohort filter", () => {
   });
 });
 
-describe("isReadyToApprove + awaiting_approval queue", () => {
-  const today = "2026-08-28";
+describe("interrupt vs digest split", () => {
+  const today = "2026-08-29";
   const readyAugust = mama({
     id: "r21",
     name: "August Ready",
@@ -242,9 +248,42 @@ describe("isReadyToApprove + awaiting_approval queue", () => {
     hasIntake: true,
     refunded: true,
   });
-  const roster = [readyAugust, readyFallback, foundingQuiet, paidNoIntake, unpaidLead, unreadOnly, refundedPaid];
+  const safetyWaiting = mama({
+    id: "sf",
+    name: "Safety Flag",
+    cohort_label: "2026-08",
+    stage: "awaiting_approval",
+    status: "pending",
+    paid: true,
+    hasIntake: true,
+    pregnant: true,
+    lastActiveDate: null,
+  });
+  const earlyBfWaiting = mama({
+    id: "eb",
+    name: "Early BF",
+    cohort_label: "2026-08",
+    stage: "awaiting_approval",
+    status: "pending",
+    paid: true,
+    hasIntake: true,
+    breastfeeding: true,
+    monthsPP: 2,
+    lastActiveDate: null,
+  });
+  const roster = [
+    readyAugust,
+    readyFallback,
+    foundingQuiet,
+    paidNoIntake,
+    unpaidLead,
+    unreadOnly,
+    refundedPaid,
+    safetyWaiting,
+    earlyBfWaiting,
+  ];
 
-  it("counts only paid + intake + not approved", () => {
+  it("counts only paid + intake + not approved on the ready-to-approve queue", () => {
     expect(isReadyToApprove(readyAugust)).toBe(true);
     expect(isReadyToApprove(readyFallback)).toBe(true);
     expect(isReadyToApprove(foundingQuiet)).toBe(false);
@@ -252,29 +291,50 @@ describe("isReadyToApprove + awaiting_approval queue", () => {
     expect(isReadyToApprove(unpaidLead)).toBe(false);
     expect(isReadyToApprove(unreadOnly)).toBe(false);
     expect(isReadyToApprove(refundedPaid)).toBe(false);
-    expect(rosterFilterCounts(roster, today).awaitingApproval).toBe(2);
-    expect(rosterStats(roster).awaitingApproval).toBe(2);
+    expect(rosterFilterCounts(roster, today).awaitingApproval).toBe(4);
+    expect(rosterStats(roster).awaitingApproval).toBe(4);
   });
 
   it("opens the ready-to-approve queue without quiet, unpaid, or paid-no-intake", () => {
     const list = filterRoster(roster, "awaiting_approval", { todayIso: today });
-    expect(list.map((c) => c.id).sort()).toEqual(["r21", "rf"]);
+    expect(list.map((c) => c.id).sort()).toEqual(["eb", "r21", "rf", "sf"]);
   });
 
-  it("keeps Founding quiet in needs-you, not in ready-to-approve", () => {
-    expect(needsYou(foundingQuiet, today)).toBe(true);
+  it("keeps Founding quiet on digest, not Needs you or ready-to-approve", () => {
+    expect(needsYou(foundingQuiet, today)).toBe(false);
+    expect(isDigestItem(foundingQuiet, today)).toBe(true);
     expect(needsYou(readyAugust, today)).toBe(true);
     expect(needsYou(paidNoIntake, today)).toBe(false);
+    expect(isDigestItem(paidNoIntake, today)).toBe(true);
     const needs = filterRoster(roster, "needs_you", { todayIso: today });
-    expect(needs.map((c) => c.id)).toEqual(expect.arrayContaining(["fq", "r21", "uo"]));
+    expect(needs.map((c) => c.id)).toEqual(expect.arrayContaining(["r21", "uo", "sf", "eb"]));
+    expect(needs.map((c) => c.id)).not.toContain("fq");
     expect(needs.map((c) => c.id)).not.toContain("ni");
     expect(filterRoster(roster, "awaiting_approval", { todayIso: today }).map((c) => c.id)).not.toContain("fq");
+    expect(filterRoster(roster, "digest", { todayIso: today }).map((c) => c.id).sort()).toEqual(["fq", "ni"]);
   });
 
-  it("scopes the ready-to-approve count to a cohort without changing the all-cohorts interrupt", () => {
+  it("interrupts on pregnant / early-BF safety flags for waiting intakes", () => {
+    expect(hasWaitingIntakeSafetyFlag(safetyWaiting)).toBe(true);
+    expect(hasWaitingIntakeSafetyFlag(earlyBfWaiting)).toBe(true);
+    expect(hasWaitingIntakeSafetyFlag(foundingQuiet)).toBe(false);
+    expect(needsYou(safetyWaiting, today)).toBe(true);
+    expect(needsYou(earlyBfWaiting, today)).toBe(true);
+    expect(isDigestItem(safetyWaiting, today)).toBe(false);
+  });
+
+  it("leaves refunds on the Refunded filter, not Needs you", () => {
+    expect(needsYou(refundedPaid, today)).toBe(false);
+    expect(isDigestItem(refundedPaid, today)).toBe(false);
+    expect(filterRoster(roster, "refunded", { todayIso: today }).map((c) => c.id)).toEqual(["rr"]);
+  });
+
+  it("scopes the ready-to-approve count to a cohort without mixing quiet", () => {
     expect(rosterStats(roster, "2026-07").awaitingApproval).toBe(0);
-    expect(rosterStats(roster, "2026-08").awaitingApproval).toBe(2);
-    expect(rosterStats(roster, "all").awaitingApproval).toBe(2);
+    expect(rosterStats(roster, "2026-08").awaitingApproval).toBe(4);
+    expect(rosterStats(roster, "all").awaitingApproval).toBe(4);
+    expect(rosterFilterCounts(roster, today, "2026-07").quiet).toBe(1);
+    expect(rosterFilterCounts(roster, today, "2026-07").needsYou).toBe(1);
   });
 });
 

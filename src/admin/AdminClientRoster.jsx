@@ -74,6 +74,7 @@ function stageShort(c) {
 
 const FILTERS = [
   ["needs_you", "Needs you"],
+  ["digest", "Quiet"],
   ["active", "Active"],
   ["awaiting_approval", "Ready to approve"],
   ["awaiting_intake", "Need intake"],
@@ -87,6 +88,7 @@ function rosterSortHint(filter) {
   if (filter === "unpaid") return "Newest signups first. ";
   if (filter === "active") return "Alphabetical. ";
   if (filter === "awaiting_approval") return "Paid, intake in — waiting on your approve tap. ";
+  if (filter === "digest") return "Daily list — quiet logs and paid, no intake. ";
   return "Waiting on you first, then oldest message. ";
 }
 
@@ -206,6 +208,7 @@ export function AdminClientRoster({
 
   const countFor = (id) => {
     if (id === "needs_you") return counts.needsYou;
+    if (id === "digest") return counts.digest;
     if (id === "active") return counts.active;
     if (id === "awaiting_approval") return counts.awaitingApproval;
     if (id === "awaiting_intake") return counts.awaitingIntake;
