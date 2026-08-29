@@ -11,6 +11,7 @@ import { GoalsCard } from "../components/GoalsCard";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { WeighInCard } from "../components/WeighInCard";
 import { HomeScreenTip } from "../components/HomeScreenTip";
+import { NotificationsTip } from "../components/NotificationsTip";
 import { MondayVoiceDropBanner } from "../components/MondayVoiceDropBanner";
 import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { LoggableMealRow } from "../components/LoggableMealRow";
@@ -201,6 +202,10 @@ export function ClientApp({
               const result = await db.dismissHomescreenTip();
               onHomescreenTipDismissed?.(result.homescreenTipDismissedAt);
             }}
+          />
+          <NotificationsTip
+            cohortLabel={profile.cohort_label}
+            onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
           />
 
           {logFlash ? (

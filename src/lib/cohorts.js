@@ -24,6 +24,9 @@ export const COHORT_CALENDAR = [
 /** Founding Members only — post-program free month is not a later-cohort perk. */
 export const FOUNDING_COHORT_LABEL = "2026-07";
 
+/** Cohort 2 / August Group. */
+export const AUGUST_COHORT_LABEL = "2026-08";
+
 export const FREE_MONTH_DAYS = 30;
 
 export function cohortByLabel(label) {

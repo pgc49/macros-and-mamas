@@ -2601,25 +2601,45 @@ export const db = {
     }
   },
 
-  /** Admin: latest drop row (any status) for the Messages card status line. */
-  async loadLatestVoiceDropAdmin() {
+  /** Admin: live drops (one per group can be up) plus the newest row. */
+  async loadVoiceDropAdminStatus() {
     await requireUserId();
     const { data, error } = await supabase
       .from("voice_drops")
-      .select("id, caption, audio_path, audio_mime, duration_ms, audience, published_at, expires_at, status")
+      .select("id, caption, audio_path, audio_mime, duration_ms, audience, cohort_label, published_at, expires_at, status")
       .order("published_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(12);
     if (error) throw error;
-    if (!data) return null;
-    let audioUrl = null;
-    if (data.audio_path) {
-      const { data: signed } = await supabase.storage
-        .from("voice-drops")
-        .createSignedUrl(data.audio_path, 60 * 60);
-      audioUrl = signed?.signedUrl || null;
-    }
-    return { ...data, audioUrl, durationMs: data.duration_ms };
+    const rows = data || [];
+    const now = Date.now();
+    const live = rows.filter((r) => (
+      r.status === "published"
+      && r.expires_at
+      && Date.parse(r.expires_at) > now
+    ));
+    const signTargets = live.length ? live : (rows[0] ? [rows[0]] : []);
+    const signed = await Promise.all(signTargets.map(async (row) => {
+      let audioUrl = null;
+      if (row.audio_path) {
+        const { data: signedUrl } = await supabase.storage
+          .from("voice-drops")
+          .createSignedUrl(row.audio_path, 60 * 60);
+        audioUrl = signedUrl?.signedUrl || null;
+      }
+      return { ...row, audioUrl, durationMs: row.duration_ms };
+    }));
+    const byId = Object.fromEntries(signed.map((r) => [r.id, r]));
+    const hydrate = (row) => byId[row.id] || { ...row, audioUrl: null, durationMs: row.duration_ms };
+    return {
+      live: live.map(hydrate),
+      latest: rows[0] ? hydrate(rows[0]) : null,
+    };
+  },
+
+  /** Admin: latest drop row (any status) for the Messages card status line. */
+  async loadLatestVoiceDropAdmin() {
+    const status = await this.loadVoiceDropAdminStatus();
+    return status.latest;
   },
 
   async editMessage(messageId, body) {
