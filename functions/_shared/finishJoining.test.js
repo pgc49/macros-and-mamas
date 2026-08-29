@@ -140,15 +140,10 @@ describe("finish joining copy", () => {
     const two = buildFinishJoining24hBody();
     expect(one).toContain("You started joining Macros and Mamas. I'm glad you're here.");
     expect(one).toContain("our group Mon through Fri");
-    expect(one).toContain("We start Aug 31.");
-    expect(one).not.toMatch(/Doors close/i);
-    expect(one).not.toContain("Aug 27");
+    expect(one).toContain("We start Aug 31. Doors close Aug 27.");
     expect(one).not.toMatch(/\$249/);
     expect(two).toContain("I'd still love to have you in this group.");
     expect(two).toContain("macros built by me, not a calculator");
-    expect(two).toContain("We start Aug 31. Finish signing up when you're ready.");
-    expect(two).not.toMatch(/Doors close/i);
-    expect(two).not.toContain("Aug 27");
     expect(two).not.toMatch(/No pressure either way/);
     for (const html of [one, two]) {
       expect(html).not.toMatch(/whatsapp/i);
@@ -181,9 +176,7 @@ describe("finish joining copy", () => {
 
   it("builds the Wednesday last note with a safe first-name subject", () => {
     const html = buildFinishJoiningCloseBody();
-    expect(html).toContain("Last note from me. We start Monday.");
-    expect(html).not.toMatch(/Doors close/i);
-    expect(html).not.toContain("Aug 27");
+    expect(html).toContain("Last note from me. Doors close Aug 27. We start Monday.");
     expect(html).toContain("If something's unclear, reply. I read everything.");
     expect(html).not.toMatch(/—/);
     expect(finishJoiningCloseSubject("Dolly Chammas")).toBe("Dolly, last note from me");

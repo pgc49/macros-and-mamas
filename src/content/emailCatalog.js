@@ -20,7 +20,7 @@ export const EMAIL_CATALOG = [
 
 You started joining Macros and Mamas. I'm glad you're here.
 
-When you're ready: macros I build myself, our group Mon through Fri, and a short Monday voice note to keep the week simple. We start Aug 31.
+When you're ready: macros I build myself, our group Mon through Fri, and a short Monday voice note to keep the week simple. We start Aug 31. Doors close Aug 27.
 
 Finish signing up below to lock in your spot.
 
@@ -47,7 +47,7 @@ Just checking in. I'd still love to have you in this group.
 
 Inside: macros built by me, not a calculator. Our group Mon through Fri. A short Monday voice note to set the week.
 
-We start Aug 31. Finish signing up when you're ready.
+We start Aug 31. Doors close Aug 27 so I can hand-build ranges before day one. Finish signing up when you're ready.
 
 Your quiz rate is $249.
 
@@ -68,7 +68,7 @@ Callie
     cta: "Finish signing up, lock in your spot",
     bodyPreview: `Hi [First name],
 
-Last note from me. We start Monday.
+Last note from me. Doors close Aug 27. We start Monday.
 
 If you still want in, finish signing up. If something's unclear, reply. I read everything.
 
