@@ -30,8 +30,14 @@ describe("quiz payoff copy", () => {
     assert.doesNotMatch(quizJs, /\$50 off/);
     assert.doesNotMatch(quizJs, /capped at 50 mamas · /);
     assert.doesNotMatch(quizJs, /group, capped at 50 mamas/);
+    assert.match(quizJs, /Callie hand-builds every set of ranges before day one/);
     assert.match(quizJs, /The whole group starts together \$\{escapeHtml\(cohortStart\)\}, capped at 50 mamas/);
+    assert.match(quizJs, /When the 50 spots fill/);
+    assert.doesNotMatch(quizJs, /Doors close/i);
+    assert.doesNotMatch(quizJs, /Aug 27/);
+    assert.doesNotMatch(quizJs, /Thursday/);
     assert.match(quizJs, /Checkout can split it into 4 interest-free payments of \$62\.25/);
+
     assert.match(quizJs, /custom ranges built by Callie · 1:1 messaging · the app · weekly check-ins/);
     assert.match(quizJs, /or 4 payments of \$62 at checkout/);
     assert.doesNotMatch(quizJs, /[Pp]re-pay|[Pp]repay/);

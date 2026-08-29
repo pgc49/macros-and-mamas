@@ -1,12 +1,12 @@
 ---
 import {
   cohortStartDateCompact,
-  doorsCloseDate,
   enrollUrl,
   isWaitlist,
   offerPrice,
   quizUrl,
 } from '../config';
+
 ---
 
 <div class="sticky-cta" id="stickyCta" aria-hidden="true">
@@ -14,7 +14,7 @@ import {
     isWaitlist ? (
       <>
         <div class="s-price">
-          <strong>Doors close {doorsCloseDate} · 50 mamas max</strong>
+          <strong>50 mamas max · starts {cohortStartDateCompact}</strong>
         </div>
         <a class="btn" href={quizUrl}>
           Take the quiz
@@ -23,7 +23,7 @@ import {
     ) : (
       <>
         <div class="s-price">
-          <strong>Doors close {doorsCloseDate}</strong>
+          <strong>When the 50 spots fill</strong>
           Starts {cohortStartDateCompact} · ${offerPrice}
         </div>
         <a class="btn" href={enrollUrl}>

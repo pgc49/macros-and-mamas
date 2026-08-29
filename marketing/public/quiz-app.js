@@ -10,8 +10,8 @@
   const fullPrice = Number(root.dataset.fullPrice || 299);
   const weeklyPrice = Number(root.dataset.weeklyPrice || Math.round(offerPrice / 8));
   const cohortStart = root.dataset.cohortStart || 'Monday, Aug 31';
-  const doorsClose = root.dataset.doorsClose || 'Aug 27';
   const saveAmount = Math.max(0, fullPrice - offerPrice);
+
   const calliePhoto = root.dataset.calliePhoto || '/callie-kitchen.jpg';
   const postPayCopy =
     root.dataset.postPayCopy
@@ -666,7 +666,8 @@
       <p class="q-fast-deliverable">8 weeks 1:1 with Callie. She builds your ranges by hand and adjusts them as your body changes.</p>
       <p class="q-fast-split">Split it at checkout: 4 interest-free payments of $62.25.</p>
       <a class="btn q-fast-btn" href="${href}">Lock my spot · $${offerPrice}</a>
-      <p class="q-fast-micro">Doors close ${escapeHtml(doorsClose)}. Not ready? Your ranges are already in your inbox.</p>
+      <p class="q-fast-micro">When the 50 spots fill. Not ready? Your ranges are already in your inbox.</p>
+
     </div>`;
   }
 
@@ -674,8 +675,9 @@
     const href = checkoutHref();
     return `<div class="sticky-cta q-result-sticky" id="quizStickyCta" aria-hidden="true">
       <div class="s-price">
-        <strong>Doors close ${escapeHtml(doorsClose)}</strong>
+        <strong>When the 50 spots fill</strong>
         or 4 payments of $62 at checkout
+
       </div>
       <a class="btn" href="${href}">Lock my spot</a>
     </div>`;
@@ -780,7 +782,8 @@
     return `<div class="q-offer-card" id="qOfferCard">
       <div class="q-offer-kicker">Exclusive · early rate from your quiz</div>
       <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
-      <p class="q-offer-lede">Doors close ${escapeHtml(doorsClose)} so Callie can hand-build every set of ranges before day one. The whole group starts together ${escapeHtml(cohortStart)}, capped at 50 mamas.</p>
+      <p class="q-offer-lede">Callie hand-builds every set of ranges before day one. The whole group starts together ${escapeHtml(cohortStart)}, capped at 50 mamas.</p>
+
       <div class="q-offer-price-row">
         <span class="q-offer-now">$${offerPrice}</span>
         <span class="q-offer-full">Full rate $${fullPrice}</span>

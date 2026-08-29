@@ -42,10 +42,10 @@ SUPABASE_SERVICE_ROLE_KEY=…
 
 Edit both (keep in sync):
 
-- `marketing/src/config.ts` — `cohortStartDate`, `doorsCloseDate`, prices
+- `marketing/src/config.ts` — `cohortStartDate`, prices
 - `src/config.js` — `COHORT_LABEL`, `COHORT_START`, …
 
-Never sell seats without an expected start date + doors-close date on the page.
+Never sell seats without an expected start date and the 50-cap on the page.
 
 ## Marketing mode
 

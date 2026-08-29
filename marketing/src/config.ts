@@ -16,11 +16,10 @@ export const cohortStartDate = 'Monday, Aug 31';
 export const cohortStartDateShort = 'August 31';
 /** Compact start date for sticky bar / short UI strings. */
 export const cohortStartDateCompact = 'Aug 31';
-export const doorsCloseDate = 'Aug 27';
 
-/** Pricing-card doors line — soft cap in copy only; no counters or remaining-spot math. */
+/** Pricing-card urgency line — soft cap in copy only; no counters or remaining-spot math. */
 export const doorsCloseReason =
-  `Doors close ${doorsCloseDate}, or when the 50 spots fill · starts ${cohortStartDate}`;
+  `when the 50 spots fill · starts ${cohortStartDate}`;
 
 export const queuePositionCopy =
   `Lock your spot and you're in Callie's queue. She builds and approves ranges in the order they come in, so the earlier you're in, the earlier your app opens and the more time you have to get comfortable before ${cohortStartDateCompact}.`;

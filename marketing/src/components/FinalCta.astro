@@ -2,7 +2,6 @@
 import {
   cohortStartDate,
   cohortStartDateShort,
-  doorsCloseDate,
   enrollUrl,
   fullPrice,
   isWaitlist,
@@ -11,6 +10,7 @@ import {
   quizUrl,
   waitlistPrice,
 } from '../config';
+
 ---
 
 <section class="final">
@@ -24,7 +24,7 @@ import {
             Take the free quiz to see your ranges — and get the exclusive $
             {waitlistPrice} early rate (full rate ${fullPrice}). Lock your spot
             after the quiz in the {cohortStartDateShort} group,
-            capped at 50 mamas. Doors close {doorsCloseDate}.
+            capped at 50 mamas.
           </p>
           <p class="lede" style="margin-top:14px">
             {queuePositionCopy}
@@ -47,7 +47,7 @@ import {
             Join now · starts {cohortStartDate}
           </a>
           <p class="price-note">
-            ${offerPrice} · doors close {doorsCloseDate} or when the group fills
+            ${offerPrice} · when the 50 spots fill · starts {cohortStartDate}
           </p>
           <p class="price-note" style="margin-top:10px">
             <a href={quizUrl} style="color:inherit;text-decoration:underline"
