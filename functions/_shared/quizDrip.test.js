@@ -315,7 +315,8 @@ describe("quiz drip copy", () => {
     const html = buildQuizDrip2Body();
     expect(html).toMatch(/weekly check-in/i);
     expect(html).not.toMatch(/Protein:/);
-    expect(html).toContain("Doors close Aug 27");
+    expect(html).not.toMatch(/Doors close/i);
+    expect(html).not.toContain("Aug 27");
     expect(html).toContain("Monday, Aug 31");
     expect(html).toContain("$249");
     expect(html).not.toMatch(/—/);
@@ -327,7 +328,9 @@ describe("quiz drip copy", () => {
       joinUrl: "https://www.macrosandmamas.com/join?from=quiz&email=x",
     });
     expect(html).toContain("later keeps not coming");
-    expect(html).toContain("Doors close Thursday.");
+    expect(html).toContain("The group starts Monday, Aug 31.");
+    expect(html).not.toMatch(/Doors close/i);
+    expect(html).not.toContain("Aug 27");
     expect(html).toContain(`your spot is $${EARLY_PRICE}`);
     expect(html).toContain("$50 off, already applied");
     expect(html).toContain("this is it.");

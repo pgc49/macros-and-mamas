@@ -29,6 +29,12 @@ describe("unpaid sales catalog", () => {
     const ranges = EMAIL_CATALOG.find((e) => e.id === "quiz_ranges");
     expect(ranges.bodyPreview).not.toMatch(/capped at 50/);
     expect(ranges.bodyPreview).toMatch(/The group starts Monday, Aug 31/);
+    expect(ranges.bodyPreview).not.toMatch(/Aug 27/);
+    expect(ranges.bodyPreview).not.toMatch(/Doors close/i);
+    for (const row of unpaid) {
+      expect(row.bodyPreview, row.id).not.toMatch(/Aug 27/);
+      expect(row.bodyPreview, row.id).not.toMatch(/Doors close/i);
+    }
   });
 });
 
@@ -57,7 +63,9 @@ describe("quiz drip catalog", () => {
     expect(day2.trigger).toMatch(/\+2 days/);
     expect(day2.subject).not.toMatch(/your ranges/i);
     expect(day2.bodyPreview).toMatch(/Your quiz rate is \$249/);
-    expect(day2.bodyPreview).toMatch(/Doors close Aug 27/);
+    expect(day2.bodyPreview).toMatch(/This group starts Monday, Aug 31/);
+    expect(day2.bodyPreview).not.toMatch(/Aug 27/);
+    expect(day2.bodyPreview).not.toMatch(/Doors close/i);
 
     const last = EMAIL_CATALOG.find((e) => e.id === "quiz_drip_7d");
     expect(last.status).toBe("live");
@@ -66,7 +74,9 @@ describe("quiz drip catalog", () => {
     expect(last.trigger).toMatch(/Aug 27/);
     expect(last.bodyPreview).not.toMatch(/capped at 50/);
     expect(last.bodyPreview).toMatch(/later keeps not coming/);
-    expect(last.bodyPreview).toMatch(/Doors close Thursday/);
+    expect(last.bodyPreview).toMatch(/The group starts Monday, Aug 31/);
+    expect(last.bodyPreview).not.toMatch(/Doors close Thursday/);
+    expect(last.bodyPreview).not.toMatch(/Aug 27/);
     expect(last.bodyPreview).toMatch(/your spot is \$249/);
     expect(last.bodyPreview).toMatch(/Checkout offers 4 interest-free payments of \$62\.25/);
 
