@@ -8,8 +8,6 @@ import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import kitchenImg from '../assets/callie-kitchen.jpg';
 import {
-  cohortStartDate,
-  doorsCloseDate,
   enrollUrl,
   fullPrice,
   isWaitlist,
@@ -59,8 +57,6 @@ const quizJsV = createHash('sha256')
         data-offer-price={String(waitlistPrice)}
         data-full-price={String(fullPrice)}
         data-weekly-price={String(weeklyPrice)}
-        data-cohort-start={cohortStartDate}
-        data-doors-close={doorsCloseDate}
         data-callie-photo={kitchenOptimized.src}
         data-post-pay-copy={postPayQueueCopy}
         data-testimonials={payoffQuotes}

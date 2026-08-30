@@ -1,6 +1,5 @@
 ---
 import {
-  cohortStartDate,
   fullPrice,
   waitlistPrice,
 } from '../config';
@@ -114,8 +113,7 @@ const isPage = variant === 'page';
     ) : (
       <p class="price-note">
         Or take the free quiz for the <strong>${waitlistPrice}</strong> early
-        rate ($50 off ${fullPrice}) and lock your spot. The group
-        starts {cohortStartDate}.
+        rate ($50 off ${fullPrice}) and lock your spot.
       </p>
     )
   }

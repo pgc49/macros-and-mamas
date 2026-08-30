@@ -2,10 +2,9 @@
 import { Image } from 'astro:assets';
 import heroImg from '../assets/callie-family-hero.jpg';
 import {
-  cohortStartDate,
-  doorsCloseDate,
   enrollUrl,
   fullPrice,
+  handBuiltRangesCopy,
   isWaitlist,
   offerPrice,
   quizUrl,
@@ -38,9 +37,8 @@ import {
             </a>
             <p class="price-note">
               <strong>Free ranges</strong> — then the ${waitlistPrice} early
-              rate (full rate ${fullPrice}) when you finish the quiz. Doors
-              close {doorsCloseDate} · group starts {cohortStartDate}. About $
-              {weeklyPrice}/week at the early rate.
+              rate (full rate ${fullPrice}) when you finish the quiz.{' '}
+              {handBuiltRangesCopy} About ${weeklyPrice}/week at the early rate.
             </p>
           </div>
         ) : (
@@ -49,9 +47,7 @@ import {
               Join now · ${offerPrice}
             </a>
             <p class="price-note">
-              <strong>Starts {cohortStartDate}.</strong> Doors close{' '}
-              {doorsCloseDate} so Callie can build your ranges before day one.
-              Pay now, start with the group.
+              {handBuiltRangesCopy} Pay now, then a short intake.
             </p>
             <a class="btn-secondary" href={quizUrl}>
               Get your macro ranges

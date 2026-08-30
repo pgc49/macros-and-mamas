@@ -1,10 +1,8 @@
 ---
 import {
-  cohortStartDate,
-  cohortStartDateShort,
-  doorsCloseDate,
   enrollUrl,
   fullPrice,
+  handBuiltRangesCopy,
   isWaitlist,
   offerPrice,
   queuePositionCopy,
@@ -23,8 +21,7 @@ import {
           <p class="lede">
             Take the free quiz to see your ranges — and get the exclusive $
             {waitlistPrice} early rate (full rate ${fullPrice}). Lock your spot
-            after the quiz in the {cohortStartDateShort} group,
-            capped at 50 mamas. Doors close {doorsCloseDate}.
+            after the quiz. {handBuiltRangesCopy}
           </p>
           <p class="lede" style="margin-top:14px">
             {queuePositionCopy}
@@ -44,10 +41,10 @@ import {
             href={enrollUrl}
             style="background:#fff;color:var(--accent-deep)"
           >
-            Join now · starts {cohortStartDate}
+            Join now
           </a>
           <p class="price-note">
-            ${offerPrice} · doors close {doorsCloseDate} or when the group fills
+            ${offerPrice} · {handBuiltRangesCopy}
           </p>
           <p class="price-note" style="margin-top:10px">
             <a href={quizUrl} style="color:inherit;text-decoration:underline"

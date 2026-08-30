@@ -187,6 +187,19 @@ describe("SignInPage quiz handoff", () => {
   });
 });
 
+describe("SignInPage public copy", () => {
+  it("does not sell Aug 27, an Aug 31 start lock, or a 50-cap", () => {
+    renderSignIn(quizCreate);
+    const text = document.body.textContent;
+    expect(text).not.toMatch(/Aug 27|Aug 31|August 31/);
+    expect(text).not.toMatch(/doors close/i);
+    expect(text).not.toMatch(/capped at 50|50 spots|50 mamas/i);
+    expect(text).not.toMatch(/enrollment is open/i);
+    expect(text).toMatch(/Callie builds every set of ranges by hand, in the order mamas lock in/);
+    expect(text).toMatch(/\$249|lock your spot/i);
+  });
+});
+
 describe("SignInPage admin host lock", () => {
   it("stays on Welcome back / Sign in and hides Create an account", () => {
     const onSwitchMode = vi.fn();
