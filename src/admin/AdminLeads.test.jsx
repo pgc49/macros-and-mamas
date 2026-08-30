@@ -102,6 +102,7 @@ const rows = [
     calories_high: 2000,
     profileId: MEGAN,
     funnelStatus: "paid",
+    cohort_label: "2026-07",
     sourceKind: "referral",
     isMeta: false,
     isReferral: true,
@@ -130,6 +131,7 @@ const rows = [
     calories_high: 2000,
     profileId: "alex-id",
     funnelStatus: "paid",
+    cohort_label: "2026-08",
     sourceKind: "meta_click_referral",
     isMeta: false,
     isMetaAd: false,
@@ -173,17 +175,21 @@ beforeEach(() => {
 });
 
 describe("AdminLeads", () => {
-  it("lists quiz completes newest-first with source and funnel status", async () => {
+  it("defaults to leftover/unpaid with a still-in-play count and paid one chip away", async () => {
     render(<AdminLeads />);
 
     expect(screen.getByText(/Quiz completes — the Meta Lead we fire/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Unpaid" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Unpaid" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("false");
     expect(screen.getByRole("button", { name: "Ad" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Referral" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "No account" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Signed up unpaid" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Paid" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All groups" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Founding" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cohort 2" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Unassigned" })).toBeTruthy();
 
     await waitFor(() => {
       expect(screen.getByText("Ellie Rose")).toBeTruthy();
@@ -192,13 +198,19 @@ describe("AdminLeads", () => {
     expect(screen.getByText(/Meta ad · Quiz only/)).toBeTruthy();
     expect(screen.getByText("Plant-based · Vegan · Needs review")).toBeTruthy();
     expect(screen.getByText("90–110P · 150–190C · 45–60F · 1700–1900 cal")).toBeTruthy();
-    expect(screen.getByText("Megan Wells")).toBeTruthy();
-    expect(screen.getByText(/Referral · Sarah · Paid/)).toBeTruthy();
-    expect(screen.getByText("Alex Harrer")).toBeTruthy();
-    expect(screen.getByText(/Meta link · Kristen · Paid/)).toBeTruthy();
-    expect(screen.getByText("3 quiz completes")).toBeTruthy();
+    expect(screen.queryByText("Megan Wells")).toBeNull();
+    expect(screen.queryByText("Alex Harrer")).toBeNull();
+    expect(screen.getAllByText("1 still in play").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(/Ads Manager/i)).toBeTruthy();
     expect(screen.queryByText(/Sentry/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Megan Wells")).toBeTruthy();
+    expect(screen.getByText(/Referral · Sarah · Paid · Founding/)).toBeTruthy();
+    expect(screen.getByText("Alex Harrer")).toBeTruthy();
+    expect(screen.getByText(/Meta link · Kristen · Paid · Cohort 2/)).toBeTruthy();
+    expect(screen.getByText("3 quiz completes")).toBeTruthy();
   });
 
   it("filters Unpaid to range leads who have not paid", async () => {
@@ -209,11 +221,78 @@ describe("AdminLeads", () => {
     expect(screen.getByRole("button", { name: "Unpaid" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.queryByText("Megan Wells")).toBeNull();
     expect(screen.queryByText("Alex Harrer")).toBeNull();
-    expect(screen.getByText("1 of 3")).toBeTruthy();
+    expect(screen.getAllByText("1 still in play").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("filters leftover by Unassigned for quiz-only and keeps paid out of leftover + Founding", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Unassigned" }));
+    expect(screen.getByRole("button", { name: "Unassigned" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    expect(screen.queryByText("Megan Wells")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Founding" }));
+    expect(screen.getByRole("button", { name: "Founding" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText("Ellie Rose")).toBeNull();
+    expect(screen.queryByText("Megan Wells")).toBeNull();
+    expect(screen.getByText(/No leftover leads in Founding/)).toBeTruthy();
+  });
+
+  it("keeps nurture leftover on the default list with their tags", async () => {
+    loadQuizLeads.mockResolvedValue([
+      rows[0],
+      {
+        ...rows[0],
+        id: "lead-preg",
+        email: "preg@example.com",
+        first_name: "Pia",
+        last_name: "Grove",
+        segment: "pregnancy_nurture",
+        flags: [],
+        needs_review: false,
+        months_postpartum: "still_pregnant",
+        funnelStatus: "quiz_only",
+        profileId: null,
+        isMeta: false,
+        isReferral: false,
+        sourceKind: "organic",
+      },
+      {
+        ...rows[0],
+        id: "lead-notpp",
+        email: "notpp@example.com",
+        first_name: "Nina",
+        last_name: "Outside",
+        segment: "main",
+        flags: [],
+        needs_review: false,
+        months_postpartum: "not_postpartum",
+        funnelStatus: "quiz_only",
+        profileId: null,
+        isMeta: false,
+        isReferral: false,
+        sourceKind: "organic",
+      },
+      rows[1],
+    ]);
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    expect(screen.getByText("Pia Grove")).toBeTruthy();
+    expect(screen.getByText("Nina Outside")).toBeTruthy();
+    expect(screen.getByText("Plant-based · Vegan · Needs review")).toBeTruthy();
+    expect(screen.getByText("Pregnant")).toBeTruthy();
+    expect(screen.getByText("Not postpartum")).toBeTruthy();
+    expect(screen.queryByText("Megan Wells")).toBeNull();
+    expect(screen.getAllByText("3 still in play").length).toBeGreaterThanOrEqual(1);
   });
 
   it("filters Ad to campaign UTMs only; Referral keeps promo and quiz referred_by", async () => {
-    render(<AdminLeads />);
+    render(<AdminLeads initialFilter="all" />);
     await waitFor(() => {
       expect(screen.getByText("Megan Wells")).toBeTruthy();
     });
@@ -235,7 +314,7 @@ describe("AdminLeads", () => {
 
   it("opens lead detail for quiz-only and account leads; client card is secondary", async () => {
     const onOpenMama = vi.fn();
-    render(<AdminLeads onOpenMama={onOpenMama} />);
+    render(<AdminLeads onOpenMama={onOpenMama} initialFilter="all" />);
     await waitFor(() => {
       expect(screen.getByText("Megan Wells")).toBeTruthy();
     });
@@ -370,7 +449,7 @@ describe("AdminLeads", () => {
 
   it("shows no next drip for paid, unsubscribed, or finished leads", async () => {
     const onOpenMama = vi.fn();
-    render(<AdminLeads onOpenMama={onOpenMama} />);
+    render(<AdminLeads onOpenMama={onOpenMama} initialFilter="all" />);
     await waitFor(() => {
       expect(screen.getByText("Megan Wells")).toBeTruthy();
     });
@@ -428,7 +507,7 @@ describe("AdminLeads", () => {
   });
 
   it("shows account and paid timestamps on a paid lead", async () => {
-    render(<AdminLeads />);
+    render(<AdminLeads initialFilter="all" />);
     await waitFor(() => {
       expect(screen.getByText("Megan Wells")).toBeTruthy();
     });
@@ -449,7 +528,7 @@ describe("AdminLeads", () => {
   });
 
   it("omits missing landing path and campaign UTMs on lead detail", async () => {
-    render(<AdminLeads />);
+    render(<AdminLeads initialFilter="all" />);
     await waitFor(() => {
       expect(screen.getByText("Megan Wells")).toBeTruthy();
     });
@@ -544,7 +623,7 @@ describe("AdminLeads", () => {
     expect(screen.getByText("Fully vegan")).toBeTruthy();
     expect(screen.getByText("Ranges")).toBeTruthy();
     expect(screen.getByText("90–110P · 150–190C · 45–60F · 1700–1900 cal")).toBeTruthy();
-    expect(screen.getByText("Plant-based · Vegan · Needs review")).toBeTruthy();
+    expect(screen.getAllByText("Plant-based · Vegan · Needs review").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Carbs under 100")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Email" })).toBeTruthy();
     expect(screen.getByText("Activity")).toBeTruthy();
@@ -668,8 +747,40 @@ describe("AdminLeads", () => {
     expect(draft.copyText).toContain(draft.body);
   });
 
-  it("hides the join pitch on a paid lead", async () => {
+  it("does not advertise Track A as next send on a plant-based leftover card", async () => {
+    const now = Date.parse("2026-08-21T18:00:00.000Z");
+    const rangesAt = Date.parse("2026-08-20T12:00:00.000Z");
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now);
+    dbMock.loadEmailEventsByEmail.mockResolvedValue([
+      {
+        id: "evt-ranges",
+        profile_id: null,
+        email_type: "quiz_ranges",
+        to_email: "ellie@example.com",
+        subject: "Your ranges",
+        status: "sent",
+        created_at: new Date(rangesAt).toISOString(),
+      },
+    ]);
     render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByText("Plant-based — no sales drip.")).toBeTruthy();
+    });
+    expect(screen.getByText("No more drips scheduled")).toBeTruthy();
+    expect(screen.getAllByText("Plant-based · Vegan · Needs review").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/Next: Quiz drip/)).toBeNull();
+    expect(screen.queryByText("Quiz drip (+2d)")).toBeNull();
+    expect(screen.queryByText("Quiz drip (last)")).toBeNull();
+    expect(screen.queryByText(/Still scheduled/)).toBeNull();
+    nowSpy.mockRestore();
+  });
+
+  it("hides the join pitch on a paid lead", async () => {
+    render(<AdminLeads initialFilter="all" />);
     await waitFor(() => {
       expect(screen.getByText("Megan Wells")).toBeTruthy();
     });

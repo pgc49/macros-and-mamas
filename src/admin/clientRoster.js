@@ -37,6 +37,25 @@ export function listRosterCohorts(all) {
   return options;
 }
 
+/** Always offer Founding / Cohort 2 / Unassigned so leftover + group compose. */
+export function listLeadCohorts(leads) {
+  const present = new Set();
+  for (const row of leads || []) {
+    present.add(cohortKey(row));
+  }
+  const options = [
+    { id: "all", label: "All groups" },
+    { id: "2026-07", label: adminCohortName("2026-07") },
+    { id: "2026-08", label: adminCohortName("2026-08") },
+  ];
+  for (const id of [...present].sort()) {
+    if (id === "2026-07" || id === "2026-08" || id === UNASSIGNED_COHORT) continue;
+    options.push({ id, label: adminCohortName(id) });
+  }
+  options.push({ id: UNASSIGNED_COHORT, label: "Unassigned" });
+  return options;
+}
+
 const PLACEHOLDER_NAMES = new Set(["new signup", "mama", "unnamed"]);
 
 /** First+last when we have them; otherwise email local-part. Never “New signup”. */

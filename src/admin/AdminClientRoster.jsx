@@ -88,8 +88,9 @@ function rosterSortHint(filter) {
   return "Waiting on you first, then oldest message. ";
 }
 
-export function CohortFilterBar({ roster = [], cohort = "all", setCohort }) {
-  const options = useMemo(() => listRosterCohorts(roster), [roster]);
+export function CohortFilterBar({ roster = [], cohort = "all", setCohort, options: optionsProp }) {
+  const computed = useMemo(() => listRosterCohorts(roster), [roster]);
+  const options = optionsProp || computed;
   if (options.length <= 1) return null;
   return (
     <div
@@ -108,6 +109,7 @@ export function CohortFilterBar({ roster = [], cohort = "all", setCohort }) {
           key={opt.id}
           type="button"
           onClick={() => setCohort?.(opt.id)}
+          aria-pressed={cohort === opt.id}
           style={{
             flex: "0 0 auto",
             minHeight: 36,

@@ -4,6 +4,7 @@ import {
   QUIZ_DRIP_2D,
   QUIZ_DRIP_7D,
   QUIZ_DRIP_7D_PAUSED,
+  QUIZ_PREGNANCY_NOTE,
 } from "../../functions/_shared/quizDrip.mjs";
 import {
   dripStopCopy,
@@ -108,5 +109,32 @@ describe("planLeadDrips", () => {
     });
     expect(finished.remaining).toEqual([]);
     expect(nextDripLine(finished, NOW)).toBe("No more drips scheduled");
+  });
+
+  it("does not advertise Track A drips for plant-based leftover", () => {
+    const plan = planLeadDrips({
+      now: NOW,
+      lead: quizLead({ segment: "waitlist_plantbased" }),
+      events: [rangesEvent()],
+    });
+    expect(plan.remaining).toEqual([]);
+    expect(plan.stopReason).toBe("waitlist_plantbased");
+    expect(dripStopCopy(plan.stopReason)).toBe("Plant-based — no sales drip.");
+    expect(nextDripLine(plan, NOW)).toBe("No more drips scheduled");
+    expect(plan.remaining.map((r) => r.emailType)).not.toContain(QUIZ_DRIP_2D);
+    expect(plan.remaining.map((r) => r.emailType)).not.toContain(QUIZ_DRIP_7D);
+  });
+
+  it("schedules the pregnancy note only — not the $249 Track A sequence", () => {
+    const plan = planLeadDrips({
+      now: NOW,
+      lead: quizLead({ segment: "pregnancy_nurture" }),
+      events: [rangesEvent()],
+    });
+    expect(plan.remaining.map((r) => r.emailType)).toEqual([QUIZ_PREGNANCY_NOTE]);
+    expect(plan.remaining.map((r) => r.emailType)).not.toContain(QUIZ_DRIP_2D);
+    expect(plan.remaining.map((r) => r.emailType)).not.toContain(QUIZ_DRIP_7D);
+    expect(nextDripLine(plan, NOW)).toMatch(/Quiz pregnancy note/);
+    expect(nextDripLine(plan, NOW)).not.toMatch(/Quiz drip/);
   });
 });
