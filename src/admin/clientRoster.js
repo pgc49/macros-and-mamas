@@ -1,4 +1,5 @@
 import { adminCohortName } from "../lib/cohorts";
+import { joinPersonName } from "../lib/personName";
 import { isStripeCollected } from "../../functions/_shared/comp.js";
 import { addDaysIso, localDateIso } from "../utils/dates";
 
@@ -60,11 +61,11 @@ const PLACEHOLDER_NAMES = new Set(["new signup", "mama", "unnamed"]);
 
 /** First+last when we have them; otherwise email local-part. Never “New signup”. */
 export function rosterTitle(client) {
-  const named = String(client?.name || "").trim();
-  if (named && !PLACEHOLDER_NAMES.has(named.toLowerCase())) return named;
-  const first = String(client?.firstName || "").trim();
-  const last = String(client?.lastName || "").trim();
-  const combined = [first, last].filter(Boolean).join(" ");
+  const rawName = String(client?.name || "").trim();
+  if (rawName && !PLACEHOLDER_NAMES.has(rawName.toLowerCase())) {
+    return joinPersonName(rawName, client?.lastName);
+  }
+  const combined = joinPersonName(client?.firstName, client?.lastName);
   if (combined) return combined;
   const email = String(client?.email || "").trim();
   if (email.includes("@")) return email.split("@")[0];

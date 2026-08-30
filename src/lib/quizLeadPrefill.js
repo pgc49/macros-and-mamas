@@ -3,6 +3,8 @@
  * Only overlapping fields; intake remains editable and wins on submit.
  */
 
+import { givenNameForWrite } from "./personName";
+
 const MONTHS_PP_MID = {
   "0_3_months": "2",
   "3_12_months": "6",
@@ -27,7 +29,7 @@ export function mapLeadToIntakePatch(lead) {
   const activity = String(lead.activity_level || "");
 
   if (lead.first_name) {
-    patch.name = String(lead.first_name).trim();
+    patch.name = givenNameForWrite(lead.first_name, lead.last_name);
   }
   if (lead.last_name) {
     patch.lastName = String(lead.last_name).trim();

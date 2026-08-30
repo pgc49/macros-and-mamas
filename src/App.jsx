@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } fr
 import { CONFIG } from "./config";
 import { useAuth } from "./auth/useAuth.jsx";
 import { db } from "./db/db";
+import { joinPersonName } from "./lib/personName";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
@@ -665,7 +666,7 @@ export default function App() {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              name: [forEngine.name, forEngine.lastName].filter(Boolean).join(" "),
+              name: joinPersonName(forEngine.name, forEngine.lastName),
               age: forEngine.age,
               dateOfBirth: forEngine.dateOfBirth || null,
               currentWeight: forEngine.currentWeight,

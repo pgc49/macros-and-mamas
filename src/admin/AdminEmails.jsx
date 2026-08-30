@@ -9,6 +9,7 @@ import { db } from "../db/db";
 import { CONFIG } from "../config";
 import { catalogByJourney, catalogNumberLabel } from "../content/emailCatalog";
 import { emailRecipient, emailTypeLabel, filterEmailEvents } from "./emailLog";
+import { joinPersonName } from "../lib/personName";
 
 function formatWhen(iso) {
   if (!iso) return "";
@@ -334,7 +335,7 @@ function WaitlistCard({ waitlist }) {
               }}
             >
               <div style={{ fontWeight: 700, fontSize: 15 }}>
-                {[r.first_name, r.last_name].filter(Boolean).join(" ") || "—"}
+                {joinPersonName(r.first_name, r.last_name) || "—"}
               </div>
               <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 2 }}>{r.email}</div>
               <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>{formatWhen(r.created_at)}</div>

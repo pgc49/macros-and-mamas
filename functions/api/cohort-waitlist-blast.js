@@ -17,6 +17,7 @@
    ================================================================== */
 
 import { invokeEdgeFunction, logEmailEvent } from "../_shared/supabaseEmail.js";
+import { joinPersonName } from "../_shared/personName.js";
 
 const EMAIL_TYPE = "cohort_open";
 const SUBJECT = "Spots are open. Lock in your spot";
@@ -62,7 +63,7 @@ export async function onRequestPost({ request, env }) {
         continue;
       }
 
-      const name = [row.first_name, row.last_name].filter(Boolean).join(" ").trim()
+      const name = joinPersonName(row.first_name, row.last_name)
         || row.first_name
         || "Mama";
 

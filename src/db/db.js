@@ -8,8 +8,12 @@ import {
 } from "../lib/messageReactions";
 import { chronologicalMessages } from "../lib/messageOrdering";
 import { referredByByUserId } from "../lib/referredBy";
+import { givenNameForWrite, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
+
+/** Display name: first + last, without doubling a last name already in `name`. */
+export { fullName } from "../lib/personName";
 
 /* ------------------------------------------------------------------ */
 /*  DATA LAYER — per-event Supabase writes (not blob persistence)      */
@@ -36,8 +40,8 @@ function profileToRow(p) {
     : null;
   const ageFromDob = ageFromDateOfBirth(dob);
   return {
-    name: p.name || null,
-    last_name: p.lastName || null,
+    name: givenNameForWrite(p.name, p.lastName) || null,
+    last_name: String(p.lastName || "").trim() || null,
     age: ageFromDob != null
       ? ageFromDob
       : (p.age === "" || p.age == null ? null : Number(p.age)),
@@ -64,14 +68,6 @@ function profileToRow(p) {
     bottle_oz: p.bottleOz != null && p.bottleOz !== "" ? Math.round(Number(p.bottleOz)) : 24,
     avatar_path: p.avatarPath || null,
   };
-}
-
-/** Display name: "First Last" when last is present, else first / email fallback handled by callers. */
-export function fullName(profileOrRow) {
-  if (!profileOrRow) return "";
-  const first = String(profileOrRow.name || profileOrRow.first_name || "").trim();
-  const last = String(profileOrRow.lastName || profileOrRow.last_name || "").trim();
-  return [first, last].filter(Boolean).join(" ");
 }
 
 /** Public URL for a profile avatar path in the avatars bucket. */
@@ -1426,7 +1422,9 @@ export const db = {
   async updateAccountProfile(patch = {}) {
     const uid = await requireUserId();
     const row = {};
-    if (patch.name !== undefined) row.name = String(patch.name || "").trim().slice(0, 80) || null;
+    if (patch.name !== undefined) {
+      row.name = givenNameForWrite(patch.name, patch.lastName).slice(0, 80) || null;
+    }
     if (patch.lastName !== undefined) row.last_name = String(patch.lastName || "").trim().slice(0, 80) || null;
     if (patch.phone !== undefined) row.phone = String(patch.phone || "").trim().slice(0, 40) || null;
     if (patch.dateOfBirth !== undefined) {
@@ -1700,7 +1698,7 @@ export const db = {
       if (isAdminRow && hasIntake && approved) stage = "active";
 
       const lead = leadByEmail[String(p.email || "").trim().toLowerCase()] || {};
-      const leadName = [lead.first_name, lead.last_name].filter(Boolean).join(" ").trim();
+      const leadName = joinPersonName(lead.first_name, lead.last_name);
       const msg = msgById[p.id] || {};
 
       return {

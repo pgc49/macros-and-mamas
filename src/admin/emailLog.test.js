@@ -20,6 +20,14 @@ describe("emailRecipient", () => {
     });
   });
 
+  it("does not show last name twice when profile.name is already full", () => {
+    const who = emailRecipient({
+      to_email: "sarah@example.com",
+      profiles: { name: "Sarah Smith", last_name: "Smith", email: "sarah@example.com" },
+    });
+    expect(who.name).toBe("Sarah Smith");
+  });
+
   it("falls back to the address when the profile is missing", () => {
     const who = emailRecipient({
       to_email: "pgchammas+tteeesst@gmail.com",
