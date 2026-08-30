@@ -1179,7 +1179,7 @@ export function MealLogCard({
             )}
             <div
               data-plan-meal-list
-              style={{ maxHeight: "min(58dvh, 560px)", overflowY: "auto" }}
+              style={{ maxHeight: "min(64dvh, 620px)", overflowY: "auto" }}
             >
             {(searchingPlan || slotFiltering) && planMatchCount === 0 && (
               <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginBottom: 8 }}>

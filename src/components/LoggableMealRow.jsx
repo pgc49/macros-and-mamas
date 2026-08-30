@@ -100,7 +100,7 @@ export function LoggableMealRow({
             {servings !== 1 ? ` · ${servings}×` : ""}
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 6, alignItems: "flex-end" }}>
           <button
             type="button"
             disabled={phase === "busy" || phase === "done"}
@@ -121,6 +121,46 @@ export function LoggableMealRow({
           >
             {label}
           </button>
+          {compact && (hasIngredients || canEditIngredients) && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowRecipe((v) => !v);
+                setIngDraft(String(meal.ingredients || ""));
+                setIngNote("");
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                fontSize: 11.5,
+                color: T.accentDeep,
+                cursor: "pointer",
+                fontFamily: F,
+                fontWeight: 700,
+                padding: 0,
+              }}
+            >
+              {showRecipe ? "Hide recipe" : (hasIngredients ? "Recipe" : "Add note")}
+            </button>
+          )}
+          {compact && onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              style={{
+                background: "none",
+                border: "none",
+                fontSize: 11.5,
+                color: T.inkSoft,
+                cursor: "pointer",
+                fontFamily: F,
+                fontWeight: 600,
+                padding: 0,
+              }}
+            >
+              Remove
+            </button>
+          )}
         </div>
       </div>
 
@@ -138,19 +178,20 @@ export function LoggableMealRow({
         alignItems: "center",
         justifyContent: "space-between",
         gap: compact ? 6 : 10,
-        marginTop: compact ? 7 : 10,
+        marginTop: compact ? 6 : 10,
         flexWrap: "wrap",
       }}
       >
         {showSlotPicker && compact && (
           <SlotChips value={slot} onChange={setSlot} compact />
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 8, marginLeft: compact ? "auto" : 0 }}>
           {!compact && (
             <span style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600 }}>Servings</span>
           )}
           <ServingStepper value={servings} onChange={setQty} compact />
         </div>
+        {!compact && (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {(hasIngredients || canEditIngredients) && (
             <button
@@ -191,6 +232,7 @@ export function LoggableMealRow({
             </button>
           )}
         </div>
+        )}
       </div>
 
       {showRecipe && (

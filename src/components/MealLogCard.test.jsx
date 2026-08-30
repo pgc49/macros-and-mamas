@@ -42,7 +42,7 @@ describe("MealLogCard My plan list", () => {
 
     const list = document.querySelector("[data-plan-meal-list]");
     expect(list).toBeTruthy();
-    expect(list.style.maxHeight).toContain("58dvh");
+    expect(list.style.maxHeight).toContain("64dvh");
 
     fireEvent.click(screen.getByRole("button", { name: "Filter meals" }));
     fireEvent.click(screen.getByRole("option", { name: "Dinner" }));
