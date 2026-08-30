@@ -21,10 +21,12 @@ import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { splitLinkedMessageText } from "../lib/messageLinks";
 import {
+  BUBBLE_HOLD_SELECT_CSS,
   MESSAGE_HOLD_MOVE_PX,
   MESSAGE_HOLD_MS,
   bubbleTextSelect,
-  hasSelectableText,
+  copyableMessageBody,
+  holdOpensMenu,
 } from "../lib/messageSelect";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
@@ -435,15 +437,16 @@ export function MessagesThread({
     holdStart.current = null;
   };
 
-  const selectionBlocksMenu = () => hasSelectableText(window.getSelection?.());
+  const selectionAtPointer = () => window.getSelection?.();
 
   const armHold = (m, x, y) => {
     clearHold();
-    if (selectionBlocksMenu()) return;
+    // Only a selection that already exists is a copy gesture. iOS creates one
+    // during the hold — that must not cancel the reaction picker.
+    if (!holdOpensMenu(selectionAtPointer())) return;
     holdStart.current = { x, y };
     holdTimer.current = window.setTimeout(() => {
       holdTimer.current = null;
-      if (selectionBlocksMenu()) return;
       openMenu(m);
     }, MESSAGE_HOLD_MS);
   };
@@ -481,9 +484,39 @@ export function MessagesThread({
     && !!m.id
   );
 
+  const canCopyMsg = (m) => !m.deleted_at && !!copyableMessageBody(m);
+
   const canManage = (m) => (
-    canEditMsg(m) || canDeleteMsg(m) || canReplyMsg(m) || canReactMsg(m)
+    canEditMsg(m) || canDeleteMsg(m) || canReplyMsg(m) || canReactMsg(m) || canCopyMsg(m)
   );
+
+  const copyMessage = async (m) => {
+    const text = copyableMessageBody(m);
+    if (!text) return;
+    setMenuId(null);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+    } catch {
+      // fall through to execCommand
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    } catch (e) {
+      console.error(e);
+      setAttachError("Couldn’t copy.");
+    }
+  };
 
   const startReply = (m) => {
     if (!canReplyMsg(m)) return;
@@ -543,6 +576,7 @@ export function MessagesThread({
 
   const openMenu = (m) => {
     if (!canManage(m) || editingId === m.id) return;
+    window.getSelection?.()?.removeAllRanges?.();
     setMenuId(m.id);
   };
 
@@ -550,8 +584,8 @@ export function MessagesThread({
     if (!canManage(m)) return {};
     return {
       onContextMenu: (e) => {
-        // Let iOS / desktop copy when text is already selected.
-        if (selectionBlocksMenu()) return;
+        // Already mid-copy (mouse drag / second gesture) — leave native copy.
+        if (!holdOpensMenu(selectionAtPointer())) return;
         e.preventDefault();
         openMenu(m);
       },
@@ -632,6 +666,7 @@ export function MessagesThread({
       boxSizing: "border-box",
     }}
     >
+      <style>{BUBBLE_HOLD_SELECT_CSS}</style>
       {(title || subtitle) && (
         <div style={{ marginBottom: 10 }}>
           {title ? (
@@ -763,6 +798,7 @@ export function MessagesThread({
                   wordBreak: "break-word",
                   userSelect: bubbleTextSelect(deleted),
                   WebkitUserSelect: bubbleTextSelect(deleted),
+                  WebkitTouchCallout: "none",
                   cursor: deleted ? "default" : "text",
                 }}
               >
@@ -963,8 +999,28 @@ export function MessagesThread({
                     minWidth: canReactMsg(m) ? 228 : undefined,
                   }}
                 >
-                  {(canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m)) && (
+                  {(canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m) || canCopyMsg(m)) && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {canCopyMsg(m) && (
+                        <button
+                          type="button"
+                          onClick={() => copyMessage(m)}
+                          disabled={editBusy || busy}
+                          style={{
+                            border: `1.5px solid ${T.border}`,
+                            background: "#fff",
+                            color: T.ink,
+                            fontWeight: 700,
+                            fontSize: 13,
+                            fontFamily: F,
+                            cursor: "pointer",
+                            borderRadius: 999,
+                            padding: "8px 12px",
+                          }}
+                        >
+                          Copy
+                        </button>
+                      )}
                       {canReplyMsg(m) && (
                         <button
                           type="button"
@@ -1033,10 +1089,10 @@ export function MessagesThread({
                         display: "flex",
                         gap: 2,
                         justifyContent: "space-between",
-                        padding: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m))
+                        padding: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m) || canCopyMsg(m))
                           ? "4px 2px 2px"
                           : "2px",
-                        borderTop: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m))
+                        borderTop: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m) || canCopyMsg(m))
                           ? `1px solid ${T.border}`
                           : "none",
                       }}
