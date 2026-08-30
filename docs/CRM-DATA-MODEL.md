@@ -6,6 +6,8 @@ Live snapshot (not product constants): 74 quiz emails, 70 non-admin profiles, 0 
 
 Leftover-first Leads shipped in [#304](https://github.com/pgc49/macros-and-mamas/pull/304) (`91b49a8` on `main`).
 
+Questions 1–18 are the CRM data model. Questions 19–23 are AI summary infra. Questions 24–31 are homepage / enrollment copy.
+
 ---
 
 ## Data model and stage logic
@@ -270,6 +272,251 @@ Do not touch **299, 301, 302**. Those plus nearby open work:
 
 ---
 
+## AI summary infra
+
+### 19. How Snap, Describe, and Suggest my week call the model
+
+All three go through **Cloudflare Pages Functions** → **OpenRouter** (`https://openrouter.ai/api/v1/chat/completions`). There is no Supabase Edge Function for these, and no direct Google/Anthropic/OpenAI SDK.
+
+| Feature | Client | Server | Label in `ai_failures` |
+|---|---|---|---|
+| **Snap** | `MealLogCard` → `POST /api/estimate` `{ type: "photo" }` | `functions/api/estimate.js` | `estimate_photo` |
+| **Describe** | same → `{ type: "text" }` (also recipe paste → `type: "recipe"`) | same | `estimate_text` / `estimate_recipe` |
+| **Suggest my week** | `WeekPlanner` / `App.jsx` → `POST /api/meal-suggest` | `functions/api/meal-suggest.js` | `meal_suggest` |
+
+Shared client: `functions/_shared/openrouter.js`.
+
+- **Provider:** OpenRouter. Secret: `OPENROUTER_API_KEY`.
+- **Model chain:** `google/gemini-3.1-flash-lite` → `google/gemini-3.5-flash-lite` → `google/gemini-2.5-flash-lite`. Optional `MEAL_PLAN_MODEL` becomes primary; the chain stays as fallback. OpenRouter `models` + `provider.allow_fallbacks` plus one app-level retry.
+- **Auth:** Supabase JWT. Paid (or admin). Refunded blocked. Mamas rate-limited (`estimate_calls`); admins unlimited.
+- **Failures:** `logAiFailure` inserts into `public.ai_failures` (service role). Admin Overview card **AI health · last 24h** reads that table (`src/admin/AdminPortal.jsx`). Also `console.error` on the Function. Sentry is not the AI failure store.
+- **Related callers (same path, not Snap/Describe/Suggest):** `POST /api/meal-idea` (single planner meal), `POST /api/meal-plan` (admin draft week), `POST /api/support-digest-cron` (GitHub issue triage). `/api/analyze` is a dead stub that tells clients to use `/api/estimate`.
+
+**Can a per-client summary reuse this path?** Yes. Add a Pages Function that imports `callOpenRouter` / `logAiFailure` / `resolveModels` the same way `meal-suggest` and `meal-plan` do. `meal-plan` is the closer sibling: admin-only, loads one client’s profile + approved macros, fixed prompt, JSON out. Do not reuse `/api/estimate` (vision + food-only prompt) or `/api/meal-suggest` (client-facing week plan + 5/day cap). New label, e.g. `client_summary`, so Overview health stays readable.
+
+### 20. Per-client data queryable in one shot
+
+Already assembled today for the admin client card:
+
+| Data | Where | Cost |
+|---|---|---|
+| Approved ranges | `macros` (one row) | Cheap. Already on the roster. |
+| Logged days vs ranges | `meal_logs` (`date, name, cal, p, c, f, via, slot`) + `macros` | `db.loadClientProgress(id, 28)` already groups meals by date. Compare with `formatRangeProgress` / `rangeState`. |
+| Water | `water_logs` by date | Same 28-day progress payload. |
+| Habit completion by week | `checkins` (`week_start, item_id, day`) + `custom_goals` | Progress payload returns **all** checkins (not just 28 days) + custom goals. Feed `buildHabitRhythm`. |
+| Weigh-ins | `weighins` (`date, weight`) | Already on the roster (`sel.weighins`). |
+| Last N DMs | `messages` via `db.loadMessages(clientId)` | Separate query. Cheap at N=20–40. |
+| Last email | `email_events` by `profile_id` / `to_email` | Not on the client card today; one extra query. |
+
+**Expensive / skip for a summary prompt**
+
+- Full meal **photos** (not needed; Snap already sent those to OpenRouter at log time).
+- Entire DM history or group `conversation_messages`.
+- Roster-wide `meal_logs` (already paginated because a cohort exceeds PostgREST’s 1000-row default). Per-client 28 days is fine.
+- Token weight: 28 days of meal names + totals + habit % + last ~20 DMs + ranges is plenty. Do not dump `profiles.*` plus every log row.
+
+`loadClientProgress` + roster weigh-ins + `loadMessages({ limit })` is the one-shot. No new SQL view required to start.
+
+### 21. Cache a generated summary
+
+**No cache table today.** Closest objects:
+
+- `ai_failures` — failures only.
+- `estimate_calls` — rate-limit log (`profile_id, type, created_at`), not output.
+- `profiles.coach_note` — Callie’s human note, trigger-locked so the mama cannot edit it.
+
+Need a **new table** (e.g. `client_summaries`: `profile_id`, `for_date`, `text`, `model`, `created_at`, unique `(profile_id, for_date)`). Do not overwrite `coach_note`.
+
+**Trigger**
+
+- **Generate-on-open + 24h cache** is the natural fit: Callie opens a card rarely; most clients will not be opened on a given day. Reuse `meal-plan`’s on-demand pattern. Cache hit = skip OpenRouter.
+- **Daily cron** only if she wants a queue of stale cards waiting. Could hang off the existing hourly `POST /api/email-cron` style (`CRON_SECRET` + GitHub Actions), but that burns tokens for people she never opens.
+
+No existing daily “generate content per client” job. `support-digest-cron` is GitHub triage, not client summaries.
+
+### 22. Habit insight callouts — deterministic
+
+Yes. No model. Logic lives in `src/lib/habitRhythm.js`:
+
+- `buildHabitRhythm(...)` → `steadiest` = program/custom goal with the **highest average % across completed (non-current) weeks** where the goal was active.
+- Empty until she has a finished week.
+- Chip labels: `goalChipLabel` (`Macros`, `Water`, `Steps`, `Sunlight`, `Home meals`, `Strength`, or a truncated custom title).
+
+UI: `HabitRhythmCard` (`src/components/HabitRhythmCard.jsx`) already has `audience="admin"` copy (“Her steadiest habit: **strength workouts**”). It is mounted from `ProgressCharts`, which the **admin client card already renders** (`AdminPortal` → `ProgressCharts audience="admin"`). Flag chips should call `buildHabitRhythm` + `goalChipLabel` — do not re-derive from raw checkins.
+
+Related but separate: `src/utils/progressSeries.js` (`adherenceForWeek`, 4-week trends). Same checkin facts, different rollup.
+
+### 23. PII / privacy when sending content to the model
+
+**Already happening for AI features (disclosed, incomplete):**
+
+Privacy §3 + §4 (`src/content/privacy.js`) say meal **photos and text descriptions** go to a third-party AI provider for estimates. Terms mention “AI model providers.” Not HIPAA (wellness, not a healthcare provider).
+
+**Already happening, barely named in privacy:**
+
+- **Suggest my week** / **admin meal-plan** send intake: name, age, weights, goal, activity, stress, insulin resistance, pregnant/breastfeeding, months PP, diet, meal prefs, season note, allergens, food avoids, plus approved macros and saved My meals. That is health-adjacent PII. Privacy lists “estimate macros from meal photos and descriptions” and does not explicitly say week-planning sends intake.
+- **Support digest** sends GitHub issue text (user-typed from-app reports), not in-app DMs.
+
+**Not happening today:** 1:1 `messages` and group `conversation_messages` are **not** sent to OpenRouter.
+
+**For a client summary:** reuse the meal-plan path (intake + logs + habits) without a new legal surface. Sending **DM bodies** is a new share. If you do it: update Privacy §3/§4, keep it admin-only, send last N messages (not the whole thread), strip attachments, and do not send other mamas’ group posts. Photos stay out. `callOpenRouter` already sends `http-referer: macrosandmamas.com` and an `x-title` — no extra PII there.
+
+---
+
+## Homepage and enrollment copy
+
+### 24. Where deadline / date copy lives
+
+**Not one file.** Marketing has a central config; the SPA has a second; emails and the product calendar hardcode the same dates again.
+
+**Canonical display config (keep in sync)**
+
+| File | What |
+|---|---|
+| `marketing/src/config.ts` | `cohortStartDate` (`Monday, Aug 31`), `cohortStartDateShort` / `Compact`, `doorsCloseDate` (`Aug 27`), `doorsCloseReason`, prices, `queuePositionCopy` |
+| `src/config.js` | `COHORT_START` / `_SHORT` / `_COMPACT`, `ENROLLMENT_OPEN`, `ENROLLMENT_CLOSED_AT`, display price tiers |
+
+**Homepage / marketing components that interpolate those dates or the 50-cap**
+
+| File / component | What it says |
+|---|---|
+| `marketing/src/components/Hero.astro` | Doors close Aug 27 · group starts Monday, Aug 31 |
+| `marketing/src/components/Pricing.astro` | “The August 31 group”, “capped at 50”, `doorsCloseReason`, “starts Aug 31” |
+| `marketing/src/components/FinalCta.astro` | August 31 group, capped at 50, doors close Aug 27 |
+| `marketing/src/components/StickyCta.astro` | **Sticky footer.** Waitlist: “Doors close Aug 27 · 50 mamas max”. Open: “Doors close Aug 27 / Starts Aug 31 · $299” |
+| `marketing/src/components/Faq.astro` | “Groups are capped at 50” (no dates). Lab Review “spots are limited” |
+| `marketing/src/components/WaitlistForm.astro` | “starts Monday, Aug 31” |
+| `marketing/src/pages/quiz.astro` | Passes `data-cohort-start` / `data-doors-close` into the quiz |
+| `marketing/src/layouts/BaseLayout.astro` | JSON-LD `LimitedAvailability` / price — **no dates** |
+| `marketing/reference.html` | Old static mock (not shipped) — same dates |
+
+**No countdown.** No `daysLeft` / timer. Sticky bar is static copy.
+
+**Hardcoded elsewhere (not imported from `config.ts`)**
+
+| File | Dates |
+|---|---|
+| `marketing/public/quiz-app.js` | Fallbacks `Monday, Aug 31` / `Aug 27`; title **“Ready to lock your Aug 31 spot?”**; fast-lane + sticky “Doors close …” |
+| `marketing/src/lib/rangesEmail.mjs` | `DOORS_CLOSE = "Aug 27"`, `COHORT_SHORT = "Aug 31"` |
+| `marketing/src/lib/quizDripEmail.mjs` | “This group starts Monday, Aug 31” |
+| `marketing/src/lib/finishJoiningEmail.mjs` | “We start Aug 31. Doors close Aug 27.” |
+| `marketing/src/lib/cohortEmailWindow.mjs` | `DOORS_CLOSE_YMD = "2026-08-27"`, last sales `2026-08-26` |
+| `src/content/emailCatalog.js` | Admin mirror of the same bodies |
+| `src/views/SignInPage.jsx` | Hardcoded “starts Monday, Aug 31” (does **not** read `CONFIG`) |
+| `src/views/JoinPage.jsx` | Reads `CONFIG.COHORT_START*` |
+| `src/lib/cohorts.js` + `functions/_shared/cohorts.js` | `programStart: 2026-08-31` (product calendar, not marketing) |
+| `supabase/functions/finish-joining/index.ts` | Duplicate constants `Aug 27` / `Aug 31` (legacy Edge Function) |
+
+`marketing/CURSOR-INSTRUCTIONS.md` already says dates should be one-line edits in `config.ts`. They are not — emails and SignIn still duplicate.
+
+### 25. Is checkout gated on the deadline or the 50-cap?
+
+**Copy only.** `POST /api/checkout` does **not** read Aug 27, does **not** count paid seats, and does **not** call `enrollmentIsOpen()`. It blocks refunded / already-paid / missing Stripe price id. That is it.
+
+`ENROLLMENT_OPEN` is a **client + drip** switch (`src/config.js` `true`; Cloudflare env for cron). `App.jsx` can send people to the waitlist when false. `email-cron` stops Track B nudges when closed except founding finish-pay. `functions/_shared/pricing.js` defines `enrollmentIsOpen()` but checkout never uses it.
+
+**If we removed all date *copy*:** homepage, quiz, `/signin`, `/join`, and leftover drips stop lying. Stripe stays open. JSON-LD `LimitedAvailability` stays (not date-based).
+
+**If we removed all date *logic*:**
+
+- `COHORT_CALENDAR.programStart/End` — week numbers, membership / alumni gate, voice-drop week labels, Today/Progress “Week X”.
+- `ENROLLMENT_CLOSED_AT` — who still gets founding $149.
+- `cohortEmailWindow` — last unpaid sales mail (already past as of 30 Aug 2026).
+- Tests locked to Aug 26/27/31.
+
+Do not delete the product calendar to clean the homepage.
+
+### 26. $249 early vs $299 full
+
+**Separate Stripe Price IDs**, resolved server-side in `functions/_shared/pricing.js` → `resolveCheckoutOffer`:
+
+1. Account created before `ENROLLMENT_CLOSED_AT` (default `2026-07-26T02:00:00.000Z`) → founding **$149** (`STRIPE_PRICE_ID_FOUNDING`).
+2. Email has a `marketing_leads` row with segment `main` or `early_pp_nurture` → early **$249** (`STRIPE_PRICE_ID_WAITLIST` / `PRICE_QUIZ_RATE`).
+3. `OPEN_WITHOUT_QUIZ=true` → everyone $249.
+4. Else → full **$299** (`STRIPE_PRICE_ID_FULL` / `PRICE_FULL_RATE`).
+
+Not a coupon (referral $25 is a separate promo on the $249 tier only). Not a flag on `profiles`. Live lookup of `marketing_leads.email` + `segment`. Pregnancy / plant-based do not unlock $249. `needs_review` still unlocks.
+
+**Evergreen with no dates:** keep steps 2 and 4. Drop or freeze the founding cutoff once those accounts are gone. Stop putting Aug 27/31 in copy. Quiz unlock already works without a calendar. Homepage can keep showing $299; quiz still reveals $249.
+
+### 27. Quiz flow, results, confirmation — dates?
+
+**Yes on results. No on waitlist thanks. No on intake.**
+
+- **Quiz questions:** no dates.
+- **Results** (`marketing/public/quiz-app.js` `renderResult`): fast-lane “{Aug 31} group” + “Doors close Aug 27”; offer title **“Ready to lock your Aug 31 spot?”**; lede with doors-close + start + “capped at 50 mamas”; sticky “Doors close Aug 27”. Pregnancy nurture skips this block.
+- **`/thanks`** (`thanks.astro`): waitlist confirmation — no Aug dates.
+- **Stripe success → intake** (`IntakeFlow.jsx`): no Aug 27/31.
+- **`/signin` and `/join`:** yes (see §24). Those are the post-quiz confirmation / lock screens.
+
+### 28. Stale deadline copy in drips / Resend
+
+Drips are **hourly cron** (`POST /api/email-cron`), not Resend scheduled sends. Resend check (30 Aug 2026): **0 automations**, **1 broadcast** (Day 1 WhatsApp + orientation, already `sent` 27 Jul 2026). Nothing queued in Resend will fire Aug 31 copy.
+
+**Live templates that still mention the dates** (will send to leftover leads who quiz or create an account now):
+
+| Template | Dates in body | Still sends after Aug 27? |
+|---|---|---|
+| `quiz_ranges` | “The group starts Monday, Aug 31.” No Aug 27. | **Yes** — immediate on quiz submit |
+| `quiz_drip_2d` | “This group starts Monday, Aug 31.” | **Yes** — +2 days, no doors-close stop |
+| `quiz_drip_7d` | “The group starts Monday, Aug 31.” Trigger text mentions Aug 27. | **No** — `isOnOrAfterDoorsClosePt` |
+| `quiz_pregnancy_note` | none | Yes (nurture only) |
+| `finish_joining_1h` | “We start Aug 31. Doors close Aug 27.” | **Yes** — +1h |
+| `finish_joining_24h` | same | **Yes** — +24h |
+| `finish_joining_close` | “Doors close Aug 27. We start Monday.” | **No** — last-sales-day only |
+| `welcome` / intake / `macros_live` | no Aug 27/31 | Yes |
+| `quiz_one_more` | “registration will close tonight” (manual blast) | Only if Callie sends it |
+
+`src/content/emailCatalog.js` is the admin mirror — change senders in `marketing/src/lib/*Email.mjs` and the catalog together.
+
+**Stale-copy risk right now:** leftover who take the quiz after doors-close still get `quiz_ranges` + `quiz_drip_2d` saying the group starts Aug 31. Unpaid accounts still get finish-joining +1h/+24h with “Doors close Aug 27.”
+
+### 29. What “group starts Aug 31” actually triggers
+
+**No midnight cron on Aug 31.** It is the Monday of Week 1 on `COHORT_CALENDAR` for `2026-08`.
+
+Derived from that timestamp:
+
+- `programWeekNumber` / Today + Progress + admin “Week X of 8”
+- Membership / alumni gate (`programEnd` 2026-10-26)
+- Monday voice-drop **week labels** (Callie still publishes by hand; the drop is not auto-created on Aug 31)
+- Pricing window / `cohortForDate` when stamping `cohort_label` at pay
+
+**Not triggered by Aug 31:**
+
+- **Content unlock** — paid + Callie approved (`macros.approved` + `profiles.status='active'`). A mama approved on Aug 20 can log immediately.
+- **Group thread** — `handlePaidEnrollmentChannel` at Stripe pay (joins pre-seeded `conversations.cohort_label='2026-08'`). Approve runs `handleActivationCohort` again (idempotent).
+- **Week-1 voice note** — Callie records and publishes via `POST /api/admin-voice-drop`. No auto-fire.
+
+**Ranges-approved is already an event.** `POST /api/macros-approved` (Callie taps Approve):
+
+1. `macros.approved = true`
+2. `profiles.status = 'active'`, `week = 1`
+3. `handleActivationCohort` (stamp cohort if missing + channel membership)
+4. `macros_live` email (“Your ranges are ready”)
+
+In a rolling model, fire “your week 1 starts now” (voice drop targeting, week labels, welcome-to-group) **on that approve**, not on a shared Aug 31. The missing piece is a per-person `program_start`, not a new event bus.
+
+### 30. Lab Review “limited spots per group”
+
+**Copy only.** Checkout adds `STRIPE_PRICE_ID_LAB_ADDON` ($349) when the `/join` checkbox is on. Webhook sets `lab_review_purchased`. No inventory, no per-cohort counter, no disable-at-N.
+
+Copy: Pricing kicker “limited spots per group”; FAQ “spots are limited to protect Callie’s review time.” `/join` checkbox has **no** scarcity line (educational analysis only).
+
+**Evergreen:** drop “per group” / “limited spots.” Keep “Callie reviews these herself, so she takes them one at a time” (or just the educational disclaimer). Enforcement is Callie saying no, not Stripe.
+
+### 31. Is the 50-cap checked in code?
+
+**No.** `marketing/src/config.ts` says it outright: “soft cap in copy only; no counters or remaining-spot math.”
+
+No `COUNT(*)` of paid profiles before signup, checkout, or quiz submit. Paid + comps already exceed a literal 50 if you count Founding + August together. Homepage, quiz offer, sticky bar, FAQ, and Pricing are marketing only.
+
+---
+
 ## Recommendation
 
 Keep derivation; add a **read model** (person key = `lower(email)`, plus `profile_id` when present) that exposes leftover, roster stage, last email, last admin DM, unread, next drip. Add a stored status only if Callie needs overrides. The 48 paid-without-quiz people are the first hole a unified Contacts list will hit.
+
+For a per-client AI summary: new Pages Function on the OpenRouter helper, generate-on-open with a new 24h cache table, reuse `loadClientProgress` + last N DMs, share `buildHabitRhythm` for flag chips, and do not send group-chat bodies until privacy copy is updated.
+
+For evergreen enrollment: Stripe is already date-agnostic. The work is deleting Aug 27/31 / “capped at 50” from marketing + quiz + `/signin` + `/join` + leftover drip templates (`quiz_ranges`, `quiz_drip_2d`, `finish_joining_1h` / `_24h`), and leaving `COHORT_CALENDAR` alone until rolling starts exist.
