@@ -11,23 +11,19 @@ export const enrollmentMode: EnrollmentMode =
 export const isWaitlist = enrollmentMode === 'waitlist';
 export const isOpen = enrollmentMode === 'open';
 
-/** Centralized cohort dates and prices. One-line edits propagate everywhere. */
-export const cohortStartDate = 'Monday, Aug 31';
-export const cohortStartDateShort = 'August 31';
-/** Compact start date for sticky bar / short UI strings. */
-export const cohortStartDateCompact = 'Aug 31';
-export const doorsCloseDate = 'Aug 27';
-
-/** Pricing-card doors line — soft cap in copy only; no counters or remaining-spot math. */
-export const doorsCloseReason =
-  `Doors close ${doorsCloseDate}, or when the 50 spots fill · starts ${cohortStartDate}`;
+/**
+ * Customer-facing constraint — no close date, no 50-cap, no start-day lock.
+ * Callie builds every set of ranges by hand, in the order mamas lock in.
+ */
+export const handBuiltRangesCopy =
+  `Callie builds every set of ranges by hand, in the order mamas lock in.`;
 
 export const queuePositionCopy =
-  `Lock your spot and you're in Callie's queue. She builds and approves ranges in the order they come in, so the earlier you're in, the earlier your app opens and the more time you have to get comfortable before ${cohortStartDateCompact}.`;
+  `Lock your spot and you're in Callie's queue. She builds every set of ranges by hand, in the order they come in.`;
 
 /** Quiz offer — what happens after she locks her spot (queue promise + password/intake in one beat). */
 export const postPayQueueCopy =
-  `After you lock your spot, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.`;
+  `After you lock your spot, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in.`;
 
 /** Early rate — revealed only after an eligible quiz finish (Strategy A). */
 export const waitlistPrice = 249;

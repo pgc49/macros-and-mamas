@@ -9,16 +9,14 @@
   const offerPrice = Number(root.dataset.offerPrice || 249);
   const fullPrice = Number(root.dataset.fullPrice || 299);
   const weeklyPrice = Number(root.dataset.weeklyPrice || Math.round(offerPrice / 8));
-  const cohortStart = root.dataset.cohortStart || 'Monday, Aug 31';
-  const doorsClose = root.dataset.doorsClose || 'Aug 27';
   const saveAmount = Math.max(0, fullPrice - offerPrice);
   const calliePhoto = root.dataset.calliePhoto || '/callie-kitchen.jpg';
   const postPayCopy =
     root.dataset.postPayCopy
-    || "After you lock your spot, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in, so the earlier you're in, the sooner your app opens.";
+    || "After you lock your spot, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in.";
   const ATTR_KEY = 'mm_attribution_v1';
   const META_PIXEL_ID = '1078367721716098';
-  /** Segments that may enroll Aug 31 — only these fire Meta Lead. */
+  /** Enrollable quiz segments — only these fire Meta Lead. */
   const ENROLLABLE_SEGMENTS = { main: 1, early_pp_nurture: 1 };
   /** The only “preview” sentence on the payoff (tone rule). */
   const PREVIEW_ONCE =
@@ -659,14 +657,13 @@
   /** Compact fast-lane ask — one screen from ranges, before proof. */
   function fastOfferHtml() {
     const href = checkoutHref();
-    const startShort = String(cohortStart || '').replace(/^Monday,\s+/i, '');
     return `<div class="q-fast-offer">
       <div class="q-fast-kicker">Your quiz unlocked the early rate</div>
-      <p class="q-fast-line">$${offerPrice} · full rate $${fullPrice} · ${escapeHtml(startShort)} group</p>
+      <p class="q-fast-line">$${offerPrice} · full rate $${fullPrice}</p>
       <p class="q-fast-deliverable">8 weeks 1:1 with Callie. She builds your ranges by hand and adjusts them as your body changes.</p>
       <p class="q-fast-split">Split it at checkout: 4 interest-free payments of $62.25.</p>
       <a class="btn q-fast-btn" href="${href}">Lock my spot · $${offerPrice}</a>
-      <p class="q-fast-micro">Doors close ${escapeHtml(doorsClose)}. Not ready? Your ranges are already in your inbox.</p>
+      <p class="q-fast-micro">Callie builds every set of ranges by hand. Not ready? Your ranges are already in your inbox.</p>
     </div>`;
   }
 
@@ -674,7 +671,7 @@
     const href = checkoutHref();
     return `<div class="sticky-cta q-result-sticky" id="quizStickyCta" aria-hidden="true">
       <div class="s-price">
-        <strong>Doors close ${escapeHtml(doorsClose)}</strong>
+        <strong>$${offerPrice} early rate</strong>
         or 4 payments of $62 at checkout
       </div>
       <a class="btn" href="${href}">Lock my spot</a>
@@ -779,8 +776,8 @@
     const joinHref = checkoutHref();
     return `<div class="q-offer-card" id="qOfferCard">
       <div class="q-offer-kicker">Exclusive · early rate from your quiz</div>
-      <h2 class="q-offer-title">Ready to lock your Aug 31 spot?</h2>
-      <p class="q-offer-lede">Doors close ${escapeHtml(doorsClose)} so Callie can hand-build every set of ranges before day one. The whole group starts together ${escapeHtml(cohortStart)}, capped at 50 mamas.</p>
+      <h2 class="q-offer-title">Ready to lock your spot?</h2>
+      <p class="q-offer-lede">Callie builds every set of ranges by hand, in the order mamas lock in.</p>
       <div class="q-offer-price-row">
         <span class="q-offer-now">$${offerPrice}</span>
         <span class="q-offer-full">Full rate $${fullPrice}</span>

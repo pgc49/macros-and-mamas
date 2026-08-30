@@ -1,7 +1,5 @@
 ---
 import {
-  cohortStartDateCompact,
-  doorsCloseDate,
   enrollUrl,
   isWaitlist,
   offerPrice,
@@ -14,7 +12,7 @@ import {
     isWaitlist ? (
       <>
         <div class="s-price">
-          <strong>Doors close {doorsCloseDate} · 50 mamas max</strong>
+          <strong>Ranges built by hand</strong>
         </div>
         <a class="btn" href={quizUrl}>
           Take the quiz
@@ -23,8 +21,8 @@ import {
     ) : (
       <>
         <div class="s-price">
-          <strong>Doors close {doorsCloseDate}</strong>
-          Starts {cohortStartDateCompact} · ${offerPrice}
+          <strong>${offerPrice} · 8 weeks</strong>
+          Ranges built by hand
         </div>
         <a class="btn" href={enrollUrl}>
           Join now

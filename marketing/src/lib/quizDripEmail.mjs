@@ -45,7 +45,7 @@ export function buildQuizDrip2Body() {
   return `
 <p>The ranges I sent you are a starting point. They're not the whole program.</p>
 <p>What we actually do together is the weekly check-in. Milk changes, sleep falls apart, appetite swings. That's when the numbers need a person, not a calculator.</p>
-<p>This group starts Monday, ${COHORT_SHORT}.</p>
+<p>Callie builds every set of ranges by hand, in the order mamas lock in.</p>
 <p>If you want that, finish signing up. Same email so your ranges stay attached. Your quiz rate is $${EARLY_PRICE}.</p>
 <p>Callie</p>
 ${QUIZ_FOOTNOTE}`;

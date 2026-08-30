@@ -236,7 +236,7 @@ Callie
 Here are your bands, built the same way Callie builds them for the program:
 • Protein / Carbs / Fat / Calories
 
-Your quiz also unlocked the $249 early rate ($50 off $299). The group starts Monday, Aug 31.
+Your quiz also unlocked the $249 early rate ($50 off $299). Callie builds every set of ranges by hand, in the order mamas lock in.
 
 [Lock my spot · $249]
 
@@ -265,7 +265,7 @@ The ranges I sent you are a starting point. They're not the whole program.
 
 What we actually do together is the weekly check-in. Milk changes, sleep falls apart, appetite swings. That's when the numbers need a person, not a calculator.
 
-This group starts Monday, Aug 31.
+Callie builds every set of ranges by hand, in the order mamas lock in.
 
 If you want that, finish signing up. Same email so your ranges stay attached. Your quiz rate is $249.
 

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { FD, T } from "../theme/tokens";
 import { Shell, Card, Btn } from "../components/ui";
-import { CONFIG } from "../config";
 import { fetchCheckoutQuote, startCheckout } from "../lib/checkout";
 import { useAuth } from "../auth/useAuth.jsx";
 import {
@@ -17,9 +16,8 @@ import { captureQuizSignupBounce } from "../auth/quizSignupBounce";
 import { PATHS } from "../routing";
 
 const LAB_ADDON_PRICE = 349;
-const COHORT_START = CONFIG.COHORT_START || "Monday, Aug 31";
-const COHORT_START_SHORT = CONFIG.COHORT_START_SHORT || "August 31";
-const COHORT_START_COMPACT = CONFIG.COHORT_START_COMPACT || "Aug 31";
+const HAND_BUILT_RANGES =
+  "Callie builds every set of ranges by hand, in the order mamas lock in.";
 
 /** Unpaid signed-in users finish joining here before intake. */
 export function JoinPage({ profileCreatedAt = null }) {
@@ -211,10 +209,10 @@ export function JoinPage({ profileCreatedAt = null }) {
   const openBlurb = isFounding
     ? `Founding rate $${amount}. After checkout you’ll complete a short intake so Callie can build your macros.`
     : isEarly && amount != null
-      ? `You’re locking your spot — starts ${COHORT_START}. Early rate $${amount} for 8 weeks. After checkout you’ll complete a short intake; Callie approves your final ranges before day one.`
+      ? `You’re locking your spot. Early rate $${amount} for 8 weeks. ${HAND_BUILT_RANGES} After checkout you’ll complete a short intake.`
       : isFull && amount != null
-        ? `You’re locking your spot — starts ${COHORT_START}. Full rate $${amount} for 8 weeks. After checkout you’ll complete a short intake so Callie can build your macros.`
-        : `You’re locking your spot — starts ${COHORT_START}. After checkout you’ll complete a short intake so Callie can build your macros.`;
+        ? `You’re locking your spot. Full rate $${amount} for 8 weeks. ${HAND_BUILT_RANGES} After checkout you’ll complete a short intake so Callie can build your macros.`
+        : `You’re locking your spot. ${HAND_BUILT_RANGES} After checkout you’ll complete a short intake so Callie can build your macros.`;
 
   return (
     <Shell>
@@ -229,14 +227,14 @@ export function JoinPage({ profileCreatedAt = null }) {
             marginBottom: 6,
           }}
         >
-          Starts {COHORT_START}
+          Ranges built by hand
         </div>
         <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "10px 0" }}>
           {isFounding
             ? (total != null ? `Finish joining — $${total}` : "Finish joining")
             : (total != null
-              ? `Lock your ${COHORT_START_COMPACT} spot — $${total}`
-              : `Lock your ${COHORT_START_COMPACT} spot`)}
+              ? `Lock your spot — $${total}`
+              : "Lock your spot")}
         </h2>
         {sessionEmail && (
           <p style={{ fontSize: 13.5, lineHeight: 1.45, color: T.inkSoft, margin: "0 0 8px" }}>
@@ -320,8 +318,7 @@ export function JoinPage({ profileCreatedAt = null }) {
         )}
         {!isFounding && (
           <p style={{ marginTop: 14, fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>
-            You’re locking your spot
-            {" "}— starts <strong style={{ color: T.ink }}>{COHORT_START_SHORT}</strong>.
+            You’re locking your spot. {HAND_BUILT_RANGES}
             {isEarly ? (
               <> Keep using this same email so your quiz ranges stay attached.</>
             ) : null}

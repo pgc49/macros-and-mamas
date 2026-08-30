@@ -1,11 +1,8 @@
 ---
 import {
-  cohortStartDate,
-  cohortStartDateCompact,
-  cohortStartDateShort,
-  doorsCloseReason,
   enrollUrl,
   fullPrice,
+  handBuiltRangesCopy,
   isWaitlist,
   labAddonPrice,
   labPanelPrice,
@@ -24,20 +21,20 @@ const saveAmount = fullPrice - waitlistPrice;
 <section id="pricing">
   <div class="wrap">
     <div style="text-align:center">
-      <span class="kicker">One price · capped at 50 mamas</span>
-      <h2>The {cohortStartDateShort} group is forming.</h2>
+      <span class="kicker">One price · ranges built by hand</span>
+      <h2>8 weeks with Callie.</h2>
       <p class="lede" style="margin-inline:auto">
         {
           isWaitlist ? (
             <>
-              Full rate ${fullPrice} · ${waitlistPrice} after the free quiz ·
-              capped at 50 so Callie can build every set of ranges by hand.
+              Full rate ${fullPrice} · ${waitlistPrice} after the free quiz.{' '}
+              {handBuiltRangesCopy}
             </>
           ) : (
             <>
               ${openPrice} for {programWeeks} weeks · about $
-              {Math.round(openPrice / programWeeks)}/week · capped at 50 so
-              Callie can build every set of ranges by hand.
+              {Math.round(openPrice / programWeeks)}/week.{' '}
+              {handBuiltRangesCopy}
             </>
           )
         }
@@ -50,7 +47,7 @@ const saveAmount = fullPrice - waitlistPrice;
             >Full rate · early ${waitlistPrice} after the free quiz</span
           >
         ) : (
-          <span class="cohort">Enrollment open · starts {cohortStartDate}</span>
+          <span class="cohort">8 weeks · ranges built by hand</span>
         )
       }
       {
@@ -80,7 +77,7 @@ const saveAmount = fullPrice - waitlistPrice;
         )
       }
       <p class="price-history" style="margin-top:6px">
-        {doorsCloseReason}
+        {handBuiltRangesCopy}
       </p>
       <ul class="includes">
         <li
@@ -112,7 +109,7 @@ const saveAmount = fullPrice - waitlistPrice;
           </a>
         ) : (
           <a class="btn" href={enrollUrl}>
-            Join now · starts {cohortStartDateCompact}
+            Join now
           </a>
         )
       }
