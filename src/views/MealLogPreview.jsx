@@ -1,6 +1,7 @@
 import { Fonts } from "../theme/Fonts";
 import { T, F, FD } from "../theme/tokens";
 import { MealLogCard } from "../components/MealLogCard";
+import { RecipeCreator } from "../components/RecipeCreator";
 
 /** Local-only preview of Today → My plan list + slot filter. */
 const PREVIEW_CUSTOM = [
@@ -59,6 +60,36 @@ export function MealLogPreview() {
         macros={{ cal: 1800, protein: 130, carbs: 160, fat: 55 }}
         todayLog={{ date: "2026-08-30", entries: [] }}
       />
+      <div style={{ marginTop: 20 }}>
+        <h2 style={{
+          fontFamily: FD,
+          fontWeight: 400,
+          fontSize: 20,
+          margin: "0 0 8px",
+          color: T.ink,
+        }}
+        >
+          Save a recipe
+        </h2>
+        <p style={{ fontFamily: F, fontSize: 13, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45 }}>
+          Pick Breakfast / Lunch / Dinner / Snack before Save to My meals.
+        </p>
+        <RecipeCreator
+          embedded
+          defaultSlot="dinner"
+          onEstimateRecipe={async () => ({
+            meal: "Turkey chili",
+            servings: 4,
+            calories: 1600,
+            protein_g: 160,
+            carbs_g: 80,
+            fat_g: 48,
+            items: ["2 lb turkey", "beans", "tomatoes"],
+            confidence: "high",
+          })}
+          onSaveCustomMeal={async (meal) => meal}
+        />
+      </div>
     </div>
   );
 }

@@ -350,6 +350,7 @@ function normalizeServes(value) {
 }
 
 function mapCustomMeal(r) {
+  const slot = normalizeMealSlot(r.slot);
   return {
     id: r.id,
     name: r.name,
@@ -359,6 +360,8 @@ function mapCustomMeal(r) {
     f: Number(r.f) || 0,
     serves: normalizeServes(r.serves ?? 1),
     ingredients: r.ingredients || "",
+    slot,
+    cat: slot,
     updated_at: r.updated_at,
   };
 }
@@ -2989,9 +2992,16 @@ export const db = {
     // Prefer the recipe columns; degrade if migration 019 hasn't run yet.
     let { data, error } = await supabase
       .from("custom_meals")
-      .select("id, name, cal, p, c, f, serves, ingredients, updated_at")
+      .select("id, name, cal, p, c, f, serves, ingredients, slot, updated_at")
       .eq("profile_id", uid)
       .order("updated_at", { ascending: false });
+    if (error && /slot/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("custom_meals")
+        .select("id, name, cal, p, c, f, serves, ingredients, updated_at")
+        .eq("profile_id", uid)
+        .order("updated_at", { ascending: false }));
+    }
     if (error && /serves|ingredients/i.test(error.message || "")) {
       ({ data, error } = await supabase
         .from("custom_meals")
@@ -3007,7 +3017,7 @@ export const db = {
   },
 
   /** Upsert by name for this user (re-saving the same lunch updates macros). */
-  async saveCustomMeal({ name, cal, p, c, f, serves, ingredients }) {
+  async saveCustomMeal({ name, cal, p, c, f, serves, ingredients, slot }) {
     const uid = await requireUserId();
     const trimmed = String(name || "").trim().slice(0, 80);
     if (!trimmed) throw new Error("Meal needs a name");
@@ -3023,13 +3033,27 @@ export const db = {
     const recipeFields = {};
     if (serves != null) recipeFields.serves = normalizeServes(serves);
     if (ingredients != null) recipeFields.ingredients = String(ingredients).slice(0, 4000) || null;
+    const savedSlot = normalizeMealSlot(slot);
+    if (savedSlot) recipeFields.slot = savedSlot;
 
-    const withRecipe = Object.keys(recipeFields).length > 0;
+    const extraCols = [
+      recipeFields.serves != null ? "serves" : "",
+      recipeFields.ingredients !== undefined ? "ingredients" : "",
+      recipeFields.slot ? "slot" : "",
+    ].filter(Boolean).join(", ");
     let { data, error } = await supabase
       .from("custom_meals")
       .upsert({ ...base, ...recipeFields }, { onConflict: "profile_id,name" })
-      .select(`id, name, cal, p, c, f, updated_at${withRecipe ? ", serves, ingredients" : ""}`)
+      .select(`id, name, cal, p, c, f, updated_at${extraCols ? `, ${extraCols}` : ""}`)
       .single();
+    if (error && /slot/i.test(error.message || "")) {
+      const { slot: _s, ...noSlot } = recipeFields;
+      ({ data, error } = await supabase
+        .from("custom_meals")
+        .upsert({ ...base, ...noSlot }, { onConflict: "profile_id,name" })
+        .select("id, name, cal, p, c, f, updated_at, serves, ingredients")
+        .single());
+    }
     if (error && /serves|ingredients/i.test(error.message || "")) {
       ({ data, error } = await supabase
         .from("custom_meals")

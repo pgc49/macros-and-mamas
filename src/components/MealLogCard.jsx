@@ -1256,6 +1256,7 @@ export function MealLogCard({
                       f: meal.f,
                       serves: meal.serves,
                       ingredients: meal.ingredients,
+                      slot: meal.slot || meal.cat || r.slot || r.cat,
                     }) : undefined}
                   />
                 ))}

@@ -1055,7 +1055,14 @@ export default function App() {
     if (!ok) return false;
     if (opts.saveCustom) {
       try {
-        const saved = await db.saveCustomMeal({ name, cal, p, c, f });
+        const saved = await db.saveCustomMeal({
+          name,
+          cal,
+          p,
+          c,
+          f,
+          slot: o?.slot ?? opts.slot ?? null,
+        });
         setCustomMeals((list) => {
           const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
           return [saved, ...without];
@@ -1113,6 +1120,7 @@ export default function App() {
           f: entry.f,
           serves: entry.serves,
           ingredients: entry.ingredients,
+          slot: entry.slot,
         });
         setCustomMeals((list) => {
           const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
