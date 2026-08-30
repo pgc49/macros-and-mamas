@@ -21,6 +21,7 @@ import {
   resolveModels,
 } from "../_shared/openrouter.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
+import { joinPersonName } from "../_shared/personName.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -232,7 +233,7 @@ async function loadClientForPlan(env, clientId) {
   if (!row) return { profile: null, macros: null };
 
   const profile = {
-    name: [row.name, row.last_name].filter(Boolean).join(" ") || row.name,
+    name: joinPersonName(row.name, row.last_name) || row.name,
     age: row.age,
     currentWeight: row.current_weight,
     goalWeight: row.goal_weight,

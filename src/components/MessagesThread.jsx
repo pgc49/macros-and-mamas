@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
+import { MESSAGE_FACE_FONT } from "../lib/messageFace";
 import { Btn } from "./ui";
 import {
   enablePushNotifications,
@@ -18,6 +19,15 @@ import {
 } from "../lib/voiceMemo";
 import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { splitLinkedMessageText } from "../lib/messageLinks";
+import {
+  BUBBLE_HOLD_SELECT_CSS,
+  MESSAGE_HOLD_MOVE_PX,
+  MESSAGE_HOLD_MS,
+  bubbleTextSelect,
+  copyableMessageBody,
+  holdOpensMenu,
+} from "../lib/messageSelect";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
 const pendingSendAttempts = new Map();
@@ -93,6 +103,7 @@ export function MessagesThread({
   const fileRef = useRef(null);
   const draftRef = useRef(null);
   const holdTimer = useRef(null);
+  const holdStart = useRef(null);
   const recorderRef = useRef(null);
   const markReadRef = useRef(onMarkRead);
   const sendInFlightRef = useRef(false);
@@ -423,6 +434,27 @@ export function MessagesThread({
       window.clearTimeout(holdTimer.current);
       holdTimer.current = null;
     }
+    holdStart.current = null;
+  };
+
+  const selectionAtPointer = () => window.getSelection?.();
+
+  const armHold = (m, x, y) => {
+    clearHold();
+    // Only a selection that already exists is a copy gesture. iOS creates one
+    // during the hold — that must not cancel the reaction picker.
+    if (!holdOpensMenu(selectionAtPointer())) return;
+    holdStart.current = { x, y };
+    holdTimer.current = window.setTimeout(() => {
+      holdTimer.current = null;
+      openMenu(m);
+    }, MESSAGE_HOLD_MS);
+  };
+
+  const movedAway = (x, y) => {
+    const start = holdStart.current;
+    if (!start) return false;
+    return Math.hypot(x - start.x, y - start.y) >= MESSAGE_HOLD_MOVE_PX;
   };
 
   const canEditMsg = (m) => (
@@ -452,9 +484,39 @@ export function MessagesThread({
     && !!m.id
   );
 
+  const canCopyMsg = (m) => !m.deleted_at && !!copyableMessageBody(m);
+
   const canManage = (m) => (
-    canEditMsg(m) || canDeleteMsg(m) || canReplyMsg(m) || canReactMsg(m)
+    canEditMsg(m) || canDeleteMsg(m) || canReplyMsg(m) || canReactMsg(m) || canCopyMsg(m)
   );
+
+  const copyMessage = async (m) => {
+    const text = copyableMessageBody(m);
+    if (!text) return;
+    setMenuId(null);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+    } catch {
+      // fall through to execCommand
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    } catch (e) {
+      console.error(e);
+      setAttachError("Couldn’t copy.");
+    }
+  };
 
   const startReply = (m) => {
     if (!canReplyMsg(m)) return;
@@ -514,6 +576,7 @@ export function MessagesThread({
 
   const openMenu = (m) => {
     if (!canManage(m) || editingId === m.id) return;
+    window.getSelection?.()?.removeAllRanges?.();
     setMenuId(m.id);
   };
 
@@ -521,20 +584,27 @@ export function MessagesThread({
     if (!canManage(m)) return {};
     return {
       onContextMenu: (e) => {
+        // Already mid-copy (mouse drag / second gesture) — leave native copy.
+        if (!holdOpensMenu(selectionAtPointer())) return;
         e.preventDefault();
         openMenu(m);
       },
-      onTouchStart: () => {
-        clearHold();
-        holdTimer.current = window.setTimeout(() => openMenu(m), 450);
+      onTouchStart: (e) => {
+        const t = e.touches?.[0];
+        armHold(m, t?.clientX ?? 0, t?.clientY ?? 0);
       },
       onTouchEnd: clearHold,
-      onTouchMove: clearHold,
+      onTouchMove: (e) => {
+        const t = e.touches?.[0];
+        if (t && movedAway(t.clientX, t.clientY)) clearHold();
+      },
       onTouchCancel: clearHold,
       onMouseDown: (e) => {
         if (e.button !== 0) return;
-        clearHold();
-        holdTimer.current = window.setTimeout(() => openMenu(m), 450);
+        armHold(m, e.clientX, e.clientY);
+      },
+      onMouseMove: (e) => {
+        if (movedAway(e.clientX, e.clientY)) clearHold();
       },
       onMouseUp: clearHold,
       onMouseLeave: clearHold,
@@ -596,6 +666,7 @@ export function MessagesThread({
       boxSizing: "border-box",
     }}
     >
+      <style>{BUBBLE_HOLD_SELECT_CSS}</style>
       {(title || subtitle) && (
         <div style={{ marginBottom: 10 }}>
           {title ? (
@@ -719,16 +790,16 @@ export function MessagesThread({
                   color: T.ink,
                   borderRadius: 14,
                   padding: "10px 12px",
-                  fontFamily: F,
+                  fontFamily: MESSAGE_FACE_FONT,
+                  fontVariantEmoji: "emoji",
                   fontSize: 14.5,
                   lineHeight: 1.45,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
-                  // Keep copy/select for reply-only bubbles; suppress selection when
-                  // edit/delete long-press would fight iOS text handles.
-                  userSelect: (canEditMsg(m) || canDeleteMsg(m)) ? "none" : "text",
-                  WebkitUserSelect: (canEditMsg(m) || canDeleteMsg(m)) ? "none" : "text",
-                  cursor: canManage(m) ? "default" : undefined,
+                  userSelect: bubbleTextSelect(deleted),
+                  WebkitUserSelect: bubbleTextSelect(deleted),
+                  WebkitTouchCallout: "none",
+                  cursor: deleted ? "default" : "text",
                 }}
               >
                 {!mine && !deleted && showSenderNames && (
@@ -778,7 +849,7 @@ export function MessagesThread({
                         padding: "8px 10px",
                         borderRadius: 10,
                         border: `1.5px solid ${T.border}`,
-                        fontFamily: F,
+                        fontFamily: MESSAGE_FACE_FONT,
                         fontSize: 14.5,
                         resize: "vertical",
                         color: T.ink,
@@ -837,7 +908,7 @@ export function MessagesThread({
                         Photo attached
                       </div>
                     )}
-                    {m.body}
+                    {m.body ? <MessageBodyLinks text={m.body} /> : null}
                   </>
                 )}
                 <div style={{
@@ -873,6 +944,8 @@ export function MessagesThread({
                       gap: 4,
                       marginTop: 8,
                       justifyContent: mine ? "flex-end" : "flex-start",
+                      userSelect: "none",
+                      WebkitUserSelect: "none",
                     }}
                   >
                     {m.reactions.map((r) => (
@@ -894,7 +967,8 @@ export function MessagesThread({
                           fontSize: 13,
                           lineHeight: 1.3,
                           cursor: canReactMsg(m) ? "pointer" : "default",
-                          fontFamily: F,
+                          fontFamily: MESSAGE_FACE_FONT,
+                          fontVariantEmoji: "emoji",
                           color: T.ink,
                         }}
                       >
@@ -925,8 +999,28 @@ export function MessagesThread({
                     minWidth: canReactMsg(m) ? 228 : undefined,
                   }}
                 >
-                  {(canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m)) && (
+                  {(canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m) || canCopyMsg(m)) && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {canCopyMsg(m) && (
+                        <button
+                          type="button"
+                          onClick={() => copyMessage(m)}
+                          disabled={editBusy || busy}
+                          style={{
+                            border: `1.5px solid ${T.border}`,
+                            background: "#fff",
+                            color: T.ink,
+                            fontWeight: 700,
+                            fontSize: 13,
+                            fontFamily: F,
+                            cursor: "pointer",
+                            borderRadius: 999,
+                            padding: "8px 12px",
+                          }}
+                        >
+                          Copy
+                        </button>
+                      )}
                       {canReplyMsg(m) && (
                         <button
                           type="button"
@@ -995,10 +1089,10 @@ export function MessagesThread({
                         display: "flex",
                         gap: 2,
                         justifyContent: "space-between",
-                        padding: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m))
+                        padding: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m) || canCopyMsg(m))
                           ? "4px 2px 2px"
                           : "2px",
-                        borderTop: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m))
+                        borderTop: (canReplyMsg(m) || canEditMsg(m) || canDeleteMsg(m) || canCopyMsg(m))
                           ? `1px solid ${T.border}`
                           : "none",
                       }}
@@ -1022,6 +1116,8 @@ export function MessagesThread({
                               cursor: "pointer",
                               padding: "6px 4px",
                               minWidth: 34,
+                              fontFamily: MESSAGE_FACE_FONT,
+                              fontVariantEmoji: "emoji",
                             }}
                           >
                             {emoji}
@@ -1391,6 +1487,39 @@ function safeString(value, fallback = "") {
   return fallback;
 }
 
+const MESSAGE_LINK_STYLE = {
+  color: T.accentDeep,
+  fontWeight: 700,
+  textDecoration: "underline",
+  wordBreak: "break-word",
+};
+
+/** Display-only: http(s) / youtu.be in the bubble become links. Stored body is unchanged. */
+function MessageBodyLinks({ text }) {
+  const parts = splitLinkedMessageText(text);
+  if (!parts.length) return null;
+  return parts.map((part, index) => {
+    if (part.type !== "link") {
+      // Text node, not a span — nested Karla spans can drop emoji fallbacks.
+      return <Fragment key={`t-${index}`}>{part.value}</Fragment>;
+    }
+    return (
+      <a
+        key={`l-${index}`}
+        href={part.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        style={MESSAGE_LINK_STYLE}
+      >
+        {part.value}
+      </a>
+    );
+  });
+}
+
 function createClientMessageId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -1457,7 +1586,8 @@ function MessageBubbleFallback({ message, mine }) {
         padding: "10px 12px",
         background: mine ? T.accentSoft : T.sageSoft,
         color: T.ink,
-        fontFamily: F,
+        fontFamily: MESSAGE_FACE_FONT,
+        fontVariantEmoji: "emoji",
         fontSize: 14.5,
         lineHeight: 1.45,
         whiteSpace: "pre-wrap",
@@ -1466,7 +1596,9 @@ function MessageBubbleFallback({ message, mine }) {
       >
         {deleted
           ? "Message deleted"
-          : (body || (message?.attachment_path ? "Attachment unavailable" : "Message unavailable"))}
+          : (body
+            ? <MessageBodyLinks text={body} />
+            : (message?.attachment_path ? "Attachment unavailable" : "Message unavailable"))}
         {time ? (
           <div style={{ marginTop: 6, fontSize: 11, color: T.inkSoft }}>{time}</div>
         ) : null}

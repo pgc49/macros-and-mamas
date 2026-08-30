@@ -11,6 +11,7 @@ import {
 } from "./credits.js";
 import { referralCouponId } from "./pricing.js";
 import { adminPortalUrl } from "./adminOrigin.js";
+import { joinPersonName } from "./personName.js";
 
 export const REFERRAL_CREDIT_CENTS = 2500;
 export const AMBASSADOR_PAID_THRESHOLD = 3;
@@ -134,7 +135,7 @@ async function advocateProfileName(env, advocateUserId) {
   );
   const profile = Array.isArray(rows) ? rows[0] : null;
   if (!profile) return "";
-  return [profile.name, profile.last_name].filter(Boolean).join(" ").trim();
+  return joinPersonName(profile.name, profile.last_name);
 }
 
 /**
