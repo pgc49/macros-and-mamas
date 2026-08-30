@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHomeQueue, isHotLeftover, leftoverInPlayCount, pipelineCounts } from "./homeQueue.js";
+import { buildHomeQueue, isHotLeftover, leftoverInPlayCount, newLeftoverLastHours, pipelineCounts } from "./homeQueue.js";
 
 const TODAY = "2026-08-30";
 const NOW = Date.parse("2026-08-30T18:00:00.000Z");
@@ -109,6 +109,18 @@ describe("pipeline + leftover counts", () => {
     ];
     expect(leftoverInPlayCount(people)).toBe(1);
     expect(pipelineCounts(people)).toEqual({ inPlay: 1, settingUp: 1, active: 1 });
+  });
+
+  it("lists leftover created in the last 24 hours", () => {
+    const fresh = leftover({
+      emailLower: "fresh@x.com",
+      lead: { created_at: "2026-08-30T10:00:00.000Z" },
+    });
+    const old = leftover({
+      emailLower: "old@x.com",
+      lead: { created_at: "2026-08-28T00:00:00.000Z" },
+    });
+    expect(newLeftoverLastHours([fresh, old], NOW).map((p) => p.emailLower)).toEqual(["fresh@x.com"]);
   });
 
   it("counts nurture leftover as still in play, not cold", () => {

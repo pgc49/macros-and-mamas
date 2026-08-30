@@ -1,18 +1,24 @@
 import { Link } from "react-router-dom";
 import { T, F, FD } from "../theme/tokens";
-import { Card, Btn } from "../components/ui";
+import { Card } from "../components/ui";
 import { PATHS } from "../routing";
 import { AdminVoiceDropCard } from "./AdminVoiceDropCard";
-import { leftoverInPlayCount, pipelineCounts, todayStripStats } from "./homeQueue";
-import { personStageLabel } from "./personStage";
-import { rosterTitle } from "./clientRoster";
+import { newLeftoverLastHours } from "./homeQueue";
+import { clientHealthByCohort } from "./clientHealth";
+import { localDateIso } from "../utils/dates";
 
-function QueueRow({ row, onOpen }) {
-  const name = row.person?.name || rosterTitle(row.person?.client) || row.person?.email;
+const BANDS = [
+  ["needs_help", "Needs help", "needs_help"],
+  ["steady", "Steady", "steady"],
+  ["doing_well", "Doing well", "doing_well"],
+];
+
+function LeadRow({ person, onOpen }) {
+  const name = person?.name || person?.email;
   return (
     <button
       type="button"
-      onClick={() => onOpen(row)}
+      onClick={() => onOpen(person)}
       style={{
         display: "block",
         width: "100%",
@@ -25,95 +31,110 @@ function QueueRow({ row, onOpen }) {
         fontFamily: F,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontWeight: 700, color: T.ink, fontSize: 15 }}>{name}</span>
-        <span style={{ fontSize: 12, color: T.inkSoft, whiteSpace: "nowrap" }}>
-          {personStageLabel(row.person.stage)}
-        </span>
+      <div style={{ fontWeight: 700, color: T.ink, fontSize: 15 }}>{name}</div>
+      <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 3 }}>
+        {person.email}
+        {person.nurtureTags?.length ? ` · ${person.nurtureTags.join(" · ")}` : ""}
       </div>
-      <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 3 }}>{row.reason}</div>
     </button>
   );
 }
 
 export function AdminHome({
   people = [],
-  queue = [],
   roster = [],
-  leftoverCount,
   cohortFilter,
-  onOpenQueueRow,
-  onOpenPeople,
+  onOpenLead,
   onOpenLeads,
-  onOpenFunnel,
+  onOpenClients,
 }) {
-  const leftover = leftoverCount ?? leftoverInPlayCount(people);
-  const today = todayStripStats(people);
-  const pipe = pipelineCounts(people);
+  const freshLeads = newLeftoverLastHours(people);
+  const health = clientHealthByCohort(roster, localDateIso());
   const activeCount = (roster || []).filter((c) => c.role !== "admin" && (c.stage === "active" || c.status === "active")).length;
 
   return (
     <>
       <Card>
-        <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>Needs you</div>
+        <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>New leftover · 24h</div>
         <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 8 }}>
-          {leftover} leftover still in play
+          Quiz complete, not paid.
         </div>
-        {queue.length === 0 ? (
+        {freshLeads.length === 0 ? (
           <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5 }}>
-            Nothing waiting. Check leftover leads if you want to nudge.
+            No new leftover leads in the last 24 hours.
           </div>
         ) : (
-          queue.map((row) => (
-            <QueueRow key={row.key} row={row} onOpen={onOpenQueueRow} />
+          freshLeads.map((person) => (
+            <LeadRow key={person.key} person={person} onOpen={onOpenLead} />
           ))
         )}
-        <Btn ghost small style={{ marginTop: 12 }} onClick={onOpenPeople}>
-          Open People
-        </Btn>
-        <Btn ghost small style={{ marginTop: 8, marginLeft: 8 }} onClick={onOpenLeads}>
-          Leftover leads
-        </Btn>
+        <button
+          type="button"
+          onClick={onOpenLeads}
+          style={{
+            marginTop: 12,
+            background: "none",
+            border: "none",
+            color: T.accent,
+            fontWeight: 700,
+            fontFamily: F,
+            fontSize: 13,
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          Open leftover leads
+        </button>
       </Card>
 
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <Card style={{ flex: 1, margin: 0 }}>
-          <div style={{ fontFamily: FD, fontSize: 22, color: T.ink }}>{today.newLeads}</div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft }}>New leftover today</div>
-        </Card>
-        <Card style={{ flex: 1, margin: 0 }}>
-          <div style={{ fontFamily: FD, fontSize: 22, color: T.ink }}>{today.paidToday}</div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft }}>Paid today</div>
-        </Card>
-      </div>
-
-      <button
-        type="button"
-        onClick={onOpenFunnel}
-        style={{
-          display: "block",
-          width: "100%",
-          marginTop: 12,
-          padding: 0,
-          border: "none",
-          background: "none",
-          cursor: "pointer",
-          textAlign: "left",
-          fontFamily: F,
-        }}
-      >
-        <Card>
-          <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>Pipeline</div>
-          <div style={{ display: "flex", gap: 6, height: 12, borderRadius: 99, overflow: "hidden", background: T.track }}>
-            <div style={{ flex: Math.max(pipe.inPlay, 0.2), background: T.accent }} />
-            <div style={{ flex: Math.max(pipe.settingUp, 0.2), background: T.amber }} />
-            <div style={{ flex: Math.max(pipe.active, 0.2), background: T.sage }} />
-          </div>
-          <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8 }}>
-            {pipe.inPlay} in play · {pipe.settingUp} setting up · {pipe.active} active
-          </div>
-        </Card>
-      </button>
+      <Card style={{ marginTop: 12 }}>
+        <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>Client health</div>
+        <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 10, lineHeight: 1.45 }}>
+          Needs help is unread, waiting on approval, or no logs in 3+ days.
+          Logged is meals / water / weigh-ins.
+        </div>
+        {health.length === 0 ? (
+          <div style={{ fontSize: 14, color: T.inkSoft }}>No paid clients to score yet.</div>
+        ) : (
+          health.map((row) => (
+            <div key={row.cohort} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: T.ink, marginBottom: 8 }}>
+                {row.label}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {BANDS.map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onOpenClients(id, row.cohort)}
+                    style={{
+                      flex: 1,
+                      border: `1.5px solid ${T.border}`,
+                      background: id === "needs_help" ? T.amberSoft : "#fff",
+                      borderRadius: 12,
+                      padding: "10px 6px",
+                      cursor: "pointer",
+                      fontFamily: F,
+                    }}
+                  >
+                    <div style={{
+                      fontFamily: FD,
+                      fontSize: 22,
+                      color: id === "needs_help" ? T.amber : T.ink,
+                    }}
+                    >
+                      {row[id]}
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft, marginTop: 2 }}>
+                      {label}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </Card>
 
       <div style={{ marginTop: 12 }}>
         <AdminVoiceDropCard

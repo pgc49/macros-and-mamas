@@ -18,7 +18,8 @@ describe("adminNav", () => {
   it("preserves leads / clients deep links on People", () => {
     expect(peopleSegmentFromQuery("leads")).toBe("leads");
     expect(peopleSegmentFromQuery("clients")).toBe("clients");
-    expect(peopleSegmentFromQuery("overview")).toBe("needs_action");
+    expect(peopleSegmentFromQuery("overview")).toBe("clients");
+    expect(peopleSegmentFromQuery("people")).toBe("clients");
   });
 
   it("writes a legacy-compatible query tab", () => {

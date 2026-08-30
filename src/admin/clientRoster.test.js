@@ -90,6 +90,12 @@ describe("needsYou + filterRoster", () => {
     expect(matchesRosterQuery(unpaid, "new@")).toBe(true);
   });
 
+  it("filters unread and quiet 3d+", () => {
+    expect(filterRoster([unread, quiet, unpaid], "unread", { todayIso: today }).map((c) => c.id)).toEqual(["u"]);
+    expect(filterRoster([unread, quiet, unpaid], "quiet", { todayIso: today }).map((c) => c.id)).toEqual(["q"]);
+    expect(filterRoster([unread, quiet, unpaid], "needs_help", { todayIso: today }).map((c) => c.id)).toEqual(["u", "q"]);
+  });
+
   it("sorts unread ahead of quiet on needs-you", () => {
     const list = filterRoster([quiet, unread], "needs_you", { todayIso: today });
     expect(list.map((c) => c.id)).toEqual(["u", "q"]);
@@ -133,6 +139,8 @@ describe("needsYou + filterRoster", () => {
   it("counts needs-you separately from unpaid", () => {
     const counts = rosterFilterCounts([unread, quiet, unpaid], today);
     expect(counts.needsYou).toBe(2);
+    expect(counts.needsHelp).toBe(2);
+    expect(counts.unread).toBe(1);
     expect(counts.unpaid).toBe(1);
     expect(counts.active).toBe(2);
   });

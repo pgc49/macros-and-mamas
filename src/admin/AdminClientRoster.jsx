@@ -10,6 +10,7 @@ import {
   rosterFilterCounts,
   rosterTitle,
 } from "./clientRoster";
+import { formatLastLogged } from "./clientHealth";
 import { formatReferredByHint } from "./referredBy";
 
 export function CopyPhoneButton({ phone, compact = false }) {
@@ -72,7 +73,11 @@ function stageShort(c) {
 }
 
 const FILTERS = [
-  ["needs_you", "Needs you"],
+  ["needs_help", "Needs help"],
+  ["unread", "Unread"],
+  ["quiet", "Quiet 3d"],
+  ["doing_well", "Doing well"],
+  ["steady", "Steady"],
   ["active", "Active"],
   ["awaiting_approval", "Approve"],
   ["awaiting_intake", "Need intake"],
@@ -84,7 +89,7 @@ const FILTERS = [
 
 function rosterSortHint(filter) {
   if (filter === "unpaid") return "Newest signups first. ";
-  if (filter === "active") return "Alphabetical. ";
+  if (filter === "active" || filter === "doing_well" || filter === "steady") return "Alphabetical. ";
   return "Waiting on you first, then oldest message. ";
 }
 
@@ -153,7 +158,11 @@ export function AdminClientRoster({
   );
 
   const countFor = (id) => {
-    if (id === "needs_you") return counts.needsYou;
+    if (id === "needs_help") return counts.needsHelp;
+    if (id === "unread") return counts.unread;
+    if (id === "quiet") return counts.quiet;
+    if (id === "doing_well") return counts.doingWell;
+    if (id === "steady") return counts.steady;
     if (id === "active") return counts.active;
     if (id === "awaiting_approval") return counts.awaitingApproval;
     if (id === "awaiting_intake") return counts.awaitingIntake;
@@ -226,6 +235,7 @@ export function AdminClientRoster({
             const title = rosterTitle(c);
             const short = stageShort(c);
             const messaged = formatLastMessaged(c.lastAdminAt, nowMs);
+            const logged = formatLastLogged(c, todayIso);
             const unread = Number(c.unreadFromMama) || 0;
             const referredHint = formatReferredByHint(c.referredBy);
             return (
@@ -368,6 +378,18 @@ export function AdminClientRoster({
                     {messaged.label === "Never messaged"
                       ? "Never messaged"
                       : `You messaged · ${messaged.label}`}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      color: logged.stale ? T.amber : T.inkSoft,
+                      marginTop: 2,
+                    }}
+                  >
+                    {logged.label === "Never logged"
+                      ? "Never logged"
+                      : `Last logged · ${logged.label}`}
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>

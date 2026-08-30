@@ -93,6 +93,15 @@ export function buildHomeQueue({
   });
 }
 
+export function newLeftoverLastHours(people, now = Date.now(), hours = 24) {
+  const cutoff = now - hours * 60 * 60 * 1000;
+  return (people || []).filter((p) => {
+    if (!p.leftover || p.stage === "cold") return false;
+    const created = Date.parse(p.lead?.created_at || "");
+    return Number.isFinite(created) && created >= cutoff;
+  });
+}
+
 export function leftoverInPlayCount(people) {
   return (people || []).filter((p) => p.leftover && p.stage !== "cold").length;
 }

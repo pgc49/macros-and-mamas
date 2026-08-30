@@ -25,9 +25,7 @@ export function primaryTabFromQuery(raw) {
 export function peopleSegmentFromQuery(raw) {
   const q = String(raw || "").trim();
   if (q === "leads") return "leads";
-  if (q === "clients") return "clients";
-  if (q === "people" || q === "all") return "all";
-  return "needs_action";
+  return "clients";
 }
 
 export function moreViewFromQuery(raw) {

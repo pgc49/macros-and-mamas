@@ -8,13 +8,13 @@
  * 3. Wrap new admin surfaces in ErrorBoundary so a coach-UI bug cannot blank
  *    the customer SPA.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import { T, F, FD } from "../theme/tokens";
-import { localDateIso, rateOf } from "../utils/dates";
+import { rateOf } from "../utils/dates";
 import { buildMacroHistory, buildTrends, buildWaterHistory } from "../utils/progressSeries";
 import { adminCohortName, programWeekNumber, resolveProgramStartWeekIso } from "../lib/cohorts";
 import { mergeGoalItems } from "../lib/goals";
@@ -29,7 +29,6 @@ import { AdminClientMessages } from "./AdminClientMessages";
 import { CopyPhoneButton } from "./AdminClientRoster";
 import { loadQuizLeads } from "./quizLeads";
 import { assemblePeople } from "./personModel";
-import { buildHomeQueue } from "./homeQueue";
 import {
   moreViewFromQuery,
   peopleSegmentFromQuery,
@@ -80,8 +79,11 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   const [filter, setFilter] = useState(() => {
     if (typeof window === "undefined") return "needs_you";
     const q = new URLSearchParams(window.location.search).get("filter");
-    const allowed = new Set(["needs_you", "active", "awaiting_approval", "awaiting_intake", "paid", "unpaid", "refunded", "all"]);
-    return allowed.has(q) ? q : "needs_you";
+    const allowed = new Set([
+      "needs_help", "unread", "quiet", "doing_well", "steady", "needs_you",
+      "active", "awaiting_approval", "awaiting_intake", "paid", "unpaid", "refunded", "all",
+    ]);
+    return allowed.has(q) ? q : "needs_help";
   });
   const [cohortFilter, setCohortFilter] = useState(() => {
     if (typeof window === "undefined") return "all";
@@ -197,10 +199,6 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     setPrimaryTab("people", { peopleSegment: "leads" });
   }, [setPrimaryTab]);
 
-  const openFunnel = useCallback(() => {
-    setPrimaryTab("more", { moreView: "funnel" });
-  }, [setPrimaryTab]);
-
   const openPerson = useCallback((person) => {
     if (person?.profileId) {
       setAdminSel(person.profileId);
@@ -211,13 +209,6 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
       setPrimaryTab("people", { peopleSegment: "leads" });
     }
   }, [setAdminSel, setPrimaryTab]);
-
-  const snoozePerson = useCallback(async (person) => {
-    if (!person?.email) return;
-    const until = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
-    await db.savePersonOverride(person.email, { snoozed_until: until });
-    await refreshPeople();
-  }, [refreshPeople]);
 
   const touchLead = useCallback(async (email, kind) => {
     if (!email) return;
@@ -233,11 +224,6 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     })();
     return () => { cancelled = true; };
   }, [refreshPeople]);
-
-  const queue = useMemo(
-    () => buildHomeQueue({ people, todayIso: localDateIso() }),
-    [people],
-  );
 
   useEffect(() => {
     const el = composerRef.current;
@@ -742,7 +728,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     >
       <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 4px" }}>Callie admin</h2>
       <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
-        Home is who needs you. People is leftover leads and clients.{" "}
+        Today’s leftover leads and client health. People is Clients or Leads.{" "}
         <Link to={PATHS.dashboard} style={{ color: T.accent, fontWeight: 700 }}>Your dashboard</Link>
         {" · "}
         Admin only.
@@ -753,13 +739,15 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
       {tab === "home" && (
         <AdminHome
           people={people}
-          queue={queue}
           roster={all}
           cohortFilter={cohortFilter}
-          onOpenQueueRow={(row) => openPerson(row.person)}
-          onOpenPeople={() => setPrimaryTab("people", { peopleSegment: "needs_action" })}
+          onOpenLead={openPerson}
           onOpenLeads={() => openLeads("unpaid")}
-          onOpenFunnel={openFunnel}
+          onOpenClients={(nextFilter, nextCohort) => {
+            if (nextFilter) setFilter(nextFilter);
+            if (nextCohort) setCohortFilter(nextCohort);
+            setPrimaryTab("people", { peopleSegment: "clients" });
+          }}
         />
       )}
 
@@ -767,8 +755,6 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
         <AdminPeople
           segment={peopleSegment}
           setSegment={updatePeopleSegment}
-          people={people}
-          queue={queue}
           roster={all}
           filter={filter}
           setFilter={setFilter}
@@ -776,13 +762,11 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
           setCohortFilter={setCohortFilter}
           leadsFilter={leadsFilter}
           selectedLeadEmail={selectedLeadEmail}
-          onOpenPerson={openPerson}
           onOpenClient={(id) => setAdminSel(id)}
           onMessageClient={(id) => {
             setAdminSel(id);
             setPrimaryTab("messages");
           }}
-          onSnooze={snoozePerson}
           onAdminTouch={touchLead}
         />
       )}

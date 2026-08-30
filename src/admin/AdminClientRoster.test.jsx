@@ -119,15 +119,16 @@ describe("AdminClientRoster", () => {
     renderRoster({ filter: "active", onMessageClient });
     expect(screen.getByText("Lauren Wells")).toBeTruthy();
     expect(screen.getByText(/You messaged · 2d ago/)).toBeTruthy();
+    expect(screen.getByText(/Last logged · Today/)).toBeTruthy();
     expect(screen.getByLabelText("Message Lauren Wells")).toBeTruthy();
   });
 
-  it("says Active is alphabetical and Needs you is urgency-first", () => {
+  it("says Active is alphabetical and Needs help is urgency-first", () => {
     renderRoster({ filter: "active" });
     expect(screen.getByText(/Alphabetical/)).toBeTruthy();
     expect(screen.queryByText(/Waiting on you first/)).toBeNull();
     cleanup();
-    renderRoster({ filter: "needs_you" });
+    renderRoster({ filter: "needs_help" });
     expect(screen.getByText(/Waiting on you first, then oldest message/)).toBeTruthy();
     expect(screen.queryByText(/Alphabetical/)).toBeNull();
     cleanup();

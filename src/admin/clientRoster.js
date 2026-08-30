@@ -1,6 +1,7 @@
 import { adminCohortName } from "../lib/cohorts";
 import { isStripeCollected } from "../../functions/_shared/comp.js";
 import { addDaysIso, localDateIso } from "../utils/dates";
+import { matchesClientHealthFilter } from "./clientHealth";
 
 export const UNASSIGNED_COHORT = "unassigned";
 
@@ -169,12 +170,16 @@ export function filterRoster(all, filter, { query = "", todayIso = localDateIso(
     list = clientsOnly.filter((c) => c.stage === "active" || c.status === "active");
   } else if (filter === "refunded") {
     list = clientsOnly.filter((c) => c.refunded || c.stage === "refunded");
+  } else if (filter === "unread" || filter === "quiet" || filter === "needs_help" || filter === "steady" || filter === "doing_well") {
+    list = clientsOnly.filter((c) => matchesClientHealthFilter(c, filter, todayIso));
   }
 
   list = list.filter((c) => matchesRosterQuery(c, query));
 
   if (filter === "unpaid") {
     list = list.slice().sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  } else if (filter === "doing_well" || filter === "steady") {
+    list = list.slice().sort(byName);
   } else if (filter === "active") {
     list = list.slice().sort(byName);
   } else {
@@ -209,6 +214,11 @@ export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all
     unpaid: clientsOnly.filter((c) => c.stage === "signed_up").length,
     paid: clientsOnly.filter((c) => isStripeCollected(c)).length,
     refunded: clientsOnly.filter((c) => c.refunded || c.stage === "refunded").length,
+    unread: clientsOnly.filter((c) => matchesClientHealthFilter(c, "unread", todayIso)).length,
+    quiet: clientsOnly.filter((c) => matchesClientHealthFilter(c, "quiet", todayIso)).length,
+    needsHelp: clientsOnly.filter((c) => matchesClientHealthFilter(c, "needs_help", todayIso)).length,
+    steady: clientsOnly.filter((c) => matchesClientHealthFilter(c, "steady", todayIso)).length,
+    doingWell: clientsOnly.filter((c) => matchesClientHealthFilter(c, "doing_well", todayIso)).length,
     all: clientsOnly.length,
   };
 }
