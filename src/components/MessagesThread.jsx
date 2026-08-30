@@ -18,6 +18,7 @@ import {
 } from "../lib/voiceMemo";
 import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { splitLinkedMessageText } from "../lib/messageLinks";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
 const pendingSendAttempts = new Map();
@@ -837,7 +838,7 @@ export function MessagesThread({
                         Photo attached
                       </div>
                     )}
-                    {m.body}
+                    {m.body ? <MessageBodyLinks text={m.body} /> : null}
                   </>
                 )}
                 <div style={{
@@ -1391,6 +1392,38 @@ function safeString(value, fallback = "") {
   return fallback;
 }
 
+const MESSAGE_LINK_STYLE = {
+  color: T.accentDeep,
+  fontWeight: 700,
+  textDecoration: "underline",
+  wordBreak: "break-word",
+};
+
+/** Display-only: http(s) / youtu.be in the bubble become links. Stored body is unchanged. */
+function MessageBodyLinks({ text }) {
+  const parts = splitLinkedMessageText(text);
+  if (!parts.length) return null;
+  return parts.map((part, index) => {
+    if (part.type !== "link") {
+      return <span key={`t-${index}`}>{part.value}</span>;
+    }
+    return (
+      <a
+        key={`l-${index}`}
+        href={part.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        style={MESSAGE_LINK_STYLE}
+      >
+        {part.value}
+      </a>
+    );
+  });
+}
+
 function createClientMessageId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -1466,7 +1499,9 @@ function MessageBubbleFallback({ message, mine }) {
       >
         {deleted
           ? "Message deleted"
-          : (body || (message?.attachment_path ? "Attachment unavailable" : "Message unavailable"))}
+          : (body
+            ? <MessageBodyLinks text={body} />
+            : (message?.attachment_path ? "Attachment unavailable" : "Message unavailable"))}
         {time ? (
           <div style={{ marginTop: 6, fontSize: 11, color: T.inkSoft }}>{time}</div>
         ) : null}

@@ -287,5 +287,27 @@ describe("messaging crash containment", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(1));
   });
+
+  it("makes http(s) and youtu.be URLs in the bubble clickable", () => {
+    const href = "https://youtu.be/EDjE15Ktzcs?si=abc";
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [{
+            id: "yt-1",
+            sender_id: "admin-1",
+            body: `Watch this ${href}`,
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    const link = screen.getByRole("link", { name: href });
+    expect(link.getAttribute("href")).toBe(href);
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toMatch(/noopener/);
+    expect(screen.getByText("Watch this", { exact: false })).toBeTruthy();
+  });
 });
 
