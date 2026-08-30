@@ -291,6 +291,37 @@ describe("messaging crash containment", () => {
     await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(1));
   });
 
+  it("keeps body emoji and reaction chips visible while links stay tappable", () => {
+    const href = "https://youtu.be/EDjE15Ktzcs?si=abc";
+    render(
+      <MessagesThread
+        {...threadProps({
+          canModerate: true,
+          messages: [{
+            id: "christina-1",
+            sender_id: "christina-1",
+            body: `Good morning mamas 💕 ${href}`,
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [{ emoji: "❤️", count: 2, mine: false }],
+          }],
+        })}
+      />,
+    );
+    const bubble = document.querySelector("[data-msg-id=\"christina-1\"]");
+    expect(bubble.textContent).toContain("💕");
+    expect(bubble.textContent).toContain("Good morning mamas");
+    expect(bubble.style.fontFamily).toMatch(/Apple Color Emoji/);
+    expect(bubble.style.userSelect).toBe("text");
+    expect(bubble.style.WebkitUserSelect).toBe("text");
+    const link = screen.getByRole("link", { name: href });
+    expect(link.getAttribute("href")).toBe(href);
+    expect(link.textContent).not.toContain("💕");
+    const chip = screen.getByRole("button", { name: /❤️ 2/ });
+    expect(chip.textContent).toContain("❤️");
+    expect(chip.style.fontFamily).toMatch(/Apple Color Emoji/);
+    expect(chip.parentElement.style.userSelect).toBe("none");
+  });
+
   it("makes http(s) and youtu.be URLs in the bubble clickable", () => {
     const href = "https://youtu.be/EDjE15Ktzcs?si=abc";
     render(

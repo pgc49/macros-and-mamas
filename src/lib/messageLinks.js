@@ -3,7 +3,7 @@
  * Does not change stored message bodies.
  */
 
-const URL_RE = /https?:\/\/[^\s<>"']+|youtu\.be\/[^\s<>"']+/gi;
+const URL_RE = /https?:\/\/[^\s<>"']+|youtu\.be\/[^\s<>"']+/giu;
 const TRAIL_PUNCT = /[),.;:!?]+$/;
 
 function peelTrailingPunct(raw) {

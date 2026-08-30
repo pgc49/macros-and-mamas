@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
+import { MESSAGE_FACE_FONT } from "../lib/messageFace";
 import { Btn } from "./ui";
 import {
   enablePushNotifications,
@@ -754,7 +755,8 @@ export function MessagesThread({
                   color: T.ink,
                   borderRadius: 14,
                   padding: "10px 12px",
-                  fontFamily: F,
+                  fontFamily: MESSAGE_FACE_FONT,
+                  fontVariantEmoji: "emoji",
                   fontSize: 14.5,
                   lineHeight: 1.45,
                   whiteSpace: "pre-wrap",
@@ -811,7 +813,7 @@ export function MessagesThread({
                         padding: "8px 10px",
                         borderRadius: 10,
                         border: `1.5px solid ${T.border}`,
-                        fontFamily: F,
+                        fontFamily: MESSAGE_FACE_FONT,
                         fontSize: 14.5,
                         resize: "vertical",
                         color: T.ink,
@@ -906,6 +908,8 @@ export function MessagesThread({
                       gap: 4,
                       marginTop: 8,
                       justifyContent: mine ? "flex-end" : "flex-start",
+                      userSelect: "none",
+                      WebkitUserSelect: "none",
                     }}
                   >
                     {m.reactions.map((r) => (
@@ -927,7 +931,8 @@ export function MessagesThread({
                           fontSize: 13,
                           lineHeight: 1.3,
                           cursor: canReactMsg(m) ? "pointer" : "default",
-                          fontFamily: F,
+                          fontFamily: MESSAGE_FACE_FONT,
+                          fontVariantEmoji: "emoji",
                           color: T.ink,
                         }}
                       >
@@ -1055,6 +1060,8 @@ export function MessagesThread({
                               cursor: "pointer",
                               padding: "6px 4px",
                               minWidth: 34,
+                              fontFamily: MESSAGE_FACE_FONT,
+                              fontVariantEmoji: "emoji",
                             }}
                           >
                             {emoji}
@@ -1437,7 +1444,8 @@ function MessageBodyLinks({ text }) {
   if (!parts.length) return null;
   return parts.map((part, index) => {
     if (part.type !== "link") {
-      return <span key={`t-${index}`}>{part.value}</span>;
+      // Text node, not a span — nested Karla spans can drop emoji fallbacks.
+      return <Fragment key={`t-${index}`}>{part.value}</Fragment>;
     }
     return (
       <a
@@ -1522,7 +1530,8 @@ function MessageBubbleFallback({ message, mine }) {
         padding: "10px 12px",
         background: mine ? T.accentSoft : T.sageSoft,
         color: T.ink,
-        fontFamily: F,
+        fontFamily: MESSAGE_FACE_FONT,
+        fontVariantEmoji: "emoji",
         fontSize: 14.5,
         lineHeight: 1.45,
         whiteSpace: "pre-wrap",
