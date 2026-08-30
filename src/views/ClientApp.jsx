@@ -507,6 +507,7 @@ export function ClientApp({
                       f: meal.f,
                       serves: meal.serves,
                       ingredients: meal.ingredients,
+                      slot: meal.slot || meal.cat || m.slot || m.cat,
                     })}
                   />
                 ))

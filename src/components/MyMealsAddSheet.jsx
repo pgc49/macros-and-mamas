@@ -60,6 +60,7 @@ export function MyMealsAddSheet({
       c: Number(idea.c) || 0,
       f: Number(idea.f) || 0,
       serves: Number(idea.servings) || 1,
+      slot: normalizeSlot(slot) || normalizeSlot(idea.slot),
       ...(ingredients ? { ingredients } : {}),
     });
     if (!saved) {
@@ -257,6 +258,7 @@ export function MyMealsAddSheet({
         {view === "create" && (
           <RecipeCreator
             embedded
+            defaultSlot={slot}
             onEstimateRecipe={onEstimateRecipe}
             onSaveCustomMeal={onSaveCustomMeal}
             saveLabel="Save to My meals"
@@ -272,7 +274,7 @@ export function MyMealsAddSheet({
           <>
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginBottom: 6 }}>
-                Slot (for better AI suggestions)
+                Save as
               </div>
               <SlotChips value={slot} onChange={setSlot} compact />
             </div>

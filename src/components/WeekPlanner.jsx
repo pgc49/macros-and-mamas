@@ -231,6 +231,7 @@ export function WeekPlanner({
         c: meal.c,
         f: meal.f,
         serves: Number(meal.servings) || 1,
+        slot,
         ...(ingredients ? { ingredients } : {}),
       });
       setMessageSticky(false);
@@ -1386,6 +1387,7 @@ function MealPickerModal({
             )}
             <RecipeCreator
               embedded
+              defaultSlot={effectiveSlot}
               onEstimateRecipe={onEstimateRecipe}
               onSaveCustomMeal={onSaveCustomMeal}
               saveLabel="Save & add to plan"

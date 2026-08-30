@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "./ui";
+import { SlotChips } from "./SlotChips";
+import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
 import { MAX_RECIPE_SERVINGS, normalizeServings, perServingMacros } from "../utils/recipeMacros";
 
 /** Matches MAX_RECIPE_CHARS in functions/api/estimate.js. */
@@ -34,6 +36,7 @@ export function RecipeCreator({
   onSaved,
   onCancel,
   saveLabel = "Save to My meals",
+  defaultSlot,
 }) {
   const [open, setOpen] = useState(!!embedded);
   const [paste, setPaste] = useState("");
@@ -41,6 +44,7 @@ export function RecipeCreator({
   const [error, setError] = useState("");
   const [draft, setDraft] = useState(null);
   const [saved, setSaved] = useState("");
+  const [slot, setSlot] = useState(() => normalizeSlot(defaultSlot) || guessSlotFromTime());
 
   const reset = () => {
     setPaste("");
@@ -106,6 +110,7 @@ export function RecipeCreator({
       ...perServing,
       serves,
       ingredients: (draft.items || []).join("\n"),
+      slot: normalizeSlot(slot),
     });
     setBusy(false);
     if (!result) {
@@ -350,6 +355,13 @@ export function RecipeCreator({
           {error && (
             <div style={{ fontSize: 12.5, color: T.amber, marginBottom: 10, lineHeight: 1.5 }}>{error}</div>
           )}
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, letterSpacing: 0.3, marginBottom: 6 }}>
+              Save as
+            </div>
+            <SlotChips value={slot} onChange={setSlot} compact />
+          </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <Btn small onClick={save} disabled={busy}>

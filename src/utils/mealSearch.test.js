@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  enrichMealsWithBankSlot,
   filterMealsByQuery,
+  filterMealsBySlot,
   mealMatchesQuery,
+  mealMatchesSlotFilter,
+  mealSlotFilterKey,
   uniqueMealsByName,
 } from "./mealSearch.js";
 
@@ -43,6 +47,50 @@ describe("filterMealsByQuery", () => {
     const list = [oatmeal, chicken];
     expect(filterMealsByQuery(list, "")).toBe(list);
     expect(filterMealsByQuery(list, "chicken")).toEqual([chicken]);
+  });
+});
+
+describe("mealSlotFilterKey", () => {
+  it("keeps Treats separate from Snack", () => {
+    expect(mealSlotFilterKey({ cat: "Treats" })).toBe("Treats");
+    expect(mealSlotFilterKey({ cat: "Snack" })).toBe("Snack");
+    expect(mealSlotFilterKey({ cat: "Pantry" })).toBe("Snack");
+    expect(mealSlotFilterKey({ slot: "breakfast" })).toBe("Breakfast");
+    expect(mealSlotFilterKey({ name: "Mystery plate" })).toBe(null);
+  });
+});
+
+describe("filterMealsBySlot", () => {
+  it("returns the original list for All", () => {
+    const list = [oatmeal, chicken];
+    expect(filterMealsBySlot(list, "all")).toBe(list);
+    expect(filterMealsBySlot(list, "")).toBe(list);
+  });
+
+  it("hides uncategorized My meals from a slot chip", () => {
+    const saved = { name: "Turkey and Bacon" };
+    expect(mealMatchesSlotFilter(oatmeal, "Breakfast")).toBe(true);
+    expect(mealMatchesSlotFilter(chicken, "Breakfast")).toBe(false);
+    expect(mealMatchesSlotFilter(saved, "Dinner")).toBe(false);
+    expect(mealMatchesSlotFilter(saved, "My meals")).toBe(true);
+    expect(filterMealsBySlot([oatmeal, chicken, saved], "Dinner")).toEqual([chicken]);
+    expect(filterMealsBySlot([oatmeal, chicken, saved], "My meals")).toEqual([
+      oatmeal,
+      chicken,
+      saved,
+    ]);
+  });
+});
+
+describe("enrichMealsWithBankSlot", () => {
+  it("copies a bank category onto a saved meal with the same name", () => {
+    const saved = { name: "Pulled chicken tacos" };
+    const [tagged] = enrichMealsWithBankSlot([saved], [
+      { cat: "Dinner", name: "Pulled chicken tacos" },
+    ]);
+    expect(mealSlotFilterKey(tagged)).toBe("Dinner");
+    expect(mealMatchesSlotFilter(tagged, "Breakfast")).toBe(false);
+    expect(mealMatchesSlotFilter(tagged, "Dinner")).toBe(true);
   });
 });
 

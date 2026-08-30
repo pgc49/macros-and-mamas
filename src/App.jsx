@@ -33,6 +33,7 @@ import { TermsPage } from "./views/TermsPage";
 import { PrivacyPage } from "./views/PrivacyPage";
 import { ClientApp } from "./views/ClientApp";
 import { OnboardingBannersPreview } from "./views/OnboardingBannersPreview";
+import { MealLogPreview } from "./views/MealLogPreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
@@ -1055,7 +1056,14 @@ export default function App() {
     if (!ok) return false;
     if (opts.saveCustom) {
       try {
-        const saved = await db.saveCustomMeal({ name, cal, p, c, f });
+        const saved = await db.saveCustomMeal({
+          name,
+          cal,
+          p,
+          c,
+          f,
+          slot: o?.slot ?? opts.slot ?? null,
+        });
         setCustomMeals((list) => {
           const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
           return [saved, ...without];
@@ -1113,6 +1121,7 @@ export default function App() {
           f: entry.f,
           serves: entry.serves,
           ingredients: entry.ingredients,
+          slot: entry.slot,
         });
         setCustomMeals((list) => {
           const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
@@ -1614,7 +1623,10 @@ export default function App() {
 
       <Route path="/home" element={<Navigate to={PATHS.dashboard} replace />} />
       {import.meta.env.DEV ? (
-        <Route path="/dev/onboarding-banners" element={<OnboardingBannersPreview />} />
+        <>
+          <Route path="/dev/onboarding-banners" element={<OnboardingBannersPreview />} />
+          <Route path="/dev/meal-log" element={<MealLogPreview />} />
+        </>
       ) : null}
 
       <Route path={PATHS.terms} element={<TermsPage />} />
