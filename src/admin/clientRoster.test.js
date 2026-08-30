@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   filterRoster,
   formatLastMessaged,
+  listLeadCohorts,
   listRosterCohorts,
   matchesRosterQuery,
   needsYou,
@@ -160,6 +161,14 @@ describe("cohort filter", () => {
     const opts = listRosterCohorts([founding, c2]);
     expect(opts.map((o) => o.id)).toEqual(["all", "2026-07", "2026-08"]);
     expect(opts.find((o) => o.id === "2026-08").label).toBe("Cohort 2");
+  });
+
+  it("always offers Founding, Cohort 2, and Unassigned on Leads", () => {
+    const quizOnly = { email: "bare@example.com", cohort_label: "" };
+    const opts = listLeadCohorts([quizOnly]);
+    expect(opts.map((o) => o.id)).toEqual(["all", "2026-07", "2026-08", "unassigned"]);
+    expect(opts.find((o) => o.id === "2026-07").label).toBe("Founding");
+    expect(opts.find((o) => o.id === "unassigned").label).toBe("Unassigned");
   });
 
   it("scopes the roster and stats to one cohort", () => {

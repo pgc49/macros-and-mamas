@@ -6,14 +6,17 @@
 import { supabase } from "../lib/supabase";
 import { PACIFIC_TZ } from "./quizFunnel";
 
+/** Leftover = quiz complete, no payment. Default Leads list. */
+export const DEFAULT_QUIZ_LEAD_FILTER = "unpaid";
+
 export const QUIZ_LEAD_FILTERS = [
-  ["all", "All"],
   ["unpaid", "Unpaid"],
   ["no_account", "No account"],
   ["signed_up_unpaid", "Signed up unpaid"],
   ["paid", "Paid"],
   ["meta", "Ad"],
   ["referral", "Referral"],
+  ["all", "All"],
 ];
 
 const META_UTM = new Set(["facebook", "ig", "instagram", "fb", "meta"]);
@@ -68,6 +71,7 @@ const PROFILE_COLS = [
   "created_at",
   "phone",
   "status",
+  "cohort_label",
   "utm_source",
   "utm_medium",
   "utm_campaign",
@@ -348,10 +352,13 @@ export function enrichQuizLeads(leads, profiles, referrals = [], extras = {}) {
     const cohort = pickRelatedRow(cohortByEmail, cohortByProfileId, lead?.email, profileId);
     const eligibility = pickRelatedRow(eligibilityByEmail, eligibilityByProfileId, lead?.email, profileId);
     const macros = profileId ? macrosByProfileId.get(profileId) || null : null;
+    const profileCohort = String(profile?.cohort_label || "").trim();
+    const waitlistCohort = String(cohort?.cohort || "").trim();
     const row = {
       ...lead,
       referralCode: referral?.code || null,
       referralAdvocateFirstName: referral?.advocateFirstName || null,
+      cohort_label: profileCohort || waitlistCohort || "",
       profileId,
       profileCreatedAt: profile?.created_at || null,
       profilePaidAt: profile?.paid_at || null,
@@ -386,15 +393,21 @@ export function enrichQuizLeads(leads, profiles, referrals = [], extras = {}) {
   });
 }
 
-export function filterQuizLeads(rows, filter = "all") {
+export function isLeftoverLead(row) {
+  return row?.funnelStatus === "quiz_only" || row?.funnelStatus === "signed_up_unpaid";
+}
+
+export function leftoverLeadCount(rows) {
+  return (Array.isArray(rows) ? rows : []).filter(isLeftoverLead).length;
+}
+
+export function filterQuizLeads(rows, filter = DEFAULT_QUIZ_LEAD_FILTER) {
   const list = Array.isArray(rows) ? rows : [];
   if (!filter || filter === "all") return list;
   if (filter === "meta") return list.filter((row) => row.isMeta);
   if (filter === "referral") return list.filter((row) => row.isReferral);
-  if (filter === "unpaid") {
-    return list.filter((row) => (
-      row.funnelStatus === "quiz_only" || row.funnelStatus === "signed_up_unpaid"
-    ));
+  if (filter === "unpaid" || filter === "leftover") {
+    return list.filter(isLeftoverLead);
   }
   if (filter === "no_account") return list.filter((row) => row.funnelStatus === "quiz_only");
   if (filter === "signed_up_unpaid") return list.filter((row) => row.funnelStatus === "signed_up_unpaid");
@@ -443,8 +456,13 @@ export function formatLeadTags(lead) {
   const tags = [];
   const segment = SEGMENT_LABEL[lead?.segment];
   if (segment) tags.push(segment);
-  if (String(lead?.months_postpartum || "") === "still_pregnant" && !tags.includes("Pregnant")) {
+  const months = String(lead?.months_postpartum || "").trim();
+  if (months === "still_pregnant" && !tags.includes("Pregnant")) {
     tags.push("Pregnant");
+  }
+  if (months === "not_postpartum") {
+    const label = MONTHS_PP_LABEL.not_postpartum;
+    if (label && !tags.includes(label)) tags.push(label);
   }
   for (const flag of Array.isArray(lead?.flags) ? lead.flags : []) {
     const label = FLAG_LABEL[flag];

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { listLeadCohorts, matchesCohort } from "./clientRoster";
 import {
+  DEFAULT_QUIZ_LEAD_FILTER,
   enrichQuizLeads,
   filterQuizLeads,
   formatCampaignCompare,
@@ -19,6 +21,8 @@ import {
   leadInsightRows,
   leadQuizAnswerRows,
   leadQuizResultRows,
+  leftoverLeadCount,
+  isLeftoverLead,
   isMetaAdLead,
   isMetaClickLead,
   isMetaLead,
@@ -338,9 +342,74 @@ describe("enrichQuizLeads + filterQuizLeads", () => {
     expect(filterQuizLeads(rows, "meta").map((r) => r.id)).toEqual(["ellie"]);
     expect(filterQuizLeads(rows, "referral").map((r) => r.id)).toEqual(["alex", "jennifer"]);
     expect(filterQuizLeads(rows, "unpaid").map((r) => r.id)).toEqual(["ellie", "organic-unpaid", "pixel-only"]);
+    expect(filterQuizLeads(rows, "leftover").map((r) => r.id)).toEqual(["ellie", "organic-unpaid", "pixel-only"]);
     expect(filterQuizLeads(rows, "no_account").map((r) => r.id)).toEqual(["ellie", "pixel-only"]);
     expect(filterQuizLeads(rows, "signed_up_unpaid").map((r) => r.id)).toEqual(["organic-unpaid"]);
     expect(filterQuizLeads(rows, "paid").map((r) => r.id)).toEqual(["organic-paid", "alex", "jennifer"]);
+    expect(DEFAULT_QUIZ_LEAD_FILTER).toBe("unpaid");
+    expect(leftoverLeadCount(rows)).toBe(3);
+    expect(filterQuizLeads(rows, "unpaid").some((r) => r.funnelStatus === "paid")).toBe(false);
+  });
+
+  it("leftover includes nurture (pregnant / plant-based / early PP) and excludes paid", () => {
+    const nurture = enrichQuizLeads(
+      [
+        lead({ id: "preg", email: "preg@example.com", segment: "pregnancy_nurture" }),
+        lead({ id: "plant", email: "plant@example.com", segment: "waitlist_plantbased", flags: ["vegan"] }),
+        lead({ id: "early", email: "early@example.com", segment: "early_pp_nurture", months_postpartum: "0_3_months" }),
+        lead({ id: "notpp", email: "notpp@example.com", months_postpartum: "not_postpartum" }),
+        lead({ id: "paid-nurture", email: "paidn@example.com", segment: "pregnancy_nurture" }),
+      ],
+      [{ id: "paid-n", email: "paidn@example.com", role: "client", paid: true }],
+    );
+    expect(nurture.filter(isLeftoverLead).map((r) => r.id)).toEqual(["preg", "plant", "early", "notpp"]);
+    expect(filterQuizLeads(nurture, "unpaid").map((r) => r.id)).toEqual(["preg", "plant", "early", "notpp"]);
+    expect(formatLeadTags(nurture.find((r) => r.id === "preg"))).toBe("Pregnant");
+    expect(formatLeadTags(nurture.find((r) => r.id === "plant"))).toBe("Plant-based · Vegan");
+    expect(formatLeadTags(nurture.find((r) => r.id === "early"))).toBe("Early PP");
+    expect(formatLeadTags(nurture.find((r) => r.id === "notpp"))).toBe("Not postpartum");
+  });
+
+  it("stamps cohort from the profile, else cohort_waitlist; quiz-only sits Unassigned", () => {
+    const founding = enrichQuizLeads(
+      [lead({ id: "founding", email: "founding@example.com" })],
+      [{ id: "f1", email: "founding@example.com", role: "client", paid: false, cohort_label: "2026-07" }],
+    )[0];
+    expect(founding.cohort_label).toBe("2026-07");
+    expect(matchesCohort(founding, "2026-07")).toBe(true);
+    expect(matchesCohort(founding, "unassigned")).toBe(false);
+
+    const waitlistOnly = enrichQuizLeads(
+      [lead({ id: "wait", email: "wait@example.com" })],
+      [],
+      [],
+      { cohortWaitlist: [{ email: "wait@example.com", cohort: "2026-08", created_at: "2026-08-10T19:00:00.000Z" }] },
+    )[0];
+    expect(waitlistOnly.funnelStatus).toBe("quiz_only");
+    expect(waitlistOnly.cohort_label).toBe("2026-08");
+    expect(matchesCohort(waitlistOnly, "2026-08")).toBe(true);
+
+    const quizOnly = enrichQuizLeads([lead({ id: "bare", email: "bare@example.com" })], [])[0];
+    expect(quizOnly.funnelStatus).toBe("quiz_only");
+    expect(quizOnly.cohort_label).toBe("");
+    expect(matchesCohort(quizOnly, "unassigned")).toBe(true);
+    expect(matchesCohort(quizOnly, "2026-07")).toBe(false);
+
+    const leftoverFounding = filterQuizLeads([founding, waitlistOnly, quizOnly], "unpaid")
+      .filter((row) => matchesCohort(row, "2026-07"));
+    expect(leftoverFounding.map((r) => r.id)).toEqual(["founding"]);
+    const leftoverUnassigned = filterQuizLeads([founding, waitlistOnly, quizOnly], "unpaid")
+      .filter((row) => matchesCohort(row, "unassigned"));
+    expect(leftoverUnassigned.map((r) => r.id)).toEqual(["bare"]);
+
+    expect(listLeadCohorts([founding, quizOnly]).map((o) => o.id)).toEqual([
+      "all",
+      "2026-07",
+      "2026-08",
+      "unassigned",
+    ]);
+    expect(listLeadCohorts([quizOnly]).find((o) => o.id === "2026-07").label).toBe("Founding");
+    expect(listLeadCohorts([quizOnly]).find((o) => o.id === "2026-08").label).toBe("Cohort 2");
   });
 });
 
@@ -373,6 +442,8 @@ describe("lead display helpers", () => {
       .toBe("Early PP · C-section · Needs review");
     expect(formatLeadTags(lead({ months_postpartum: "still_pregnant", flags: ["none"] })))
       .toBe("Pregnant");
+    expect(formatLeadTags(lead({ months_postpartum: "not_postpartum", segment: "main" })))
+      .toBe("Not postpartum");
   });
 });
 
@@ -760,6 +831,7 @@ describe("loadQuizLeads", () => {
     expect(client.calls.find((c) => c.table === "referrals").cols).toEqual(expect.stringContaining("referred_email"));
     expect(client.calls.find((c) => c.table === "profiles").cols).toEqual(expect.stringContaining("phone"));
     expect(client.calls.find((c) => c.table === "profiles").cols).toEqual(expect.stringContaining("utm_source"));
+    expect(client.calls.find((c) => c.table === "profiles").cols).toEqual(expect.stringContaining("cohort_label"));
     expect(client.calls.find((c) => c.table === "profiles").cols).not.toMatch(/fbp|fbc|anon_id/);
     expect(rows).toHaveLength(1);
     expect(rows[0].profileId).toBe(MEGAN);

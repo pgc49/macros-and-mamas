@@ -16,7 +16,11 @@ import {
   planLeadDrips,
 } from "./leadDripSchedule";
 import { draftLeadPersonalNote, personalNoteMailtoHref } from "./leadPersonalNote";
+import { adminCohortName } from "../lib/cohorts";
+import { listLeadCohorts, matchesCohort } from "./clientRoster";
+import { CohortFilterBar } from "./AdminClientRoster";
 import {
+  DEFAULT_QUIZ_LEAD_FILTER,
   QUIZ_LEAD_FILTERS,
   filterQuizLeads,
   formatLeadTags,
@@ -26,6 +30,7 @@ import {
   leadInsightRows,
   leadQuizAnswerRows,
   leadQuizResultRows,
+  leftoverLeadCount,
   loadQuizLeads,
   quizLeadFunnelLabel,
   quizLeadSourceLabel,
@@ -70,9 +75,9 @@ const actionBtnBase = {
   boxSizing: "border-box",
 };
 
-function FilterBar({ filter, setFilter }) {
+function FilterBar({ filter, setFilter, leftoverCount }) {
   return (
-    <div style={{ display: "flex", gap: 6, margin: "0 0 16px", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 6, margin: "0 0 10px", flexWrap: "wrap", alignItems: "center" }}>
       {QUIZ_LEAD_FILTERS.map(([id, label]) => (
         <button
           key={id}
@@ -94,6 +99,11 @@ function FilterBar({ filter, setFilter }) {
           {label}
         </button>
       ))}
+      {leftoverCount != null ? (
+        <span style={{ fontSize: 13, fontWeight: 700, color: T.inkSoft, marginLeft: 2 }}>
+          {leftoverCount} still in play
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -312,6 +322,11 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
         ) : (
           <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 8 }}>No email on this lead.</div>
         )}
+        {formatLeadTags(lead) ? (
+          <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 6 }}>
+            {formatLeadTags(lead)}
+          </div>
+        ) : null}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
           {mailto ? (
             <>
@@ -399,14 +414,15 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
   );
 }
 
-export function AdminLeads({ onOpenMama, initialFilter = "all" }) {
+export function AdminLeads({ onOpenMama, initialFilter = DEFAULT_QUIZ_LEAD_FILTER }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState(initialFilter);
+  const [filter, setFilter] = useState(initialFilter || DEFAULT_QUIZ_LEAD_FILTER);
+  const [cohort, setCohort] = useState("all");
   const [selected, setSelected] = useState(null);
 
   useEffect(() => {
-    setFilter(initialFilter || "all");
+    setFilter(initialFilter || DEFAULT_QUIZ_LEAD_FILTER);
   }, [initialFilter]);
 
   useEffect(() => {
@@ -426,7 +442,25 @@ export function AdminLeads({ onOpenMama, initialFilter = "all" }) {
     };
   }, []);
 
-  const matches = useMemo(() => filterQuizLeads(rows || [], filter), [rows, filter]);
+  const leftoverCount = useMemo(() => leftoverLeadCount(rows || []), [rows]);
+  const cohortOptions = useMemo(() => listLeadCohorts(rows || []), [rows]);
+  const matches = useMemo(
+    () => filterQuizLeads(rows || [], filter).filter((row) => matchesCohort(row, cohort)),
+    [rows, filter, cohort],
+  );
+
+  const leftoverEmpty = filter === "unpaid" || filter === "leftover";
+  const emptyFilterCopy = leftoverEmpty
+    ? (cohort && cohort !== "all"
+      ? `No leftover leads in ${cohort === "unassigned" ? "Unassigned" : adminCohortName(cohort)} — ranges in, no payment.`
+      : "Nobody still in play — quiz complete with no payment.")
+    : "No quiz leads match this filter.";
+
+  const countLine = leftoverEmpty
+    ? `${matches.length} still in play`
+    : filter === "all"
+      ? `${matches.length} quiz complete${matches.length === 1 ? "" : "s"}`
+      : `${matches.length} of ${rows?.length || 0}`;
 
   if (selected) {
     return (
@@ -442,10 +476,11 @@ export function AdminLeads({ onOpenMama, initialFilter = "all" }) {
     <div>
       <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55, margin: "0 0 12px" }}>
         Quiz completes — the Meta Lead we fire, not Ads Manager.
-        Unpaid is the true lead list: ranges in, no payment yet.
-        Tap a lead to see her email, what we've sent, and what's still scheduled.
+        Leftover (Unpaid) is who is still in play: ranges in, no payment.
+        Paid and All are one chip away. Tap a lead to see her email, what we've sent, and what's still scheduled.
       </p>
-      <FilterBar filter={filter} setFilter={setFilter} />
+      <FilterBar filter={filter} setFilter={setFilter} leftoverCount={rows == null ? null : leftoverCount} />
+      <CohortFilterBar options={cohortOptions} cohort={cohort} setCohort={setCohort} />
       <Card style={{ marginBottom: 28 }}>
         <SectionTitle>Quiz leads</SectionTitle>
         {error ? (
@@ -455,13 +490,11 @@ export function AdminLeads({ onOpenMama, initialFilter = "all" }) {
         ) : rows.length === 0 ? (
           <EmptyLine>No quiz completes yet.</EmptyLine>
         ) : matches.length === 0 ? (
-          <EmptyLine>No quiz leads match this filter.</EmptyLine>
+          <EmptyLine>{emptyFilterCopy}</EmptyLine>
         ) : (
           <>
             <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, margin: "0 0 4px" }}>
-              {filter === "all"
-                ? `${matches.length} quiz complete${matches.length === 1 ? "" : "s"}`
-                : `${matches.length} of ${rows.length}`}
+              {countLine}
             </p>
             {matches.map((row, i) => {
               const canOpen = !!leadEmail(row);
@@ -495,6 +528,7 @@ export function AdminLeads({ onOpenMama, initialFilter = "all" }) {
                     {quizLeadSourceLabel(row)}
                     {" · "}
                     {quizLeadFunnelLabel(row.funnelStatus)}
+                    {row.cohort_label ? ` · ${adminCohortName(row.cohort_label)}` : ""}
                   </div>
                   {formatLeadTags(row) ? (
                     <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 2 }}>

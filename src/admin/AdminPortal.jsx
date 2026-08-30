@@ -261,7 +261,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   const [progressLoading, setProgressLoading] = useState(false);
   const [progressError, setProgressError] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const [leadsFilter, setLeadsFilter] = useState("all");
+  const [leadsFilter, setLeadsFilter] = useState("unpaid");
   const debounceRef = useRef({});
 
   useEffect(() => {
@@ -846,7 +846,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
         <>
           <AdminQuizFunnelCard
             onOpenLeads={(nextFilter) => {
-              setLeadsFilter(nextFilter || "all");
+              setLeadsFilter(nextFilter || "unpaid");
               setTab("leads");
             }}
           />
