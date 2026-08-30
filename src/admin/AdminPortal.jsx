@@ -31,7 +31,7 @@ import { AdminCredits } from "./AdminCredits";
 import { AdminEmails } from "./AdminEmails";
 import { AdminLeads } from "./AdminLeads";
 import { AdminQuizFunnelCard } from "./AdminQuizFunnelCard";
-import { AdminClientRoster, CohortFilterBar, CopyPhoneButton } from "./AdminClientRoster";
+import { AdminClientRoster, CohortFilterBar, CopyPhoneButton, ReadyToApproveBanner } from "./AdminClientRoster";
 import { rosterStats } from "./clientRoster";
 import { formatReferredBy, thankReferrerLabel } from "./referredBy";
 import { AppUpdateBanner } from "../components/AppUpdateBanner";
@@ -307,11 +307,20 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     () => rosterStats(all, cohortFilter),
     [all, cohortFilter],
   );
+  const readyToApproveCount = useMemo(
+    () => rosterStats(all, "all").awaitingApproval,
+    [all],
+  );
 
-  const openClients = useCallback((nextFilter) => {
+  const openClients = useCallback((nextFilter, { allCohorts = false } = {}) => {
+    if (allCohorts) setCohortFilter("all");
     setFilter(nextFilter);
     setTab("clients");
   }, []);
+
+  const openReadyToApprove = useCallback(() => {
+    openClients("awaiting_approval", { allCohorts: true });
+  }, [openClients]);
 
   useEffect(() => {
     if (tab !== "overview") return;
@@ -819,6 +828,8 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
       <AppUpdateBanner />
 
+      <ReadyToApproveBanner count={readyToApproveCount} onOpen={openReadyToApprove} />
+
       {tab === "overview" && (
       <Link
         to={`${PATHS.support}?kind=feedback&from=admin`}
@@ -901,7 +912,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
             <StatPill label="Paid" value={computedStats.paid} bg={T.sageSoft} color={T.sage} onClick={() => openClients("paid")} />
             <StatPill label="Unpaid" value={computedStats.unpaid} bg={T.track} color={T.inkSoft} onClick={() => openClients("unpaid")} />
             <StatPill label="Need intake" value={computedStats.awaitingIntake} bg={T.amberSoft} color={T.amber} onClick={() => openClients("awaiting_intake")} />
-            <StatPill label="Need approval" value={computedStats.awaitingApproval} bg={T.amberSoft} color={T.amber} onClick={() => openClients("awaiting_approval")} />
+            <StatPill label="Ready to approve" value={readyToApproveCount} bg={T.amberSoft} color={T.amber} onClick={openReadyToApprove} />
             <StatPill label="Active" value={computedStats.active} bg={T.sageSoft} color={T.sage} onClick={() => openClients("active")} />
             <StatPill label="Refunded" value={computedStats.refunded} bg={T.track} color={T.inkSoft} onClick={() => openClients("refunded")} />
           </div>
@@ -932,11 +943,11 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                   </button>
                 </p>
               )}
-              {computedStats.awaitingApproval > 0
+              {readyToApproveCount > 0
                 ? (
                   <p style={{ margin: "0 0 8px" }}>
-                    <button type="button" onClick={() => openClients("awaiting_approval")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
-                      {computedStats.awaitingApproval} mama{computedStats.awaitingApproval === 1 ? "" : "s"} waiting on macro approval
+                    <button type="button" onClick={openReadyToApprove} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
+                      {readyToApproveCount} ready to approve
                     </button>
                     .
                   </p>
@@ -961,9 +972,9 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
             </div>
             <Btn
               style={{ width: "100%", marginTop: 14 }}
-              onClick={() => openClients(computedStats.awaitingApproval > 0 ? "awaiting_approval" : "needs_you")}
+              onClick={() => (readyToApproveCount > 0 ? openReadyToApprove() : openClients("needs_you"))}
             >
-              {computedStats.awaitingApproval > 0 ? "Review approvals" : "Open client list"}
+              {readyToApproveCount > 0 ? "Review approvals" : "Open client list"}
             </Btn>
           </Card>
 

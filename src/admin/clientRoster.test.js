@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   filterRoster,
   formatLastMessaged,
+  isReadyToApprove,
   listRosterCohorts,
   matchesRosterQuery,
   needsYou,
@@ -171,6 +172,109 @@ describe("cohort filter", () => {
     expect(stats.active).toBe(0);
     expect(stats.awaitingIntake).toBe(1);
     expect(rosterFilterCounts([founding, c2], today, "2026-08").paid).toBe(1);
+  });
+});
+
+describe("isReadyToApprove + awaiting_approval queue", () => {
+  const today = "2026-08-28";
+  const readyAugust = mama({
+    id: "r21",
+    name: "August Ready",
+    cohort_label: "2026-08",
+    stage: "awaiting_approval",
+    status: "pending",
+    paid: true,
+    hasIntake: true,
+    lastActiveDate: null,
+  });
+  const readyFallback = mama({
+    id: "rf",
+    name: "Pending Fallback",
+    cohort_label: "2026-08",
+    stage: "signed_up",
+    status: "pending",
+    paid: true,
+    hasIntake: true,
+    lastActiveDate: null,
+  });
+  const foundingQuiet = mama({
+    id: "fq",
+    name: "Founding Quiet",
+    cohort_label: "2026-07",
+    stage: "active",
+    status: "active",
+    paid: true,
+    hasIntake: true,
+    lastActiveDate: "2026-08-10",
+    lastMealDate: "2026-08-10",
+  });
+  const paidNoIntake = mama({
+    id: "ni",
+    name: "Paid No Intake",
+    cohort_label: "2026-08",
+    stage: "paid_awaiting_intake",
+    status: "pending",
+    paid: true,
+    hasIntake: false,
+    lastActiveDate: null,
+  });
+  const unpaidLead = mama({
+    id: "ul",
+    name: "Unpaid Lead",
+    stage: "signed_up",
+    status: "pending",
+    paid: false,
+    hasIntake: false,
+    lastActiveDate: null,
+  });
+  const unreadOnly = mama({
+    id: "uo",
+    name: "Unread Active",
+    cohort_label: "2026-07",
+    unreadFromMama: 2,
+  });
+  const refundedPaid = mama({
+    id: "rr",
+    name: "Refunded",
+    stage: "refunded",
+    status: "pending",
+    paid: true,
+    hasIntake: true,
+    refunded: true,
+  });
+  const roster = [readyAugust, readyFallback, foundingQuiet, paidNoIntake, unpaidLead, unreadOnly, refundedPaid];
+
+  it("counts only paid + intake + not approved", () => {
+    expect(isReadyToApprove(readyAugust)).toBe(true);
+    expect(isReadyToApprove(readyFallback)).toBe(true);
+    expect(isReadyToApprove(foundingQuiet)).toBe(false);
+    expect(isReadyToApprove(paidNoIntake)).toBe(false);
+    expect(isReadyToApprove(unpaidLead)).toBe(false);
+    expect(isReadyToApprove(unreadOnly)).toBe(false);
+    expect(isReadyToApprove(refundedPaid)).toBe(false);
+    expect(rosterFilterCounts(roster, today).awaitingApproval).toBe(2);
+    expect(rosterStats(roster).awaitingApproval).toBe(2);
+  });
+
+  it("opens the ready-to-approve queue without quiet, unpaid, or paid-no-intake", () => {
+    const list = filterRoster(roster, "awaiting_approval", { todayIso: today });
+    expect(list.map((c) => c.id).sort()).toEqual(["r21", "rf"]);
+  });
+
+  it("keeps Founding quiet in needs-you, not in ready-to-approve", () => {
+    expect(needsYou(foundingQuiet, today)).toBe(true);
+    expect(needsYou(readyAugust, today)).toBe(true);
+    expect(needsYou(paidNoIntake, today)).toBe(false);
+    const needs = filterRoster(roster, "needs_you", { todayIso: today });
+    expect(needs.map((c) => c.id)).toEqual(expect.arrayContaining(["fq", "r21", "uo"]));
+    expect(needs.map((c) => c.id)).not.toContain("ni");
+    expect(filterRoster(roster, "awaiting_approval", { todayIso: today }).map((c) => c.id)).not.toContain("fq");
+  });
+
+  it("scopes the ready-to-approve count to a cohort without changing the all-cohorts interrupt", () => {
+    expect(rosterStats(roster, "2026-07").awaitingApproval).toBe(0);
+    expect(rosterStats(roster, "2026-08").awaitingApproval).toBe(2);
+    expect(rosterStats(roster, "all").awaitingApproval).toBe(2);
   });
 });
 

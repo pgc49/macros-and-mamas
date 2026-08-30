@@ -88,11 +88,18 @@ export function isQuietActive(client, todayIso = localDateIso()) {
   return lastActive < okIfOnOrAfter;
 }
 
+/** Paid + intake/macros in + not yet approved. Not quiet actives, unpaid, or paid-no-intake. */
+export function isReadyToApprove(client) {
+  if (!client || String(client.role || "").toLowerCase() === "admin") return false;
+  if (client.refunded || client.stage === "refunded") return false;
+  if (client.stage === "awaiting_approval") return true;
+  return Boolean(client.status === "pending" && client.hasIntake && client.paid);
+}
+
 export function needsYou(client, todayIso = localDateIso()) {
   if (!client || client.role === "admin") return false;
   if (Number(client.unreadFromMama) > 0) return true;
-  if (client.stage === "awaiting_approval") return true;
-  if (client.status === "pending" && client.hasIntake && client.paid) return true;
+  if (isReadyToApprove(client)) return true;
   return isQuietActive(client, todayIso);
 }
 
@@ -121,9 +128,7 @@ function byName(a, b) {
 
 function attentionRank(client, todayIso) {
   if (Number(client.unreadFromMama) > 0) return 0;
-  if (client.stage === "awaiting_approval" || (client.status === "pending" && client.hasIntake && client.paid)) {
-    return 1;
-  }
+  if (isReadyToApprove(client)) return 1;
   if (isQuietActive(client, todayIso)) return 2;
   if (client.stage === "active" && !client.lastAdminAt) return 3;
   return 4;
@@ -142,9 +147,7 @@ export function filterRoster(all, filter, { query = "", todayIso = localDateIso(
   } else if (filter === "awaiting_intake") {
     list = clientsOnly.filter((c) => c.stage === "paid_awaiting_intake");
   } else if (filter === "awaiting_approval") {
-    list = clientsOnly.filter(
-      (c) => c.stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid),
-    );
+    list = clientsOnly.filter((c) => isReadyToApprove(c));
   } else if (filter === "active") {
     list = clientsOnly.filter((c) => c.stage === "active" || c.status === "active");
   } else if (filter === "refunded") {
@@ -182,9 +185,7 @@ export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all
   return {
     needsYou: clientsOnly.filter((c) => needsYou(c, todayIso)).length,
     active: clientsOnly.filter((c) => c.stage === "active" || c.status === "active").length,
-    awaitingApproval: clientsOnly.filter(
-      (c) => c.stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid),
-    ).length,
+    awaitingApproval: clientsOnly.filter((c) => isReadyToApprove(c)).length,
     awaitingIntake: clientsOnly.filter((c) => c.stage === "paid_awaiting_intake").length,
     unpaid: clientsOnly.filter((c) => c.stage === "signed_up").length,
     paid: clientsOnly.filter((c) => isStripeCollected(c)).length,
@@ -200,9 +201,7 @@ export function rosterStats(all, cohort = "all") {
     paid: clientsOnly.filter((c) => isStripeCollected(c)).length,
     unpaid: clientsOnly.filter((c) => !c.paid && !c.refunded).length,
     awaitingIntake: clientsOnly.filter((c) => c.stage === "paid_awaiting_intake").length,
-    awaitingApproval: clientsOnly.filter(
-      (c) => c.stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid),
-    ).length,
+    awaitingApproval: clientsOnly.filter((c) => isReadyToApprove(c)).length,
     active: clientsOnly.filter((c) => c.stage === "active" || c.status === "active").length,
     refunded: clientsOnly.filter((c) => c.refunded || c.stage === "refunded").length,
   };
