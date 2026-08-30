@@ -138,7 +138,8 @@ function byName(a, b) {
   return rosterTitle(a).localeCompare(rosterTitle(b), undefined, { sensitivity: "base" });
 }
 
-function attentionRank(client, todayIso) {
+/** Exported so Home can consume this rank — do not rewrite the rules here. */
+export function attentionRank(client, todayIso) {
   if (Number(client.unreadFromMama) > 0) return 0;
   if (client.stage === "awaiting_approval" || (client.status === "pending" && client.hasIntake && client.paid)) {
     return 1;

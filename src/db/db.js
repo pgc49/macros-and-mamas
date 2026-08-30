@@ -66,12 +66,28 @@ function profileToRow(p) {
   };
 }
 
-/** Display name: "First Last" when last is present, else first / email fallback handled by callers. */
+/**
+ * Display name: "First Last" when last is present.
+ * If `name` already includes the last name (full-name-in-first-column, or a
+ * previously doubled render), do not append it again.
+ */
 export function fullName(profileOrRow) {
   if (!profileOrRow) return "";
   const first = String(profileOrRow.name || profileOrRow.first_name || "").trim();
   const last = String(profileOrRow.lastName || profileOrRow.last_name || "").trim();
-  return [first, last].filter(Boolean).join(" ");
+  if (!last) return first;
+  if (!first) return last;
+  const lastLower = last.toLowerCase();
+  const parts = first.split(/\s+/).filter(Boolean);
+  while (parts.length && parts[parts.length - 1].toLowerCase() === lastLower) {
+    if (parts.length === 1) break;
+    parts.pop();
+  }
+  const remaining = parts.join(" ");
+  if (!remaining) return last;
+  if (remaining.toLowerCase() === lastLower) return remaining;
+  if (remaining.toLowerCase().endsWith(` ${lastLower}`)) return remaining;
+  return `${remaining} ${last}`;
 }
 
 /** Public URL for a profile avatar path in the avatars bucket. */
@@ -1826,6 +1842,127 @@ export const db = {
     return (data || []).filter(
       (row) => String(row?.to_email || "").trim().toLowerCase() === target,
     );
+  },
+
+  async loadPersonOverrides() {
+    const { data, error } = await supabase
+      .from("person_overrides")
+      .select("email_lower, snoozed_until, marked_cold, last_touch_at, updated_at");
+    if (error) {
+      console.warn("loadPersonOverrides failed", error);
+      return [];
+    }
+    return data || [];
+  },
+
+  async savePersonOverride(email, patch = {}) {
+    const email_lower = String(email || "").trim().toLowerCase();
+    if (!email_lower) return null;
+    const uid = await requireUserId();
+    const row = {
+      email_lower,
+      updated_by: uid,
+      updated_at: new Date().toISOString(),
+      ...patch,
+    };
+    const { data, error } = await supabase
+      .from("person_overrides")
+      .upsert(row, { onConflict: "email_lower" })
+      .select("email_lower, snoozed_until, marked_cold, last_touch_at")
+      .maybeSingle();
+    if (error) {
+      console.warn("savePersonOverride failed", error);
+      return null;
+    }
+    return data;
+  },
+
+  async recordAdminTouch(email, kind = "open", profileId = null) {
+    const email_lower = String(email || "").trim().toLowerCase();
+    if (!email_lower) return;
+    const uid = await requireUserId();
+    const { error } = await supabase.from("admin_touches").insert({
+      email_lower,
+      kind: String(kind || "open").slice(0, 40),
+      profile_id: profileId || null,
+      created_by: uid,
+    });
+    if (error) console.warn("recordAdminTouch failed", error);
+    await this.savePersonOverride(email_lower, { last_touch_at: new Date().toISOString() });
+  },
+
+  async loadLatestEmailEventsByEmails(emails, perEmail = 8) {
+    const raw = [...new Set((emails || []).map((e) => String(e || "").trim()).filter(Boolean))];
+    const list = [...new Set(raw.flatMap((e) => [e, e.toLowerCase()]))];
+    if (!list.length) return {};
+    const { data, error } = await supabase
+      .from("email_events")
+      .select("id, profile_id, email_type, to_email, subject, status, created_at")
+      .in("to_email", list)
+      .order("created_at", { ascending: false })
+      .limit(Math.min(list.length * perEmail, 800));
+    if (error) {
+      console.warn("loadLatestEmailEventsByEmails failed", error);
+      return {};
+    }
+    const byEmail = {};
+    for (const row of data || []) {
+      const key = String(row.to_email || "").trim().toLowerCase();
+      if (!key) continue;
+      if (!byEmail[key]) byEmail[key] = [];
+      if (byEmail[key].length < perEmail) byEmail[key].push(row);
+    }
+    return byEmail;
+  },
+
+  async loadUnsubscribedEmailSet(emails) {
+    const list = [...new Set((emails || []).map((e) => String(e || "").trim().toLowerCase()).filter(Boolean))];
+    if (!list.length) return new Set();
+    const { data, error } = await supabase
+      .from("email_unsubscribes")
+      .select("email")
+      .in("email", list);
+    if (error) {
+      console.warn("loadUnsubscribedEmailSet failed", error);
+      return new Set();
+    }
+    return new Set((data || []).map((r) => String(r.email || "").trim().toLowerCase()).filter(Boolean));
+  },
+
+  async loadClientSummary(profileId, forDate) {
+    if (!profileId) return null;
+    const day = forDate || new Date().toISOString().slice(0, 10);
+    const { data, error } = await supabase
+      .from("client_summaries")
+      .select("profile_id, for_date, summary, suggested_touch, model, created_at")
+      .eq("profile_id", profileId)
+      .eq("for_date", day)
+      .maybeSingle();
+    if (error) {
+      console.warn("loadClientSummary failed", error);
+      return null;
+    }
+    return data;
+  },
+
+  async saveClientSummary(row) {
+    if (!row?.profile_id || !row?.for_date || !row?.summary) return null;
+    const { data, error } = await supabase
+      .from("client_summaries")
+      .upsert({
+        profile_id: row.profile_id,
+        for_date: row.for_date,
+        summary: String(row.summary).slice(0, 2000),
+        suggested_touch: row.suggested_touch ? String(row.suggested_touch).slice(0, 500) : null,
+        model: row.model ? String(row.model).slice(0, 120) : null,
+      }, { onConflict: "profile_id,for_date" })
+      .select("profile_id, for_date, summary, suggested_touch, model, created_at")
+      .maybeSingle();
+    if (error) {
+      console.warn("saveClientSummary failed", error);
+      return null;
+    }
+    return data;
   },
 
   async isEmailUnsubscribed(email) {
