@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  collapseTrailingLast,
   fullName,
-  givenNameForWrite,
   joinPersonName,
+  nameAlreadyHasLast,
 } from "./personName.js";
 
 describe("joinPersonName", () => {
@@ -14,7 +13,7 @@ describe("joinPersonName", () => {
     expect(joinPersonName("Sarah")).toBe("Sarah");
   });
 
-  it("joins first + last", () => {
+  it("joins a one-word first name with last (the live majority case)", () => {
     expect(joinPersonName("Sarah", "Smith")).toBe("Sarah Smith");
     expect(joinPersonName("  Sarah  ", "  Smith  ")).toBe("Sarah Smith");
   });
@@ -25,8 +24,13 @@ describe("joinPersonName", () => {
     expect(joinPersonName("sarah smith", "SMITH")).toBe("sarah smith");
   });
 
-  it("collapses a last name that was already doubled in name", () => {
-    expect(joinPersonName("Sarah Smith Smith", "Smith")).toBe("Sarah Smith");
+  it("does not append last when last_name is already the last token", () => {
+    expect(nameAlreadyHasLast("Sarah Smith", "Smith")).toBe(true);
+    expect(joinPersonName("Mary Ann", "Ann")).toBe("Mary Ann");
+  });
+
+  it("does not collapse a name that already has last twice — only skips another append", () => {
+    expect(joinPersonName("Sarah Smith Smith", "Smith")).toBe("Sarah Smith Smith");
   });
 
   it("keeps hyphenated last names intact and does not double them", () => {
@@ -71,36 +75,5 @@ describe("fullName", () => {
   it("does not re-append last on a roster row whose name is already joined", () => {
     expect(fullName({ name: "Sarah Smith", lastName: "Smith", firstName: "Sarah" }))
       .toBe("Sarah Smith");
-  });
-});
-
-describe("givenNameForWrite", () => {
-  it("keeps a first-name-only value", () => {
-    expect(givenNameForWrite("Sarah", "Smith")).toBe("Sarah");
-    expect(givenNameForWrite("Sarah", "")).toBe("Sarah");
-  });
-
-  it("strips a trailing last name from a full name in the first-name field", () => {
-    expect(givenNameForWrite("Sarah Smith", "Smith")).toBe("Sarah");
-    expect(givenNameForWrite("Sarah Smith-Jones", "Smith-Jones")).toBe("Sarah");
-    expect(givenNameForWrite("Sarah Van Der Berg", "Van Der Berg")).toBe("Sarah");
-  });
-
-  it("strips a doubled trailing last name", () => {
-    expect(givenNameForWrite("Sarah Smith Smith", "Smith")).toBe("Sarah");
-  });
-
-  it("does not rewrite when last is empty", () => {
-    expect(givenNameForWrite("Sarah Smith", "")).toBe("Sarah Smith");
-  });
-
-  it("does not wipe a single-token name that equals last", () => {
-    expect(givenNameForWrite("Smith", "Smith")).toBe("Smith");
-  });
-});
-
-describe("collapseTrailingLast", () => {
-  it("requires a space before the last-name suffix", () => {
-    expect(collapseTrailingLast("Annabelle", "Belle")).toBe("Annabelle");
   });
 });

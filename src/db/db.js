@@ -8,7 +8,7 @@ import {
 } from "../lib/messageReactions";
 import { chronologicalMessages } from "../lib/messageOrdering";
 import { referredByByUserId } from "../lib/referredBy";
-import { givenNameForWrite, joinPersonName } from "../lib/personName";
+import { joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
 
@@ -40,8 +40,8 @@ function profileToRow(p) {
     : null;
   const ageFromDob = ageFromDateOfBirth(dob);
   return {
-    name: givenNameForWrite(p.name, p.lastName) || null,
-    last_name: String(p.lastName || "").trim() || null,
+    name: p.name || null,
+    last_name: p.lastName || null,
     age: ageFromDob != null
       ? ageFromDob
       : (p.age === "" || p.age == null ? null : Number(p.age)),
@@ -1422,9 +1422,7 @@ export const db = {
   async updateAccountProfile(patch = {}) {
     const uid = await requireUserId();
     const row = {};
-    if (patch.name !== undefined) {
-      row.name = givenNameForWrite(patch.name, patch.lastName).slice(0, 80) || null;
-    }
+    if (patch.name !== undefined) row.name = String(patch.name || "").trim().slice(0, 80) || null;
     if (patch.lastName !== undefined) row.last_name = String(patch.lastName || "").trim().slice(0, 80) || null;
     if (patch.phone !== undefined) row.phone = String(patch.phone || "").trim().slice(0, 40) || null;
     if (patch.dateOfBirth !== undefined) {

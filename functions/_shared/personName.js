@@ -1,10 +1,15 @@
 /**
- * Person-name join / write helpers.
+ * Person-name display join.
  *
  * After 020_profile_last_name, `profiles.name` is first-name-only and
- * `last_name` is last-name-only. Some rows (and some in-memory roster
- * objects) still carry a full name in `name`. Joining blindly produced
+ * `last_name` is last-name-only. Some in-memory roster objects (and a
+ * few rows) still carry a full name in `name`. Joining blindly produced
  * "Sarah Smith Smith".
+ *
+ * Do not rewrite stored first names. Almost every live row is already
+ * one-word first + last_name. Only skip the extra append when it would
+ * double: `name` already ends with last_name, or last_name is already
+ * the last token of `name`.
  */
 
 function trimPart(value) {
@@ -15,63 +20,31 @@ function lower(value) {
   return value.toLowerCase();
 }
 
-/**
- * Peel trailing last-name suffixes off `first`.
- * Requires a space before the suffix so "Annabelle" + "Belle" is left alone.
- * A single-token name that equals last is kept ("Smith" / "Smith").
- */
-function stripTrailingLasts(first, last) {
+/** True when appending `last` would repeat a last name already in `first`. */
+export function nameAlreadyHasLast(first, last) {
+  const given = trimPart(first);
   const family = trimPart(last);
-  let given = trimPart(first);
-  let count = 0;
-  if (!given || !family) return { given, family, count };
+  if (!given || !family) return false;
+  const givenLower = lower(given);
   const familyLower = lower(family);
-  while (true) {
-    const gLower = lower(given);
-    if (gLower === familyLower) break;
-    if (!gLower.endsWith(` ${familyLower}`)) break;
-    given = given.slice(0, given.length - family.length).trim();
-    count += 1;
-  }
-  return { given, family, count };
-}
-
-/** Strip every trailing last-name suffix. Used for first-name-only writes. */
-export function collapseTrailingLast(first, last) {
-  return stripTrailingLasts(first, last).given;
+  if (givenLower === familyLower) return true;
+  if (givenLower.endsWith(` ${familyLower}`)) return true;
+  const tokens = given.split(/\s+/).filter(Boolean);
+  const lastToken = tokens[tokens.length - 1] || "";
+  return lower(lastToken) === familyLower;
 }
 
 /**
  * Display name: "First Last" without appending last when `first`
- * already ends with that last name (case-insensitive, trimmed).
- * Extra trailing lasts already stored in `first` are collapsed so
- * display never shows the last name twice. Original last-name
- * casing in `first` is kept when last was already present.
+ * already ends with that last name or already has it as the last token.
  */
 export function joinPersonName(first, last) {
-  const rawGiven = trimPart(first);
-  const { given, family, count } = stripTrailingLasts(first, last);
-  if (!family) return rawGiven;
-  if (!rawGiven) return family;
-  if (count === 0) {
-    if (lower(given) === lower(family)) return rawGiven;
-    return `${given} ${family}`;
-  }
-  const originalLast = rawGiven.slice(rawGiven.length - family.length);
-  if (!given) return originalLast;
-  return `${given} ${originalLast}`;
-}
-
-/**
- * Persist first-name-only. If `name` already ends with `last_name`,
- * strip that suffix. Empty last leaves `name` unchanged.
- */
-export function givenNameForWrite(first, last) {
   const given = trimPart(first);
   const family = trimPart(last);
-  if (!given) return "";
   if (!family) return given;
-  return collapseTrailingLast(given, family) || given;
+  if (!given) return family;
+  if (nameAlreadyHasLast(given, family)) return given;
+  return `${given} ${family}`;
 }
 
 /** `fullName()`-shaped objects: name/first_name + lastName/last_name. */

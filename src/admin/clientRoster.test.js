@@ -47,7 +47,7 @@ describe("rosterTitle", () => {
 
   it("does not show last name twice when name is already full", () => {
     expect(rosterTitle(mama({ name: "Sarah Smith", lastName: "Smith" }))).toBe("Sarah Smith");
-    expect(rosterTitle(mama({ name: "Sarah Smith Smith", lastName: "Smith" }))).toBe("Sarah Smith");
+    expect(rosterTitle(mama({ name: "Sarah Smith Smith", lastName: "Smith" }))).toBe("Sarah Smith Smith");
     expect(rosterTitle(mama({ name: "", firstName: "Sarah Smith", lastName: "Smith" }))).toBe("Sarah Smith");
   });
 });

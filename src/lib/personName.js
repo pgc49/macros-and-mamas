@@ -1,6 +1,5 @@
 export {
-  collapseTrailingLast,
   fullName,
-  givenNameForWrite,
   joinPersonName,
+  nameAlreadyHasLast,
 } from "../../functions/_shared/personName.js";
