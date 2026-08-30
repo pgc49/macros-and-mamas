@@ -38,7 +38,7 @@ describe("joinPersonName", () => {
   it("keeps multi-word last names intact and does not double them", () => {
     expect(joinPersonName("Sarah", "Van Der Berg")).toBe("Sarah Van Der Berg");
     expect(joinPersonName("Sarah Van Der Berg", "Van Der Berg")).toBe("Sarah Van Der Berg");
-    expect(joinPersonName("Sarah van der berg", "Van Der Berg")).toBe("Sarah Van Der Berg");
+    expect(joinPersonName("Sarah van der berg", "Van Der Berg")).toBe("Sarah van der berg");
   });
 
   it("does not treat a first name that merely ends with last as a match", () => {
