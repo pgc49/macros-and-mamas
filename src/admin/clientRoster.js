@@ -150,7 +150,7 @@ export function attentionRank(client, todayIso) {
   return 4;
 }
 
-export function filterRoster(all, filter, { query = "", todayIso = localDateIso(), cohort = "all" } = {}) {
+export function filterRoster(all, filter, { query = "", todayIso = localDateIso(), cohort = "all", nowMs = Date.now() } = {}) {
   const admins = (all || []).filter((c) => c.role === "admin").slice().sort(byName);
   const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
   let list = clientsOnly;
@@ -171,7 +171,7 @@ export function filterRoster(all, filter, { query = "", todayIso = localDateIso(
   } else if (filter === "refunded") {
     list = clientsOnly.filter((c) => c.refunded || c.stage === "refunded");
   } else if (filter === "unread" || filter === "quiet" || filter === "needs_help" || filter === "steady" || filter === "doing_well") {
-    list = clientsOnly.filter((c) => matchesClientHealthFilter(c, filter, todayIso));
+    list = clientsOnly.filter((c) => matchesClientHealthFilter(c, filter, todayIso, nowMs));
   }
 
   list = list.filter((c) => matchesRosterQuery(c, query));
@@ -202,7 +202,7 @@ export function filterRoster(all, filter, { query = "", todayIso = localDateIso(
   return [...adminHits, ...list];
 }
 
-export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all") {
+export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all", nowMs = Date.now()) {
   const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
   return {
     needsYou: clientsOnly.filter((c) => needsYou(c, todayIso)).length,
@@ -214,11 +214,11 @@ export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all
     unpaid: clientsOnly.filter((c) => c.stage === "signed_up").length,
     paid: clientsOnly.filter((c) => isStripeCollected(c)).length,
     refunded: clientsOnly.filter((c) => c.refunded || c.stage === "refunded").length,
-    unread: clientsOnly.filter((c) => matchesClientHealthFilter(c, "unread", todayIso)).length,
-    quiet: clientsOnly.filter((c) => matchesClientHealthFilter(c, "quiet", todayIso)).length,
-    needsHelp: clientsOnly.filter((c) => matchesClientHealthFilter(c, "needs_help", todayIso)).length,
-    steady: clientsOnly.filter((c) => matchesClientHealthFilter(c, "steady", todayIso)).length,
-    doingWell: clientsOnly.filter((c) => matchesClientHealthFilter(c, "doing_well", todayIso)).length,
+    unread: clientsOnly.filter((c) => matchesClientHealthFilter(c, "unread", todayIso, nowMs)).length,
+    quiet: clientsOnly.filter((c) => matchesClientHealthFilter(c, "quiet", todayIso, nowMs)).length,
+    needsHelp: clientsOnly.filter((c) => matchesClientHealthFilter(c, "needs_help", todayIso, nowMs)).length,
+    steady: clientsOnly.filter((c) => matchesClientHealthFilter(c, "steady", todayIso, nowMs)).length,
+    doingWell: clientsOnly.filter((c) => matchesClientHealthFilter(c, "doing_well", todayIso, nowMs)).length,
     all: clientsOnly.length,
   };
 }

@@ -91,7 +91,7 @@ export function AdminHome({
         <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>Client health</div>
         <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 10, lineHeight: 1.45 }}>
           Needs help is unread, waiting on approval, or no logs in 3+ days.
-          Logged is meals / water / weigh-ins.
+          Quiet she passes for today drop out of this count. A reply brings them back.
         </div>
         {health.length === 0 ? (
           <div style={{ fontSize: 14, color: T.inkSoft }}>No paid clients to score yet.</div>

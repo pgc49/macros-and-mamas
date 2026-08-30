@@ -8,7 +8,7 @@
  * 3. Wrap new admin surfaces in ErrorBoundary so a coach-UI bug cannot blank
  *    the customer SPA.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid,
@@ -29,6 +29,7 @@ import { AdminClientMessages } from "./AdminClientMessages";
 import { CopyPhoneButton } from "./AdminClientRoster";
 import { loadQuizLeads } from "./quizLeads";
 import { assemblePeople } from "./personModel";
+import { skipUntilIso, stampRosterOverrides } from "./dailySkip";
 import {
   moreViewFromQuery,
   peopleSegmentFromQuery,
@@ -74,6 +75,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     return moreViewFromQuery(new URLSearchParams(window.location.search).get("tab"));
   });
   const [people, setPeople] = useState([]);
+  const [overrides, setOverrides] = useState([]);
   const [composerOffscreen, setComposerOffscreen] = useState(false);
   const composerRef = useRef(null);
   const [filter, setFilter] = useState(() => {
@@ -134,6 +136,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   }, [unreadMessages]);
 
   const all = roster || EMPTY_ROSTER;
+  const boardRoster = useMemo(() => stampRosterOverrides(all, overrides), [all, overrides]);
 
   // Keep unread count fresh on Overview (and elsewhere) so Callie sees it without opening Messages.
   const refreshUnread = useCallback(async () => {
@@ -170,7 +173,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
   const refreshPeople = useCallback(async () => {
     try {
-      const [leadRows, overrides] = await Promise.all([
+      const [leadRows, nextOverrides] = await Promise.all([
         loadQuizLeads(),
         db.loadPersonOverrides(),
       ]);
@@ -182,10 +185,11 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
         db.loadLatestEmailEventsByEmails(emails),
         db.loadUnsubscribedEmailSet(emails),
       ]);
+      setOverrides(nextOverrides);
       setPeople(assemblePeople({
         clients: roster || [],
         leads: leadRows,
-        overrides,
+        overrides: nextOverrides,
         eventsByEmail,
         unsubscribedEmails: unsubscribed,
       }));
@@ -215,6 +219,44 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     await db.recordAdminTouch(email, kind || "email").catch(() => {});
     await refreshPeople();
   }, [refreshPeople]);
+
+  const upsertOverride = useCallback((email, patch) => {
+    const email_lower = String(email || "").trim().toLowerCase();
+    if (!email_lower) return;
+    setOverrides((prev) => {
+      const existing = (prev || []).find(
+        (row) => String(row.email_lower || row.email || "").trim().toLowerCase() === email_lower,
+      );
+      const rest = (prev || []).filter(
+        (row) => String(row.email_lower || row.email || "").trim().toLowerCase() !== email_lower,
+      );
+      return [...rest, { ...existing, email_lower, ...patch }];
+    });
+  }, []);
+
+  const passClientToday = useCallback(async (client) => {
+    if (!client?.email) return;
+    const snoozed_until = skipUntilIso();
+    const last_touch_at = new Date().toISOString();
+    upsertOverride(client.email, { snoozed_until, last_touch_at });
+    const saved = await db.savePersonOverride(client.email, { snoozed_until, last_touch_at });
+    if (!saved) {
+      await refreshPeople();
+      return;
+    }
+    db.recordAdminTouch(client.email, "skip", client.id).catch(() => {});
+  }, [refreshPeople, upsertOverride]);
+
+  const undoPassClient = useCallback(async (client) => {
+    if (!client?.email) return;
+    upsertOverride(client.email, { snoozed_until: null });
+    const saved = await db.savePersonOverride(client.email, { snoozed_until: null });
+    if (!saved) {
+      await refreshPeople();
+      return;
+    }
+    db.recordAdminTouch(client.email, "unskip", client.id).catch(() => {});
+  }, [refreshPeople, upsertOverride]);
 
   useEffect(() => {
     let cancelled = false;
@@ -739,7 +781,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
       {tab === "home" && (
         <AdminHome
           people={people}
-          roster={all}
+          roster={boardRoster}
           cohortFilter={cohortFilter}
           onOpenLead={openPerson}
           onOpenLeads={() => openLeads("unpaid")}
@@ -755,7 +797,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
         <AdminPeople
           segment={peopleSegment}
           setSegment={updatePeopleSegment}
-          roster={all}
+          roster={boardRoster}
           filter={filter}
           setFilter={setFilter}
           cohortFilter={cohortFilter}
@@ -767,6 +809,8 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
             setAdminSel(id);
             setPrimaryTab("messages");
           }}
+          onPassToday={passClientToday}
+          onUndoPass={undoPassClient}
           onAdminTouch={touchLead}
         />
       )}

@@ -96,6 +96,21 @@ describe("needsYou + filterRoster", () => {
     expect(filterRoster([unread, quiet, unpaid], "needs_help", { todayIso: today }).map((c) => c.id)).toEqual(["u", "q"]);
   });
 
+  it("drops passed quiet from Needs help until she replies", () => {
+    const nowMs = Date.parse("2026-08-18T15:00:00.000Z");
+    const passed = mama({
+      id: "q",
+      name: "Bea",
+      lastActiveDate: "2026-08-10",
+      lastMealDate: "2026-08-10",
+      snoozedUntil: "2026-08-19T06:00:00.000Z",
+    });
+    expect(filterRoster([unread, passed], "needs_help", { todayIso: today, nowMs }).map((c) => c.id)).toEqual(["u"]);
+    expect(filterRoster([passed], "quiet", { todayIso: today, nowMs })).toEqual([]);
+    const replied = { ...passed, unreadFromMama: 1 };
+    expect(filterRoster([replied], "needs_help", { todayIso: today, nowMs }).map((c) => c.id)).toEqual(["q"]);
+  });
+
   it("sorts unread ahead of quiet on needs-you", () => {
     const list = filterRoster([quiet, unread], "needs_you", { todayIso: today });
     expect(list.map((c) => c.id)).toEqual(["u", "q"]);

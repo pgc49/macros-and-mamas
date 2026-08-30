@@ -11,6 +11,7 @@ import {
   rosterTitle,
 } from "./clientRoster";
 import { formatLastLogged } from "./clientHealth";
+import { boardReason, canPassToday, listPassedToday } from "./dailySkip";
 import { formatReferredByHint } from "./referredBy";
 
 export function CopyPhoneButton({ phone, compact = false }) {
@@ -90,8 +91,17 @@ const FILTERS = [
 function rosterSortHint(filter) {
   if (filter === "unpaid") return "Newest signups first. ";
   if (filter === "active" || filter === "doing_well" || filter === "steady") return "Alphabetical. ";
+  if (filter === "needs_help" || filter === "quiet") {
+    return "Unread and approvals stay until you handle them. Quiet: message or Not today. A reply after you pass brings her back. ";
+  }
   return "Waiting on you first, then oldest message. ";
 }
+
+const REASON_LABEL = {
+  unread: "Unread",
+  approve: "Approve",
+  quiet: "Quiet",
+};
 
 export function CohortFilterBar({ roster = [], cohort = "all", setCohort, options: optionsProp }) {
   const computed = useMemo(() => listRosterCohorts(roster), [roster]);
@@ -144,17 +154,24 @@ export function AdminClientRoster({
   setCohort,
   onOpenClient,
   onMessageClient,
+  onPassToday,
+  onUndoPass,
   nowMs = Date.now(),
   todayIso = localDateIso(),
 }) {
   const [query, setQuery] = useState("");
   const counts = useMemo(
-    () => rosterFilterCounts(roster, todayIso, cohort),
-    [roster, todayIso, cohort],
+    () => rosterFilterCounts(roster, todayIso, cohort, nowMs),
+    [roster, todayIso, cohort, nowMs],
   );
   const filtered = useMemo(
-    () => filterRoster(roster, filter, { query, todayIso, cohort }),
-    [roster, filter, query, todayIso, cohort],
+    () => filterRoster(roster, filter, { query, todayIso, cohort, nowMs }),
+    [roster, filter, query, todayIso, cohort, nowMs],
+  );
+  const showPass = filter === "needs_help" || filter === "quiet";
+  const passed = useMemo(
+    () => (showPass ? listPassedToday(roster, { query, cohort, nowMs }) : []),
+    [showPass, roster, query, cohort, nowMs],
   );
 
   const countFor = (id) => {
@@ -223,14 +240,23 @@ export function AdminClientRoster({
       </div>
       <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.4 }}>
         {rosterSortHint(filter)}
-        Tap a row for her profile.
+        Tap a card to engage.
       </p>
-      {!filtered.length ? (
+      {!filtered.length && !passed.length ? (
         <div style={{ fontSize: 14, color: T.inkSoft, padding: "18px 4px" }}>
-          {query.trim() ? "No one matches that search." : "Nobody in this filter right now."}
+          {query.trim()
+            ? "No one matches that search."
+            : showPass
+              ? "Queue is clear. New replies and approvals will show up here."
+              : "Nobody in this filter right now."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {!filtered.length && showPass ? (
+            <div style={{ fontSize: 14, color: T.inkSoft, padding: "8px 4px 4px" }}>
+              Queue is clear. New replies and approvals will show up here.
+            </div>
+          ) : null}
           {filtered.map((c) => {
             const title = rosterTitle(c);
             const short = stageShort(c);
@@ -238,6 +264,8 @@ export function AdminClientRoster({
             const logged = formatLastLogged(c, todayIso);
             const unread = Number(c.unreadFromMama) || 0;
             const referredHint = formatReferredByHint(c.referredBy);
+            const reason = boardReason(c, todayIso);
+            const passable = showPass && canPassToday(c, todayIso, nowMs);
             return (
               <div
                 key={c.id}
@@ -338,6 +366,21 @@ export function AdminClientRoster({
                         {unread} waiting
                       </span>
                     )}
+                    {reason === "quiet" && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          fontFamily: F,
+                          padding: "2px 8px",
+                          borderRadius: 99,
+                          background: T.amberSoft,
+                          color: T.amber,
+                        }}
+                      >
+                        {REASON_LABEL.quiet}
+                      </span>
+                    )}
                   </div>
                   {c.email ? (
                     <div
@@ -415,7 +458,7 @@ export function AdminClientRoster({
                   >
                     {short}
                   </span>
-                  <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }} onClick={(e) => e.stopPropagation()}>
                     <CopyPhoneButton phone={c.phone} compact />
                     <button
                       type="button"
@@ -437,11 +480,85 @@ export function AdminClientRoster({
                     >
                       Msg
                     </button>
+                    {passable ? (
+                      <button
+                        type="button"
+                        onClick={() => onPassToday?.(c)}
+                        aria-label={`Not today for ${title}`}
+                        style={{
+                          minHeight: 44,
+                          padding: "0 12px",
+                          borderRadius: 12,
+                          border: `1.5px solid ${T.border}`,
+                          background: "#fff",
+                          color: T.inkSoft,
+                          fontFamily: F,
+                          fontWeight: 800,
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Not today
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
             );
           })}
+          {passed.length ? (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: T.inkSoft, margin: "8px 4px 8px" }}>
+                Passed until tonight · {passed.length}
+              </div>
+              {passed.map((c) => {
+                const title = rosterTitle(c);
+                return (
+                  <div
+                    key={`passed-${c.id}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      padding: "12px 14px",
+                      borderRadius: 14,
+                      border: `1px dashed ${T.border}`,
+                      background: T.track,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: FD, fontSize: 16, color: T.inkSoft }}>{title}</div>
+                      <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
+                        Back on the board if she replies
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onUndoPass?.(c)}
+                      aria-label={`Put ${title} back on the board`}
+                      style={{
+                        minHeight: 44,
+                        padding: "0 12px",
+                        borderRadius: 12,
+                        border: `1.5px solid ${T.border}`,
+                        background: "#fff",
+                        color: T.ink,
+                        fontFamily: F,
+                        fontWeight: 800,
+                        fontSize: 13,
+                        cursor: "pointer",
+                        flex: "0 0 auto",
+                      }}
+                    >
+                      Undo
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       )}
     </>

@@ -129,11 +129,72 @@ describe("AdminClientRoster", () => {
     expect(screen.queryByText(/Waiting on you first/)).toBeNull();
     cleanup();
     renderRoster({ filter: "needs_help" });
-    expect(screen.getByText(/Waiting on you first, then oldest message/)).toBeTruthy();
+    expect(screen.getByText(/Unread and approvals stay until you handle them/)).toBeTruthy();
     expect(screen.queryByText(/Alphabetical/)).toBeNull();
     cleanup();
     renderRoster({ filter: "unpaid" });
     expect(screen.getByText(/Newest signups first/)).toBeTruthy();
+  });
+
+  it("offers Not today on quiet Needs help cards, not unread", () => {
+    renderRoster({
+      filter: "needs_help",
+      todayIso: "2026-08-18",
+      nowMs: Date.parse("2026-08-18T15:00:00.000Z"),
+      roster: [
+        {
+          id: "quiet-1",
+          role: "client",
+          name: "Bea Quiet",
+          email: "bea@example.com",
+          stage: "active",
+          status: "active",
+          paid: true,
+          unreadFromMama: 0,
+          lastActiveDate: "2026-08-10",
+          lastAdminAt: null,
+        },
+        {
+          id: "unread-1",
+          role: "client",
+          name: "Ava Unread",
+          email: "ava@example.com",
+          stage: "active",
+          status: "active",
+          paid: true,
+          unreadFromMama: 2,
+          lastActiveDate: "2026-08-18",
+        },
+      ],
+    });
+    expect(screen.getByLabelText("Not today for Bea Quiet")).toBeTruthy();
+    expect(screen.queryByLabelText("Not today for Ava Unread")).toBeNull();
+    expect(screen.getByText("Quiet")).toBeTruthy();
+  });
+
+  it("lists passed quiet under Passed until tonight", () => {
+    renderRoster({
+      filter: "needs_help",
+      todayIso: "2026-08-18",
+      nowMs: Date.parse("2026-08-18T15:00:00.000Z"),
+      roster: [
+        {
+          id: "quiet-1",
+          role: "client",
+          name: "Bea Quiet",
+          email: "bea@example.com",
+          stage: "active",
+          status: "active",
+          paid: true,
+          unreadFromMama: 0,
+          lastActiveDate: "2026-08-10",
+          snoozedUntil: "2026-08-19T06:00:00.000Z",
+        },
+      ],
+    });
+    expect(screen.getByText(/Passed until tonight/)).toBeTruthy();
+    expect(screen.getByText(/Queue is clear/)).toBeTruthy();
+    expect(screen.getByLabelText("Put Bea Quiet back on the board")).toBeTruthy();
   });
 
   it("filters the list from the search field", () => {

@@ -4,6 +4,7 @@
  */
 import { adminCohortName } from "../lib/cohorts";
 import { daysSinceIso } from "./clientFlags";
+import { isPassedQuietToday } from "./dailySkip";
 
 function cohortKey(client) {
   return String(client?.cohort_label || "").trim() || "unassigned";
@@ -57,31 +58,34 @@ export function isAwaitingApproval(client) {
  * Mutually exclusive: unread / approval / quiet 3d+ first,
  * then doing well (logged yesterday or today), else steady (logged in last 3 days).
  */
-export function clientHealthBand(client, todayIso) {
+export function clientHealthBand(client, todayIso, nowMs = Date.now()) {
   if (!isHealthClient(client)) return null;
   if (Number(client.unreadFromMama) > 0) return "needs_help";
   if (isAwaitingApproval(client)) return "needs_help";
+  if (isPassedQuietToday(client, nowMs)) return null;
   const days = daysSinceLastLog(client, todayIso);
   if (days >= 3) return "needs_help";
   if (days <= 1) return "doing_well";
   return "steady";
 }
 
-export function matchesClientHealthFilter(client, filter, todayIso) {
+export function matchesClientHealthFilter(client, filter, todayIso, nowMs = Date.now()) {
   if (filter === "unread") return Number(client?.unreadFromMama) > 0;
   if (filter === "quiet") {
-    return isHealthClient(client) && daysSinceLastLog(client, todayIso) >= 3;
+    return isHealthClient(client)
+      && daysSinceLastLog(client, todayIso) >= 3
+      && !isPassedQuietToday(client, nowMs);
   }
   if (filter === "needs_help" || filter === "steady" || filter === "doing_well") {
-    return clientHealthBand(client, todayIso) === filter;
+    return clientHealthBand(client, todayIso, nowMs) === filter;
   }
   return false;
 }
 
-export function clientHealthByCohort(roster, todayIso) {
+export function clientHealthByCohort(roster, todayIso, nowMs = Date.now()) {
   const counts = new Map();
   for (const client of roster || []) {
-    const band = clientHealthBand(client, todayIso);
+    const band = clientHealthBand(client, todayIso, nowMs);
     if (!band) continue;
     const key = cohortKey(client);
     if (!counts.has(key)) {

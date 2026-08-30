@@ -65,6 +65,23 @@ describe("filters + cohort rollup", () => {
     expect(matchesClientHealthFilter(client({ lastActiveDate: TODAY }), "quiet", TODAY)).toBe(false);
   });
 
+  it("drops passed quiet from needs help until she replies", () => {
+    const now = Date.parse("2026-08-30T18:00:00.000Z");
+    const passed = client({
+      lastActiveDate: "2026-08-20",
+      snoozedUntil: "2026-08-31T06:00:00.000Z",
+    });
+    const replied = client({
+      lastActiveDate: "2026-08-20",
+      snoozedUntil: "2026-08-31T06:00:00.000Z",
+      unreadFromMama: 1,
+    });
+    expect(clientHealthBand(passed, TODAY, now)).toBeNull();
+    expect(matchesClientHealthFilter(passed, "needs_help", TODAY, now)).toBe(false);
+    expect(matchesClientHealthFilter(passed, "quiet", TODAY, now)).toBe(false);
+    expect(clientHealthBand(replied, TODAY, now)).toBe("needs_help");
+  });
+
   it("rolls health counts by cohort", () => {
     const rows = clientHealthByCohort([
       client({ id: "a", cohort_label: "2026-07", lastActiveDate: TODAY }),

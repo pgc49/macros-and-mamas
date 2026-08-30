@@ -48,6 +48,8 @@ export function AdminPeople({
   selectedLeadEmail,
   onOpenClient,
   onMessageClient,
+  onPassToday,
+  onUndoPass,
   onAdminTouch,
 }) {
   const current = segment === "leads" ? "leads" : "clients";
@@ -75,6 +77,8 @@ export function AdminPeople({
           setCohort={setCohortFilter}
           onOpenClient={onOpenClient}
           onMessageClient={onMessageClient}
+          onPassToday={onPassToday}
+          onUndoPass={onUndoPass}
         />
       )}
     </>
