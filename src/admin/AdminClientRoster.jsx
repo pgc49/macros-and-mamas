@@ -7,6 +7,7 @@ import {
   filterRoster,
   formatLastMessaged,
   listRosterCohorts,
+  ROSTER_SORTS,
   rosterFilterCounts,
   rosterTitle,
 } from "./clientRoster";
@@ -75,6 +76,7 @@ function stageShort(c) {
 
 const FILTERS = [
   ["needs_help", "Needs help"],
+  ["needs_note", "Needs a note"],
   ["unread", "Unread"],
   ["quiet", "Quiet 3d"],
   ["doing_well", "Doing well"],
@@ -88,13 +90,33 @@ const FILTERS = [
   ["all", "All"],
 ];
 
-function rosterSortHint(filter) {
+function rosterSortHint(filter, sort = "board", dir = "asc") {
+  if (sort === "last_messaged") {
+    return dir === "desc"
+      ? "You messaged most recently first. "
+      : "Never / oldest note first — weekly touch-base. ";
+  }
+  if (sort === "last_logged") {
+    return dir === "desc"
+      ? "Most recent meal / water / weigh-in first. "
+      : "Longest since a log first. ";
+  }
+  if (sort === "name") return dir === "desc" ? "Z–A. " : "A–Z. ";
+  if (sort === "signed_up") {
+    return dir === "desc" ? "Newest signups first. " : "Oldest signups first. ";
+  }
   if (filter === "unpaid") return "Newest signups first. ";
+  if (filter === "needs_note") return "No personal note in 7 days. Never / oldest first. ";
   if (filter === "active" || filter === "doing_well" || filter === "steady") return "Alphabetical. ";
   if (filter === "needs_help" || filter === "quiet") {
     return "Unread and approvals stay until you handle them. Quiet: message or Not today. A reply after you pass brings her back. ";
   }
   return "Waiting on you first, then oldest message. ";
+}
+
+function defaultDirForSort(sort) {
+  if (sort === "signed_up") return "desc";
+  return "asc";
 }
 
 const REASON_LABEL = {
@@ -160,13 +182,15 @@ export function AdminClientRoster({
   todayIso = localDateIso(),
 }) {
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("board");
+  const [dir, setDir] = useState("asc");
   const counts = useMemo(
     () => rosterFilterCounts(roster, todayIso, cohort, nowMs),
     [roster, todayIso, cohort, nowMs],
   );
   const filtered = useMemo(
-    () => filterRoster(roster, filter, { query, todayIso, cohort, nowMs }),
-    [roster, filter, query, todayIso, cohort, nowMs],
+    () => filterRoster(roster, filter, { query, todayIso, cohort, nowMs, sort, dir }),
+    [roster, filter, query, todayIso, cohort, nowMs, sort, dir],
   );
   const showPass = filter === "needs_help" || filter === "quiet";
   const passed = useMemo(
@@ -176,6 +200,7 @@ export function AdminClientRoster({
 
   const countFor = (id) => {
     if (id === "needs_help") return counts.needsHelp;
+    if (id === "needs_note") return counts.needsNote;
     if (id === "unread") return counts.unread;
     if (id === "quiet") return counts.quiet;
     if (id === "doing_well") return counts.doingWell;
@@ -217,7 +242,13 @@ export function AdminClientRoster({
             <button
               key={id}
               type="button"
-              onClick={() => setFilter(id)}
+              onClick={() => {
+                setFilter(id);
+                if (id === "needs_note") {
+                  setSort("last_messaged");
+                  setDir("asc");
+                }
+              }}
               style={{
                 flex: "0 0 auto",
                 minHeight: 40,
@@ -238,8 +269,98 @@ export function AdminClientRoster({
           );
         })}
       </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "nowrap",
+          overflowX: "auto",
+          marginBottom: 8,
+          paddingBottom: 2,
+          WebkitOverflowScrolling: "touch",
+          alignItems: "center",
+        }}
+      >
+        <span style={{ flex: "0 0 auto", fontSize: 12, fontWeight: 800, color: T.inkSoft }}>
+          Sort
+        </span>
+        {ROSTER_SORTS.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={sort === id}
+            onClick={() => {
+              if (id === sort && id !== "board") {
+                setDir((prev) => (prev === "asc" ? "desc" : "asc"));
+                return;
+              }
+              setSort(id);
+              setDir(defaultDirForSort(id));
+            }}
+            style={{
+              flex: "0 0 auto",
+              minHeight: 36,
+              padding: "6px 12px",
+              borderRadius: 999,
+              border: `1.5px solid ${sort === id ? T.ink : T.border}`,
+              background: sort === id ? T.ink : "#fff",
+              color: sort === id ? "#fff" : T.inkSoft,
+              fontWeight: 700,
+              fontSize: 12.5,
+              cursor: "pointer",
+              fontFamily: F,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+        {sort !== "board" ? (
+          <>
+            <button
+              type="button"
+              aria-pressed={dir === "asc"}
+              onClick={() => setDir("asc")}
+              style={{
+                flex: "0 0 auto",
+                minHeight: 36,
+                padding: "6px 12px",
+                borderRadius: 999,
+                border: `1.5px solid ${dir === "asc" ? T.ink : T.border}`,
+                background: dir === "asc" ? T.track : "#fff",
+                color: T.ink,
+                fontWeight: 700,
+                fontSize: 12.5,
+                cursor: "pointer",
+                fontFamily: F,
+              }}
+            >
+              {sort === "name" ? "A–Z" : "Oldest first"}
+            </button>
+            <button
+              type="button"
+              aria-pressed={dir === "desc"}
+              onClick={() => setDir("desc")}
+              style={{
+                flex: "0 0 auto",
+                minHeight: 36,
+                padding: "6px 12px",
+                borderRadius: 999,
+                border: `1.5px solid ${dir === "desc" ? T.ink : T.border}`,
+                background: dir === "desc" ? T.track : "#fff",
+                color: T.ink,
+                fontWeight: 700,
+                fontSize: 12.5,
+                cursor: "pointer",
+                fontFamily: F,
+              }}
+            >
+              {sort === "name" ? "Z–A" : "Newest first"}
+            </button>
+          </>
+        ) : null}
+      </div>
       <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.4 }}>
-        {rosterSortHint(filter)}
+        {rosterSortHint(filter, sort, dir)}
         Tap a card to engage.
       </p>
       {!filtered.length && !passed.length ? (

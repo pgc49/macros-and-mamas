@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareNullableIso,
   filterRoster,
   formatLastMessaged,
   listLeadCohorts,
   listRosterCohorts,
   matchesRosterQuery,
+  needsWeeklyNote,
   needsYou,
   rosterFilterCounts,
   rosterStats,
@@ -142,6 +144,48 @@ describe("needsYou + filterRoster", () => {
     expect(list.map((c) => c.id)).toEqual(["z", "a"]);
   });
 
+  it("sorts by last messaged oldest-first, never first", () => {
+    const never = mama({ id: "n", name: "Never", lastAdminAt: null });
+    const old = mama({ id: "o", name: "Old", lastAdminAt: "2026-08-01T12:00:00.000Z" });
+    const recent = mama({ id: "r", name: "Recent", lastAdminAt: "2026-08-18T12:00:00.000Z" });
+    expect(filterRoster([recent, never, old], "active", {
+      todayIso: today,
+      sort: "last_messaged",
+      dir: "asc",
+    }).map((c) => c.id)).toEqual(["n", "o", "r"]);
+    expect(filterRoster([recent, never, old], "active", {
+      todayIso: today,
+      sort: "last_messaged",
+      dir: "desc",
+    }).map((c) => c.id)).toEqual(["r", "o", "n"]);
+  });
+
+  it("sorts by last logged and signed up", () => {
+    const stale = mama({ id: "s", name: "Stale", lastActiveDate: "2026-08-01", createdAt: "2026-07-01T00:00:00.000Z" });
+    const fresh = mama({ id: "f", name: "Fresh", lastActiveDate: "2026-08-18", createdAt: "2026-08-10T00:00:00.000Z" });
+    expect(filterRoster([fresh, stale], "active", {
+      todayIso: today,
+      sort: "last_logged",
+      dir: "asc",
+    }).map((c) => c.id)).toEqual(["s", "f"]);
+    expect(filterRoster([stale, fresh], "all", {
+      todayIso: today,
+      sort: "signed_up",
+      dir: "desc",
+    }).map((c) => c.id)).toEqual(["f", "s"]);
+  });
+
+  it("lists clients who have not had a note in 7 days", () => {
+    const due = mama({ id: "d", name: "Due", lastAdminAt: "2026-08-11T12:00:00.000Z" });
+    const fresh = mama({ id: "f", name: "Fresh", lastAdminAt: "2026-08-16T12:00:00.000Z" });
+    const never = mama({ id: "n", name: "Never", lastAdminAt: null });
+    expect(needsWeeklyNote(due, today)).toBe(true);
+    expect(needsWeeklyNote(fresh, today)).toBe(false);
+    expect(needsWeeklyNote(never, today)).toBe(true);
+    expect(filterRoster([due, fresh, never, unpaid], "needs_note", { todayIso: today }).map((c) => c.id)).toEqual(["n", "d"]);
+    expect(rosterFilterCounts([due, fresh, never, unpaid], today).needsNote).toBe(2);
+  });
+
   it("pins admins at the top of Active, then clients A–Z", () => {
     const patrick = mama({ id: "p", role: "admin", name: "Patrick" });
     const callie = mama({ id: "c", role: "admin", name: "Callie" });
@@ -203,6 +247,14 @@ describe("cohort filter", () => {
     expect(stats.active).toBe(0);
     expect(stats.awaitingIntake).toBe(1);
     expect(rosterFilterCounts([founding, c2], today, "2026-08").paid).toBe(1);
+  });
+});
+
+describe("compareNullableIso", () => {
+  it("treats empty as oldest", () => {
+    expect(compareNullableIso(null, "2026-08-01", "asc")).toBe(-1);
+    expect(compareNullableIso(null, "2026-08-01", "desc")).toBe(1);
+    expect(compareNullableIso("2026-08-10", "2026-08-01", "desc")).toBeLessThan(0);
   });
 });
 

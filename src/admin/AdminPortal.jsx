@@ -82,7 +82,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     if (typeof window === "undefined") return "needs_you";
     const q = new URLSearchParams(window.location.search).get("filter");
     const allowed = new Set([
-      "needs_help", "unread", "quiet", "doing_well", "steady", "needs_you",
+      "needs_help", "needs_note", "unread", "quiet", "doing_well", "steady", "needs_you",
       "active", "awaiting_approval", "awaiting_intake", "paid", "unpaid", "refunded", "all",
     ]);
     return allowed.has(q) ? q : "needs_help";

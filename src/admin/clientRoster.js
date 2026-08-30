@@ -1,7 +1,8 @@
 import { adminCohortName } from "../lib/cohorts";
 import { isStripeCollected } from "../../functions/_shared/comp.js";
 import { addDaysIso, localDateIso } from "../utils/dates";
-import { matchesClientHealthFilter } from "./clientHealth";
+import { daysSinceIso } from "./clientFlags";
+import { isHealthClient, lastLogIso, matchesClientHealthFilter } from "./clientHealth";
 
 export const UNASSIGNED_COHORT = "unassigned";
 
@@ -139,6 +140,73 @@ function byName(a, b) {
   return rosterTitle(a).localeCompare(rosterTitle(b), undefined, { sensitivity: "base" });
 }
 
+export const ROSTER_SORTS = [
+  ["board", "Board"],
+  ["last_messaged", "Last messaged"],
+  ["last_logged", "Last logged"],
+  ["name", "Name"],
+  ["signed_up", "Signed up"],
+];
+
+export const WEEKLY_NOTE_DAYS = 7;
+
+/** Paid client with no admin DM, or last note older than a week. */
+export function needsWeeklyNote(client, todayIso = localDateIso(), days = WEEKLY_NOTE_DAYS) {
+  if (!isHealthClient(client)) return false;
+  if (!client?.lastAdminAt) return true;
+  const n = daysSinceIso(client.lastAdminAt, todayIso);
+  return n == null || n >= days;
+}
+
+/** Never / missing dates count as oldest. */
+export function compareNullableIso(a, b, dir = "asc") {
+  const aEmpty = !a;
+  const bEmpty = !b;
+  if (aEmpty && bEmpty) return 0;
+  if (aEmpty) return dir === "asc" ? -1 : 1;
+  if (bEmpty) return dir === "asc" ? 1 : -1;
+  const cmp = String(a).localeCompare(String(b));
+  return dir === "desc" ? -cmp : cmp;
+}
+
+function boardCompare(a, b, filter, todayIso) {
+  if (filter === "unpaid") {
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  }
+  if (filter === "doing_well" || filter === "steady" || filter === "active") {
+    return byName(a, b);
+  }
+  if (filter === "needs_note") {
+    const messaged = compareNullableIso(a.lastAdminAt, b.lastAdminAt, "asc");
+    return messaged || byName(a, b);
+  }
+  const rank = attentionRank(a, todayIso) - attentionRank(b, todayIso);
+  if (rank !== 0) return rank;
+  const messaged = compareNullableIso(a.lastAdminAt, b.lastAdminAt, "asc");
+  return messaged || byName(a, b);
+}
+
+export function compareRosterSort(a, b, { sort = "board", dir = "asc", filter = "needs_help", todayIso } = {}) {
+  if (!sort || sort === "board") return boardCompare(a, b, filter, todayIso);
+  if (sort === "name") {
+    const cmp = byName(a, b);
+    return dir === "desc" ? -cmp : cmp;
+  }
+  if (sort === "last_messaged") {
+    const cmp = compareNullableIso(a.lastAdminAt, b.lastAdminAt, dir);
+    return cmp || byName(a, b);
+  }
+  if (sort === "last_logged") {
+    const cmp = compareNullableIso(lastLogIso(a), lastLogIso(b), dir);
+    return cmp || byName(a, b);
+  }
+  if (sort === "signed_up") {
+    const cmp = compareNullableIso(a.createdAt, b.createdAt, dir);
+    return cmp || byName(a, b);
+  }
+  return boardCompare(a, b, filter, todayIso);
+}
+
 /** Exported so Home can consume this rank — do not rewrite the rules here. */
 export function attentionRank(client, todayIso) {
   if (Number(client.unreadFromMama) > 0) return 0;
@@ -150,7 +218,14 @@ export function attentionRank(client, todayIso) {
   return 4;
 }
 
-export function filterRoster(all, filter, { query = "", todayIso = localDateIso(), cohort = "all", nowMs = Date.now() } = {}) {
+export function filterRoster(all, filter, {
+  query = "",
+  todayIso = localDateIso(),
+  cohort = "all",
+  nowMs = Date.now(),
+  sort = "board",
+  dir = "asc",
+} = {}) {
   const admins = (all || []).filter((c) => c.role === "admin").slice().sort(byName);
   const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
   let list = clientsOnly;
@@ -170,32 +245,14 @@ export function filterRoster(all, filter, { query = "", todayIso = localDateIso(
     list = clientsOnly.filter((c) => c.stage === "active" || c.status === "active");
   } else if (filter === "refunded") {
     list = clientsOnly.filter((c) => c.refunded || c.stage === "refunded");
+  } else if (filter === "needs_note") {
+    list = clientsOnly.filter((c) => needsWeeklyNote(c, todayIso));
   } else if (filter === "unread" || filter === "quiet" || filter === "needs_help" || filter === "steady" || filter === "doing_well") {
     list = clientsOnly.filter((c) => matchesClientHealthFilter(c, filter, todayIso, nowMs));
   }
 
   list = list.filter((c) => matchesRosterQuery(c, query));
-
-  if (filter === "unpaid") {
-    list = list.slice().sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-  } else if (filter === "doing_well" || filter === "steady") {
-    list = list.slice().sort(byName);
-  } else if (filter === "active") {
-    list = list.slice().sort(byName);
-  } else {
-    list = list.slice().sort((a, b) => {
-      const rank = attentionRank(a, todayIso) - attentionRank(b, todayIso);
-      if (rank !== 0) return rank;
-      const aAt = a.lastAdminAt || "";
-      const bAt = b.lastAdminAt || "";
-      if (aAt !== bAt) {
-        if (!aAt) return -1;
-        if (!bAt) return 1;
-        return aAt.localeCompare(bAt);
-      }
-      return byName(a, b);
-    });
-  }
+  list = list.slice().sort((a, b) => compareRosterSort(a, b, { sort, dir, filter, todayIso }));
 
   const showAdmins = (filter === "all" || filter === "active") && (!cohort || cohort === "all");
   const adminHits = showAdmins ? admins.filter((c) => matchesRosterQuery(c, query)) : [];
@@ -217,6 +274,7 @@ export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all
     unread: clientsOnly.filter((c) => matchesClientHealthFilter(c, "unread", todayIso, nowMs)).length,
     quiet: clientsOnly.filter((c) => matchesClientHealthFilter(c, "quiet", todayIso, nowMs)).length,
     needsHelp: clientsOnly.filter((c) => matchesClientHealthFilter(c, "needs_help", todayIso, nowMs)).length,
+    needsNote: clientsOnly.filter((c) => needsWeeklyNote(c, todayIso)).length,
     steady: clientsOnly.filter((c) => matchesClientHealthFilter(c, "steady", todayIso, nowMs)).length,
     doingWell: clientsOnly.filter((c) => matchesClientHealthFilter(c, "doing_well", todayIso, nowMs)).length,
     all: clientsOnly.length,

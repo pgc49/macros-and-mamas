@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { AdminClientRoster } from "./AdminClientRoster.jsx";
@@ -134,6 +135,57 @@ describe("AdminClientRoster", () => {
     cleanup();
     renderRoster({ filter: "unpaid" });
     expect(screen.getByText(/Newest signups first/)).toBeTruthy();
+  });
+
+  it("lets her sort by last messaged and open Needs a note", () => {
+    const roster = [
+      {
+        id: "due-1",
+        role: "client",
+        name: "Bea Due",
+        email: "bea@example.com",
+        stage: "active",
+        status: "active",
+        paid: true,
+        unreadFromMama: 0,
+        lastActiveDate: "2026-08-18",
+        lastAdminAt: "2026-08-01T12:00:00.000Z",
+      },
+      {
+        id: "fresh-1",
+        role: "client",
+        name: "Ava Fresh",
+        email: "ava@example.com",
+        stage: "active",
+        status: "active",
+        paid: true,
+        unreadFromMama: 0,
+        lastActiveDate: "2026-08-18",
+        lastAdminAt: "2026-08-17T12:00:00.000Z",
+      },
+    ];
+    function Harness() {
+      const [filter, setFilter] = useState("active");
+      return (
+        <AdminClientRoster
+          roster={roster}
+          filter={filter}
+          setFilter={setFilter}
+          onOpenClient={() => {}}
+          onMessageClient={() => {}}
+          nowMs={Date.parse("2026-08-18T15:00:00.000Z")}
+          todayIso="2026-08-18"
+        />
+      );
+    }
+    render(<Harness />);
+    expect(screen.getByRole("button", { name: "Needs a note · 1" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Last messaged" }));
+    expect(screen.getByText(/weekly touch-base/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Oldest first" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Needs a note · 1" }));
+    expect(screen.getByText("Bea Due")).toBeTruthy();
+    expect(screen.queryByText("Ava Fresh")).toBeNull();
   });
 
   it("offers Not today on quiet Needs help cards, not unread", () => {
