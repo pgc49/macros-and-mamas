@@ -59,17 +59,42 @@ export function listLeadCohorts(leads) {
 
 const PLACEHOLDER_NAMES = new Set(["new signup", "mama", "unnamed"]);
 
+function isPlaceholderName(value) {
+  const raw = String(value || "").trim();
+  return !raw || PLACEHOLDER_NAMES.has(raw.toLowerCase());
+}
+
+function emailLocalPart(value) {
+  const email = String(value || "").trim();
+  if (email.includes("@")) return email.split("@")[0];
+  return email;
+}
+
 /** First+last when we have them; otherwise email local-part. Never “New signup”. */
 export function rosterTitle(client) {
   const rawName = String(client?.name || "").trim();
-  if (rawName && !PLACEHOLDER_NAMES.has(rawName.toLowerCase())) {
+  if (rawName && !isPlaceholderName(rawName)) {
     return joinPersonName(rawName, client?.lastName);
   }
-  const combined = joinPersonName(client?.firstName, client?.lastName);
+  const first = String(client?.firstName || "").trim();
+  const firstOk = isPlaceholderName(first) ? "" : first;
+  const combined = joinPersonName(firstOk, client?.lastName);
   if (combined) return combined;
-  const email = String(client?.email || "").trim();
-  if (email.includes("@")) return email.split("@")[0];
-  if (email) return email;
+  const local = emailLocalPart(client?.email);
+  if (local) return local;
+  return "Unnamed";
+}
+
+/**
+ * Inbox / start-a-thread title. Same rules as the Clients roster.
+ * Never a blanket “Mama” — walk candidates (roster row, inbox peer, email).
+ */
+export function inboxDisplayName(...candidates) {
+  for (const c of candidates) {
+    if (!c) continue;
+    const titled = rosterTitle(c);
+    if (titled && titled !== "Unnamed") return titled;
+  }
   return "Unnamed";
 }
 

@@ -9,6 +9,7 @@ import {
   rosterFilterCounts,
   rosterStats,
   rosterTitle,
+  inboxDisplayName,
 } from "./clientRoster.js";
 
 const mama = (over = {}) => ({
@@ -49,6 +50,29 @@ describe("rosterTitle", () => {
     expect(rosterTitle(mama({ name: "Sarah Smith", lastName: "Smith" }))).toBe("Sarah Smith");
     expect(rosterTitle(mama({ name: "Sarah Smith Smith", lastName: "Smith" }))).toBe("Sarah Smith Smith");
     expect(rosterTitle(mama({ name: "", firstName: "Sarah Smith", lastName: "Smith" }))).toBe("Sarah Smith");
+  });
+
+  it("uses last name when the profile name is the Mama placeholder", () => {
+    expect(rosterTitle(mama({ name: "Mama", firstName: "Mama", lastName: "Wells", email: "wells@example.com" })))
+      .toBe("Wells");
+  });
+});
+
+describe("inboxDisplayName", () => {
+  it("prefers first+last from the roster and never a blanket Mama", () => {
+    expect(inboxDisplayName({ name: "Christina", lastName: "Lee" })).toBe("Christina Lee");
+    expect(inboxDisplayName({ name: "Chelsea", lastName: "Park" })).toBe("Chelsea Park");
+  });
+
+  it("falls back to the inbox peer when the roster row is missing", () => {
+    expect(inboxDisplayName(null, { name: "Nora", lastName: "Kim", email: "nora@example.com" }))
+      .toBe("Nora Kim");
+    expect(inboxDisplayName(undefined)).toBe("Unnamed");
+  });
+
+  it("uses email local-part when the only name is Mama", () => {
+    expect(inboxDisplayName({ name: "Mama", firstName: "Mama", email: "christina@example.com" }))
+      .toBe("christina");
   });
 });
 

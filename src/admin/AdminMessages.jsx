@@ -3,14 +3,10 @@ import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { db, fullName, channelHasUnread } from "../db/db";
+import { db, channelHasUnread } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { mergeMessagesById } from "../lib/messageOrdering";
-
-function displayName(c) {
-  if (!c) return "Mama";
-  return fullName(c) || c.name || c.firstName || c.email || "Mama";
-}
+import { inboxDisplayName as displayName } from "./clientRoster";
 
 function isAdminProfile(c) {
   return String(c?.role || "").toLowerCase() === "admin";
@@ -82,11 +78,22 @@ export function AdminMessages({
   const activeRef = useRef(active);
   const dmLoadSequence = useRef(new Map());
 
-  const clientMap = useMemo(() => {
+  const rosterMap = useMemo(() => {
     const m = new Map();
-    for (const c of roster || []) m.set(c.id, c);
+    for (const c of roster || []) if (c?.id) m.set(c.id, c);
     return m;
   }, [roster]);
+
+  const clientMap = useMemo(() => {
+    const m = new Map(rosterMap);
+    for (const row of inbox) {
+      if (row.peer?.id && !m.has(row.peer.id)) m.set(row.peer.id, row.peer);
+      for (const p of row.participantPeers || []) {
+        if (p?.id && !m.has(p.id)) m.set(p.id, p);
+      }
+    }
+    return m;
+  }, [rosterMap, inbox]);
 
   const refreshInbox = useCallback(async () => {
     try {
@@ -243,7 +250,7 @@ export function AdminMessages({
 
   const senderNameById = useMemo(() => {
     const map = {};
-    for (const c of roster || []) {
+    for (const c of clientMap.values()) {
       if (c?.id) map[c.id] = displayName(c);
     }
     for (const m of activeChannelMessages) {
@@ -252,7 +259,7 @@ export function AdminMessages({
       }
     }
     return map;
-  }, [roster, activeChannelMessages, adminUserId]);
+  }, [clientMap, activeChannelMessages, adminUserId]);
 
   const openDm = (profileOrId) => {
     try { window.scrollTo({ top: 0, behavior: "auto" }); } catch { /* ignore */ }
@@ -441,7 +448,7 @@ export function AdminMessages({
         clientMap,
       });
       const c = clientMap.get(peerId || row.clientId);
-      const hay = `${displayName(c)} ${c?.email || ""} ${previewText(row.lastMessage)}`.toLowerCase();
+      const hay = `${displayName(c, row.peer)} ${c?.email || row.peer?.email || ""} ${previewText(row.lastMessage)}`.toLowerCase();
       return hay.includes(q);
     });
   }, [inbox, q, adminUserId, clientMap]);
@@ -542,7 +549,7 @@ export function AdminMessages({
             clientMap,
           });
           const c = clientMap.get(peerId || row.clientId);
-          const name = displayName(c);
+          const name = displayName(c, row.peer);
           const selected = active?.type === "dm" && active.id === row.clientId;
           const isAdminRow = isAdminProfile(c);
           return (

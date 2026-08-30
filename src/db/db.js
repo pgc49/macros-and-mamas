@@ -8,12 +8,15 @@ import {
 } from "../lib/messageReactions";
 import { chronologicalMessages } from "../lib/messageOrdering";
 import { referredByByUserId } from "../lib/referredBy";
-import { joinPersonName } from "../lib/personName";
+import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
 
 /** Display name: first + last, without doubling a last name already in `name`. */
-export { fullName } from "../lib/personName";
+export { fullName };
+
+// `export { fullName } from` is not a local binding. loadRoster calls fullName(p);
+// after #309 that throw emptied the admin roster and every inbox DM titled "Mama".
 
 /* ------------------------------------------------------------------ */
 /*  DATA LAYER — per-event Supabase writes (not blob persistence)      */
@@ -608,6 +611,52 @@ async function loadChannelSenderLabels(conversationId, userIds) {
   } catch (e) {
     console.warn("channel sender label lookup failed", e);
     return {};
+  }
+}
+
+function profileToInboxPeer(p) {
+  if (!p?.id) return null;
+  return {
+    id: p.id,
+    name: p.name || "",
+    firstName: p.name || "",
+    lastName: p.last_name || "",
+    email: p.email || "",
+    role: p.role || "",
+  };
+}
+
+/** Attach first/last/email onto inbox rows so a missed roster lookup still has a real title. */
+export function attachInboxPeers(rows, profiles) {
+  const byId = new Map((profiles || []).map((p) => [p.id, profileToInboxPeer(p)]));
+  return (rows || []).map((row) => ({
+    ...row,
+    peer: byId.get(row.clientId) || null,
+    participantPeers: (row.participantIds || [])
+      .map((id) => byId.get(id))
+      .filter(Boolean),
+  }));
+}
+
+async function hydrateInboxPeers(rows) {
+  const list = rows || [];
+  const ids = [...new Set(
+    list.flatMap((row) => [row.clientId, ...(row.participantIds || [])]).filter(Boolean),
+  )];
+  if (!ids.length) return list;
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, name, last_name, email, role")
+      .in("id", ids);
+    if (error) {
+      console.warn("inbox peer profile lookup failed", error);
+      return list;
+    }
+    return attachInboxPeers(list, data || []);
+  } catch (e) {
+    console.warn("inbox peer profile lookup failed", e);
+    return list;
   }
 }
 
@@ -2747,12 +2796,12 @@ export const db = {
     const { data: inboxRows, error: inboxError } = await supabase
       .rpc("load_admin_message_inbox");
     if (!inboxError) {
-      return (inboxRows || []).map((row) => ({
+      return hydrateInboxPeers((inboxRows || []).map((row) => ({
         clientId: row.client_id,
         lastMessage: row.last_message,
         unread: Number(row.unread) || 0,
         participantIds: Array.isArray(row.participant_ids) ? row.participant_ids : [],
-      }));
+      })));
     }
     // Backward-compatible only during migration rollout. Once the RPC is
     // installed, real database errors must surface instead of hiding behind
@@ -2800,14 +2849,16 @@ export const db = {
       if (senderIsAdmin && !threadIsAdminDm) continue;
       row.unread += 1;
     }
-    return [...byClient.values()]
-      .map((row) => ({
-        ...row,
-        participantIds: [...row.participantIds],
-      }))
-      .sort(
-        (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at),
-      );
+    return hydrateInboxPeers(
+      [...byClient.values()]
+        .map((row) => ({
+          ...row,
+          participantIds: [...row.participantIds],
+        }))
+        .sort(
+          (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at),
+        ),
+    );
   },
 
   async savePushSubscription({ endpoint, p256dh, auth, userAgent }) {
