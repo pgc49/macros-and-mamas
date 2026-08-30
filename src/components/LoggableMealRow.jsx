@@ -17,6 +17,8 @@ export function LoggableMealRow({
   accent = false,
   /** Show breakfast/lunch/dinner/snack chips before Add (default on). */
   showSlotPicker = true,
+  /** Tighter Today → My plan cards so more than two meals fit. */
+  compact = false,
 }) {
   const initialSlot = normalizeSlot(meal.slot || meal.cat) || guessSlotFromTime();
   const [qty, setQty] = useState(1);
@@ -84,16 +86,16 @@ export function LoggableMealRow({
     <div
       style={{
         border: `1.5px solid ${accent ? T.accent : T.border}`,
-        borderRadius: 12,
+        borderRadius: compact ? 10 : 12,
         background: accent ? T.accentSoft : T.card,
-        padding: "12px 14px",
-        marginBottom: 8,
+        padding: compact ? "8px 10px" : "12px 14px",
+        marginBottom: compact ? 6 : 8,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: compact ? 8 : 10, alignItems: "flex-start" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontFamily: FD, fontSize: 17, color: T.ink }}>{meal.name}</div>
-          <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
+          <div style={{ fontFamily: FD, fontSize: compact ? 15 : 17, color: T.ink }}>{meal.name}</div>
+          <div style={{ fontSize: compact ? 11.5 : 12.5, color: T.inkSoft, marginTop: 2 }}>
             {scaled.cal} cal · P {scaled.p}g · C {scaled.c}g · F {scaled.f}g
             {servings !== 1 ? ` · ${servings}×` : ""}
           </div>
@@ -105,9 +107,9 @@ export function LoggableMealRow({
             onClick={handleLog}
             style={{
               fontFamily: F,
-              fontSize: 12,
+              fontSize: compact ? 11.5 : 12,
               fontWeight: 700,
-              padding: "6px 12px",
+              padding: compact ? "5px 10px" : "6px 12px",
               borderRadius: 999,
               border: `1.5px solid ${T.accent}`,
               background: accent ? "#fff" : T.accentSoft,
@@ -122,7 +124,7 @@ export function LoggableMealRow({
         </div>
       </div>
 
-      {showSlotPicker && (
+      {showSlotPicker && !compact && (
         <div style={{ marginTop: 10 }}>
           <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginBottom: 6 }}>
             Add to
@@ -135,13 +137,18 @@ export function LoggableMealRow({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: 10,
-        marginTop: 10,
+        gap: compact ? 6 : 10,
+        marginTop: compact ? 7 : 10,
         flexWrap: "wrap",
       }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600 }}>Servings</span>
+        {showSlotPicker && compact && (
+          <SlotChips value={slot} onChange={setSlot} compact />
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 8 }}>
+          {!compact && (
+            <span style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600 }}>Servings</span>
+          )}
           <ServingStepper value={servings} onChange={setQty} compact />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

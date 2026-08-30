@@ -32,6 +32,7 @@ import { TermsPage } from "./views/TermsPage";
 import { PrivacyPage } from "./views/PrivacyPage";
 import { ClientApp } from "./views/ClientApp";
 import { OnboardingBannersPreview } from "./views/OnboardingBannersPreview";
+import { MealLogPreview } from "./views/MealLogPreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
@@ -1613,7 +1614,10 @@ export default function App() {
 
       <Route path="/home" element={<Navigate to={PATHS.dashboard} replace />} />
       {import.meta.env.DEV ? (
-        <Route path="/dev/onboarding-banners" element={<OnboardingBannersPreview />} />
+        <>
+          <Route path="/dev/onboarding-banners" element={<OnboardingBannersPreview />} />
+          <Route path="/dev/meal-log" element={<MealLogPreview />} />
+        </>
       ) : null}
 
       <Route path={PATHS.terms} element={<TermsPage />} />

@@ -64,6 +64,45 @@ export function filterMealsByQuery(meals, query) {
   return list.filter((meal) => mealMatchesQuery(meal, query));
 }
 
+/** Same slot chips as Meals → Breakfast / Lunch / Dinner / Snack / Treats. */
+export const MEAL_SLOT_FILTERS = ["Breakfast", "Lunch", "Dinner", "Snack", "Treats"];
+
+function titleSlotFilter(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "breakfast") return "Breakfast";
+  if (s === "lunch") return "Lunch";
+  if (s === "dinner") return "Dinner";
+  if (s === "snack" || s === "snacks") return "Snack";
+  if (s === "treat" || s === "treats") return "Treats";
+  if (s === "pantry") return "Snack";
+  return null;
+}
+
+/** Breakfast / Lunch / Dinner / Snack / Treats, or null if uncategorized. */
+export function mealSlotFilterKey(meal) {
+  if (!meal || typeof meal !== "object") return null;
+  return titleSlotFilter(meal.cat) || titleSlotFilter(meal.slot) || null;
+}
+
+/**
+ * Filter by Meals-tab slot. Uncategorized meals (most My meals) stay visible
+ * when `includeUncategorized` is on so a Dinner chip doesn't hide saved plates.
+ */
+export function mealMatchesSlotFilter(meal, filter, { includeUncategorized = false } = {}) {
+  const f = String(filter || "all").trim();
+  if (!f || f.toLowerCase() === "all") return true;
+  const key = mealSlotFilterKey(meal);
+  if (key == null) return includeUncategorized;
+  return key === f;
+}
+
+export function filterMealsBySlot(meals, filter, opts) {
+  const list = Array.isArray(meals) ? meals : [];
+  const f = String(filter || "all").trim();
+  if (!f || f.toLowerCase() === "all") return list;
+  return list.filter((meal) => mealMatchesSlotFilter(meal, f, opts));
+}
+
 /** First occurrence of each meal name (personalized plans repeat across days). */
 export function uniqueMealsByName(meals) {
   const seen = new Set();
