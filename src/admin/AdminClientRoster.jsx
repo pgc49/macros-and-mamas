@@ -8,7 +8,7 @@ import {
   formatLastMessaged,
   listRosterCohorts,
   rosterFilterCounts,
-  rosterTitle,
+  adminPersonTitle,
 } from "./clientRoster";
 import { formatReferredByHint } from "./referredBy";
 
@@ -223,7 +223,7 @@ export function AdminClientRoster({
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {filtered.map((c) => {
-            const title = rosterTitle(c);
+            const title = adminPersonTitle(c);
             const short = stageShort(c);
             const messaged = formatLastMessaged(c.lastAdminAt, nowMs);
             const unread = Number(c.unreadFromMama) || 0;

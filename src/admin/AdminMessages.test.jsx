@@ -250,7 +250,195 @@ describe("AdminMessages thread switching", () => {
       expect(screen.getByText("B stays selected")).toBeTruthy();
     });
   });
+});
 
+describe("AdminMessages inbox titles", () => {
+  it("renders distinct first+last titles from the roster", async () => {
+    dbMock.loadMessageInbox.mockResolvedValueOnce([
+      {
+        clientId: "c-lee",
+        unread: 0,
+        participantIds: ["c-lee"],
+        lastMessage: { id: "p1", body: "Lee preview", created_at: "2026-08-10T10:00:00Z" },
+      },
+      {
+        clientId: "c-park",
+        unread: 0,
+        participantIds: ["c-park"],
+        lastMessage: { id: "p2", body: "Park preview", created_at: "2026-08-10T10:01:00Z" },
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[
+          { id: "c-lee", name: "Christina", firstName: "Christina", lastName: "Lee", email: "christina@example.com" },
+          { id: "c-park", name: "Chelsea", firstName: "Chelsea", lastName: "Park", email: "chelsea@example.com" },
+        ]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /Christina Lee/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Chelsea Park/ })).toBeTruthy();
+    expect(screen.getByText("Lee preview")).toBeTruthy();
+    expect(screen.getByText("Park preview")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Mama$/ })).toBeNull();
+    expect(screen.queryAllByText("Mama")).toHaveLength(0);
+  });
+
+  it("does not title a missing peer Mama when the inbox row has a profile", async () => {
+    dbMock.loadMessageInbox.mockResolvedValueOnce([
+      {
+        clientId: "ghost",
+        unread: 0,
+        participantIds: ["ghost"],
+        lastMessage: { id: "g1", body: "Ghost preview", created_at: "2026-08-10T10:00:00Z" },
+        peer: { id: "ghost", name: "Nora", firstName: "Nora", lastName: "Kim", email: "nora@example.com" },
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /Nora Kim/ })).toBeTruthy();
+    expect(screen.getByText("Ghost preview")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Mama$/ })).toBeNull();
+    expect(screen.queryAllByText("Mama")).toHaveLength(0);
+  });
+
+  it("shows a real identity when the profile name is the Mama placeholder plus last_name", async () => {
+    dbMock.loadMessageInbox.mockResolvedValueOnce([
+      {
+        clientId: "wells",
+        unread: 0,
+        participantIds: ["wells"],
+        lastMessage: { id: "w1", body: "Wells preview", created_at: "2026-08-10T10:00:00Z" },
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[
+          { id: "wells", name: "Mama", firstName: "Mama", lastName: "Wells", email: "wells@example.com" },
+        ]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /Wells/ })).toBeTruthy();
+    expect(screen.getByText("Wells preview")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Mama$/ })).toBeNull();
+  });
+
+  it("missing clientMap peers get distinct email / Unnamed titles, not Mama", async () => {
+    dbMock.loadMessageInbox.mockResolvedValueOnce([
+      {
+        clientId: "a",
+        unread: 0,
+        participantIds: ["a"],
+        lastMessage: { id: "a1", body: "A preview", created_at: "2026-08-10T10:00:00Z" },
+        peer: { id: "a", email: "christina@example.com" },
+      },
+      {
+        clientId: "b",
+        unread: 0,
+        participantIds: ["b"],
+        lastMessage: { id: "b1", body: "B preview", created_at: "2026-08-10T10:01:00Z" },
+        peer: { id: "b", email: "chelsea@example.com" },
+      },
+      {
+        clientId: "c",
+        unread: 0,
+        participantIds: ["c"],
+        lastMessage: { id: "c1", body: "C preview", created_at: "2026-08-10T10:02:00Z" },
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /christina/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /chelsea/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Unnamed/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Mama$/ })).toBeNull();
+    expect(screen.queryAllByText("Mama")).toHaveLength(0);
+  });
+
+  it("titles DIRECT rows from lastMessage.sender_profile when the roster is empty", async () => {
+    dbMock.loadMessageInbox.mockResolvedValueOnce([
+      {
+        clientId: "c-lee",
+        unread: 0,
+        participantIds: ["c-lee"],
+        lastMessage: {
+          id: "p1",
+          sender_id: "c-lee",
+          body: "Lee preview",
+          created_at: "2026-08-10T10:00:00Z",
+          sender_profile: { id: "c-lee", name: "Christina", last_name: "Lee" },
+        },
+      },
+      {
+        clientId: "c-park",
+        unread: 0,
+        participantIds: ["c-park"],
+        lastMessage: {
+          id: "p2",
+          sender_id: "c-park",
+          body: "Park preview",
+          created_at: "2026-08-10T10:01:00Z",
+          sender_profile: { id: "c-park", name: "Chelsea", last_name: "Park" },
+        },
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /Christina Lee/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Chelsea Park/ })).toBeTruthy();
+    expect(screen.queryAllByText("Mama")).toHaveLength(0);
+  });
+
+  it("lists start-a-thread people by first+last, not Mama", async () => {
+    dbMock.loadMessageInbox.mockResolvedValueOnce([]);
+
+    render(
+      <AdminMessages
+        roster={[
+          { id: "c-lee", name: "Christina", lastName: "Lee", email: "christina@example.com", stage: "active" },
+          { id: "c-park", name: "Chelsea", lastName: "Park", email: "chelsea@example.com", status: "active" },
+        ]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText("Christina Lee")).toBeTruthy();
+    expect(screen.getByText("Chelsea Park")).toBeTruthy();
+    expect(screen.queryByText("Mama")).toBeNull();
+  });
+});
+
+describe("AdminMessages thread switching", () => {
   it("gives the thread pane leftover width on desktop so the composer is not crushed", async () => {
     render(
       <AdminMessages
