@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { T, F, FD } from "../theme/tokens";
+import { T, FD } from "../theme/tokens";
 import { Card, Btn } from "../components/ui";
 import { db } from "../db/db";
 import { supabase } from "../lib/supabase";

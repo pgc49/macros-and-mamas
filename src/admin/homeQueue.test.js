@@ -80,7 +80,7 @@ describe("buildHomeQueue", () => {
       todayIso: TODAY,
       now: NOW,
     });
-    expect(rows[0].reason).toMatch(/Unread/);
+    expect(rows[0].reason).toMatch(/unread/i);
     expect(rows[1].reason).toMatch(/approval/);
     expect(rows.some((r) => r.kind === "lead")).toBe(true);
   });
