@@ -377,7 +377,10 @@ describe("messaging crash containment", () => {
   });
 
   it("opens edit/delete after a still long-press when nothing is selected", () => {
-    vi.stubGlobal("getSelection", () => ({ toString: () => "" }));
+    vi.stubGlobal("getSelection", () => ({
+      toString: () => "",
+      removeAllRanges: vi.fn(),
+    }));
     vi.useFakeTimers();
     render(
       <MessagesThread
@@ -399,6 +402,78 @@ describe("messaging crash containment", () => {
     });
     expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "React with ❤️" })).toBeTruthy();
+  });
+
+  it("opens the reaction picker on hold even if iOS starts selecting mid-hold", () => {
+    let selected = "";
+    vi.stubGlobal("getSelection", () => ({
+      toString: () => selected,
+      removeAllRanges: vi.fn(),
+    }));
+    vi.useFakeTimers();
+    const href = "https://youtu.be/EDjE15Ktzcs?si=abc";
+    render(
+      <MessagesThread
+        {...threadProps({
+          canModerate: true,
+          messages: [{
+            id: "christina-1",
+            sender_id: "christina-1",
+            body: `Good morning mamas 💕 ${href}`,
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    const bubble = document.querySelector("[data-msg-id=\"christina-1\"]");
+    expect(bubble.style.userSelect).toBe("text");
+    fireEvent.touchStart(bubble, { touches: [{ clientX: 12, clientY: 18 }] });
+    selected = "Good morning mamas 💕";
+    act(() => {
+      vi.advanceTimersByTime(MESSAGE_HOLD_MS);
+    });
+    expect(screen.getByRole("button", { name: "React with ❤️" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "React with 👍" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
+  });
+
+  it("copies the live body from the long-press menu", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    vi.stubGlobal("getSelection", () => ({
+      toString: () => "",
+      removeAllRanges: vi.fn(),
+    }));
+    vi.useFakeTimers();
+    const body = "Good morning mamas 💕 https://youtu.be/EDjE15Ktzcs";
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [{
+            id: "christina-1",
+            sender_id: "christina-1",
+            body,
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    const bubble = document.querySelector("[data-msg-id=\"christina-1\"]");
+    fireEvent.mouseDown(bubble, { button: 0, clientX: 10, clientY: 20 });
+    act(() => {
+      vi.advanceTimersByTime(MESSAGE_HOLD_MS);
+    });
+    vi.useRealTimers();
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(body));
   });
 
   it("does not steal a text-selection gesture for the action menu", () => {
