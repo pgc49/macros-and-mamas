@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -10,6 +11,7 @@ import {
 } from "@testing-library/react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { MessagesThread } from "./MessagesThread";
+import { MESSAGE_HOLD_MS } from "../lib/messageSelect";
 
 vi.mock("@sentry/react", () => ({
   captureException: vi.fn(),
@@ -18,6 +20,7 @@ vi.mock("@sentry/react", () => ({
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 function Thrower({ active = true }) {
@@ -308,6 +311,85 @@ describe("messaging crash containment", () => {
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toMatch(/noopener/);
     expect(screen.getByText("Watch this", { exact: false })).toBeTruthy();
+  });
+
+  it("lets admins and senders copy live bubble text", () => {
+    render(
+      <MessagesThread
+        {...threadProps({
+          canModerate: true,
+          messages: [
+            {
+              id: "callie-yt",
+              sender_id: "callie-1",
+              body: "https://youtu.be/EDjE15Ktzcs?si=abc",
+              created_at: "2026-08-10T10:00:00.000Z",
+              reactions: [],
+            },
+            {
+              id: "own-1",
+              sender_id: "admin-1",
+              body: "my own note",
+              created_at: "2026-08-10T10:01:00.000Z",
+              reactions: [],
+            },
+          ],
+        })}
+      />,
+    );
+    const callie = document.querySelector("[data-msg-id=\"callie-yt\"]");
+    const own = document.querySelector("[data-msg-id=\"own-1\"]");
+    expect(callie.style.userSelect).toBe("text");
+    expect(callie.style.WebkitUserSelect).toBe("text");
+    expect(own.style.userSelect).toBe("text");
+    expect(own.style.WebkitUserSelect).toBe("text");
+  });
+
+  it("opens edit/delete after a still long-press when nothing is selected", () => {
+    vi.stubGlobal("getSelection", () => ({ toString: () => "" }));
+    vi.useFakeTimers();
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [{
+            id: "own-1",
+            sender_id: "admin-1",
+            body: "copy me",
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    const bubble = document.querySelector("[data-msg-id=\"own-1\"]");
+    fireEvent.mouseDown(bubble, { button: 0, clientX: 10, clientY: 20 });
+    act(() => {
+      vi.advanceTimersByTime(MESSAGE_HOLD_MS);
+    });
+    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
+  });
+
+  it("does not steal a text-selection gesture for the action menu", () => {
+    vi.stubGlobal("getSelection", () => ({ toString: () => "copy me" }));
+    vi.useFakeTimers();
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [{
+            id: "own-1",
+            sender_id: "admin-1",
+            body: "copy me",
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    const bubble = document.querySelector("[data-msg-id=\"own-1\"]");
+    fireEvent.mouseDown(bubble, { button: 0, clientX: 10, clientY: 20 });
+    vi.advanceTimersByTime(MESSAGE_HOLD_MS + 50);
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 });
 

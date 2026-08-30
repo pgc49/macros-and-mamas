@@ -19,6 +19,12 @@ import {
 import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { splitLinkedMessageText } from "../lib/messageLinks";
+import {
+  MESSAGE_HOLD_MOVE_PX,
+  MESSAGE_HOLD_MS,
+  bubbleTextSelect,
+  hasSelectableText,
+} from "../lib/messageSelect";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
 const pendingSendAttempts = new Map();
@@ -94,6 +100,7 @@ export function MessagesThread({
   const fileRef = useRef(null);
   const draftRef = useRef(null);
   const holdTimer = useRef(null);
+  const holdStart = useRef(null);
   const recorderRef = useRef(null);
   const markReadRef = useRef(onMarkRead);
   const sendInFlightRef = useRef(false);
@@ -424,6 +431,26 @@ export function MessagesThread({
       window.clearTimeout(holdTimer.current);
       holdTimer.current = null;
     }
+    holdStart.current = null;
+  };
+
+  const selectionBlocksMenu = () => hasSelectableText(window.getSelection?.());
+
+  const armHold = (m, x, y) => {
+    clearHold();
+    if (selectionBlocksMenu()) return;
+    holdStart.current = { x, y };
+    holdTimer.current = window.setTimeout(() => {
+      holdTimer.current = null;
+      if (selectionBlocksMenu()) return;
+      openMenu(m);
+    }, MESSAGE_HOLD_MS);
+  };
+
+  const movedAway = (x, y) => {
+    const start = holdStart.current;
+    if (!start) return false;
+    return Math.hypot(x - start.x, y - start.y) >= MESSAGE_HOLD_MOVE_PX;
   };
 
   const canEditMsg = (m) => (
@@ -522,20 +549,27 @@ export function MessagesThread({
     if (!canManage(m)) return {};
     return {
       onContextMenu: (e) => {
+        // Let iOS / desktop copy when text is already selected.
+        if (selectionBlocksMenu()) return;
         e.preventDefault();
         openMenu(m);
       },
-      onTouchStart: () => {
-        clearHold();
-        holdTimer.current = window.setTimeout(() => openMenu(m), 450);
+      onTouchStart: (e) => {
+        const t = e.touches?.[0];
+        armHold(m, t?.clientX ?? 0, t?.clientY ?? 0);
       },
       onTouchEnd: clearHold,
-      onTouchMove: clearHold,
+      onTouchMove: (e) => {
+        const t = e.touches?.[0];
+        if (t && movedAway(t.clientX, t.clientY)) clearHold();
+      },
       onTouchCancel: clearHold,
       onMouseDown: (e) => {
         if (e.button !== 0) return;
-        clearHold();
-        holdTimer.current = window.setTimeout(() => openMenu(m), 450);
+        armHold(m, e.clientX, e.clientY);
+      },
+      onMouseMove: (e) => {
+        if (movedAway(e.clientX, e.clientY)) clearHold();
       },
       onMouseUp: clearHold,
       onMouseLeave: clearHold,
@@ -725,11 +759,9 @@ export function MessagesThread({
                   lineHeight: 1.45,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
-                  // Keep copy/select for reply-only bubbles; suppress selection when
-                  // edit/delete long-press would fight iOS text handles.
-                  userSelect: (canEditMsg(m) || canDeleteMsg(m)) ? "none" : "text",
-                  WebkitUserSelect: (canEditMsg(m) || canDeleteMsg(m)) ? "none" : "text",
-                  cursor: canManage(m) ? "default" : undefined,
+                  userSelect: bubbleTextSelect(deleted),
+                  WebkitUserSelect: bubbleTextSelect(deleted),
+                  cursor: deleted ? "default" : "text",
                 }}
               >
                 {!mine && !deleted && showSenderNames && (
