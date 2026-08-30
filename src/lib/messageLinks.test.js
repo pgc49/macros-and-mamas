@@ -58,4 +58,21 @@ describe("splitLinkedMessageText", () => {
     const parts = splitLinkedMessageText(body);
     expect(parts.map((p) => p.value).join("")).toBe(body);
   });
+
+  it("keeps body emoji such as 💕 as text, including next to a URL", () => {
+    expect(splitLinkedMessageText("Good morning mamas 💕")).toEqual([
+      { type: "text", value: "Good morning mamas 💕" },
+    ]);
+    const withLink = `Love this 💕 ${YT}`;
+    const parts = splitLinkedMessageText(withLink);
+    expect(parts).toEqual([
+      { type: "text", value: "Love this 💕 " },
+      { type: "link", value: YT, href: YT },
+    ]);
+    expect(parts.map((p) => p.value).join("")).toBe(withLink);
+    expect(splitLinkedMessageText(`${YT} 💕`)).toEqual([
+      { type: "link", value: YT, href: YT },
+      { type: "text", value: " 💕" },
+    ]);
+  });
 });
