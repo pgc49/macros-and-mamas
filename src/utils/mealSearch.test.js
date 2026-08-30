@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  enrichMealsWithBankSlot,
   filterMealsByQuery,
   filterMealsBySlot,
   mealMatchesQuery,
@@ -66,14 +67,30 @@ describe("filterMealsBySlot", () => {
     expect(filterMealsBySlot(list, "")).toBe(list);
   });
 
-  it("matches cat and slot, and can keep uncategorized My meals", () => {
+  it("hides uncategorized My meals from a slot chip", () => {
     const saved = { name: "Turkey and Bacon" };
     expect(mealMatchesSlotFilter(oatmeal, "Breakfast")).toBe(true);
     expect(mealMatchesSlotFilter(chicken, "Breakfast")).toBe(false);
     expect(mealMatchesSlotFilter(saved, "Dinner")).toBe(false);
-    expect(mealMatchesSlotFilter(saved, "Dinner", { includeUncategorized: true })).toBe(true);
-    expect(filterMealsBySlot([oatmeal, chicken, saved], "Dinner", { includeUncategorized: true }))
-      .toEqual([chicken, saved]);
+    expect(mealMatchesSlotFilter(saved, "My meals")).toBe(true);
+    expect(filterMealsBySlot([oatmeal, chicken, saved], "Dinner")).toEqual([chicken]);
+    expect(filterMealsBySlot([oatmeal, chicken, saved], "My meals")).toEqual([
+      oatmeal,
+      chicken,
+      saved,
+    ]);
+  });
+});
+
+describe("enrichMealsWithBankSlot", () => {
+  it("copies a bank category onto a saved meal with the same name", () => {
+    const saved = { name: "Pulled chicken tacos" };
+    const [tagged] = enrichMealsWithBankSlot([saved], [
+      { cat: "Dinner", name: "Pulled chicken tacos" },
+    ]);
+    expect(mealSlotFilterKey(tagged)).toBe("Dinner");
+    expect(mealMatchesSlotFilter(tagged, "Breakfast")).toBe(false);
+    expect(mealMatchesSlotFilter(tagged, "Dinner")).toBe(true);
   });
 });
 

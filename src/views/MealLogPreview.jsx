@@ -5,10 +5,10 @@ import { MealLogCard } from "../components/MealLogCard";
 /** Local-only preview of Today → My plan list + slot filter. */
 const PREVIEW_CUSTOM = [
   { id: "c1", name: "Pulled Chicken Tacos", cal: 425, p: 48, c: 38, f: 7, ingredients: "5 oz chicken\n3 corn tortillas" },
-  { id: "c2", name: "Turkey and Bacon", cal: 410, p: 36, c: 8, f: 22 },
+  { id: "c2", name: "Turkey and Bacon", cal: 410, p: 36, c: 8, f: 22, slot: "dinner" },
   { id: "c3", name: "Greek yogurt bowl", cal: 350, p: 25, c: 49, f: 5 },
-  { id: "c4", name: "Egg white scramble", cal: 400, p: 39, c: 25, f: 13 },
-  { id: "c5", name: "Salmon salad", cal: 335, p: 39, c: 6, f: 15 },
+  { id: "c4", name: "Egg white scramble", cal: 400, p: 39, c: 25, f: 13, slot: "breakfast" },
+  { id: "c5", name: "Salmon salad", cal: 335, p: 39, c: 6, f: 15, slot: "lunch" },
 ];
 
 const PREVIEW_PLAN = [

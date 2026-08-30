@@ -27,7 +27,13 @@ import { targetBands } from "../utils/weekPlan";
 import { roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
 import { LogMealRefine } from "./LogMealRefine";
-import { filterMealsByQuery, filterMealsBySlot, MEAL_SLOT_FILTERS } from "../utils/mealSearch";
+import {
+  enrichMealsWithBankSlot,
+  filterMealsByQuery,
+  filterMealsBySlot,
+  isMyMealsFilter,
+  MEAL_SLOT_FILTERS,
+} from "../utils/mealSearch";
 
 /** She pasted a link — the estimator only reads text, so say so plainly. */
 const URL_RE = /(https?:\/\/|www\.)\S+/i;
@@ -170,26 +176,33 @@ export function MealLogCard({
     : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
   const searchingPlan = Boolean(String(planSearch || "").trim());
   const slotFiltering = slotFilter && slotFilter !== "all";
+  const mineOnly = isMyMealsFilter(slotFilter);
+  const customTagged = useMemo(
+    () => enrichMealsWithBankSlot(customMeals || [], recipes),
+    [customMeals, recipes],
+  );
   const plannedVisible = useMemo(
-    () => filterMealsBySlot(filterMealsByQuery(plannedMeals || [], planSearch), slotFilter),
-    [plannedMeals, planSearch, slotFilter],
+    () => (mineOnly
+      ? []
+      : filterMealsBySlot(filterMealsByQuery(plannedMeals || [], planSearch), slotFilter)),
+    [mineOnly, plannedMeals, planSearch, slotFilter],
   );
   const customVisible = useMemo(
-    () => filterMealsBySlot(
-      filterMealsByQuery(customMeals || [], planSearch),
-      slotFilter,
-      { includeUncategorized: true },
-    ),
-    [customMeals, planSearch, slotFilter],
+    () => filterMealsBySlot(filterMealsByQuery(customTagged, planSearch), slotFilter),
+    [customTagged, planSearch, slotFilter],
   );
   const recipesVisible = useMemo(
-    () => filterMealsBySlot(filterMealsByQuery(recipes || [], planSearch), slotFilter),
-    [recipes, planSearch, slotFilter],
+    () => (mineOnly
+      ? []
+      : filterMealsBySlot(filterMealsByQuery(recipes || [], planSearch), slotFilter)),
+    [mineOnly, recipes, planSearch, slotFilter],
   );
   const pantrySearchPool = searchingPlan ? PANTRY_ITEMS : pantryVisible;
   const pantryMatches = useMemo(
-    () => filterMealsBySlot(filterMealsByQuery(pantrySearchPool, planSearch), slotFilter),
-    [pantrySearchPool, planSearch, slotFilter],
+    () => (mineOnly
+      ? []
+      : filterMealsBySlot(filterMealsByQuery(pantrySearchPool, planSearch), slotFilter)),
+    [mineOnly, pantrySearchPool, planSearch, slotFilter],
   );
   const planMatchCount = plannedVisible.length
     + customVisible.length
@@ -1185,7 +1198,9 @@ export function MealLogCard({
               <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginBottom: 8 }}>
                 {searchingPlan
                   ? `No meals match “${planSearch.trim()}”${slotFiltering ? ` in ${slotFilter}` : ""}. Try a name or ingredient.`
-                  : `No ${slotFilter} meals in this list. Clear the filter or pick another slot.`}
+                  : mineOnly
+                    ? "Nothing saved in My meals yet."
+                    : `No ${slotFilter} meals in this list. Try My meals, or pick another slot.`}
               </div>
             )}
             {plannedVisible.length > 0 && (

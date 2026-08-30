@@ -64,8 +64,8 @@ export function filterMealsByQuery(meals, query) {
   return list.filter((meal) => mealMatchesQuery(meal, query));
 }
 
-/** Same slot chips as Meals → Breakfast / Lunch / Dinner / Snack / Treats. */
-export const MEAL_SLOT_FILTERS = ["Breakfast", "Lunch", "Dinner", "Snack", "Treats"];
+/** Today → My plan filter chips. My meals is the saved list; the rest match Meals-tab slots. */
+export const MEAL_SLOT_FILTERS = ["My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Treats"];
 
 function titleSlotFilter(raw) {
   const s = String(raw || "").trim().toLowerCase();
@@ -84,13 +84,18 @@ export function mealSlotFilterKey(meal) {
   return titleSlotFilter(meal.cat) || titleSlotFilter(meal.slot) || null;
 }
 
+export function isMyMealsFilter(filter) {
+  return String(filter || "").trim() === "My meals";
+}
+
 /**
- * Filter by Meals-tab slot. Uncategorized meals (most My meals) stay visible
- * when `includeUncategorized` is on so a Dinner chip doesn't hide saved plates.
+ * Filter by Meals-tab slot. Uncategorized meals stay hidden unless
+ * `includeUncategorized` is on. "My meals" is handled by the caller
+ * (show only the saved list, any slot).
  */
 export function mealMatchesSlotFilter(meal, filter, { includeUncategorized = false } = {}) {
   const f = String(filter || "all").trim();
-  if (!f || f.toLowerCase() === "all") return true;
+  if (!f || f.toLowerCase() === "all" || isMyMealsFilter(f)) return true;
   const key = mealSlotFilterKey(meal);
   if (key == null) return includeUncategorized;
   return key === f;
@@ -99,8 +104,28 @@ export function mealMatchesSlotFilter(meal, filter, { includeUncategorized = fal
 export function filterMealsBySlot(meals, filter, opts) {
   const list = Array.isArray(meals) ? meals : [];
   const f = String(filter || "all").trim();
-  if (!f || f.toLowerCase() === "all") return list;
+  if (!f || f.toLowerCase() === "all" || isMyMealsFilter(f)) return list;
   return list.filter((meal) => mealMatchesSlotFilter(meal, f, opts));
+}
+
+/**
+ * Saved My meals often have no slot. If the name matches a bank recipe,
+ * borrow that category so Dinner tacos don't land in Breakfast.
+ */
+export function enrichMealsWithBankSlot(meals, recipes) {
+  const list = Array.isArray(meals) ? meals : [];
+  const byName = new Map();
+  for (const recipe of Array.isArray(recipes) ? recipes : []) {
+    const key = String(recipe?.name || "").trim().toLowerCase();
+    const slot = mealSlotFilterKey(recipe);
+    if (key && slot && !byName.has(key)) byName.set(key, slot);
+  }
+  return list.map((meal) => {
+    if (mealSlotFilterKey(meal)) return meal;
+    const inferred = byName.get(String(meal?.name || "").trim().toLowerCase());
+    if (!inferred) return meal;
+    return { ...meal, cat: inferred };
+  });
 }
 
 /** First occurrence of each meal name (personalized plans repeat across days). */
