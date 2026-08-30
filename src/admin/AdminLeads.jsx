@@ -3,7 +3,7 @@
  * Not Meta Ads Manager. Quiz-only emails live here; Clients is profiles.
  * Tap a lead to see her address, a copy-ready Callie note, mailto, and send history.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card } from "../components/ui";
 import { db } from "../db/db";
@@ -157,12 +157,13 @@ function LeadInsights({ lead }) {
   );
 }
 
-function CopyNoteButton({ text }) {
+function CopyNoteButton({ text, onCopied }) {
   const [copied, setCopied] = useState(false);
   const onCopy = async () => {
     try {
       await copyText(text);
       setCopied(true);
+      onCopied?.();
       window.setTimeout(() => setCopied(false), 1600);
     } catch (err) {
       console.error("clipboard write failed", err);
@@ -186,7 +187,7 @@ function CopyNoteButton({ text }) {
   );
 }
 
-function LeadPersonalNote({ lead }) {
+function LeadPersonalNote({ lead, onCopied }) {
   const draft = draftLeadPersonalNote(lead);
   if (draft.kind === "paid") {
     return (
@@ -215,17 +216,18 @@ function LeadPersonalNote({ lead }) {
       >
         {draft.body}
       </pre>
-      <CopyNoteButton text={draft.copyText} />
+      <CopyNoteButton text={draft.copyText} onCopied={onCopied} />
     </div>
   );
 }
 
-function CopyEmailButton({ email }) {
+function CopyEmailButton({ email, onCopied }) {
   const [copied, setCopied] = useState(false);
   const onCopy = async () => {
     try {
       await copyText(email);
       setCopied(true);
+      onCopied?.();
       window.setTimeout(() => setCopied(false), 1600);
     } catch (err) {
       console.error("clipboard write failed", err);
@@ -248,7 +250,7 @@ function CopyEmailButton({ email }) {
   );
 }
 
-function LeadDetail({ lead, onBack, onOpenMama }) {
+function LeadDetail({ lead, onBack, onOpenMama, onAdminTouch }) {
   const [events, setEvents] = useState(null);
   const [unsubscribed, setUnsubscribed] = useState(false);
   const email = leadEmail(lead);
@@ -330,8 +332,12 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
           {mailto ? (
             <>
-              <CopyEmailButton email={email} />
-              <a href={mailto} style={{ ...actionBtnBase, border: "none", background: T.accent, color: "#fff" }}>
+              <CopyEmailButton email={email} onCopied={() => onAdminTouch?.(email, "copy")} />
+              <a
+                href={mailto}
+                onClick={() => onAdminTouch?.(email, "email")}
+                style={{ ...actionBtnBase, border: "none", background: T.accent, color: "#fff" }}
+              >
                 Email
               </a>
             </>
@@ -354,7 +360,7 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
 
         <LeadQuizAnswers lead={lead} />
         <LeadQuizResults lead={lead} />
-        <LeadPersonalNote lead={lead} />
+        <LeadPersonalNote lead={lead} onCopied={() => onAdminTouch?.(email, "copy")} />
         <LeadInsights lead={lead} />
 
         <div style={{ marginTop: 22 }}>
@@ -414,16 +420,33 @@ function LeadDetail({ lead, onBack, onOpenMama }) {
   );
 }
 
-export function AdminLeads({ onOpenMama, initialFilter = DEFAULT_QUIZ_LEAD_FILTER }) {
+export function AdminLeads({
+  onOpenMama,
+  initialFilter = DEFAULT_QUIZ_LEAD_FILTER,
+  initialSelectedEmail = null,
+  onAdminTouch,
+}) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState(initialFilter || DEFAULT_QUIZ_LEAD_FILTER);
   const [cohort, setCohort] = useState("all");
   const [selected, setSelected] = useState(null);
+  const consumedEmailRef = useRef(null);
 
   useEffect(() => {
     setFilter(initialFilter || DEFAULT_QUIZ_LEAD_FILTER);
   }, [initialFilter]);
+
+  useEffect(() => {
+    if (!initialSelectedEmail || !rows) return;
+    const target = String(initialSelectedEmail).trim().toLowerCase();
+    if (!target || consumedEmailRef.current === target) return;
+    const match = rows.find((row) => String(row.email || "").trim().toLowerCase() === target);
+    if (match) {
+      consumedEmailRef.current = target;
+      setSelected(match);
+    }
+  }, [initialSelectedEmail, rows]);
 
   useEffect(() => {
     let cancelled = false;
@@ -468,6 +491,9 @@ export function AdminLeads({ onOpenMama, initialFilter = DEFAULT_QUIZ_LEAD_FILTE
         lead={selected}
         onBack={() => setSelected(null)}
         onOpenMama={onOpenMama}
+        onAdminTouch={onAdminTouch || ((email, kind) => {
+          db.recordAdminTouch(email, kind).catch(() => {});
+        })}
       />
     );
   }

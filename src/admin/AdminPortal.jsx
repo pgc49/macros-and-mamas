@@ -14,9 +14,9 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import { T, F, FD } from "../theme/tokens";
-import { addDaysIso, localDateIso, rateOf } from "../utils/dates";
+import { localDateIso, rateOf } from "../utils/dates";
 import { buildMacroHistory, buildTrends, buildWaterHistory } from "../utils/progressSeries";
-import { adminCohortName, resolveProgramStartWeekIso } from "../lib/cohorts";
+import { adminCohortName, programWeekNumber, resolveProgramStartWeekIso } from "../lib/cohorts";
 import { mergeGoalItems } from "../lib/goals";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
@@ -24,19 +24,29 @@ import { Shell, Card, Btn, inputStyle } from "../components/ui";
 import { ProgressCharts } from "../components/ProgressCharts";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AdminMessages } from "./AdminMessages";
-import { AdminAnnouncements } from "./AdminAnnouncements";
 import { AdminClientTracking } from "./AdminClientTracking";
 import { AdminClientMessages } from "./AdminClientMessages";
-import { AdminCredits } from "./AdminCredits";
-import { AdminEmails } from "./AdminEmails";
-import { AdminLeads } from "./AdminLeads";
-import { AdminQuizFunnelCard } from "./AdminQuizFunnelCard";
-import { AdminClientRoster, CohortFilterBar, CopyPhoneButton } from "./AdminClientRoster";
-import { rosterStats } from "./clientRoster";
+import { CopyPhoneButton } from "./AdminClientRoster";
+import { loadQuizLeads } from "./quizLeads";
+import { assemblePeople } from "./personModel";
+import { buildHomeQueue } from "./homeQueue";
+import {
+  moreViewFromQuery,
+  peopleSegmentFromQuery,
+  primaryTabFromQuery,
+  queryTabFor,
+} from "./adminNav";
+import { AdminBottomNav } from "./AdminBottomNav";
+import { AdminHome } from "./AdminHome";
+import { AdminPeople } from "./AdminPeople";
+import { AdminMore } from "./AdminMore";
+import { AdminClientSummary } from "./AdminClientSummary";
+import { AdminPersonTimeline } from "./AdminPersonTimeline";
+import { AdminStickyVoiceBar } from "./AdminStickyVoiceBar";
+import { buildClientFlagChips } from "./clientFlags";
 import { formatReferredBy, thankReferrerLabel } from "./referredBy";
 import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { supabase } from "../lib/supabase";
-import { EMAIL_TYPE_LABELS } from "../content/emailCatalog";
 import { useAuth } from "../auth/useAuth.jsx";
 import { syncAppBadge } from "../lib/push";
 
@@ -48,204 +58,25 @@ const STAGE_LABEL = {
   refunded: "Refunded",
 };
 
-const AI_LABELS = {
-  estimate_photo: "Snap photo",
-  estimate_text: "Describe",
-  meal_suggest: "Suggest my week",
-  meal_idea: "Meal ideas",
-};
-
 const EMPTY_ROSTER = [];
-
-const AI_KINDS = {
-  config: "not configured",
-  auth: "bad API key",
-  credits: "out of credits",
-  rate_limited: "rate limited",
-  timeout: "timed out",
-  network: "network drop",
-  upstream: "provider error",
-  empty: "empty reply",
-  parse: "unreadable reply",
-};
-
-function formatWhen(iso) {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function StatPill({ label, value, bg, color, onClick }) {
-  const style = {
-    flex: "1 1 30%",
-    minWidth: 100,
-    background: bg,
-    borderRadius: 12,
-    padding: "12px 8px",
-    textAlign: "center",
-    border: "none",
-    fontFamily: F,
-    cursor: onClick ? "pointer" : "default",
-    appearance: "none",
-    WebkitAppearance: "none",
-  };
-  const inner = (
-    <>
-      <div style={{ fontFamily: FD, fontSize: 24, color }}>{value}</div>
-      <div style={{ fontSize: 11.5, fontWeight: 700, color, lineHeight: 1.3, marginTop: 2 }}>{label}</div>
-    </>
-  );
-  if (!onClick) return <div style={style}>{inner}</div>;
-  return (
-    <button type="button" onClick={onClick} style={style} aria-label={`${label}: ${value}. Open this list.`}>
-      {inner}
-    </button>
-  );
-}
-
-function TabBar({ tab, setTab, unreadMessages = 0 }) {
-  const tabs = [
-    ["overview", "Overview"],
-    ["clients", "Clients"],
-    ["leads", "Leads"],
-    ["credits", "Credits"],
-    ["messages", "Messages"],
-    ["announcements", "Announcements"],
-    ["emails", "Emails"],
-  ];
-  return (
-    <div style={{ display: "flex", gap: 6, margin: "10px 0 18px", flexWrap: "wrap" }}>
-      {tabs.map(([id, label]) => {
-        const showBadge = id === "messages" && unreadMessages > 0;
-        return (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            style={{
-              padding: "8px 14px",
-              borderRadius: 999,
-              border: `1.5px solid ${
-                tab === id ? T.accent : showBadge ? T.accent : T.border
-              }`,
-              background: tab === id ? T.accentSoft : showBadge ? T.accentSoft : "#fff",
-              color: tab === id || showBadge ? T.accentDeep : T.inkSoft,
-              fontWeight: 700,
-              fontSize: 13,
-              cursor: "pointer",
-              fontFamily: F,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            {label}
-            {showBadge && (
-              <span
-                style={{
-                  minWidth: 18,
-                  height: 18,
-                  borderRadius: 99,
-                  background: T.accent,
-                  color: "#fff",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  lineHeight: "18px",
-                  padding: "0 5px",
-                  boxSizing: "border-box",
-                  textAlign: "center",
-                }}
-              >
-                {unreadMessages > 9 ? "9+" : unreadMessages}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function EmailTimeline({ profileId }) {
-  const [events, setEvents] = useState(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setEvents(null);
-    setError("");
-    (async () => {
-      try {
-        const rows = await db.loadEmailEvents(profileId);
-        if (!cancelled) setEvents(rows);
-      } catch (e) {
-        console.error(e);
-        if (!cancelled) {
-          setEvents([]);
-          setError("Couldn't load email history. If this is new, run migration 006 in Supabase.");
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [profileId]);
-
-  if (events === null) {
-    return <div style={{ fontSize: 13.5, color: T.inkSoft }}>Loading emails…</div>;
-  }
-  if (error) {
-    return <div style={{ fontSize: 13.5, color: T.amber }}>{error}</div>;
-  }
-  if (!events.length) {
-    return (
-      <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5 }}>
-        No emails logged for this mama yet. New sends (welcome, intake, approve, refund) appear here after migration 006 is applied.
-      </div>
-    );
-  }
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {events.map((e) => (
-        <div
-          key={e.id}
-          style={{
-            border: `1px solid ${T.border}`,
-            borderRadius: 12,
-            padding: "10px 12px",
-            background: e.status === "failed" ? T.amberSoft : "#fff",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.ink }}>
-              {EMAIL_TYPE_LABELS[e.email_type] || e.email_type}
-            </div>
-            <div style={{ fontSize: 11.5, color: T.inkSoft, whiteSpace: "nowrap" }}>{formatWhen(e.created_at)}</div>
-          </div>
-          {e.subject && (
-            <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 3, lineHeight: 1.4 }}>{e.subject}</div>
-          )}
-          <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 4 }}>
-            {e.to_email && e.to_email !== "callie" ? `To ${e.to_email} · ` : e.to_email === "callie" ? "To Callie · " : ""}
-            {e.status === "failed" ? "Failed" : "Sent"}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdminSel }) {
   const { user } = useAuth();
   const [tab, setTab] = useState(() => {
-    if (typeof window === "undefined") return "overview";
-    const q = new URLSearchParams(window.location.search).get("tab");
-    if (q === "messages" || q === "announcements" || q === "emails" || q === "clients" || q === "credits" || q === "leads") return q;
-    return "overview";
+    if (typeof window === "undefined") return "home";
+    return primaryTabFromQuery(new URLSearchParams(window.location.search).get("tab"));
   });
+  const [peopleSegment, setPeopleSegment] = useState(() => {
+    if (typeof window === "undefined") return "needs_action";
+    return peopleSegmentFromQuery(new URLSearchParams(window.location.search).get("tab"));
+  });
+  const [moreView, setMoreView] = useState(() => {
+    if (typeof window === "undefined") return "menu";
+    return moreViewFromQuery(new URLSearchParams(window.location.search).get("tab"));
+  });
+  const [people, setPeople] = useState([]);
+  const [composerOffscreen, setComposerOffscreen] = useState(false);
+  const composerRef = useRef(null);
   const [filter, setFilter] = useState(() => {
     if (typeof window === "undefined") return "needs_you";
     const q = new URLSearchParams(window.location.search).get("filter");
@@ -262,7 +93,39 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   const [progressError, setProgressError] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [leadsFilter, setLeadsFilter] = useState("unpaid");
+  const [selectedLeadEmail, setSelectedLeadEmail] = useState(null);
   const debounceRef = useRef({});
+
+  const setPrimaryTab = useCallback((next, extras = {}) => {
+    const nextSegment = extras.peopleSegment ?? peopleSegment;
+    const nextMore = extras.moreView ?? moreView;
+    if (extras.peopleSegment) setPeopleSegment(extras.peopleSegment);
+    if (extras.moreView) setMoreView(extras.moreView);
+    setTab(next);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", queryTabFor(next, { peopleSegment: nextSegment, moreView: nextMore }));
+      window.history.replaceState({}, "", url);
+    }
+  }, [peopleSegment, moreView]);
+
+  const updatePeopleSegment = useCallback((next) => {
+    setPeopleSegment(next);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", queryTabFor("people", { peopleSegment: next, moreView }));
+      window.history.replaceState({}, "", url);
+    }
+  }, [moreView]);
+
+  const updateMoreView = useCallback((next) => {
+    setMoreView(next);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", queryTabFor("more", { peopleSegment, moreView: next }));
+      window.history.replaceState({}, "", url);
+    }
+  }, [peopleSegment]);
 
   useEffect(() => {
     syncAppBadge(unreadMessages);
@@ -303,18 +166,95 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     };
   }, [user?.id, refreshUnread]);
 
-  const computedStats = useMemo(
-    () => rosterStats(all, cohortFilter),
-    [all, cohortFilter],
-  );
+  const refreshPeople = useCallback(async () => {
+    try {
+      const [leadRows, overrides] = await Promise.all([
+        loadQuizLeads(),
+        db.loadPersonOverrides(),
+      ]);
+      const emails = [
+        ...leadRows.map((l) => l.email),
+        ...(roster || []).map((c) => c.email),
+      ];
+      const [eventsByEmail, unsubscribed] = await Promise.all([
+        db.loadLatestEmailEventsByEmails(emails),
+        db.loadUnsubscribedEmailSet(emails),
+      ]);
+      setPeople(assemblePeople({
+        clients: roster || [],
+        leads: leadRows,
+        overrides,
+        eventsByEmail,
+        unsubscribedEmails: unsubscribed,
+      }));
+    } catch (e) {
+      console.warn("assemble people failed", e);
+    }
+  }, [roster]);
 
-  const openClients = useCallback((nextFilter) => {
-    setFilter(nextFilter);
-    setTab("clients");
-  }, []);
+  const openLeads = useCallback((nextFilter) => {
+    setLeadsFilter(nextFilter || "unpaid");
+    setPrimaryTab("people", { peopleSegment: "leads" });
+  }, [setPrimaryTab]);
+
+  const openFunnel = useCallback(() => {
+    setPrimaryTab("more", { moreView: "funnel" });
+  }, [setPrimaryTab]);
+
+  const openPerson = useCallback((person) => {
+    if (person?.profileId) {
+      setAdminSel(person.profileId);
+      return;
+    }
+    if (person?.email) {
+      setSelectedLeadEmail(person.email);
+      setPrimaryTab("people", { peopleSegment: "leads" });
+    }
+  }, [setAdminSel, setPrimaryTab]);
+
+  const snoozePerson = useCallback(async (person) => {
+    if (!person?.email) return;
+    const until = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+    await db.savePersonOverride(person.email, { snoozed_until: until });
+    await refreshPeople();
+  }, [refreshPeople]);
+
+  const touchLead = useCallback(async (email, kind) => {
+    if (!email) return;
+    await db.recordAdminTouch(email, kind || "email").catch(() => {});
+    await refreshPeople();
+  }, [refreshPeople]);
 
   useEffect(() => {
-    if (tab !== "overview") return;
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      await refreshPeople();
+    })();
+    return () => { cancelled = true; };
+  }, [refreshPeople]);
+
+  const queue = useMemo(
+    () => buildHomeQueue({ people, todayIso: localDateIso() }),
+    [people],
+  );
+
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setComposerOffscreen(false);
+      return undefined;
+    }
+    const obs = new IntersectionObserver(
+      ([entry]) => setComposerOffscreen(!entry?.isIntersecting),
+      { threshold: 0.05 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [adminSel]);
+
+  useEffect(() => {
+    if (tab !== "more" && tab !== "home") return;
     let cancelled = false;
     db.loadAiFailures(24, 50).then((rows) => {
       if (!cancelled) setAiFailures(rows);
@@ -347,6 +287,9 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
           customGoals: payload.customGoals || [],
           checksByWeek: payload.checksByWeek || {},
           goalItems,
+          mealHistoryByDate: payload.mealHistoryByDate || {},
+          waterLogsByDate: payload.waterLogsByDate || {},
+          programStartWeek: resolveProgramStartWeekIso(client?.cohort_label),
         });
       })
       .catch((e) => {
@@ -358,36 +301,6 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
       });
     return () => { cancelled = true; };
   }, [adminSel, roster]);
-
-  const needsAttention = (c) => {
-    const r = rateOf(c.weighins);
-    const flags = [];
-    if (c.pregnant) flags.push("pregnant — review 1:1 before approving");
-    if (c.breastfeeding) {
-      const mo = c.monthsPP != null && c.monthsPP !== "" ? Number(c.monthsPP) : null;
-      if (mo != null && !Number.isNaN(mo) && mo < 3) {
-        flags.push("early postpartum / nursing (<3 mo) — review 1:1");
-      } else if (mo != null && !Number.isNaN(mo)) {
-        flags.push(`postpartum / nursing (${mo} mo) — review 1:1`);
-      } else {
-        flags.push("postpartum / nursing — review 1:1");
-      }
-    }
-    if (c.diet && c.diet !== "none") flags.push(`diet: ${c.diet} — connect before approving`);
-    if (r !== null && r > 1.5) flags.push("losing too fast");
-    // Quiet week-1 noise: don't flag checklist %. Flag silence — no app logs in ~48h.
-    // lastActiveDate = meals / water / weigh-ins (not auth login).
-    const active = c.status === "active" || c.stage === "active";
-    if (active) {
-      const today = localDateIso();
-      const okIfOnOrAfter = addDaysIso(today, -1); // yesterday or today = fine
-      const lastActive = c.lastActiveDate || c.lastMealDate || null;
-      if (!lastActive || lastActive < okIfOnOrAfter) {
-        flags.push("no logs in 48h — check in");
-      }
-    }
-    return flags;
-  };
 
   const patchMacros = (c, k, v) => {
     if (!c.macros) return;
@@ -476,22 +389,52 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
   const sel = all.find((c) => c.id === adminSel);
 
+  useEffect(() => {
+    if (!sel?.email) return;
+    db.recordAdminTouch(sel.email, "open", sel.id).catch(() => {});
+  }, [sel?.id, sel?.email]);
+
   /* ---- client detail ---- */
   if (sel) {
     const r = rateOf(sel.weighins || []);
-    const flags = needsAttention(sel);
     const stage = sel.stage || (sel.status === "active" ? "active" : "awaiting_approval");
+    const weekNum = programWeekNumber(sel.cohort_label);
+    const flagChips = buildClientFlagChips({
+      client: sel,
+      checksByWeek: clientProgress?.checksByWeek || {},
+      goalItems: clientProgress?.goalItems || [],
+      macroHistory: clientProgress?.macroHistory || [],
+      programStartWeek: resolveProgramStartWeekIso(sel.cohort_label),
+    });
     const referredLine = formatReferredBy(sel.referredBy);
     const thankLabel = thankReferrerLabel(sel.referredBy);
     return (
-      <Shell>
+      <Shell
+        contentMaxWidth={560}
+        bottomBar={(
+          <>
+            <AdminStickyVoiceBar
+              clientId={sel.id}
+              visible={composerOffscreen}
+              onSent={refreshUnread}
+            />
+            <AdminBottomNav tab={tab} setTab={setPrimaryTab} unreadMessages={unreadMessages} />
+          </>
+        )}
+      >
         <button
           type="button"
           onClick={() => setAdminSel(null)}
           style={{ background: "none", border: "none", color: T.accent, fontWeight: 700, fontSize: 14, cursor: "pointer", padding: "4px 0 10px" }}
         >
-          ← All clients
+          ← People
         </button>
+        <AdminClientSummary
+          client={sel}
+          progress={clientProgress}
+          progressLoading={progressLoading || (!clientProgress && !progressError)}
+          chips={flagChips}
+        />
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
             <div>
@@ -530,7 +473,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                         type="button"
                         onClick={() => {
                           setAdminSel(sel.referredBy.advocateUserId);
-                          setTab("messages");
+                          setPrimaryTab("messages");
                         }}
                         aria-label={`${thankLabel} to thank her`}
                         style={{
@@ -591,7 +534,9 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
               background: stage === "active" ? T.sageSoft : T.amberSoft,
               color: stage === "active" ? T.sage : T.amber,
             }}>
-              {stage === "active" ? `Week ${sel.week}` : "Pending"}
+              {stage === "active"
+                ? (weekNum != null ? `Week ${weekNum} of 8` : "Active")
+                : "Pending"}
             </span>
           </div>
 
@@ -648,6 +593,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
           )}
         </Card>
 
+        <div ref={composerRef}>
         <ErrorBoundary
           key={`client-messages-${sel.id}`}
           name="AdminClientMessages"
@@ -661,6 +607,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
             onActivity={refreshUnread}
           />
         </ErrorBoundary>
+        </div>
 
         {sel.macros && (sel.status === "active" || sel.stage === "active" || sel.role === "admin") && (
           <ErrorBoundary
@@ -688,19 +635,6 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
               {" · "}checklist this week: {sel.adherence ?? 0}%
               {r !== null && <> · trending <b style={{ color: r > 1.5 ? T.amber : T.sage }}>{Math.abs(r).toFixed(1)} lb/wk {r < 0 ? "up" : "down"}</b></>}
             </div>
-            {flags.length > 0 && (
-              <div style={{ background: T.amberSoft, borderRadius: 12, padding: "10px 14px", marginBottom: 10 }}>
-                {flags.map((f) => (
-                  <div key={f} style={{ fontSize: 13, color: T.amber, lineHeight: 1.5 }}>
-                    ⚠ {f === "losing too fast"
-                      ? "Losing faster than 1.5 lb/wk — voice-note her to eat the top of her ranges."
-                      : f === "no logs in 48h — check in"
-                        ? "No meals, water, or weigh-ins yesterday or today — a quick Messages check-in usually helps."
-                        : f}
-                  </div>
-                ))}
-              </div>
-            )}
             {(sel.weighins || []).length > 1 && (
               <div style={{ height: 170 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -796,237 +730,61 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
         </>
         )}
 
-        <Card style={{ marginTop: 12 }}>
-          <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>Emails sent</div>
-          <EmailTimeline profileId={sel.id} />
-        </Card>
+        <AdminPersonTimeline client={sel} />
       </Shell>
     );
   }
 
   return (
-    <Shell contentMaxWidth={tab === "messages" ? 1120 : 560}>
+    <Shell
+      contentMaxWidth={tab === "messages" ? 1120 : 560}
+      bottomBar={<AdminBottomNav tab={tab} setTab={setPrimaryTab} unreadMessages={unreadMessages} />}
+    >
       <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 4px" }}>Callie admin</h2>
-      <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 4px", lineHeight: 1.45 }}>
-        Your mamas — find who needs you, then jump into a 1:1.{" "}
-        Messages is replies. Announcements is a note to many mamas.{" "}
+      <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
+        Home is who needs you. People is leftover leads and clients.{" "}
         <Link to={PATHS.dashboard} style={{ color: T.accent, fontWeight: 700 }}>Your dashboard</Link>
         {" · "}
         Admin only.
       </p>
 
-      <TabBar tab={tab} setTab={setTab} unreadMessages={unreadMessages} />
-
       <AppUpdateBanner />
 
-      {tab === "overview" && (
-      <Link
-        to={`${PATHS.support}?kind=feedback&from=admin`}
-        style={{
-          display: "block",
-          textDecoration: "none",
-          marginBottom: 14,
-          padding: "14px 16px",
-          borderRadius: 14,
-          border: `1.5px solid ${T.border}`,
-          background: "#fff",
-          color: T.ink,
-        }}
-      >
-        <div style={{ fontWeight: 800, fontSize: 14.5, color: T.accentDeep }}>
-          Feedback for Tech Guy
-        </div>
-        <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 3, lineHeight: 1.45 }}>
-          Recipes, content ideas, bugs, or product wishes — same form as App help; tagged as Callie.
-        </div>
-      </Link>
-      )}
-
-      {tab === "overview" && (
-        <>
-          <AdminQuizFunnelCard
-            onOpenLeads={(nextFilter) => {
-              setLeadsFilter(nextFilter || "unpaid");
-              setTab("leads");
-            }}
-          />
-          {unreadMessages > 0 && (
-            <button
-              type="button"
-              onClick={() => setTab("messages")}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                width: "100%",
-                boxSizing: "border-box",
-                marginBottom: 14,
-                padding: "16px 18px",
-                borderRadius: 14,
-                border: `2px solid ${T.accent}`,
-                background: T.accentSoft,
-                color: T.accentDeep,
-                fontFamily: F,
-                cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
-              <span>
-                <span style={{ display: "block", fontFamily: FD, fontSize: 20, color: T.ink, marginBottom: 4 }}>
-                  {unreadMessages} unread message{unreadMessages === 1 ? "" : "s"}
-                </span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: T.inkSoft }}>
-                  Open Messages to reply — no need to hunt for the tab.
-                </span>
-              </span>
-              <span style={{
-                flexShrink: 0,
-                fontWeight: 800,
-                fontSize: 13,
-                padding: "8px 12px",
-                borderRadius: 999,
-                background: T.accent,
-                color: "#fff",
-              }}
-              >
-                Open →
-              </span>
-            </button>
-          )}
-
-          <CohortFilterBar roster={all} cohort={cohortFilter} setCohort={setCohortFilter} />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-            <StatPill label="Signups" value={computedStats.signups} bg={T.accentSoft} color={T.accentDeep} onClick={() => openClients("all")} />
-            <StatPill label="Paid" value={computedStats.paid} bg={T.sageSoft} color={T.sage} onClick={() => openClients("paid")} />
-            <StatPill label="Unpaid" value={computedStats.unpaid} bg={T.track} color={T.inkSoft} onClick={() => openClients("unpaid")} />
-            <StatPill label="Need intake" value={computedStats.awaitingIntake} bg={T.amberSoft} color={T.amber} onClick={() => openClients("awaiting_intake")} />
-            <StatPill label="Need approval" value={computedStats.awaitingApproval} bg={T.amberSoft} color={T.amber} onClick={() => openClients("awaiting_approval")} />
-            <StatPill label="Active" value={computedStats.active} bg={T.sageSoft} color={T.sage} onClick={() => openClients("active")} />
-            <StatPill label="Refunded" value={computedStats.refunded} bg={T.track} color={T.inkSoft} onClick={() => openClients("refunded")} />
-          </div>
-
-          <Card>
-            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>What needs you</div>
-            <div style={{ fontSize: 14, lineHeight: 1.55, color: T.inkSoft }}>
-              {unreadMessages > 0 && (
-                <p style={{ margin: "0 0 8px" }}>
-                  <b style={{ color: T.accentDeep }}>{unreadMessages}</b> unread message{unreadMessages === 1 ? "" : "s"}
-                  {" — "}
-                  <button
-                    type="button"
-                    onClick={() => setTab("messages")}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      padding: 0,
-                      color: T.accent,
-                      fontWeight: 700,
-                      fontFamily: F,
-                      fontSize: 14,
-                      cursor: "pointer",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    open Messages
-                  </button>
-                </p>
-              )}
-              {computedStats.awaitingApproval > 0
-                ? (
-                  <p style={{ margin: "0 0 8px" }}>
-                    <button type="button" onClick={() => openClients("awaiting_approval")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
-                      {computedStats.awaitingApproval} mama{computedStats.awaitingApproval === 1 ? "" : "s"} waiting on macro approval
-                    </button>
-                    .
-                  </p>
-                )
-                : <p style={{ margin: "0 0 8px" }}>No intakes waiting on approval.</p>}
-              {computedStats.awaitingIntake > 0 && (
-                <p style={{ margin: "0 0 8px" }}>
-                  <button type="button" onClick={() => openClients("awaiting_intake")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
-                    {computedStats.awaitingIntake} paid but haven&apos;t finished intake yet
-                  </button>
-                  .
-                </p>
-              )}
-              {computedStats.unpaid > 0 && (
-                <p style={{ margin: 0 }}>
-                  <button type="button" onClick={() => openClients("unpaid")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
-                    {computedStats.unpaid} signed up and haven&apos;t paid
-                  </button>
-                  .
-                </p>
-              )}
-            </div>
-            <Btn
-              style={{ width: "100%", marginTop: 14 }}
-              onClick={() => openClients(computedStats.awaitingApproval > 0 ? "awaiting_approval" : "needs_you")}
-            >
-              {computedStats.awaitingApproval > 0 ? "Review approvals" : "Open client list"}
-            </Btn>
-          </Card>
-
-          <Card style={{ marginTop: 12 }}>
-            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 8 }}>AI health · last 24h</div>
-            {!aiFailures.length ? (
-              <div style={{ fontSize: 13.5, color: T.sage, lineHeight: 1.5 }}>
-                No AI failures logged. Snap, Describe, and Suggest my week are all answering.
-              </div>
-            ) : (
-              <>
-                <div style={{ fontSize: 13.5, color: T.amber, lineHeight: 1.5, marginBottom: 8 }}>
-                  <b>{aiFailures.length}</b> failed AI call{aiFailures.length === 1 ? "" : "s"} in the last 24h.
-                  {aiFailures.some((f) => f.kind === "credits" || f.kind === "auth")
-                    ? " Check the OpenRouter key + balance."
-                    : " Clients were told to retry — no data lost."}
-                </div>
-                {Object.entries(
-                  aiFailures.reduce((acc, f) => {
-                    const k = `${AI_LABELS[f.label] || f.label} · ${AI_KINDS[f.kind] || f.kind}`;
-                    acc[k] = (acc[k] || 0) + 1;
-                    return acc;
-                  }, {}),
-                ).map(([k, n]) => (
-                  <div key={k} style={{ padding: "6px 0", borderBottom: `1px solid ${T.border}`, fontSize: 13 }}>
-                    <b>{n}×</b> {k}
-                  </div>
-                ))}
-                <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 8 }}>
-                  Most recent: {formatWhen(aiFailures[0].created_at)}
-                </div>
-              </>
-            )}
-          </Card>
-
-        </>
-      )}
-
-      {tab === "clients" && (
-        <AdminClientRoster
+      {tab === "home" && (
+        <AdminHome
+          people={people}
+          queue={queue}
           roster={all}
-          filter={filter}
-          setFilter={setFilter}
-          cohort={cohortFilter}
-          setCohort={setCohortFilter}
-          onOpenClient={(id) => setAdminSel(id)}
-          onMessageClient={(id) => {
-            setAdminSel(id);
-            setTab("messages");
-          }}
+          cohortFilter={cohortFilter}
+          onOpenQueueRow={(row) => openPerson(row.person)}
+          onOpenPeople={() => setPrimaryTab("people", { peopleSegment: "needs_action" })}
+          onOpenLeads={() => openLeads("unpaid")}
+          onOpenFunnel={openFunnel}
         />
       )}
 
-      {tab === "leads" && (
-        <ErrorBoundary message="Leads admin hit an error. Other admin tabs still work — refresh or switch tabs.">
-          <AdminLeads onOpenMama={setAdminSel} initialFilter={leadsFilter} />
-        </ErrorBoundary>
-      )}
-
-      {tab === "credits" && (
-        <ErrorBoundary message="Credits admin hit an error. Other admin tabs still work — refresh or switch tabs.">
-          <AdminCredits roster={all} />
-        </ErrorBoundary>
+      {tab === "people" && (
+        <AdminPeople
+          segment={peopleSegment}
+          setSegment={updatePeopleSegment}
+          people={people}
+          queue={queue}
+          roster={all}
+          filter={filter}
+          setFilter={setFilter}
+          cohortFilter={cohortFilter}
+          setCohortFilter={setCohortFilter}
+          leadsFilter={leadsFilter}
+          selectedLeadEmail={selectedLeadEmail}
+          onOpenPerson={openPerson}
+          onOpenClient={(id) => setAdminSel(id)}
+          onMessageClient={(id) => {
+            setAdminSel(id);
+            setPrimaryTab("messages");
+          }}
+          onSnooze={snoozePerson}
+          onAdminTouch={touchLead}
+        />
       )}
 
       {tab === "messages" && (
@@ -1045,14 +803,16 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
         </ErrorBoundary>
       )}
 
-      {tab === "announcements" && (
-        <AdminAnnouncements roster={all} cohortFilter={cohortFilter} />
-      )}
-
-      {tab === "emails" && (
-        <ErrorBoundary message="Emails admin hit an error. Other admin tabs still work — refresh or switch tabs.">
-          <AdminEmails roster={all} onOpenMama={setAdminSel} />
-        </ErrorBoundary>
+      {tab === "more" && (
+        <AdminMore
+          view={moreView}
+          setView={updateMoreView}
+          roster={all}
+          cohortFilter={cohortFilter}
+          onOpenMama={setAdminSel}
+          onOpenLeads={openLeads}
+          aiFailures={aiFailures}
+        />
       )}
     </Shell>
   );

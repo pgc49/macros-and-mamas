@@ -8,6 +8,7 @@ const { dbMock } = vi.hoisted(() => ({
   dbMock: {
     loadEmailEventsByEmail: vi.fn(),
     isEmailUnsubscribed: vi.fn(),
+    recordAdminTouch: vi.fn(),
   },
 }));
 
@@ -172,6 +173,8 @@ beforeEach(() => {
   dbMock.loadEmailEventsByEmail.mockResolvedValue([]);
   dbMock.isEmailUnsubscribed.mockReset();
   dbMock.isEmailUnsubscribed.mockResolvedValue(false);
+  dbMock.recordAdminTouch.mockReset();
+  dbMock.recordAdminTouch.mockResolvedValue(undefined);
 });
 
 describe("AdminLeads", () => {
@@ -794,5 +797,18 @@ describe("AdminLeads", () => {
     expect(screen.getByRole("link", { name: "Email" }).getAttribute("href")).toBe(
       "mailto:megan@example.com?subject=Macros%20and%20Mamas",
     );
+  });
+
+  it("records an admin touch when Callie emails a leftover lead", async () => {
+    render(<AdminLeads />);
+    await waitFor(() => {
+      expect(screen.getByText("Ellie Rose")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Ellie Rose"));
+    await waitFor(() => {
+      expect(screen.getByText("ellie@example.com")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("link", { name: "Email" }));
+    expect(dbMock.recordAdminTouch).toHaveBeenCalledWith("ellie@example.com", "email");
   });
 });
