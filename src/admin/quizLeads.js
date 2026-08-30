@@ -4,6 +4,7 @@
  * Meta ad = campaign UTMs. Meta link = fbc without those UTMs. Never fbp alone.
  */
 import { supabase } from "../lib/supabase";
+import { joinPersonName } from "../lib/personName";
 import { PACIFIC_TZ } from "./quizFunnel";
 
 /** Leftover = quiz complete, no payment. Default Leads list. */
@@ -416,7 +417,7 @@ export function filterQuizLeads(rows, filter = DEFAULT_QUIZ_LEAD_FILTER) {
 }
 
 export function leadDisplayName(lead) {
-  const named = [lead?.first_name, lead?.last_name].map((p) => String(p || "").trim()).filter(Boolean).join(" ");
+  const named = joinPersonName(lead?.first_name, lead?.last_name);
   if (named) return named;
   const email = String(lead?.email || "").trim();
   if (email.includes("@")) return email.split("@")[0];

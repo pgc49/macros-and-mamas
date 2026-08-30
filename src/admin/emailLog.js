@@ -1,4 +1,5 @@
 import { EMAIL_TYPE_LABELS } from "../content/emailCatalog";
+import { joinPersonName } from "../lib/personName";
 
 export function normalizeEmailAddress(email) {
   return String(email || "").trim().toLowerCase();
@@ -50,9 +51,10 @@ export function emailRecipient(event) {
       coach: true,
     };
   }
-  const first = String(profile?.name || event?.profile_name || "").trim();
-  const last = String(profile?.last_name || "").trim();
-  const named = [first, last].filter(Boolean).join(" ");
+  const named = joinPersonName(
+    profile?.name || event?.profile_name || "",
+    profile?.last_name || "",
+  );
   const email = to || String(profile?.email || event?.profile_email || "").trim();
   if (named) return { name: named, email, coach: false };
   if (email.includes("@")) {

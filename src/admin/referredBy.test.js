@@ -76,6 +76,14 @@ describe("pickReferredBy", () => {
     })).toEqual({ advocateName: "Ava Stone", code: "AVA25", advocateUserId: AVA });
   });
 
+  it("does not double a last name already stored in name", () => {
+    expect(pickReferredBy({
+      rows: [row()],
+      profilesById: { [AVA]: { name: "Ava Stone", last_name: "Stone" } },
+      referredUserId: MAMA,
+    })).toEqual({ advocateName: "Ava Stone", code: "AVA25", advocateUserId: AVA });
+  });
+
   it("keeps two advocates with the same first name distinct", () => {
     const other = "advocate-2";
     expect(pickReferredBy({

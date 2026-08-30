@@ -418,6 +418,8 @@ describe("lead display helpers", () => {
     expect(leadDisplayName(lead())).toBe("Dolly Chammas");
     expect(leadDisplayName(lead({ first_name: "", last_name: "", email: "pgchammas+demo@gmail.com" })))
       .toBe("pgchammas+demo");
+    expect(leadDisplayName(lead({ first_name: "Dolly Chammas", last_name: "Chammas" })))
+      .toBe("Dolly Chammas");
   });
 
   it("formats macros on one compact line and PT time", () => {
