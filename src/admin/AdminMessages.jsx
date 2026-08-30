@@ -6,7 +6,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { db, channelHasUnread } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { mergeMessagesById } from "../lib/messageOrdering";
-import { inboxDisplayName as displayName } from "./clientRoster";
+import { adminPersonTitle as displayName, inboxThreadTitle } from "./clientRoster";
 
 function isAdminProfile(c) {
   return String(c?.role || "").toLowerCase() === "admin";
@@ -448,7 +448,7 @@ export function AdminMessages({
         clientMap,
       });
       const c = clientMap.get(peerId || row.clientId);
-      const hay = `${displayName(c, row.peer)} ${c?.email || row.peer?.email || ""} ${previewText(row.lastMessage)}`.toLowerCase();
+      const hay = `${inboxThreadTitle(row, c)} ${c?.email || row.peer?.email || ""} ${previewText(row.lastMessage)}`.toLowerCase();
       return hay.includes(q);
     });
   }, [inbox, q, adminUserId, clientMap]);
@@ -549,7 +549,7 @@ export function AdminMessages({
             clientMap,
           });
           const c = clientMap.get(peerId || row.clientId);
-          const name = displayName(c, row.peer);
+          const name = inboxThreadTitle(row, c);
           const selected = active?.type === "dm" && active.id === row.clientId;
           const isAdminRow = isAdminProfile(c);
           return (

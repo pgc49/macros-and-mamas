@@ -629,13 +629,21 @@ function profileToInboxPeer(p) {
 /** Attach first/last/email onto inbox rows so a missed roster lookup still has a real title. */
 export function attachInboxPeers(rows, profiles) {
   const byId = new Map((profiles || []).map((p) => [p.id, profileToInboxPeer(p)]));
-  return (rows || []).map((row) => ({
-    ...row,
-    peer: byId.get(row.clientId) || null,
-    participantPeers: (row.participantIds || [])
-      .map((id) => byId.get(id))
-      .filter(Boolean),
-  }));
+  return (rows || []).map((row) => {
+    const last = row.lastMessage || null;
+    const senderId = last?.sender_id;
+    const sender = (senderId && byId.get(senderId)) || null;
+    return {
+      ...row,
+      peer: byId.get(row.clientId) || null,
+      participantPeers: (row.participantIds || [])
+        .map((id) => byId.get(id))
+        .filter(Boolean),
+      lastMessage: last
+        ? { ...last, sender_profile: last.sender_profile || sender }
+        : last,
+    };
+  });
 }
 
 async function hydrateInboxPeers(rows) {

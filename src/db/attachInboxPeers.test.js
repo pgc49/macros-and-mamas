@@ -25,4 +25,20 @@ describe("attachInboxPeers", () => {
     expect(rows[1].peer.lastName).toBe("Wells");
     expect(rows[1].peer.name).toBe("Mama");
   });
+
+  it("stamps lastMessage.sender_profile so an empty roster can still title the row", () => {
+    const rows = attachInboxPeers(
+      [{
+        clientId: "c1",
+        participantIds: ["c1"],
+        lastMessage: { sender_id: "c1", body: "hi" },
+      }],
+      [{ id: "c1", name: "Christina", last_name: "Lee", email: "christina@example.com", role: "client" }],
+    );
+    expect(rows[0].lastMessage.sender_profile).toMatchObject({
+      id: "c1",
+      name: "Christina",
+      lastName: "Lee",
+    });
+  });
 });

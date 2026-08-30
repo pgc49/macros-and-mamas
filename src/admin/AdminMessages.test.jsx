@@ -338,6 +338,86 @@ describe("AdminMessages inbox titles", () => {
     expect(screen.queryByRole("button", { name: /^Mama$/ })).toBeNull();
   });
 
+  it("missing clientMap peers get distinct email / Unnamed titles, not Mama", async () => {
+    dbMock.loadMessageInbox.mockResolvedValueOnce([
+      {
+        clientId: "a",
+        unread: 0,
+        participantIds: ["a"],
+        lastMessage: { id: "a1", body: "A preview", created_at: "2026-08-10T10:00:00Z" },
+        peer: { id: "a", email: "christina@example.com" },
+      },
+      {
+        clientId: "b",
+        unread: 0,
+        participantIds: ["b"],
+        lastMessage: { id: "b1", body: "B preview", created_at: "2026-08-10T10:01:00Z" },
+        peer: { id: "b", email: "chelsea@example.com" },
+      },
+      {
+        clientId: "c",
+        unread: 0,
+        participantIds: ["c"],
+        lastMessage: { id: "c1", body: "C preview", created_at: "2026-08-10T10:02:00Z" },
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /christina/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /chelsea/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Unnamed/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Mama$/ })).toBeNull();
+    expect(screen.queryAllByText("Mama")).toHaveLength(0);
+  });
+
+  it("titles DIRECT rows from lastMessage.sender_profile when the roster is empty", async () => {
+    dbMock.loadMessageInbox.mockResolvedValueOnce([
+      {
+        clientId: "c-lee",
+        unread: 0,
+        participantIds: ["c-lee"],
+        lastMessage: {
+          id: "p1",
+          sender_id: "c-lee",
+          body: "Lee preview",
+          created_at: "2026-08-10T10:00:00Z",
+          sender_profile: { id: "c-lee", name: "Christina", last_name: "Lee" },
+        },
+      },
+      {
+        clientId: "c-park",
+        unread: 0,
+        participantIds: ["c-park"],
+        lastMessage: {
+          id: "p2",
+          sender_id: "c-park",
+          body: "Park preview",
+          created_at: "2026-08-10T10:01:00Z",
+          sender_profile: { id: "c-park", name: "Chelsea", last_name: "Park" },
+        },
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /Christina Lee/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Chelsea Park/ })).toBeTruthy();
+    expect(screen.queryAllByText("Mama")).toHaveLength(0);
+  });
+
   it("lists start-a-thread people by first+last, not Mama", async () => {
     dbMock.loadMessageInbox.mockResolvedValueOnce([]);
 

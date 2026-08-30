@@ -10,6 +10,8 @@ import {
   rosterStats,
   rosterTitle,
   inboxDisplayName,
+  adminPersonTitle,
+  inboxThreadTitle,
 } from "./clientRoster.js";
 
 const mama = (over = {}) => ({
@@ -73,6 +75,60 @@ describe("inboxDisplayName", () => {
   it("uses email local-part when the only name is Mama", () => {
     expect(inboxDisplayName({ name: "Mama", firstName: "Mama", email: "christina@example.com" }))
       .toBe("christina");
+  });
+});
+
+describe("adminPersonTitle — shared inbox + roster helper", () => {
+  it("does not render several first+last people as Mama", () => {
+    const titles = [
+      adminPersonTitle({ name: "Christina", lastName: "Lee" }),
+      adminPersonTitle({ name: "Chelsea", lastName: "Park" }),
+      adminPersonTitle({ name: "Nora", lastName: "Kim" }),
+    ];
+    expect(titles).toEqual(["Christina Lee", "Chelsea Park", "Nora Kim"]);
+    expect(new Set(titles).size).toBe(3);
+    expect(titles.every((t) => t === "Mama")).toBe(false);
+  });
+
+  it("does not double a last name that is already in name", () => {
+    expect(adminPersonTitle({ name: "Sarah Smith", lastName: "Smith" })).toBe("Sarah Smith");
+    expect(adminPersonTitle({ name: "Sarah Smith", last_name: "Smith" })).toBe("Sarah Smith");
+    expect(rosterTitle({ name: "Sarah Smith", lastName: "Smith" })).toBe("Sarah Smith");
+  });
+
+  it("missing clientMap peer falls back to distinct email local-part or Unnamed, not Mama", () => {
+    expect(inboxThreadTitle({
+      clientId: "a",
+      peer: { email: "christina@example.com" },
+    })).toBe("christina");
+    expect(inboxThreadTitle({
+      clientId: "b",
+      peer: { email: "chelsea@example.com" },
+    })).toBe("chelsea");
+    expect(inboxThreadTitle({ clientId: "c" })).toBe("Unnamed");
+    const titles = ["christina", "chelsea", "Unnamed"];
+    expect(new Set(titles).size).toBe(3);
+    expect(titles.includes("Mama")).toBe(false);
+  });
+
+  it("uses lastMessage.sender_profile when the roster is empty", () => {
+    const emptyRosterClient = null;
+    expect(inboxThreadTitle({
+      clientId: "c-lee",
+      lastMessage: {
+        sender_id: "c-lee",
+        body: "hi",
+        sender_profile: { id: "c-lee", name: "Christina", last_name: "Lee", email: "christina@example.com" },
+      },
+    }, emptyRosterClient)).toBe("Christina Lee");
+    expect(inboxThreadTitle({
+      clientId: "c-park",
+      lastMessage: {
+        sender_id: "c-park",
+        body: "hey",
+        sender_profile: { id: "c-park", name: "Chelsea", last_name: "Park" },
+      },
+    }, emptyRosterClient)).toBe("Chelsea Park");
   });
 });
 
