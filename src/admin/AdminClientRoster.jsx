@@ -6,6 +6,7 @@ import { adminCohortName } from "../lib/cohorts";
 import {
   filterRoster,
   formatLastMessaged,
+  isReadyToApprove,
   listRosterCohorts,
   rosterFilterCounts,
   rosterTitle,
@@ -64,7 +65,7 @@ export function CopyPhoneButton({ phone, compact = false }) {
 function stageShort(c) {
   const stage = c.stage || "signed_up";
   if (stage === "active" || c.status === "active") return `W${c.week ?? "—"}`;
-  if (stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid)) return "Approve";
+  if (isReadyToApprove(c)) return "Approve";
   if (stage === "paid_awaiting_intake") return "Intake";
   if (stage === "refunded" || c.refunded) return "Refunded";
   if (stage === "signed_up") return "Unpaid";
@@ -73,8 +74,9 @@ function stageShort(c) {
 
 const FILTERS = [
   ["needs_you", "Needs you"],
+  ["digest", "Quiet"],
   ["active", "Active"],
-  ["awaiting_approval", "Approve"],
+  ["awaiting_approval", "Ready to approve"],
   ["awaiting_intake", "Need intake"],
   ["paid", "Paid"],
   ["unpaid", "Unpaid"],
@@ -85,7 +87,61 @@ const FILTERS = [
 function rosterSortHint(filter) {
   if (filter === "unpaid") return "Newest signups first. ";
   if (filter === "active") return "Alphabetical. ";
+  if (filter === "awaiting_approval") return "Paid, intake in — waiting on your approve tap. ";
+  if (filter === "digest") return "Daily list — quiet logs and paid, no intake. ";
   return "Waiting on you first, then oldest message. ";
+}
+
+/** Overview / admin-wide interrupt: live paid + intake + not approved count. */
+export function ReadyToApproveBanner({ count = 0, onOpen }) {
+  const n = Number(count) || 0;
+  if (n <= 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen?.()}
+      aria-label={`${n} ready to approve. Open this queue.`}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        width: "100%",
+        boxSizing: "border-box",
+        marginBottom: 14,
+        padding: "16px 18px",
+        borderRadius: 14,
+        border: `2px solid ${T.amber}`,
+        background: T.amberSoft,
+        color: T.amber,
+        fontFamily: F,
+        cursor: "pointer",
+        textAlign: "left",
+      }}
+    >
+      <span>
+        <span style={{ display: "block", fontFamily: FD, fontSize: 20, color: T.ink, marginBottom: 4 }}>
+          {n} ready to approve
+        </span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: T.inkSoft }}>
+          Paid and intake in — waiting on your tap.
+        </span>
+      </span>
+      <span
+        style={{
+          flexShrink: 0,
+          fontWeight: 800,
+          fontSize: 13,
+          padding: "8px 12px",
+          borderRadius: 999,
+          background: T.amber,
+          color: "#fff",
+        }}
+      >
+        Review →
+      </span>
+    </button>
+  );
 }
 
 export function CohortFilterBar({ roster = [], cohort = "all", setCohort }) {
@@ -152,6 +208,7 @@ export function AdminClientRoster({
 
   const countFor = (id) => {
     if (id === "needs_you") return counts.needsYou;
+    if (id === "digest") return counts.digest;
     if (id === "active") return counts.active;
     if (id === "awaiting_approval") return counts.awaitingApproval;
     if (id === "awaiting_intake") return counts.awaitingIntake;

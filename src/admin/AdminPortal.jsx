@@ -31,8 +31,8 @@ import { AdminCredits } from "./AdminCredits";
 import { AdminEmails } from "./AdminEmails";
 import { AdminLeads } from "./AdminLeads";
 import { AdminQuizFunnelCard } from "./AdminQuizFunnelCard";
-import { AdminClientRoster, CohortFilterBar, CopyPhoneButton } from "./AdminClientRoster";
-import { rosterStats } from "./clientRoster";
+import { AdminClientRoster, CohortFilterBar, CopyPhoneButton, ReadyToApproveBanner } from "./AdminClientRoster";
+import { rosterFilterCounts, rosterStats } from "./clientRoster";
 import { formatReferredBy, thankReferrerLabel } from "./referredBy";
 import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { supabase } from "../lib/supabase";
@@ -249,7 +249,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   const [filter, setFilter] = useState(() => {
     if (typeof window === "undefined") return "needs_you";
     const q = new URLSearchParams(window.location.search).get("filter");
-    const allowed = new Set(["needs_you", "active", "awaiting_approval", "awaiting_intake", "paid", "unpaid", "refunded", "all"]);
+    const allowed = new Set(["needs_you", "digest", "active", "awaiting_approval", "awaiting_intake", "paid", "unpaid", "refunded", "all"]);
     return allowed.has(q) ? q : "needs_you";
   });
   const [cohortFilter, setCohortFilter] = useState(() => {
@@ -307,11 +307,24 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     () => rosterStats(all, cohortFilter),
     [all, cohortFilter],
   );
+  const readyToApproveCount = useMemo(
+    () => rosterStats(all, "all").awaitingApproval,
+    [all],
+  );
+  const filterCounts = useMemo(
+    () => rosterFilterCounts(all, localDateIso(), cohortFilter),
+    [all, cohortFilter],
+  );
 
-  const openClients = useCallback((nextFilter) => {
+  const openClients = useCallback((nextFilter, { allCohorts = false } = {}) => {
+    if (allCohorts) setCohortFilter("all");
     setFilter(nextFilter);
     setTab("clients");
   }, []);
+
+  const openReadyToApprove = useCallback(() => {
+    openClients("awaiting_approval", { allCohorts: true });
+  }, [openClients]);
 
   useEffect(() => {
     if (tab !== "overview") return;
@@ -819,6 +832,8 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
       <AppUpdateBanner />
 
+      <ReadyToApproveBanner count={readyToApproveCount} onOpen={openReadyToApprove} />
+
       {tab === "overview" && (
       <Link
         to={`${PATHS.support}?kind=feedback&from=admin`}
@@ -901,7 +916,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
             <StatPill label="Paid" value={computedStats.paid} bg={T.sageSoft} color={T.sage} onClick={() => openClients("paid")} />
             <StatPill label="Unpaid" value={computedStats.unpaid} bg={T.track} color={T.inkSoft} onClick={() => openClients("unpaid")} />
             <StatPill label="Need intake" value={computedStats.awaitingIntake} bg={T.amberSoft} color={T.amber} onClick={() => openClients("awaiting_intake")} />
-            <StatPill label="Need approval" value={computedStats.awaitingApproval} bg={T.amberSoft} color={T.amber} onClick={() => openClients("awaiting_approval")} />
+            <StatPill label="Ready to approve" value={readyToApproveCount} bg={T.amberSoft} color={T.amber} onClick={openReadyToApprove} />
             <StatPill label="Active" value={computedStats.active} bg={T.sageSoft} color={T.sage} onClick={() => openClients("active")} />
             <StatPill label="Refunded" value={computedStats.refunded} bg={T.track} color={T.inkSoft} onClick={() => openClients("refunded")} />
           </div>
@@ -932,24 +947,16 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                   </button>
                 </p>
               )}
-              {computedStats.awaitingApproval > 0
+              {readyToApproveCount > 0
                 ? (
                   <p style={{ margin: "0 0 8px" }}>
-                    <button type="button" onClick={() => openClients("awaiting_approval")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
-                      {computedStats.awaitingApproval} mama{computedStats.awaitingApproval === 1 ? "" : "s"} waiting on macro approval
+                    <button type="button" onClick={openReadyToApprove} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
+                      {readyToApproveCount} ready to approve
                     </button>
                     .
                   </p>
                 )
                 : <p style={{ margin: "0 0 8px" }}>No intakes waiting on approval.</p>}
-              {computedStats.awaitingIntake > 0 && (
-                <p style={{ margin: "0 0 8px" }}>
-                  <button type="button" onClick={() => openClients("awaiting_intake")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
-                    {computedStats.awaitingIntake} paid but haven&apos;t finished intake yet
-                  </button>
-                  .
-                </p>
-              )}
               {computedStats.unpaid > 0 && (
                 <p style={{ margin: 0 }}>
                   <button type="button" onClick={() => openClients("unpaid")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
@@ -961,9 +968,43 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
             </div>
             <Btn
               style={{ width: "100%", marginTop: 14 }}
-              onClick={() => openClients(computedStats.awaitingApproval > 0 ? "awaiting_approval" : "needs_you")}
+              onClick={() => (readyToApproveCount > 0 ? openReadyToApprove() : openClients("needs_you"))}
             >
-              {computedStats.awaitingApproval > 0 ? "Review approvals" : "Open client list"}
+              {readyToApproveCount > 0 ? "Review approvals" : "Open interrupt list"}
+            </Btn>
+          </Card>
+
+          <Card style={{ marginTop: 12 }}>
+            <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Daily digest</div>
+            <div style={{ fontSize: 14, lineHeight: 1.55, color: T.inkSoft }}>
+              <p style={{ margin: "0 0 8px" }}>
+                Not urgent — quiet logs and paid, no intake. Existing 24h / 72h intake reminders still send.
+              </p>
+              {filterCounts.quiet > 0
+                ? (
+                  <p style={{ margin: "0 0 8px" }}>
+                    <button type="button" onClick={() => openClients("digest")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
+                      {filterCounts.quiet} quiet mama{filterCounts.quiet === 1 ? "" : "s"} (no logs yesterday or today)
+                    </button>
+                    .
+                  </p>
+                )
+                : <p style={{ margin: "0 0 8px" }}>No quiet actives today.</p>}
+              {computedStats.awaitingIntake > 0 && (
+                <p style={{ margin: 0 }}>
+                  <button type="button" onClick={() => openClients("awaiting_intake")} style={{ background: "none", border: "none", padding: 0, color: T.ink, fontWeight: 700, fontFamily: F, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
+                    {computedStats.awaitingIntake} paid but haven&apos;t finished intake yet
+                  </button>
+                  .
+                </p>
+              )}
+            </div>
+            <Btn
+              ghost
+              style={{ width: "100%", marginTop: 14 }}
+              onClick={() => openClients("digest")}
+            >
+              Open quiet list
             </Btn>
           </Card>
 
