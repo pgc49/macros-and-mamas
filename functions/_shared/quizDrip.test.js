@@ -3,6 +3,7 @@ import {
   ANCHOR_FALLBACK_MS,
   DAY_MS,
   QUIZ_DRIP_2D,
+  QUIZ_DRIP_2D_FREEZE_CUTOFF_MS,
   QUIZ_DRIP_7D,
   QUIZ_DRIP_7D_PAUSED,
   QUIZ_LAST_MIN_AGE_MS,
@@ -213,18 +214,46 @@ describe("quizDripAnchorMs", () => {
 describe("planQuizLeadSends", () => {
   it("plans a +2d send for an unpaid quiz-only lead", () => {
     const email = "mama@example.com";
+    const created = QUIZ_DRIP_2D_FREEZE_CUTOFF_MS;
+    const now = created + 2 * DAY_MS;
     const { plans } = planQuizLeadSends({
-      now: NOW,
-      leads: [lead()],
+      now,
+      leads: [lead({ created_at: new Date(created).toISOString() })],
       profileByEmail: new Map(),
       eventsByEmail: indexEmailEvents([{
         to_email: email,
         email_type: "quiz_ranges",
-        created_at: new Date(NOW - 2 * DAY_MS).toISOString(),
+        created_at: new Date(created).toISOString(),
       }]),
       unsubscribedEmails: new Set(),
     });
     expect(plans).toEqual([expect.objectContaining({ email, step: QUIZ_DRIP_2D })]);
+  });
+
+  it("skips quiz_drip_2d for leftover leads created before the freeze cutoff", () => {
+    const now = QUIZ_DRIP_2D_FREEZE_CUTOFF_MS + 2 * DAY_MS;
+    const leftoverCreated = new Date(QUIZ_DRIP_2D_FREEZE_CUTOFF_MS - 1).toISOString();
+    const whitneyCreated = new Date(QUIZ_DRIP_2D_FREEZE_CUTOFF_MS).toISOString();
+    const laterCreated = new Date(QUIZ_DRIP_2D_FREEZE_CUTOFF_MS + 1).toISOString();
+    const leftover = lead({ email: "summer@example.com", created_at: leftoverCreated });
+    const whitney = lead({ email: "whitney@example.com", created_at: whitneyCreated });
+    const later = lead({ email: "later@example.com", created_at: laterCreated });
+    const { plans, skipped } = planQuizLeadSends({
+      now,
+      leads: [leftover, whitney, later],
+      profileByEmail: new Map(),
+      eventsByEmail: indexEmailEvents([
+        { to_email: leftover.email, email_type: "quiz_ranges", created_at: leftoverCreated },
+        { to_email: whitney.email, email_type: "quiz_ranges", created_at: whitneyCreated },
+        { to_email: later.email, email_type: "quiz_ranges", created_at: laterCreated },
+      ]),
+      unsubscribedEmails: new Set(),
+    });
+    expect(plans).toEqual([
+      expect.objectContaining({ email: "whitney@example.com", step: QUIZ_DRIP_2D }),
+      expect.objectContaining({ email: "later@example.com", step: QUIZ_DRIP_2D }),
+    ]);
+    expect(skipped.frozen_leftover).toBe(1);
   });
 
   it("does not plan quiz drip when the same email has a profile", () => {

@@ -2,6 +2,8 @@
  * Track A — quiz submitted, no account (marketing_leads, no profiles row).
  * Immediate ranges email is #1 (quiz_ranges). Follow-ups: +2d, then last
  * at +6d or Wed Aug 26 PT (whichever first). Never send last on/after Aug 27 PT.
+ * quiz_drip_2d is skipped for leftover leads created before Whitney
+ * (2026-08-30T20:42:00.000Z). Quizzes at/after that stay on live Track A.
  * Pregnancy gets one soft +3d note. Plant-based gets no follow-up.
  *
  * Track B — signed up, unpaid — is finish-joining only. A profiles row
@@ -27,6 +29,17 @@ export const QUIZ_DRIP_7D = "quiz_drip_7d";
 export const QUIZ_PREGNANCY_NOTE = "quiz_pregnancy_note";
 /** Hold the last sales email. Flip to true to stop cron from sending it. */
 export const QUIZ_DRIP_7D_PAUSED = false;
+/** Whitney's quiz time (Sun Aug 30, 1:42pm PT). Leftover 51 created before this skip +2d. */
+export const QUIZ_DRIP_2D_FREEZE_CUTOFF = "2026-08-30T20:42:00.000Z";
+export const QUIZ_DRIP_2D_FREEZE_CUTOFF_MS = Date.parse(QUIZ_DRIP_2D_FREEZE_CUTOFF);
+
+/** True when a marketing lead predates the leftover freeze and must not get quiz_drip_2d. */
+export function isFrozenLeftoverQuizLead(createdAt) {
+  const created = typeof createdAt === "number"
+    ? createdAt
+    : Date.parse(createdAt);
+  return Number.isFinite(created) && created < QUIZ_DRIP_2D_FREEZE_CUTOFF_MS;
+}
 
 export const QUIZ_DRIP_SALES_TYPES = [QUIZ_DRIP_2D, QUIZ_DRIP_7D];
 export const QUIZ_DRIP_ALL_TYPES = [
@@ -153,6 +166,9 @@ export function decideQuizDripAction({
   const step = pickDueQuizDripStep({ ageMs, sentTypes: sent, segment, now });
   if (!step) return { action: "skip", reason: "not_due" };
   if (sent.has(step)) return { action: "skip", reason: "already_sent" };
+  if (step === QUIZ_DRIP_2D && isFrozenLeftoverQuizLead(lead?.created_at)) {
+    return { action: "skip", reason: "frozen_leftover" };
+  }
 
   return { action: "send", step, ageMs, reason: step };
 }
