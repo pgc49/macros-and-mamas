@@ -5,19 +5,33 @@ import { db } from "../db/db";
 import { PATHS } from "../routing";
 import { trackPixel } from "../lib/attribution";
 import { purchaseEventIdFromWelcomeSearch } from "../lib/purchaseEventId";
+import { welcomeCheckoutDecision } from "../lib/welcomeCheckout";
 
 /**
  * Stripe success landing. Never trust the URL alone — poll until webhook
  * flips profiles.paid, then send them into intake.
+ * Unpaid + no session_id is a leftover bookmark, not a checkout return.
  */
-export function WelcomePage({ onPaid, navigate }) {
+export function WelcomePage({ onPaid, navigate, paid = false, loaded = false }) {
   const [status, setStatus] = useState("confirming"); // confirming | ready | stuck
   const [tries, setTries] = useState(0);
   const onPaidRef = useRef(onPaid);
   const purchaseTracked = useRef(false);
   onPaidRef.current = onPaid;
+  const decision = welcomeCheckoutDecision({
+    paid,
+    loaded,
+    search: typeof window !== "undefined" ? window.location.search : "",
+  });
 
   useEffect(() => {
+    if (decision !== "join") return undefined;
+    navigate(PATHS.join, { replace: true });
+    return undefined;
+  }, [decision, navigate]);
+
+  useEffect(() => {
+    if (decision === "join" || decision === "hold") return undefined;
     let cancelled = false;
     let attempt = 0;
     const maxAttempts = 20;
@@ -78,7 +92,9 @@ export function WelcomePage({ onPaid, navigate }) {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [navigate]);
+  }, [navigate, decision]);
+
+  if (decision === "hold" || decision === "join") return null;
 
   return (
     <Shell>
