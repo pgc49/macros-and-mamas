@@ -424,3 +424,82 @@ describe("complimentary members", () => {
     expect(filterRoster([compMama], "active", { todayIso: today }).map((c) => c.id)).toEqual(["c"]);
   });
 });
+
+describe("admin QA plus-addresses stay off People", () => {
+  const today = "2026-08-18";
+  const qaQuiz = mama({
+    id: "qa-quiz",
+    name: "QA Quiz",
+    email: "pgchammas+qa-quiz@gmail.com",
+    stage: "signed_up",
+    status: "pending",
+    paid: false,
+    hasIntake: false,
+    lastActiveDate: null,
+    createdAt: "2026-08-18T12:00:00.000Z",
+  });
+  const qaHold = mama({
+    id: "qa-hold",
+    name: "QA Hold",
+    email: "pgchammas+hold322a@gmail.com",
+    stage: "signed_up",
+    status: "pending",
+    paid: false,
+    hasIntake: false,
+    lastActiveDate: null,
+    createdAt: "2026-08-18T11:00:00.000Z",
+  });
+  const patrick = mama({
+    id: "patrick",
+    name: "Patrick",
+    email: "pgchammas@gmail.com",
+    stage: "signed_up",
+    status: "pending",
+    paid: false,
+    hasIntake: false,
+    lastActiveDate: null,
+    createdAt: "2026-08-17T00:00:00.000Z",
+  });
+  const nora = mama({
+    id: "nora",
+    name: "Nora",
+    email: "nora@example.com",
+    stage: "signed_up",
+    status: "pending",
+    paid: false,
+    hasIntake: false,
+    lastActiveDate: null,
+    createdAt: "2026-08-16T00:00:00.000Z",
+  });
+  const dolly = mama({
+    id: "dolly",
+    name: "Dolly",
+    email: "dollychammas@gmail.com",
+    stage: "paid_awaiting_intake",
+    status: "pending",
+    paid: true,
+    hasIntake: false,
+    lastActiveDate: null,
+  });
+  const roster = [qaQuiz, qaHold, patrick, nora, dolly];
+
+  it("excludes pgchammas+qa-quiz and pgchammas+hold322a from unpaid, All, counts, and Newest signups", () => {
+    const unpaid = filterRoster(roster, "unpaid", { todayIso: today });
+    expect(unpaid.map((c) => c.email)).toEqual(["pgchammas@gmail.com", "nora@example.com"]);
+    expect(filterRoster(roster, "all", { todayIso: today }).map((c) => c.id).sort()).toEqual(["dolly", "nora", "patrick"]);
+    expect(filterRoster(roster, "unpaid", { todayIso: today, sort: "signed_up", dir: "desc" }).map((c) => c.id))
+      .toEqual(["patrick", "nora"]);
+    const counts = rosterFilterCounts(roster, today);
+    expect(counts.unpaid).toBe(2);
+    expect(counts.awaitingIntake).toBe(1);
+    expect(counts.all).toBe(3);
+    expect(rosterStats(roster).unpaid).toBe(2);
+    expect(rosterStats(roster).signups).toBe(3);
+  });
+
+  it("still lists Need intake Dolly and does not hide pgchammas@gmail.com or a normal mama", () => {
+    expect(filterRoster(roster, "awaiting_intake", { todayIso: today }).map((c) => c.id)).toEqual(["dolly"]);
+    expect(needsYou(qaQuiz, today)).toBe(false);
+    expect(needsYou(dolly, today)).toBe(false);
+  });
+});

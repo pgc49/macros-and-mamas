@@ -85,6 +85,57 @@ describe("buildHomeQueue", () => {
     expect(rows.some((r) => r.kind === "lead")).toBe(true);
   });
 
+  it("drops QA plus-address clients from the needs-you queue", () => {
+    const qaUnread = clientPerson({
+      profileId: "qa",
+      emailLower: "pgchammas+qa-quiz@gmail.com",
+      client: {
+        id: "qa",
+        role: "client",
+        email: "pgchammas+qa-quiz@gmail.com",
+        stage: "active",
+        status: "active",
+        paid: true,
+        unreadFromMama: 3,
+        lastActiveDate: TODAY,
+      },
+    });
+    const holdUnpaid = clientPerson({
+      profileId: "hold",
+      emailLower: "pgchammas+hold322a@gmail.com",
+      client: {
+        id: "hold",
+        role: "client",
+        email: "pgchammas+hold322a@gmail.com",
+        stage: "signed_up",
+        status: "pending",
+        paid: false,
+        unreadFromMama: 0,
+        lastActiveDate: null,
+      },
+    });
+    const realUnread = clientPerson({
+      profileId: "u",
+      emailLower: "nora@example.com",
+      client: {
+        id: "u",
+        role: "client",
+        email: "nora@example.com",
+        stage: "active",
+        status: "active",
+        paid: true,
+        unreadFromMama: 1,
+        lastActiveDate: TODAY,
+      },
+    });
+    const rows = buildHomeQueue({
+      people: [qaUnread, holdUnpaid, realUnread],
+      todayIso: TODAY,
+      now: NOW,
+    });
+    expect(rows.map((r) => r.person.emailLower)).toEqual(["nora@example.com"]);
+  });
+
   it("drops snoozed people", () => {
     const rows = buildHomeQueue({
       people: [leftover({ snoozed: true }), clientPerson({ snoozed: true })],

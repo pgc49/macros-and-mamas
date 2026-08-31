@@ -162,4 +162,25 @@ describe("filters + cohort rollup", () => {
     expect(founding.needs_help).toBe(1);
     expect(c2.steady).toBe(1);
   });
+
+  it("drops QA plus-address accounts from health, unread, and unpaid", () => {
+    const qa = client({
+      id: "qa",
+      email: "pgchammas+qa-quiz@gmail.com",
+      unreadFromMama: 2,
+      lastActiveDate: "2026-08-20",
+    });
+    const hold = client({
+      id: "hold",
+      email: "pgchammas+hold322a@gmail.com",
+      paid: false,
+      stage: "signed_up",
+      status: "pending",
+    });
+    expect(isUnpaidSignup(hold)).toBe(false);
+    expect(matchesClientHealthFilter(qa, "unread", TODAY)).toBe(false);
+    expect(clientHealthBand(qa, TODAY)).toBeNull();
+    expect(clientHealthByCohort([qa, hold, client({ id: "mama", email: "nora@example.com" })], TODAY)
+      .find((r) => r.cohort === "2026-08")?.doing_well).toBe(1);
+  });
 });
