@@ -307,6 +307,7 @@ describe("cohort filter", () => {
     cohort_label: "2026-08",
     stage: "paid_awaiting_intake",
     status: "pending",
+    hasIntake: false,
     lastActiveDate: null,
   });
 

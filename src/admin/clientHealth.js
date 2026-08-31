@@ -52,15 +52,17 @@ export function isHealthClient(client) {
 export function isAwaitingApproval(client) {
   if (!client || String(client.role || "").toLowerCase() === "admin") return false;
   if (client.refunded || client.stage === "refunded") return false;
+  if (client.stage === "paid_awaiting_intake") return false;
+  if (client.stage === "active" || client.status === "active") return false;
   return client.stage === "awaiting_approval"
-    || (client.status === "pending" && client.hasIntake && client.paid);
+    || (client.status === "pending" && Boolean(client.hasIntake) && Boolean(client.paid || client.comp));
 }
 
 /** Paid or comp mama who has not submitted intake. Same rule as People → Need intake. */
 export function isAwaitingIntake(client) {
   if (!client || String(client.role || "").toLowerCase() === "admin") return false;
   if (client.refunded || client.stage === "refunded") return false;
-  if (isAwaitingApproval(client)) return false;
+  if (client.stage === "awaiting_approval") return false;
   if (client.stage === "active" || client.status === "active") return false;
   if (client.stage === "paid_awaiting_intake") return true;
   const paidOrComp = Boolean(client.paid || client.comp);
