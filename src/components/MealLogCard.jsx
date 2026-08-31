@@ -1179,7 +1179,7 @@ export function MealLogCard({
             )}
             {!searchingPlan && (plannedMeals || []).length === 0 && (customMeals || []).length === 0 && (
               <div style={{ fontSize: 12.5, color: T.inkSoft, marginBottom: 8, lineHeight: 1.45 }}>
-                Nothing on your Plan for this day yet — add meals under Meals → Plan, or pick from the bank below.
+                Nothing on your Plan for this day yet — add meals under Meals → Weekly Planner, or pick from the bank below.
               </div>
             )}
             {recipesVisible.map((r) => (
