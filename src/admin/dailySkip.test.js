@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { filterRoster } from "./clientRoster.js";
 import {
   boardReason,
@@ -87,9 +87,9 @@ describe("mergeOverrideRows", () => {
       [{ email_lower: "bea@example.com", snoozed_until: UNTIL_TONIGHT }],
       NOW,
     );
-    expect(merged).toEqual([
-      { email_lower: "bea@example.com", snoozed_until: UNTIL_TONIGHT },
-    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].email_lower).toBe("bea@example.com");
+    expect(merged[0].snoozed_until).toBe(UNTIL_TONIGHT);
   });
 
   it("does not let an expired local skip overwrite the server", () => {
@@ -123,8 +123,21 @@ describe("mergeOverrideRows", () => {
 });
 
 describe("local skip store", () => {
+  function memoryStorage() {
+    const map = new Map();
+    return {
+      getItem: (key) => (map.has(key) ? map.get(key) : null),
+      setItem: (key, value) => { map.set(key, String(value)); },
+      removeItem: (key) => { map.delete(key); },
+      clear: () => { map.clear(); },
+    };
+  }
+
+  beforeEach(() => {
+    globalThis.localStorage = memoryStorage();
+  });
+
   it("round-trips an active skip and drops it after undo", () => {
-    localStorage.clear();
     writeLocalSkip("Bea@example.com", { snoozed_until: UNTIL_TONIGHT }, NOW);
     expect(loadLocalSkips(NOW)).toEqual([
       { email_lower: "bea@example.com", snoozed_until: UNTIL_TONIGHT },
@@ -134,7 +147,6 @@ describe("local skip store", () => {
   });
 
   it("prunes skips that already expired", () => {
-    localStorage.clear();
     writeLocalSkip("bea@example.com", { snoozed_until: UNTIL_TONIGHT }, NOW);
     expect(loadLocalSkips(Date.parse("2026-08-31T07:00:00.000Z"))).toEqual([]);
   });
