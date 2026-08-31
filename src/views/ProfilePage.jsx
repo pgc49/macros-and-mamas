@@ -5,6 +5,7 @@ import { Shell, Card, Btn, Field, Chip, inputStyle } from "../components/ui";
 import { PATHS } from "../routing";
 import { useAuth } from "../auth/useAuth.jsx";
 import { db, ageFromDateOfBirth, fullName } from "../db/db";
+import { birthDateInputBounds } from "../utils/dateOfBirth";
 import { FoodPrefsEditor } from "../components/FoodPrefsEditor";
 
 /**
@@ -63,6 +64,7 @@ export function ProfilePage({ onProfileSaved }) {
 
   const set = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
   const derivedAge = ageFromDateOfBirth(profile?.dateOfBirth);
+  const { min: dobMin, max: dobMax } = birthDateInputBounds();
 
   const saveBasics = async () => {
     setSaving(true);
@@ -265,7 +267,8 @@ export function ProfilePage({ onProfileSaved }) {
             value={profile.dateOfBirth || ""}
             onChange={(e) => set("dateOfBirth", e.target.value)}
             autoComplete="bday"
-            max={new Date().toISOString().slice(0, 10)}
+            min={dobMin}
+            max={dobMax}
           />
         </Field>
         {derivedAge != null ? (
