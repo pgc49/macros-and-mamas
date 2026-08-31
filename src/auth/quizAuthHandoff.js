@@ -146,7 +146,6 @@ export function shouldSkipProfileHold({ pathname, fromQuiz } = {}) {
  * signed-out default unless this is the quiz handoff (URL `from=quiz`).
  */
 export function joinAfterAuthDecision({
-  user,
   loaded,
   fromQuiz,
   paid,
@@ -155,7 +154,9 @@ export function joinAfterAuthDecision({
 } = {}) {
   if (refunded) return { action: "goodbye" };
   if ((paid || isAdmin) && (loaded || fromQuiz)) return { action: "home" };
-  if (user && !loaded && !fromQuiz) return { action: "hold" };
+  // Caller already decided "stay" (React user or a live JWT). Do not require
+  // `user` here — a late React user with paid still false used to paint Stripe.
+  if (!loaded && !fromQuiz) return { action: "hold" };
   return { action: "checkout" };
 }
 

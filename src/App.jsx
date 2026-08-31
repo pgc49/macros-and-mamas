@@ -205,7 +205,6 @@ function JoinGate({ refunded, paid, isAdmin, approved, macros, membershipPaywall
   }
   const fromQuiz = new URLSearchParams(location.search).get("from") === "quiz";
   const afterAuth = joinAfterAuthDecision({
-    user,
     loaded,
     fromQuiz,
     paid,

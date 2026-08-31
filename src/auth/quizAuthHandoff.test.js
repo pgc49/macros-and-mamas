@@ -208,6 +208,103 @@ describe("joinAfterAuthDecision", () => {
       paid: true,
     })).toEqual({ action: "home" });
   });
+
+  it("holds when the JWT is here but React user is still late (non-quiz)", () => {
+    expect(joinAfterAuthDecision({
+      loaded: false,
+      fromQuiz: false,
+      paid: false,
+    })).toEqual({ action: "hold" });
+  });
+
+  it("shows checkout for a loaded unpaid mama who is not on the quiz handoff", () => {
+    expect(joinAfterAuthDecision({
+      loaded: true,
+      fromQuiz: false,
+      paid: false,
+    })).toEqual({ action: "checkout" });
+  });
+});
+
+describe("leftover-tab quiz session (do not sign anyone out)", () => {
+  const newSignup = { id: "u-new", email: "new@example.com" };
+
+  it("old quiz /signin tab still sends the new session to checkout, using the URL email", () => {
+    expect(signInPostAuthDecision({
+      user: newSignup,
+      authLoading: false,
+      loaded: false,
+      fromQuiz: true,
+      quizEmail: "old@example.com",
+    })).toEqual({
+      action: "go",
+      to: "/join?from=quiz&email=old%40example.com",
+    });
+  });
+
+  it("joinCheckoutDecision stays when a session exists — never a bounce to sign-in", () => {
+    expect(joinCheckoutDecision({
+      user: newSignup,
+      authLoading: false,
+      probeDone: true,
+      supabaseHasSession: true,
+    })).toBe("stay");
+  });
+});
+
+describe("funnel decision matrix", () => {
+  const mama = { id: "u1", email: "mama@example.com" };
+
+  it("covers returning login, quiz pay, and signed-out paints", () => {
+    const rows = [
+      {
+        name: "Welcome back before profile",
+        got: signInPostAuthDecision({
+          user: mama, authLoading: false, loaded: false, fromQuiz: false,
+        }),
+        want: { action: "hold" },
+      },
+      {
+        name: "Welcome back after profile",
+        got: signInPostAuthDecision({
+          user: mama, authLoading: false, loaded: true, fromQuiz: false,
+        }),
+        want: { action: "home" },
+      },
+      {
+        name: "auth still settling",
+        got: signInPostAuthDecision({
+          user: mama, authLoading: true, loaded: false, fromQuiz: false,
+        }),
+        want: { action: "hold" },
+      },
+      {
+        name: "quiz Lock my spot",
+        got: signInPostAuthDecision({
+          user: mama, authLoading: false, loaded: false, fromQuiz: true,
+          quizEmail: mama.email,
+        }),
+        want: { action: "go", to: "/join?from=quiz&email=mama%40example.com" },
+      },
+      {
+        name: "membership deep-link",
+        got: signInPostAuthDecision({
+          user: mama, authLoading: false, loaded: false, fromPath: "/membership",
+        }),
+        want: { action: "go", to: "/membership" },
+      },
+      {
+        name: "signed-out form",
+        got: signInPostAuthDecision({
+          user: null, authLoading: false, loaded: false,
+        }),
+        want: { action: "signin" },
+      },
+    ];
+    for (const row of rows) {
+      expect(row.got, row.name).toEqual(row.want);
+    }
+  });
 });
 
 afterEach(() => {
