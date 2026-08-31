@@ -231,10 +231,11 @@ describe("planQuizLeadSends", () => {
   });
 
   it("skips quiz_drip_2d for leftover leads created before the freeze cutoff", () => {
-    const now = QUIZ_DRIP_2D_FREEZE_CUTOFF_MS + 2 * DAY_MS;
+    const laterCreatedMs = QUIZ_DRIP_2D_FREEZE_CUTOFF_MS + 60 * 60 * 1000;
+    const now = laterCreatedMs + 2 * DAY_MS;
     const leftoverCreated = new Date(QUIZ_DRIP_2D_FREEZE_CUTOFF_MS - 1).toISOString();
     const whitneyCreated = new Date(QUIZ_DRIP_2D_FREEZE_CUTOFF_MS).toISOString();
-    const laterCreated = new Date(QUIZ_DRIP_2D_FREEZE_CUTOFF_MS + 1).toISOString();
+    const laterCreated = new Date(laterCreatedMs).toISOString();
     const leftover = lead({ email: "summer@example.com", created_at: leftoverCreated });
     const whitney = lead({ email: "whitney@example.com", created_at: whitneyCreated });
     const later = lead({ email: "later@example.com", created_at: laterCreated });
