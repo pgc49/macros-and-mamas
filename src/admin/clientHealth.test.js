@@ -4,6 +4,8 @@ import {
   clientHealthByCohort,
   daysSinceLastLog,
   formatLastLogged,
+  isAwaitingApproval,
+  isAwaitingIntake,
   matchesClientHealthFilter,
 } from "./clientHealth.js";
 
@@ -30,6 +32,47 @@ describe("daysSinceLastLog + formatLastLogged", () => {
       label: "Never logged",
       stale: true,
     });
+  });
+});
+
+describe("isAwaitingApproval + isAwaitingIntake", () => {
+  it("flags submitted-unapproved as need approval, not need intake", () => {
+    const summer = client({
+      name: "Summer",
+      stage: "awaiting_approval",
+      status: "pending",
+      paid: true,
+      hasIntake: true,
+    });
+    expect(isAwaitingApproval(summer)).toBe(true);
+    expect(isAwaitingIntake(summer)).toBe(false);
+  });
+
+  it("flags paid or comp without intake as need intake", () => {
+    const paidNoIntake = client({
+      stage: "paid_awaiting_intake",
+      status: "pending",
+      paid: true,
+      hasIntake: false,
+      macros: null,
+    });
+    const compNoIntake = client({
+      stage: "signed_up",
+      status: "pending",
+      paid: false,
+      comp: true,
+      hasIntake: false,
+      macros: null,
+    });
+    expect(isAwaitingIntake(paidNoIntake)).toBe(true);
+    expect(isAwaitingIntake(compNoIntake)).toBe(true);
+    expect(isAwaitingApproval(paidNoIntake)).toBe(false);
+  });
+
+  it("does not flag approved or active mamas", () => {
+    expect(isAwaitingApproval(client())).toBe(false);
+    expect(isAwaitingIntake(client())).toBe(false);
+    expect(isAwaitingIntake(client({ paid: true, hasIntake: true, macros: { approved: true } }))).toBe(false);
   });
 });
 

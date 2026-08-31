@@ -5,12 +5,18 @@ import { PATHS } from "../routing";
 import { AdminVoiceDropCard } from "./AdminVoiceDropCard";
 import { newLeftoverLastHours } from "./homeQueue";
 import { clientHealthByCohort } from "./clientHealth";
+import { filterRoster, rosterTitle } from "./clientRoster";
 import { localDateIso } from "../utils/dates";
 
 const BANDS = [
   ["needs_help", "Needs help", "needs_help"],
   ["steady", "Steady", "steady"],
   ["doing_well", "Doing well", "doing_well"],
+];
+
+const INTAKE_QUEUES = [
+  ["awaiting_approval", "Need approval"],
+  ["awaiting_intake", "Need intake"],
 ];
 
 function LeadRow({ person, onOpen }) {
@@ -40,6 +46,44 @@ function LeadRow({ person, onOpen }) {
   );
 }
 
+function IntakeQueue({ filter, label, clients, onOpen, showEmptyHint }) {
+  const count = clients.length;
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(filter, "all")}
+      aria-label={`${label} · ${count}`}
+      style={{
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        padding: "12px 0",
+        border: "none",
+        borderBottom: `1px solid ${T.border}`,
+        background: "none",
+        cursor: "pointer",
+        fontFamily: F,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+        <div style={{ fontWeight: 800, color: T.ink, fontSize: 15 }}>{label}</div>
+        <div style={{ fontWeight: 800, color: count ? T.amber : T.inkSoft, fontSize: 15 }}>{count}</div>
+      </div>
+      {count === 0 ? (
+        showEmptyHint ? (
+          <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 4 }}>Nobody right now.</div>
+        ) : null
+      ) : (
+        clients.map((client) => (
+          <div key={client.id || client.email} style={{ fontWeight: 700, color: T.ink, fontSize: 15, marginTop: 6 }}>
+            {rosterTitle(client)}
+          </div>
+        ))
+      )}
+    </button>
+  );
+}
+
 export function AdminHome({
   people = [],
   roster = [],
@@ -50,6 +94,13 @@ export function AdminHome({
 }) {
   const freshLeads = newLeftoverLastHours(people);
   const health = clientHealthByCohort(roster, localDateIso());
+  const needApproval = filterRoster(roster, "awaiting_approval", { cohort: "all" });
+  const needIntake = filterRoster(roster, "awaiting_intake", { cohort: "all" });
+  const intakeQueues = {
+    awaiting_approval: needApproval,
+    awaiting_intake: needIntake,
+  };
+  const intakeEmpty = needApproval.length === 0 && needIntake.length === 0;
   const activeCount = (roster || []).filter((c) => c.role !== "admin" && (c.stage === "active" || c.status === "active")).length;
 
   return (
@@ -89,7 +140,27 @@ export function AdminHome({
 
       <Card style={{ marginTop: 12 }}>
         <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>Client health</div>
-        <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 10, lineHeight: 1.45 }}>
+        <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 8, lineHeight: 1.45 }}>
+          Need approval is a submitted intake you have not tapped Approve on.
+          Need intake is paid or comp and she still has not finished intake.
+          Tap a row to open People with that filter.
+        </div>
+        {INTAKE_QUEUES.map(([filter, label]) => (
+          <IntakeQueue
+            key={filter}
+            filter={filter}
+            label={label}
+            clients={intakeQueues[filter]}
+            onOpen={onOpenClients}
+            showEmptyHint={!intakeEmpty}
+          />
+        ))}
+        {intakeEmpty ? (
+          <div style={{ fontSize: 14, color: T.inkSoft, padding: "10px 0 4px" }}>
+            Nobody waiting on intake or your Approve tap.
+          </div>
+        ) : null}
+        <div style={{ fontSize: 13, color: T.inkSoft, margin: "12px 0 10px", lineHeight: 1.45 }}>
           Needs help is unread, waiting on approval, or no logs in 3+ days.
           Quiet she passes for today drop out of this count. A reply brings them back.
         </div>

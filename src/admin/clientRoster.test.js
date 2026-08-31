@@ -344,6 +344,59 @@ describe("compareNullableIso", () => {
   });
 });
 
+describe("awaiting intake + awaiting approval filters", () => {
+  const today = "2026-08-18";
+  const active = mama({ id: "active", name: "Erika Active" });
+  const needApproval = mama({
+    id: "approve",
+    name: "Summer Pending",
+    stage: "awaiting_approval",
+    status: "pending",
+    paid: true,
+    hasIntake: true,
+    lastActiveDate: null,
+  });
+  const needIntake = mama({
+    id: "intake",
+    name: "Dolly Needs Intake",
+    stage: "paid_awaiting_intake",
+    status: "pending",
+    paid: true,
+    hasIntake: false,
+    lastActiveDate: null,
+  });
+  const unpaid = mama({
+    id: "unpaid",
+    name: "Quiz Only",
+    stage: "signed_up",
+    status: "pending",
+    paid: false,
+    hasIntake: false,
+    lastActiveDate: null,
+  });
+  const flagOnlyIntake = mama({
+    id: "flags",
+    name: "Rachel Flags",
+    stage: "signed_up",
+    status: "pending",
+    paid: true,
+    hasIntake: false,
+    macros: null,
+    lastActiveDate: null,
+  });
+
+  it("lists paid-without-intake and submitted-unapproved on their own filters", () => {
+    const roster = [active, needApproval, needIntake, unpaid, flagOnlyIntake];
+    expect(filterRoster(roster, "awaiting_approval", { todayIso: today }).map((c) => c.id)).toEqual(["approve"]);
+    expect(filterRoster(roster, "awaiting_intake", { todayIso: today }).map((c) => c.id).sort()).toEqual(["flags", "intake"]);
+    expect(filterRoster(roster, "awaiting_approval", { todayIso: today }).some((c) => c.id === "active")).toBe(false);
+    expect(filterRoster(roster, "awaiting_intake", { todayIso: today }).some((c) => c.id === "active")).toBe(false);
+    const counts = rosterFilterCounts(roster, today);
+    expect(counts.awaitingApproval).toBe(1);
+    expect(counts.awaitingIntake).toBe(2);
+  });
+});
+
 describe("complimentary members", () => {
   const today = "2026-08-18";
   const stripePaid = mama({ id: "s", name: "Stripe Mama" });
