@@ -39,10 +39,13 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
   const steps = Array.isArray(r.steps) ? r.steps : [];
   const servings = snapServings(qty);
   const scaled = scaleMealForLog(r, servings);
-  const isDinner = String(cat).toLowerCase() === "dinner";
-  const batchLabel = serves > 1
-    ? (isDinner ? ` · batch · serves ${serves}` : ` · batch serves ${serves}`)
-    : "";
+  const catKey = String(cat).toLowerCase();
+  const isDinner = catKey === "dinner";
+  const isTreat = catKey === "treat" || catKey === "treats";
+  const metaBits = [];
+  if (isTreat) metaBits.push("Treat");
+  if (serves > 1) metaBits.push(isDinner ? `batch · serves ${serves}` : `batch serves ${serves}`);
+  const recipeMeta = metaBits.join(" · ");
   const [slot, setSlot] = useState(
     () => normalizeSlot(r.slot || r.cat) || guessSlotFromTime(),
   );
@@ -107,9 +110,14 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
       <div style={{ padding: "12px 14px 10px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}>
-              {cat}{batchLabel}
-            </div>
+            {recipeMeta ? (
+              <div
+                data-recipe-meta=""
+                style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}
+              >
+                {recipeMeta}
+              </div>
+            ) : null}
             <button
               type="button"
               aria-expanded={open}

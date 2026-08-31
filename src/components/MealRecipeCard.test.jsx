@@ -41,12 +41,15 @@ describe("MealRecipeCard Meals tab logging chrome", () => {
       "Scales macros only — recipe amounts stay at one serving",
     );
     expect(screen.queryByText("Add to")).toBeNull();
+    expect(document.querySelector("[data-recipe-meta]")).toBeNull();
   });
 
-  it("advertises Open recipe as its own control, not fused into the category stamp", () => {
+  it("advertises Open recipe as its own control and drops the redundant category stamp", () => {
     render(<MealRecipeCard meal={oatmeal} onLog={vi.fn()} />);
 
     expect(screen.queryByText(/breakfast · open recipe/i)).toBeNull();
+    expect(document.querySelector("[data-recipe-meta]")).toBeNull();
+    expect(screen.getByRole("button", { name: "Breakfast" })).toBeTruthy();
     const openBtn = screen.getByRole("button", { name: "Open recipe ▾" });
     expect(openBtn.getAttribute("aria-expanded")).toBe("false");
 
@@ -78,5 +81,25 @@ describe("MealRecipeCard Meals tab logging chrome", () => {
       f: 8,
       servingsLogged: 2,
     });
+  });
+
+  it("keeps treat and batch meta the chips cannot show", () => {
+    render(
+      <MealRecipeCard
+        meal={{
+          cat: "Treats",
+          name: "Oatmeal protein cookies",
+          cal: 85,
+          p: 5,
+          c: 13,
+          f: 1,
+          serves: 12,
+        }}
+        onLog={vi.fn()}
+      />,
+    );
+    expect(document.querySelector("[data-recipe-meta]").textContent).toMatch(/Treat/i);
+    expect(document.querySelector("[data-recipe-meta]").textContent).toMatch(/batch serves 12/i);
+    expect(screen.getByRole("button", { name: "Snack" })).toBeTruthy();
   });
 });
