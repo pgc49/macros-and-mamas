@@ -476,6 +476,77 @@ describe("messaging crash containment", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(body));
   });
 
+  it("blocks a file://-only send and leaves the thread unchanged", async () => {
+    const onSend = vi.fn();
+    const path =
+      "file:///var/mobile/Library/SMS/Attachments/ab/11/F53E021E-19F9-4635-B509-B5B88E1808F8/Macros%20and%20Mamas.png";
+    render(
+      <MessagesThread
+        {...threadProps({
+          onSend,
+          messages: [message("existing", 1)],
+        })}
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: `  ${path}  ` },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.getByText("Use + to send a photo")).toBeTruthy();
+    expect(screen.getByText("Message existing")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Write a message…").value).toContain("file:///var/mobile");
+  });
+
+  it("sends a + photo with an empty body when the caption is only a file:// URL", async () => {
+    const onSend = vi.fn().mockResolvedValue({});
+    if (!URL.createObjectURL) {
+      URL.createObjectURL = () => "blob:test";
+      URL.revokeObjectURL = () => {};
+    }
+    render(<MessagesThread {...threadProps({ onSend })} />);
+    const photo = new File(["png"], "Macros and Mamas.png", { type: "image/png" });
+    fireEvent.change(document.querySelector("input[type=file]"), {
+      target: { files: [photo] },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "file:///tmp/photo.png" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend.mock.calls[0][0]).toBe("");
+    expect(onSend.mock.calls[0][1]).toBe(photo);
+  });
+
+  it("still sends an empty-body + File attachment", async () => {
+    const onSend = vi.fn().mockResolvedValue({});
+    if (!URL.createObjectURL) {
+      URL.createObjectURL = () => "blob:test";
+      URL.revokeObjectURL = () => {};
+    }
+    render(<MessagesThread {...threadProps({ onSend })} />);
+    const photo = new File(["png"], "dinner.png", { type: "image/png" });
+    fireEvent.change(document.querySelector("input[type=file]"), {
+      target: { files: [photo] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend.mock.calls[0][0]).toBe("");
+    expect(onSend.mock.calls[0][1]).toBe(photo);
+  });
+
+  it("still sends a normal sentence", async () => {
+    const onSend = vi.fn().mockResolvedValue({});
+    render(<MessagesThread {...threadProps({ onSend })} />);
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "What's my protein goal for today?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend.mock.calls[0][0]).toBe("What's my protein goal for today?");
+    expect(onSend.mock.calls[0][1]).toBeFalsy();
+  });
+
   it("does not steal a text-selection gesture for the action menu", () => {
     vi.stubGlobal("getSelection", () => ({ toString: () => "copy me" }));
     vi.useFakeTimers();

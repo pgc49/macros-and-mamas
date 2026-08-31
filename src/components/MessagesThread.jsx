@@ -28,6 +28,7 @@ import {
   copyableMessageBody,
   holdOpensMenu,
 } from "../lib/messageSelect";
+import { isLocalFileUrl } from "../lib/localFileUrl";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
 const pendingSendAttempts = new Map();
@@ -270,13 +271,19 @@ export function MessagesThread({
     const text = draft.trim();
     const attach = voicePreview?.file || file;
     if ((!text && !attach) || busy || !onSend || recording || sendInFlightRef.current) return;
+    if (!attach && isLocalFileUrl(text)) {
+      setAttachError("Use + to send a photo");
+      return;
+    }
+    const sendBody = isLocalFileUrl(text) ? "" : text;
+    setAttachError("");
     sendInFlightRef.current = true;
     const keptText = text;
     const keptFile = file;
     const keptVoice = voicePreview;
     const keptReply = replyTo;
     const attemptScope = threadKey || `thread:${selfId || "unknown"}`;
-    const fingerprint = sendPayloadFingerprint(keptText, attach, keptReply?.id);
+    const fingerprint = sendPayloadFingerprint(sendBody, attach, keptReply?.id);
     const previousAttempt = pendingSendAttempts.get(attemptScope);
     const matchingAttempt = previousAttempt?.fingerprint === fingerprint
       ? previousAttempt
@@ -305,7 +312,7 @@ export function MessagesThread({
     }
 
     const generation = createClientMessageId();
-    const sendPromise = Promise.resolve().then(() => onSend(keptText, attach, {
+    const sendPromise = Promise.resolve().then(() => onSend(sendBody, attach, {
       ...(keptReply?.id ? { replyToId: keptReply.id } : {}),
       clientMessageId,
     }));
