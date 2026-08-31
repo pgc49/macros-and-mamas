@@ -81,14 +81,15 @@ function renderMeals(filter = "All meals") {
 }
 
 describe("Meals tab search filter", () => {
-  it("keeps Food prefs and My meals up top and hides slot chips", () => {
+  it("defaults to All meals without an All meals chip", () => {
     renderMeals();
 
     expect(screen.getByRole("heading", { name: "All meals" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "All meals" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Plan" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "All meals" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Weekly Planner" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Food prefs" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "My meals" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Plan$/ })).toBeNull();
     expect(screen.getByLabelText("Search meals")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Filter meals" })).toBeTruthy();
     expect(screen.queryByRole("option", { name: "Breakfast" })).toBeNull();
@@ -108,6 +109,13 @@ describe("Meals tab search filter", () => {
     expect(setMealFilter).toHaveBeenCalledWith("Breakfast");
   });
 
+  it("toggles Weekly Planner back to All meals", () => {
+    const { setMealFilter } = renderMeals("Plan");
+
+    fireEvent.click(screen.getByRole("button", { name: "Weekly Planner" }));
+    expect(setMealFilter).toHaveBeenCalledWith("All meals");
+  });
+
   it("shows pantry from the filter, not the top row", () => {
     renderMeals("Pantry");
 
@@ -115,5 +123,6 @@ describe("Meals tab search filter", () => {
     expect(screen.getByRole("button", { name: "Filter meals · Pantry" })).toBeTruthy();
     expect(screen.getByRole("option", { name: "Pantry" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Pantry" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Weekly Planner" })).toBeTruthy();
   });
 });

@@ -4,6 +4,7 @@ import { Btn, inputStyle } from "./ui";
 import { SlotChips } from "./SlotChips";
 import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
 import { MAX_RECIPE_SERVINGS, normalizeServings, perServingMacros } from "../utils/recipeMacros";
+import { isLocalFilePaste } from "../lib/localFileUrl";
 
 /** Matches MAX_RECIPE_CHARS in functions/api/estimate.js. */
 const PASTE_MAX = 4000;
@@ -65,11 +66,18 @@ export function RecipeCreator({
   const readRecipe = async () => {
     const text = paste.trim();
     if (!text || busy) return;
+    if (isLocalFilePaste(text)) {
+      setDraft(null);
+      setError("Couldn't read that recipe. Try pasting just the ingredients.");
+      return;
+    }
     setBusy(true);
     setError("");
     setSaved("");
     const result = await onEstimateRecipe?.(text);
-    if (!result || result.error) {
+    const name = String(result?.meal || "").trim();
+    if (!result || result.error || /^error$/i.test(name)) {
+      setDraft(null);
       setError(result?.message || "Couldn't read that recipe. Try pasting just the ingredients.");
       setBusy(false);
       return;
@@ -101,8 +109,12 @@ export function RecipeCreator({
   const serves = draft ? normalizeServings(draft.serves) : 1;
   const perServing = batchNums ? perServingMacros(batchNums, serves) : null;
 
+  const nameIsError = /^error$/i.test(String(draft?.name || "").trim());
+  const macrosAllZero = !perServing || (!perServing.cal && !perServing.p && !perServing.c && !perServing.f);
+  const canSave = Boolean(draft && perServing && !busy && !nameIsError && !macrosAllZero);
+
   const save = async () => {
-    if (!draft || !perServing || busy) return;
+    if (!canSave) return;
     const name = String(draft.name || "").trim() || "My recipe";
     setBusy(true);
     const result = await onSaveCustomMeal?.({
@@ -364,7 +376,7 @@ export function RecipeCreator({
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <Btn small onClick={save} disabled={busy}>
+            <Btn small onClick={save} disabled={!canSave}>
               {busy ? "Saving…" : saveLabel}
             </Btn>
             <button
