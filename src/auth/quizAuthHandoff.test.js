@@ -4,12 +4,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   clearQuizPayHandoff,
   isQuizPayHandoffActive,
+  joinAfterAuthDecision,
   joinCheckoutDecision,
   joinPathWhenSignedOut,
   markQuizPayHandoff,
   quizSessionMismatch,
   shouldAcceptGetSession,
+  shouldSkipProfileHold,
   shouldSwitchCreateToSignIn,
+  signInPostAuthDecision,
   urlQuizEmail,
 } from "./quizAuthHandoff";
 
@@ -95,6 +98,212 @@ describe("joinCheckoutDecision", () => {
       supabaseHasSession: false,
       handoffActive: true,
     })).toBe("hold");
+  });
+});
+
+describe("signInPostAuthDecision", () => {
+  const mama = { id: "u1", email: "mama@example.com" };
+
+  it("holds a returning sign-in until paid is known — does not send her to /join", () => {
+    expect(signInPostAuthDecision({
+      user: mama,
+      authLoading: false,
+      loaded: false,
+      fromQuiz: false,
+    })).toEqual({ action: "hold" });
+  });
+
+  it("sends a loaded paid-or-unpaid session through homePathFor", () => {
+    expect(signInPostAuthDecision({
+      user: mama,
+      authLoading: false,
+      loaded: true,
+      fromQuiz: false,
+    })).toEqual({ action: "home" });
+  });
+
+  it("sends quiz Lock my spot to checkout before the profile row lands", () => {
+    expect(signInPostAuthDecision({
+      user: mama,
+      authLoading: false,
+      loaded: false,
+      fromQuiz: true,
+      quizEmail: "mama@example.com",
+    })).toEqual({
+      action: "go",
+      to: "/join?from=quiz&email=mama%40example.com",
+    });
+  });
+
+  it("does not treat the handoff stamp as from=quiz (Welcome back also stamps it)", () => {
+    markQuizPayHandoff(mama.email);
+    expect(signInPostAuthDecision({
+      user: mama,
+      authLoading: false,
+      loaded: false,
+      fromQuiz: false,
+    })).toEqual({ action: "hold" });
+  });
+
+  it("keeps support and account deep-links", () => {
+    expect(signInPostAuthDecision({
+      user: mama,
+      authLoading: false,
+      loaded: false,
+      fromPath: "/support",
+    })).toEqual({ action: "go", to: "/support" });
+    expect(signInPostAuthDecision({
+      user: mama,
+      authLoading: false,
+      loaded: false,
+      fromPath: "/account/profile",
+    })).toEqual({ action: "go", to: "/account/profile" });
+  });
+
+  it("shows the form when signed out", () => {
+    expect(signInPostAuthDecision({
+      user: null,
+      authLoading: false,
+      loaded: true,
+    })).toEqual({ action: "signin" });
+  });
+});
+
+describe("shouldSkipProfileHold", () => {
+  it("skips only /join and quiz /signin", () => {
+    expect(shouldSkipProfileHold({ pathname: "/join" })).toBe(true);
+    expect(shouldSkipProfileHold({ pathname: "/signin", fromQuiz: true })).toBe(true);
+    expect(shouldSkipProfileHold({ pathname: "/signin/", fromQuiz: true })).toBe(true);
+    expect(shouldSkipProfileHold({ pathname: "/signin", fromQuiz: false })).toBe(false);
+    expect(shouldSkipProfileHold({ pathname: "/dashboard" })).toBe(false);
+  });
+});
+
+describe("joinAfterAuthDecision", () => {
+  const mama = { id: "u1", email: "mama@example.com" };
+
+  it("holds a returning session on /join until paid is known", () => {
+    expect(joinAfterAuthDecision({
+      user: mama,
+      loaded: false,
+      fromQuiz: false,
+      paid: false,
+    })).toEqual({ action: "hold" });
+  });
+
+  it("shows quiz checkout before the profile row lands", () => {
+    expect(joinAfterAuthDecision({
+      user: mama,
+      loaded: false,
+      fromQuiz: true,
+      paid: false,
+    })).toEqual({ action: "checkout" });
+  });
+
+  it("sends a loaded paid mama home instead of painting Stripe", () => {
+    expect(joinAfterAuthDecision({
+      user: mama,
+      loaded: true,
+      fromQuiz: false,
+      paid: true,
+    })).toEqual({ action: "home" });
+  });
+
+  it("holds when the JWT is here but React user is still late (non-quiz)", () => {
+    expect(joinAfterAuthDecision({
+      loaded: false,
+      fromQuiz: false,
+      paid: false,
+    })).toEqual({ action: "hold" });
+  });
+
+  it("shows checkout for a loaded unpaid mama who is not on the quiz handoff", () => {
+    expect(joinAfterAuthDecision({
+      loaded: true,
+      fromQuiz: false,
+      paid: false,
+    })).toEqual({ action: "checkout" });
+  });
+});
+
+describe("leftover-tab quiz session (do not sign anyone out)", () => {
+  const newSignup = { id: "u-new", email: "new@example.com" };
+
+  it("old quiz /signin tab still sends the new session to checkout, using the URL email", () => {
+    expect(signInPostAuthDecision({
+      user: newSignup,
+      authLoading: false,
+      loaded: false,
+      fromQuiz: true,
+      quizEmail: "old@example.com",
+    })).toEqual({
+      action: "go",
+      to: "/join?from=quiz&email=old%40example.com",
+    });
+  });
+
+  it("joinCheckoutDecision stays when a session exists — never a bounce to sign-in", () => {
+    expect(joinCheckoutDecision({
+      user: newSignup,
+      authLoading: false,
+      probeDone: true,
+      supabaseHasSession: true,
+    })).toBe("stay");
+  });
+});
+
+describe("funnel decision matrix", () => {
+  const mama = { id: "u1", email: "mama@example.com" };
+
+  it("covers returning login, quiz pay, and signed-out paints", () => {
+    const rows = [
+      {
+        name: "Welcome back before profile",
+        got: signInPostAuthDecision({
+          user: mama, authLoading: false, loaded: false, fromQuiz: false,
+        }),
+        want: { action: "hold" },
+      },
+      {
+        name: "Welcome back after profile",
+        got: signInPostAuthDecision({
+          user: mama, authLoading: false, loaded: true, fromQuiz: false,
+        }),
+        want: { action: "home" },
+      },
+      {
+        name: "auth still settling",
+        got: signInPostAuthDecision({
+          user: mama, authLoading: true, loaded: false, fromQuiz: false,
+        }),
+        want: { action: "hold" },
+      },
+      {
+        name: "quiz Lock my spot",
+        got: signInPostAuthDecision({
+          user: mama, authLoading: false, loaded: false, fromQuiz: true,
+          quizEmail: mama.email,
+        }),
+        want: { action: "go", to: "/join?from=quiz&email=mama%40example.com" },
+      },
+      {
+        name: "membership deep-link",
+        got: signInPostAuthDecision({
+          user: mama, authLoading: false, loaded: false, fromPath: "/membership",
+        }),
+        want: { action: "go", to: "/membership" },
+      },
+      {
+        name: "signed-out form",
+        got: signInPostAuthDecision({
+          user: null, authLoading: false, loaded: false,
+        }),
+        want: { action: "signin" },
+      },
+    ];
+    for (const row of rows) {
+      expect(row.got, row.name).toEqual(row.want);
+    }
   });
 });
 
