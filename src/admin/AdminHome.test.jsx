@@ -130,6 +130,68 @@ describe("AdminHome intake queues", () => {
     expect(onOpenClients).toHaveBeenCalledWith("unpaid", "all");
   });
 
+  it("hides QA plus-address unpaid signups and still lists Need intake Dolly", () => {
+    renderHome({
+      roster: [
+        mama({
+          id: "qa-quiz",
+          name: "QA Quiz",
+          email: "pgchammas+qa-quiz@gmail.com",
+          paid: false,
+          stage: "signed_up",
+          status: "pending",
+          hasIntake: false,
+          macros: null,
+        }),
+        mama({
+          id: "qa-hold",
+          name: "QA Hold",
+          email: "pgchammas+hold322a@gmail.com",
+          paid: false,
+          stage: "signed_up",
+          status: "pending",
+          hasIntake: false,
+          macros: null,
+        }),
+        mama({
+          id: "patrick",
+          name: "Patrick",
+          email: "pgchammas@gmail.com",
+          paid: false,
+          stage: "signed_up",
+          status: "pending",
+          hasIntake: false,
+          macros: null,
+        }),
+        mama({
+          id: "nora",
+          name: "Nora",
+          email: "nora@example.com",
+          paid: false,
+          stage: "signed_up",
+          status: "pending",
+          hasIntake: false,
+          macros: null,
+        }),
+        mama({
+          id: "intake",
+          name: "Dolly",
+          email: "dollychammas@gmail.com",
+          stage: "paid_awaiting_intake",
+          status: "pending",
+          hasIntake: false,
+        }),
+      ],
+    });
+    expect(screen.getByRole("button", { name: "Unpaid signup · 2" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Need intake · 1" })).toBeTruthy();
+    expect(screen.getByText("Patrick")).toBeTruthy();
+    expect(screen.getByText("Nora")).toBeTruthy();
+    expect(screen.getByText("Dolly")).toBeTruthy();
+    expect(screen.queryByText("QA Quiz")).toBeNull();
+    expect(screen.queryByText("QA Hold")).toBeNull();
+  });
+
   it("shows an empty state when nobody is in pre-activation", () => {
     renderHome({
       roster: [

@@ -16,7 +16,7 @@ function renderRoster(over = {}) {
       role: "client",
       name: "New signup",
       firstName: "Test Patrick",
-      email: "pgchammas+demo@gmail.com",
+      email: "testpatrick@example.com",
       phone: "",
       stage: "signed_up",
       status: "pending",
@@ -59,7 +59,7 @@ describe("AdminClientRoster", () => {
   it("shows first name and email for unpaid signups instead of New signup", () => {
     renderRoster();
     expect(screen.getByText("Test Patrick")).toBeTruthy();
-    expect(screen.getByText("pgchammas+demo@gmail.com")).toBeTruthy();
+    expect(screen.getByText("testpatrick@example.com")).toBeTruthy();
     expect(screen.queryByText("New signup")).toBeNull();
     expect(screen.getByText("Never messaged")).toBeTruthy();
   });
@@ -251,6 +251,85 @@ describe("AdminClientRoster", () => {
     expect(screen.getByText(/Passed until tonight/)).toBeTruthy();
     expect(screen.getByText(/Queue is clear/)).toBeTruthy();
     expect(screen.getByLabelText("Put Bea Quiet back on the board")).toBeTruthy();
+  });
+
+  it("hides QA plus-address cards from Unpaid and still shows Dolly on Need intake", () => {
+    const roster = [
+      {
+        id: "qa-quiz",
+        role: "client",
+        name: "QA Quiz",
+        email: "pgchammas+qa-quiz@gmail.com",
+        stage: "signed_up",
+        status: "pending",
+        paid: false,
+        hasIntake: false,
+        unreadFromMama: 0,
+        lastAdminAt: null,
+        createdAt: "2026-08-18T12:00:00.000Z",
+      },
+      {
+        id: "qa-hold",
+        role: "client",
+        name: "QA Hold",
+        email: "pgchammas+hold322a@gmail.com",
+        stage: "signed_up",
+        status: "pending",
+        paid: false,
+        hasIntake: false,
+        unreadFromMama: 0,
+        lastAdminAt: null,
+        createdAt: "2026-08-18T11:00:00.000Z",
+      },
+      {
+        id: "patrick",
+        role: "client",
+        name: "Patrick",
+        email: "pgchammas@gmail.com",
+        stage: "signed_up",
+        status: "pending",
+        paid: false,
+        hasIntake: false,
+        unreadFromMama: 0,
+        lastAdminAt: null,
+        createdAt: "2026-08-17T00:00:00.000Z",
+      },
+      {
+        id: "intake-1",
+        role: "client",
+        name: "Dolly",
+        email: "dollychammas@gmail.com",
+        stage: "paid_awaiting_intake",
+        status: "pending",
+        paid: true,
+        hasIntake: false,
+        unreadFromMama: 0,
+        lastAdminAt: null,
+      },
+    ];
+    function Harness({ start }) {
+      const [filter, setFilter] = useState(start);
+      return (
+        <AdminClientRoster
+          roster={roster}
+          filter={filter}
+          setFilter={setFilter}
+          onOpenClient={() => {}}
+          onMessageClient={() => {}}
+          nowMs={Date.parse("2026-08-18T15:00:00.000Z")}
+          todayIso="2026-08-18"
+        />
+      );
+    }
+    render(<Harness start="unpaid" />);
+    expect(screen.getByText("Patrick")).toBeTruthy();
+    expect(screen.getByText("pgchammas@gmail.com")).toBeTruthy();
+    expect(screen.getByText(/Newest signups first/)).toBeTruthy();
+    expect(screen.queryByText("QA Quiz")).toBeNull();
+    expect(screen.queryByText("QA Hold")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Need intake/ }));
+    expect(screen.getByText("Dolly")).toBeTruthy();
+    expect(screen.queryByText("Patrick")).toBeNull();
   });
 
   it("filters Need intake and Approve from the same chips Home deep-links to", () => {

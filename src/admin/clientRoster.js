@@ -3,6 +3,7 @@ import { joinPersonName } from "../lib/personName";
 import { isStripeCollected } from "../../functions/_shared/comp.js";
 import { addDaysIso, localDateIso } from "../utils/dates";
 import { daysSinceIso } from "./clientFlags";
+import { isAdminQaClient } from "./adminQa";
 import { isAwaitingApproval, isAwaitingIntake, isHealthClient, isUnpaidSignup, lastLogIso, matchesClientHealthFilter } from "./clientHealth";
 
 export const UNASSIGNED_COHORT = "unassigned";
@@ -21,6 +22,7 @@ export function listRosterCohorts(all) {
   const present = new Set();
   for (const c of all || []) {
     if (String(c?.role || "").toLowerCase() === "admin") continue;
+    if (isAdminQaClient(c)) continue;
     present.add(cohortKey(c));
   }
   const options = [{ id: "all", label: "All groups" }];
@@ -188,6 +190,7 @@ export function isQuietActive(client, todayIso = localDateIso()) {
 
 export function needsYou(client, todayIso = localDateIso()) {
   if (!client || client.role === "admin") return false;
+  if (isAdminQaClient(client)) return false;
   if (Number(client.unreadFromMama) > 0) return true;
   if (isAwaitingApproval(client)) return true;
   return isQuietActive(client, todayIso);
@@ -303,7 +306,7 @@ export function filterRoster(all, filter, {
   dir = "asc",
 } = {}) {
   const admins = (all || []).filter((c) => c.role === "admin").slice().sort(byName);
-  const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
+  const clientsOnly = (all || []).filter((c) => c.role !== "admin" && !isAdminQaClient(c) && matchesCohort(c, cohort));
   let list = clientsOnly;
   if (filter === "needs_you") {
     list = clientsOnly.filter((c) => needsYou(c, todayIso));
@@ -334,7 +337,7 @@ export function filterRoster(all, filter, {
 }
 
 export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all", nowMs = Date.now()) {
-  const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
+  const clientsOnly = (all || []).filter((c) => c.role !== "admin" && !isAdminQaClient(c) && matchesCohort(c, cohort));
   return {
     needsYou: clientsOnly.filter((c) => needsYou(c, todayIso)).length,
     active: clientsOnly.filter((c) => c.stage === "active" || c.status === "active").length,
@@ -354,7 +357,7 @@ export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all
 }
 
 export function rosterStats(all, cohort = "all") {
-  const clientsOnly = (all || []).filter((c) => c.role !== "admin" && matchesCohort(c, cohort));
+  const clientsOnly = (all || []).filter((c) => c.role !== "admin" && !isAdminQaClient(c) && matchesCohort(c, cohort));
   return {
     signups: clientsOnly.length,
     paid: clientsOnly.filter((c) => isStripeCollected(c)).length,

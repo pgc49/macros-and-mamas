@@ -2,6 +2,7 @@
  * Home Needs-you queue. Clients use attentionRank as-is (299/302 own those
  * rules). Leftover leads append as hot / last-drip rows. Snoozed people drop out.
  */
+import { isAdminQaClient } from "./adminQa";
 import { attentionRank, needsYou } from "./clientRoster";
 import { isAwaitingApproval, isAwaitingIntake } from "./clientHealth";
 import { lastTouchMs } from "./personStage";
@@ -50,6 +51,7 @@ export function buildHomeQueue({
 
   for (const person of people) {
     if (person.snoozed) continue;
+    if (isAdminQaClient(person) || isAdminQaClient(person.client)) continue;
     const client = person.client;
     if (client && needsYou(client, todayIso)) {
       rows.push({
