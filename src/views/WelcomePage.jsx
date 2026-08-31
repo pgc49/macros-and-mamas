@@ -12,7 +12,7 @@ import { welcomeCheckoutDecision } from "../lib/welcomeCheckout";
  * flips profiles.paid, then send them into intake.
  * Unpaid + no session_id is a leftover bookmark, not a checkout return.
  */
-export function WelcomePage({ onPaid, navigate, paid = false }) {
+export function WelcomePage({ onPaid, navigate, paid = false, loaded = false }) {
   const [status, setStatus] = useState("confirming"); // confirming | ready | stuck
   const [tries, setTries] = useState(0);
   const onPaidRef = useRef(onPaid);
@@ -20,6 +20,7 @@ export function WelcomePage({ onPaid, navigate, paid = false }) {
   onPaidRef.current = onPaid;
   const decision = welcomeCheckoutDecision({
     paid,
+    loaded,
     search: typeof window !== "undefined" ? window.location.search : "",
   });
 
@@ -30,7 +31,7 @@ export function WelcomePage({ onPaid, navigate, paid = false }) {
   }, [decision, navigate]);
 
   useEffect(() => {
-    if (decision === "join") return undefined;
+    if (decision === "join" || decision === "hold") return undefined;
     let cancelled = false;
     let attempt = 0;
     const maxAttempts = 20;
@@ -93,7 +94,7 @@ export function WelcomePage({ onPaid, navigate, paid = false }) {
     };
   }, [navigate, decision]);
 
-  if (decision === "join") return null;
+  if (decision === "hold" || decision === "join") return null;
 
   return (
     <Shell>

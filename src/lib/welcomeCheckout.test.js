@@ -22,4 +22,17 @@ describe("welcomeCheckoutDecision", () => {
       search: "?session_id=cs_test_abc",
     })).toBe("stay");
   });
+
+  it("holds until paid is known — does not bounce a returning mama to /join", () => {
+    expect(welcomeCheckoutDecision({
+      paid: false,
+      loaded: false,
+      search: "",
+    })).toBe("hold");
+    expect(welcomeCheckoutDecision({
+      paid: false,
+      loaded: false,
+      search: "?session_id=cs_test_abc",
+    })).toBe("hold");
+  });
 });
