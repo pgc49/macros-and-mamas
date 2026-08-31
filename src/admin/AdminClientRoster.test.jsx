@@ -253,6 +253,70 @@ describe("AdminClientRoster", () => {
     expect(screen.getByLabelText("Put Bea Quiet back on the board")).toBeTruthy();
   });
 
+  it("filters Need intake and Approve from the same chips Home deep-links to", () => {
+    const roster = [
+      {
+        id: "approve-1",
+        role: "client",
+        name: "Summer",
+        email: "summer@example.com",
+        stage: "awaiting_approval",
+        status: "pending",
+        paid: true,
+        hasIntake: true,
+        unreadFromMama: 0,
+        lastAdminAt: null,
+      },
+      {
+        id: "intake-1",
+        role: "client",
+        name: "Dolly",
+        email: "dolly@example.com",
+        stage: "paid_awaiting_intake",
+        status: "pending",
+        paid: true,
+        hasIntake: false,
+        unreadFromMama: 0,
+        lastAdminAt: null,
+      },
+      {
+        id: "active-1",
+        role: "client",
+        name: "Erika",
+        email: "erika@example.com",
+        stage: "active",
+        status: "active",
+        paid: true,
+        hasIntake: true,
+        unreadFromMama: 0,
+        lastAdminAt: null,
+        lastActiveDate: "2026-08-18",
+      },
+    ];
+    function Harness({ start }) {
+      const [filter, setFilter] = useState(start);
+      return (
+        <AdminClientRoster
+          roster={roster}
+          filter={filter}
+          setFilter={setFilter}
+          onOpenClient={() => {}}
+          onMessageClient={() => {}}
+          nowMs={Date.parse("2026-08-18T15:00:00.000Z")}
+          todayIso="2026-08-18"
+        />
+      );
+    }
+    render(<Harness start="awaiting_approval" />);
+    expect(screen.getByText("Summer")).toBeTruthy();
+    expect(screen.queryByText("Dolly")).toBeNull();
+    expect(screen.queryByText("Erika")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Need intake/ }));
+    expect(screen.getByText("Dolly")).toBeTruthy();
+    expect(screen.queryByText("Summer")).toBeNull();
+    expect(screen.queryByText("Erika")).toBeNull();
+  });
+
   it("filters the list from the search field", () => {
     renderRoster({ filter: "all" });
     fireEvent.change(screen.getByLabelText("Search name, email, or phone"), {

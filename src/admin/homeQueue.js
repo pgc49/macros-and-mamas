@@ -3,6 +3,7 @@
  * rules). Leftover leads append as hot / last-drip rows. Snoozed people drop out.
  */
 import { attentionRank, needsYou } from "./clientRoster";
+import { isAwaitingApproval, isAwaitingIntake } from "./clientHealth";
 import { lastTouchMs } from "./personStage";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -28,10 +29,10 @@ function clientReason(client, todayIso) {
     const n = Number(client.unreadFromMama);
     return n === 1 ? "Unread message" : `${n} unread messages`;
   }
-  if (client?.stage === "awaiting_approval" || (client?.status === "pending" && client?.hasIntake && client?.paid)) {
+  if (isAwaitingApproval(client)) {
     return "Waiting on your approval";
   }
-  if (client?.stage === "paid_awaiting_intake") return "Paid — needs intake";
+  if (isAwaitingIntake(client)) return "Paid — needs intake";
   if (needsYou(client, todayIso)) return "Quiet — no logs";
   return "Needs you";
 }

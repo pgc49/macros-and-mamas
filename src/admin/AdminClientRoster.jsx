@@ -11,7 +11,7 @@ import {
   rosterFilterCounts,
   adminPersonTitle,
 } from "./clientRoster";
-import { formatLastLogged } from "./clientHealth";
+import { formatLastLogged, isAwaitingApproval, isAwaitingIntake } from "./clientHealth";
 import { boardReason, canPassToday, listPassedToday } from "./dailySkip";
 import { smsHref } from "./phoneSms";
 import { formatReferredByHint } from "./referredBy";
@@ -58,8 +58,8 @@ export function TextSmsButton({ phone, compact = false, name = "" }) {
 function stageShort(c) {
   const stage = c.stage || "signed_up";
   if (stage === "active" || c.status === "active") return `W${c.week ?? "—"}`;
-  if (stage === "awaiting_approval" || (c.status === "pending" && c.hasIntake && c.paid)) return "Approve";
-  if (stage === "paid_awaiting_intake") return "Intake";
+  if (isAwaitingApproval(c)) return "Approve";
+  if (isAwaitingIntake(c)) return "Intake";
   if (stage === "refunded" || c.refunded) return "Refunded";
   if (stage === "signed_up") return "Unpaid";
   return stage;
