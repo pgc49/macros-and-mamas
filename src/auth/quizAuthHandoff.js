@@ -1,5 +1,11 @@
-import { PATHS } from "../lib/appPaths";
-import { emailsMatch, normalizeEmail, quizSignInHref, resolveQuizEmail } from "../lib/quizCheckout";
+import { PATHS, canonicalPath } from "../lib/appPaths";
+import {
+  emailsMatch,
+  normalizeEmail,
+  quizJoinHref,
+  quizSignInHref,
+  resolveQuizEmail,
+} from "../lib/quizCheckout";
 import { isExistingAccountError } from "./completeSignup";
 
 const HANDOFF_KEY = "mm_quiz_pay_handoff";
@@ -82,6 +88,75 @@ export function joinCheckoutDecision({
   if (user || supabaseHasSession) return "stay";
   if (authLoading || !probeDone || handoffActive) return "hold";
   return "signin";
+}
+
+/**
+ * After a session exists on /signin, where to send her.
+ *
+ * hold   — still reading auth or the profile row (`paid` is false until then)
+ * signin — show the form
+ * go     — Navigate to `to`
+ * home   — call homePathFor with the loaded profile
+ *
+ * A returning mama used to flash /join because SignInGate called homePathFor
+ * while `paid` was still the signed-out default. Quiz Lock my spot (`from=quiz`
+ * in the URL only) still goes to checkout immediately.
+ *
+ * Do not key this off the handoff stamp — SignInPage marks it on every
+ * Welcome-back sign-in, not just the quiz funnel.
+ */
+export function signInPostAuthDecision({
+  user,
+  authLoading,
+  loaded,
+  fromQuiz,
+  quizEmail,
+  fromPath,
+} = {}) {
+  if (authLoading) return { action: "hold" };
+  if (!user) return { action: "signin" };
+
+  if (fromPath && String(fromPath).startsWith("/account")) {
+    return { action: "go", to: fromPath };
+  }
+  if (fromPath === PATHS.support) return { action: "go", to: PATHS.support };
+  if (fromPath === PATHS.membership) return { action: "go", to: PATHS.membership };
+
+  if (fromQuiz) {
+    return { action: "go", to: quizJoinHref(quizEmail || user.email) };
+  }
+
+  if (!loaded) return { action: "hold" };
+  return { action: "home" };
+}
+
+/**
+ * Skip the App-level "wait for profile" hold only for the quiz pay funnel.
+ * /signin without from=quiz must wait — that skip is what painted checkout
+ * for a paid mama after Welcome back.
+ */
+export function shouldSkipProfileHold({ pathname, fromQuiz } = {}) {
+  const here = canonicalPath(pathname);
+  if (here === PATHS.join) return true;
+  return here === PATHS.signin && Boolean(fromQuiz);
+}
+
+/**
+ * /join after a session exists. Don't paint Stripe while `paid` is still the
+ * signed-out default unless this is the quiz handoff (URL `from=quiz`).
+ */
+export function joinAfterAuthDecision({
+  user,
+  loaded,
+  fromQuiz,
+  paid,
+  isAdmin,
+  refunded,
+} = {}) {
+  if (refunded) return { action: "goodbye" };
+  if ((paid || isAdmin) && (loaded || fromQuiz)) return { action: "home" };
+  if (user && !loaded && !fromQuiz) return { action: "hold" };
+  return { action: "checkout" };
 }
 
 /** Stale getSession(null) must not wipe a signup we just applied. */

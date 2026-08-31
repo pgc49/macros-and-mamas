@@ -51,7 +51,10 @@ import { emailsMatch, quizJoinHref } from "./lib/quizCheckout";
 import {
   clearQuizPayHandoff,
   isQuizPayHandoffActive,
+  joinAfterAuthDecision,
   joinCheckoutDecision,
+  shouldSkipProfileHold,
+  signInPostAuthDecision,
   urlQuizEmail,
 } from "./auth/quizAuthHandoff";
 import { signedOutJoinRedirect } from "./auth/quizSignupBounce";
@@ -68,6 +71,18 @@ import { ageFromDateOfBirth } from "./db/db";
  * A different signed-in account is handled by the explicit switch button on
  * /join instead.
  */
+function SignInLoading() {
+  return (
+    <Shell>
+      <Card style={{ marginTop: 30, textAlign: "center", padding: 28 }}>
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: T.inkSoft }}>
+          Loading…
+        </p>
+      </Card>
+    </Shell>
+  );
+}
+
 function SignInGate({
   authMode,
   onSwitchMode,
@@ -78,35 +93,29 @@ function SignInGate({
   macros,
   refunded,
   membershipPaywall = false,
+  loaded = false,
 }) {
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const fromQuiz = searchParams.get("from") === "quiz";
+  const decision = signInPostAuthDecision({
+    user,
+    authLoading,
+    loaded,
+    fromQuiz,
+    quizEmail: urlQuizEmail(searchParams),
+    fromPath: location.state?.from,
+  });
 
-  if (authLoading) {
-    return (
-      <Shell>
-        <Card style={{ marginTop: 30, textAlign: "center", padding: 28 }}>
-          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: T.inkSoft }}>
-            Loading…
-          </p>
-        </Card>
-      </Shell>
-    );
+  if (decision.action === "hold") {
+    return <SignInLoading />;
   }
 
-  if (user) {
-    const joinQuiz = fromQuiz
-      ? quizJoinHref(urlQuizEmail(searchParams) || user.email)
-      : null;
-    const deepAccount = location.state?.from && String(location.state.from).startsWith("/account")
-      ? location.state.from
-      : null;
-    const to = deepAccount
-      || (location.state?.from === PATHS.support ? PATHS.support : null)
-      || joinQuiz
-      || homePathFor({ isAdmin, approved, paid, macros, refunded, membershipPaywall });
+  if (decision.action === "go" || decision.action === "home") {
+    const to = decision.action === "go"
+      ? decision.to
+      : homePathFor({ isAdmin, approved, paid, macros, refunded, membershipPaywall });
     return <Navigate to={to} replace />;
   }
 
@@ -127,7 +136,7 @@ function SignInGate({
   );
 }
 
-function JoinGate({ refunded, paid, isAdmin, approved, macros, membershipPaywall, profileCreatedAt }) {
+function JoinGate({ refunded, paid, isAdmin, approved, macros, membershipPaywall, profileCreatedAt, loaded = false }) {
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const [probe, setProbe] = useState({ done: false, hasSession: false });
@@ -194,8 +203,20 @@ function JoinGate({ refunded, paid, isAdmin, approved, macros, membershipPaywall
     });
     return <Navigate to={signedOutTo} replace state={{ from: PATHS.join }} />;
   }
-  if (refunded) return <Navigate to={PATHS.goodbye} replace />;
-  if (paid || isAdmin) {
+  const fromQuiz = new URLSearchParams(location.search).get("from") === "quiz";
+  const afterAuth = joinAfterAuthDecision({
+    user,
+    loaded,
+    fromQuiz,
+    paid,
+    isAdmin,
+    refunded,
+  });
+  if (afterAuth.action === "hold") {
+    return <SignInLoading />;
+  }
+  if (afterAuth.action === "goodbye") return <Navigate to={PATHS.goodbye} replace />;
+  if (afterAuth.action === "home") {
     return (
       <Navigate
         to={homePathFor({
@@ -1472,10 +1493,10 @@ export default function App() {
     [waterLogsByDate, waterOz],
   );
 
-  const payFunnelPath = (() => {
-    const here = canonicalPath(location.pathname);
-    return here === PATHS.signin || here === PATHS.join;
-  })();
+  const payFunnelPath = shouldSkipProfileHold({
+    pathname: location.pathname,
+    fromQuiz: new URLSearchParams(location.search).get("from") === "quiz",
+  });
   if (authLoading || (user && !loaded && !payFunnelPath)) {
     return (
       <Shell>
@@ -1732,6 +1753,7 @@ export default function App() {
             macros={macros}
             refunded={refunded}
             membershipPaywall={membershipPaywall}
+            loaded={loaded}
           />
         }
       />
@@ -1747,6 +1769,7 @@ export default function App() {
             macros={macros}
             membershipPaywall={membershipPaywall}
             profileCreatedAt={profile?.createdAt || null}
+            loaded={loaded}
           />
         )}
       />
