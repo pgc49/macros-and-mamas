@@ -68,6 +68,9 @@ export function sanitizeTip(raw) {
 export function sanitizeEstimate(parsed, mode = "meal") {
   if (!parsed || typeof parsed !== "object") return { error: "not food" };
   if (parsed.error) return { error: "not food" };
+  // Models sometimes return meal:"error" + 0 macros instead of {error}.
+  // That must not become a saveable client contract.
+  if (/^error$/i.test(String(parsed.meal ?? "").trim())) return { error: "not food" };
 
   const recipe = mode === "recipe";
   const servings = recipe ? normalizeServings(parsed.servings) : 1;

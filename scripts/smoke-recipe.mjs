@@ -40,6 +40,8 @@ assert(!plate.error, "valid plate is not an error");
 assert(sanitizeEstimate({ error: "not food" }).error === "not food", "explicit refusal");
 assert(sanitizeEstimate(null).error === "not food", "null is refused");
 assert(sanitizeEstimate("nope").error === "not food", "string is refused");
+assert(sanitizeEstimate({ meal: "error", calories: 0 }).error === "not food", "meal:error is refused");
+assert(sanitizeEstimate({ meal: "ERROR", protein_g: 0 }, "recipe").error === "not food", "ERROR name refused");
 
 // Plate ceilings still bite in meal mode.
 const absurd = sanitizeEstimate({ meal: "x", calories: 999999, protein_g: 9999 });

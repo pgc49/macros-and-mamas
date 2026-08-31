@@ -1783,6 +1783,7 @@ export default function App() {
             : (
               <WelcomePage
                 navigate={navigate}
+                paid={paid}
                 onPaid={(s) => {
                   applyClientState(s);
                 }}
