@@ -3,13 +3,16 @@
  * Never use the advocate email as the name.
  */
 
+import { joinPersonName } from "./personName.js";
+
 const ACTIVE_STATUSES = new Set(["paid", "pending_payment"]);
 
 function advocateProfileName(profile) {
   if (!profile) return "";
-  const first = String(profile.name || profile.first_name || "").trim();
-  const last = String(profile.last_name || profile.lastName || "").trim();
-  return [first, last].filter(Boolean).join(" ");
+  return joinPersonName(
+    profile.name || profile.first_name || "",
+    profile.last_name || profile.lastName || "",
+  );
 }
 
 function normalizedCode(raw) {

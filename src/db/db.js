@@ -8,8 +8,15 @@ import {
 } from "../lib/messageReactions";
 import { chronologicalMessages } from "../lib/messageOrdering";
 import { referredByByUserId } from "../lib/referredBy";
+import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
+
+/** Display name: first + last, without doubling a last name already in `name`. */
+export { fullName };
+
+// `export { fullName } from` is not a local binding. loadRoster calls fullName(p);
+// after #309 that throw emptied the admin roster and every inbox DM titled "Mama".
 
 /* ------------------------------------------------------------------ */
 /*  DATA LAYER — per-event Supabase writes (not blob persistence)      */
@@ -64,30 +71,6 @@ function profileToRow(p) {
     bottle_oz: p.bottleOz != null && p.bottleOz !== "" ? Math.round(Number(p.bottleOz)) : 24,
     avatar_path: p.avatarPath || null,
   };
-}
-
-/**
- * Display name: "First Last" when last is present.
- * If `name` already includes the last name (full-name-in-first-column, or a
- * previously doubled render), do not append it again.
- */
-export function fullName(profileOrRow) {
-  if (!profileOrRow) return "";
-  const first = String(profileOrRow.name || profileOrRow.first_name || "").trim();
-  const last = String(profileOrRow.lastName || profileOrRow.last_name || "").trim();
-  if (!last) return first;
-  if (!first) return last;
-  const lastLower = last.toLowerCase();
-  const parts = first.split(/\s+/).filter(Boolean);
-  while (parts.length && parts[parts.length - 1].toLowerCase() === lastLower) {
-    if (parts.length === 1) break;
-    parts.pop();
-  }
-  const remaining = parts.join(" ");
-  if (!remaining) return last;
-  if (remaining.toLowerCase() === lastLower) return remaining;
-  if (remaining.toLowerCase().endsWith(` ${lastLower}`)) return remaining;
-  return `${remaining} ${last}`;
 }
 
 /** Public URL for a profile avatar path in the avatars bucket. */
@@ -366,6 +349,7 @@ function normalizeServes(value) {
 }
 
 function mapCustomMeal(r) {
+  const slot = normalizeMealSlot(r.slot);
   return {
     id: r.id,
     name: r.name,
@@ -375,6 +359,8 @@ function mapCustomMeal(r) {
     f: Number(r.f) || 0,
     serves: normalizeServes(r.serves ?? 1),
     ingredients: r.ingredients || "",
+    slot,
+    cat: slot,
     updated_at: r.updated_at,
   };
 }
@@ -625,6 +611,60 @@ async function loadChannelSenderLabels(conversationId, userIds) {
   } catch (e) {
     console.warn("channel sender label lookup failed", e);
     return {};
+  }
+}
+
+function profileToInboxPeer(p) {
+  if (!p?.id) return null;
+  return {
+    id: p.id,
+    name: p.name || "",
+    firstName: p.name || "",
+    lastName: p.last_name || "",
+    email: p.email || "",
+    role: p.role || "",
+  };
+}
+
+/** Attach first/last/email onto inbox rows so a missed roster lookup still has a real title. */
+export function attachInboxPeers(rows, profiles) {
+  const byId = new Map((profiles || []).map((p) => [p.id, profileToInboxPeer(p)]));
+  return (rows || []).map((row) => {
+    const last = row.lastMessage || null;
+    const senderId = last?.sender_id;
+    const sender = (senderId && byId.get(senderId)) || null;
+    return {
+      ...row,
+      peer: byId.get(row.clientId) || null,
+      participantPeers: (row.participantIds || [])
+        .map((id) => byId.get(id))
+        .filter(Boolean),
+      lastMessage: last
+        ? { ...last, sender_profile: last.sender_profile || sender }
+        : last,
+    };
+  });
+}
+
+async function hydrateInboxPeers(rows) {
+  const list = rows || [];
+  const ids = [...new Set(
+    list.flatMap((row) => [row.clientId, ...(row.participantIds || [])]).filter(Boolean),
+  )];
+  if (!ids.length) return list;
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, name, last_name, email, role")
+      .in("id", ids);
+    if (error) {
+      console.warn("inbox peer profile lookup failed", error);
+      return list;
+    }
+    return attachInboxPeers(list, data || []);
+  } catch (e) {
+    console.warn("inbox peer profile lookup failed", e);
+    return list;
   }
 }
 
@@ -1716,7 +1756,7 @@ export const db = {
       if (isAdminRow && hasIntake && approved) stage = "active";
 
       const lead = leadByEmail[String(p.email || "").trim().toLowerCase()] || {};
-      const leadName = [lead.first_name, lead.last_name].filter(Boolean).join(" ").trim();
+      const leadName = joinPersonName(lead.first_name, lead.last_name);
       const msg = msgById[p.id] || {};
 
       return {
@@ -2885,12 +2925,12 @@ export const db = {
     const { data: inboxRows, error: inboxError } = await supabase
       .rpc("load_admin_message_inbox");
     if (!inboxError) {
-      return (inboxRows || []).map((row) => ({
+      return hydrateInboxPeers((inboxRows || []).map((row) => ({
         clientId: row.client_id,
         lastMessage: row.last_message,
         unread: Number(row.unread) || 0,
         participantIds: Array.isArray(row.participant_ids) ? row.participant_ids : [],
-      }));
+      })));
     }
     // Backward-compatible only during migration rollout. Once the RPC is
     // installed, real database errors must surface instead of hiding behind
@@ -2938,14 +2978,16 @@ export const db = {
       if (senderIsAdmin && !threadIsAdminDm) continue;
       row.unread += 1;
     }
-    return [...byClient.values()]
-      .map((row) => ({
-        ...row,
-        participantIds: [...row.participantIds],
-      }))
-      .sort(
-        (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at),
-      );
+    return hydrateInboxPeers(
+      [...byClient.values()]
+        .map((row) => ({
+          ...row,
+          participantIds: [...row.participantIds],
+        }))
+        .sort(
+          (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at),
+        ),
+    );
   },
 
   async savePushSubscription({ endpoint, p256dh, auth, userAgent }) {
@@ -3126,9 +3168,16 @@ export const db = {
     // Prefer the recipe columns; degrade if migration 019 hasn't run yet.
     let { data, error } = await supabase
       .from("custom_meals")
-      .select("id, name, cal, p, c, f, serves, ingredients, updated_at")
+      .select("id, name, cal, p, c, f, serves, ingredients, slot, updated_at")
       .eq("profile_id", uid)
       .order("updated_at", { ascending: false });
+    if (error && /slot/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("custom_meals")
+        .select("id, name, cal, p, c, f, serves, ingredients, updated_at")
+        .eq("profile_id", uid)
+        .order("updated_at", { ascending: false }));
+    }
     if (error && /serves|ingredients/i.test(error.message || "")) {
       ({ data, error } = await supabase
         .from("custom_meals")
@@ -3144,7 +3193,7 @@ export const db = {
   },
 
   /** Upsert by name for this user (re-saving the same lunch updates macros). */
-  async saveCustomMeal({ name, cal, p, c, f, serves, ingredients }) {
+  async saveCustomMeal({ name, cal, p, c, f, serves, ingredients, slot }) {
     const uid = await requireUserId();
     const trimmed = String(name || "").trim().slice(0, 80);
     if (!trimmed) throw new Error("Meal needs a name");
@@ -3160,13 +3209,27 @@ export const db = {
     const recipeFields = {};
     if (serves != null) recipeFields.serves = normalizeServes(serves);
     if (ingredients != null) recipeFields.ingredients = String(ingredients).slice(0, 4000) || null;
+    const savedSlot = normalizeMealSlot(slot);
+    if (savedSlot) recipeFields.slot = savedSlot;
 
-    const withRecipe = Object.keys(recipeFields).length > 0;
+    const extraCols = [
+      recipeFields.serves != null ? "serves" : "",
+      recipeFields.ingredients !== undefined ? "ingredients" : "",
+      recipeFields.slot ? "slot" : "",
+    ].filter(Boolean).join(", ");
     let { data, error } = await supabase
       .from("custom_meals")
       .upsert({ ...base, ...recipeFields }, { onConflict: "profile_id,name" })
-      .select(`id, name, cal, p, c, f, updated_at${withRecipe ? ", serves, ingredients" : ""}`)
+      .select(`id, name, cal, p, c, f, updated_at${extraCols ? `, ${extraCols}` : ""}`)
       .single();
+    if (error && /slot/i.test(error.message || "")) {
+      const { slot: _s, ...noSlot } = recipeFields;
+      ({ data, error } = await supabase
+        .from("custom_meals")
+        .upsert({ ...base, ...noSlot }, { onConflict: "profile_id,name" })
+        .select("id, name, cal, p, c, f, updated_at, serves, ingredients")
+        .single());
+    }
     if (error && /serves|ingredients/i.test(error.message || "")) {
       ({ data, error } = await supabase
         .from("custom_meals")

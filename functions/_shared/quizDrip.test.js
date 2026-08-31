@@ -317,7 +317,13 @@ describe("quiz drip copy", () => {
     expect(html).not.toMatch(/Protein:/);
     expect(html).not.toMatch(/Doors close/i);
     expect(html).not.toContain("Aug 27");
-    expect(html).toContain("Monday, Aug 31");
+    expect(html).not.toContain("Aug 31");
+    expect(html).not.toContain("August 31");
+    expect(html).not.toMatch(/group starts/i);
+    expect(html).not.toMatch(/enrollment is open/i);
+    expect(html).not.toMatch(/8 weeks start when/i);
+    expect(html).toContain("Callie builds every set of ranges by hand, in the order mamas lock in.");
+    expect(html).toContain("Same email so your ranges stay attached");
     expect(html).toContain("$249");
     expect(html).not.toMatch(/—/);
     expect(quizDripSubject(QUIZ_DRIP_2D, "Dolly")).toBe("Dolly, the numbers are the easy part");

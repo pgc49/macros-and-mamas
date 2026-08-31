@@ -11,6 +11,9 @@ import {
   rosterFilterCounts,
   rosterStats,
   rosterTitle,
+  inboxDisplayName,
+  adminPersonTitle,
+  inboxThreadTitle,
 } from "./clientRoster.js";
 
 const mama = (over = {}) => ({
@@ -45,6 +48,89 @@ describe("rosterTitle", () => {
 
   it("uses quiz first name when profile name is blank", () => {
     expect(rosterTitle(mama({ name: "", firstName: "Callie" }))).toBe("Callie");
+  });
+
+  it("does not show last name twice when name is already full", () => {
+    expect(rosterTitle(mama({ name: "Sarah Smith", lastName: "Smith" }))).toBe("Sarah Smith");
+    expect(rosterTitle(mama({ name: "Sarah Smith Smith", lastName: "Smith" }))).toBe("Sarah Smith Smith");
+    expect(rosterTitle(mama({ name: "", firstName: "Sarah Smith", lastName: "Smith" }))).toBe("Sarah Smith");
+  });
+
+  it("uses last name when the profile name is the Mama placeholder", () => {
+    expect(rosterTitle(mama({ name: "Mama", firstName: "Mama", lastName: "Wells", email: "wells@example.com" })))
+      .toBe("Wells");
+  });
+});
+
+describe("inboxDisplayName", () => {
+  it("prefers first+last from the roster and never a blanket Mama", () => {
+    expect(inboxDisplayName({ name: "Christina", lastName: "Lee" })).toBe("Christina Lee");
+    expect(inboxDisplayName({ name: "Chelsea", lastName: "Park" })).toBe("Chelsea Park");
+  });
+
+  it("falls back to the inbox peer when the roster row is missing", () => {
+    expect(inboxDisplayName(null, { name: "Nora", lastName: "Kim", email: "nora@example.com" }))
+      .toBe("Nora Kim");
+    expect(inboxDisplayName(undefined)).toBe("Unnamed");
+  });
+
+  it("uses email local-part when the only name is Mama", () => {
+    expect(inboxDisplayName({ name: "Mama", firstName: "Mama", email: "christina@example.com" }))
+      .toBe("christina");
+  });
+});
+
+describe("adminPersonTitle — shared inbox + roster helper", () => {
+  it("does not render several first+last people as Mama", () => {
+    const titles = [
+      adminPersonTitle({ name: "Christina", lastName: "Lee" }),
+      adminPersonTitle({ name: "Chelsea", lastName: "Park" }),
+      adminPersonTitle({ name: "Nora", lastName: "Kim" }),
+    ];
+    expect(titles).toEqual(["Christina Lee", "Chelsea Park", "Nora Kim"]);
+    expect(new Set(titles).size).toBe(3);
+    expect(titles.every((t) => t === "Mama")).toBe(false);
+  });
+
+  it("does not double a last name that is already in name", () => {
+    expect(adminPersonTitle({ name: "Sarah Smith", lastName: "Smith" })).toBe("Sarah Smith");
+    expect(adminPersonTitle({ name: "Sarah Smith", last_name: "Smith" })).toBe("Sarah Smith");
+    expect(rosterTitle({ name: "Sarah Smith", lastName: "Smith" })).toBe("Sarah Smith");
+  });
+
+  it("missing clientMap peer falls back to distinct email local-part or Unnamed, not Mama", () => {
+    expect(inboxThreadTitle({
+      clientId: "a",
+      peer: { email: "christina@example.com" },
+    })).toBe("christina");
+    expect(inboxThreadTitle({
+      clientId: "b",
+      peer: { email: "chelsea@example.com" },
+    })).toBe("chelsea");
+    expect(inboxThreadTitle({ clientId: "c" })).toBe("Unnamed");
+    const titles = ["christina", "chelsea", "Unnamed"];
+    expect(new Set(titles).size).toBe(3);
+    expect(titles.includes("Mama")).toBe(false);
+  });
+
+  it("uses lastMessage.sender_profile when the roster is empty", () => {
+    const emptyRosterClient = null;
+    expect(inboxThreadTitle({
+      clientId: "c-lee",
+      lastMessage: {
+        sender_id: "c-lee",
+        body: "hi",
+        sender_profile: { id: "c-lee", name: "Christina", last_name: "Lee", email: "christina@example.com" },
+      },
+    }, emptyRosterClient)).toBe("Christina Lee");
+    expect(inboxThreadTitle({
+      clientId: "c-park",
+      lastMessage: {
+        sender_id: "c-park",
+        body: "hey",
+        sender_profile: { id: "c-park", name: "Chelsea", last_name: "Park" },
+      },
+    }, emptyRosterClient)).toBe("Chelsea Park");
   });
 });
 

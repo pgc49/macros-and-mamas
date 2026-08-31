@@ -9,7 +9,7 @@ import {
   listRosterCohorts,
   ROSTER_SORTS,
   rosterFilterCounts,
-  rosterTitle,
+  adminPersonTitle,
 } from "./clientRoster";
 import { formatLastLogged } from "./clientHealth";
 import { boardReason, canPassToday, listPassedToday } from "./dailySkip";
@@ -370,7 +370,7 @@ export function AdminClientRoster({
             </div>
           ) : null}
           {filtered.map((c) => {
-            const title = rosterTitle(c);
+            const title = adminPersonTitle(c);
             const short = stageShort(c);
             const messaged = formatLastMessaged(c.lastAdminAt, nowMs);
             const logged = formatLastLogged(c, todayIso);
@@ -624,7 +624,7 @@ export function AdminClientRoster({
                 Passed until tonight · {passed.length}
               </div>
               {passed.map((c) => {
-                const title = rosterTitle(c);
+                const title = adminPersonTitle(c);
                 return (
                   <div
                     key={`passed-${c.id}`}

@@ -1,4 +1,5 @@
 import { adminCohortName } from "../lib/cohorts";
+import { joinPersonName } from "../lib/personName";
 import { isStripeCollected } from "../../functions/_shared/comp.js";
 import { addDaysIso, localDateIso } from "../utils/dates";
 import { daysSinceIso } from "./clientFlags";
@@ -60,18 +61,94 @@ export function listLeadCohorts(leads) {
 
 const PLACEHOLDER_NAMES = new Set(["new signup", "mama", "unnamed"]);
 
-/** First+last when we have them; otherwise email local-part. Never “New signup”. */
-export function rosterTitle(client) {
-  const named = String(client?.name || "").trim();
-  if (named && !PLACEHOLDER_NAMES.has(named.toLowerCase())) return named;
-  const first = String(client?.firstName || "").trim();
-  const last = String(client?.lastName || "").trim();
-  const combined = [first, last].filter(Boolean).join(" ");
-  if (combined) return combined;
-  const email = String(client?.email || "").trim();
+function isPlaceholderName(value) {
+  const raw = String(value || "").trim();
+  return !raw || PLACEHOLDER_NAMES.has(raw.toLowerCase());
+}
+
+function emailLocalPart(value) {
+  const email = String(value || "").trim();
   if (email.includes("@")) return email.split("@")[0];
-  if (email) return email;
+  return email;
+}
+
+function givenName(person) {
+  return String(person?.name || person?.first_name || "").trim();
+}
+
+function familyName(person) {
+  return String(person?.lastName || person?.last_name || "").trim();
+}
+
+function personEmail(person) {
+  return person?.email || person?.sender_email || "";
+}
+
+/**
+ * Shared admin identity: Clients roster, inbox DIRECT, Start a thread.
+ * Placeholder names {mama, new signup, unnamed} are not real — fall through
+ * to first+last (no doubled last), then email local-part. Never “Mama”.
+ */
+export function adminPersonTitle(...candidates) {
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const named = givenName(raw);
+    if (named && !isPlaceholderName(named)) {
+      const joined = joinPersonName(named, familyName(raw));
+      if (joined) return joined;
+    }
+    const first = String(raw.firstName || raw.first_name || "").trim();
+    const firstOk = isPlaceholderName(first) ? "" : first;
+    const combined = joinPersonName(firstOk, familyName(raw));
+    if (combined) return combined;
+    const local = emailLocalPart(personEmail(raw));
+    if (local) return local;
+  }
   return "Unnamed";
+}
+
+/** Alias — Clients roster and sorts. Same helper as inbox. */
+export function rosterTitle(client) {
+  return adminPersonTitle(client);
+}
+
+/** Alias — inbox / start-a-thread walk roster row, then peer, then email. */
+export function inboxDisplayName(...candidates) {
+  return adminPersonTitle(...candidates);
+}
+
+function lastMessageOf(row) {
+  return row?.lastMessage || row?.last_message || null;
+}
+
+function senderProfileOf(last) {
+  return last?.sender_profile || last?.senderProfile || null;
+}
+
+/** True when the last-message sender is the mama/peer, not Callie. */
+export function senderProfileIsPeer(row, last = lastMessageOf(row)) {
+  const sender = senderProfileOf(last);
+  if (!sender) return false;
+  const peerId = row?.clientId || row?.client_id || null;
+  if (!peerId) return false;
+  if (sender.id && String(sender.id) === String(peerId)) return true;
+  if (last?.sender_id && String(last.sender_id) === String(peerId)) return true;
+  return false;
+}
+
+/**
+ * DIRECT row title. Roster is preferred; a missed clientMap entry still
+ * resolves from inbox peer / lastMessage.sender_profile / email — not “Mama”.
+ */
+export function inboxThreadTitle(row, client = null) {
+  const last = lastMessageOf(row);
+  const sender = senderProfileIsPeer(row, last) ? senderProfileOf(last) : null;
+  return adminPersonTitle(
+    client,
+    row?.peer,
+    sender,
+    { email: row?.peer?.email || sender?.email || last?.sender_email || "" },
+  );
 }
 
 export function formatLastMessaged(iso, nowMs = Date.now()) {

@@ -12,9 +12,9 @@ describe("fullName", () => {
     expect(fullName({ name: "Callie Chammas", last_name: "Chammas" })).toBe("Callie Chammas");
   });
 
-  it("strips an already-doubled last name", () => {
-    expect(fullName({ name: "Mallory Shull Shull", last_name: "Shull" })).toBe("Mallory Shull");
-    expect(fullName({ name: "Lindsay Luevanos Luevanos", lastName: "Luevanos" })).toBe("Lindsay Luevanos");
+  it("does not collapse a name that already has last twice", () => {
+    expect(fullName({ name: "Mallory Shull Shull", last_name: "Shull" })).toBe("Mallory Shull Shull");
+    expect(fullName({ name: "Lindsay Luevanos Luevanos", lastName: "Luevanos" })).toBe("Lindsay Luevanos Luevanos");
   });
 
   it("uses first_name when name is empty", () => {

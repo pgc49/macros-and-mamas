@@ -27,7 +27,13 @@ import { targetBands } from "../utils/weekPlan";
 import { roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
 import { LogMealRefine } from "./LogMealRefine";
-import { filterMealsByQuery } from "../utils/mealSearch";
+import {
+  enrichMealsWithBankSlot,
+  filterMealsByQuery,
+  filterMealsBySlot,
+  isMyMealsFilter,
+  MEAL_SLOT_FILTERS,
+} from "../utils/mealSearch";
 
 /** She pasted a link — the estimator only reads text, so say so plainly. */
 const URL_RE = /(https?:\/\/|www\.)\S+/i;
@@ -134,8 +140,9 @@ export function MealLogCard({
   onSelectMealDate,
   onChangeMealWeek,
   earliestWeekStart,
+  initialMethod = null,
 }) {
-  const [method, setMethod] = useState(null); // snap | describe | recipes | manual
+  const [method, setMethod] = useState(initialMethod); // snap | describe | recipes | manual
   const [desc, setDesc] = useState("");
   const [photoNote, setPhotoNote] = useState("");
   const [snapItems, setSnapItems] = useState([]); // { file, previewUrl }[]
@@ -149,6 +156,8 @@ export function MealLogCard({
   const [estimateDraft, setEstimateDraft] = useState(null);
   const [pantryGroup, setPantryGroup] = useState("all");
   const [planSearch, setPlanSearch] = useState("");
+  const [slotFilter, setSlotFilter] = useState("all");
+  const [slotFilterOpen, setSlotFilterOpen] = useState(false);
   const [logSlot, setLogSlot] = useState(() => guessSlotFromTime());
   // What was sent for the estimate on screen, so "I added X" can re-ask
   // about the whole plate instead of throwing the first answer away.
@@ -166,22 +175,34 @@ export function MealLogCard({
     ? PANTRY_ITEMS
     : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
   const searchingPlan = Boolean(String(planSearch || "").trim());
+  const slotFiltering = slotFilter && slotFilter !== "all";
+  const mineOnly = isMyMealsFilter(slotFilter);
+  const customTagged = useMemo(
+    () => enrichMealsWithBankSlot(customMeals || [], recipes),
+    [customMeals, recipes],
+  );
   const plannedVisible = useMemo(
-    () => filterMealsByQuery(plannedMeals || [], planSearch),
-    [plannedMeals, planSearch],
+    () => (mineOnly
+      ? []
+      : filterMealsBySlot(filterMealsByQuery(plannedMeals || [], planSearch), slotFilter)),
+    [mineOnly, plannedMeals, planSearch, slotFilter],
   );
   const customVisible = useMemo(
-    () => filterMealsByQuery(customMeals || [], planSearch),
-    [customMeals, planSearch],
+    () => filterMealsBySlot(filterMealsByQuery(customTagged, planSearch), slotFilter),
+    [customTagged, planSearch, slotFilter],
   );
   const recipesVisible = useMemo(
-    () => filterMealsByQuery(recipes || [], planSearch),
-    [recipes, planSearch],
+    () => (mineOnly
+      ? []
+      : filterMealsBySlot(filterMealsByQuery(recipes || [], planSearch), slotFilter)),
+    [mineOnly, recipes, planSearch, slotFilter],
   );
   const pantrySearchPool = searchingPlan ? PANTRY_ITEMS : pantryVisible;
   const pantryMatches = useMemo(
-    () => filterMealsByQuery(pantrySearchPool, planSearch),
-    [pantrySearchPool, planSearch],
+    () => (mineOnly
+      ? []
+      : filterMealsBySlot(filterMealsByQuery(pantrySearchPool, planSearch), slotFilter)),
+    [mineOnly, pantrySearchPool, planSearch, slotFilter],
   );
   const planMatchCount = plannedVisible.length
     + customVisible.length
@@ -331,7 +352,11 @@ export function MealLogCard({
       }
       if (next === "snap") setSnapMenuOpen(false);
       if (next) setLogSlot(guessSlotFromTime());
-      if (next !== "recipes") setPlanSearch("");
+      if (next !== "recipes") {
+        setPlanSearch("");
+        setSlotFilter("all");
+        setSlotFilterOpen(false);
+      }
       return next;
     });
   };
@@ -1055,16 +1080,127 @@ export function MealLogCard({
 
         {method === "recipes" && (
           <div style={{ marginTop: 12 }}>
-            <MealSearchInput
-              value={planSearch}
-              onChange={setPlanSearch}
-              placeholder="Search my plan & saved meals"
-              style={{ marginBottom: 10 }}
-            />
-            <div style={{ maxHeight: 360, overflowY: "auto" }}>
-            {searchingPlan && planMatchCount === 0 && (
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 10 }}>
+              <MealSearchInput
+                value={planSearch}
+                onChange={setPlanSearch}
+                placeholder="Search my plan & saved meals"
+                style={{ flex: 1, marginBottom: 0, minWidth: 0 }}
+              />
+              <button
+                type="button"
+                aria-label={slotFiltering ? `Filter meals · ${slotFilter}` : "Filter meals"}
+                aria-expanded={slotFilterOpen}
+                aria-haspopup="listbox"
+                onClick={() => setSlotFilterOpen((open) => !open)}
+                style={{
+                  width: 44,
+                  height: 44,
+                  flexShrink: 0,
+                  borderRadius: 12,
+                  border: `1.5px solid ${slotFiltering || slotFilterOpen ? T.accent : T.border}`,
+                  background: slotFiltering || slotFilterOpen ? T.accentSoft : "#fff",
+                  color: slotFiltering || slotFilterOpen ? T.accentDeep : T.inkSoft,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative",
+                  padding: 0,
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M4 6h16l-6.2 7.4V19l-3.6 1.6v-7.2L4 6z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {slotFiltering && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      top: 7,
+                      right: 7,
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: T.accent,
+                    }}
+                  />
+                )}
+              </button>
+            </div>
+            {(slotFilterOpen || slotFiltering) && (
+              <div
+                role="listbox"
+                aria-label="Filter by meal"
+                style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}
+              >
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={!slotFiltering}
+                  onClick={() => {
+                    setSlotFilter("all");
+                    setSlotFilterOpen(false);
+                  }}
+                  style={{
+                    fontFamily: F,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    padding: "5px 10px",
+                    borderRadius: 999,
+                    border: `1.5px solid ${!slotFiltering ? T.accent : T.border}`,
+                    background: !slotFiltering ? T.accentSoft : "#fff",
+                    color: !slotFiltering ? T.accentDeep : T.inkSoft,
+                    cursor: "pointer",
+                  }}
+                >
+                  All
+                </button>
+                {MEAL_SLOT_FILTERS.map((c) => {
+                  const active = slotFilter === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => {
+                        setSlotFilter(active ? "all" : c);
+                      }}
+                      style={{
+                        fontFamily: F,
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        padding: "5px 10px",
+                        borderRadius: 999,
+                        border: `1.5px solid ${active ? T.accent : T.border}`,
+                        background: active ? T.accentSoft : "#fff",
+                        color: active ? T.accentDeep : T.inkSoft,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div
+              data-plan-meal-list
+              style={{ maxHeight: "min(64dvh, 620px)", overflowY: "auto" }}
+            >
+            {(searchingPlan || slotFiltering) && planMatchCount === 0 && (
               <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginBottom: 8 }}>
-                No meals match “{planSearch.trim()}”. Try a name or ingredient.
+                {searchingPlan
+                  ? `No meals match “${planSearch.trim()}”${slotFiltering ? ` in ${slotFilter}` : ""}. Try a name or ingredient.`
+                  : mineOnly
+                    ? "Nothing saved in My meals yet."
+                    : `No ${slotFilter} meals in this list. Try My meals, or pick another slot.`}
               </div>
             )}
             {plannedVisible.length > 0 && (
@@ -1085,6 +1221,7 @@ export function MealLogCard({
                     }}
                     via="recipe"
                     accent
+                    compact
                     onLog={onLogRecipe}
                   />
                 ))}
@@ -1109,6 +1246,7 @@ export function MealLogCard({
                     meal={r}
                     via="custom"
                     accent={!plannedVisible.length}
+                    compact
                     onLog={onLogRecipe}
                     onSaveIngredients={onSaveCustomMeal ? (meal) => onSaveCustomMeal({
                       name: meal.name,
@@ -1118,6 +1256,7 @@ export function MealLogCard({
                       f: meal.f,
                       serves: meal.serves,
                       ingredients: meal.ingredients,
+                      slot: meal.slot || meal.cat || r.slot || r.cat,
                     }) : undefined}
                   />
                 ))}
@@ -1146,10 +1285,11 @@ export function MealLogCard({
                 key={r.name}
                 meal={r}
                 via="recipe"
+                compact
                 onLog={onLogRecipe}
               />
             ))}
-            {(pantryMatches.length > 0 || !searchingPlan) && (
+            {(pantryMatches.length > 0 || (!searchingPlan && !slotFiltering)) && (
             <div style={{
               fontSize: 11.5,
               fontWeight: 700,
@@ -1162,7 +1302,7 @@ export function MealLogCard({
               Pantry staples
             </div>
             )}
-            {!searchingPlan && (
+            {!searchingPlan && !slotFiltering && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
               <button
                 type="button"
@@ -1208,6 +1348,7 @@ export function MealLogCard({
                 key={r.name}
                 meal={r}
                 via="recipe"
+                compact
                 onLog={onLogRecipe}
               />
             ))}

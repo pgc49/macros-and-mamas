@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -10,6 +11,7 @@ import {
 } from "@testing-library/react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { MessagesThread } from "./MessagesThread";
+import { MESSAGE_HOLD_MS } from "../lib/messageSelect";
 
 vi.mock("@sentry/react", () => ({
   captureException: vi.fn(),
@@ -18,6 +20,7 @@ vi.mock("@sentry/react", () => ({
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 function Thrower({ active = true }) {
@@ -286,6 +289,213 @@ describe("messaging crash containment", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps body emoji and reaction chips visible while links stay tappable", () => {
+    const href = "https://youtu.be/EDjE15Ktzcs?si=abc";
+    render(
+      <MessagesThread
+        {...threadProps({
+          canModerate: true,
+          messages: [{
+            id: "christina-1",
+            sender_id: "christina-1",
+            body: `Good morning mamas 💕 ${href}`,
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [{ emoji: "❤️", count: 2, mine: false }],
+          }],
+        })}
+      />,
+    );
+    const bubble = document.querySelector("[data-msg-id=\"christina-1\"]");
+    expect(bubble.textContent).toContain("💕");
+    expect(bubble.textContent).toContain("Good morning mamas");
+    expect(bubble.style.fontFamily).toMatch(/Apple Color Emoji/);
+    expect(bubble.style.userSelect).toBe("text");
+    expect(bubble.style.WebkitUserSelect).toBe("text");
+    const link = screen.getByRole("link", { name: href });
+    expect(link.getAttribute("href")).toBe(href);
+    expect(link.textContent).not.toContain("💕");
+    const chip = screen.getByRole("button", { name: /❤️ 2/ });
+    expect(chip.textContent).toContain("❤️");
+    expect(chip.style.fontFamily).toMatch(/Apple Color Emoji/);
+    expect(chip.parentElement.style.userSelect).toBe("none");
+  });
+
+  it("makes http(s) and youtu.be URLs in the bubble clickable", () => {
+    const href = "https://youtu.be/EDjE15Ktzcs?si=abc";
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [{
+            id: "yt-1",
+            sender_id: "admin-1",
+            body: `Watch this ${href}`,
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    const link = screen.getByRole("link", { name: href });
+    expect(link.getAttribute("href")).toBe(href);
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toMatch(/noopener/);
+    expect(screen.getByText("Watch this", { exact: false })).toBeTruthy();
+  });
+
+  it("lets admins and senders copy live bubble text", () => {
+    render(
+      <MessagesThread
+        {...threadProps({
+          canModerate: true,
+          messages: [
+            {
+              id: "callie-yt",
+              sender_id: "callie-1",
+              body: "https://youtu.be/EDjE15Ktzcs?si=abc",
+              created_at: "2026-08-10T10:00:00.000Z",
+              reactions: [],
+            },
+            {
+              id: "own-1",
+              sender_id: "admin-1",
+              body: "my own note",
+              created_at: "2026-08-10T10:01:00.000Z",
+              reactions: [],
+            },
+          ],
+        })}
+      />,
+    );
+    const callie = document.querySelector("[data-msg-id=\"callie-yt\"]");
+    const own = document.querySelector("[data-msg-id=\"own-1\"]");
+    expect(callie.style.userSelect).toBe("text");
+    expect(callie.style.WebkitUserSelect).toBe("text");
+    expect(own.style.userSelect).toBe("text");
+    expect(own.style.WebkitUserSelect).toBe("text");
+  });
+
+  it("opens edit/delete after a still long-press when nothing is selected", () => {
+    vi.stubGlobal("getSelection", () => ({
+      toString: () => "",
+      removeAllRanges: vi.fn(),
+    }));
+    vi.useFakeTimers();
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [{
+            id: "own-1",
+            sender_id: "admin-1",
+            body: "copy me",
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    const bubble = document.querySelector("[data-msg-id=\"own-1\"]");
+    fireEvent.mouseDown(bubble, { button: 0, clientX: 10, clientY: 20 });
+    act(() => {
+      vi.advanceTimersByTime(MESSAGE_HOLD_MS);
+    });
+    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "React with ❤️" })).toBeTruthy();
+  });
+
+  it("opens the reaction picker on hold even if iOS starts selecting mid-hold", () => {
+    let selected = "";
+    vi.stubGlobal("getSelection", () => ({
+      toString: () => selected,
+      removeAllRanges: vi.fn(),
+    }));
+    vi.useFakeTimers();
+    const href = "https://youtu.be/EDjE15Ktzcs?si=abc";
+    render(
+      <MessagesThread
+        {...threadProps({
+          canModerate: true,
+          messages: [{
+            id: "christina-1",
+            sender_id: "christina-1",
+            body: `Good morning mamas 💕 ${href}`,
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    const bubble = document.querySelector("[data-msg-id=\"christina-1\"]");
+    expect(bubble.style.userSelect).toBe("text");
+    fireEvent.touchStart(bubble, { touches: [{ clientX: 12, clientY: 18 }] });
+    selected = "Good morning mamas 💕";
+    act(() => {
+      vi.advanceTimersByTime(MESSAGE_HOLD_MS);
+    });
+    expect(screen.getByRole("button", { name: "React with ❤️" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "React with 👍" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
+  });
+
+  it("copies the live body from the long-press menu", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    vi.stubGlobal("getSelection", () => ({
+      toString: () => "",
+      removeAllRanges: vi.fn(),
+    }));
+    vi.useFakeTimers();
+    const body = "Good morning mamas 💕 https://youtu.be/EDjE15Ktzcs";
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [{
+            id: "christina-1",
+            sender_id: "christina-1",
+            body,
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    const bubble = document.querySelector("[data-msg-id=\"christina-1\"]");
+    fireEvent.mouseDown(bubble, { button: 0, clientX: 10, clientY: 20 });
+    act(() => {
+      vi.advanceTimersByTime(MESSAGE_HOLD_MS);
+    });
+    vi.useRealTimers();
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(body));
+  });
+
+  it("does not steal a text-selection gesture for the action menu", () => {
+    vi.stubGlobal("getSelection", () => ({ toString: () => "copy me" }));
+    vi.useFakeTimers();
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [{
+            id: "own-1",
+            sender_id: "admin-1",
+            body: "copy me",
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    const bubble = document.querySelector("[data-msg-id=\"own-1\"]");
+    fireEvent.mouseDown(bubble, { button: 0, clientX: 10, clientY: 20 });
+    vi.advanceTimersByTime(MESSAGE_HOLD_MS + 50);
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 });
 

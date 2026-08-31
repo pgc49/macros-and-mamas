@@ -41,6 +41,23 @@ function renderJoin(path = "/join") {
   );
 }
 
+describe("JoinPage public copy", () => {
+  it("does not sell Aug 27, an Aug 31 start lock, or a 50-cap", async () => {
+    renderJoin();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /lock my spot/i })).toBeTruthy();
+    });
+    const text = document.body.textContent;
+    expect(text).not.toMatch(/Aug 27|Aug 31|August 31/);
+    expect(text).not.toMatch(/doors close/i);
+    expect(text).not.toMatch(/capped at 50|50 spots|50 mamas/i);
+    expect(text).not.toMatch(/enrollment is open/i);
+    expect(text).not.toMatch(/8 weeks start when/i);
+    expect(text).toMatch(/Callie builds every set of ranges by hand, in the order mamas lock in/);
+    expect(text).toMatch(/\$249/);
+  });
+});
+
 describe("JoinPage referral field", () => {
   it("hides the input behind a Referral code caret and never mentions $25", async () => {
     renderJoin();

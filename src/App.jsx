@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } fr
 import { CONFIG } from "./config";
 import { useAuth } from "./auth/useAuth.jsx";
 import { db } from "./db/db";
+import { joinPersonName } from "./lib/personName";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
@@ -32,6 +33,8 @@ import { TermsPage } from "./views/TermsPage";
 import { PrivacyPage } from "./views/PrivacyPage";
 import { ClientApp } from "./views/ClientApp";
 import { OnboardingBannersPreview } from "./views/OnboardingBannersPreview";
+import { MealLogPreview } from "./views/MealLogPreview";
+import { RecipeBankPreview } from "./views/RecipeBankPreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
@@ -665,7 +668,7 @@ export default function App() {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              name: [forEngine.name, forEngine.lastName].filter(Boolean).join(" "),
+              name: joinPersonName(forEngine.name, forEngine.lastName),
               age: forEngine.age,
               dateOfBirth: forEngine.dateOfBirth || null,
               currentWeight: forEngine.currentWeight,
@@ -1054,7 +1057,14 @@ export default function App() {
     if (!ok) return false;
     if (opts.saveCustom) {
       try {
-        const saved = await db.saveCustomMeal({ name, cal, p, c, f });
+        const saved = await db.saveCustomMeal({
+          name,
+          cal,
+          p,
+          c,
+          f,
+          slot: o?.slot ?? opts.slot ?? null,
+        });
         setCustomMeals((list) => {
           const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
           return [saved, ...without];
@@ -1112,6 +1122,7 @@ export default function App() {
           f: entry.f,
           serves: entry.serves,
           ingredients: entry.ingredients,
+          slot: entry.slot,
         });
         setCustomMeals((list) => {
           const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
@@ -1613,7 +1624,11 @@ export default function App() {
 
       <Route path="/home" element={<Navigate to={PATHS.dashboard} replace />} />
       {import.meta.env.DEV ? (
-        <Route path="/dev/onboarding-banners" element={<OnboardingBannersPreview />} />
+        <>
+          <Route path="/dev/onboarding-banners" element={<OnboardingBannersPreview />} />
+          <Route path="/dev/meal-log" element={<MealLogPreview />} />
+          <Route path="/dev/recipe-bank" element={<RecipeBankPreview />} />
+        </>
       ) : null}
 
       <Route path={PATHS.terms} element={<TermsPage />} />

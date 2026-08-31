@@ -466,6 +466,40 @@ export const RECIPE_DETAILS = {
     ],
   },
 
+  "Laura's Juicy Chicken Meatballs": {
+    batch: [
+      { amount: "3 lb", item: "ground chicken breast" },
+      { amount: "1½ cups", item: "grated Parmesan cheese" },
+      { amount: "1 cup", item: "finely grated onion" },
+      { amount: "8 cloves", item: "garlic, finely minced" },
+      { amount: "1¼ cups", item: "sourdough breadcrumbs" },
+      { amount: "¼ cup", item: "plain 0% milk fat Greek yogurt" },
+      { amount: "3 tbsp", item: "avocado oil mayonnaise" },
+      { amount: "2", item: "small eggs" },
+      { amount: "1 tbsp", item: "Worcestershire sauce" },
+      { amount: "1½ tbsp", item: "tomato paste" },
+      { amount: "2¾ tsp", item: "kosher salt" },
+      { amount: "1½ tsp", item: "black pepper" },
+      { amount: "2 tsp", item: "garlic powder" },
+      { amount: "1½ tsp", item: "onion powder" },
+      { amount: "1½ tsp", item: "smoked paprika" },
+      { amount: "1 tsp", item: "dried oregano" },
+      { amount: "½ tsp", item: "dried thyme" },
+      { amount: "¼ tsp", item: "ground coriander" },
+    ],
+    serving: [
+      { amount: "1 serving (⅛ of batch)", item: "juicy chicken meatballs" },
+    ],
+    steps: [
+      "Heat the oven to 400°F. Line a large sheet pan with parchment. Finely grate the onion and mince the garlic.",
+      "In a large bowl, stir together the Parmesan, breadcrumbs, yogurt, mayo, eggs, Worcestershire, tomato paste, salt, pepper, and the rest of the spices until the mix looks even.",
+      "Add the ground chicken and mix gently with your hands until just combined — don’t overwork or the meatballs get tough.",
+      "Scoop and roll into even meatballs and set them on the sheet with a little space between each one.",
+      "Bake until browned and the center hits 165°F, about 18–22 minutes depending on size.",
+      "Rest 5 minutes so the juices settle. Logged serving = ⅛ of the batch. Freeze extras for easy dinners.",
+    ],
+  },
+
   "Greek yogurt + berries": {
     batch: null,
     serving: [

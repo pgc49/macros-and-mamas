@@ -41,10 +41,9 @@ export function splitAtCheckoutHtml() {
 export function rangesOfferBlock(joinUrl, {
   earlyPrice = EARLY_PRICE,
   fullPrice = FULL_PRICE,
-  cohortShort = COHORT_SHORT,
 } = {}) {
   const save = Math.max(0, Number(fullPrice) - Number(earlyPrice));
-  return `<p><strong>Your quiz also unlocked the $${earlyPrice} early rate</strong> ($${save} off $${fullPrice}). The group starts Monday, ${cohortShort}.</p>
+  return `<p><strong>Your quiz also unlocked the $${earlyPrice} early rate</strong> ($${save} off $${fullPrice}). Callie builds every set of ranges by hand, in the order mamas lock in.</p>
 ${emailCtaButton(`Lock my spot · $${earlyPrice}`, joinUrl)}
 ${splitAtCheckoutHtml()}`;
 }
