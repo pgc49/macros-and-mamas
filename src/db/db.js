@@ -10,7 +10,10 @@ import { chronologicalMessages } from "../lib/messageOrdering";
 import { referredByByUserId } from "../lib/referredBy";
 import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
+import { ageFromDateOfBirth } from "../utils/dateOfBirth";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
+
+export { ageFromDateOfBirth };
 
 /** Display name: first + last, without doubling a last name already in `name`. */
 export { fullName };
@@ -23,19 +26,6 @@ export { fullName };
 /*  Tables (RLS on all):                                               */
 /*    profiles, macros, checkins, weighins, meal_logs, water_logs      */
 /* ------------------------------------------------------------------ */
-
-/** Age in whole years from YYYY-MM-DD (local), or null. */
-export function ageFromDateOfBirth(dob) {
-  if (!dob || !/^\d{4}-\d{2}-\d{2}$/.test(String(dob))) return null;
-  const [y, m, d] = String(dob).split("-").map(Number);
-  const born = new Date(y, m - 1, d);
-  if (Number.isNaN(born.getTime())) return null;
-  const now = new Date();
-  let age = now.getFullYear() - born.getFullYear();
-  const md = now.getMonth() - born.getMonth();
-  if (md < 0 || (md === 0 && now.getDate() < born.getDate())) age -= 1;
-  return age >= 0 && age < 120 ? age : null;
-}
 
 function profileToRow(p) {
   const dob = p.dateOfBirth && /^\d{4}-\d{2}-\d{2}$/.test(String(p.dateOfBirth))
