@@ -14,7 +14,7 @@ import {
 import {
   assertNoMessageBodies,
   CLIENT_SUMMARY_HINT,
-} from "../../src/admin/clientSummaryPayload.js";
+} from "../_shared/clientSummaryGuard.js";
 
 export async function onRequestPost({ request, env }) {
   try {

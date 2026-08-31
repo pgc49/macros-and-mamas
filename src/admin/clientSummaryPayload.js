@@ -3,6 +3,12 @@
  * v1: no DM bodies, no photos, no group posts, no full profiles dump.
  */
 import { buildHabitRhythm, goalChipLabel } from "../lib/habitRhythm";
+import {
+  assertNoMessageBodies,
+  CLIENT_SUMMARY_HINT,
+} from "../../functions/_shared/clientSummaryGuard.js";
+
+export { assertNoMessageBodies, CLIENT_SUMMARY_HINT };
 
 export function buildClientSummaryPayload({
   client,
@@ -65,12 +71,3 @@ export function buildClientSummaryPayload({
     })),
   };
 }
-
-export function assertNoMessageBodies(payload) {
-  const blob = JSON.stringify(payload || {});
-  return !/"body"\s*:/.test(blob) && !/"messages"\s*:/.test(blob);
-}
-
-export const CLIENT_SUMMARY_HINT = `Respond with ONLY a JSON object:
-{"summary":"2-3 sentences, descriptive only, facts from the payload","suggested_touch":"one sentence message idea: celebrate, nudge, or check in"}
-Do not give medical advice or diagnoses. Do not invent weigh-ins, meals, or habits that are not in the payload.`;
