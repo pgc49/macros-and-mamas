@@ -105,7 +105,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
       }}
     >
       <div style={{ padding: "12px 14px 10px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
@@ -124,35 +124,52 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
             <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}>
               {cat}{batchLabel}{open ? " · hide recipe" : " · open recipe"}
             </div>
-            <div style={{ fontFamily: FD, fontSize: 18, margin: "2px 0 0", color: T.ink, lineHeight: 1.25 }}>{r.name}</div>
           </button>
-          <div style={{ flexShrink: 0, textAlign: "right" }}>
-            {showLog && <div style={{ marginBottom: 4 }}>{logBtn}</div>}
-            <button
-              type="button"
-              onClick={() => setOpen((o) => !o)}
-              style={{
-                border: "none",
-                background: "transparent",
-                padding: 0,
-                cursor: "pointer",
-                fontFamily: F,
-                color: "inherit",
-                textAlign: "right",
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>
-                {scaled.cal} cal
-                {servings !== 1 ? (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft }}> · {servings}×</span>
-                ) : null}
-              </div>
-              <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 1, lineHeight: 1.25 }}>
-                <span style={{ color: T.accentDeep, fontWeight: 700 }}>P {scaled.p}g</span>
-                {" · "}C {scaled.c}g · F {scaled.f}g
-              </div>
-            </button>
-          </div>
+          {showLog && logBtn}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", marginTop: 4 }}>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              textAlign: "left",
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              cursor: "pointer",
+              fontFamily: F,
+              color: "inherit",
+            }}
+          >
+            <div style={{ fontFamily: FD, fontSize: 18, margin: 0, color: T.ink, lineHeight: 1.25 }}>{r.name}</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            style={{
+              flexShrink: 0,
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              cursor: "pointer",
+              fontFamily: F,
+              color: "inherit",
+              textAlign: "right",
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>
+              {scaled.cal} cal
+              {servings !== 1 ? (
+                <span style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft }}> · {servings}×</span>
+              ) : null}
+            </div>
+            <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 1, lineHeight: 1.25 }}>
+              <span style={{ color: T.accentDeep, fontWeight: 700 }}>P {scaled.p}g</span>
+              {" · "}C {scaled.c}g · F {scaled.f}g
+            </div>
+          </button>
         </div>
 
         {showLog && (
@@ -171,11 +188,14 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
                 data-servings-hint=""
                 title="Scales macros only — recipe amounts stay at one serving"
                 style={{
-                  fontSize: 11,
+                  fontSize: 10.5,
                   color: T.inkSoft,
                   fontWeight: 600,
-                  lineHeight: 1.3,
+                  lineHeight: 1.25,
                   minWidth: 0,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
               >
                 Servings to log
