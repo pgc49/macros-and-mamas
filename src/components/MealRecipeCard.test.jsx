@@ -43,6 +43,18 @@ describe("MealRecipeCard Meals tab logging chrome", () => {
     expect(screen.queryByText("Add to")).toBeNull();
   });
 
+  it("advertises Open recipe as its own control, not fused into the category stamp", () => {
+    render(<MealRecipeCard meal={oatmeal} onLog={vi.fn()} />);
+
+    expect(screen.queryByText(/breakfast · open recipe/i)).toBeNull();
+    const openBtn = screen.getByRole("button", { name: "Open recipe ▾" });
+    expect(openBtn.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(openBtn);
+    expect(screen.getByRole("button", { name: "Hide recipe ▴" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Ingredients · one serving")).toBeTruthy();
+  });
+
   it("logs the chosen slot and scaled macros from Add to Today", async () => {
     const onLog = vi.fn(async () => true);
     render(<MealRecipeCard meal={oatmeal} onLog={onLog} />);

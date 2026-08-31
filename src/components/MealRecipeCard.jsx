@@ -106,30 +106,36 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
     >
       <div style={{ padding: "12px 14px 10px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              textAlign: "left",
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: F,
-              color: "inherit",
-            }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, flexWrap: "wrap" }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}>
-              {cat}{batchLabel}{open ? " · hide recipe" : " · open recipe"}
+              {cat}{batchLabel}
             </div>
-          </button>
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setOpen((o) => !o)}
+              style={{
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                cursor: "pointer",
+                fontFamily: F,
+                fontSize: 12,
+                fontWeight: 700,
+                color: T.accentDeep,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {open ? "Hide recipe ▴" : "Open recipe ▾"}
+            </button>
+          </div>
           {showLog && logBtn}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", marginTop: 4 }}>
           <button
             type="button"
+            aria-expanded={open}
+            aria-label={open ? `Hide ${r.name} recipe` : `Open ${r.name} recipe`}
             onClick={() => setOpen((o) => !o)}
             style={{
               flex: 1,
