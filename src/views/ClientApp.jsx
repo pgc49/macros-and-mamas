@@ -27,7 +27,7 @@ import { countPlannedMeals } from "../utils/weekPlan";
 import {
   filterMealsByQuery,
   isMealsTabSlotFilter,
-  MEALS_TAB_PRIMARY_FILTERS,
+  MEALS_TAB_SECTIONS,
   MEALS_TAB_SLOT_FILTERS,
   mealMatchesQuery,
   uniqueMealsByName,
@@ -406,19 +406,25 @@ export function ClientApp({
           )}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {MEALS_TAB_PRIMARY_FILTERS.map((c) => (
-              <Chip
-                key={c}
-                active={mealFilter === c}
-                onClick={() => {
-                  setMealFilter(c);
-                  setMealQuery("");
-                  setSlotFilterOpen(false);
-                }}
-              >
-                {c === "Plan" && plannedCount ? `${c} · ${plannedCount}` : c}
-              </Chip>
-            ))}
+            {MEALS_TAB_SECTIONS.map((section) => {
+              const active = mealFilter === section.id;
+              const label = section.id === "Plan" && plannedCount
+                ? `${section.label} · ${plannedCount}`
+                : section.label;
+              return (
+                <Chip
+                  key={section.id}
+                  active={active}
+                  onClick={() => {
+                    setMealFilter(active ? "All meals" : section.id);
+                    setMealQuery("");
+                    setSlotFilterOpen(false);
+                  }}
+                >
+                  {label}
+                </Chip>
+              );
+            })}
           </div>
 
           {showMealsSearch && (
@@ -506,7 +512,7 @@ export function ClientApp({
               {!customMeals.length ? (
                 <Card>
                   <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
-                    Nothing saved yet. Tap <b style={{ color: T.ink }}>＋ Add meal</b> to paste a recipe or let AI draft one — or save from Today logging / Plan.
+                    Nothing saved yet. Tap <b style={{ color: T.ink }}>＋ Add meal</b> to paste a recipe or let AI draft one — or save from Today logging / Weekly Planner.
                   </div>
                 </Card>
               ) : !visibleCustomMeals.length ? (
