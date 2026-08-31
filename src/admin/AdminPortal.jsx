@@ -769,7 +769,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     >
       <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 4px" }}>Callie admin</h2>
       <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
-        Today’s leftover leads and client health. People is Clients or Leads.{" "}
+        Today’s new leads and client health. People is Clients or Leads.{" "}
         <Link to={PATHS.dashboard} style={{ color: T.accent, fontWeight: 700 }}>Your dashboard</Link>
         {" · "}
         Admin only.

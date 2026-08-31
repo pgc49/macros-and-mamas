@@ -55,13 +55,13 @@ export function AdminHome({
   return (
     <>
       <Card>
-        <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>New leftover · 24h</div>
+        <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>New leads · 24h</div>
         <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 8 }}>
           Quiz complete, not paid.
         </div>
         {freshLeads.length === 0 ? (
           <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5 }}>
-            No new leftover leads in the last 24 hours.
+            No new leads in the last 24 hours.
           </div>
         ) : (
           freshLeads.map((person) => (
@@ -83,7 +83,7 @@ export function AdminHome({
             padding: 0,
           }}
         >
-          Open leftover leads
+          Open leads
         </button>
       </Card>
 
