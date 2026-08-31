@@ -108,21 +108,42 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
       }}
     >
       <div style={{ padding: "12px 14px 10px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, flexWrap: "wrap" }}>
-            {recipeMeta ? (
-              <div
-                data-recipe-meta=""
-                style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}
-              >
-                {recipeMeta}
-              </div>
-            ) : null}
+        {recipeMeta ? (
+          <div
+            data-recipe-meta=""
+            style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}
+          >
+            {recipeMeta}
+          </div>
+        ) : null}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-label={open ? `Hide ${r.name} recipe` : `Open ${r.name} recipe`}
+              onClick={() => setOpen((o) => !o)}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                cursor: "pointer",
+                fontFamily: F,
+                color: "inherit",
+              }}
+            >
+              <div style={{ fontFamily: FD, fontSize: 18, margin: 0, color: T.ink, lineHeight: 1.25 }}>{r.name}</div>
+            </button>
             <button
               type="button"
               aria-expanded={open}
               onClick={() => setOpen((o) => !o)}
               style={{
+                display: "block",
+                marginTop: 3,
                 border: "none",
                 background: "transparent",
                 padding: 0,
@@ -137,42 +158,21 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
               {open ? "Hide recipe ▴" : "Open recipe ▾"}
             </button>
           </div>
-          {showLog && logBtn}
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", marginTop: 4 }}>
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-label={open ? `Hide ${r.name} recipe` : `Open ${r.name} recipe`}
-            onClick={() => setOpen((o) => !o)}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              textAlign: "left",
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: F,
-              color: "inherit",
-            }}
-          >
-            <div style={{ fontFamily: FD, fontSize: 18, margin: 0, color: T.ink, lineHeight: 1.25 }}>{r.name}</div>
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            style={{
-              flexShrink: 0,
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: F,
-              color: "inherit",
-              textAlign: "right",
-            }}
-          >
+          <div style={{ flexShrink: 0, textAlign: "right" }}>
+            {showLog && <div style={{ marginBottom: 4 }}>{logBtn}</div>}
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              style={{
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                cursor: "pointer",
+                fontFamily: F,
+                color: "inherit",
+                textAlign: "right",
+              }}
+            >
             <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>
               {scaled.cal} cal
               {servings !== 1 ? (
@@ -183,7 +183,8 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
               <span style={{ color: T.accentDeep, fontWeight: 700 }}>P {scaled.p}g</span>
               {" · "}C {scaled.c}g · F {scaled.f}g
             </div>
-          </button>
+            </button>
+          </div>
         </div>
 
         {showLog && (

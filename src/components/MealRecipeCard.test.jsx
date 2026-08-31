@@ -50,7 +50,9 @@ describe("MealRecipeCard Meals tab logging chrome", () => {
     expect(screen.queryByText(/breakfast · open recipe/i)).toBeNull();
     expect(document.querySelector("[data-recipe-meta]")).toBeNull();
     expect(screen.getByRole("button", { name: "Breakfast" })).toBeTruthy();
+    const nameBtn = screen.getByRole("button", { name: "Open Protein oatmeal recipe" });
     const openBtn = screen.getByRole("button", { name: "Open recipe ▾" });
+    expect(nameBtn.compareDocumentPosition(openBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(openBtn.getAttribute("aria-expanded")).toBe("false");
 
     fireEvent.click(openBtn);
