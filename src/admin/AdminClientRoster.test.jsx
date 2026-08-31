@@ -122,6 +122,10 @@ describe("AdminClientRoster", () => {
     expect(screen.getByText(/You messaged · 2d ago/)).toBeTruthy();
     expect(screen.getByText(/Last logged · Today/)).toBeTruthy();
     expect(screen.getByLabelText("Message Lauren Wells")).toBeTruthy();
+    const textLink = screen.getByRole("link", { name: "Text Lauren Wells in Messages" });
+    expect(textLink.getAttribute("href")).toBe("sms:5550199");
+    expect(textLink.textContent).toBe("Text");
+    expect(screen.queryByText("555-0199")).toBeNull();
   });
 
   it("says Active is alphabetical and Needs help is urgency-first", () => {

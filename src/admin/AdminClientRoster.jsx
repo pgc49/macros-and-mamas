@@ -13,54 +13,45 @@ import {
 } from "./clientRoster";
 import { formatLastLogged } from "./clientHealth";
 import { boardReason, canPassToday, listPassedToday } from "./dailySkip";
+import { smsHref } from "./phoneSms";
 import { formatReferredByHint } from "./referredBy";
 
-export function CopyPhoneButton({ phone, compact = false }) {
-  const [copied, setCopied] = useState(false);
-  if (!phone) {
+/** Opens iPhone Messages (iMessage when that number can). Not the in-app thread. */
+export function TextSmsButton({ phone, compact = false, name = "" }) {
+  const href = smsHref(phone);
+  if (!href) {
     return compact ? null : (
       <span style={{ fontSize: 12.5, color: T.inkSoft }}>—</span>
     );
   }
-  const onCopy = async (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    try {
-      await navigator.clipboard.writeText(String(phone).trim());
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch (err) {
-      console.error("clipboard write failed", err);
-    }
-  };
+  const label = name ? `Text ${name}` : "Text";
   return (
-    <button
-      type="button"
-      onClick={onCopy}
-      title="Copy phone"
-      aria-label={copied ? "Phone copied" : `Copy phone ${phone}`}
+    <a
+      href={href}
+      onClick={(e) => e.stopPropagation()}
+      title={label}
+      aria-label={name ? `Text ${name} in Messages` : "Text in Messages"}
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: compact ? 4 : 6,
-        maxWidth: "100%",
+        justifyContent: "center",
         minHeight: 44,
-        padding: compact ? "8px 10px" : "8px 12px",
-        borderRadius: 10,
-        border: `1px solid ${copied ? T.sage : T.border}`,
-        background: copied ? T.sageSoft : "#fff",
-        color: copied ? T.sage : T.ink,
+        minWidth: 44,
+        padding: compact ? "0 12px" : "0 14px",
+        borderRadius: 12,
+        border: `1.5px solid ${T.border}`,
+        background: "#fff",
+        color: T.ink,
         fontFamily: F,
-        fontSize: compact ? 13 : 14,
-        fontWeight: 700,
+        fontWeight: 800,
+        fontSize: 13,
+        textDecoration: "none",
         cursor: "pointer",
         lineHeight: 1.2,
       }}
     >
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {copied ? "Copied" : phone}
-      </span>
-    </button>
+      Text
+    </a>
   );
 }
 
@@ -580,7 +571,7 @@ export function AdminClientRoster({
                     {short}
                   </span>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }} onClick={(e) => e.stopPropagation()}>
-                    <CopyPhoneButton phone={c.phone} compact />
+                    <TextSmsButton phone={c.phone} name={title} compact />
                     <button
                       type="button"
                       onClick={() => onMessageClient?.(c.id)}

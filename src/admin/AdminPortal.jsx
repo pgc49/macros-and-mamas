@@ -26,7 +26,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AdminMessages } from "./AdminMessages";
 import { AdminClientTracking } from "./AdminClientTracking";
 import { AdminClientMessages } from "./AdminClientMessages";
-import { CopyPhoneButton } from "./AdminClientRoster";
+import { TextSmsButton } from "./AdminClientRoster";
 import { loadQuizLeads } from "./quizLeads";
 import { assemblePeople } from "./personModel";
 import { skipUntilIso, stampRosterOverrides } from "./dailySkip";
@@ -546,8 +546,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                 {sel.foodAvoids ? <><br />👎 Avoids: {sel.foodAvoids}</> : null}
                 {sel.phone ? (
                   <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 6 }}>
-                    <span style={{ fontSize: 13, color: T.inkSoft }}>📱 Phone</span>
-                    <CopyPhoneButton phone={sel.phone} />
+                    <TextSmsButton phone={sel.phone} name={sel.name || sel.firstName || ""} />
                     {stage === "awaiting_approval" && (
                       <span style={{ fontSize: 12, color: T.inkSoft }}>Approve email points her to Messages</span>
                     )}
