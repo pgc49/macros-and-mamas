@@ -39,10 +39,13 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
   const steps = Array.isArray(r.steps) ? r.steps : [];
   const servings = snapServings(qty);
   const scaled = scaleMealForLog(r, servings);
-  const isDinner = String(cat).toLowerCase() === "dinner";
-  const batchLabel = serves > 1
-    ? (isDinner ? ` · batch · serves ${serves}` : ` · batch serves ${serves}`)
-    : "";
+  const catKey = String(cat).toLowerCase();
+  const isDinner = catKey === "dinner";
+  const isTreat = catKey === "treat" || catKey === "treats";
+  const metaBits = [];
+  if (isTreat) metaBits.push("Treat");
+  if (serves > 1) metaBits.push(isDinner ? `batch · serves ${serves}` : `batch serves ${serves}`);
+  const recipeMeta = metaBits.join(" · ");
   const [slot, setSlot] = useState(
     () => normalizeSlot(r.slot || r.cat) || guessSlotFromTime(),
   );
@@ -95,89 +98,129 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
 
   return (
     <div
+      data-meal-recipe-card=""
       style={{
         border: `1px solid ${T.border}`,
         borderRadius: 12,
         background: T.card,
-        marginBottom: 10,
+        marginBottom: 8,
         overflow: "hidden",
       }}
     >
-      <div style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            textAlign: "left",
-            border: "none",
-            background: "transparent",
-            padding: 0,
-            cursor: "pointer",
-            fontFamily: F,
-            color: "inherit",
-          }}
-        >
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase" }}>
-            {cat}{batchLabel}{open ? " · hide recipe" : " · open recipe"}
-          </div>
-          <div style={{ fontFamily: FD, fontSize: 18, margin: "2px 0 4px", color: T.ink }}>{r.name}</div>
-        </button>
-        <div style={{ flexShrink: 0, textAlign: "right" }}>
-          {showLog && <div style={{ marginBottom: 8 }}>{logBtn}</div>}
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            style={{
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: F,
-              color: "inherit",
-              textAlign: "right",
-            }}
+      <div style={{ padding: "12px 14px 10px" }}>
+        {recipeMeta ? (
+          <div
+            data-recipe-meta=""
+            style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}
           >
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft, marginBottom: 2 }}>
-              {servings === 1 ? "per serving" : `${servings}× to log`}
+            {recipeMeta}
+          </div>
+        ) : null}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-label={open ? `Hide ${r.name} recipe` : `Open ${r.name} recipe`}
+              onClick={() => setOpen((o) => !o)}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                cursor: "pointer",
+                fontFamily: F,
+                color: "inherit",
+              }}
+            >
+              <div style={{ fontFamily: FD, fontSize: 18, margin: 0, color: T.ink, lineHeight: 1.25 }}>{r.name}</div>
+            </button>
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setOpen((o) => !o)}
+              style={{
+                display: "block",
+                marginTop: 3,
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                cursor: "pointer",
+                fontFamily: F,
+                fontSize: 12,
+                fontWeight: 700,
+                color: T.accentDeep,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {open ? "Hide recipe ▴" : "Open recipe ▾"}
+            </button>
+          </div>
+          <div style={{ flexShrink: 0, textAlign: "right" }}>
+            {showLog && <div style={{ marginBottom: 4 }}>{logBtn}</div>}
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              style={{
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                cursor: "pointer",
+                fontFamily: F,
+                color: "inherit",
+                textAlign: "right",
+              }}
+            >
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>
+              {scaled.cal} cal
+              {servings !== 1 ? (
+                <span style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft }}> · {servings}×</span>
+              ) : null}
             </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{scaled.cal} cal</div>
-            <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
+            <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 1, lineHeight: 1.25 }}>
               <span style={{ color: T.accentDeep, fontWeight: 700 }}>P {scaled.p}g</span>
               {" · "}C {scaled.c}g · F {scaled.f}g
             </div>
-          </button>
+            </button>
+          </div>
         </div>
-      </div>
 
-      {showLog && (
-        <div style={{ padding: "0 16px 12px" }}>
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginBottom: 6 }}>
-              Add to
-            </div>
-            <SlotChips value={slot} onChange={setSlot} compact />
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600 }}>Servings to log</div>
-              <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2, maxWidth: 220, lineHeight: 1.35 }}>
-                Scales macros only — recipe amounts stay at one serving
+        {showLog && (
+          <div data-meal-recipe-log="" style={{ marginTop: 8 }}>
+            <SlotChips value={slot} onChange={setSlot} compact fill />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              <div
+                data-servings-hint=""
+                title="Scales macros only — recipe amounts stay at one serving"
+                style={{
+                  fontSize: 10.5,
+                  color: T.inkSoft,
+                  fontWeight: 600,
+                  lineHeight: 1.25,
+                  minWidth: 0,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                Servings to log
+                <span style={{ fontWeight: 500 }}> · macros only; recipe stays 1 serving</span>
               </div>
+              <ServingStepper value={servings} onChange={setQty} compact />
             </div>
-            <ServingStepper value={servings} onChange={setQty} compact />
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {open && (
         <div style={{ padding: "12px 16px 16px", borderTop: `1px dashed ${T.border}` }}>

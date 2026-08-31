@@ -5,10 +5,10 @@ import { MealRecipeCard } from "../components/MealRecipeCard";
 
 /** Local-only preview of the default Meals bank cards. */
 export function RecipeBankPreview() {
-  const dinners = RECIPES.filter((r) => r.cat === "Dinner");
+  const breakfasts = RECIPES.filter((r) => r.cat === "Breakfast").slice(0, 5);
   return (
     <div style={{
-      maxWidth: 430,
+      maxWidth: 390,
       margin: "0 auto",
       padding: "16px 14px 40px",
       background: T.bg,
@@ -37,13 +37,13 @@ export function RecipeBankPreview() {
         color: T.ink,
       }}
       >
-        Recipe bank · Dinner
+        Recipe bank · Breakfast
       </h1>
       <p style={{ fontFamily: F, fontSize: 13, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
-        Default Meals bank cards. Expand a recipe for batch ingredients and steps.
+        Meals tab cards with Add to Today. Expand a recipe for ingredients and steps.
       </p>
-      {dinners.map((meal) => (
-        <MealRecipeCard key={meal.name} meal={meal} showLog={false} />
+      {breakfasts.map((meal) => (
+        <MealRecipeCard key={meal.name} meal={meal} onLog={async () => true} />
       ))}
     </div>
   );
