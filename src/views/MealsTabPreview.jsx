@@ -1,0 +1,66 @@
+import { useState } from "react";
+import { ClientApp } from "./ClientApp";
+
+const noop = () => {};
+const noopAsync = async () => true;
+
+/** Local-only preview of Meals tab chips + search filter. */
+export function MealsTabPreview() {
+  const [mealFilter, setMealFilter] = useState("All meals");
+  const [tab, setTab] = useState("meals");
+
+  return (
+    <ClientApp
+      tab={tab}
+      setTab={setTab}
+      profile={{ name: "Pat" }}
+      macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
+      totals={{ p: 0, c: 0, f: 0, cal: 0 }}
+      waterOz={80}
+      estimateBusy={false}
+      estimate={null}
+      analyzePhoto={noop}
+      analyzeText={noop}
+      confirmEstimate={noopAsync}
+      discardEstimate={noop}
+      logManualMeal={noopAsync}
+      logRecipe={noopAsync}
+      todayLog={{ date: "2026-08-30", entries: [] }}
+      deleteMealEntry={noop}
+      updateMealEntry={noop}
+      mealLogDate="2026-08-30"
+      mealLogWeekStart="2026-08-24"
+      mealLogsByDate={{}}
+      selectMealLogDate={noop}
+      changeMealWeek={noop}
+      waterLogsByDate={{}}
+      waterBusy={false}
+      onAddWater={noop}
+      onUndoWater={noop}
+      onChangeBottleOz={noop}
+      viewWk={1}
+      setViewWk={noop}
+      curWk={1}
+      editPast={false}
+      setEditPast={noop}
+      checksByWeek={{}}
+      toggleCheck={noop}
+      adherenceFor={() => ({})}
+      progWeekNum={1}
+      earliestWk="2026-08-24"
+      weighins={[]}
+      logWeighin={noop}
+      deleteWeighin={noop}
+      weeklyRate={0}
+      trends={{ locked: true, items: [] }}
+      macroHistory={[]}
+      mealFilter={mealFilter}
+      setMealFilter={setMealFilter}
+      customMeals={[
+        { id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 },
+        { id: "c2", name: "Yogurt bowl", cal: 280, p: 28, c: 30, f: 6, slot: "breakfast" },
+      ]}
+      weekPlanDays={[]}
+    />
+  );
+}

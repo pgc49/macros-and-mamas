@@ -3,6 +3,9 @@ import {
   enrichMealsWithBankSlot,
   filterMealsByQuery,
   filterMealsBySlot,
+  isMealsTabSlotFilter,
+  MEALS_TAB_PRIMARY_FILTERS,
+  MEALS_TAB_SLOT_FILTERS,
   mealMatchesQuery,
   mealMatchesSlotFilter,
   mealSlotFilterKey,
@@ -91,6 +94,17 @@ describe("enrichMealsWithBankSlot", () => {
     expect(mealSlotFilterKey(tagged)).toBe("Dinner");
     expect(mealMatchesSlotFilter(tagged, "Breakfast")).toBe(false);
     expect(mealMatchesSlotFilter(tagged, "Dinner")).toBe(true);
+  });
+});
+
+describe("Meals tab filter split", () => {
+  it("keeps Food prefs and My meals as top chips and hides slots", () => {
+    expect(MEALS_TAB_PRIMARY_FILTERS).toEqual(["All meals", "Plan", "Food prefs", "My meals"]);
+    expect(MEALS_TAB_SLOT_FILTERS).toEqual(["Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"]);
+    expect(isMealsTabSlotFilter("Breakfast")).toBe(true);
+    expect(isMealsTabSlotFilter("Pantry")).toBe(true);
+    expect(isMealsTabSlotFilter("My meals")).toBe(false);
+    expect(isMealsTabSlotFilter("Food prefs")).toBe(false);
   });
 });
 

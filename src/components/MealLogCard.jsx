@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
-import { Btn, inputStyle, MealSearchInput } from "./ui";
+import { Btn, inputStyle } from "./ui";
+import { MealSlotFilterBar } from "./MealSlotFilterBar";
 import { LoggableMealRow } from "./LoggableMealRow";
 import { SlotChips } from "./SlotChips";
 import { RECIPES, PANTRY_ITEMS } from "../content/data";
@@ -1080,116 +1081,17 @@ export function MealLogCard({
 
         {method === "recipes" && (
           <div style={{ marginTop: 12 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 10 }}>
-              <MealSearchInput
-                value={planSearch}
-                onChange={setPlanSearch}
-                placeholder="Search my plan & saved meals"
-                style={{ flex: 1, marginBottom: 0, minWidth: 0 }}
-              />
-              <button
-                type="button"
-                aria-label={slotFiltering ? `Filter meals · ${slotFilter}` : "Filter meals"}
-                aria-expanded={slotFilterOpen}
-                aria-haspopup="listbox"
-                onClick={() => setSlotFilterOpen((open) => !open)}
-                style={{
-                  width: 44,
-                  height: 44,
-                  flexShrink: 0,
-                  borderRadius: 12,
-                  border: `1.5px solid ${slotFiltering || slotFilterOpen ? T.accent : T.border}`,
-                  background: slotFiltering || slotFilterOpen ? T.accentSoft : "#fff",
-                  color: slotFiltering || slotFilterOpen ? T.accentDeep : T.inkSoft,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  position: "relative",
-                  padding: 0,
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M4 6h16l-6.2 7.4V19l-3.6 1.6v-7.2L4 6z"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                {slotFiltering && (
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      position: "absolute",
-                      top: 7,
-                      right: 7,
-                      width: 7,
-                      height: 7,
-                      borderRadius: "50%",
-                      background: T.accent,
-                    }}
-                  />
-                )}
-              </button>
-            </div>
-            {(slotFilterOpen || slotFiltering) && (
-              <div
-                role="listbox"
-                aria-label="Filter by meal"
-                style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}
-              >
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={!slotFiltering}
-                  onClick={() => {
-                    setSlotFilter("all");
-                    setSlotFilterOpen(false);
-                  }}
-                  style={{
-                    fontFamily: F,
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    padding: "5px 10px",
-                    borderRadius: 999,
-                    border: `1.5px solid ${!slotFiltering ? T.accent : T.border}`,
-                    background: !slotFiltering ? T.accentSoft : "#fff",
-                    color: !slotFiltering ? T.accentDeep : T.inkSoft,
-                    cursor: "pointer",
-                  }}
-                >
-                  All
-                </button>
-                {MEAL_SLOT_FILTERS.map((c) => {
-                  const active = slotFilter === c;
-                  return (
-                    <button
-                      key={c}
-                      type="button"
-                      role="option"
-                      aria-selected={active}
-                      onClick={() => {
-                        setSlotFilter(active ? "all" : c);
-                      }}
-                      style={{
-                        fontFamily: F,
-                        fontSize: 11.5,
-                        fontWeight: 700,
-                        padding: "5px 10px",
-                        borderRadius: 999,
-                        border: `1.5px solid ${active ? T.accent : T.border}`,
-                        background: active ? T.accentSoft : "#fff",
-                        color: active ? T.accentDeep : T.inkSoft,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {c}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <MealSlotFilterBar
+              query={planSearch}
+              onQueryChange={setPlanSearch}
+              placeholder="Search my plan & saved meals"
+              filters={MEAL_SLOT_FILTERS}
+              value={slotFilter}
+              onChange={setSlotFilter}
+              allValue="all"
+              open={slotFilterOpen}
+              onOpenChange={setSlotFilterOpen}
+            />
             <div
               data-plan-meal-list
               style={{ maxHeight: "min(64dvh, 620px)", overflowY: "auto" }}

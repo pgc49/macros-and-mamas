@@ -67,6 +67,14 @@ export function filterMealsByQuery(meals, query) {
 /** Today → My plan filter chips. My meals is the saved list; the rest match Meals-tab slots. */
 export const MEAL_SLOT_FILTERS = ["My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Treats"];
 
+/** Meals tab: categories live behind the search filter. Pantry is a slot here, not a top chip. */
+export const MEALS_TAB_PRIMARY_FILTERS = ["All meals", "Plan", "Food prefs", "My meals"];
+export const MEALS_TAB_SLOT_FILTERS = ["Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"];
+
+export function isMealsTabSlotFilter(filter) {
+  return MEALS_TAB_SLOT_FILTERS.includes(filter);
+}
+
 function titleSlotFilter(raw) {
   const s = String(raw || "").trim().toLowerCase();
   if (s === "breakfast") return "Breakfast";
