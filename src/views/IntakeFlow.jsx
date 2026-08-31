@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { FD, T, F } from "../theme/tokens";
 import { Shell, Card, Btn, Field, Chip, inputStyle } from "../components/ui";
 import { ageFromDateOfBirth } from "../db/db";
+import { birthDateInputBounds, isPlausibleDateOfBirth } from "../utils/dateOfBirth";
 import { supabase } from "../lib/supabase";
 import { CONFIG } from "../config";
 import { mapLeadToIntakePatch, mergeQuizPrefill } from "../lib/quizLeadPrefill";
@@ -54,7 +55,8 @@ export function IntakeFlow({ profile, step, setStep, set, setProfile, onSubmit }
   const monthsNum = Number(profile.monthsPP);
   const monthsValid = profile.monthsPP !== "" && !Number.isNaN(monthsNum);
   const dob = String(profile.dateOfBirth || "").trim();
-  const dobValid = !!ageFromDateOfBirth(dob);
+  const { min: dobMin, max: dobMax } = birthDateInputBounds();
+  const dobValid = isPlausibleDateOfBirth(dob);
 
   const setPregnant = (v) => {
     set("pregnant", v);
@@ -140,7 +142,8 @@ export function IntakeFlow({ profile, step, setStep, set, setProfile, onSubmit }
               value={dob}
               onChange={(e) => set("dateOfBirth", e.target.value)}
               autoComplete="bday"
-              max={new Date().toISOString().slice(0, 10)}
+              min={dobMin}
+              max={dobMax}
             />
           </Field>
           {dobValid && (
