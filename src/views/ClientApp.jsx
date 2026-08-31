@@ -2,7 +2,8 @@ import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { RECIPES, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
-import { Shell, Card, Chip, RangeBand, rangeState, MealSearchInput } from "../components/ui";
+import { Shell, Card, Chip, RangeBand, rangeState } from "../components/ui";
+import { MealSlotFilterBar } from "../components/MealSlotFilterBar";
 import { formatRangeProgress } from "../utils/rangeProgress";
 import { MealLogCard } from "../components/MealLogCard";
 import { MealRecipeCard } from "../components/MealRecipeCard";
@@ -23,7 +24,14 @@ import { TechHelpFooter } from "../components/TechHelpFooter";
 import { MessagesPanel } from "../components/MessagesPanel";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals } from "../utils/weekPlan";
-import { filterMealsByQuery, mealMatchesQuery, uniqueMealsByName } from "../utils/mealSearch";
+import {
+  filterMealsByQuery,
+  isMealsTabSlotFilter,
+  MEALS_TAB_PRIMARY_FILTERS,
+  MEALS_TAB_SLOT_FILTERS,
+  mealMatchesQuery,
+  uniqueMealsByName,
+} from "../utils/mealSearch";
 import { db } from "../db/db";
 import { useState } from "react";
 
@@ -69,15 +77,17 @@ export function ClientApp({
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
   const [mealQuery, setMealQuery] = useState("");
+  const [slotFilterOpen, setSlotFilterOpen] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [myMealsAddOpen, setMyMealsAddOpen] = useState(false);
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
     : [];
-  const pantryVisible = pantryGroup === "all"
+  const pantryVisible = (pantryGroup === "all"
     ? PANTRY_ITEMS
-    : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
+    : PANTRY_ITEMS.filter((item) => item.group === pantryGroup)
+  ).filter((item) => mealMatchesQuery(item, mealQuery));
   const bankSource = personalized ? uniqueMealsByName(flatPersonalized) : RECIPES;
   const isBankFilter = mealFilter === "All meals"
     || mealFilter === "Breakfast"
@@ -85,6 +95,12 @@ export function ClientApp({
     || mealFilter === "Dinner"
     || mealFilter === "Snack"
     || mealFilter === "Treats";
+  const mealsSlotValue = isMealsTabSlotFilter(mealFilter)
+    ? mealFilter
+    : mealFilter === "My meals"
+      ? "My meals"
+      : "All meals";
+  const showMealsSearch = isBankFilter || mealFilter === "My meals" || mealFilter === "Pantry";
   const visibleBank = bankSource.filter((m) => {
     if (mealFilter !== "All meals" && (m.cat || "") !== mealFilter) return false;
     return mealMatchesQuery(m, mealQuery);
@@ -390,14 +406,14 @@ export function ClientApp({
           )}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            {["All meals", "Plan", "Food prefs", "My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"].map((c) => (
+            {MEALS_TAB_PRIMARY_FILTERS.map((c) => (
               <Chip
                 key={c}
                 active={mealFilter === c}
                 onClick={() => {
                   setMealFilter(c);
                   setMealQuery("");
-                  if (c === "Pantry") setPantryGroup("all");
+                  setSlotFilterOpen(false);
                 }}
               >
                 {c === "Plan" && plannedCount ? `${c} · ${plannedCount}` : c}
@@ -405,11 +421,20 @@ export function ClientApp({
             ))}
           </div>
 
-          {(isBankFilter || mealFilter === "My meals") && (
-            <MealSearchInput
-              value={mealQuery}
-              onChange={setMealQuery}
+          {showMealsSearch && (
+            <MealSlotFilterBar
+              query={mealQuery}
+              onQueryChange={setMealQuery}
               placeholder={mealFilter === "My meals" ? "Search my meals" : "Search meals"}
+              filters={MEALS_TAB_SLOT_FILTERS}
+              value={mealsSlotValue}
+              onChange={(next) => {
+                setMealFilter(next);
+                if (next === "Pantry") setPantryGroup("all");
+              }}
+              allValue={mealFilter === "My meals" ? "My meals" : "All meals"}
+              open={slotFilterOpen}
+              onOpenChange={setSlotFilterOpen}
             />
           )}
 
@@ -528,7 +553,13 @@ export function ClientApp({
               <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
                 Per-serving estimates from Callie’s brands & pantry cheat sheet. Serving sizes match the sheet.
               </p>
-              {pantryVisible.map((item) => (
+              {searchingMeals && !pantryVisible.length ? (
+                <Card>
+                  <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
+                    No pantry items match “{mealQuery.trim()}”. Try a name or brand, or pick All.
+                  </div>
+                </Card>
+              ) : pantryVisible.map((item) => (
                 <LoggableMealRow
                   key={item.name}
                   meal={item}

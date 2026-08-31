@@ -34,6 +34,7 @@ import { PrivacyPage } from "./views/PrivacyPage";
 import { ClientApp } from "./views/ClientApp";
 import { OnboardingBannersPreview } from "./views/OnboardingBannersPreview";
 import { MealLogPreview } from "./views/MealLogPreview";
+import { MealsTabPreview } from "./views/MealsTabPreview";
 import { RecipeBankPreview } from "./views/RecipeBankPreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -1627,6 +1628,7 @@ export default function App() {
         <>
           <Route path="/dev/onboarding-banners" element={<OnboardingBannersPreview />} />
           <Route path="/dev/meal-log" element={<MealLogPreview />} />
+          <Route path="/dev/meals-tab" element={<MealsTabPreview />} />
           <Route path="/dev/recipe-bank" element={<RecipeBankPreview />} />
         </>
       ) : null}
