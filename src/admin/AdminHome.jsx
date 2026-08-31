@@ -14,9 +14,10 @@ const BANDS = [
   ["doing_well", "Doing well", "doing_well"],
 ];
 
-const INTAKE_QUEUES = [
+const SETUP_QUEUES = [
   ["awaiting_approval", "Need approval"],
   ["awaiting_intake", "Need intake"],
+  ["unpaid", "Unpaid signup"],
 ];
 
 function LeadRow({ person, onOpen }) {
@@ -96,11 +97,13 @@ export function AdminHome({
   const health = clientHealthByCohort(roster, localDateIso());
   const needApproval = filterRoster(roster, "awaiting_approval", { cohort: "all" });
   const needIntake = filterRoster(roster, "awaiting_intake", { cohort: "all" });
-  const intakeQueues = {
+  const unpaidSignups = filterRoster(roster, "unpaid", { cohort: "all" });
+  const setupQueues = {
     awaiting_approval: needApproval,
     awaiting_intake: needIntake,
+    unpaid: unpaidSignups,
   };
-  const intakeEmpty = needApproval.length === 0 && needIntake.length === 0;
+  const setupEmpty = needApproval.length === 0 && needIntake.length === 0 && unpaidSignups.length === 0;
   const activeCount = (roster || []).filter((c) => c.role !== "admin" && (c.stage === "active" || c.status === "active")).length;
 
   return (
@@ -141,23 +144,22 @@ export function AdminHome({
       <Card style={{ marginTop: 12 }}>
         <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>Client health</div>
         <div style={{ fontSize: 13, color: T.inkSoft, marginBottom: 8, lineHeight: 1.45 }}>
-          Need approval is a submitted intake you have not tapped Approve on.
-          Need intake is paid or comp and she still has not finished intake.
+          Pre-activation: unpaid signup, then intake, then your Approve tap.
           Tap a row to open People with that filter.
         </div>
-        {INTAKE_QUEUES.map(([filter, label]) => (
+        {SETUP_QUEUES.map(([filter, label]) => (
           <IntakeQueue
             key={filter}
             filter={filter}
             label={label}
-            clients={intakeQueues[filter]}
+            clients={setupQueues[filter]}
             onOpen={onOpenClients}
-            showEmptyHint={!intakeEmpty}
+            showEmptyHint={!setupEmpty}
           />
         ))}
-        {intakeEmpty ? (
+        {setupEmpty ? (
           <div style={{ fontSize: 14, color: T.inkSoft, padding: "10px 0 4px" }}>
-            Nobody waiting on intake or your Approve tap.
+            Nobody waiting on an unpaid signup, intake, or your Approve tap.
           </div>
         ) : null}
         <div style={{ fontSize: 13, color: T.inkSoft, margin: "12px 0 10px", lineHeight: 1.45 }}>

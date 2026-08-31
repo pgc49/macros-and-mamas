@@ -392,9 +392,11 @@ describe("awaiting intake + awaiting approval filters", () => {
     expect(filterRoster(roster, "awaiting_intake", { todayIso: today }).map((c) => c.id).sort()).toEqual(["flags", "intake"]);
     expect(filterRoster(roster, "awaiting_approval", { todayIso: today }).some((c) => c.id === "active")).toBe(false);
     expect(filterRoster(roster, "awaiting_intake", { todayIso: today }).some((c) => c.id === "active")).toBe(false);
+    expect(filterRoster(roster, "unpaid", { todayIso: today }).map((c) => c.id)).toEqual(["unpaid"]);
     const counts = rosterFilterCounts(roster, today);
     expect(counts.awaitingApproval).toBe(1);
     expect(counts.awaitingIntake).toBe(2);
+    expect(counts.unpaid).toBe(1);
   });
 });
 

@@ -70,6 +70,16 @@ export function isAwaitingIntake(client) {
   return !client.hasIntake && !client.macros;
 }
 
+/** Account created, not paid or comp. Same rule as People → Unpaid. */
+export function isUnpaidSignup(client) {
+  if (!client || String(client.role || "").toLowerCase() === "admin") return false;
+  if (client.refunded || client.stage === "refunded") return false;
+  if (client.paid || client.comp) return false;
+  if (client.stage === "active" || client.status === "active") return false;
+  if (isAwaitingApproval(client) || isAwaitingIntake(client)) return false;
+  return client.stage === "signed_up";
+}
+
 /**
  * Mutually exclusive: unread / approval / quiet 3d+ first,
  * then doing well (logged yesterday or today), else steady (logged in last 3 days).

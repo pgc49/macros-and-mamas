@@ -3,7 +3,7 @@ import { joinPersonName } from "../lib/personName";
 import { isStripeCollected } from "../../functions/_shared/comp.js";
 import { addDaysIso, localDateIso } from "../utils/dates";
 import { daysSinceIso } from "./clientFlags";
-import { isAwaitingApproval, isAwaitingIntake, isHealthClient, lastLogIso, matchesClientHealthFilter } from "./clientHealth";
+import { isAwaitingApproval, isAwaitingIntake, isHealthClient, isUnpaidSignup, lastLogIso, matchesClientHealthFilter } from "./clientHealth";
 
 export const UNASSIGNED_COHORT = "unassigned";
 
@@ -308,7 +308,7 @@ export function filterRoster(all, filter, {
   if (filter === "needs_you") {
     list = clientsOnly.filter((c) => needsYou(c, todayIso));
   } else if (filter === "unpaid") {
-    list = clientsOnly.filter((c) => c.stage === "signed_up");
+    list = clientsOnly.filter((c) => isUnpaidSignup(c));
   } else if (filter === "paid") {
     list = clientsOnly.filter((c) => isStripeCollected(c));
   } else if (filter === "awaiting_intake") {
@@ -340,7 +340,7 @@ export function rosterFilterCounts(all, todayIso = localDateIso(), cohort = "all
     active: clientsOnly.filter((c) => c.stage === "active" || c.status === "active").length,
     awaitingApproval: clientsOnly.filter((c) => isAwaitingApproval(c)).length,
     awaitingIntake: clientsOnly.filter((c) => isAwaitingIntake(c)).length,
-    unpaid: clientsOnly.filter((c) => c.stage === "signed_up").length,
+    unpaid: clientsOnly.filter((c) => isUnpaidSignup(c)).length,
     paid: clientsOnly.filter((c) => isStripeCollected(c)).length,
     refunded: clientsOnly.filter((c) => c.refunded || c.stage === "refunded").length,
     unread: clientsOnly.filter((c) => matchesClientHealthFilter(c, "unread", todayIso, nowMs)).length,

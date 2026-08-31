@@ -6,6 +6,7 @@ import {
   formatLastLogged,
   isAwaitingApproval,
   isAwaitingIntake,
+  isUnpaidSignup,
   matchesClientHealthFilter,
 } from "./clientHealth.js";
 
@@ -72,7 +73,31 @@ describe("isAwaitingApproval + isAwaitingIntake", () => {
   it("does not flag approved or active mamas", () => {
     expect(isAwaitingApproval(client())).toBe(false);
     expect(isAwaitingIntake(client())).toBe(false);
+    expect(isUnpaidSignup(client())).toBe(false);
     expect(isAwaitingIntake(client({ paid: true, hasIntake: true, macros: { approved: true } }))).toBe(false);
+  });
+
+  it("flags an unpaid account signup, not a paid or comp mama", () => {
+    const unpaid = client({
+      name: "New Mama",
+      stage: "signed_up",
+      status: "pending",
+      paid: false,
+      comp: false,
+      hasIntake: false,
+      macros: null,
+    });
+    expect(isUnpaidSignup(unpaid)).toBe(true);
+    expect(isAwaitingIntake(unpaid)).toBe(false);
+    expect(isAwaitingApproval(unpaid)).toBe(false);
+    expect(isUnpaidSignup(client({
+      stage: "signed_up",
+      status: "pending",
+      paid: false,
+      comp: true,
+      hasIntake: false,
+      macros: null,
+    }))).toBe(false);
   });
 });
 
