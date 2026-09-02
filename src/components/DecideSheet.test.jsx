@@ -81,6 +81,7 @@ describe("Help me decide entry", () => {
   it("Esc from detail returns to the list, then dismisses; it does not un-log", () => {
     const onLogRecipe = vi.fn(async () => true);
     const onAteIt = vi.fn(async () => true);
+    const onDeleteEntry = vi.fn(async () => true);
     render(
       <MealLogCard
         macros={MACROS}
@@ -102,6 +103,7 @@ describe("Help me decide entry", () => {
         }}
         onLogRecipe={onLogRecipe}
         onAteIt={onAteIt}
+        onDeleteEntry={onDeleteEntry}
       />,
     );
     fireEvent.click(document.querySelector("[data-decide-bar]"));
@@ -116,6 +118,46 @@ describe("Help me decide entry", () => {
     expect(document.querySelector("[data-decide-sheet]")).toBeNull();
     expect(onLogRecipe).not.toHaveBeenCalled();
     expect(onAteIt).not.toHaveBeenCalled();
+    expect(onDeleteEntry).not.toHaveBeenCalled();
+    expect(screen.getAllByText("Breakfast").length).toBeGreaterThan(0);
+  });
+
+  it("Esc with a Today edit panel open does not delete the log", () => {
+    const onDeleteEntry = vi.fn(async () => true);
+    const onUpdateEntry = vi.fn(async () => true);
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 12, 40)}
+        profile={{ prefL: "chicken", foodAvoids: "" }}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+        onDeleteEntry={onDeleteEntry}
+        onUpdateEntry={onUpdateEntry}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Breakfast/ }));
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    expect(document.querySelector("[data-decide-sheet]")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(document.querySelector("[data-decide-sheet]")).toBeNull();
+    expect(onDeleteEntry).not.toHaveBeenCalled();
+    expect(onUpdateEntry).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.getAllByText("Breakfast").length).toBeGreaterThan(0);
   });
 
   it("names the later-slot CTA for lunch, not always dinner", () => {

@@ -324,6 +324,7 @@ export function DecideSheet({
       secondsOpen: Math.round((Date.now() - openedAt.current) / 1000),
       refines: refines.current,
     });
+    // Close only. Never delete / undo a meal_log from Esc or Back.
     onClose?.();
   };
   const dismissRef = useRef(dismiss);
