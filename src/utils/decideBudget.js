@@ -1,4 +1,4 @@
-import { DECIDE_COPY, DECIDE_SLOT_LABEL, DECIDE_SLOT_PHRASE } from "../content/decideVoice.js";
+import { DECIDE_COPY, DECIDE_SLOT_LABEL, DECIDE_SLOT_PHRASE, snackReserveCopy } from "../content/decideVoice.js";
 import { REMAINING_OVER_SLACK, mealMacros } from "./eatingOutImpact.js";
 import { MEAL_SLOTS, guessSlotFromTime, normalizeSlot } from "./mealSlots.js";
 import { namesMatch, stripPortionSuffix } from "./decidePrefs.js";
@@ -306,11 +306,11 @@ export function computeSlotBudget({
     const reserve = packReserve(
       Object.fromEntries(Object.entries(rawReserve.bySlot).map(([s, piece]) => [s, zeroPiece(piece)])),
     );
-    return { slot, laterSlots: later, remaining, reserve, ...leftoverFrom(remaining, reserve) };
+    return { slot, laterSlots: later, remaining, reserve, snackCount: snacks, ...leftoverFrom(remaining, reserve) };
   }
 
   if (remaining.cal - rawReserve.cal >= 0) {
-    return { slot, laterSlots: later, remaining, reserve: rawReserve, ...leftoverFrom(remaining, rawReserve) };
+    return { slot, laterSlots: later, remaining, reserve: rawReserve, snackCount: snacks, ...leftoverFrom(remaining, rawReserve) };
   }
 
   // Extra snacks the user added on top of a reserve that already fit:
@@ -330,7 +330,7 @@ export function computeSlotBudget({
         Object.entries(rawReserve.bySlot).map(([s, piece]) => [s, scalePiece(piece, factor)]),
       );
       const reserve = packReserve(bySlot);
-      return { slot, laterSlots: later, remaining, reserve, ...leftoverFrom(remaining, reserve) };
+      return { slot, laterSlots: later, remaining, reserve, snackCount: snacks, ...leftoverFrom(remaining, reserve) };
     }
   }
 
@@ -367,6 +367,7 @@ export function computeSlotBudget({
     laterSlots: later,
     remaining,
     reserve: packReserve(bySlot),
+    snackCount: snacks,
     cal: leftover.cal,
     pNeed: leftover.p,
     pHigh: leftover.pHigh,
@@ -438,15 +439,23 @@ function fmtP(n) {
   return `${Math.round(n)}g protein`;
 }
 
+function joinReserveNames(names) {
+  if (names.length <= 1) return names[0] || "";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
 export function budgetSentence(budget) {
   if (!budget) return "";
   const later = budget.laterSlots || [];
   const snackPiece = budget.reserve?.bySlot?.snack;
+  const snackReserved = Boolean(snackPiece && snackPiece.cal > 0);
+  const snackName = snackReserveCopy(budget.snackCount ?? 1);
   const leaves = `${DECIDE_COPY.thatLeaves} ${fmtCal(budget.cal)} cal and ${fmtP(budget.pNeed)} for ${DECIDE_SLOT_LABEL[budget.slot] || budget.slot}.`;
   if (!later.length) {
-    if (snackPiece && snackPiece.cal > 0 && !snackPiece.meal) {
+    if (snackReserved && !snackPiece.meal) {
       const how = snackPiece.source === "usual" ? DECIDE_COPY.usualEat : DECIDE_COPY.normalShare;
-      return `${DECIDE_COPY.savingRoom} ${DECIDE_SLOT_LABEL.snack} ${how} (about ${fmtCal(snackPiece.cal)} cal, ${fmtP(snackPiece.p)}). ${leaves}`;
+      return `${DECIDE_COPY.savingRoom} ${snackName} ${how} (about ${fmtCal(snackPiece.cal)} cal, ${fmtP(snackPiece.p)}). ${leaves}`;
     }
     return `${DECIDE_COPY.lastMealLead} ${DECIDE_COPY.lastMealRest}: about ${fmtCal(budget.cal)} cal, ${fmtP(budget.pNeed)} to hit range.`;
   }
@@ -454,11 +463,14 @@ export function budgetSentence(budget) {
   const piece = budget.reserve?.bySlot?.[first];
   if (piece?.meal) {
     const name = piece.meal.name || "Dinner";
-    return `${DECIDE_SLOT_LABEL[first] || first} ${DECIDE_COPY.pencilledIn} (${name}, ${fmtCal(piece.cal)} cal, ${fmtP(piece.p)}). ${leaves}`;
+    const snackBit = snackReserved
+      ? ` ${DECIDE_COPY.savingRoom} ${snackName} too.`
+      : "";
+    return `${DECIDE_SLOT_LABEL[first] || first} ${DECIDE_COPY.pencilledIn} (${name}, ${fmtCal(piece.cal)} cal, ${fmtP(piece.p)}).${snackBit} ${leaves}`;
   }
-  const laterLabel = later.length === 1
-    ? (DECIDE_SLOT_LABEL[first] || first)
-    : later.map((s) => DECIDE_SLOT_LABEL[s] || s).join(" and ");
+  const names = later.map((s) => DECIDE_SLOT_LABEL[s] || s);
+  if (snackReserved) names.push(snackName);
+  const laterLabel = joinReserveNames(names);
   const laterSharePieces = later
     .map((s) => budget.reserve?.bySlot?.[s])
     .filter((p) => p && !p.meal);
@@ -470,8 +482,8 @@ export function budgetSentence(budget) {
     if (!p) return acc;
     return { cal: acc.cal + p.cal, p: acc.p + p.p };
   }, { cal: 0, p: 0 });
-  const aboutCal = named.cal || piece?.cal || 0;
-  const aboutP = named.p || piece?.p || 0;
+  const aboutCal = named.cal + (snackReserved ? snackPiece.cal : 0);
+  const aboutP = named.p + (snackReserved ? snackPiece.p : 0);
   return `${DECIDE_COPY.savingRoom} ${laterLabel} ${how} (about ${fmtCal(aboutCal)} cal, ${fmtP(aboutP)}). ${leaves}`;
 }
 

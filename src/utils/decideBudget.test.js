@@ -77,7 +77,7 @@ describe("deriveMealShares", () => {
     expect(budget.reserve.bySlot.lunch.source).toBe("default");
     expect(budget.cal).toBeGreaterThan(100);
     expect(budget.cal).toBeLessThan(BANDS.calHi * 0.5);
-    expect(budgetSentence(budget)).toMatch(/Saving room for lunch and dinner/);
+    expect(budgetSentence(budget)).toMatch(/Saving room for lunch, dinner, and a snack/);
     expect(budgetSentence(budget)).toMatch(DECIDE_COPY.normalShare);
     expect(budgetSentence(budget)).not.toMatch(DECIDE_COPY.usualEat);
   });
@@ -191,7 +191,7 @@ describe("12:40 leftover lunch budget", () => {
   });
 
   it("writes a normal-share dinner sentence when history is not usual", () => {
-    expect(budgetSentence(budget)).toMatch(/Saving room for dinner/);
+    expect(budgetSentence(budget)).toMatch(/Saving room for dinner and a snack/);
     expect(budgetSentence(budget)).toMatch(DECIDE_COPY.normalShare);
     expect(budgetSentence(budget)).not.toMatch(DECIDE_COPY.usualEat);
   });

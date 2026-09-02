@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MealLogCard } from "./MealLogCard";
-import { DECIDE_COPY, knowLaterCopy, snackRoomCopy } from "../content/decideVoice";
+import { DECIDE_COPY, decideNextCopy, knowLaterCopy, snackRoomCopy } from "../content/decideVoice";
 import { localDateIso } from "../utils/dates";
 import { writeDecidePencil } from "../utils/decidePencil";
 import { emptyWeekPlan } from "../utils/weekPlan";
@@ -341,6 +341,9 @@ describe("Help me decide entry", () => {
     const room = document.querySelector("[data-snack-room]");
     expect(room).toBeTruthy();
     expect(screen.getByText(snackRoomCopy(1))).toBeTruthy();
+    const budgetGrid = document.querySelector("[data-decide-slot-budget]")?.parentElement;
+    expect(budgetGrid?.nextElementSibling).toBe(document.querySelector("[data-snack-room]"));
+    expect(screen.getByText(/and a snack/)).toBeTruthy();
     expect(document.querySelector("[data-snack-room-count]")?.textContent).toBe("1");
     const card = document.querySelector("[data-decide-slot-budget]");
     const before = card?.textContent || "";
@@ -353,14 +356,48 @@ describe("Help me decide entry", () => {
     expect(after).not.toMatch(/to range/);
   });
 
-  it("keeps refine chips clear of the sheet bottom", () => {
+  it("keeps refine chips and Back in the bottom chrome", () => {
     renderToday();
     fireEvent.click(document.querySelector("[data-decide-bar]"));
     const scroll = document.querySelector("[data-decide-sheet-scroll]");
-    expect(Number.parseInt(scroll.style.paddingBottom, 10)).toBeGreaterThanOrEqual(36);
-    expect(screen.getByRole("button", { name: DECIDE_COPY.noneOfThese })).toBeTruthy();
+    const chrome = document.querySelector("[data-decide-sheet-chrome]");
+    const none = screen.getByRole("button", { name: DECIDE_COPY.noneOfThese });
+    const back = screen.getByRole("button", { name: DECIDE_COPY.back });
+    expect(chrome.contains(none)).toBe(true);
+    expect(chrome.contains(back)).toBe(true);
+    expect(scroll.contains(none)).toBe(false);
     expect(screen.getByRole("button", { name: DECIDE_COPY.lighter })).toBeTruthy();
     expect(screen.getByRole("button", { name: DECIDE_COPY.moreProtein })).toBeTruthy();
     expect(screen.getByPlaceholderText("Something else")).toBeTruthy();
+  });
+
+  it("offers Decide dinner next after Log it so the sheet does not dead-end", async () => {
+    const onLogRecipe = vi.fn(async () => true);
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 12, 40)}
+        profile={{ prefL: "chicken", foodAvoids: "" }}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+        onLogRecipe={onLogRecipe}
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    fireEvent.click(screen.getAllByRole("button", { name: DECIDE_COPY.logIt })[0]);
+    expect(await screen.findByRole("button", { name: decideNextCopy("dinner") })).toBeTruthy();
+    expect(document.querySelector("[data-decide-next]")).toBeTruthy();
   });
 });

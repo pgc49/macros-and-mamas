@@ -51,6 +51,12 @@ export const DECIDE_COPY = {
   savedFor: "Saved for",
   snackRoomOne: "Save room for a snack",
   snackRoomMany: "Save room for snacks",
+  snackReserveOne: "a snack",
+  snackReserveMany: "snacks",
+  loggedShort: "Logged.",
+  pencilledShort: "Pencilled in.",
+  decideNextLead: "Decide",
+  decideNextTail: "next",
   pencilledBox: "pencilled in",
   proteinCovered: "Protein's covered",
   proteinNeed: "You need about",
@@ -97,6 +103,15 @@ export const DECIDE_COPY = {
 
 export function snackRoomCopy(count) {
   return Number(count) === 1 ? DECIDE_COPY.snackRoomOne : DECIDE_COPY.snackRoomMany;
+}
+
+export function snackReserveCopy(count) {
+  return Number(count) === 1 ? DECIDE_COPY.snackReserveOne : DECIDE_COPY.snackReserveMany;
+}
+
+export function decideNextCopy(slot) {
+  const label = DECIDE_SLOT_LABEL[slot] || slot;
+  return `${DECIDE_COPY.decideNextLead} ${label} ${DECIDE_COPY.decideNextTail}`;
 }
 
 /** Right-box CTA for the next unlogged main slot. Dinner string stays the default. */
