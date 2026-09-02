@@ -118,7 +118,7 @@ function CompactCard({ card, onLog, onOpen, logging }) {
       </button>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
         <div style={{ fontSize: 11.5, color: T.inkSoft, fontWeight: 600 }}>
-          {Math.round(card.cal)} cal · P {Math.round(card.p)}g · C {Math.round(card.c)}g · F {Math.round(card.f)}g
+          {Math.round(card.cal)} cal · {macrosLine(card.p, card.c, card.f)}
         </div>
         <button
           type="button"
@@ -157,6 +157,77 @@ function stepLines(meal) {
   return (Array.isArray(detailed.steps) ? detailed.steps : []).slice(0, 3);
 }
 
+function macrosLine(p, c, f) {
+  return `P ${Math.round(p || 0)}g · C ${Math.round(c || 0)}g · F ${Math.round(f || 0)}g`;
+}
+
+function SnackRoomStepper({ count, onChange }) {
+  return (
+    <div
+      data-snack-room
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginTop: 8,
+        border: `1px solid ${T.border}`,
+        borderRadius: 12,
+        padding: "8px 10px",
+        background: "#fff",
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{DECIDE_COPY.snackRoom}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          type="button"
+          aria-label="Fewer snacks"
+          disabled={count <= 0}
+          onClick={() => onChange(count - 1)}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            border: `1px solid ${T.border}`,
+            background: count <= 0 ? "#F8F3F5" : T.accentSoft,
+            color: T.accentDeep,
+            fontFamily: F,
+            fontWeight: 700,
+            fontSize: 18,
+            lineHeight: 1,
+            cursor: count <= 0 ? "default" : "pointer",
+          }}
+        >
+          −
+        </button>
+        <span data-snack-room-count style={{ fontFamily: FD, fontSize: 18, minWidth: 18, textAlign: "center" }}>
+          {count}
+        </span>
+        <button
+          type="button"
+          aria-label="More snacks"
+          disabled={count >= 4}
+          onClick={() => onChange(count + 1)}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            border: `1px solid ${T.border}`,
+            background: count >= 4 ? "#F8F3F5" : T.accentSoft,
+            color: T.accentDeep,
+            fontFamily: F,
+            fontWeight: 700,
+            fontSize: 18,
+            lineHeight: 1,
+            cursor: count >= 4 ? "default" : "pointer",
+          }}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function DecideSheet({
   open,
   onClose,
@@ -191,6 +262,7 @@ export function DecideSheet({
   const [offset, setOffset] = useState(0);
   const [logging, setLogging] = useState(false);
   const [refineText, setRefineText] = useState("");
+  const [snackCount, setSnackCount] = useState(1);
   const refines = useRef(0);
 
   const bands = useMemo(() => bandsFromMacros(macros), [macros]);
@@ -212,8 +284,9 @@ export function DecideSheet({
       plannedMeals,
       shares,
       loggedSlots,
+      snackCount,
     }), bands);
-  }, [bands, totals, slot, plannedMeals, shares, loggedSlots]);
+  }, [bands, totals, slot, plannedMeals, shares, loggedSlots, snackCount]);
 
   const over = isOverDay(budget?.remaining);
   const coach = coachRead({ budget, remaining: budget?.remaining, slot, over });
@@ -507,7 +580,7 @@ export function DecideSheet({
             <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <ServingStepper value={detailServings} onChange={setDetailServings} />
               <div style={{ fontSize: 12.5, color: T.inkSoft, fontWeight: 600 }}>
-                {Math.round(detailScaled.cal)} cal · P {Math.round(detailScaled.p)}g
+                {Math.round(detailScaled.cal)} cal · {macrosLine(detailScaled.p, detailScaled.c, detailScaled.f)}
               </div>
             </div>
             <div style={{ fontSize: 12.5, color: detailFits ? T.sage : T.inkSoft, marginTop: 6 }}>
@@ -555,13 +628,13 @@ export function DecideSheet({
               {budgetSentence(budget)}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-              <div style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: "8px 10px" }}>
+              <div data-decide-slot-budget style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: "8px 10px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft }}>
                   {DECIDE_COPY.forSlot} {DECIDE_SLOT_LABEL[slot] || slot}
                 </div>
                 <div style={{ fontFamily: FD, fontSize: 20, marginTop: 2 }}>{Math.round(budget.cal)} cal</div>
                 <div style={{ fontSize: 11.5, color: T.inkSoft, fontWeight: 600 }}>
-                  P {Math.round(budget.pNeed)}g to range · C {Math.round(budget.c)}g · F {Math.round(budget.f)}g
+                  {macrosLine(budget.pNeed, budget.c, budget.f)}
                 </div>
               </div>
               {laterSlot ? (
@@ -588,8 +661,8 @@ export function DecideSheet({
                   </div>
                   <div style={{ fontSize: 11.5, color: T.inkSoft, fontWeight: 600 }}>
                     {laterPiece?.meal
-                      ? `${Math.round(laterPiece.cal)} cal · P ${Math.round(laterPiece.p)}g`
-                      : `P ${Math.round(laterPiece?.p || 0)}g · C ${Math.round(laterPiece?.c || 0)}g · F ${Math.round(laterPiece?.f || 0)}g`}
+                      ? `${Math.round(laterPiece.cal)} cal · ${macrosLine(laterPiece.p, laterPiece.c, laterPiece.f)}`
+                      : macrosLine(laterPiece?.p, laterPiece?.c, laterPiece?.f)}
                   </div>
                   <div style={{ fontSize: 11.5, color: T.accentDeep, fontWeight: 700, marginTop: 3 }}>
                     {laterPiece?.meal ? DECIDE_COPY.change : knowLaterCopy(laterSlot)}
@@ -608,7 +681,7 @@ export function DecideSheet({
                   <div key={m.name} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 0", borderTop: `1px solid ${T.border}` }}>
                     <div>
                       <div style={{ fontSize: 13.5, fontWeight: 600 }}>{m.title || m.name}</div>
-                      <div style={{ fontSize: 11.5, color: T.inkSoft }}>{m.knowsYou} · {Math.round(m.cal)} cal · P {Math.round(m.p)}g</div>
+                      <div style={{ fontSize: 11.5, color: T.inkSoft }}>{m.knowsYou} · {Math.round(m.cal)} cal · {macrosLine(m.p, m.c, m.f)}</div>
                     </div>
                     <button
                       type="button"
@@ -647,6 +720,9 @@ export function DecideSheet({
                   {DECIDE_COPY.notSureYet}
                 </button>
               </div>
+            ) : null}
+            {slot !== "snack" ? (
+              <SnackRoomStepper count={snackCount} onChange={setSnackCount} />
             ) : null}
             {prefs ? (
               <button
@@ -708,7 +784,7 @@ export function DecideSheet({
             </div>
             <div
               data-decide-sheet-scroll
-              style={{ overflow: "auto", flex: 1, minHeight: 0, marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}
+              style={{ overflow: "auto", flex: 1, minHeight: 0, marginTop: 10, display: "flex", flexDirection: "column", gap: 8, paddingBottom: 36 }}
             >
               {mode !== "pick" && ((mode === "kitchen" && !KITCHEN_FLAG) || (mode === "out" && !EATING_OUT_FLAG)) ? (
                 <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, padding: "8px 2px" }}>
@@ -780,7 +856,7 @@ export function DecideSheet({
               style={{
                 flexShrink: 0,
                 background: "#fff",
-                padding: "10px 0 18px",
+                padding: "10px 0 max(28px, env(safe-area-inset-bottom, 28px))",
                 position: "relative",
                 zIndex: 2,
               }}

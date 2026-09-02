@@ -113,12 +113,23 @@ export function resolveDecideShares(shares = DEFAULT_MEAL_SHARES, laterMains = [
   return shares;
 }
 
-function reserveSlotsAfter(selected, loggedSlots = new Set()) {
+function clampSnackCount(n) {
+  const count = Math.round(Number(n));
+  if (!Number.isFinite(count)) return 1;
+  return Math.max(0, Math.min(4, count));
+}
+
+function slotShareWeight(slot, shares, snackCount = 1) {
+  const base = effectiveSlotShare(slot, shares).share;
+  if (slot !== "snack") return base;
+  return base * clampSnackCount(snackCount);
+}
+
+function reserveSlotsAfter(selected, loggedSlots = new Set(), snackCount = 1) {
   const later = laterSlotsAfter(selected, loggedSlots);
-  if ((selected === "breakfast" || selected === "lunch") && !loggedSlots.has("snack")) {
-    return [...later, "snack"];
-  }
-  return later;
+  if (selected === "snack") return later;
+  if (clampSnackCount(snackCount) <= 0) return later;
+  return [...later, "snack"];
 }
 
 export function remainingForDecide(totals, bands) {
@@ -139,8 +150,9 @@ export function planMealForSlot(plannedMeals, slot) {
   return list.find((m) => m.via === "decide") || list[0];
 }
 
-function shareReserve(slot, shares, bands) {
-  const { share, usual } = effectiveSlotShare(slot, shares);
+function shareReserve(slot, shares, bands, snackCount = 1) {
+  const { usual } = effectiveSlotShare(slot, shares);
+  const share = slotShareWeight(slot, shares, snackCount);
   return {
     cal: share * bands.calHi,
     p: share * bands.pLo,
@@ -234,12 +246,12 @@ function packReserve(bySlot) {
   return { ...totals, bySlot };
 }
 
-export function reserveForLater({ laterSlots = [], shares, bands, plannedMeals } = {}) {
+export function reserveForLater({ laterSlots = [], shares, bands, plannedMeals, snackCount = 1 } = {}) {
   if (!bands) return { ...emptyMacros(), bySlot: {} };
   const bySlot = {};
   for (const slot of laterSlots) {
     const planned = planMealForSlot(plannedMeals, slot);
-    bySlot[slot] = planned ? mealReserve(planned, slot) : shareReserve(slot, shares, bands);
+    bySlot[slot] = planned ? mealReserve(planned, slot) : shareReserve(slot, shares, bands, snackCount);
   }
   return packReserve(bySlot);
 }
@@ -272,19 +284,22 @@ export function computeSlotBudget({
   plannedMeals = [],
   shares = DEFAULT_MEAL_SHARES,
   loggedSlots,
+  snackCount = 1,
 } = {}) {
   if (!bands || !slot) return null;
   const remaining = remainingForDecide(totals, bands);
   if (!remaining) return null;
   const logged = loggedSlots || loggedSlotsFromEntries([]);
+  const snacks = clampSnackCount(snackCount);
   const later = laterSlotsAfter(slot, logged);
   const resolvedShares = resolveDecideShares(shares, later);
-  const reserveSlots = reserveSlotsAfter(slot, logged);
+  const reserveSlots = reserveSlotsAfter(slot, logged, snacks);
   const rawReserve = reserveForLater({
     laterSlots: reserveSlots,
     shares: resolvedShares,
     bands,
     plannedMeals,
+    snackCount: snacks,
   });
 
   if (remaining.cal <= 0) {
@@ -314,12 +329,12 @@ export function computeSlotBudget({
 
   const rest = restAfter(remaining, used);
   const shareSlots = reserveSlots.filter((s) => !rawReserve.bySlot[s]?.meal);
-  const currentShare = effectiveSlotShare(slot, resolvedShares).share;
-  const totalW = shareSlots.reduce((n, s) => n + effectiveSlotShare(s, resolvedShares).share, currentShare);
+  const currentShare = slotShareWeight(slot, resolvedShares, snacks);
+  const totalW = shareSlots.reduce((n, s) => n + slotShareWeight(s, resolvedShares, snacks), currentShare);
   const denom = totalW > 0 ? totalW : 1;
 
   for (const s of shareSlots) {
-    const frac = effectiveSlotShare(s, resolvedShares).share / denom;
+    const frac = slotShareWeight(s, resolvedShares, snacks) / denom;
     const slice = sliceRemaining(rest, frac);
     bySlot[s] = { ...rawReserve.bySlot[s], ...slice };
     used = addMacros(used, slice);
@@ -405,12 +420,17 @@ function fmtP(n) {
 export function budgetSentence(budget) {
   if (!budget) return "";
   const later = budget.laterSlots || [];
+  const snackPiece = budget.reserve?.bySlot?.snack;
+  const leaves = `${DECIDE_COPY.thatLeaves} ${fmtCal(budget.cal)} cal and ${fmtP(budget.pNeed)} for ${DECIDE_SLOT_LABEL[budget.slot] || budget.slot}.`;
   if (!later.length) {
+    if (snackPiece && snackPiece.cal > 0 && !snackPiece.meal) {
+      const how = snackPiece.source === "usual" ? DECIDE_COPY.usualEat : DECIDE_COPY.normalShare;
+      return `${DECIDE_COPY.savingRoom} ${DECIDE_SLOT_LABEL.snack} ${how} (about ${fmtCal(snackPiece.cal)} cal, ${fmtP(snackPiece.p)}). ${leaves}`;
+    }
     return `${DECIDE_COPY.lastMealLead} ${DECIDE_COPY.lastMealRest}: about ${fmtCal(budget.cal)} cal, ${fmtP(budget.pNeed)} to hit range.`;
   }
   const first = later[0];
   const piece = budget.reserve?.bySlot?.[first];
-  const leaves = `${DECIDE_COPY.thatLeaves} ${fmtCal(budget.cal)} cal and ${fmtP(budget.pNeed)} for ${DECIDE_SLOT_LABEL[budget.slot] || budget.slot}.`;
   if (piece?.meal) {
     const name = piece.meal.name || "Dinner";
     return `${DECIDE_SLOT_LABEL[first] || first} ${DECIDE_COPY.pencilledIn} (${name}, ${fmtCal(piece.cal)} cal, ${fmtP(piece.p)}). ${leaves}`;

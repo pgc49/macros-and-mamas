@@ -49,6 +49,7 @@ export const DECIDE_COPY = {
   pencilledIn: "is pencilled in",
   forSlot: "For",
   savedFor: "Saved for",
+  snackRoom: "Snack room",
   pencilledBox: "pencilled in",
   proteinCovered: "Protein's covered",
   proteinNeed: "You need about",

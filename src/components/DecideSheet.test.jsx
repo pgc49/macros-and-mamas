@@ -334,4 +334,30 @@ describe("Help me decide entry", () => {
     expect(screen.getByText(DECIDE_COPY.pencilledHint)).toBeTruthy();
     expect(screen.getByRole("button", { name: DECIDE_COPY.ateIt })).toBeTruthy();
   });
+
+  it("shows snack room defaulting to 1 and changing leftover for this meal", () => {
+    renderToday();
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    const room = document.querySelector("[data-snack-room]");
+    expect(room).toBeTruthy();
+    expect(document.querySelector("[data-snack-room-count]")?.textContent).toBe("1");
+    const card = document.querySelector("[data-decide-slot-budget]");
+    const before = card?.textContent || "";
+    fireEvent.click(screen.getByRole("button", { name: "More snacks" }));
+    expect(document.querySelector("[data-snack-room-count]")?.textContent).toBe("2");
+    const after = card?.textContent || "";
+    expect(after).not.toBe(before);
+    expect(after).not.toMatch(/to range/);
+  });
+
+  it("keeps refine chips clear of the sheet bottom", () => {
+    renderToday();
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    const scroll = document.querySelector("[data-decide-sheet-scroll]");
+    expect(Number.parseInt(scroll.style.paddingBottom, 10)).toBeGreaterThanOrEqual(36);
+    expect(screen.getByRole("button", { name: DECIDE_COPY.noneOfThese })).toBeTruthy();
+    expect(screen.getByRole("button", { name: DECIDE_COPY.lighter })).toBeTruthy();
+    expect(screen.getByRole("button", { name: DECIDE_COPY.moreProtein })).toBeTruthy();
+    expect(screen.getByPlaceholderText("Something else")).toBeTruthy();
+  });
 });

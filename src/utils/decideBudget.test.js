@@ -210,7 +210,7 @@ describe("12:40 leftover lunch budget", () => {
 });
 
 describe("last meal / over / snack", () => {
-  it("gives the full leftover to dinner at 18:30", () => {
+  it("reserves a default snack at dinner and leaves the rest", () => {
     const totals = { cal: 1000, p: 70, c: 100, f: 40 };
     const budget = computeSlotBudget({
       totals,
@@ -220,9 +220,43 @@ describe("last meal / over / snack", () => {
       loggedSlots: new Set(["breakfast", "lunch"]),
     });
     expect(budget.laterSlots).toEqual([]);
+    expect(budget.reserve.bySlot.snack.cal).toBeCloseTo(BANDS.calHi * DEFAULT_MEAL_SHARES.snack, 0);
+    expect(budget.cal).toBeCloseTo(900 - BANDS.calHi * DEFAULT_MEAL_SHARES.snack, 0);
+    expect(budgetSentence(budget)).toMatch(/Saving room for a snack/);
+    expect(budgetSentence(budget)).toMatch(DECIDE_COPY.normalShare);
+  });
+
+  it("gives dinner the full leftover when snack room is 0", () => {
+    const totals = { cal: 1000, p: 70, c: 100, f: 40 };
+    const budget = computeSlotBudget({
+      totals,
+      bands: BANDS,
+      slot: "dinner",
+      shares: DEFAULT_MEAL_SHARES,
+      loggedSlots: new Set(["breakfast", "lunch"]),
+      snackCount: 0,
+    });
+    expect(budget.laterSlots).toEqual([]);
+    expect(budget.reserve.bySlot.snack).toBeUndefined();
     expect(budget.cal).toBe(900);
     expect(budget.pNeed).toBe(75);
     expect(budgetSentence(budget)).toMatch(/Last meal of the day/);
+  });
+
+  it("scales snack reserve with the stepper count", () => {
+    const base = {
+      totals: { cal: 0, p: 0, c: 0, f: 0 },
+      bands: BANDS,
+      slot: "breakfast",
+      shares: DEFAULT_MEAL_SHARES,
+      loggedSlots: new Set(),
+    };
+    const two = computeSlotBudget({ ...base, snackCount: 2 });
+    const none = computeSlotBudget({ ...base, snackCount: 0 });
+    expect(two.reserve.bySlot.snack.cal).toBeCloseTo(BANDS.calHi * DEFAULT_MEAL_SHARES.snack * 2, 0);
+    expect(none.reserve.bySlot.snack).toBeUndefined();
+    expect(two.cal).toBeLessThan(none.cal);
+    expect(two.cal + two.reserve.cal).toBeCloseTo(BANDS.calHi, 0);
   });
 
   it("flags over when calories are spent or fat is past slack", () => {
