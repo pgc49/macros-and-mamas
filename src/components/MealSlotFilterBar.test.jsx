@@ -52,7 +52,7 @@ describe("MealSlotFilterBar", () => {
     expect(onChange).toHaveBeenCalledWith("Pantry");
   });
 
-  it("shows Fits what's left as a toggle that composes with the slot", () => {
+  it("shows Fits remaining macros as a toggle that composes with the slot", () => {
     const onFitsChange = vi.fn();
     const onChange = vi.fn();
     render(
@@ -70,15 +70,15 @@ describe("MealSlotFilterBar", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Filter meals · Dinner · Fits what's left" })).toBeTruthy();
-    const fits = screen.getByRole("button", { name: "Fits what's left" });
+    expect(screen.getByRole("button", { name: "Filter meals · Dinner · Fits remaining macros" })).toBeTruthy();
+    const fits = screen.getByRole("button", { name: "Fits remaining macros" });
     expect(fits.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(fits);
     expect(onFitsChange).toHaveBeenCalledWith(false);
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("hides Fits what's left when no handler is passed", () => {
+  it("hides Fits remaining macros when no handler is passed", () => {
     render(
       <MealSlotFilterBar
         query=""
@@ -92,6 +92,6 @@ describe("MealSlotFilterBar", () => {
       />,
     );
 
-    expect(screen.queryByRole("button", { name: "Fits what's left" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Fits remaining macros" })).toBeNull();
   });
 });

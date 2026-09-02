@@ -29,8 +29,10 @@ function FilterChip({ active, onClick, children, role = "option" }) {
 /**
  * Search field + funnel filter used on Today → My plan and Meals.
  * Slot chips stay hidden until she opens the filter (or a slot is active).
- * Optional "Fits what's left" is always visible — it composes with the slot.
+ * Optional remaining-macros chip is always visible — it composes with the slot.
  */
+export const FITS_REMAINING_LABEL = "Fits remaining macros";
+
 export function MealSlotFilterBar({
   query,
   onQueryChange,
@@ -44,7 +46,7 @@ export function MealSlotFilterBar({
   onOpenChange,
   fitsActive = false,
   onFitsChange,
-  fitsLabel = "Fits what's left",
+  fitsLabel = FITS_REMAINING_LABEL,
 }) {
   const slotFiltering = Boolean(value && value !== allValue);
   const filtering = slotFiltering || Boolean(fitsActive);

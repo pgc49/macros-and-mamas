@@ -1,6 +1,6 @@
 /**
  * Day-range impact helpers for restaurant menu picks and the Meals bank
- * "Fits what's left" filter. remaining = room to day HIGH before this meal.
+ * "Fits remaining macros" filter. remaining = room to day HIGH before this meal.
  *
  * Slack matches "ranges, not rules" — a meal still fits if it nicks the high
  * by a little (same walls as eating-out ranking).

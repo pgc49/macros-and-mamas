@@ -132,7 +132,7 @@ describe("Meals tab search filter", () => {
     expect(screen.getByText("Callie's chicken teriyaki")).toBeTruthy();
     expect(screen.getByText("Protein oatmeal")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Fits what's left" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fits remaining macros" }));
 
     expect(screen.getByText(/Room left after today’s log/)).toBeTruthy();
     expect(screen.getByText("Protein oatmeal")).toBeTruthy();

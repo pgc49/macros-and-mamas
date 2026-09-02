@@ -120,7 +120,7 @@ export function ClientApp({
   const visibleCustomMeals = applyFitsFilter(filterMealsByQuery(customMeals, mealQuery));
   const searchingMeals = Boolean(String(mealQuery || "").trim());
   const fitsEmptyHint = fitsRemainingOnly
-    ? " Nothing here stays in today’s remaining room — turn off Fits what’s left to browse everything."
+    ? " Nothing here fits your remaining macros — turn the filter off to browse everything."
     : "";
   const plannedCount = countPlannedMeals(weekPlanDays);
   const hi = (n, d = 10) => n + d;
@@ -463,7 +463,6 @@ export function ClientApp({
               {fitsRemainingOnly && remainingRoom && (
                 <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "-4px 0 12px", lineHeight: 1.45 }}>
                   Room left after today’s log: {formatRoomLeft(remainingRoom)} to your day high.
-                  Showing meals that stay in your ranges.
                 </p>
               )}
             </>

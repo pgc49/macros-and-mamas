@@ -14,6 +14,7 @@ const PREVIEW_CUSTOM = [
 
 const PREVIEW_PLAN = [
   { id: "p1", name: "Protein oatmeal", cal: 310, p: 30, c: 40, f: 4, slot: "breakfast" },
+  { id: "p2", name: "Big pasta night", cal: 720, p: 28, c: 90, f: 22, slot: "dinner" },
 ];
 
 export function MealLogPreview() {
@@ -57,8 +58,12 @@ export function MealLogPreview() {
         initialMethod="recipes"
         customMeals={PREVIEW_CUSTOM}
         plannedMeals={PREVIEW_PLAN}
-        macros={{ cal: 1800, protein: 130, carbs: 160, fat: 55 }}
-        todayLog={{ date: "2026-08-30", entries: [] }}
+        macros={{ cal: 1700, protein: 120, carbs: 150, fat: 50 }}
+        todayLog={{
+          date: "2026-08-30",
+          entries: [{ name: "Lunch bowl", cal: 1400, p: 90, c: 120, f: 45 }],
+        }}
+        mealLogDate="2026-08-30"
       />
       <div style={{ marginTop: 20 }}>
         <h2 style={{

@@ -25,7 +25,7 @@ import {
 import { formatServings, ServingStepper, snapServings } from "../utils/servings";
 import { recipeNoteFromMeal } from "../utils/planMealShape";
 import { targetBands } from "../utils/weekPlan";
-import { roomLeftFromTotals } from "../utils/eatingOutImpact";
+import { filterMealsByRemaining, formatRoomLeft, roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
 import { LogMealRefine } from "./LogMealRefine";
 import {
@@ -161,6 +161,7 @@ export function MealLogCard({
   const [planSearch, setPlanSearch] = useState("");
   const [slotFilter, setSlotFilter] = useState("all");
   const [slotFilterOpen, setSlotFilterOpen] = useState(false);
+  const [fitsRemainingOnly, setFitsRemainingOnly] = useState(false);
   const [logSlot, setLogSlot] = useState(() => guessSlotFromTime());
   // What was sent for the estimate on screen, so "I added X" can re-ask
   // about the whole plate instead of throwing the first answer away.
@@ -184,33 +185,29 @@ export function MealLogCard({
     () => enrichMealsWithBankSlot(customMeals || [], recipes),
     [customMeals, recipes],
   );
-  const plannedVisible = useMemo(
+  const plannedForSlot = useMemo(
     () => (mineOnly
       ? []
       : filterMealsBySlot(filterMealsByQuery(plannedMeals || [], planSearch), slotFilter)),
     [mineOnly, plannedMeals, planSearch, slotFilter],
   );
-  const customVisible = useMemo(
+  const customForSlot = useMemo(
     () => filterMealsBySlot(filterMealsByQuery(customTagged, planSearch), slotFilter),
     [customTagged, planSearch, slotFilter],
   );
-  const recipesVisible = useMemo(
+  const recipesForSlot = useMemo(
     () => (mineOnly
       ? []
       : filterMealsBySlot(filterMealsByQuery(recipes || [], planSearch), slotFilter)),
     [mineOnly, recipes, planSearch, slotFilter],
   );
   const pantrySearchPool = searchingPlan ? PANTRY_ITEMS : pantryVisible;
-  const pantryMatches = useMemo(
+  const pantryForSlot = useMemo(
     () => (mineOnly
       ? []
       : filterMealsBySlot(filterMealsByQuery(pantrySearchPool, planSearch), slotFilter)),
     [mineOnly, pantrySearchPool, planSearch, slotFilter],
   );
-  const planMatchCount = plannedVisible.length
-    + customVisible.length
-    + recipesVisible.length
-    + pantryMatches.length;
 
   const MAX_SNAP_PHOTOS = 3;
 
@@ -323,6 +320,19 @@ export function MealLogCard({
     const bands = targetBands(macros);
     return roomLeftFromTotals(totals, bands);
   }, [macros, totals.cal, totals.p, totals.c, totals.f]);
+  const remainingRoom = logRoom.remaining;
+  const canFilterFits = Boolean(macros && remainingRoom);
+  const applyFits = (list) => (
+    fitsRemainingOnly && remainingRoom ? filterMealsByRemaining(list, remainingRoom) : list
+  );
+  const plannedVisible = applyFits(plannedForSlot);
+  const customVisible = applyFits(customForSlot);
+  const recipesVisible = applyFits(recipesForSlot);
+  const pantryMatches = applyFits(pantryForSlot);
+  const planMatchCount = plannedVisible.length
+    + customVisible.length
+    + recipesVisible.length
+    + pantryMatches.length;
 
   const pickMenuMeal = async (meal, opts = {}) => {
     if (!meal || !onManualLog) return false;
@@ -1100,18 +1110,27 @@ export function MealLogCard({
               allValue="all"
               open={slotFilterOpen}
               onOpenChange={setSlotFilterOpen}
+              fitsActive={fitsRemainingOnly}
+              onFitsChange={canFilterFits ? setFitsRemainingOnly : undefined}
             />
+            {fitsRemainingOnly && remainingRoom && (
+              <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "-4px 0 10px", lineHeight: 1.45 }}>
+                Room left after this day’s log: {formatRoomLeft(remainingRoom)} to your day high.
+              </p>
+            )}
             <div
               data-plan-meal-list
               style={{ maxHeight: "min(64dvh, 620px)", overflowY: "auto" }}
             >
-            {(searchingPlan || slotFiltering) && planMatchCount === 0 && (
+            {(searchingPlan || slotFiltering || fitsRemainingOnly) && planMatchCount === 0 && (
               <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.5, marginBottom: 8 }}>
                 {searchingPlan
                   ? `No meals match “${planSearch.trim()}”${slotFiltering ? ` in ${slotFilter}` : ""}. Try a name or ingredient.`
                   : mineOnly
                     ? "Nothing saved in My meals yet."
-                    : `No ${slotFilter} meals in this list. Try My meals, or pick another slot.`}
+                    : slotFiltering
+                      ? `No ${slotFilter} meals in this list. Try My meals, or pick another slot.`
+                      : "Nothing here fits your remaining macros — turn the filter off to browse everything."}
               </div>
             )}
             {plannedVisible.length > 0 && (
@@ -1200,7 +1219,7 @@ export function MealLogCard({
                 onLog={onLogRecipe}
               />
             ))}
-            {(pantryMatches.length > 0 || (!searchingPlan && !slotFiltering)) && (
+            {(pantryMatches.length > 0 || (!searchingPlan && !slotFiltering && !fitsRemainingOnly)) && (
             <div style={{
               fontSize: 11.5,
               fontWeight: 700,

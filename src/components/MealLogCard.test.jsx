@@ -78,6 +78,41 @@ describe("MealLogCard My plan list", () => {
     expect(screen.getByText("Pulled chicken tacos")).toBeTruthy();
     expect(screen.queryByText("Protein oatmeal")).toBeNull();
   });
+
+  it("does not show Fits remaining macros without a log and ranges", () => {
+    renderPlan();
+    expect(screen.queryByRole("button", { name: "Fits remaining macros" })).toBeNull();
+  });
+
+  it("filters My plan to meals that fit remaining macros", () => {
+    render(
+      <MealLogCard
+        initialMethod="recipes"
+        customMeals={customMeals}
+        recipes={[
+          ...recipes,
+          { cat: "Dinner", name: "Big pasta night", cal: 720, p: 28, c: 90, f: 22, serves: 1 },
+        ]}
+        plannedMeals={[
+          { id: "p1", name: "Protein oatmeal", cal: 310, p: 30, c: 40, f: 4, slot: "breakfast" },
+          { id: "p2", name: "Big pasta night", cal: 720, p: 28, c: 90, f: 22, slot: "dinner" },
+        ]}
+        macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
+        todayLog={{
+          date: "2026-08-30",
+          entries: [{ name: "Lunch bowl", cal: 1400, p: 90, c: 120, f: 45 }],
+        }}
+        mealLogDate="2026-08-30"
+      />,
+    );
+
+    expect(screen.getAllByText("Big pasta night").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Fits remaining macros" }));
+    expect(screen.getByText(/Room left after this day’s log/)).toBeTruthy();
+    expect(screen.getAllByText("Protein oatmeal").length).toBeGreaterThan(0);
+    expect(screen.getByText("Yogurt bowl")).toBeTruthy();
+    expect(screen.queryByText("Big pasta night")).toBeNull();
+  });
 });
 
 describe("MealLogCard Save to today", () => {
