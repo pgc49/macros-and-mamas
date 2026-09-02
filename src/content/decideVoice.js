@@ -49,7 +49,8 @@ export const DECIDE_COPY = {
   pencilledIn: "is pencilled in",
   forSlot: "For",
   savedFor: "Saved for",
-  snackRoom: "Snack room",
+  snackRoomOne: "Save room for a snack",
+  snackRoomMany: "Save room for snacks",
   pencilledBox: "pencilled in",
   proteinCovered: "Protein's covered",
   proteinNeed: "You need about",
@@ -93,6 +94,10 @@ export const DECIDE_COPY = {
   viaAi: "Made from your fridge",
   viaOut: "Estimate from menu",
 };
+
+export function snackRoomCopy(count) {
+  return Number(count) === 1 ? DECIDE_COPY.snackRoomOne : DECIDE_COPY.snackRoomMany;
+}
 
 /** Right-box CTA for the next unlogged main slot. Dinner string stays the default. */
 export function knowLaterCopy(slot) {

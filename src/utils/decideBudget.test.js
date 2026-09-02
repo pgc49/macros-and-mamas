@@ -226,7 +226,7 @@ describe("last meal / over / snack", () => {
     expect(budgetSentence(budget)).toMatch(DECIDE_COPY.normalShare);
   });
 
-  it("gives dinner the full leftover when snack room is 0", () => {
+  it("gives dinner the full leftover when save-room-for-snacks is 0", () => {
     const totals = { cal: 1000, p: 70, c: 100, f: 40 };
     const budget = computeSlotBudget({
       totals,
@@ -259,7 +259,7 @@ describe("last meal / over / snack", () => {
     expect(two.cal + two.reserve.cal).toBeCloseTo(BANDS.calHi, 0);
   });
 
-  it("never increases this meal’s leftover when snack room goes up", () => {
+  it("never increases this meal’s leftover when save-room-for-snacks goes up", () => {
     const base = {
       totals: BREAKFAST,
       bands: BANDS,

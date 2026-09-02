@@ -3,7 +3,7 @@ import { T, F, FD } from "../theme/tokens";
 import { Btn } from "./ui";
 import { SlotChips } from "./SlotChips";
 import { ServingStepper } from "../utils/servings";
-import { DECIDE_COPY, DECIDE_SLOT_LABEL, knowLaterCopy } from "../content/decideVoice";
+import { DECIDE_COPY, DECIDE_SLOT_LABEL, knowLaterCopy, snackRoomCopy } from "../content/decideVoice";
 import { decideLogFromCard } from "../utils/decideScale";
 import { withRecipeDetail } from "../content/recipeDetails";
 import { RECIPES, PANTRY_ITEMS } from "../content/data";
@@ -162,9 +162,11 @@ function macrosLine(p, c, f) {
 }
 
 function SnackRoomStepper({ count, onChange }) {
+  const label = snackRoomCopy(count);
   return (
     <div
       data-snack-room
+      aria-label={label}
       style={{
         display: "flex",
         justifyContent: "space-between",
@@ -176,7 +178,7 @@ function SnackRoomStepper({ count, onChange }) {
         background: "#fff",
       }}
     >
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{DECIDE_COPY.snackRoom}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{label}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <button
           type="button"

@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MealLogCard } from "./MealLogCard";
-import { DECIDE_COPY, knowLaterCopy } from "../content/decideVoice";
+import { DECIDE_COPY, knowLaterCopy, snackRoomCopy } from "../content/decideVoice";
 import { localDateIso } from "../utils/dates";
 import { writeDecidePencil } from "../utils/decidePencil";
 import { emptyWeekPlan } from "../utils/weekPlan";
@@ -335,16 +335,19 @@ describe("Help me decide entry", () => {
     expect(screen.getByRole("button", { name: DECIDE_COPY.ateIt })).toBeTruthy();
   });
 
-  it("shows snack room defaulting to 1 and changing leftover for this meal", () => {
+  it("shows save-room-for-a-snack defaulting to 1 and changing leftover for this meal", () => {
     renderToday();
     fireEvent.click(document.querySelector("[data-decide-bar]"));
     const room = document.querySelector("[data-snack-room]");
     expect(room).toBeTruthy();
+    expect(screen.getByText(snackRoomCopy(1))).toBeTruthy();
     expect(document.querySelector("[data-snack-room-count]")?.textContent).toBe("1");
     const card = document.querySelector("[data-decide-slot-budget]");
     const before = card?.textContent || "";
     fireEvent.click(screen.getByRole("button", { name: "More snacks" }));
     expect(document.querySelector("[data-snack-room-count]")?.textContent).toBe("2");
+    expect(screen.getByText(snackRoomCopy(2))).toBeTruthy();
+    expect(screen.queryByText(snackRoomCopy(1))).toBeNull();
     const after = card?.textContent || "";
     expect(after).not.toBe(before);
     expect(after).not.toMatch(/to range/);
