@@ -149,8 +149,16 @@ export function MyMealsAddSheet({
         padding: 0,
         boxSizing: "border-box",
       }}
-      onClick={onClose}
-      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose?.(e);
+      }}
+      onKeyDown={(e) => { if (e.key === "Escape") onClose?.(e); }}
     >
       <div
         style={{

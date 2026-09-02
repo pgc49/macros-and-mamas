@@ -26,7 +26,7 @@ function IngList({ items }) {
  * Open: batch cook (if any) → one-serving ingredients → steps.
  * Serving stepper scales macros for logging only — ingredient list stays base recipe.
  */
-export function MealRecipeCard({ meal, onLog, showLog = true }) {
+export function MealRecipeCard({ meal, onLog, showLog = true, showSlotPicker = false }) {
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState(1);
   const r = withRecipeDetail(meal);
@@ -46,9 +46,9 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
   if (isTreat) metaBits.push("Treat");
   if (serves > 1) metaBits.push(isDinner ? `batch · serves ${serves}` : `batch serves ${serves}`);
   const recipeMeta = metaBits.join(" · ");
-  const [slot, setSlot] = useState(
-    () => normalizeSlot(r.slot || r.cat) || guessSlotFromTime(),
-  );
+  const recipeSlot = normalizeSlot(r.slot || r.cat) || guessSlotFromTime();
+  const [slot, setSlot] = useState(() => recipeSlot);
+  const logSlot = showSlotPicker ? slot : recipeSlot;
 
   const [logPhase, setLogPhase] = useState("idle");
   const logBtn = (
@@ -63,7 +63,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
           const ok = await onLog?.(scaleMealForLog({
             ...r,
             via: "recipe",
-            slot,
+            slot: logSlot,
             fromPlanner: true,
           }, servings));
           if (ok === false) {
@@ -189,14 +189,16 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
 
         {showLog && (
           <div data-meal-recipe-log="" style={{ marginTop: 8 }}>
-            <SlotChips value={slot} onChange={setSlot} compact fill />
+            {showSlotPicker ? (
+              <SlotChips value={slot} onChange={setSlot} compact fill />
+            ) : null}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: 8,
-                marginTop: 8,
+                marginTop: showSlotPicker ? 8 : 0,
               }}
             >
               <div

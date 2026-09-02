@@ -2,11 +2,12 @@ import { T, F } from "../theme/tokens";
 import { MEAL_SLOTS, SLOT_CHIP } from "../utils/mealSlots";
 
 /** Breakfast / Lunch / Dinner / Snack picker — shared by Today log + Add rows. */
-export function SlotChips({ value, onChange, compact = false, fill = false }) {
+export function SlotChips({ value, onChange, compact = false, fill = false, mealKey = "" }) {
   const tight = compact || fill;
   return (
     <div
       data-slot-chips={fill ? "fill" : compact ? "compact" : "default"}
+      data-meal-key={mealKey || undefined}
       style={{
         display: "flex",
         flexWrap: fill ? "nowrap" : "wrap",
@@ -20,9 +21,11 @@ export function SlotChips({ value, onChange, compact = false, fill = false }) {
           <button
             key={s}
             type="button"
+            aria-pressed={active}
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
-              onChange?.(s);
+              onChange?.(s, mealKey || undefined);
             }}
             style={{
               fontFamily: F,
@@ -35,6 +38,7 @@ export function SlotChips({ value, onChange, compact = false, fill = false }) {
               background: active ? T.accentSoft : "#fff",
               color: active ? T.accentDeep : T.inkSoft,
               cursor: "pointer",
+              touchAction: "manipulation",
               flexGrow: fill ? 1 : undefined,
               flexShrink: fill ? 1 : undefined,
               flexBasis: fill ? 0 : undefined,

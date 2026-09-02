@@ -3156,24 +3156,35 @@ export const db = {
   async loadCustomMeals() {
     const uid = await requireUserId();
     // Prefer the recipe columns; degrade if migration 019 hasn't run yet.
+    // created_at, not updated_at — slot Save all must not reshuffle the list.
     let { data, error } = await supabase
       .from("custom_meals")
-      .select("id, name, cal, p, c, f, serves, ingredients, slot, updated_at")
+      .select("id, name, cal, p, c, f, serves, ingredients, slot, created_at, updated_at")
       .eq("profile_id", uid)
-      .order("updated_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (error && /created_at/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("custom_meals")
+        .select("id, name, cal, p, c, f, serves, ingredients, slot, updated_at")
+        .eq("profile_id", uid)
+        .order("id", { ascending: false }));
+    }
     if (error && /slot/i.test(error.message || "")) {
       ({ data, error } = await supabase
         .from("custom_meals")
-        .select("id, name, cal, p, c, f, serves, ingredients, updated_at")
+        .select("id, name, cal, p, c, f, serves, ingredients, created_at, updated_at")
         .eq("profile_id", uid)
-        .order("updated_at", { ascending: false }));
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false }));
     }
     if (error && /serves|ingredients/i.test(error.message || "")) {
       ({ data, error } = await supabase
         .from("custom_meals")
-        .select("id, name, cal, p, c, f, updated_at")
+        .select("id, name, cal, p, c, f, created_at, updated_at")
         .eq("profile_id", uid)
-        .order("updated_at", { ascending: false }));
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false }));
     }
     if (error) {
       console.warn("loadCustomMeals failed", error);
@@ -3182,8 +3193,38 @@ export const db = {
     return (data || []).map(mapCustomMeal);
   },
 
-  /** Upsert by name for this user (re-saving the same lunch updates macros). */
-  async saveCustomMeal({ name, cal, p, c, f, serves, ingredients, slot }) {
+  /**
+   * Slot-only write. Update by id — never upsert by name (that retagged the wrong meal).
+   */
+  async saveCustomMealSlot(id, slot) {
+    const uid = await requireUserId();
+    const mealId = String(id || "").trim();
+    if (!mealId) throw new Error("Meal id required");
+    const savedSlot = normalizeMealSlot(slot);
+    if (!savedSlot) throw new Error("Pick a meal slot");
+    let { data, error } = await supabase
+      .from("custom_meals")
+      .update({ slot: savedSlot, updated_at: new Date().toISOString() })
+      .eq("profile_id", uid)
+      .eq("id", mealId)
+      .select("id, name, cal, p, c, f, updated_at, serves, ingredients, slot")
+      .maybeSingle();
+    if (error && /serves|ingredients/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("custom_meals")
+        .update({ slot: savedSlot, updated_at: new Date().toISOString() })
+        .eq("profile_id", uid)
+        .eq("id", mealId)
+        .select("id, name, cal, p, c, f, updated_at, slot")
+        .maybeSingle());
+    }
+    if (error) throw error;
+    if (!data) throw new Error("Meal not found");
+    return mapCustomMeal(data);
+  },
+
+  /** Update by id when present; otherwise upsert by name for this user. */
+  async saveCustomMeal({ id, name, cal, p, c, f, serves, ingredients, slot }) {
     const uid = await requireUserId();
     const trimmed = String(name || "").trim().slice(0, 80);
     if (!trimmed) throw new Error("Meal needs a name");
@@ -3207,10 +3248,44 @@ export const db = {
       recipeFields.ingredients !== undefined ? "ingredients" : "",
       recipeFields.slot ? "slot" : "",
     ].filter(Boolean).join(", ");
+    const selectCols = `id, name, cal, p, c, f, updated_at${extraCols ? `, ${extraCols}` : ""}`;
+
+    if (id) {
+      let { data, error } = await supabase
+        .from("custom_meals")
+        .update({ ...base, ...recipeFields })
+        .eq("profile_id", uid)
+        .eq("id", id)
+        .select(selectCols)
+        .maybeSingle();
+      if (error && /slot/i.test(error.message || "")) {
+        const { slot: _s, ...noSlot } = recipeFields;
+        ({ data, error } = await supabase
+          .from("custom_meals")
+          .update({ ...base, ...noSlot })
+          .eq("profile_id", uid)
+          .eq("id", id)
+          .select("id, name, cal, p, c, f, updated_at, serves, ingredients")
+          .maybeSingle());
+      }
+      if (error && /serves|ingredients/i.test(error.message || "")) {
+        ({ data, error } = await supabase
+          .from("custom_meals")
+          .update(base)
+          .eq("profile_id", uid)
+          .eq("id", id)
+          .select("id, name, cal, p, c, f, updated_at")
+          .maybeSingle());
+      }
+      if (error) throw error;
+      if (!data) throw new Error("Meal not found");
+      return mapCustomMeal(data);
+    }
+
     let { data, error } = await supabase
       .from("custom_meals")
       .upsert({ ...base, ...recipeFields }, { onConflict: "profile_id,name" })
-      .select(`id, name, cal, p, c, f, updated_at${extraCols ? `, ${extraCols}` : ""}`)
+      .select(selectCols)
       .single();
     if (error && /slot/i.test(error.message || "")) {
       const { slot: _s, ...noSlot } = recipeFields;

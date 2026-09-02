@@ -19,28 +19,19 @@ const oatmeal = {
 };
 
 describe("MealRecipeCard Meals tab logging chrome", () => {
-  it("stretches slot chips across the row and keeps servings on one compact line", () => {
+  it("hides slot chips on bank cards — they do not persist without Save all", () => {
     render(<MealRecipeCard meal={oatmeal} onLog={vi.fn()} />);
 
-    const chips = document.querySelector("[data-slot-chips='fill']");
-    expect(chips).toBeTruthy();
-    expect(chips.style.width).toBe("100%");
-    expect(chips.style.flexWrap).toBe("nowrap");
-    const buttons = [...chips.querySelectorAll("button")];
-    expect(buttons.map((b) => b.textContent)).toEqual(["Breakfast", "Lunch", "Dinner", "Snack"]);
-    for (const btn of buttons) {
-      expect(btn.style.flexGrow).toBe("1");
-      expect(btn.style.flexBasis).toBe("0px");
-    }
+    expect(document.querySelector("[data-slot-chips]")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Breakfast" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Dinner" })).toBeNull();
+    expect(screen.queryByText("Add to")).toBeNull();
+    expect(screen.queryByText("Meal slot")).toBeNull();
 
     const hint = document.querySelector("[data-servings-hint]");
     expect(hint.textContent).toMatch(/Servings to log/);
     expect(hint.textContent).toMatch(/macros only/);
     expect(hint.textContent).toMatch(/recipe stays 1 serving/);
-    expect(hint.getAttribute("title")).toBe(
-      "Scales macros only — recipe amounts stay at one serving",
-    );
-    expect(screen.queryByText("Add to")).toBeNull();
     expect(document.querySelector("[data-recipe-meta]")).toBeNull();
   });
 
@@ -49,7 +40,7 @@ describe("MealRecipeCard Meals tab logging chrome", () => {
 
     expect(screen.queryByText(/breakfast · open recipe/i)).toBeNull();
     expect(document.querySelector("[data-recipe-meta]")).toBeNull();
-    expect(screen.getByRole("button", { name: "Breakfast" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Breakfast" })).toBeNull();
     const nameBtn = screen.getByRole("button", { name: "Open Protein oatmeal recipe" });
     const openBtn = screen.getByRole("button", { name: "Open recipe ▾" });
     expect(nameBtn.compareDocumentPosition(openBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -60,11 +51,10 @@ describe("MealRecipeCard Meals tab logging chrome", () => {
     expect(screen.getByText("Ingredients · one serving")).toBeTruthy();
   });
 
-  it("logs the chosen slot and scaled macros from Add to Today", async () => {
+  it("logs the recipe category slot and scaled macros from Add to Today", async () => {
     const onLog = vi.fn(async () => true);
     render(<MealRecipeCard meal={oatmeal} onLog={onLog} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Dinner" }));
     fireEvent.click(screen.getByRole("button", { name: "More servings" }));
     fireEvent.click(screen.getByRole("button", { name: "More servings" }));
     fireEvent.click(screen.getByRole("button", { name: "More servings" }));
@@ -74,7 +64,7 @@ describe("MealRecipeCard Meals tab logging chrome", () => {
     await waitFor(() => expect(onLog).toHaveBeenCalledTimes(1));
     expect(onLog.mock.calls[0][0]).toMatchObject({
       name: "Protein oatmeal · 2×",
-      slot: "dinner",
+      slot: "breakfast",
       via: "recipe",
       fromPlanner: true,
       cal: 620,
@@ -102,6 +92,16 @@ describe("MealRecipeCard Meals tab logging chrome", () => {
     );
     expect(document.querySelector("[data-recipe-meta]").textContent).toMatch(/Treat/i);
     expect(document.querySelector("[data-recipe-meta]").textContent).toMatch(/batch serves 12/i);
-    expect(screen.getByRole("button", { name: "Snack" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Snack" })).toBeNull();
+  });
+
+  it("can still stretch slot chips when a persistable surface opts in", () => {
+    render(<MealRecipeCard meal={oatmeal} onLog={vi.fn()} showSlotPicker />);
+
+    const chips = document.querySelector("[data-slot-chips='fill']");
+    expect(chips).toBeTruthy();
+    expect(chips.style.width).toBe("100%");
+    const buttons = [...chips.querySelectorAll("button")];
+    expect(buttons.map((b) => b.textContent)).toEqual(["Breakfast", "Lunch", "Dinner", "Snack"]);
   });
 });

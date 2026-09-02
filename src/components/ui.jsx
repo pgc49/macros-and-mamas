@@ -86,9 +86,15 @@ export function MealSearchInput({
   );
 }
 
-export const Chip = ({ active, onClick, children }) => (
-  <button onClick={onClick} style={{
-    padding: "10px 16px", borderRadius: 999, fontSize: 14, fontWeight: 600, cursor: "pointer",
+export const Chip = ({ active, onClick, children, compact = false }) => (
+    <button type="button" onClick={onClick} style={{
+    padding: compact ? "6px 10px" : "10px 16px",
+    borderRadius: 999,
+    fontSize: compact ? 12.5 : 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
     border: `1.5px solid ${active ? T.accent : T.border}`,
     background: active ? T.accentSoft : "#fff", color: active ? T.accentDeep : T.inkSoft,
   }}>{children}</button>

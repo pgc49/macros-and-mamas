@@ -14,25 +14,45 @@ export function LoggableMealRow({
   onLog,
   onRemove,
   onSaveIngredients,
+  onSlotDraftChange,
+  /** Controlled display slot — do not write this onto `meal` (keeps row identity stable). */
+  slotValue,
   accent = false,
   /** Show breakfast/lunch/dinner/snack chips before Add (default on). */
   showSlotPicker = true,
   /** Tighter Today → My plan cards so more than two meals fit. */
   compact = false,
 }) {
-  const initialSlot = normalizeSlot(meal.slot || meal.cat) || guessSlotFromTime();
+  const controlledSlot = typeof onSlotDraftChange === "function";
+  const parentSlot = normalizeSlot(slotValue ?? meal.slot ?? meal.cat);
   const [qty, setQty] = useState(1);
-  const [slot, setSlot] = useState(initialSlot);
+  const [localSlot, setLocalSlot] = useState(() => parentSlot || guessSlotFromTime());
   const [phase, setPhase] = useState("idle"); // idle | busy | done
   const [showRecipe, setShowRecipe] = useState(false);
   const [ingDraft, setIngDraft] = useState(String(meal.ingredients || ""));
   const [ingBusy, setIngBusy] = useState(false);
   const [ingNote, setIngNote] = useState("");
+  const slot = controlledSlot ? parentSlot : localSlot;
 
   const servings = snapServings(qty);
   const scaled = scaleMealForLog(meal, servings);
   const hasIngredients = Boolean(String(meal.ingredients || "").trim());
   const canEditIngredients = typeof onSaveIngredients === "function";
+
+  const slotMealKey = meal.id != null && String(meal.id).trim()
+    ? `id:${String(meal.id).trim()}`
+    : String(meal.name || "").trim() ? `name:${String(meal.name).trim()}` : "";
+
+  const handleSlotChange = (next, fromKey) => {
+    if (!next) return;
+    if (fromKey && slotMealKey && fromKey !== slotMealKey) return;
+    if (controlledSlot) {
+      onSlotDraftChange(next);
+      return;
+    }
+    if (next === localSlot) return;
+    setLocalSlot(next);
+  };
 
   const label =
     phase === "idle" ? "Add to Today"
@@ -46,7 +66,7 @@ export function LoggableMealRow({
       const ok = await onLog?.({
         ...scaled,
         via,
-        slot: showSlotPicker ? slot : (meal.slot || meal.cat || slot),
+        slot: showSlotPicker ? (slot || guessSlotFromTime()) : (meal.slot || meal.cat || slot),
       });
       if (ok === false) {
         setPhase("idle");
@@ -68,6 +88,7 @@ export function LoggableMealRow({
       const saved = await onSaveIngredients({
         ...meal,
         ingredients: ingDraft.trim(),
+        slot: controlledSlot ? (meal.slot || meal.cat) : slot,
       });
       if (saved === false || saved == null) {
         setIngNote("Couldn't save — try again");
@@ -84,6 +105,8 @@ export function LoggableMealRow({
 
   return (
     <div
+      data-loggable-meal=""
+      data-meal-id={meal.id || undefined}
       style={{
         border: `1.5px solid ${accent ? T.accent : T.border}`,
         borderRadius: compact ? 10 : 12,
@@ -167,9 +190,9 @@ export function LoggableMealRow({
       {showSlotPicker && !compact && (
         <div style={{ marginTop: 10 }}>
           <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginBottom: 6 }}>
-            Add to
+            Meal slot
           </div>
-          <SlotChips value={slot} onChange={setSlot} compact />
+          <SlotChips value={slot} onChange={handleSlotChange} compact mealKey={slotMealKey} />
         </div>
       )}
 
@@ -183,7 +206,7 @@ export function LoggableMealRow({
       }}
       >
         {showSlotPicker && compact && (
-          <SlotChips value={slot} onChange={setSlot} compact />
+          <SlotChips value={slot} onChange={handleSlotChange} compact mealKey={slotMealKey} />
         )}
         <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 8, marginLeft: compact ? "auto" : 0 }}>
           {!compact && (

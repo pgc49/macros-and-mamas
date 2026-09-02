@@ -2,7 +2,7 @@ import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { RECIPES, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
-import { Shell, Card, Chip, RangeBand, rangeState } from "../components/ui";
+import { Shell, Card, Chip, Btn, RangeBand, rangeState } from "../components/ui";
 import { MealSlotFilterBar } from "../components/MealSlotFilterBar";
 import { formatRangeProgress } from "../utils/rangeProgress";
 import { MealLogCard } from "../components/MealLogCard";
@@ -31,14 +31,115 @@ import {
 } from "../utils/eatingOutImpact";
 import {
   filterMealsByQuery,
+  isMealsDecideFilter,
   isMealsTabSlotFilter,
+  MEALS_DECIDE_FILTER,
   MEALS_TAB_SECTIONS,
   MEALS_TAB_SLOT_FILTERS,
   mealMatchesQuery,
   uniqueMealsByName,
 } from "../utils/mealSearch";
 import { db } from "../db/db";
-import { useState } from "react";
+import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
+import { applySlotDraft, customMealId, customMealKey, slotOnlySavePayload } from "../utils/customMeals";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+function customMealSavedSlot(meal) {
+  return normalizeSlot(meal?.slot || meal?.cat);
+}
+
+function tapUnlessMoved(onTap, threshold = 10) {
+  let x = 0;
+  let y = 0;
+  return {
+    onPointerDown: (e) => {
+      x = e.clientX;
+      y = e.clientY;
+    },
+    onClick: (e) => {
+      if (Math.abs(e.clientX - x) > threshold || Math.abs(e.clientY - y) > threshold) {
+        e.preventDefault();
+        return;
+      }
+      onTap(e);
+    },
+  };
+}
+
+const MyMealLogRow = memo(function MyMealLogRow({
+  meal,
+  draftSlot,
+  savedSlot,
+  onSlotDraft,
+  onLog,
+  onRemove,
+  onSaveIngredients,
+}) {
+  const idRef = useRef(customMealId(meal));
+  const key = customMealKey({ id: idRef.current || meal.id, name: meal.name });
+  const handleDraft = useCallback((next) => {
+    onSlotDraft(key, next, savedSlot);
+  }, [key, savedSlot, onSlotDraft]);
+  return (
+    <LoggableMealRow
+      meal={meal}
+      slotValue={draftSlot}
+      via="custom"
+      accent
+      onLog={onLog}
+      onRemove={onRemove}
+      onSlotDraftChange={handleDraft}
+      onSaveIngredients={onSaveIngredients}
+    />
+  );
+});
+
+/** Portal to body — Shell overflow traps position:fixed unless the bar leaves the scroll box. */
+function SaveAllDock({ children }) {
+  const [bottom, setBottom] = useState(72);
+  useEffect(() => {
+    const el = document.querySelector(".mam-tabbar");
+    if (!el) {
+      setBottom(0);
+      return undefined;
+    }
+    const sync = () => setBottom(Math.ceil(el.getBoundingClientRect().height));
+    sync();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      data-my-meals-save-all
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom,
+        zIndex: 40,
+        display: "flex",
+        justifyContent: "center",
+        pointerEvents: "none",
+      }}
+    >
+      <div style={{
+        pointerEvents: "auto",
+        maxWidth: 560,
+        width: "100%",
+        padding: "0 16px 8px",
+        boxSizing: "border-box",
+      }}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 export function ClientApp({
   tab, setTab,
@@ -76,6 +177,7 @@ export function ClientApp({
   onSuggestAiWeek,
   onMealIdea,
   onSaveFoodPrefs,
+  onOpenDecide,
   userId = null,
   unreadMessages = 0,
   onUnreadMessagesChange,
@@ -86,6 +188,10 @@ export function ClientApp({
   const [fitsRemainingOnly, setFitsRemainingOnly] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [myMealsAddOpen, setMyMealsAddOpen] = useState(false);
+  const [pendingSlots, setPendingSlots] = useState({});
+  const pendingSlotsRef = useRef(pendingSlots);
+  const [saveAllBusy, setSaveAllBusy] = useState(false);
+  const [saveAllNote, setSaveAllNote] = useState("");
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
@@ -101,23 +207,131 @@ export function ClientApp({
     : PANTRY_ITEMS.filter((item) => item.group === pantryGroup)
   ).filter((item) => mealMatchesQuery(item, mealQuery)));
   const bankSource = personalized ? uniqueMealsByName(flatPersonalized) : RECIPES;
-  const isBankFilter = mealFilter === "All meals"
-    || mealFilter === "Breakfast"
-    || mealFilter === "Lunch"
-    || mealFilter === "Dinner"
-    || mealFilter === "Snack"
-    || mealFilter === "Treats";
-  const mealsSlotValue = isMealsTabSlotFilter(mealFilter)
-    ? mealFilter
-    : mealFilter === "My meals"
+  const prevTabRef = useRef(tab);
+  const crossedToMeals = tab === "meals" && prevTabRef.current !== "meals";
+  if (prevTabRef.current !== tab) prevTabRef.current = tab;
+  // Same-paint Decide when crossing into Meals — do not setState during render
+  // (that updates the parent while ClientApp is rendering). openTab / the
+  // first-mount effect sync mealFilter after the event.
+  const viewFilter = crossedToMeals ? MEALS_DECIDE_FILTER : mealFilter;
+
+  const isBankFilter = viewFilter === "All meals"
+    || viewFilter === "Breakfast"
+    || viewFilter === "Lunch"
+    || viewFilter === "Dinner"
+    || viewFilter === "Snack"
+    || viewFilter === "Treats";
+  const mealsSlotValue = isMealsTabSlotFilter(viewFilter)
+    ? viewFilter
+    : viewFilter === "My meals"
       ? "My meals"
       : "All meals";
-  const showMealsSearch = isBankFilter || mealFilter === "My meals" || mealFilter === "Pantry";
+  const showMealsSearch = isBankFilter || viewFilter === "My meals" || viewFilter === "Pantry";
+  const onDecideHome = isMealsDecideFilter(viewFilter);
+  const decideSlotAsk = ({
+    breakfast: "Know what breakfast is yet? I'll size it to what's left.",
+    lunch: "Know what lunch is yet? I'll size it to what's left.",
+    dinner: "Know what dinner is yet? I'll size it to what's left.",
+    snack: "Know what a snack is yet? I'll size it to what's left.",
+  })[guessSlotFromTime()] || "I'll size this slot to what's left today.";
+  const openDecideExperience = () => {
+    if (onOpenDecide) onOpenDecide();
+    else setTab("today");
+  };
   const visibleBank = applyFitsFilter(bankSource.filter((m) => {
-    if (mealFilter !== "All meals" && (m.cat || "") !== mealFilter) return false;
+    if (viewFilter !== "All meals" && (m.cat || "") !== viewFilter) return false;
     return mealMatchesQuery(m, mealQuery);
   }));
   const visibleCustomMeals = applyFitsFilter(filterMealsByQuery(customMeals, mealQuery));
+  const pendingSlotCount = Object.keys(pendingSlots).length;
+
+  const draftSlotFor = (meal) => pendingSlots[customMealKey(meal)] ?? customMealSavedSlot(meal);
+
+  const writePendingSlots = (next) => {
+    pendingSlotsRef.current = next;
+    setPendingSlots(next);
+  };
+
+  const setMealSlotDraft = useCallback((key, nextSlot, savedSlot) => {
+    if (!key) return;
+    setSaveAllNote("");
+    const next = applySlotDraft(pendingSlotsRef.current, key, nextSlot, savedSlot);
+    if (next === pendingSlotsRef.current) return;
+    writePendingSlots(next);
+  }, []);
+
+  const landedOnMealsRef = useRef(false);
+  useEffect(() => {
+    if (tab !== "meals") {
+      landedOnMealsRef.current = false;
+      return;
+    }
+    if (landedOnMealsRef.current) return;
+    landedOnMealsRef.current = true;
+    setMealFilter(MEALS_DECIDE_FILTER);
+    setMealQuery("");
+    setSlotFilterOpen(false);
+    setFitsRemainingOnly(false);
+    setMyMealsAddOpen(false);
+  }, [tab, setMealFilter]);
+
+  const openTab = (nextTab) => {
+    if (nextTab === "meals") {
+      landedOnMealsRef.current = false;
+      setMealFilter(MEALS_DECIDE_FILTER);
+      setMealQuery("");
+      setSlotFilterOpen(false);
+      setFitsRemainingOnly(false);
+      setMyMealsAddOpen(false);
+    }
+    setTab(nextTab);
+  };
+
+  const persistCustomMealSlot = (meal, slot) => {
+    const payload = slotOnlySavePayload(meal, slot);
+    if (!payload) return null;
+    return onSaveCustomMeal?.(payload, { keepOrder: true, slotOnly: true });
+  };
+
+  const saveAllMyMealSlots = async () => {
+    if (saveAllBusy || !pendingSlotCount) return;
+    const entries = Object.entries(pendingSlots);
+    if (!entries.length) return;
+    setSaveAllBusy(true);
+    setSaveAllNote("");
+    const confirmed = [];
+    let failed = false;
+    // Sequential + id-only so parallel name upserts cannot retag the wrong row.
+    for (const [key, slot] of entries) {
+      const meal = customMeals.find((m) => customMealKey(m) === key);
+      if (!meal || !customMealId(meal)) {
+        failed = true;
+        continue;
+      }
+      try {
+        const saved = await persistCustomMealSlot(meal, slot);
+        if (saved != null && saved !== false) confirmed.push({ key, slot });
+        else failed = true;
+      } catch {
+        failed = true;
+      }
+    }
+    const next = { ...pendingSlotsRef.current };
+    for (const { key, slot } of confirmed) {
+      if (next[key] === slot) delete next[key];
+    }
+    writePendingSlots(next);
+    const remaining = Object.keys(next).length;
+    if (failed) {
+      setSaveAllNote("Couldn't save some slots — try again");
+    } else if (remaining === 0) {
+      setSaveAllNote("Saved");
+      window.setTimeout(() => {
+        setSaveAllNote((note) => (note === "Saved" ? "" : note));
+      }, 2000);
+    }
+    setSaveAllBusy(false);
+  };
   const searchingMeals = Boolean(String(mealQuery || "").trim());
   const fitsEmptyHint = fitsRemainingOnly
     ? " Nothing here fits your remaining macros — turn the filter off to browse everything."
@@ -171,7 +385,7 @@ export function ClientApp({
         <button
           key={k}
           type="button"
-          onClick={() => setTab(k)}
+          onClick={() => openTab(k)}
           style={{
             fontFamily: F,
             fontSize: 13.5,
@@ -397,38 +611,76 @@ export function ClientApp({
             </Card>
           ) : null}
 
-          {mealFilter !== "Plan" && mealFilter !== "Food prefs" && (
+          {onDecideHome ? (
             <>
               <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
-                {mealFilter === "My meals"
-                  ? "My meals"
-                  : mealFilter === "Pantry"
-                    ? "Pantry staples"
-                    : mealFilter === "All meals"
-                      ? "All meals"
-                      : "Recipe bank"}
+                Help me decide
               </h2>
               <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-                {mealFilter === "My meals"
-                  ? "Saved meals for one-tap logging — add a few, then hop to Today when you’re ready."
-                  : mealFilter === "Pantry"
-                    ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap Add to Today as many times as you need."
-                    : mealFilter === "All meals"
-                      ? "Search Callie’s recipes, or pick a slot. Tap Add to Today — you stay here so you can keep going."
-                      : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
+                Knows your prefs, your saved meals, your log.
               </p>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setMealFilter(MEALS_DECIDE_FILTER);
+                  setMealQuery("");
+                  setSlotFilterOpen(false);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  margin: "4px 0 8px",
+                  fontFamily: F,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: T.accentDeep,
+                  cursor: "pointer",
+                }}
+              >
+                Help me decide
+              </button>
+              {viewFilter !== "Plan" && viewFilter !== "Food prefs" && (
+                <>
+                  <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
+                    {viewFilter === "My meals"
+                      ? "My meals"
+                      : viewFilter === "Pantry"
+                        ? "Pantry staples"
+                        : viewFilter === "All meals"
+                          ? "All meals"
+                          : "Recipe bank"}
+                  </h2>
+                  <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
+                    {viewFilter === "My meals"
+                      ? "Saved meals for one-tap logging — add a few, then hop to Today when you’re ready."
+                      : viewFilter === "Pantry"
+                        ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap Add to Today as many times as you need."
+                        : viewFilter === "All meals"
+                          ? "Search Callie’s recipes, or pick a slot. Tap Add to Today — you stay here so you can keep going."
+                          : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
+                  </p>
+                </>
+              )}
             </>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          <div
+            data-meals-sections
+            style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "nowrap", overflowX: "auto" }}
+          >
             {MEALS_TAB_SECTIONS.map((section) => {
-              const active = mealFilter === section.id;
+              const active = viewFilter === section.id;
               const label = section.id === "Plan" && plannedCount
                 ? `${section.label} · ${plannedCount}`
                 : section.label;
               return (
                 <Chip
                   key={section.id}
+                  compact
                   active={active}
                   onClick={() => {
                     setMealFilter(active ? "All meals" : section.id);
@@ -442,23 +694,34 @@ export function ClientApp({
             })}
           </div>
 
+          {onDecideHome && (
+            <div data-meals-decide-entry>
+              <Card style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 15, color: T.ink, lineHeight: 1.5, marginBottom: 12 }}>
+                  {decideSlotAsk}
+                </div>
+                <Btn onClick={openDecideExperience}>Help me decide</Btn>
+              </Card>
+            </div>
+          )}
+
           {showMealsSearch && (
             <>
               <MealSlotFilterBar
                 query={mealQuery}
                 onQueryChange={setMealQuery}
-                placeholder={mealFilter === "My meals" ? "Search my meals" : "Search meals"}
+                placeholder={viewFilter === "My meals" ? "Search my meals" : "Search meals"}
                 filters={MEALS_TAB_SLOT_FILTERS}
                 value={mealsSlotValue}
                 onChange={(next) => {
                   setMealFilter(next);
                   if (next === "Pantry") setPantryGroup("all");
                 }}
-                allValue={mealFilter === "My meals" ? "My meals" : "All meals"}
+                allValue={viewFilter === "My meals" ? "My meals" : "All meals"}
                 open={slotFilterOpen}
                 onOpenChange={setSlotFilterOpen}
                 fitsActive={fitsRemainingOnly}
-                onFitsChange={canFilterFits ? setFitsRemainingOnly : undefined}
+                onFitsChange={canFilterFits ? ((on) => setFitsRemainingOnly(Boolean(on))) : undefined}
               />
               {fitsRemainingOnly && remainingRoom && (
                 <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "-4px 0 12px", lineHeight: 1.45 }}>
@@ -468,7 +731,7 @@ export function ClientApp({
             </>
           )}
 
-          {mealFilter === "Plan" && (
+          {viewFilter === "Plan" && (
             <ErrorBoundary
               name="WeekPlanner"
               title="Plan my week hit a snag"
@@ -494,15 +757,16 @@ export function ClientApp({
             </ErrorBoundary>
           )}
 
-          {mealFilter === "Food prefs" && (
+          {viewFilter === "Food prefs" && (
             <FoodPrefsEditor profile={profile} onSave={onSaveFoodPrefs} />
           )}
 
-          {mealFilter === "My meals" && (
+          {viewFilter === "My meals" && (
             <div style={{ marginBottom: 12 }}>
               <button
                 type="button"
-                onClick={() => setMyMealsAddOpen(true)}
+                data-add-meal=""
+                {...tapUnlessMoved(() => setMyMealsAddOpen(true))}
                 style={{
                   width: "100%",
                   padding: "12px 14px",
@@ -516,6 +780,7 @@ export function ClientApp({
                   cursor: "pointer",
                   textAlign: "left",
                   marginBottom: 12,
+                  touchAction: "manipulation",
                 }}
               >
                 ＋ Add meal
@@ -527,7 +792,11 @@ export function ClientApp({
                 <MyMealsAddSheet
                   macros={macros}
                   customMeals={customMeals}
-                  onClose={() => setMyMealsAddOpen(false)}
+                  onClose={(e) => {
+                    e?.preventDefault?.();
+                    e?.stopPropagation?.();
+                    window.setTimeout(() => setMyMealsAddOpen(false), 0);
+                  }}
                   onEstimateRecipe={onEstimateRecipe}
                   onSaveCustomMeal={onSaveCustomMeal}
                   onMealIdea={onMealIdea}
@@ -549,31 +818,110 @@ export function ClientApp({
                   </div>
                 </Card>
               ) : (
-                visibleCustomMeals.map((m) => (
-                  <LoggableMealRow
-                    key={m.id}
-                    meal={m}
-                    via="custom"
-                    accent
-                    onLog={logRecipe}
-                    onRemove={() => onDeleteCustomMeal?.(m.id)}
-                    onSaveIngredients={(meal) => onSaveCustomMeal?.({
-                      name: meal.name,
-                      cal: meal.cal,
-                      p: meal.p,
-                      c: meal.c,
-                      f: meal.f,
-                      serves: meal.serves,
-                      ingredients: meal.ingredients,
-                      slot: meal.slot || meal.cat || m.slot || m.cat,
-                    })}
-                  />
-                ))
+                <>
+                  {visibleCustomMeals.map((m) => {
+                    const rowKey = customMealKey(m);
+                    const draftSlot = draftSlotFor(m);
+                    const savedSlot = customMealSavedSlot(m);
+                    return (
+                      <MyMealLogRow
+                        key={rowKey}
+                        meal={m}
+                        draftSlot={draftSlot}
+                        savedSlot={savedSlot}
+                        onSlotDraft={setMealSlotDraft}
+                        onLog={logRecipe}
+                        onRemove={() => onDeleteCustomMeal?.(m.id)}
+                        onSaveIngredients={async (meal) => {
+                          const saved = await onSaveCustomMeal?.({
+                            id: m.id,
+                            name: meal.name,
+                            cal: meal.cal,
+                            p: meal.p,
+                            c: meal.c,
+                            f: meal.f,
+                            serves: meal.serves,
+                            ingredients: meal.ingredients,
+                            slot: savedSlot || m.slot || m.cat,
+                          }, { keepOrder: true });
+                          if (saved != null && saved !== false) {
+                            if (rowKey in pendingSlotsRef.current) {
+                              const next = { ...pendingSlotsRef.current };
+                              delete next[rowKey];
+                              writePendingSlots(next);
+                            }
+                          }
+                          return saved;
+                        }}
+                      />
+                    );
+                  })}
+                  <div data-pending-slots={JSON.stringify(pendingSlots)} hidden />
+                  {visibleCustomMeals.length > 0 ? (
+                    <div aria-hidden="true" style={{ height: pendingSlotCount > 0 || saveAllNote ? 72 : 0 }} />
+                  ) : null}
+                  {(pendingSlotCount > 0 || saveAllNote) ? (
+                    <SaveAllDock>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 10,
+                          padding: "10px 12px",
+                          borderRadius: 12,
+                          background: T.accentSoft,
+                          border: `1.5px solid ${T.accent}`,
+                          boxShadow: "0 -8px 20px rgba(51, 39, 46, 0.08)",
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          {pendingSlotCount > 0 ? (
+                            <div style={{ fontWeight: 700, fontSize: 13, color: T.accentDeep }}>
+                              {pendingSlotCount === 1 ? "1 meal slot changed" : `${pendingSlotCount} meal slots changed`}
+                            </div>
+                          ) : null}
+                          {saveAllNote ? (
+                            <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginTop: pendingSlotCount ? 2 : 0 }}>
+                              {saveAllNote}
+                            </div>
+                          ) : null}
+                        </div>
+                        {pendingSlotCount > 0 ? (
+                          <button
+                            type="button"
+                            disabled={saveAllBusy}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              saveAllMyMealSlots();
+                            }}
+                            style={{
+                              fontFamily: F,
+                              fontSize: 13,
+                              fontWeight: 700,
+                              padding: "7px 14px",
+                              borderRadius: 999,
+                              border: `1.5px solid ${T.accent}`,
+                              background: "#fff",
+                              color: T.accentDeep,
+                              cursor: saveAllBusy ? "default" : "pointer",
+                              flexShrink: 0,
+                              opacity: saveAllBusy ? 0.7 : 1,
+                            }}
+                          >
+                            {saveAllBusy ? "Saving…" : "Save all"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </SaveAllDock>
+                  ) : null}
+                </>
               )}
             </div>
           )}
 
-          {mealFilter === "Pantry" && (
+          {viewFilter === "Pantry" && (
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
                 <Chip active={pantryGroup === "all"} onClick={() => setPantryGroup("all")}>All</Chip>
@@ -600,6 +948,7 @@ export function ClientApp({
                   key={item.name}
                   meal={item}
                   via="recipe"
+                  showSlotPicker={false}
                   onLog={logRecipe}
                 />
               ))}

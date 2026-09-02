@@ -8,6 +8,7 @@ import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
 import { resolveLogSlot } from "./utils/mealSlots";
+import { MEALS_DECIDE_FILTER } from "./utils/mealSearch";
 import {
   adherenceForWeek,
   buildMacroHistory,
@@ -62,6 +63,7 @@ import { signedOutJoinRedirect } from "./auth/quizSignupBounce";
 import { isAdminSignupLockedSurface } from "./auth/adminSignupLock";
 import { nextAuthSwitch, resolveSignInMode } from "./auth/signInMode";
 import { ageFromDateOfBirth } from "./db/db";
+import { mergeSavedCustomMeal } from "./utils/customMeals";
 
 /**
  * /signin entry: quiz Lock my spot carries ?from=quiz&email=.
@@ -364,7 +366,7 @@ export default function App() {
   const [viewWk, setViewWk] = useState(curWk);
   const [editPast, setEditPast] = useState(false);
   const [weighins, setWeighins] = useState([]);
-  const [mealFilter, setMealFilter] = useState("All meals");
+  const [mealFilter, setMealFilter] = useState("Decide");
   const [mealPlanMode, setMealPlanMode] = useState("default");
   const [publishedPlan, setPublishedPlan] = useState(null);
   const [weekPlanDays, setWeekPlanDays] = useState([]);
@@ -1156,13 +1158,12 @@ export default function App() {
     return true;
   };
 
-  const saveCustomMeal = async (meal) => {
+  const saveCustomMeal = async (meal, opts = {}) => {
     try {
-      const saved = await db.saveCustomMeal(meal);
-      setCustomMeals((list) => {
-        const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
-        return [saved, ...without];
-      });
+      const saved = opts.slotOnly
+        ? await db.saveCustomMealSlot(meal.id, meal.slot)
+        : await db.saveCustomMeal(meal);
+      setCustomMeals((list) => mergeSavedCustomMeal(list, saved, opts));
       return saved;
     } catch (e) {
       console.error("saveCustomMeal failed", e);
@@ -1551,7 +1552,10 @@ export default function App() {
   const clientApp = (
     <ClientApp
       tab={tab}
-      setTab={setTab}
+      setTab={(next) => {
+        if (next === "meals") setMealFilter(MEALS_DECIDE_FILTER);
+        setTab(next);
+      }}
       profile={profile}
       macros={macros}
       totals={totals}
@@ -1620,6 +1624,7 @@ export default function App() {
       onSuggestAiWeek={onSuggestAiWeek}
       onMealIdea={onMealIdea}
       onSaveFoodPrefs={onSaveFoodPrefs}
+      onOpenDecide={() => setTab("today")}
       onHomescreenTipDismissed={(at) => {
         setProfile((p) => ({ ...p, homescreenTipDismissedAt: at }));
       }}

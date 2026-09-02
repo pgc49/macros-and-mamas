@@ -1,18 +1,28 @@
 import { useState } from "react";
 import { ClientApp } from "./ClientApp";
+import { mergeSavedCustomMeal } from "../utils/customMeals";
+import { MEALS_DECIDE_FILTER } from "../utils/mealSearch";
 
 const noop = () => {};
 const noopAsync = async () => true;
 
 /** Local-only preview of Meals tab chips + search filter. */
 export function MealsTabPreview() {
-  const [mealFilter, setMealFilter] = useState("All meals");
+  const [mealFilter, setMealFilter] = useState("Decide");
   const [tab, setTab] = useState("meals");
+  const [customMeals, setCustomMeals] = useState([
+    { id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 },
+    { id: "c2", name: "Yogurt bowl", cal: 280, p: 28, c: 30, f: 6, slot: "breakfast" },
+    { id: "c3", name: "Steak Tacos", cal: 480, p: 38, c: 36, f: 18, slot: "lunch" },
+  ]);
 
   return (
     <ClientApp
       tab={tab}
-      setTab={setTab}
+      setTab={(next) => {
+        if (next === "meals") setMealFilter(MEALS_DECIDE_FILTER);
+        setTab(next);
+      }}
       profile={{ name: "Pat" }}
       macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
       totals={{ cal: 1400, p: 90, c: 120, f: 45 }}
@@ -38,15 +48,15 @@ export function MealsTabPreview() {
       onAddWater={noop}
       onUndoWater={noop}
       onChangeBottleOz={noop}
-      viewWk={1}
+      viewWk="2026-08-24"
       setViewWk={noop}
-      curWk={1}
+      curWk="2026-08-24"
       editPast={false}
       setEditPast={noop}
       checksByWeek={{}}
       toggleCheck={noop}
-      adherenceFor={() => ({})}
-      progWeekNum={1}
+      adherenceFor={() => 0}
+      progWeekNum={() => 1}
       earliestWk="2026-08-24"
       weighins={[]}
       logWeighin={noop}
@@ -56,10 +66,14 @@ export function MealsTabPreview() {
       macroHistory={[]}
       mealFilter={mealFilter}
       setMealFilter={setMealFilter}
-      customMeals={[
-        { id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 },
-        { id: "c2", name: "Yogurt bowl", cal: 280, p: 28, c: 30, f: 6, slot: "breakfast" },
-      ]}
+      customMeals={customMeals}
+      onSaveCustomMeal={async (meal, opts = {}) => {
+        const saved = opts.slotOnly
+          ? { ...customMeals.find((m) => m.id === meal.id), slot: meal.slot }
+          : { ...meal, id: meal.id || `c-${meal.name}` };
+        setCustomMeals((list) => mergeSavedCustomMeal(list, saved, opts));
+        return saved;
+      }}
       weekPlanDays={[]}
     />
   );
