@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MealLogCard } from "./MealLogCard";
 
 afterEach(() => {
@@ -77,5 +77,46 @@ describe("MealLogCard My plan list", () => {
     expect(screen.getByText("Turkey and Bacon")).toBeTruthy();
     expect(screen.getByText("Pulled chicken tacos")).toBeTruthy();
     expect(screen.queryByText("Protein oatmeal")).toBeNull();
+  });
+});
+
+describe("MealLogCard Save to today", () => {
+  it("does not call onConfirmEstimate twice while the first save is pending", async () => {
+    let resolveConfirm;
+    const onConfirmEstimate = vi.fn(() => new Promise((resolve) => {
+      resolveConfirm = resolve;
+    }));
+
+    render(
+      <MealLogCard
+        estimate={{
+          meal: "Eggs and toast",
+          calories: 420,
+          protein_g: 28,
+          carbs_g: 32,
+          fat_g: 18,
+          items: ["2 eggs", "toast"],
+          confidence: "medium",
+        }}
+        onConfirmEstimate={onConfirmEstimate}
+      />,
+    );
+
+    const save = await waitFor(() => screen.getByRole("button", { name: "Save to today" }));
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(onConfirmEstimate).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => {
+      const saving = screen.getByRole("button", { name: "Saving…" });
+      expect(saving.disabled).toBe(true);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Saving…" }));
+    expect(onConfirmEstimate).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "discard" }).disabled).toBe(true);
+
+    resolveConfirm(true);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Saving…" })).toBeNull());
+    expect(onConfirmEstimate).toHaveBeenCalledTimes(1);
   });
 });
