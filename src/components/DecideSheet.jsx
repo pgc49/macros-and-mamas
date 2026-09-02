@@ -439,6 +439,7 @@ export function DecideSheet({
         display: "flex",
         flexDirection: "column",
         justifyContent: "flex-end",
+        overflow: "hidden",
       }}
     >
       <button
@@ -458,6 +459,9 @@ export function DecideSheet({
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           height: "90vh",
+          maxHeight: "90vh",
+          minHeight: 0,
+          flexShrink: 0,
           background: "#fff",
           borderRadius: "28px 28px 0 0",
           padding: "8px 16px 0",

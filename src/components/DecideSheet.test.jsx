@@ -56,6 +56,8 @@ describe("Help me decide entry", () => {
     const chrome = document.querySelector("[data-decide-sheet-chrome]");
     const back = screen.getByRole("button", { name: DECIDE_COPY.back });
     expect(dialog.style.overflow).toBe("hidden");
+    expect(dialog.style.maxHeight).toBe("90vh");
+    expect(dialog.style.minHeight).toBe("0px");
     expect(scroll).toBeTruthy();
     expect(scroll.style.flexGrow).toBe("1");
     expect(scroll.style.minHeight).toBe("0px");
