@@ -1,9 +1,35 @@
 import { T, F } from "../theme/tokens";
 import { MealSearchInput } from "./ui";
 
+function FilterChip({ active, onClick, children, role = "option" }) {
+  return (
+    <button
+      type="button"
+      role={role}
+      aria-pressed={role === "button" ? active : undefined}
+      aria-selected={role === "option" ? active : undefined}
+      onClick={onClick}
+      style={{
+        fontFamily: F,
+        fontSize: 11.5,
+        fontWeight: 700,
+        padding: "5px 10px",
+        borderRadius: 999,
+        border: `1.5px solid ${active ? T.accent : T.border}`,
+        background: active ? T.accentSoft : "#fff",
+        color: active ? T.accentDeep : T.inkSoft,
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 /**
  * Search field + funnel filter used on Today → My plan and Meals.
  * Slot chips stay hidden until she opens the filter (or a slot is active).
+ * Optional "Fits what's left" is always visible — it composes with the slot.
  */
 export function MealSlotFilterBar({
   query,
@@ -16,8 +42,15 @@ export function MealSlotFilterBar({
   allLabel = "All",
   open,
   onOpenChange,
+  fitsActive = false,
+  onFitsChange,
+  fitsLabel = "Fits what's left",
 }) {
-  const filtering = Boolean(value && value !== allValue);
+  const slotFiltering = Boolean(value && value !== allValue);
+  const filtering = slotFiltering || Boolean(fitsActive);
+  const filterBits = [slotFiltering ? value : null, fitsActive ? fitsLabel : null].filter(Boolean);
+  const filterAria = filterBits.length ? `Filter meals · ${filterBits.join(" · ")}` : "Filter meals";
+  const showFits = typeof onFitsChange === "function";
 
   return (
     <div>
@@ -30,7 +63,7 @@ export function MealSlotFilterBar({
         />
         <button
           type="button"
-          aria-label={filtering ? `Filter meals · ${value}` : "Filter meals"}
+          aria-label={filterAria}
           aria-expanded={open}
           aria-haspopup="listbox"
           onClick={() => onOpenChange?.(!open)}
@@ -74,59 +107,44 @@ export function MealSlotFilterBar({
           )}
         </button>
       </div>
-      {(open || filtering) && (
+      {showFits && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+          <FilterChip
+            role="button"
+            active={Boolean(fitsActive)}
+            onClick={() => onFitsChange(!fitsActive)}
+          >
+            {fitsLabel}
+          </FilterChip>
+        </div>
+      )}
+      {(open || slotFiltering) && (
         <div
           role="listbox"
           aria-label="Filter by meal"
           style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}
         >
-          <button
-            type="button"
-            role="option"
-            aria-selected={!filtering}
+          <FilterChip
+            active={!slotFiltering}
             onClick={() => {
               onChange?.(allValue);
               onOpenChange?.(false);
             }}
-            style={{
-              fontFamily: F,
-              fontSize: 11.5,
-              fontWeight: 700,
-              padding: "5px 10px",
-              borderRadius: 999,
-              border: `1.5px solid ${!filtering ? T.accent : T.border}`,
-              background: !filtering ? T.accentSoft : "#fff",
-              color: !filtering ? T.accentDeep : T.inkSoft,
-              cursor: "pointer",
-            }}
           >
             {allLabel}
-          </button>
+          </FilterChip>
           {filters.map((c) => {
             const active = value === c;
             return (
-              <button
+              <FilterChip
                 key={c}
-                type="button"
-                role="option"
-                aria-selected={active}
+                active={active}
                 onClick={() => {
                   onChange?.(active ? allValue : c);
                 }}
-                style={{
-                  fontFamily: F,
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  padding: "5px 10px",
-                  borderRadius: 999,
-                  border: `1.5px solid ${active ? T.accent : T.border}`,
-                  background: active ? T.accentSoft : "#fff",
-                  color: active ? T.accentDeep : T.inkSoft,
-                  cursor: "pointer",
-                }}
               >
                 {c}
-              </button>
+              </FilterChip>
             );
           })}
         </div>

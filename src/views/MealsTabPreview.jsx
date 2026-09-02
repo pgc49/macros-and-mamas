@@ -15,7 +15,7 @@ export function MealsTabPreview() {
       setTab={setTab}
       profile={{ name: "Pat" }}
       macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
-      totals={{ p: 0, c: 0, f: 0, cal: 0 }}
+      totals={{ cal: 1400, p: 90, c: 120, f: 45 }}
       waterOz={80}
       estimateBusy={false}
       estimate={null}

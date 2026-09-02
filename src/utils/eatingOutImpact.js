@@ -1,7 +1,12 @@
 /**
- * Day-range impact helpers for restaurant menu picks.
- * remaining = room to day HIGH before this meal.
+ * Day-range impact helpers for restaurant menu picks and the Meals bank
+ * "Fits what's left" filter. remaining = room to day HIGH before this meal.
+ *
+ * Slack matches "ranges, not rules" — a meal still fits if it nicks the high
+ * by a little (same walls as eating-out ranking).
  */
+
+export const REMAINING_OVER_SLACK = { cal: 40, p: 8, c: 15, f: 8 };
 
 export function roomLeftFromTotals(dayTotals, bands) {
   const totals = dayTotals || { cal: 0, p: 0, c: 0, f: 0 };
@@ -20,20 +25,58 @@ export function roomLeftFromTotals(dayTotals, bands) {
   };
 }
 
-export function eatingOutDayImpact(meal, remaining, dayTotals, bands) {
-  if (!meal || !bands || !remaining) return null;
-  const m = {
-    cal: Number(meal.cal) || 0,
-    p: Number(meal.p) || 0,
-    c: Number(meal.c) || 0,
-    f: Number(meal.f) || 0,
+export function mealMacros(meal) {
+  return {
+    cal: Number(meal?.cal) || 0,
+    p: Number(meal?.p) || 0,
+    c: Number(meal?.c) || 0,
+    f: Number(meal?.f) || 0,
   };
-  const left = {
+}
+
+/** Room to day high after adding this meal (negative = over). */
+export function remainingAfterMeal(meal, remaining) {
+  if (!remaining) return null;
+  const m = mealMacros(meal);
+  return {
     cal: remaining.cal - m.cal,
     p: remaining.p - m.p,
     c: remaining.c - m.c,
     f: remaining.f - m.f,
   };
+}
+
+/**
+ * True when adding this meal (1× as written) stays in today's remaining room.
+ * Missing remaining → do not hide the meal.
+ */
+export function mealFitsRemaining(meal, remaining) {
+  if (!remaining) return true;
+  const left = remainingAfterMeal(meal, remaining);
+  if (!left) return true;
+  return left.cal >= -REMAINING_OVER_SLACK.cal
+    && left.p >= -REMAINING_OVER_SLACK.p
+    && left.c >= -REMAINING_OVER_SLACK.c
+    && left.f >= -REMAINING_OVER_SLACK.f;
+}
+
+export function filterMealsByRemaining(meals, remaining) {
+  const list = Array.isArray(meals) ? meals : [];
+  if (!remaining) return list;
+  return list.filter((meal) => mealFitsRemaining(meal, remaining));
+}
+
+/** Compact "520 cal · P 35g · C 40g · F 12g" for the Meals filter caption. */
+export function formatRoomLeft(remaining) {
+  if (!remaining) return "";
+  const n = (v) => Math.round(Number(v) || 0);
+  return `${n(remaining.cal)} cal · P ${n(remaining.p)}g · C ${n(remaining.c)}g · F ${n(remaining.f)}g`;
+}
+
+export function eatingOutDayImpact(meal, remaining, dayTotals, bands) {
+  if (!meal || !bands || !remaining) return null;
+  const m = mealMacros(meal);
+  const left = remainingAfterMeal(meal, remaining);
   const projected = {
     cal: (dayTotals?.cal || 0) + m.cal,
     p: (dayTotals?.p || 0) + m.p,
@@ -41,13 +84,13 @@ export function eatingOutDayImpact(meal, remaining, dayTotals, bands) {
     f: (dayTotals?.f || 0) + m.f,
   };
   const overs = [];
-  if (left.cal < -40) overs.push(`~${Math.round(-left.cal)} cal`);
-  if (left.p < -8) overs.push(`~${Math.round(-left.p)}g P`);
-  if (left.c < -15) overs.push(`~${Math.round(-left.c)}g C`);
-  if (left.f < -8) overs.push(`~${Math.round(-left.f)}g F`);
+  if (left.cal < -REMAINING_OVER_SLACK.cal) overs.push(`~${Math.round(-left.cal)} cal`);
+  if (left.p < -REMAINING_OVER_SLACK.p) overs.push(`~${Math.round(-left.p)}g P`);
+  if (left.c < -REMAINING_OVER_SLACK.c) overs.push(`~${Math.round(-left.c)}g C`);
+  if (left.f < -REMAINING_OVER_SLACK.f) overs.push(`~${Math.round(-left.f)}g F`);
   const fits = overs.length === 0;
   const pGapBefore = bands.pLo - (dayTotals?.p || 0);
-  const helpsProtein = pGapBefore > 8 && m.p >= 25 && left.p >= -8;
+  const helpsProtein = pGapBefore > 8 && m.p >= 25 && left.p >= -REMAINING_OVER_SLACK.p;
   let badge;
   if (!fits) badge = `Over day high · ${overs[0]}`;
   else if (helpsProtein) badge = "Fits · helps protein toward range";
