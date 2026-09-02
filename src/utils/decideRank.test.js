@@ -130,6 +130,33 @@ describe("rankBankCards", () => {
       .toBe(false);
   });
 
+  it("two exclusive lighter passes never repeat the pantry trio", () => {
+    const applePb = { name: "Apple + peanut butter", cal: 190, p: 5, c: 28, f: 8 };
+    const cookies = { name: "Oatmeal protein cookies", cal: 85, p: 5, c: 13, f: 1 };
+    const kalona4 = { name: "Kalona SuperNatural Whole Milk (4 oz)", cal: 70, p: 4, c: 6, f: 4 };
+    const kalona8 = { name: "Kalona SuperNatural Whole Milk (8 oz)", cal: 140, p: 8, c: 12, f: 8 };
+    const honey = { name: "Honey", cal: 21, p: 0, c: 6, f: 0 };
+    const yogurtCup = { name: "Greek yogurt + berries", cal: 180, p: 24, c: 16, f: 2 };
+    const chickenSalad = { name: "Grilled chicken big salad", cal: 210, p: 30, c: 5, f: 7 };
+    const pool = {
+      bankMeals: [applePb, cookies, chickenSalad, yogurtCup],
+      pantryItems: [kalona4, kalona8, honey],
+      budget: { cal: 400, pNeed: 25, pHigh: 32, c: 65, f: 12 },
+    };
+    const first = rankBankCards({ ...pool, prefer: "lighter" });
+    const second = rankBankCards({
+      ...pool,
+      prefer: "lighter",
+      skipNames: first.meals.map((m) => m.name),
+    });
+    const firstNames = first.meals.map((m) => m.name);
+    const secondNames = second.meals.map((m) => m.name);
+    expect(firstNames.length).toBeGreaterThan(0);
+    expect(secondNames.length).toBeGreaterThan(0);
+    expect(secondNames.some((n) => firstNames.includes(n))).toBe(false);
+    expect(first.meals[0].cal).toBeLessThanOrEqual(first.meals[first.meals.length - 1].cal);
+  });
+
   it("protein prefer keeps real protein and drops Honey", () => {
     const { meals } = rankBankCards({
       bankMeals: [chicken, yogurt],

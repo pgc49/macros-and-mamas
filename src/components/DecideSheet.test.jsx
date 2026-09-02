@@ -437,6 +437,20 @@ describe("Help me decide entry", () => {
     expect(screen.getByPlaceholderText("Something else")).toBeTruthy();
   });
 
+  it("Lighter twice walks to a new top card", () => {
+    renderToday();
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    const first = document.querySelector("[data-decide-featured-card]")?.textContent || "";
+    fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.lighter }));
+    const afterOne = document.querySelector("[data-decide-featured-card]")?.textContent || "";
+    fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.lighter }));
+    const afterTwo = document.querySelector("[data-decide-featured-card]")?.textContent || "";
+    expect(afterOne.length).toBeGreaterThan(0);
+    expect(afterTwo.length).toBeGreaterThan(0);
+    expect(afterTwo).not.toBe(afterOne);
+    expect(afterTwo === first && afterOne === first).toBe(false);
+  });
+
   it("uses cream surface and a tall Pick-for-me card", () => {
     renderToday();
     fireEvent.click(document.querySelector("[data-decide-bar]"));

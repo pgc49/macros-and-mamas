@@ -168,6 +168,26 @@ function compareMeals(a, b, prefer) {
   return (a.servings || 1) - (b.servings || 1);
 }
 
+function skipKey(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\s·\s[\d.]+×$/i, "")
+    .replace(/\s*\([^)]*\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isSkippedName(name, skipNames = []) {
+  if (!name || !skipNames.length) return false;
+  const key = skipKey(name);
+  return skipNames.some((raw) => {
+    if (namesMatch(raw, name)) return true;
+    const other = skipKey(raw);
+    if (!key || !other) return false;
+    return other === key || key.startsWith(`${other} `) || other.startsWith(`${key} `);
+  });
+}
+
 export function rankBankCards({
   bankMeals = [],
   myMeals = [],
@@ -199,7 +219,7 @@ export function rankBankCards({
   ].filter((m) => hasMacros(m)
     && mealAllowedForDiet(m, diet)
     && !mealHitsDislike(m, dislikes)
-    && !skipNames.some((n) => namesMatch(n, m.name)));
+    && !isSkippedName(m.name, skipNames));
 
   const ctx = {
     likes,
@@ -233,8 +253,10 @@ export function rankBankCards({
 
   rankedPool.sort((a, b) => compareMeals(a, b, prefer));
   const unique = uniqueByName(rankedPool);
-  const windowed = unique.slice(offset);
-  let meals = diversify(windowed);
+  const windowed = unique.slice(Math.max(0, offset));
+  let meals = prefer === "lighter"
+    ? windowed.slice(0, 3)
+    : diversify(windowed);
 
   if (pencilled && meals.every((m) => !namesMatch(m.name, pencilled.name))) {
     const servings = pickScale(pencilled, budget) || pencilled.servings || 1;

@@ -27,7 +27,7 @@ import {
   loggedSlotsFromEntries,
   nextDecideSlot,
 } from "../utils/decideBudget";
-import { dislikeTokens, prefsLine, slotPrefText, tokenizeLikes } from "../utils/decidePrefs";
+import { dislikeTokens, namesMatch, prefsLine, slotPrefText, tokenizeLikes } from "../utils/decidePrefs";
 import { EATING_OUT_FLAG, KITCHEN_FLAG, rankBankCards } from "../utils/decideRank";
 import { filterMealsByQuery } from "../utils/mealSearch";
 import {
@@ -38,7 +38,7 @@ import {
   saveDecideSession,
   saveDecideSnackCount,
 } from "../lib/decideEvents";
-import { markDecideScroll, ownPointerClick, trapDecideEvent } from "../lib/decidePointerTrap";
+import { markDecideScroll, trapDecideEvent } from "../lib/decidePointerTrap";
 
 function historyNames(mealHistoryByDate, { slot, sinceIso, dates } = {}) {
   const any = [];
@@ -476,6 +476,8 @@ export function DecideSheet({
     loggedTodayNames, recent.anyHistoryNames, hist.slotHistoryNames, hist.anyHistoryNames,
     skipNames, prefer, offset, pencilled, over, slot,
   ]);
+  const shownRef = useRef([]);
+  shownRef.current = (ranked.meals || []).map((m) => m.name).filter(Boolean);
 
   const laterBudget = laterCtaSlot && bands
     ? laterSlotAsBudget(laterCtaSlot, shares, bands)
@@ -561,7 +563,13 @@ export function DecideSheet({
 
   useEffect(() => {
     if (!open) return undefined;
-    const mark = () => markDecideScroll();
+    const mark = (e) => {
+      const t = e?.target;
+      if (t && typeof t.closest === "function" && t.closest("[data-decide-sheet-chrome], [data-decide-refine]")) {
+        return;
+      }
+      markDecideScroll();
+    };
     window.addEventListener("scroll", mark, true);
     window.addEventListener("wheel", mark, { capture: true, passive: true });
     window.addEventListener("touchmove", mark, { capture: true, passive: true });
@@ -705,7 +713,39 @@ export function DecideSheet({
     refines.current += 1;
     decideTrack("decide_refine", { chip: kind, mode, askIndex: refines.current });
     if (kind === "none" || kind === "lighter" || kind === "protein") {
-      setSkipNames((prev) => [...prev, ...ranked.meals.map((m) => m.name)]);
+      const shown = shownRef.current;
+      setSkipNames((prev) => {
+        const merged = [...prev];
+        for (const n of shown) {
+          if (n && !merged.some((p) => namesMatch(p, n))) merged.push(n);
+        }
+        const already = shown.length > 0 && shown.every((n) => prev.some((p) => namesMatch(p, n)));
+        if (already) {
+          const preview = rankBankCards({
+            bankMeals,
+            myMeals: customMeals,
+            pantryItems,
+            budget,
+            likes,
+            dislikes,
+            diet: profile?.diet,
+            loggedTodayNames,
+            loggedRecentNames: recent.anyHistoryNames,
+            slotHistoryNames: hist.slotHistoryNames,
+            anyHistoryNames: hist.anyHistoryNames,
+            skipNames: merged,
+            prefer: kind === "protein" ? "protein" : kind === "lighter" ? "lighter" : prefer,
+            offset: 0,
+            pencilled,
+            over,
+            slot,
+          });
+          for (const n of (preview.meals || []).map((m) => m.name)) {
+            if (n && !merged.some((p) => namesMatch(p, n))) merged.push(n);
+          }
+        }
+        return merged;
+      });
       setOffset(0);
     }
     if (kind === "lighter") setPrefer("lighter");
@@ -1256,11 +1296,22 @@ export function DecideSheet({
                     <button
                       key={id}
                       type="button"
-                      {...ownPointerClick((e) => {
+                      onPointerDown={(e) => {
+                        if (e.button != null && e.button !== 0) return;
                         e.preventDefault();
                         e.stopPropagation();
+                        e.currentTarget.dataset.refineArmed = "1";
                         refine(id);
-                      })}
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (e.currentTarget.dataset.refineArmed === "1") {
+                          delete e.currentTarget.dataset.refineArmed;
+                          return;
+                        }
+                        refine(id);
+                      }}
                       style={{
                         fontFamily: F,
                         fontSize: 12,
