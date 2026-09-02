@@ -73,7 +73,8 @@ function renderMeals(filter = "All meals", extras = {}) {
         macroHistory={[]}
         mealFilter={filter}
         setMealFilter={setMealFilter}
-        customMeals={[{ id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 }]}
+        customMeals={extras.customMeals || [{ id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 }]}
+        onSaveCustomMeal={extras.onSaveCustomMeal}
       />
     </MemoryRouter>,
   );
@@ -81,14 +82,20 @@ function renderMeals(filter = "All meals", extras = {}) {
 }
 
 describe("Meals tab search filter", () => {
-  it("defaults to All meals without an All meals chip", () => {
+  it("defaults to All meals with an All meals chip first", () => {
     renderMeals();
 
     expect(screen.getByRole("heading", { name: "All meals" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "All meals" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Weekly Planner" })).toBeTruthy();
+    const chips = document.querySelector("[data-meals-sections]");
+    expect(chips).toBeTruthy();
+    expect(chips.style.flexWrap).toBe("nowrap");
+    const sectionButtons = [...chips.querySelectorAll("button")].map((b) => b.textContent);
+    expect(sectionButtons).toEqual(["All meals", "Planner", "Food prefs", "My meals"]);
+    expect(screen.getByRole("button", { name: "All meals" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Planner" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Food prefs" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "My meals" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Weekly Planner" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Plan$/ })).toBeNull();
     expect(screen.getByLabelText("Search meals")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Filter meals" })).toBeTruthy();
@@ -109,10 +116,20 @@ describe("Meals tab search filter", () => {
     expect(setMealFilter).toHaveBeenCalledWith("Breakfast");
   });
 
-  it("toggles Weekly Planner back to All meals", () => {
+  it("selects All meals from its chip and Planner from Planner", () => {
+    const { setMealFilter } = renderMeals();
+
+    fireEvent.click(screen.getByRole("button", { name: "Planner" }));
+    expect(setMealFilter).toHaveBeenCalledWith("Plan");
+
+    fireEvent.click(screen.getByRole("button", { name: "All meals" }));
+    expect(setMealFilter).toHaveBeenCalledWith("All meals");
+  });
+
+  it("toggles Planner back to All meals", () => {
     const { setMealFilter } = renderMeals("Plan");
 
-    fireEvent.click(screen.getByRole("button", { name: "Weekly Planner" }));
+    fireEvent.click(screen.getByRole("button", { name: "Planner" }));
     expect(setMealFilter).toHaveBeenCalledWith("All meals");
   });
 
@@ -123,7 +140,8 @@ describe("Meals tab search filter", () => {
     expect(screen.getByRole("button", { name: "Filter meals · Pantry" })).toBeTruthy();
     expect(screen.getByRole("option", { name: "Pantry" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Pantry" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Weekly Planner" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Planner" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All meals" })).toBeTruthy();
   });
 
   it("filters the bank to meals that fit remaining room from today's log", () => {
@@ -139,5 +157,82 @@ describe("Meals tab search filter", () => {
     expect(screen.getByText("Greek yogurt + berries")).toBeTruthy();
     expect(screen.queryByText("Callie's chicken teriyaki")).toBeNull();
     expect(screen.queryByText("Chicken soba stir fry")).toBeNull();
+  });
+
+  it("lets several My meals slots draft, then Save all persists them", async () => {
+    const onSaveCustomMeal = vi.fn(async (meal) => meal);
+    renderMeals("My meals", {
+      customMeals: [
+        {
+          id: "c-steak",
+          name: "Steak Tacos",
+          cal: 480,
+          p: 38,
+          c: 36,
+          f: 18,
+          slot: "lunch",
+        },
+        {
+          id: "c-yogurt",
+          name: "Yogurt bowl",
+          cal: 280,
+          p: 28,
+          c: 30,
+          f: 6,
+          slot: "breakfast",
+        },
+      ],
+      onSaveCustomMeal,
+    });
+
+    expect(screen.queryByRole("button", { name: "Save all" })).toBeNull();
+
+    const dinners = screen.getAllByRole("button", { name: "Dinner" });
+    fireEvent.click(dinners[0]);
+    fireEvent.click(dinners[1]);
+
+    expect(onSaveCustomMeal).not.toHaveBeenCalled();
+    expect(screen.getByText("2 meal slots changed")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save all" }));
+
+    await vi.waitFor(() => {
+      expect(onSaveCustomMeal).toHaveBeenCalledTimes(2);
+    });
+    expect(onSaveCustomMeal).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Steak Tacos",
+      slot: "dinner",
+    }));
+    expect(onSaveCustomMeal).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Yogurt bowl",
+      slot: "dinner",
+    }));
+    await vi.waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Save all" })).toBeNull();
+    });
+  });
+
+  it("reverts pending slots and shows a soft error when Save all fails", async () => {
+    const onSaveCustomMeal = vi.fn(async () => null);
+    renderMeals("My meals", {
+      customMeals: [{
+        id: "c-steak",
+        name: "Steak Tacos",
+        cal: 480,
+        p: 38,
+        c: 36,
+        f: 18,
+        slot: "lunch",
+      }],
+      onSaveCustomMeal,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Dinner" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save all" }));
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Couldn't save some slots — try again")).toBeTruthy();
+    });
+    expect(screen.queryByRole("button", { name: "Save all" })).toBeNull();
   });
 });

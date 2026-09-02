@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
@@ -14,6 +14,7 @@ export function LoggableMealRow({
   onLog,
   onRemove,
   onSaveIngredients,
+  onSlotDraftChange,
   accent = false,
   /** Show breakfast/lunch/dinner/snack chips before Add (default on). */
   showSlotPicker = true,
@@ -33,6 +34,17 @@ export function LoggableMealRow({
   const scaled = scaleMealForLog(meal, servings);
   const hasIngredients = Boolean(String(meal.ingredients || "").trim());
   const canEditIngredients = typeof onSaveIngredients === "function";
+
+  useEffect(() => {
+    const next = normalizeSlot(meal.slot || meal.cat);
+    if (next) setSlot(next);
+  }, [meal.slot, meal.cat]);
+
+  const handleSlotChange = (next) => {
+    if (!next || next === slot) return;
+    setSlot(next);
+    onSlotDraftChange?.(next);
+  };
 
   const label =
     phase === "idle" ? "Add to Today"
@@ -68,6 +80,7 @@ export function LoggableMealRow({
       const saved = await onSaveIngredients({
         ...meal,
         ingredients: ingDraft.trim(),
+        slot,
       });
       if (saved === false || saved == null) {
         setIngNote("Couldn't save — try again");
@@ -169,7 +182,7 @@ export function LoggableMealRow({
           <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginBottom: 6 }}>
             Add to
           </div>
-          <SlotChips value={slot} onChange={setSlot} compact />
+          <SlotChips value={slot} onChange={handleSlotChange} compact />
         </div>
       )}
 
@@ -183,7 +196,7 @@ export function LoggableMealRow({
       }}
       >
         {showSlotPicker && compact && (
-          <SlotChips value={slot} onChange={setSlot} compact />
+          <SlotChips value={slot} onChange={handleSlotChange} compact />
         )}
         <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 8, marginLeft: compact ? "auto" : 0 }}>
           {!compact && (

@@ -8,6 +8,11 @@ const noopAsync = async () => true;
 export function MealsTabPreview() {
   const [mealFilter, setMealFilter] = useState("All meals");
   const [tab, setTab] = useState("meals");
+  const [customMeals, setCustomMeals] = useState([
+    { id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 },
+    { id: "c2", name: "Yogurt bowl", cal: 280, p: 28, c: 30, f: 6, slot: "breakfast" },
+    { id: "c3", name: "Steak Tacos", cal: 480, p: 38, c: 36, f: 18, slot: "lunch" },
+  ]);
 
   return (
     <ClientApp
@@ -56,10 +61,15 @@ export function MealsTabPreview() {
       macroHistory={[]}
       mealFilter={mealFilter}
       setMealFilter={setMealFilter}
-      customMeals={[
-        { id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 },
-        { id: "c2", name: "Yogurt bowl", cal: 280, p: 28, c: 30, f: 6, slot: "breakfast" },
-      ]}
+      customMeals={customMeals}
+      onSaveCustomMeal={async (meal) => {
+        const saved = { ...meal, id: meal.id || `c-${meal.name}` };
+        setCustomMeals((list) => {
+          const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
+          return [saved, ...without];
+        });
+        return saved;
+      }}
       weekPlanDays={[]}
     />
   );

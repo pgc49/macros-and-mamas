@@ -38,7 +38,16 @@ import {
   uniqueMealsByName,
 } from "../utils/mealSearch";
 import { db } from "../db/db";
+import { normalizeSlot } from "../utils/mealSlots";
 import { useState } from "react";
+
+function customMealKey(meal) {
+  return String(meal?.id || meal?.name || "").trim();
+}
+
+function customMealSavedSlot(meal) {
+  return normalizeSlot(meal?.slot || meal?.cat);
+}
 
 export function ClientApp({
   tab, setTab,
@@ -86,6 +95,9 @@ export function ClientApp({
   const [fitsRemainingOnly, setFitsRemainingOnly] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [myMealsAddOpen, setMyMealsAddOpen] = useState(false);
+  const [pendingSlots, setPendingSlots] = useState({});
+  const [saveAllBusy, setSaveAllBusy] = useState(false);
+  const [saveAllNote, setSaveAllNote] = useState("");
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
@@ -118,6 +130,63 @@ export function ClientApp({
     return mealMatchesQuery(m, mealQuery);
   }));
   const visibleCustomMeals = applyFitsFilter(filterMealsByQuery(customMeals, mealQuery));
+  const pendingSlotCount = Object.keys(pendingSlots).length;
+
+  const draftSlotFor = (meal) => pendingSlots[customMealKey(meal)] ?? customMealSavedSlot(meal);
+
+  const setMealSlotDraft = (meal, nextSlot) => {
+    const key = customMealKey(meal);
+    if (!key) return;
+    const saved = customMealSavedSlot(meal);
+    setSaveAllNote("");
+    setPendingSlots((prev) => {
+      if (!nextSlot || nextSlot === saved) {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      if (prev[key] === nextSlot) return prev;
+      return { ...prev, [key]: nextSlot };
+    });
+  };
+
+  const persistCustomMealSlot = (meal, slot) => onSaveCustomMeal?.({
+    name: meal.name,
+    cal: meal.cal,
+    p: meal.p,
+    c: meal.c,
+    f: meal.f,
+    serves: meal.serves,
+    slot,
+  });
+
+  const saveAllMyMealSlots = async () => {
+    if (saveAllBusy || !pendingSlotCount) return;
+    setSaveAllBusy(true);
+    setSaveAllNote("");
+    const entries = Object.entries(pendingSlots);
+    const results = await Promise.all(entries.map(async ([key, slot]) => {
+      const meal = customMeals.find((m) => customMealKey(m) === key);
+      if (!meal) return { key, ok: false };
+      try {
+        const saved = await persistCustomMealSlot(meal, slot);
+        return { key, ok: saved != null && saved !== false };
+      } catch {
+        return { key, ok: false };
+      }
+    }));
+    const failed = new Set(results.filter((r) => !r.ok).map((r) => r.key));
+    setPendingSlots((prev) => {
+      const next = { ...prev };
+      for (const { key } of results) delete next[key];
+      return next;
+    });
+    if (failed.size) {
+      setSaveAllNote("Couldn't save some slots — try again");
+    }
+    setSaveAllBusy(false);
+  };
   const searchingMeals = Boolean(String(mealQuery || "").trim());
   const fitsEmptyHint = fitsRemainingOnly
     ? " Nothing here fits your remaining macros — turn the filter off to browse everything."
@@ -420,7 +489,10 @@ export function ClientApp({
             </>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          <div
+            data-meals-sections
+            style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "nowrap", overflowX: "auto" }}
+          >
             {MEALS_TAB_SECTIONS.map((section) => {
               const active = mealFilter === section.id;
               const label = section.id === "Plan" && plannedCount
@@ -429,6 +501,7 @@ export function ClientApp({
               return (
                 <Chip
                   key={section.id}
+                  compact
                   active={active}
                   onClick={() => {
                     setMealFilter(active ? "All meals" : section.id);
@@ -549,26 +622,98 @@ export function ClientApp({
                   </div>
                 </Card>
               ) : (
-                visibleCustomMeals.map((m) => (
-                  <LoggableMealRow
-                    key={m.id}
-                    meal={m}
-                    via="custom"
-                    accent
-                    onLog={logRecipe}
-                    onRemove={() => onDeleteCustomMeal?.(m.id)}
-                    onSaveIngredients={(meal) => onSaveCustomMeal?.({
-                      name: meal.name,
-                      cal: meal.cal,
-                      p: meal.p,
-                      c: meal.c,
-                      f: meal.f,
-                      serves: meal.serves,
-                      ingredients: meal.ingredients,
-                      slot: meal.slot || meal.cat || m.slot || m.cat,
-                    })}
-                  />
-                ))
+                <>
+                  {(pendingSlotCount > 0 || saveAllNote) && (
+                    <div
+                      data-my-meals-save-all
+                      style={{
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 2,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        marginBottom: 12,
+                        padding: "10px 12px",
+                        borderRadius: 12,
+                        background: T.accentSoft,
+                        border: `1.5px solid ${T.accent}`,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        {pendingSlotCount > 0 ? (
+                          <div style={{ fontWeight: 700, fontSize: 13, color: T.accentDeep }}>
+                            {pendingSlotCount === 1 ? "1 meal slot changed" : `${pendingSlotCount} meal slots changed`}
+                          </div>
+                        ) : null}
+                        {saveAllNote ? (
+                          <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginTop: pendingSlotCount ? 2 : 0 }}>
+                            {saveAllNote}
+                          </div>
+                        ) : null}
+                      </div>
+                      {pendingSlotCount > 0 ? (
+                        <button
+                          type="button"
+                          disabled={saveAllBusy}
+                          onClick={saveAllMyMealSlots}
+                          style={{
+                            fontFamily: F,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            padding: "7px 14px",
+                            borderRadius: 999,
+                            border: `1.5px solid ${T.accent}`,
+                            background: "#fff",
+                            color: T.accentDeep,
+                            cursor: saveAllBusy ? "default" : "pointer",
+                            flexShrink: 0,
+                            opacity: saveAllBusy ? 0.7 : 1,
+                          }}
+                        >
+                          {saveAllBusy ? "Saving…" : "Save all"}
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+                  {visibleCustomMeals.map((m) => {
+                    const draftSlot = draftSlotFor(m);
+                    return (
+                      <LoggableMealRow
+                        key={m.id}
+                        meal={{ ...m, slot: draftSlot || m.slot, cat: draftSlot || m.cat }}
+                        via="custom"
+                        accent
+                        onLog={logRecipe}
+                        onRemove={() => onDeleteCustomMeal?.(m.id)}
+                        onSlotDraftChange={(next) => setMealSlotDraft(m, next)}
+                        onSaveIngredients={async (meal) => {
+                          const saved = await onSaveCustomMeal?.({
+                            name: meal.name,
+                            cal: meal.cal,
+                            p: meal.p,
+                            c: meal.c,
+                            f: meal.f,
+                            serves: meal.serves,
+                            ingredients: meal.ingredients,
+                            slot: meal.slot || draftSlot || m.slot || m.cat,
+                          });
+                          if (saved != null && saved !== false) {
+                            setPendingSlots((prev) => {
+                              const key = customMealKey(m);
+                              if (!(key in prev)) return prev;
+                              const next = { ...prev };
+                              delete next[key];
+                              return next;
+                            });
+                          }
+                          return saved;
+                        }}
+                      />
+                    );
+                  })}
+                </>
               )}
             </div>
           )}

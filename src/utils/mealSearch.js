@@ -68,11 +68,12 @@ export function filterMealsByQuery(meals, query) {
 export const MEAL_SLOT_FILTERS = ["My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Treats"];
 
 /**
- * Meals tab section chips. All meals is the default (no chip) — the filter's
- * All / Breakfast / … picks a slot. Internal `id` stays on mealFilter.
+ * Meals tab section chips. All meals is the default. Internal `id` stays on
+ * mealFilter — Plan is the weekly planner (chip label is Planner).
  */
 export const MEALS_TAB_SECTIONS = [
-  { id: "Plan", label: "Weekly Planner" },
+  { id: "All meals", label: "All meals" },
+  { id: "Plan", label: "Planner" },
   { id: "Food prefs", label: "Food prefs" },
   { id: "My meals", label: "My meals" },
 ];
