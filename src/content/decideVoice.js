@@ -44,6 +44,7 @@ export const DECIDE_COPY = {
   lastMealRest: "Everything that's left is yours",
   savingRoom: "Saving room for",
   usualEat: "the way you usually eat it",
+  normalShare: "using a normal share",
   thatLeaves: "That leaves",
   pencilledIn: "is pencilled in",
   forSlot: "For",

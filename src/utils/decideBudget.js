@@ -69,15 +69,56 @@ export function deriveMealShares(mealHistoryByDate) {
     }
     days.push(share);
   }
-  if (days.length < 5) return { ...DEFAULT_MEAL_SHARES };
+  if (days.length < 5) return { ...DEFAULT_MEAL_SHARES, fromHistory: false };
   const raw = {};
   let sum = 0;
   for (const slot of MEAL_SLOTS) {
     raw[slot] = median(days.map((d) => d[slot] || 0));
     sum += raw[slot];
   }
-  if (sum <= 0) return { ...DEFAULT_MEAL_SHARES };
-  return Object.fromEntries(MEAL_SLOTS.map((s) => [s, raw[s] / sum]));
+  if (sum <= 0) return { ...DEFAULT_MEAL_SHARES, fromHistory: false };
+  return {
+    ...Object.fromEntries(MEAL_SLOTS.map((s) => [s, raw[s] / sum])),
+    fromHistory: true,
+  };
+}
+
+/** Later unlogged slots cannot collapse below the default share. */
+export function effectiveSlotShare(slot, shares = DEFAULT_MEAL_SHARES) {
+  const floor = DEFAULT_MEAL_SHARES[slot] ?? 0;
+  const derived = Number(shares?.[slot]);
+  const share = Number.isFinite(derived) ? Math.max(derived, floor) : floor;
+  const usual = Boolean(
+    shares?.fromHistory
+    && Number.isFinite(derived)
+    && derived + 1e-9 >= floor,
+  );
+  return { share, usual };
+}
+
+/**
+ * History that zeros lunch/dinner is not "usual" — use the default split.
+ * Stronger-than-default later shares stay (pencils still win later).
+ */
+export function resolveDecideShares(shares = DEFAULT_MEAL_SHARES, laterMains = []) {
+  if (!shares?.fromHistory) {
+    return { ...DEFAULT_MEAL_SHARES, fromHistory: false };
+  }
+  const collapsed = laterMains.some((s) => {
+    const derived = Number(shares[s]);
+    const floor = DEFAULT_MEAL_SHARES[s] ?? 0;
+    return !Number.isFinite(derived) || derived + 1e-9 < floor;
+  });
+  if (collapsed) return { ...DEFAULT_MEAL_SHARES, fromHistory: false };
+  return shares;
+}
+
+function reserveSlotsAfter(selected, loggedSlots = new Set()) {
+  const later = laterSlotsAfter(selected, loggedSlots);
+  if ((selected === "breakfast" || selected === "lunch") && !loggedSlots.has("snack")) {
+    return [...later, "snack"];
+  }
+  return later;
 }
 
 export function remainingForDecide(totals, bands) {
@@ -99,14 +140,14 @@ export function planMealForSlot(plannedMeals, slot) {
 }
 
 function shareReserve(slot, shares, bands) {
-  const share = shares?.[slot] ?? DEFAULT_MEAL_SHARES[slot] ?? 0;
+  const { share, usual } = effectiveSlotShare(slot, shares);
   return {
     cal: share * bands.calHi,
     p: share * bands.pLo,
     pHigh: share * bands.pHi,
     c: share * bands.cHi,
     f: share * bands.fHi,
-    source: "share",
+    source: usual ? "usual" : "default",
     meal: null,
     slot,
   };
@@ -126,25 +167,81 @@ function mealReserve(meal, slot) {
   };
 }
 
+function emptyMacros() {
+  return { cal: 0, p: 0, pHigh: 0, c: 0, f: 0 };
+}
+
+function addMacros(a, b) {
+  return {
+    cal: a.cal + b.cal,
+    p: a.p + b.p,
+    pHigh: a.pHigh + b.pHigh,
+    c: a.c + b.c,
+    f: a.f + b.f,
+  };
+}
+
+function scalePiece(piece, factor) {
+  return {
+    ...piece,
+    cal: piece.cal * factor,
+    p: piece.p * factor,
+    pHigh: piece.pHigh * factor,
+    c: piece.c * factor,
+    f: piece.f * factor,
+  };
+}
+
+function zeroPiece(piece) {
+  return scalePiece(piece, 0);
+}
+
+function leftoverFrom(remaining, reserve) {
+  return {
+    cal: Math.max(0, remaining.cal - reserve.cal),
+    pNeed: Math.max(0, remaining.p - reserve.p),
+    pHigh: Math.max(0, remaining.pHigh - reserve.pHigh),
+    c: Math.max(0, remaining.c - reserve.c),
+    f: Math.max(0, remaining.f - reserve.f),
+  };
+}
+
+function restAfter(remaining, used) {
+  return {
+    cal: Math.max(0, remaining.cal - used.cal),
+    p: Math.max(0, remaining.p - used.p),
+    pHigh: Math.max(0, remaining.pHigh - used.pHigh),
+    c: Math.max(0, remaining.c - used.c),
+    f: Math.max(0, remaining.f - used.f),
+  };
+}
+
+function sliceRemaining(remaining, fraction) {
+  return {
+    cal: remaining.cal * fraction,
+    p: remaining.p * fraction,
+    pHigh: remaining.pHigh * fraction,
+    c: remaining.c * fraction,
+    f: remaining.f * fraction,
+  };
+}
+
+function packReserve(bySlot) {
+  let totals = emptyMacros();
+  for (const piece of Object.values(bySlot)) {
+    totals = addMacros(totals, piece);
+  }
+  return { ...totals, bySlot };
+}
+
 export function reserveForLater({ laterSlots = [], shares, bands, plannedMeals } = {}) {
-  if (!bands) return { cal: 0, p: 0, pHigh: 0, c: 0, f: 0, bySlot: {} };
+  if (!bands) return { ...emptyMacros(), bySlot: {} };
   const bySlot = {};
-  let cal = 0;
-  let p = 0;
-  let pHigh = 0;
-  let c = 0;
-  let f = 0;
   for (const slot of laterSlots) {
     const planned = planMealForSlot(plannedMeals, slot);
-    const piece = planned ? mealReserve(planned, slot) : shareReserve(slot, shares, bands);
-    bySlot[slot] = piece;
-    cal += piece.cal;
-    p += piece.p;
-    pHigh += piece.pHigh;
-    c += piece.c;
-    f += piece.f;
+    bySlot[slot] = planned ? mealReserve(planned, slot) : shareReserve(slot, shares, bands);
   }
-  return { cal, p, pHigh, c, f, bySlot };
+  return packReserve(bySlot);
 }
 
 export function laterSlotAsBudget(slot, shares, bands) {
@@ -181,17 +278,64 @@ export function computeSlotBudget({
   if (!remaining) return null;
   const logged = loggedSlots || loggedSlotsFromEntries([]);
   const later = laterSlotsAfter(slot, logged);
-  const reserve = reserveForLater({ laterSlots: later, shares, bands, plannedMeals });
+  const resolvedShares = resolveDecideShares(shares, later);
+  const reserveSlots = reserveSlotsAfter(slot, logged);
+  const rawReserve = reserveForLater({
+    laterSlots: reserveSlots,
+    shares: resolvedShares,
+    bands,
+    plannedMeals,
+  });
+
+  if (remaining.cal <= 0) {
+    const reserve = packReserve(
+      Object.fromEntries(Object.entries(rawReserve.bySlot).map(([s, piece]) => [s, zeroPiece(piece)])),
+    );
+    return { slot, laterSlots: later, remaining, reserve, ...leftoverFrom(remaining, reserve) };
+  }
+
+  if (remaining.cal - rawReserve.cal >= 0) {
+    return { slot, laterSlots: later, remaining, reserve: rawReserve, ...leftoverFrom(remaining, rawReserve) };
+  }
+
+  // Raw later shares (full-day) do not fit what's left. Split the leftover
+  // day across this slot and later unlogged slots so the cards add up and
+  // breakfast is not wiped to 0. Pencilled later meals still take first.
+  const bySlot = {};
+  let used = emptyMacros();
+  for (const s of reserveSlots) {
+    const raw = rawReserve.bySlot[s];
+    if (!raw?.meal) continue;
+    const room = Math.max(0, remaining.cal - used.cal);
+    const factor = raw.cal > 0 ? Math.min(1, room / raw.cal) : 0;
+    bySlot[s] = scalePiece(raw, factor);
+    used = addMacros(used, bySlot[s]);
+  }
+
+  const rest = restAfter(remaining, used);
+  const shareSlots = reserveSlots.filter((s) => !rawReserve.bySlot[s]?.meal);
+  const currentShare = effectiveSlotShare(slot, resolvedShares).share;
+  const totalW = shareSlots.reduce((n, s) => n + effectiveSlotShare(s, resolvedShares).share, currentShare);
+  const denom = totalW > 0 ? totalW : 1;
+
+  for (const s of shareSlots) {
+    const frac = effectiveSlotShare(s, resolvedShares).share / denom;
+    const slice = sliceRemaining(rest, frac);
+    bySlot[s] = { ...rawReserve.bySlot[s], ...slice };
+    used = addMacros(used, slice);
+  }
+
+  const leftover = sliceRemaining(rest, currentShare / denom);
   return {
     slot,
     laterSlots: later,
     remaining,
-    reserve,
-    cal: Math.max(0, remaining.cal - reserve.cal),
-    pNeed: Math.max(0, remaining.p - reserve.p),
-    pHigh: Math.max(0, remaining.pHigh - reserve.pHigh),
-    c: Math.max(0, remaining.c - reserve.c),
-    f: Math.max(0, remaining.f - reserve.f),
+    reserve: packReserve(bySlot),
+    cal: leftover.cal,
+    pNeed: leftover.p,
+    pHigh: leftover.pHigh,
+    c: leftover.c,
+    f: leftover.f,
   };
 }
 
@@ -274,7 +418,15 @@ export function budgetSentence(budget) {
   const laterLabel = later.length === 1
     ? (DECIDE_SLOT_LABEL[first] || first)
     : later.map((s) => DECIDE_SLOT_LABEL[s] || s).join(" and ");
-  return `${DECIDE_COPY.savingRoom} ${laterLabel} ${DECIDE_COPY.usualEat} (about ${fmtCal(piece?.cal || 0)} cal, ${fmtP(piece?.p || 0)}). ${leaves}`;
+  const laterSharePieces = later
+    .map((s) => budget.reserve?.bySlot?.[s])
+    .filter((p) => p && !p.meal);
+  const usedUsual = laterSharePieces.length > 0
+    && laterSharePieces.every((p) => p.source === "usual");
+  const how = usedUsual ? DECIDE_COPY.usualEat : DECIDE_COPY.normalShare;
+  const aboutCal = budget.reserve?.cal ?? piece?.cal ?? 0;
+  const aboutP = budget.reserve?.p ?? piece?.p ?? 0;
+  return `${DECIDE_COPY.savingRoom} ${laterLabel} ${how} (about ${fmtCal(aboutCal)} cal, ${fmtP(aboutP)}). ${leaves}`;
 }
 
 export function decideBarHint({

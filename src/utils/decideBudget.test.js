@@ -21,10 +21,12 @@ const BREAKFAST = { cal: 905, p: 64, c: 53, f: 47 };
 
 describe("deriveMealShares", () => {
   it("returns defaults when fewer than 5 qualifying days", () => {
-    expect(deriveMealShares({
+    const shares = deriveMealShares({
       "2026-08-01": [{ slot: "breakfast", cal: 400 }],
       "2026-08-02": [{ slot: "lunch", cal: 500 }],
-    })).toEqual(DEFAULT_MEAL_SHARES);
+    });
+    expect(shares).toMatchObject(DEFAULT_MEAL_SHARES);
+    expect(shares.fromHistory).toBe(false);
   });
 
   it("ignores days with no slotted calories", () => {
@@ -32,7 +34,9 @@ describe("deriveMealShares", () => {
     for (let i = 1; i <= 6; i += 1) {
       hist[`2026-08-0${i}`] = [{ name: "x", cal: 400 }];
     }
-    expect(deriveMealShares(hist)).toEqual(DEFAULT_MEAL_SHARES);
+    const shares = deriveMealShares(hist);
+    expect(shares).toMatchObject(DEFAULT_MEAL_SHARES);
+    expect(shares.fromHistory).toBe(false);
   });
 
   it("uses the median slot share and normalizes", () => {
@@ -48,6 +52,76 @@ describe("deriveMealShares", () => {
     expect(shares.breakfast + shares.lunch + shares.dinner + shares.snack).toBeCloseTo(1, 5);
     expect(shares.dinner).toBeCloseTo(0.5, 2);
     expect(shares.lunch).toBeCloseTo(0.3, 2);
+    expect(shares.fromHistory).toBe(true);
+  });
+
+  it("does not let breakfast-only history zero lunch or dinner", () => {
+    const hist = {};
+    for (let i = 1; i <= 6; i += 1) {
+      hist[`2026-08-0${i}`] = [{ slot: "breakfast", cal: 500 }];
+    }
+    const shares = deriveMealShares(hist);
+    expect(shares.fromHistory).toBe(true);
+    expect(shares.lunch).toBe(0);
+    expect(shares.dinner).toBe(0);
+    const budget = computeSlotBudget({
+      totals: { cal: 0, p: 0, c: 0, f: 0 },
+      bands: BANDS,
+      slot: "breakfast",
+      shares,
+      loggedSlots: new Set(),
+    });
+    expect(budget.laterSlots).toEqual(["lunch", "dinner"]);
+    expect(budget.reserve.bySlot.lunch.cal).toBeCloseTo(BANDS.calHi * DEFAULT_MEAL_SHARES.lunch, 0);
+    expect(budget.reserve.bySlot.dinner.cal).toBeCloseTo(BANDS.calHi * DEFAULT_MEAL_SHARES.dinner, 0);
+    expect(budget.reserve.bySlot.lunch.source).toBe("default");
+    expect(budget.cal).toBeGreaterThan(100);
+    expect(budget.cal).toBeLessThan(BANDS.calHi * 0.5);
+    expect(budgetSentence(budget)).toMatch(/Saving room for lunch and dinner/);
+    expect(budgetSentence(budget)).toMatch(DECIDE_COPY.normalShare);
+    expect(budgetSentence(budget)).not.toMatch(DECIDE_COPY.usualEat);
+  });
+
+  it("at breakfast reserves lunch, dinner, and a snack share of a fresh day", () => {
+    const budget = computeSlotBudget({
+      totals: { cal: 0, p: 0, c: 0, f: 0 },
+      bands: BANDS,
+      slot: "breakfast",
+      shares: DEFAULT_MEAL_SHARES,
+      loggedSlots: new Set(),
+    });
+    expect(budget.laterSlots).toEqual(["lunch", "dinner"]);
+    expect(budget.reserve.bySlot.lunch.cal).toBeCloseTo(BANDS.calHi * DEFAULT_MEAL_SHARES.lunch, 0);
+    expect(budget.reserve.bySlot.dinner.cal).toBeCloseTo(BANDS.calHi * DEFAULT_MEAL_SHARES.dinner, 0);
+    expect(budget.reserve.bySlot.snack.cal).toBeCloseTo(BANDS.calHi * DEFAULT_MEAL_SHARES.snack, 0);
+    expect(budget.cal).toBeCloseTo(BANDS.calHi * DEFAULT_MEAL_SHARES.breakfast, 0);
+    expect(budget.cal + budget.reserve.cal).toBeCloseTo(BANDS.calHi, 0);
+    expect(budgetSentence(budget)).toMatch(DECIDE_COPY.normalShare);
+    expect(budgetSentence(budget)).not.toMatch(DECIDE_COPY.usualEat);
+  });
+
+  it("does not dump a 574-cal leftover day into breakfast when history zeros lunch", () => {
+    const hist = {};
+    for (let i = 1; i <= 6; i += 1) {
+      hist[`2026-08-0${i}`] = [{ slot: "breakfast", cal: 500 }];
+    }
+    const shares = deriveMealShares(hist);
+    const budget = computeSlotBudget({
+      totals: { cal: BANDS.calHi - 574, p: BANDS.pLo - 42, c: 0, f: 0 },
+      bands: BANDS,
+      slot: "breakfast",
+      shares,
+      loggedSlots: new Set(),
+    });
+    expect(budget.remaining.cal).toBeCloseTo(574, 0);
+    expect(budget.cal + budget.reserve.cal).toBeCloseTo(574, 0);
+    expect(budget.cal).toBeGreaterThan(50);
+    expect(budget.cal).toBeLessThan(250);
+    expect(budget.reserve.bySlot.lunch.cal).toBeGreaterThan(100);
+    expect(budget.reserve.bySlot.dinner.cal).toBeGreaterThan(100);
+    expect(budget.reserve.bySlot.lunch.cal).toBeCloseTo(574 * DEFAULT_MEAL_SHARES.lunch, 0);
+    expect(budgetSentence(budget)).not.toMatch(/about 0 cal/);
+    expect(budgetSentence(budget)).toMatch(DECIDE_COPY.normalShare);
   });
 });
 
@@ -80,12 +154,14 @@ describe("12:40 leftover lunch budget", () => {
     loggedSlots: new Set(["breakfast"]),
   });
 
-  it("leaves about 275 cal and 25g protein after reserving dinner", () => {
+  it("leaves lunch after reserving dinner and a snack share", () => {
     expect(remaining.cal).toBe(995);
     expect(budget.laterSlots).toEqual(["dinner"]);
-    expect(budget.cal).toBeCloseTo(273, 0);
-    expect(budget.pNeed).toBeCloseTo(26, 0);
-    expect(budget.c).toBeCloseTo(65, 0);
+    expect(budget.reserve.bySlot.dinner.cal).toBeCloseTo(BANDS.calHi * DEFAULT_MEAL_SHARES.dinner, 0);
+    expect(budget.reserve.bySlot.snack.cal).toBeCloseTo(BANDS.calHi * DEFAULT_MEAL_SHARES.snack, 0);
+    expect(budget.cal).toBeCloseTo(121, 0);
+    expect(budget.pNeed).toBeCloseTo(14, 0);
+    expect(budget.c).toBeCloseTo(50, 0);
     expect(budget.f).toBe(0);
   });
 
@@ -107,16 +183,29 @@ describe("12:40 leftover lunch budget", () => {
       }],
     });
     expect(pencilled.reserve.bySlot.dinner.source).toBe("decide");
-    expect(pencilled.reserve.cal).toBe(720);
-    expect(pencilled.cal).toBe(275);
-    expect(pencilled.pNeed).toBe(3);
+    expect(pencilled.reserve.bySlot.dinner.cal).toBe(720);
+    expect(pencilled.cal).toBeCloseTo(123, 0);
+    expect(pencilled.pNeed).toBe(0);
     expect(budgetSentence(pencilled)).toMatch(/pencilled in/);
     expect(budgetSentence(pencilled)).toMatch(/Chicken and rice bowl/);
   });
 
-  it("writes the usual-dinner sentence when nothing is pencilled", () => {
+  it("writes a normal-share dinner sentence when history is not usual", () => {
     expect(budgetSentence(budget)).toMatch(/Saving room for dinner/);
-    expect(budgetSentence(budget)).toMatch(/275|273/);
+    expect(budgetSentence(budget)).toMatch(DECIDE_COPY.normalShare);
+    expect(budgetSentence(budget)).not.toMatch(DECIDE_COPY.usualEat);
+  });
+
+  it("says usually eat only when later-slot history is at least the default", () => {
+    const usual = computeSlotBudget({
+      totals,
+      bands: BANDS,
+      slot: "lunch",
+      shares: { ...DEFAULT_MEAL_SHARES, dinner: 0.4, fromHistory: true },
+      loggedSlots: new Set(["breakfast"]),
+    });
+    expect(usual.reserve.bySlot.dinner.source).toBe("usual");
+    expect(budgetSentence(usual)).toMatch(DECIDE_COPY.usualEat);
   });
 });
 
@@ -164,9 +253,9 @@ describe("coachRead", () => {
     loggedSlots: new Set(["breakfast"]),
   }), BANDS);
 
-  it("asks for about 25g of protein at lunch when pNeed is high", () => {
+  it("uses the shy protein line at leftover lunch when pNeed is under 15g", () => {
     const read = coachRead({ budget: base, remaining: base.remaining, slot: "lunch" });
-    expect(read.line1).toMatch(/You need about 25 g of protein at lunch/);
+    expect(read.line1).toMatch(/shy on protein at lunch/);
     expect(read.line2).toBe(DECIDE_COPY.fatSpent);
   });
 
