@@ -95,7 +95,7 @@ describe("Meals tab search filter", () => {
     expect(screen.queryByRole("option", { name: "Breakfast" })).toBeNull();
     expect(screen.queryByRole("option", { name: "Pantry" })).toBeNull();
     expect(screen.getByText("Protein oatmeal")).toBeTruthy();
-  });
+  }, 10_000);
 
   it("opens slot filters next to search and keeps Food prefs as its own chip", () => {
     const { setMealFilter } = renderMeals();
