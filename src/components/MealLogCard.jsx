@@ -155,6 +155,8 @@ export function MealLogCard({
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
   const [estimateDraft, setEstimateDraft] = useState(null);
+  const [savingEstimate, setSavingEstimate] = useState(false);
+  const savingEstimateRef = useRef(false);
   const [pantryGroup, setPantryGroup] = useState("all");
   const [planSearch, setPlanSearch] = useState("");
   const [slotFilter, setSlotFilter] = useState("all");
@@ -647,31 +649,38 @@ export function MealLogCard({
   );
 
   const saveEstimateDraft = async () => {
-    if (!estimateDraft || busy) return;
-    const payload = {
-      name: String(estimateDraft.name || "").trim() || "Meal",
-      cal: Number(estimateDraft.cal) || 0,
-      p: Number(estimateDraft.p) || 0,
-      c: Number(estimateDraft.c) || 0,
-      f: Number(estimateDraft.f) || 0,
-    };
-    const b = estimateDraft.baseline || {};
-    const changed =
-      payload.name !== (b.name || "")
-      || payload.cal !== (Number(b.cal) || 0)
-      || payload.p !== (Number(b.p) || 0)
-      || payload.c !== (Number(b.c) || 0)
-      || payload.f !== (Number(b.f) || 0);
-    const ok = await onConfirmEstimate?.(payload, {
-      adjusted: changed,
-      saveCustom: saveEstimateCustom,
-      slot: resolveLogSlot(logSlot),
-    });
-    if (ok === false) return;
-    setEstimateDraft(null);
-    setSaveEstimateCustom(false);
-    clearEstimateInputs();
-    setMethod(null);
+    if (!estimateDraft || busy || savingEstimateRef.current) return;
+    savingEstimateRef.current = true;
+    setSavingEstimate(true);
+    try {
+      const payload = {
+        name: String(estimateDraft.name || "").trim() || "Meal",
+        cal: Number(estimateDraft.cal) || 0,
+        p: Number(estimateDraft.p) || 0,
+        c: Number(estimateDraft.c) || 0,
+        f: Number(estimateDraft.f) || 0,
+      };
+      const b = estimateDraft.baseline || {};
+      const changed =
+        payload.name !== (b.name || "")
+        || payload.cal !== (Number(b.cal) || 0)
+        || payload.p !== (Number(b.p) || 0)
+        || payload.c !== (Number(b.c) || 0)
+        || payload.f !== (Number(b.f) || 0);
+      const ok = await onConfirmEstimate?.(payload, {
+        adjusted: changed,
+        saveCustom: saveEstimateCustom,
+        slot: resolveLogSlot(logSlot),
+      });
+      if (ok === false) return;
+      setEstimateDraft(null);
+      setSaveEstimateCustom(false);
+      clearEstimateInputs();
+      setMethod(null);
+    } finally {
+      savingEstimateRef.current = false;
+      setSavingEstimate(false);
+    }
   };
 
   const slotBuckets = groupEntriesBySlot(entries, { logDate: date, todayIso: today });
@@ -1484,12 +1493,16 @@ export function MealLogCard({
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
-              <Btn small onClick={saveEstimateDraft}>
-                {onToday ? "Save to today" : `Save to ${formatLongDay(date)}`}
+              <Btn small disabled={savingEstimate} onClick={saveEstimateDraft}>
+                {savingEstimate
+                  ? "Saving…"
+                  : (onToday ? "Save to today" : `Save to ${formatLongDay(date)}`)}
               </Btn>
               <button
                 type="button"
+                disabled={savingEstimate}
                 onClick={() => {
+                  if (savingEstimateRef.current) return;
                   setEstimateDraft(null);
                   clearEstimateInputs();
                   onDiscardEstimate?.();
@@ -1499,7 +1512,7 @@ export function MealLogCard({
                   border: "none",
                   fontSize: 13,
                   color: T.inkSoft,
-                  cursor: "pointer",
+                  cursor: savingEstimate ? "default" : "pointer",
                   textDecoration: "underline",
                 }}
               >
