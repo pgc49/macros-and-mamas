@@ -24,7 +24,8 @@ import {
 } from "../utils/mealSlots";
 import { formatServings, ServingStepper, snapServings } from "../utils/servings";
 import { recipeNoteFromMeal } from "../utils/planMealShape";
-import { scaledMealMacros, targetBands } from "../utils/weekPlan";
+import { targetBands } from "../utils/weekPlan";
+import { decideDisplayMacros } from "../utils/decideScale";
 import { filterMealsByRemaining, formatRoomLeft, roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
 import { LogMealRefine } from "./LogMealRefine";
@@ -1831,7 +1832,7 @@ export function MealLogCard({
                     ),
                   )}
                   {pencils.map((meal) => {
-                    const shown = scaledMealMacros(meal);
+                    const shown = decideDisplayMacros(meal);
                     return (
                     <div
                       key={meal.id || meal.name}

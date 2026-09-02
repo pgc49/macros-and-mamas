@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Btn } from "./ui";
 import { SlotChips } from "./SlotChips";
-import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
-import { DECIDE_COPY, DECIDE_SLOT_LABEL } from "../content/decideVoice";
+import { ServingStepper } from "../utils/servings";
+import { DECIDE_COPY, DECIDE_SLOT_LABEL, knowLaterCopy } from "../content/decideVoice";
+import { decideLogFromCard } from "../utils/decideScale";
 import { withRecipeDetail } from "../content/recipeDetails";
 import { RECIPES, PANTRY_ITEMS } from "../content/data";
 import { addDaysIso } from "../utils/dates";
@@ -316,6 +317,30 @@ export function DecideSheet({
     saveDecideSession(dateKey, slot, { mode, skipNames, prefer, offset });
   }, [open, dateKey, slot, mode, skipNames, prefer, offset]);
 
+  const dismiss = () => {
+    decideTrack("decide_dismiss", {
+      mode,
+      cardsShown: ranked.meals.length,
+      secondsOpen: Math.round((Date.now() - openedAt.current) / 1000),
+      refines: refines.current,
+    });
+    onClose?.();
+  };
+  const dismissRef = useRef(dismiss);
+  dismissRef.current = dismiss;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        dismissRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   if (!open || !budget) return null;
 
   const changeSlot = (next) => {
@@ -331,8 +356,7 @@ export function DecideSheet({
   const logCard = async (card, { fromDetail = false, servings } = {}) => {
     if (!card || card.kind === "soft" || logging) return;
     setLogging(true);
-    const qty = snapServings(servings || card.servings || 1);
-    const scaled = scaleMealForLog(card, qty);
+    const scaled = decideLogFromCard(card, servings);
     try {
       const ok = await onLog?.({
         ...scaled,
@@ -343,7 +367,7 @@ export function DecideSheet({
       decideTrack("decide_log", {
         via: "decide_bank",
         mode,
-        scale: qty,
+        scale: scaled.servings,
         cardIndex: ranked.meals.findIndex((m) => m.name === card.name),
         fromDetail,
         secondsOpen: Math.round((Date.now() - openedAt.current) / 1000),
@@ -363,9 +387,8 @@ export function DecideSheet({
     }
   };
 
-  const pencilCard = async (card, forSlot) => {
-    const qty = snapServings(card.servings || 1);
-    await onPencil?.({ ...card, servings: qty, via: "decide" }, forSlot);
+  const pencilCard = async (card, forSlot, qtyOverride) => {
+    await onPencil?.({ ...card, via: "decide" }, forSlot, qtyOverride);
     decideTrack("decide_pencil", { slot: forSlot, fromSlot: slot });
     setPencilOpen(false);
   };
@@ -392,17 +415,9 @@ export function DecideSheet({
     else if (kind === "protein") setPrefer("protein");
   };
 
-  const dismiss = () => {
-    decideTrack("decide_dismiss", {
-      mode,
-      cardsShown: ranked.meals.length,
-      secondsOpen: Math.round((Date.now() - openedAt.current) / 1000),
-      refines: refines.current,
-    });
-    onClose?.();
-  };
-
-  const detailScaled = detail ? scaleMealForLog(detail, detailServings) : null;
+  const detailScaled = detail
+    ? decideLogFromCard(detail, detailServings)
+    : null;
   const detailFits = detailScaled
     ? mealFitsRemaining(detailScaled, budgetAsRemaining(budget))
     : false;
@@ -431,6 +446,9 @@ export function DecideSheet({
         }}
       />
       <div
+        role="dialog"
+        aria-label={DECIDE_COPY.title}
+        onMouseDown={(e) => e.stopPropagation()}
         style={{
           height: "90vh",
           background: "#fff",
@@ -439,6 +457,8 @@ export function DecideSheet({
           display: "flex",
           flexDirection: "column",
           boxShadow: "0 -12px 40px rgba(51,39,46,0.12)",
+          position: "relative",
+          zIndex: 1,
         }}
       >
         <div style={{ width: 40, height: 5, borderRadius: 3, background: T.track, margin: "2px auto 10px" }} />
@@ -484,7 +504,7 @@ export function DecideSheet({
               <Btn small onClick={() => logCard(detail, { fromDetail: true, servings: detailServings })} disabled={logging}>
                 {DECIDE_COPY.logIt}
               </Btn>
-              <Btn small ghost onClick={() => pencilCard({ ...detail, servings: detailServings }, slot)}>
+              <Btn small ghost onClick={() => pencilCard(detail, slot, detailServings)}>
                 {DECIDE_COPY.pencilIn}
               </Btn>
             </div>
@@ -558,7 +578,7 @@ export function DecideSheet({
                       : `P ${Math.round(laterPiece?.p || 0)}g · C ${Math.round(laterPiece?.c || 0)}g · F ${Math.round(laterPiece?.f || 0)}g`}
                   </div>
                   <div style={{ fontSize: 11.5, color: T.accentDeep, fontWeight: 700, marginTop: 3 }}>
-                    {laterPiece?.meal ? DECIDE_COPY.change : DECIDE_COPY.knowDinner}
+                    {laterPiece?.meal ? DECIDE_COPY.change : knowLaterCopy(laterSlot)}
                   </div>
                 </button>
               ) : (
@@ -739,7 +759,12 @@ export function DecideSheet({
             </div>
             <button
               type="button"
-              onClick={dismiss}
+              data-decide-dismiss="back"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dismiss();
+              }}
               style={{
                 border: "none",
                 background: "none",
@@ -749,6 +774,8 @@ export function DecideSheet({
                 color: T.inkSoft,
                 padding: "10px 0 2px",
                 cursor: "pointer",
+                flexShrink: 0,
+                zIndex: 2,
               }}
             >
               {DECIDE_COPY.back}

@@ -6,7 +6,8 @@ import { RECIPES } from "../content/data";
 import { addDaysIso, localDateIso, planDayLabel } from "../utils/dates";
 import { addMealToDay, customMealToPlanMeal, recipeToPlanMeal, replaceMealById } from "../utils/weekPlan";
 import { decidePencilForSlot } from "../utils/decideBudget";
-import { namesMatch, stripPortionSuffix } from "../utils/decidePrefs";
+import { decidePlanFieldsFromCard } from "../utils/decideScale";
+import { namesMatch } from "../utils/decidePrefs";
 
 const MACROS = { cal: 1750, protein: 145, carbs: 180, fat: 60 };
 
@@ -116,25 +117,18 @@ export function DecidePreview() {
     return true;
   };
 
-  const onPencil = async (meal, slot) => {
-    const servings = Number(meal.servings) || 1;
-    const base = {
-      name: stripPortionSuffix(meal.name),
-      cal: (Number(meal.cal) || 0) / servings,
-      p: (Number(meal.p) || 0) / servings,
-      c: (Number(meal.c) || 0) / servings,
-      f: (Number(meal.f) || 0) / servings,
-      cat: slot,
-    };
+  const onPencil = async (meal, slot, qtyOverride) => {
+    const fields = decidePlanFieldsFromCard(meal, qtyOverride);
     const built = meal.source === "my"
-      ? customMealToPlanMeal({ ...meal, ...base }, slot)
-      : recipeToPlanMeal({ ...base, name: meal.name }, slot);
+      ? customMealToPlanMeal({ ...meal, ...fields, serves: 1 }, slot)
+      : recipeToPlanMeal({ ...fields, name: fields.name, cat: slot, serves: 1 }, slot);
     built.via = "decide";
-    built.qty = servings;
-    built.cal = base.cal;
-    built.p = base.p;
-    built.c = base.c;
-    built.f = base.f;
+    built.qty = fields.qty;
+    built.servings = fields.qty;
+    built.cal = fields.cal;
+    built.p = fields.p;
+    built.c = fields.c;
+    built.f = fields.f;
     setPlanned((list) => {
       const dayKey = planDayLabel(today);
       const days = [{ day: dayKey, meals: list }];

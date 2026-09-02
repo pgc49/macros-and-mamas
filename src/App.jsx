@@ -15,6 +15,7 @@ import {
   replaceMealById,
 } from "./utils/weekPlan";
 import { decidePencilForSlot } from "./utils/decideBudget";
+import { decidePlanFieldsFromCard } from "./utils/decideScale";
 import { namesMatch, stripPortionSuffix } from "./utils/decidePrefs";
 import {
   adherenceForWeek,
@@ -1223,7 +1224,7 @@ export default function App() {
     }, 600);
   };
 
-  const onPencilPlanMeal = async (meal, slotOverride) => {
+  const onPencilPlanMeal = async (meal, slotOverride, qtyOverride) => {
     const today = localDateIso();
     const dayKey = planDayLabel(today);
     const ws = wkStartOf(today);
@@ -1240,30 +1241,22 @@ export default function App() {
         days = [];
       }
     }
-    const servings = Number(meal.servings) || 1;
+    const fields = decidePlanFieldsFromCard(meal, qtyOverride);
     const base = {
-      name: stripPortionSuffix(meal.name),
-      cal: servings ? (Number(meal.cal) || 0) / servings : Number(meal.cal) || 0,
-      p: servings ? (Number(meal.p) || 0) / servings : Number(meal.p) || 0,
-      c: servings ? (Number(meal.c) || 0) / servings : Number(meal.c) || 0,
-      f: servings ? (Number(meal.f) || 0) / servings : Number(meal.f) || 0,
-      desc: meal.desc || "",
-      ingredients: meal.ingredients,
-      steps: meal.steps,
-      serving: meal.serving,
-      batch: meal.batch,
-      basedOn: meal.basedOn,
+      ...fields,
       cat: meal.source === "pantry" ? "pantry" : slot,
+      serves: 1,
     };
     const built = meal.source === "my"
       ? customMealToPlanMeal({ ...meal, ...base }, slot)
       : recipeToPlanMeal(base, slot);
     built.via = "decide";
-    built.qty = servings;
-    built.cal = base.cal;
-    built.p = base.p;
-    built.c = base.c;
-    built.f = base.f;
+    built.qty = fields.qty;
+    built.servings = fields.qty;
+    built.cal = fields.cal;
+    built.p = fields.p;
+    built.c = fields.c;
+    built.f = fields.f;
     const existing = decidePencilForSlot(
       (days || []).find((d) => d.day === dayKey)?.meals,
       slot,

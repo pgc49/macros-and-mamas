@@ -91,3 +91,11 @@ export const DECIDE_COPY = {
   viaAi: "Made from your fridge",
   viaOut: "Estimate from menu",
 };
+
+/** Right-box CTA for the next unlogged main slot. Dinner string stays the default. */
+export function knowLaterCopy(slot) {
+  if (slot === "lunch") return "Know what lunch is yet?";
+  if (slot === "snack") return "Know what snack is yet?";
+  if (slot === "breakfast") return "Know what breakfast is yet?";
+  return DECIDE_COPY.knowDinner;
+}
