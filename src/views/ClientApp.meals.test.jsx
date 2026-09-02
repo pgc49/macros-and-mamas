@@ -294,6 +294,9 @@ describe("Meals tab search filter", { timeout: 15_000 }, () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Dinner" }));
     fireEvent.click(screen.getByRole("button", { name: "Save all" }));
+    await vi.waitFor(() => {
+      expect(screen.getByRole("button", { name: "Saving…" })).toBeTruthy();
+    });
     fireEvent.click(screen.getByRole("button", { name: "Snack" }));
     release();
 
@@ -303,7 +306,9 @@ describe("Meals tab search filter", { timeout: 15_000 }, () => {
         slot: "dinner",
       }, { keepOrder: true, slotOnly: true });
     });
-    expect(screen.getByRole("button", { name: "Save all" })).toBeTruthy();
+    await vi.waitFor(() => {
+      expect(screen.getByRole("button", { name: "Save all" })).toBeTruthy();
+    });
     expect(screen.getByText("1 meal slot changed")).toBeTruthy();
     expect(screen.queryByText("Saved")).toBeNull();
     expect(screen.getByRole("button", { name: "Snack" }).getAttribute("aria-pressed")).toBe("true");

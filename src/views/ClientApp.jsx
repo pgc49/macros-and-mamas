@@ -42,7 +42,7 @@ import {
 import { db } from "../db/db";
 import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
 import { customMealId, customMealKey, slotOnlySavePayload } from "../utils/customMeals";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 function customMealSavedSlot(meal) {
   return normalizeSlot(meal?.slot || meal?.cat);
@@ -96,6 +96,7 @@ export function ClientApp({
   const [composerFocused, setComposerFocused] = useState(false);
   const [myMealsAddOpen, setMyMealsAddOpen] = useState(false);
   const [pendingSlots, setPendingSlots] = useState({});
+  const pendingSlotsRef = useRef(pendingSlots);
   const [saveAllBusy, setSaveAllBusy] = useState(false);
   const [saveAllNote, setSaveAllNote] = useState("");
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
@@ -145,21 +146,26 @@ export function ClientApp({
 
   const draftSlotFor = (meal) => pendingSlots[customMealKey(meal)] ?? customMealSavedSlot(meal);
 
+  const writePendingSlots = (next) => {
+    pendingSlotsRef.current = next;
+    setPendingSlots(next);
+  };
+
   const setMealSlotDraft = (meal, nextSlot) => {
     const key = customMealKey(meal);
     if (!key) return;
     const saved = customMealSavedSlot(meal);
     setSaveAllNote("");
-    setPendingSlots((prev) => {
-      if (!nextSlot || nextSlot === saved) {
-        if (!(key in prev)) return prev;
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-      if (prev[key] === nextSlot) return prev;
-      return { ...prev, [key]: nextSlot };
-    });
+    const prev = pendingSlotsRef.current;
+    if (!nextSlot || nextSlot === saved) {
+      if (!(key in prev)) return;
+      const next = { ...prev };
+      delete next[key];
+      writePendingSlots(next);
+      return;
+    }
+    if (prev[key] === nextSlot) return;
+    writePendingSlots({ ...prev, [key]: nextSlot });
   };
 
   const persistCustomMealSlot = (meal, slot) => {
@@ -191,15 +197,12 @@ export function ClientApp({
         failed = true;
       }
     }
-    let remaining = 0;
-    setPendingSlots((prev) => {
-      const next = { ...prev };
-      for (const { key, slot } of confirmed) {
-        if (next[key] === slot) delete next[key];
-      }
-      remaining = Object.keys(next).length;
-      return next;
-    });
+    const next = { ...pendingSlotsRef.current };
+    for (const { key, slot } of confirmed) {
+      if (next[key] === slot) delete next[key];
+    }
+    writePendingSlots(next);
+    const remaining = Object.keys(next).length;
     if (failed) {
       setSaveAllNote("Couldn't save some slots — try again");
     } else if (remaining === 0) {
@@ -716,12 +719,11 @@ export function ClientApp({
                             slot: meal.slot || draftSlot || m.slot || m.cat,
                           }, { keepOrder: true });
                           if (saved != null && saved !== false) {
-                            setPendingSlots((prev) => {
-                              if (!(rowKey in prev)) return prev;
-                              const next = { ...prev };
+                            if (rowKey in pendingSlotsRef.current) {
+                              const next = { ...pendingSlotsRef.current };
                               delete next[rowKey];
-                              return next;
-                            });
+                              writePendingSlots(next);
+                            }
                           }
                           return saved;
                         }}
