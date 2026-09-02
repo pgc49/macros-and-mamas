@@ -51,4 +51,47 @@ describe("MealSlotFilterBar", () => {
     fireEvent.click(screen.getByRole("option", { name: "Pantry" }));
     expect(onChange).toHaveBeenCalledWith("Pantry");
   });
+
+  it("shows Fits remaining macros as a toggle that composes with the slot", () => {
+    const onFitsChange = vi.fn();
+    const onChange = vi.fn();
+    render(
+      <MealSlotFilterBar
+        query=""
+        onQueryChange={() => {}}
+        filters={["Breakfast", "Dinner"]}
+        value="Dinner"
+        onChange={onChange}
+        allValue="All meals"
+        open={false}
+        onOpenChange={() => {}}
+        fitsActive
+        onFitsChange={onFitsChange}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Filter meals · Dinner · Fits remaining macros" })).toBeTruthy();
+    const fits = screen.getByRole("button", { name: "Fits remaining macros" });
+    expect(fits.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(fits);
+    expect(onFitsChange).toHaveBeenCalledWith(false);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("hides Fits remaining macros when no handler is passed", () => {
+    render(
+      <MealSlotFilterBar
+        query=""
+        onQueryChange={() => {}}
+        filters={["Breakfast"]}
+        value="All meals"
+        onChange={() => {}}
+        allValue="All meals"
+        open={false}
+        onOpenChange={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Fits remaining macros" })).toBeNull();
+  });
 });

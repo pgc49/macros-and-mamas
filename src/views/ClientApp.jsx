@@ -23,7 +23,12 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { TechHelpFooter } from "../components/TechHelpFooter";
 import { MessagesPanel } from "../components/MessagesPanel";
 import { mealToCard } from "../content/recipeDetails";
-import { countPlannedMeals } from "../utils/weekPlan";
+import { countPlannedMeals, targetBands } from "../utils/weekPlan";
+import {
+  filterMealsByRemaining,
+  formatRoomLeft,
+  roomLeftFromTotals,
+} from "../utils/eatingOutImpact";
 import {
   filterMealsByQuery,
   isMealsTabSlotFilter,
@@ -78,16 +83,23 @@ export function ClientApp({
   const [pantryGroup, setPantryGroup] = useState("all");
   const [mealQuery, setMealQuery] = useState("");
   const [slotFilterOpen, setSlotFilterOpen] = useState(false);
+  const [fitsRemainingOnly, setFitsRemainingOnly] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [myMealsAddOpen, setMyMealsAddOpen] = useState(false);
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
     : [];
-  const pantryVisible = (pantryGroup === "all"
+  const dayBands = targetBands(macros);
+  const remainingRoom = roomLeftFromTotals(totals, dayBands).remaining;
+  const canFilterFits = Boolean(macros && remainingRoom);
+  const applyFitsFilter = (list) => (
+    fitsRemainingOnly && remainingRoom ? filterMealsByRemaining(list, remainingRoom) : list
+  );
+  const pantryVisible = applyFitsFilter((pantryGroup === "all"
     ? PANTRY_ITEMS
     : PANTRY_ITEMS.filter((item) => item.group === pantryGroup)
-  ).filter((item) => mealMatchesQuery(item, mealQuery));
+  ).filter((item) => mealMatchesQuery(item, mealQuery)));
   const bankSource = personalized ? uniqueMealsByName(flatPersonalized) : RECIPES;
   const isBankFilter = mealFilter === "All meals"
     || mealFilter === "Breakfast"
@@ -101,12 +113,15 @@ export function ClientApp({
       ? "My meals"
       : "All meals";
   const showMealsSearch = isBankFilter || mealFilter === "My meals" || mealFilter === "Pantry";
-  const visibleBank = bankSource.filter((m) => {
+  const visibleBank = applyFitsFilter(bankSource.filter((m) => {
     if (mealFilter !== "All meals" && (m.cat || "") !== mealFilter) return false;
     return mealMatchesQuery(m, mealQuery);
-  });
-  const visibleCustomMeals = filterMealsByQuery(customMeals, mealQuery);
+  }));
+  const visibleCustomMeals = applyFitsFilter(filterMealsByQuery(customMeals, mealQuery));
   const searchingMeals = Boolean(String(mealQuery || "").trim());
+  const fitsEmptyHint = fitsRemainingOnly
+    ? " Nothing here fits your remaining macros — turn the filter off to browse everything."
+    : "";
   const plannedCount = countPlannedMeals(weekPlanDays);
   const hi = (n, d = 10) => n + d;
   const hasElectrolytes = hasPublicUrl(CONFIG.FULLSCRIPT_ELECTROLYTES);
@@ -428,20 +443,29 @@ export function ClientApp({
           </div>
 
           {showMealsSearch && (
-            <MealSlotFilterBar
-              query={mealQuery}
-              onQueryChange={setMealQuery}
-              placeholder={mealFilter === "My meals" ? "Search my meals" : "Search meals"}
-              filters={MEALS_TAB_SLOT_FILTERS}
-              value={mealsSlotValue}
-              onChange={(next) => {
-                setMealFilter(next);
-                if (next === "Pantry") setPantryGroup("all");
-              }}
-              allValue={mealFilter === "My meals" ? "My meals" : "All meals"}
-              open={slotFilterOpen}
-              onOpenChange={setSlotFilterOpen}
-            />
+            <>
+              <MealSlotFilterBar
+                query={mealQuery}
+                onQueryChange={setMealQuery}
+                placeholder={mealFilter === "My meals" ? "Search my meals" : "Search meals"}
+                filters={MEALS_TAB_SLOT_FILTERS}
+                value={mealsSlotValue}
+                onChange={(next) => {
+                  setMealFilter(next);
+                  if (next === "Pantry") setPantryGroup("all");
+                }}
+                allValue={mealFilter === "My meals" ? "My meals" : "All meals"}
+                open={slotFilterOpen}
+                onOpenChange={setSlotFilterOpen}
+                fitsActive={fitsRemainingOnly}
+                onFitsChange={canFilterFits ? setFitsRemainingOnly : undefined}
+              />
+              {fitsRemainingOnly && remainingRoom && (
+                <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "-4px 0 12px", lineHeight: 1.45 }}>
+                  Room left after today’s log: {formatRoomLeft(remainingRoom)} to your day high.
+                </p>
+              )}
+            </>
           )}
 
           {mealFilter === "Plan" && (
@@ -518,7 +542,10 @@ export function ClientApp({
               ) : !visibleCustomMeals.length ? (
                 <Card>
                   <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
-                    No saved meals match “{mealQuery.trim()}”.
+                    {searchingMeals
+                      ? `No saved meals match “${mealQuery.trim()}”.`
+                      : "No saved meals in this list."}
+                    {fitsEmptyHint}
                   </div>
                 </Card>
               ) : (
@@ -559,10 +586,13 @@ export function ClientApp({
               <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
                 Per-serving estimates from Callie’s brands & pantry cheat sheet. Serving sizes match the sheet.
               </p>
-              {searchingMeals && !pantryVisible.length ? (
+              {((searchingMeals || fitsRemainingOnly) && !pantryVisible.length) ? (
                 <Card>
                   <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
-                    No pantry items match “{mealQuery.trim()}”. Try a name or brand, or pick All.
+                    {searchingMeals
+                      ? `No pantry items match “${mealQuery.trim()}”. Try a name or brand, or pick All.`
+                      : "No pantry items in this list."}
+                    {fitsEmptyHint}
                   </div>
                 </Card>
               ) : pantryVisible.map((item) => (
@@ -576,10 +606,13 @@ export function ClientApp({
             </div>
           )}
 
-          {isBankFilter && searchingMeals && !visibleBank.length && (
+          {isBankFilter && (searchingMeals || fitsRemainingOnly) && !visibleBank.length && (
             <Card>
               <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.55 }}>
-                No recipes match “{mealQuery.trim()}”. Try a name or ingredient, or pick a slot.
+                {searchingMeals
+                  ? `No recipes match “${mealQuery.trim()}”. Try a name or ingredient, or pick a slot.`
+                  : "No recipes in this list."}
+                {fitsEmptyHint}
               </div>
             </Card>
           )}

@@ -20,7 +20,7 @@ afterEach(() => {
 
 function noop() {}
 
-function renderMeals(filter = "All meals") {
+function renderMeals(filter = "All meals", extras = {}) {
   let mealFilter = filter;
   const setMealFilter = vi.fn((next) => {
     mealFilter = next;
@@ -32,7 +32,7 @@ function renderMeals(filter = "All meals") {
         setTab={noop}
         profile={{ name: "Pat" }}
         macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
-        totals={{ p: 0, c: 0, f: 0, cal: 0 }}
+        totals={extras.totals || { p: 0, c: 0, f: 0, cal: 0 }}
         waterOz={80}
         estimateBusy={false}
         estimate={null}
@@ -124,5 +124,20 @@ describe("Meals tab search filter", () => {
     expect(screen.getByRole("option", { name: "Pantry" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Pantry" })).toBeNull();
     expect(screen.getByRole("button", { name: "Weekly Planner" })).toBeTruthy();
+  });
+
+  it("filters the bank to meals that fit remaining room from today's log", () => {
+    renderMeals("All meals", { totals: { cal: 1400, p: 90, c: 120, f: 45 } });
+
+    expect(screen.getByText("Callie's chicken teriyaki")).toBeTruthy();
+    expect(screen.getByText("Protein oatmeal")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Fits remaining macros" }));
+
+    expect(screen.getByText(/Room left after today’s log/)).toBeTruthy();
+    expect(screen.getByText("Protein oatmeal")).toBeTruthy();
+    expect(screen.getByText("Greek yogurt + berries")).toBeTruthy();
+    expect(screen.queryByText("Callie's chicken teriyaki")).toBeNull();
+    expect(screen.queryByText("Chicken soba stir fry")).toBeNull();
   });
 });
