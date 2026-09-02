@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { useState } from "react";
 
 vi.mock("../auth/useAuth.jsx", () => ({
   useAuth: () => ({
@@ -81,6 +82,17 @@ function renderMeals(filter = "Decide", extras = {}) {
     </MemoryRouter>,
   );
   return { view, setMealFilter, getMealFilter: () => mealFilter };
+}
+
+function clickRowSlot(mealId, slotLabel) {
+  const row = document.querySelector(`[data-loggable-meal][data-meal-id="${mealId}"]`);
+  const btn = [...row.querySelectorAll("button")].find((b) => b.textContent.trim() === slotLabel);
+  fireEvent.click(btn);
+}
+
+function pressedSlot(mealId) {
+  const row = document.querySelector(`[data-loggable-meal][data-meal-id="${mealId}"]`);
+  return row?.querySelector("[aria-pressed='true']")?.textContent.trim() || "";
 }
 
 describe("Meals tab search filter", { timeout: 15_000 }, () => {
@@ -379,5 +391,157 @@ describe("Meals tab search filter", { timeout: 15_000 }, () => {
     });
     expect(screen.getByRole("button", { name: "Save all" })).toBeTruthy();
     expect(screen.getByText("1 meal slot changed")).toBeTruthy();
+  });
+
+  it("writes each My meals slot flip only onto that meal id", async () => {
+    const onSaveCustomMeal = vi.fn(async (meal) => meal);
+    renderMeals("My meals", {
+      customMeals: [
+        { id: "c-a", name: "Alpha bowl", cal: 300, p: 30, c: 20, f: 8, slot: "snack" },
+        { id: "c-b", name: "Beta plate", cal: 400, p: 35, c: 25, f: 12, slot: "snack" },
+        { id: "c-c", name: "Gamma skillet", cal: 500, p: 40, c: 30, f: 16, slot: "snack" },
+      ],
+      onSaveCustomMeal,
+    });
+
+    clickRowSlot("c-a", "Breakfast");
+    clickRowSlot("c-b", "Lunch");
+    clickRowSlot("c-c", "Dinner");
+
+    expect(pressedSlot("c-a")).toBe("Breakfast");
+    expect(pressedSlot("c-b")).toBe("Lunch");
+    expect(pressedSlot("c-c")).toBe("Dinner");
+    expect(screen.getByText("3 meal slots changed")).toBeTruthy();
+    expect(onSaveCustomMeal).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save all" }));
+    await vi.waitFor(() => {
+      expect(onSaveCustomMeal).toHaveBeenCalledTimes(3);
+    });
+    expect(onSaveCustomMeal.mock.calls.map(([meal]) => meal)).toEqual([
+      { id: "c-a", slot: "breakfast" },
+      { id: "c-b", slot: "lunch" },
+      { id: "c-c", slot: "dinner" },
+    ]);
+  });
+
+  it("opens Help me decide every time Meals is entered, including after All meals", () => {
+    function Harness() {
+      const [tab, setTab] = useState("meals");
+      const [mealFilter, setMealFilter] = useState("All meals");
+      return (
+        <MemoryRouter>
+          <ClientApp
+            tab={tab}
+            setTab={setTab}
+            profile={{ name: "Pat" }}
+            macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
+            totals={{ p: 0, c: 0, f: 0, cal: 0 }}
+            waterOz={80}
+            estimateBusy={false}
+            estimate={null}
+            analyzePhoto={noop}
+            analyzeText={noop}
+            confirmEstimate={noop}
+            discardEstimate={noop}
+            logManualMeal={noop}
+            logRecipe={noop}
+            todayLog={{ date: "2026-08-30", entries: [] }}
+            deleteMealEntry={noop}
+            updateMealEntry={noop}
+            mealLogDate="2026-08-30"
+            mealLogWeekStart="2026-08-24"
+            mealLogsByDate={{}}
+            selectMealLogDate={noop}
+            changeMealWeek={noop}
+            waterLogsByDate={{}}
+            waterBusy={false}
+            onAddWater={noop}
+            onUndoWater={noop}
+            onChangeBottleOz={noop}
+            viewWk={1}
+            setViewWk={noop}
+            curWk={1}
+            editPast={false}
+            setEditPast={noop}
+            checksByWeek={{}}
+            toggleCheck={noop}
+            adherenceFor={() => ({})}
+            progWeekNum={1}
+            earliestWk="2026-08-24"
+            weighins={[]}
+            logWeighin={noop}
+            deleteWeighin={noop}
+            weeklyRate={0}
+            trends={{ locked: true, items: [] }}
+            macroHistory={[]}
+            mealFilter={mealFilter}
+            setMealFilter={setMealFilter}
+            customMeals={[{ id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 }]}
+          />
+        </MemoryRouter>
+      );
+    }
+
+    render(<Harness />);
+    expect(screen.getByRole("heading", { name: "Help me decide" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "All meals" }));
+    expect(screen.getByRole("heading", { name: "All meals" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Meals" }));
+    expect(screen.getByRole("heading", { name: "Help me decide" })).toBeTruthy();
+  });
+
+  it("reloads onto Help me decide both times", () => {
+    renderMeals("Decide");
+    expect(screen.getByRole("heading", { name: "Help me decide" })).toBeTruthy();
+    cleanup();
+    renderMeals("Decide");
+    expect(screen.getByRole("heading", { name: "Help me decide" })).toBeTruthy();
+  });
+
+  it("does not turn on Fits remaining when Save all is clicked", async () => {
+    const onSaveCustomMeal = vi.fn(async (meal) => meal);
+    renderMeals("My meals", {
+      totals: { cal: 1400, p: 90, c: 120, f: 45 },
+      customMeals: [{
+        id: "c-steak",
+        name: "Steak Tacos",
+        cal: 480,
+        p: 38,
+        c: 36,
+        f: 18,
+        slot: "lunch",
+      }],
+      onSaveCustomMeal,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Dinner" }));
+    expect(screen.getByRole("button", { name: "Fits remaining macros" }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Save all" }));
+    await vi.waitFor(() => {
+      expect(screen.getByText("Saved")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Fits remaining macros" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("does not open Add meal after a scroll gesture", () => {
+    renderMeals("My meals");
+    const btn = document.querySelector("[data-add-meal]");
+    fireEvent.pointerDown(btn, { clientX: 20, clientY: 20 });
+    fireEvent.click(btn, { clientX: 20, clientY: 80 });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closing Add meal does not change the Meals section", async () => {
+    const { setMealFilter } = renderMeals("My meals");
+    const callsBeforeOpen = setMealFilter.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: /Add meal/ }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await vi.waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(setMealFilter.mock.calls.length).toBe(callsBeforeOpen);
+    expect(screen.getByRole("heading", { name: "My meals" })).toBeTruthy();
   });
 });

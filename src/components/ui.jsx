@@ -87,7 +87,7 @@ export function MealSearchInput({
 }
 
 export const Chip = ({ active, onClick, children, compact = false }) => (
-  <button onClick={onClick} style={{
+    <button type="button" onClick={onClick} style={{
     padding: compact ? "6px 10px" : "10px 16px",
     borderRadius: 999,
     fontSize: compact ? 12.5 : 14,

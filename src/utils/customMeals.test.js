@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applySlotDraft,
   customMealId,
   customMealKey,
   customMealsMatch,
@@ -45,5 +46,23 @@ describe("custom meal identity", () => {
     expect(slotOnlySavePayload(sheet, "dinner")).toEqual({ id: "c-sheet", slot: "dinner" });
     expect(slotOnlySavePayload({ name: "Sheet Pan" }, "dinner")).toBeNull();
     expect(slotOnlySavePayload(sheet, "")).toBeNull();
+  });
+
+  it("writes each draft only onto that meal key — no cross-writes", () => {
+    let pending = {};
+    pending = applySlotDraft(pending, "id:c-sheet", "breakfast", "lunch");
+    pending = applySlotDraft(pending, "id:c-sausage", "lunch", "breakfast");
+    pending = applySlotDraft(pending, "id:c-greek", "dinner", "breakfast");
+    expect(pending).toEqual({
+      "id:c-sheet": "breakfast",
+      "id:c-sausage": "lunch",
+      "id:c-greek": "dinner",
+    });
+    pending = applySlotDraft(pending, "id:c-sausage", "snack", "breakfast");
+    expect(pending).toEqual({
+      "id:c-sheet": "breakfast",
+      "id:c-sausage": "snack",
+      "id:c-greek": "dinner",
+    });
   });
 });

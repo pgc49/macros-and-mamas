@@ -41,11 +41,55 @@ import {
 } from "../utils/mealSearch";
 import { db } from "../db/db";
 import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
-import { customMealId, customMealKey, slotOnlySavePayload } from "../utils/customMeals";
-import { useRef, useState } from "react";
+import { applySlotDraft, customMealId, customMealKey, slotOnlySavePayload } from "../utils/customMeals";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 function customMealSavedSlot(meal) {
   return normalizeSlot(meal?.slot || meal?.cat);
+}
+
+function tapUnlessMoved(onTap, threshold = 10) {
+  let x = 0;
+  let y = 0;
+  return {
+    onPointerDown: (e) => {
+      x = e.clientX;
+      y = e.clientY;
+    },
+    onClick: (e) => {
+      if (Math.abs(e.clientX - x) > threshold || Math.abs(e.clientY - y) > threshold) {
+        e.preventDefault();
+        return;
+      }
+      onTap(e);
+    },
+  };
+}
+
+function MyMealLogRow({
+  meal,
+  draftSlot,
+  savedSlot,
+  onSlotDraft,
+  onLog,
+  onRemove,
+  onSaveIngredients,
+}) {
+  const key = customMealKey(meal);
+  const handleDraft = useCallback((next) => {
+    onSlotDraft(key, next, savedSlot);
+  }, [key, savedSlot, onSlotDraft]);
+  return (
+    <LoggableMealRow
+      meal={{ ...meal, slot: draftSlot }}
+      via="custom"
+      accent
+      onLog={onLog}
+      onRemove={onRemove}
+      onSlotDraftChange={handleDraft}
+      onSaveIngredients={onSaveIngredients}
+    />
+  );
 }
 
 export function ClientApp({
@@ -151,21 +195,39 @@ export function ClientApp({
     setPendingSlots(next);
   };
 
-  const setMealSlotDraft = (meal, nextSlot) => {
-    const key = customMealKey(meal);
+  const setMealSlotDraft = useCallback((key, nextSlot, savedSlot) => {
     if (!key) return;
-    const saved = customMealSavedSlot(meal);
     setSaveAllNote("");
-    const prev = pendingSlotsRef.current;
-    if (!nextSlot || nextSlot === saved) {
-      if (!(key in prev)) return;
-      const next = { ...prev };
-      delete next[key];
-      writePendingSlots(next);
+    const next = applySlotDraft(pendingSlotsRef.current, key, nextSlot, savedSlot);
+    if (next === pendingSlotsRef.current) return;
+    writePendingSlots(next);
+  }, []);
+
+  const landedOnMealsRef = useRef(false);
+  useEffect(() => {
+    if (tab !== "meals") {
+      landedOnMealsRef.current = false;
       return;
     }
-    if (prev[key] === nextSlot) return;
-    writePendingSlots({ ...prev, [key]: nextSlot });
+    if (landedOnMealsRef.current) return;
+    landedOnMealsRef.current = true;
+    setMealFilter(MEALS_DECIDE_FILTER);
+    setMealQuery("");
+    setSlotFilterOpen(false);
+    setFitsRemainingOnly(false);
+    setMyMealsAddOpen(false);
+  }, [tab, setMealFilter]);
+
+  const openTab = (nextTab) => {
+    if (nextTab === "meals") {
+      landedOnMealsRef.current = false;
+      setMealFilter(MEALS_DECIDE_FILTER);
+      setMealQuery("");
+      setSlotFilterOpen(false);
+      setFitsRemainingOnly(false);
+      setMyMealsAddOpen(false);
+    }
+    setTab(nextTab);
   };
 
   const persistCustomMealSlot = (meal, slot) => {
@@ -266,7 +328,7 @@ export function ClientApp({
         <button
           key={k}
           type="button"
-          onClick={() => setTab(k)}
+          onClick={() => openTab(k)}
           style={{
             fontFamily: F,
             fontSize: 13.5,
@@ -602,7 +664,7 @@ export function ClientApp({
                 open={slotFilterOpen}
                 onOpenChange={setSlotFilterOpen}
                 fitsActive={fitsRemainingOnly}
-                onFitsChange={canFilterFits ? setFitsRemainingOnly : undefined}
+                onFitsChange={canFilterFits ? ((on) => setFitsRemainingOnly(Boolean(on))) : undefined}
               />
               {fitsRemainingOnly && remainingRoom && (
                 <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "-4px 0 12px", lineHeight: 1.45 }}>
@@ -646,7 +708,8 @@ export function ClientApp({
             <div style={{ marginBottom: 12 }}>
               <button
                 type="button"
-                onClick={() => setMyMealsAddOpen(true)}
+                data-add-meal=""
+                {...tapUnlessMoved(() => setMyMealsAddOpen(true))}
                 style={{
                   width: "100%",
                   padding: "12px 14px",
@@ -660,6 +723,7 @@ export function ClientApp({
                   cursor: "pointer",
                   textAlign: "left",
                   marginBottom: 12,
+                  touchAction: "manipulation",
                 }}
               >
                 ＋ Add meal
@@ -671,7 +735,11 @@ export function ClientApp({
                 <MyMealsAddSheet
                   macros={macros}
                   customMeals={customMeals}
-                  onClose={() => setMyMealsAddOpen(false)}
+                  onClose={(e) => {
+                    e?.preventDefault?.();
+                    e?.stopPropagation?.();
+                    window.setTimeout(() => setMyMealsAddOpen(false), 0);
+                  }}
                   onEstimateRecipe={onEstimateRecipe}
                   onSaveCustomMeal={onSaveCustomMeal}
                   onMealIdea={onMealIdea}
@@ -697,15 +765,16 @@ export function ClientApp({
                   {visibleCustomMeals.map((m) => {
                     const rowKey = customMealKey(m);
                     const draftSlot = draftSlotFor(m);
+                    const savedSlot = customMealSavedSlot(m);
                     return (
-                      <LoggableMealRow
+                      <MyMealLogRow
                         key={rowKey}
-                        meal={{ ...m, slot: draftSlot }}
-                        via="custom"
-                        accent
+                        meal={m}
+                        draftSlot={draftSlot}
+                        savedSlot={savedSlot}
+                        onSlotDraft={setMealSlotDraft}
                         onLog={logRecipe}
                         onRemove={() => onDeleteCustomMeal?.(m.id)}
-                        onSlotDraftChange={(next) => setMealSlotDraft(m, next)}
                         onSaveIngredients={async (meal) => {
                           const saved = await onSaveCustomMeal?.({
                             id: m.id,
@@ -730,6 +799,9 @@ export function ClientApp({
                       />
                     );
                   })}
+                  {visibleCustomMeals.length > 0 && pendingSlotCount === 0 && !saveAllNote ? (
+                    <div data-my-meals-save-all-spacer aria-hidden="true" style={{ height: 56 }} />
+                  ) : null}
                   {(pendingSlotCount > 0 || saveAllNote) && (
                     <div
                       data-my-meals-save-all
@@ -765,7 +837,11 @@ export function ClientApp({
                         <button
                           type="button"
                           disabled={saveAllBusy}
-                          onClick={saveAllMyMealSlots}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            saveAllMyMealSlots();
+                          }}
                           style={{
                             fontFamily: F,
                             fontSize: 13,

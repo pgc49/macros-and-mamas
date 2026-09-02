@@ -37,8 +37,13 @@ export function LoggableMealRow({
   const hasIngredients = Boolean(String(meal.ingredients || "").trim());
   const canEditIngredients = typeof onSaveIngredients === "function";
 
-  const handleSlotChange = (next) => {
+  const slotMealKey = meal.id != null && String(meal.id).trim()
+    ? `id:${String(meal.id).trim()}`
+    : String(meal.name || "").trim() ? `name:${String(meal.name).trim()}` : "";
+
+  const handleSlotChange = (next, fromKey) => {
     if (!next) return;
+    if (fromKey && slotMealKey && fromKey !== slotMealKey) return;
     if (controlledSlot) {
       onSlotDraftChange(next);
       return;
@@ -185,7 +190,7 @@ export function LoggableMealRow({
           <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginBottom: 6 }}>
             Meal slot
           </div>
-          <SlotChips value={slot} onChange={handleSlotChange} compact />
+          <SlotChips value={slot} onChange={handleSlotChange} compact mealKey={slotMealKey} />
         </div>
       )}
 
@@ -199,7 +204,7 @@ export function LoggableMealRow({
       }}
       >
         {showSlotPicker && compact && (
-          <SlotChips value={slot} onChange={handleSlotChange} compact />
+          <SlotChips value={slot} onChange={handleSlotChange} compact mealKey={slotMealKey} />
         )}
         <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 8, marginLeft: compact ? "auto" : 0 }}>
           {!compact && (

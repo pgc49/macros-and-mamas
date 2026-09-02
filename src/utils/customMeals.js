@@ -39,3 +39,20 @@ export function slotOnlySavePayload(meal, slot) {
   if (!id || !slot) return null;
   return { id, slot };
 }
+
+/**
+ * Write one meal's draft slot. Never touches other keys — no index, no shared row state.
+ * @returns {Record<string, string>}
+ */
+export function applySlotDraft(pending, key, nextSlot, savedSlot) {
+  if (!key || !nextSlot) return pending && typeof pending === "object" ? pending : {};
+  const prev = pending && typeof pending === "object" ? pending : {};
+  if (nextSlot === savedSlot) {
+    if (!(key in prev)) return prev;
+    const next = { ...prev };
+    delete next[key];
+    return next;
+  }
+  if (prev[key] === nextSlot) return prev;
+  return { ...prev, [key]: nextSlot };
+}
