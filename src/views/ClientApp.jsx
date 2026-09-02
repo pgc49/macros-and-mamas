@@ -2,7 +2,7 @@ import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { RECIPES, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
-import { Shell, Card, Chip, RangeBand, rangeState } from "../components/ui";
+import { Shell, Card, Chip, Btn, RangeBand, rangeState } from "../components/ui";
 import { MealSlotFilterBar } from "../components/MealSlotFilterBar";
 import { formatRangeProgress } from "../utils/rangeProgress";
 import { MealLogCard } from "../components/MealLogCard";
@@ -31,14 +31,16 @@ import {
 } from "../utils/eatingOutImpact";
 import {
   filterMealsByQuery,
+  isMealsDecideFilter,
   isMealsTabSlotFilter,
+  MEALS_DECIDE_FILTER,
   MEALS_TAB_SECTIONS,
   MEALS_TAB_SLOT_FILTERS,
   mealMatchesQuery,
   uniqueMealsByName,
 } from "../utils/mealSearch";
 import { db } from "../db/db";
-import { normalizeSlot } from "../utils/mealSlots";
+import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
 import { useState } from "react";
 
 function customMealKey(meal) {
@@ -85,6 +87,7 @@ export function ClientApp({
   onSuggestAiWeek,
   onMealIdea,
   onSaveFoodPrefs,
+  onOpenDecide,
   userId = null,
   unreadMessages = 0,
   onUnreadMessagesChange,
@@ -125,6 +128,17 @@ export function ClientApp({
       ? "My meals"
       : "All meals";
   const showMealsSearch = isBankFilter || mealFilter === "My meals" || mealFilter === "Pantry";
+  const onDecideHome = isMealsDecideFilter(mealFilter);
+  const decideSlotAsk = ({
+    breakfast: "Know what breakfast is yet? I'll size it to what's left.",
+    lunch: "Know what lunch is yet? I'll size it to what's left.",
+    dinner: "Know what dinner is yet? I'll size it to what's left.",
+    snack: "Know what a snack is yet? I'll size it to what's left.",
+  })[guessSlotFromTime()] || "I'll size this slot to what's left today.";
+  const openDecideExperience = () => {
+    if (onOpenDecide) onOpenDecide();
+    else setTab("today");
+  };
   const visibleBank = applyFitsFilter(bankSource.filter((m) => {
     if (mealFilter !== "All meals" && (m.cat || "") !== mealFilter) return false;
     return mealMatchesQuery(m, mealQuery);
@@ -152,6 +166,7 @@ export function ClientApp({
   };
 
   const persistCustomMealSlot = (meal, slot) => onSaveCustomMeal?.({
+    id: meal.id,
     name: meal.name,
     cal: meal.cal,
     p: meal.p,
@@ -159,13 +174,14 @@ export function ClientApp({
     f: meal.f,
     serves: meal.serves,
     slot,
-  });
+  }, { keepOrder: true });
 
   const saveAllMyMealSlots = async () => {
     if (saveAllBusy || !pendingSlotCount) return;
+    const entries = Object.entries(pendingSlots);
+    if (!entries.length) return;
     setSaveAllBusy(true);
     setSaveAllNote("");
-    const entries = Object.entries(pendingSlots);
     const results = await Promise.all(entries.map(async ([key, slot]) => {
       const meal = customMeals.find((m) => customMealKey(m) === key);
       if (!meal) return { key, ok: false };
@@ -176,14 +192,21 @@ export function ClientApp({
         return { key, ok: false };
       }
     }));
-    const failed = new Set(results.filter((r) => !r.ok).map((r) => r.key));
     setPendingSlots((prev) => {
       const next = { ...prev };
-      for (const { key } of results) delete next[key];
+      for (const { key, ok } of results) {
+        if (ok) delete next[key];
+      }
       return next;
     });
-    if (failed.size) {
+    const failed = results.some((r) => !r.ok);
+    if (failed) {
       setSaveAllNote("Couldn't save some slots — try again");
+    } else {
+      setSaveAllNote("Saved");
+      window.setTimeout(() => {
+        setSaveAllNote((note) => (note === "Saved" ? "" : note));
+      }, 2000);
     }
     setSaveAllBusy(false);
   };
@@ -466,26 +489,60 @@ export function ClientApp({
             </Card>
           ) : null}
 
-          {mealFilter !== "Plan" && mealFilter !== "Food prefs" && (
+          {onDecideHome ? (
             <>
               <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
-                {mealFilter === "My meals"
-                  ? "My meals"
-                  : mealFilter === "Pantry"
-                    ? "Pantry staples"
-                    : mealFilter === "All meals"
-                      ? "All meals"
-                      : "Recipe bank"}
+                Help me decide
               </h2>
               <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-                {mealFilter === "My meals"
-                  ? "Saved meals for one-tap logging — add a few, then hop to Today when you’re ready."
-                  : mealFilter === "Pantry"
-                    ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap Add to Today as many times as you need."
-                    : mealFilter === "All meals"
-                      ? "Search Callie’s recipes, or pick a slot. Tap Add to Today — you stay here so you can keep going."
-                      : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
+                Knows your prefs, your saved meals, your log.
               </p>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setMealFilter(MEALS_DECIDE_FILTER);
+                  setMealQuery("");
+                  setSlotFilterOpen(false);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  margin: "4px 0 8px",
+                  fontFamily: F,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: T.accentDeep,
+                  cursor: "pointer",
+                }}
+              >
+                Help me decide
+              </button>
+              {mealFilter !== "Plan" && mealFilter !== "Food prefs" && (
+                <>
+                  <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
+                    {mealFilter === "My meals"
+                      ? "My meals"
+                      : mealFilter === "Pantry"
+                        ? "Pantry staples"
+                        : mealFilter === "All meals"
+                          ? "All meals"
+                          : "Recipe bank"}
+                  </h2>
+                  <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
+                    {mealFilter === "My meals"
+                      ? "Saved meals for one-tap logging — add a few, then hop to Today when you’re ready."
+                      : mealFilter === "Pantry"
+                        ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap Add to Today as many times as you need."
+                        : mealFilter === "All meals"
+                          ? "Search Callie’s recipes, or pick a slot. Tap Add to Today — you stay here so you can keep going."
+                          : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
+                  </p>
+                </>
+              )}
             </>
           )}
 
@@ -514,6 +571,17 @@ export function ClientApp({
               );
             })}
           </div>
+
+          {onDecideHome && (
+            <div data-meals-decide-entry>
+              <Card style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 15, color: T.ink, lineHeight: 1.5, marginBottom: 12 }}>
+                  {decideSlotAsk}
+                </div>
+                <Btn onClick={openDecideExperience}>Help me decide</Btn>
+              </Card>
+            </div>
+          )}
 
           {showMealsSearch && (
             <>
@@ -623,22 +691,60 @@ export function ClientApp({
                 </Card>
               ) : (
                 <>
+                  {visibleCustomMeals.map((m) => {
+                    const rowKey = customMealKey(m);
+                    const draftSlot = draftSlotFor(m);
+                    return (
+                      <LoggableMealRow
+                        key={rowKey}
+                        meal={{ ...m, slot: draftSlot }}
+                        via="custom"
+                        accent
+                        onLog={logRecipe}
+                        onRemove={() => onDeleteCustomMeal?.(m.id)}
+                        onSlotDraftChange={(next) => setMealSlotDraft(m, next)}
+                        onSaveIngredients={async (meal) => {
+                          const saved = await onSaveCustomMeal?.({
+                            id: m.id,
+                            name: meal.name,
+                            cal: meal.cal,
+                            p: meal.p,
+                            c: meal.c,
+                            f: meal.f,
+                            serves: meal.serves,
+                            ingredients: meal.ingredients,
+                            slot: meal.slot || draftSlot || m.slot || m.cat,
+                          }, { keepOrder: true });
+                          if (saved != null && saved !== false) {
+                            setPendingSlots((prev) => {
+                              if (!(rowKey in prev)) return prev;
+                              const next = { ...prev };
+                              delete next[rowKey];
+                              return next;
+                            });
+                          }
+                          return saved;
+                        }}
+                      />
+                    );
+                  })}
                   {(pendingSlotCount > 0 || saveAllNote) && (
                     <div
                       data-my-meals-save-all
                       style={{
                         position: "sticky",
-                        top: 0,
-                        zIndex: 2,
+                        bottom: 0,
+                        zIndex: 8,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
                         gap: 10,
-                        marginBottom: 12,
+                        marginTop: 4,
                         padding: "10px 12px",
                         borderRadius: 12,
                         background: T.accentSoft,
                         border: `1.5px solid ${T.accent}`,
+                        boxShadow: "0 -8px 20px rgba(51, 39, 46, 0.08)",
                       }}
                     >
                       <div style={{ minWidth: 0 }}>
@@ -677,42 +783,6 @@ export function ClientApp({
                       ) : null}
                     </div>
                   )}
-                  {visibleCustomMeals.map((m) => {
-                    const draftSlot = draftSlotFor(m);
-                    return (
-                      <LoggableMealRow
-                        key={m.id}
-                        meal={{ ...m, slot: draftSlot || m.slot, cat: draftSlot || m.cat }}
-                        via="custom"
-                        accent
-                        onLog={logRecipe}
-                        onRemove={() => onDeleteCustomMeal?.(m.id)}
-                        onSlotDraftChange={(next) => setMealSlotDraft(m, next)}
-                        onSaveIngredients={async (meal) => {
-                          const saved = await onSaveCustomMeal?.({
-                            name: meal.name,
-                            cal: meal.cal,
-                            p: meal.p,
-                            c: meal.c,
-                            f: meal.f,
-                            serves: meal.serves,
-                            ingredients: meal.ingredients,
-                            slot: meal.slot || draftSlot || m.slot || m.cat,
-                          });
-                          if (saved != null && saved !== false) {
-                            setPendingSlots((prev) => {
-                              const key = customMealKey(m);
-                              if (!(key in prev)) return prev;
-                              const next = { ...prev };
-                              delete next[key];
-                              return next;
-                            });
-                          }
-                          return saved;
-                        }}
-                      />
-                    );
-                  })}
                 </>
               )}
             </div>

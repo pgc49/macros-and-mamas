@@ -6,7 +6,7 @@ const noopAsync = async () => true;
 
 /** Local-only preview of Meals tab chips + search filter. */
 export function MealsTabPreview() {
-  const [mealFilter, setMealFilter] = useState("All meals");
+  const [mealFilter, setMealFilter] = useState("Decide");
   const [tab, setTab] = useState("meals");
   const [customMeals, setCustomMeals] = useState([
     { id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 },
@@ -62,11 +62,17 @@ export function MealsTabPreview() {
       mealFilter={mealFilter}
       setMealFilter={setMealFilter}
       customMeals={customMeals}
-      onSaveCustomMeal={async (meal) => {
+      onSaveCustomMeal={async (meal, opts = {}) => {
         const saved = { ...meal, id: meal.id || `c-${meal.name}` };
         setCustomMeals((list) => {
-          const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
-          return [saved, ...without];
+          const same = (m) => (saved.id && m.id === saved.id) || m.name === saved.name;
+          const idx = list.findIndex(same);
+          if (opts.keepOrder && idx >= 0) {
+            const next = list.slice();
+            next[idx] = { ...list[idx], ...saved };
+            return next;
+          }
+          return [saved, ...list.filter((m) => !same(m))];
         });
         return saved;
       }}

@@ -43,6 +43,16 @@ describe("LoggableMealRow slot draft", () => {
     expect(onSaveIngredients).not.toHaveBeenCalled();
   });
 
+  it("does not mark a controlled row dirty on mount", () => {
+    const onSlotDraftChange = vi.fn();
+    renderRow({
+      meal: { id: "c-plain", name: "Sheet Pan", cal: 400, p: 30, c: 20, f: 12 },
+      onSlotDraftChange,
+    });
+
+    expect(onSlotDraftChange).not.toHaveBeenCalled();
+  });
+
   it("keeps bank or pantry slot chips local", () => {
     renderRow({});
 

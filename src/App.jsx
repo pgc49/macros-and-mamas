@@ -364,7 +364,7 @@ export default function App() {
   const [viewWk, setViewWk] = useState(curWk);
   const [editPast, setEditPast] = useState(false);
   const [weighins, setWeighins] = useState([]);
-  const [mealFilter, setMealFilter] = useState("All meals");
+  const [mealFilter, setMealFilter] = useState("Decide");
   const [mealPlanMode, setMealPlanMode] = useState("default");
   const [publishedPlan, setPublishedPlan] = useState(null);
   const [weekPlanDays, setWeekPlanDays] = useState([]);
@@ -1156,12 +1156,18 @@ export default function App() {
     return true;
   };
 
-  const saveCustomMeal = async (meal) => {
+  const saveCustomMeal = async (meal, opts = {}) => {
     try {
       const saved = await db.saveCustomMeal(meal);
       setCustomMeals((list) => {
-        const without = list.filter((m) => m.id !== saved.id && m.name !== saved.name);
-        return [saved, ...without];
+        const same = (m) => (saved.id && m.id === saved.id) || m.name === saved.name;
+        const idx = list.findIndex(same);
+        if (opts.keepOrder && idx >= 0) {
+          const next = list.slice();
+          next[idx] = { ...list[idx], ...saved };
+          return next;
+        }
+        return [saved, ...list.filter((m) => !same(m))];
       });
       return saved;
     } catch (e) {
@@ -1620,6 +1626,7 @@ export default function App() {
       onSuggestAiWeek={onSuggestAiWeek}
       onMealIdea={onMealIdea}
       onSaveFoodPrefs={onSaveFoodPrefs}
+      onOpenDecide={() => setTab("today")}
       onHomescreenTipDismissed={(at) => {
         setProfile((p) => ({ ...p, homescreenTipDismissedAt: at }));
       }}

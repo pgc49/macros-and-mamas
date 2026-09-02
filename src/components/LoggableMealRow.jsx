@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
@@ -21,29 +21,30 @@ export function LoggableMealRow({
   /** Tighter Today → My plan cards so more than two meals fit. */
   compact = false,
 }) {
-  const initialSlot = normalizeSlot(meal.slot || meal.cat) || guessSlotFromTime();
+  const controlledSlot = typeof onSlotDraftChange === "function";
+  const parentSlot = normalizeSlot(meal.slot || meal.cat);
   const [qty, setQty] = useState(1);
-  const [slot, setSlot] = useState(initialSlot);
+  const [localSlot, setLocalSlot] = useState(() => parentSlot || guessSlotFromTime());
   const [phase, setPhase] = useState("idle"); // idle | busy | done
   const [showRecipe, setShowRecipe] = useState(false);
   const [ingDraft, setIngDraft] = useState(String(meal.ingredients || ""));
   const [ingBusy, setIngBusy] = useState(false);
   const [ingNote, setIngNote] = useState("");
+  const slot = controlledSlot ? parentSlot : localSlot;
 
   const servings = snapServings(qty);
   const scaled = scaleMealForLog(meal, servings);
   const hasIngredients = Boolean(String(meal.ingredients || "").trim());
   const canEditIngredients = typeof onSaveIngredients === "function";
 
-  useEffect(() => {
-    const next = normalizeSlot(meal.slot || meal.cat);
-    if (next) setSlot(next);
-  }, [meal.slot, meal.cat]);
-
   const handleSlotChange = (next) => {
-    if (!next || next === slot) return;
-    setSlot(next);
-    onSlotDraftChange?.(next);
+    if (!next) return;
+    if (controlledSlot) {
+      onSlotDraftChange(next);
+      return;
+    }
+    if (next === localSlot) return;
+    setLocalSlot(next);
   };
 
   const label =
@@ -58,7 +59,7 @@ export function LoggableMealRow({
       const ok = await onLog?.({
         ...scaled,
         via,
-        slot: showSlotPicker ? slot : (meal.slot || meal.cat || slot),
+        slot: showSlotPicker ? (slot || guessSlotFromTime()) : (meal.slot || meal.cat || slot),
       });
       if (ok === false) {
         setPhase("idle");

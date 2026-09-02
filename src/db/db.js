@@ -3182,8 +3182,8 @@ export const db = {
     return (data || []).map(mapCustomMeal);
   },
 
-  /** Upsert by name for this user (re-saving the same lunch updates macros). */
-  async saveCustomMeal({ name, cal, p, c, f, serves, ingredients, slot }) {
+  /** Update by id when present; otherwise upsert by name for this user. */
+  async saveCustomMeal({ id, name, cal, p, c, f, serves, ingredients, slot }) {
     const uid = await requireUserId();
     const trimmed = String(name || "").trim().slice(0, 80);
     if (!trimmed) throw new Error("Meal needs a name");
@@ -3207,10 +3207,43 @@ export const db = {
       recipeFields.ingredients !== undefined ? "ingredients" : "",
       recipeFields.slot ? "slot" : "",
     ].filter(Boolean).join(", ");
+    const selectCols = `id, name, cal, p, c, f, updated_at${extraCols ? `, ${extraCols}` : ""}`;
+
+    if (id) {
+      let { data, error } = await supabase
+        .from("custom_meals")
+        .update({ ...base, ...recipeFields })
+        .eq("profile_id", uid)
+        .eq("id", id)
+        .select(selectCols)
+        .maybeSingle();
+      if (error && /slot/i.test(error.message || "")) {
+        const { slot: _s, ...noSlot } = recipeFields;
+        ({ data, error } = await supabase
+          .from("custom_meals")
+          .update({ ...base, ...noSlot })
+          .eq("profile_id", uid)
+          .eq("id", id)
+          .select("id, name, cal, p, c, f, updated_at, serves, ingredients")
+          .maybeSingle());
+      }
+      if (error && /serves|ingredients/i.test(error.message || "")) {
+        ({ data, error } = await supabase
+          .from("custom_meals")
+          .update(base)
+          .eq("profile_id", uid)
+          .eq("id", id)
+          .select("id, name, cal, p, c, f, updated_at")
+          .maybeSingle());
+      }
+      if (!error && data) return mapCustomMeal(data);
+      if (error && !/slot|serves|ingredients/i.test(error.message || "")) throw error;
+    }
+
     let { data, error } = await supabase
       .from("custom_meals")
       .upsert({ ...base, ...recipeFields }, { onConflict: "profile_id,name" })
-      .select(`id, name, cal, p, c, f, updated_at${extraCols ? `, ${extraCols}` : ""}`)
+      .select(selectCols)
       .single();
     if (error && /slot/i.test(error.message || "")) {
       const { slot: _s, ...noSlot } = recipeFields;

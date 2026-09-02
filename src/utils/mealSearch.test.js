@@ -3,7 +3,9 @@ import {
   enrichMealsWithBankSlot,
   filterMealsByQuery,
   filterMealsBySlot,
+  isMealsDecideFilter,
   isMealsTabSlotFilter,
+  MEALS_DECIDE_FILTER,
   MEALS_TAB_SECTIONS,
   MEALS_TAB_SLOT_FILTERS,
   mealMatchesQuery,
@@ -98,9 +100,13 @@ describe("enrichMealsWithBankSlot", () => {
 });
 
 describe("Meals tab filter split", () => {
-  it("keeps All meals, Planner, Food prefs, and My meals as top chips", () => {
-    expect(MEALS_TAB_SECTIONS.map((s) => s.id)).toEqual(["All meals", "Plan", "Food prefs", "My meals"]);
-    expect(MEALS_TAB_SECTIONS.map((s) => s.label)).toEqual(["All meals", "Planner", "Food prefs", "My meals"]);
+  it("keeps All meals, My meals, Food prefs, and Planner as library chips", () => {
+    expect(MEALS_DECIDE_FILTER).toBe("Decide");
+    expect(isMealsDecideFilter("Decide")).toBe(true);
+    expect(isMealsDecideFilter("All meals")).toBe(false);
+    expect(MEALS_TAB_SECTIONS.map((s) => s.id)).toEqual(["All meals", "My meals", "Food prefs", "Plan"]);
+    expect(MEALS_TAB_SECTIONS.map((s) => s.label)).toEqual(["All meals", "My meals", "Food prefs", "Planner"]);
+    expect(MEALS_TAB_SECTIONS.some((s) => /decide/i.test(s.label))).toBe(false);
     expect(MEALS_TAB_SLOT_FILTERS).toEqual(["Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"]);
     expect(isMealsTabSlotFilter("Breakfast")).toBe(true);
     expect(isMealsTabSlotFilter("Pantry")).toBe(true);
@@ -108,6 +114,7 @@ describe("Meals tab filter split", () => {
     expect(isMealsTabSlotFilter("Food prefs")).toBe(false);
     expect(isMealsTabSlotFilter("All meals")).toBe(false);
     expect(isMealsTabSlotFilter("Plan")).toBe(false);
+    expect(isMealsTabSlotFilter("Decide")).toBe(false);
   });
 });
 
