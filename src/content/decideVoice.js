@@ -25,7 +25,12 @@ export const DECIDE_SLOT_LABEL = {
 
 export const DECIDE_COPY = {
   title: "Help me decide",
+  coachName: "Meal Coach",
   headerKnows: "Knows your prefs, your saved meals, your log",
+  includeSnacks: "Include snacks?",
+  includeSnacksOn: "Snacks on",
+  includeSnacksOff: "No snacks",
+  seeRecipe: "See recipe",
   barDinnerAsk: "Know what dinner is yet? I'll size it to what's left.",
   captionLink: "Help me decide",
   back: "Back to logging",

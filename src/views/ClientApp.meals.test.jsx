@@ -87,16 +87,20 @@ function renderMeals(filter = "All meals", extras = {}) {
 }
 
 describe("Meals tab search filter", () => {
-  it("opens Help me decide as home with library chips under it", () => {
+  it("opens Meal Coach as home with library chips beside it", () => {
     renderMeals("Decide");
 
-    expect(screen.getByRole("heading", { name: "Help me decide" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Meal Coach" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Help me decide" })).toBeNull();
     expect(document.querySelector("[data-decide-sheet='page']")).toBeTruthy();
     expect(screen.getByRole("button", { name: "All meals" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "My meals" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Food prefs" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Planner" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Weekly Planner" })).toBeNull();
+    const chips = [...document.querySelector("[data-meals-sections]").querySelectorAll("button")].map((el) => el.textContent);
+    expect(chips[0]).toBe("Meal Coach");
+    expect(chips[chips.length - 1]).toBe("Planner");
     expect(screen.getByLabelText("Search meals to pencil in")).toBeTruthy();
   }, 10_000);
 
@@ -128,7 +132,7 @@ describe("Meals tab search filter", () => {
     expect(setMealFilter).toHaveBeenCalledWith("Breakfast");
   });
 
-  it("toggles Planner back to Help me decide", () => {
+  it("toggles Planner back to Meal Coach", () => {
     const { setMealFilter } = renderMeals("Plan");
 
     fireEvent.click(screen.getByRole("button", { name: "Planner" }));

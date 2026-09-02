@@ -55,7 +55,7 @@ function historyNames(mealHistoryByDate, { slot, sinceIso, dates } = {}) {
   return { anyHistoryNames: any, slotHistoryNames: slotted };
 }
 
-function CompactCard({ card, onLog, onOpen, logging }) {
+function CompactCard({ card, onLog, onPencil, onOpen, logging, featured = false }) {
   if (card.kind === "soft") {
     return (
       <button
@@ -78,11 +78,17 @@ function CompactCard({ card, onLog, onOpen, logging }) {
   }
   return (
     <div
+      data-decide-featured-card={featured ? "1" : undefined}
       style={{
         border: `1px solid ${T.border}`,
         borderRadius: 16,
-        padding: "10px 12px 10px",
-        background: "#FFFCFD",
+        padding: featured ? "16px 16px 14px" : "10px 12px 10px",
+        background: T.card,
+        flex: featured ? 1 : undefined,
+        minHeight: featured ? 200 : undefined,
+        display: featured ? "flex" : undefined,
+        flexDirection: featured ? "column" : undefined,
+        justifyContent: featured ? "space-between" : undefined,
       }}
     >
       <button
@@ -100,7 +106,16 @@ function CompactCard({ card, onLog, onOpen, logging }) {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, lineHeight: 1.25 }}>{card.title || card.name}</div>
+          <div style={{
+            fontFamily: featured ? FD : F,
+            fontSize: featured ? 22 : 15,
+            fontWeight: featured ? 400 : 700,
+            color: T.ink,
+            lineHeight: 1.25,
+          }}
+          >
+            {card.title || card.name}
+          </div>
           <span style={{
             fontSize: 10.5,
             fontWeight: 700,
@@ -114,7 +129,7 @@ function CompactCard({ card, onLog, onOpen, logging }) {
             {card.tag}
           </span>
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-start", marginTop: 5 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-start", marginTop: featured ? 10 : 5 }}>
           <span style={{
             width: 7,
             height: 7,
@@ -124,32 +139,66 @@ function CompactCard({ card, onLog, onOpen, logging }) {
             flexShrink: 0,
           }}
           />
-          <div style={{ fontSize: 12.5, color: T.accentDeep, lineHeight: 1.35 }}>{card.knowsYou}</div>
+          <div style={{ fontSize: featured ? 14 : 12.5, color: T.accentDeep, lineHeight: 1.4 }}>{card.knowsYou}</div>
         </div>
-        <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 3, lineHeight: 1.35 }}>{card.reason}</div>
+        <div style={{ fontSize: featured ? 14 : 12.5, color: T.inkSoft, marginTop: featured ? 8 : 3, lineHeight: 1.4 }}>{card.reason}</div>
+        {featured ? (
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: T.accentDeep, marginTop: 10 }}>
+            {DECIDE_COPY.seeRecipe}
+          </div>
+        ) : null}
       </button>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-        <div style={{ fontSize: 11.5, color: T.inkSoft, fontWeight: 600 }}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: featured ? "flex-end" : "center",
+        gap: 10,
+        marginTop: featured ? 16 : 8,
+        flexWrap: "wrap",
+      }}
+      >
+        <div style={{ fontSize: featured ? 13 : 11.5, color: T.inkSoft, fontWeight: 600 }}>
           {Math.round(card.cal)} cal · {macrosLine(card.p, card.c, card.f)}
         </div>
-        <button
-          type="button"
-          onClick={() => onLog?.(card)}
-          disabled={logging}
-          style={{
-            fontFamily: F,
-            fontWeight: 700,
-            fontSize: 13,
-            background: T.accent,
-            color: "#fff",
-            border: "none",
-            borderRadius: 999,
-            padding: "7px 14px",
-            cursor: logging ? "default" : "pointer",
-          }}
-        >
-          {DECIDE_COPY.logIt}
-        </button>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          {featured && onPencil ? (
+            <button
+              type="button"
+              onClick={() => onPencil?.(card)}
+              style={{
+                fontFamily: F,
+                fontWeight: 700,
+                fontSize: 13,
+                background: T.accentSoft,
+                color: T.accentDeep,
+                border: "none",
+                borderRadius: 999,
+                padding: "8px 14px",
+                cursor: "pointer",
+              }}
+            >
+              {DECIDE_COPY.pencilIn}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => onLog?.(card)}
+            disabled={logging}
+            style={{
+              fontFamily: F,
+              fontWeight: 700,
+              fontSize: 13,
+              background: T.accent,
+              color: "#fff",
+              border: "none",
+              borderRadius: 999,
+              padding: featured ? "8px 14px" : "7px 14px",
+              cursor: logging ? "default" : "pointer",
+            }}
+          >
+            {DECIDE_COPY.logIt}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -173,24 +222,25 @@ function macrosLine(p, c, f) {
   return `P ${Math.round(p || 0)}g · C ${Math.round(c || 0)}g · F ${Math.round(f || 0)}g`;
 }
 
-function SnackRoomStepper({ count, onChange, piece }) {
+function SnackRoomStepper({ count, onChange, piece, onTurnOff }) {
   const label = snackRoomCopy(count);
-  const stepBtn = (dir, disabled) => ({
-    width: 40,
-    height: 40,
+  const stepBtn = (disabled) => ({
+    width: 32,
+    height: 32,
     borderRadius: 999,
-    border: "none",
-    background: disabled ? "#F3E8EC" : T.accent,
-    color: disabled ? T.inkSoft : "#fff",
+    border: `1px solid ${T.border}`,
+    background: disabled ? T.track : T.card,
+    color: disabled ? T.inkSoft : T.ink,
     fontFamily: F,
     fontWeight: 700,
-    fontSize: 22,
+    fontSize: 18,
     lineHeight: 1,
     cursor: disabled ? "default" : "pointer",
   });
   return (
     <div
       data-snack-room
+      data-snack-include="on"
       aria-label={label}
       style={{
         display: "flex",
@@ -198,22 +248,36 @@ function SnackRoomStepper({ count, onChange, piece }) {
         alignItems: "center",
         gap: 10,
         marginTop: 8,
-        border: `1.5px solid ${T.accent}`,
-        borderRadius: 14,
-        padding: "10px 12px",
-        background: T.accentSoft,
+        border: `1px solid ${T.border}`,
+        borderRadius: 12,
+        padding: "8px 10px",
+        background: T.card,
       }}
     >
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: T.accentDeep }}>{label}</div>
-        <div style={{ fontFamily: FD, fontSize: 20, marginTop: 2, color: T.ink }}>
+        <button
+          type="button"
+          onClick={onTurnOff}
+          style={{
+            border: "none",
+            background: "none",
+            padding: 0,
+            fontFamily: F,
+            fontSize: 12,
+            fontWeight: 700,
+            color: T.accentDeep,
+            cursor: "pointer",
+          }}
+        >
+          {DECIDE_COPY.includeSnacksOff}
+        </button>
+        <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 2 }}>
+          <span>{label}</span>
+          {" · "}
           {Math.round(piece?.cal || 0)} cal
         </div>
-        <div style={{ fontSize: 11.5, color: T.inkSoft, fontWeight: 600 }}>
-          {macrosLine(piece?.p, piece?.c, piece?.f)}
-        </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <button
           type="button"
           aria-label="Fewer snacks"
@@ -223,11 +287,11 @@ function SnackRoomStepper({ count, onChange, piece }) {
             e.stopPropagation();
             onChange(-1);
           }}
-          style={stepBtn("less", count <= 0)}
+          style={stepBtn(count <= 0)}
         >
           −
         </button>
-        <span data-snack-room-count style={{ fontFamily: FD, fontSize: 22, minWidth: 20, textAlign: "center" }}>
+        <span data-snack-room-count style={{ fontFamily: FD, fontSize: 18, minWidth: 16, textAlign: "center" }}>
           {count}
         </span>
         <button
@@ -239,12 +303,39 @@ function SnackRoomStepper({ count, onChange, piece }) {
             e.stopPropagation();
             onChange(1);
           }}
-          style={stepBtn("more", count >= 4)}
+          style={stepBtn(count >= 4)}
         >
           +
         </button>
       </div>
     </div>
+  );
+}
+
+function SnackIncludeToggle({ on, onTurnOn }) {
+  if (on) return null;
+  return (
+    <button
+      type="button"
+      data-snack-include="off"
+      onClick={onTurnOn}
+      style={{
+        marginTop: 8,
+        width: "100%",
+        textAlign: "left",
+        border: `1px dashed ${T.border}`,
+        background: T.card,
+        borderRadius: 12,
+        padding: "8px 10px",
+        fontFamily: F,
+        fontSize: 13,
+        fontWeight: 700,
+        color: T.inkSoft,
+        cursor: "pointer",
+      }}
+    >
+      {DECIDE_COPY.includeSnacks}
+    </button>
   );
 }
 
@@ -520,6 +611,12 @@ export function DecideSheet({
     setPlanQuery("");
   };
 
+  const setSnackTo = (next) => {
+    const clamped = Math.max(0, Math.min(4, next));
+    setSnackCount(clamped);
+    saveDecideSnackCount(dateKey, clamped);
+  };
+
   const stepSnack = (delta) => {
     const nowMs = Date.now();
     if (nowMs - snackLock.current < 280) return;
@@ -623,6 +720,10 @@ export function DecideSheet({
     : false;
 
   const searching = Boolean(String(planQuery || "").trim());
+  const featuredMeal = searching
+    ? null
+    : (ranked.cards || []).find((c) => c && c.kind !== "soft");
+  const showModeSwitch = (KITCHEN_FLAG || EATING_OUT_FLAG);
 
   return (
     <div
@@ -638,7 +739,7 @@ export function DecideSheet({
         minHeight: 0,
         flex: 1,
         overflow: "hidden",
-        background: "#fff",
+        background: T.bg,
         pointerEvents: "auto",
         position: "relative",
         zIndex: 4,
@@ -679,7 +780,7 @@ export function DecideSheet({
         style={page ? {
           minHeight: 0,
           flex: 1,
-          background: "#fff",
+          background: T.bg,
           padding: 0,
           display: "flex",
           flexDirection: "column",
@@ -690,7 +791,7 @@ export function DecideSheet({
           maxHeight: "90vh",
           minHeight: 0,
           flexShrink: 0,
-          background: "#fff",
+          background: T.bg,
           borderRadius: "28px 28px 0 0",
           padding: "8px 16px 0",
           display: "flex",
@@ -783,14 +884,15 @@ export function DecideSheet({
               color: T.inkSoft,
               lineHeight: 1.45,
               padding: "8px 10px",
-              background: "#F8F3F5",
+              background: T.card,
+              border: `1px solid ${T.border}`,
               borderRadius: 12,
             }}
             >
               {budgetSentence(budget)}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-              <div data-decide-slot-budget style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: "8px 10px" }}>
+              <div data-decide-slot-budget style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: "8px 10px", background: T.card }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft }}>
                   {DECIDE_COPY.forSlot} {DECIDE_SLOT_LABEL[slot] || slot}
                 </div>
@@ -808,7 +910,7 @@ export function DecideSheet({
                     border: laterCtaPiece?.meal ? `1px solid ${T.border}` : `1px dashed ${T.border}`,
                     borderRadius: 12,
                     padding: "8px 10px",
-                    background: "#F8F3F5",
+                    background: T.card,
                     fontFamily: F,
                     cursor: "pointer",
                   }}
@@ -869,14 +971,19 @@ export function DecideSheet({
               )}
             </div>
             {slot !== "snack" ? (
-              <SnackRoomStepper
-                count={snackCount}
-                onChange={stepSnack}
-                piece={budget.reserve?.bySlot?.snack}
-              />
+              snackCount > 0 ? (
+                <SnackRoomStepper
+                  count={snackCount}
+                  onChange={stepSnack}
+                  piece={budget.reserve?.bySlot?.snack}
+                  onTurnOff={() => setSnackTo(0)}
+                />
+              ) : (
+                <SnackIncludeToggle on={false} onTurnOn={() => setSnackTo(1)} />
+              )
             ) : null}
             {pencilOpen && laterCtaSlot ? (
-              <div style={{ marginTop: 8, border: `1px solid ${T.border}`, borderRadius: 14, padding: "8px 10px", background: "#FFF9FB" }}>
+              <div data-decide-later-list style={{ marginTop: 8, border: `1px solid ${T.border}`, borderRadius: 14, padding: "8px 10px", background: T.card }}>
                 {(laterRanked.meals || []).slice(0, 3).map((m) => (
                   <div key={m.name} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 0", borderTop: `1px solid ${T.border}` }}>
                     <div>
@@ -968,6 +1075,7 @@ export function DecideSheet({
                   if (mode !== "pick") setMode("pick");
                 }}
                 placeholder={DECIDE_COPY.searchToPlan}
+                style={{ marginBottom: 0 }}
               />
             </div>
             {prefs ? (
@@ -989,11 +1097,12 @@ export function DecideSheet({
                 {prefs}
               </button>
             ) : null}
+            {showModeSwitch ? (
             <div style={{
               display: "flex",
               gap: 4,
               marginTop: 10,
-              background: "#F5EDF0",
+              background: T.track,
               padding: 4,
               borderRadius: 14,
             }}
@@ -1019,7 +1128,7 @@ export function DecideSheet({
                     fontWeight: 700,
                     fontSize: 12.5,
                     cursor: "pointer",
-                    background: mode === id ? "#fff" : "transparent",
+                    background: mode === id ? T.card : "transparent",
                     color: mode === id ? T.accentDeep : T.inkSoft,
                   }}
                 >
@@ -1027,11 +1136,12 @@ export function DecideSheet({
                 </button>
               ))}
             </div>
+            ) : null}
             </div>
             <div
               data-decide-sheet-scroll
               onScroll={markDecideScroll}
-              style={{ overflow: "auto", flex: 1, minHeight: 0, marginTop: 10, display: "flex", flexDirection: "column", gap: 8, paddingBottom: 12, touchAction: "pan-y" }}
+              style={{ overflow: "auto", flex: 1, minHeight: 0, marginTop: 10, display: "flex", flexDirection: "column", gap: 8, paddingBottom: 16, touchAction: "pan-y" }}
             >
               {searching ? (
                 searchHits.length ? searchHits.map((meal) => (
@@ -1042,7 +1152,7 @@ export function DecideSheet({
                       border: `1px solid ${T.border}`,
                       borderRadius: 16,
                       padding: "10px 12px",
-                      background: "#FFFCFD",
+                      background: T.card,
                     }}
                   >
                     <div style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>{meal.name}</div>
@@ -1100,6 +1210,15 @@ export function DecideSheet({
                 <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, padding: "8px 2px" }}>
                   {DECIDE_COPY.comingSoon}
                 </div>
+              ) : featuredMeal ? (
+                <CompactCard
+                  card={featuredMeal}
+                  featured
+                  onLog={(c) => logCard(c)}
+                  onPencil={(c) => pencilCard(c, slot)}
+                  onOpen={openCard}
+                  logging={logging}
+                />
               ) : (
                 ranked.cards.map((card, i) => (
                   <CompactCard
@@ -1116,8 +1235,10 @@ export function DecideSheet({
               data-decide-sheet-chrome
               style={{
                 flexShrink: 0,
-                background: "#fff",
-                padding: page ? "8px 0 10px" : "8px 0 max(48px, env(safe-area-inset-bottom, 48px))",
+                background: T.bg,
+                padding: page
+                  ? "10px 0 max(28px, env(safe-area-inset-bottom, 20px))"
+                  : "8px 0 max(48px, env(safe-area-inset-bottom, 48px))",
                 boxShadow: "0 -8px 16px rgba(51,39,46,0.04)",
                 position: "relative",
                 zIndex: 3,
@@ -1125,7 +1246,8 @@ export function DecideSheet({
               }}
             >
               {mode === "pick" && !searching ? (
-                <div data-decide-refine style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                <div data-decide-refine style={{ marginBottom: page ? 0 : 8 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {[
                     ["none", DECIDE_COPY.noneOfThese],
                     ["lighter", DECIDE_COPY.lighter],
@@ -1154,6 +1276,7 @@ export function DecideSheet({
                       {label}
                     </button>
                   ))}
+                  </div>
                   <input
                     value={refineText}
                     onChange={(e) => setRefineText(e.target.value)}
@@ -1166,17 +1289,20 @@ export function DecideSheet({
                     }}
                     placeholder="Something else"
                     style={{
-                      flex: 1,
-                      minWidth: 120,
+                      width: "100%",
+                      boxSizing: "border-box",
+                      marginTop: 6,
                       border: `1px solid ${T.border}`,
                       borderRadius: 999,
                       padding: "8px 12px",
                       fontFamily: F,
                       fontSize: 12.5,
+                      background: T.card,
                     }}
                   />
                 </div>
               ) : null}
+              {page ? null : (
               <button
                 type="button"
                 data-decide-dismiss="back"
@@ -1199,6 +1325,7 @@ export function DecideSheet({
               >
                 {DECIDE_COPY.back}
               </button>
+              )}
             </div>
           </>
         )}

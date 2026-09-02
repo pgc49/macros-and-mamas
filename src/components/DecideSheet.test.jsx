@@ -113,9 +113,7 @@ describe("Help me decide entry", () => {
       />,
     );
     fireEvent.click(document.querySelector("[data-decide-bar]"));
-    const logIt = screen.getAllByRole("button", { name: DECIDE_COPY.logIt })[0];
-    const openBtn = logIt.parentElement?.previousElementSibling;
-    fireEvent.click(openBtn);
+    fireEvent.click(document.querySelector("[data-decide-featured-card] button"));
     expect(screen.getByRole("button", { name: "← Back" })).toBeTruthy();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(document.querySelector("[data-decide-sheet]")).toBeTruthy();
@@ -401,15 +399,17 @@ describe("Help me decide entry", () => {
     expect(screen.getByText(holdingRoomTitle("dinner"))).toBeTruthy();
   });
 
-  it("shows save-room-for-a-snack defaulting to 1 and changing leftover for this meal", () => {
+  it("keeps snacks optional and quiet until she turns them on", () => {
     renderToday();
     fireEvent.click(document.querySelector("[data-decide-bar]"));
+    expect(document.querySelector("[data-snack-include='off']")).toBeTruthy();
+    expect(document.querySelector("[data-snack-room]")).toBeNull();
+    expect(screen.queryByText(snackRoomCopy(1))).toBeNull();
+    expect(screen.queryByText(/and a snack/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.includeSnacks }));
     const room = document.querySelector("[data-snack-room]");
     expect(room).toBeTruthy();
     expect(screen.getByText(snackRoomCopy(1))).toBeTruthy();
-    const budgetGrid = document.querySelector("[data-decide-slot-budget]")?.parentElement;
-    expect(budgetGrid?.nextElementSibling).toBe(document.querySelector("[data-snack-room]"));
-    expect(screen.getByText(/and a snack/)).toBeTruthy();
     expect(document.querySelector("[data-snack-room-count]")?.textContent).toBe("1");
     const card = document.querySelector("[data-decide-slot-budget]");
     const before = card?.textContent || "";
@@ -435,6 +435,22 @@ describe("Help me decide entry", () => {
     expect(screen.getByRole("button", { name: DECIDE_COPY.lighter })).toBeTruthy();
     expect(screen.getByRole("button", { name: DECIDE_COPY.moreProtein })).toBeTruthy();
     expect(screen.getByPlaceholderText("Something else")).toBeTruthy();
+  });
+
+  it("uses cream surface and a tall Pick-for-me card", () => {
+    renderToday();
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.style.background.replace(/\s/g, "")).toMatch(/#FAF5F2|rgb\(250,245,242\)/i);
+    expect(document.querySelector("[data-decide-sheet-chrome]").style.background.replace(/\s/g, "")).toMatch(/#FAF5F2|rgb\(250,245,242\)/i);
+    const featured = document.querySelector("[data-decide-featured-card]");
+    expect(featured).toBeTruthy();
+    expect(Number.parseInt(featured.style.minHeight, 10)).toBeGreaterThanOrEqual(200);
+    expect(featured.style.background.replace(/\s/g, "")).toMatch(/#FFFFFF|#fff|rgb\(255,255,255\)/i);
+    expect(screen.getByRole("button", { name: DECIDE_COPY.pencilIn })).toBeTruthy();
+    expect(screen.getByText(DECIDE_COPY.seeRecipe)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: DECIDE_COPY.kitchen })).toBeNull();
+    expect(screen.queryByRole("button", { name: DECIDE_COPY.eatingOut })).toBeNull();
   });
 
   it("search focus does not change Dinner to Lunch", () => {
@@ -492,8 +508,7 @@ describe("Help me decide entry", () => {
     );
     fireEvent.click(document.querySelector("[data-decide-bar]"));
     fireEvent.click(screen.getByText(knowLaterCopy("dinner")));
-    const pencils = screen.getAllByRole("button", { name: DECIDE_COPY.pencilIn });
-    fireEvent.click(pencils[pencils.length - 1]);
+    fireEvent.click(document.querySelector("[data-decide-later-list] button"));
     expect(onPencilPlanMeal).toHaveBeenCalled();
     expect(screen.queryByText(DECIDE_COPY.doneToday)).toBeNull();
     expect(screen.queryByRole("button", { name: decideNextCopy("snack") })).toBeNull();
@@ -563,8 +578,7 @@ describe("Help me decide entry", () => {
     );
     fireEvent.click(document.querySelector("[data-decide-bar]"));
     fireEvent.click(screen.getByText(knowLaterCopy("dinner")));
-    const pencils = screen.getAllByRole("button", { name: DECIDE_COPY.pencilIn });
-    fireEvent.click(pencils[pencils.length - 1]);
+    fireEvent.click(document.querySelector("[data-decide-later-list] button"));
     expect(onPencilPlanMeal).toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: decideNextCopy("dinner") })).toBeNull();
   });
@@ -572,6 +586,7 @@ describe("Help me decide entry", () => {
   it("steps snack room once when + fires twice", () => {
     renderToday();
     fireEvent.click(document.querySelector("[data-decide-bar]"));
+    fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.includeSnacks }));
     const more = screen.getByRole("button", { name: "More snacks" });
     fireEvent.click(more);
     fireEvent.click(more);
@@ -581,6 +596,7 @@ describe("Help me decide entry", () => {
   it("keeps snack room through a Lighter refine", () => {
     renderToday();
     fireEvent.click(document.querySelector("[data-decide-bar]"));
+    fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.includeSnacks }));
     fireEvent.click(screen.getByRole("button", { name: "More snacks" }));
     expect(document.querySelector("[data-snack-room-count]")?.textContent).toBe("2");
     const snackCal = document.querySelector("[data-snack-room]").textContent;

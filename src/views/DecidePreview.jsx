@@ -160,7 +160,7 @@ export function DecidePreview() {
         Local preview · /dev/decide
       </p>
       <h1 style={{ fontFamily: FD, fontWeight: 400, fontSize: 22, margin: "0 0 8px", color: T.ink }}>
-        Help me decide
+        Meal Coach
       </h1>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
         {Object.entries(all).map(([key, s]) => (

@@ -447,63 +447,6 @@ export function ClientApp({
             </Card>
           ) : null}
 
-          {onDecideHome ? (
-            <>
-              <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
-                Help me decide
-              </h2>
-              <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-                Knows your prefs, your saved meals, your log.
-              </p>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setMealFilter(MEALS_DECIDE_FILTER);
-                  setMealQuery("");
-                  setSlotFilterOpen(false);
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  margin: "4px 0 8px",
-                  fontFamily: F,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: T.accentDeep,
-                  cursor: "pointer",
-                }}
-              >
-                Help me decide
-              </button>
-              {mealFilter !== "Plan" && mealFilter !== "Food prefs" && (
-                <>
-                  <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
-                    {mealFilter === "My meals"
-                      ? "My meals"
-                      : mealFilter === "Pantry"
-                        ? "Pantry staples"
-                        : mealFilter === "All meals"
-                          ? "All meals"
-                          : "Recipe bank"}
-                  </h2>
-                  <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-                    {mealFilter === "My meals"
-                      ? "Saved meals for one-tap logging — add a few, then hop to Today when you’re ready."
-                      : mealFilter === "Pantry"
-                        ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap Add to Today as many times as you need."
-                        : mealFilter === "All meals"
-                          ? "Search Callie’s recipes, or pick a slot. Tap Add to Today — you stay here so you can keep going."
-                          : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
-                  </p>
-                </>
-              )}
-            </>
-          )}
-
           <div
             data-meals-sections
             style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "nowrap", overflowX: "auto" }}
@@ -517,9 +460,14 @@ export function ClientApp({
                 <Chip
                   key={section.id}
                   compact
+                  quiet={section.quiet}
                   active={active}
                   onClick={() => {
-                    setMealFilter(active ? MEALS_DECIDE_FILTER : section.id);
+                    if (section.id === MEALS_DECIDE_FILTER) {
+                      setMealFilter(MEALS_DECIDE_FILTER);
+                    } else {
+                      setMealFilter(active ? MEALS_DECIDE_FILTER : section.id);
+                    }
                     setMealQuery("");
                     setSlotFilterOpen(false);
                   }}
@@ -530,6 +478,31 @@ export function ClientApp({
             })}
           </div>
 
+          {onDecideHome ? null : (
+            mealFilter !== "Plan" && mealFilter !== "Food prefs" ? (
+              <>
+                <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
+                  {mealFilter === "My meals"
+                    ? "My meals"
+                    : mealFilter === "Pantry"
+                      ? "Pantry staples"
+                      : mealFilter === "All meals"
+                        ? "All meals"
+                        : "Recipe bank"}
+                </h2>
+                <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
+                  {mealFilter === "My meals"
+                    ? "Saved meals for one-tap logging — add a few, then hop to Today when you’re ready."
+                    : mealFilter === "Pantry"
+                      ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap Add to Today as many times as you need."
+                      : mealFilter === "All meals"
+                        ? "Search Callie’s recipes, or pick a slot. Tap Add to Today — you stay here so you can keep going."
+                        : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
+                </p>
+              </>
+            ) : null
+          )}
+
           {onDecideHome ? (
             <div
               data-meals-decide-home
@@ -537,7 +510,8 @@ export function ClientApp({
                 display: "flex",
                 flexDirection: "column",
                 minHeight: 0,
-                maxHeight: "calc(100dvh - 210px)",
+                flex: 1,
+                maxHeight: "calc(100dvh - 156px)",
                 overflow: "hidden",
               }}
             >

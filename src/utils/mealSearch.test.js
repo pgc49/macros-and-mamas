@@ -112,11 +112,12 @@ describe("enrichMealsWithBankSlot", () => {
 });
 
 describe("Meals tab filter split", () => {
-  it("keeps All meals, My meals, Food prefs, and Planner under Help me decide", () => {
+  it("lands Meal Coach first with Planner last and quiet", () => {
     expect(MEALS_DECIDE_FILTER).toBe("Decide");
     expect(isMealsDecideFilter("Decide")).toBe(true);
-    expect(MEALS_TAB_SECTIONS.map((s) => s.id)).toEqual(["All meals", "My meals", "Food prefs", "Plan"]);
-    expect(MEALS_TAB_SECTIONS.map((s) => s.label)).toEqual(["All meals", "My meals", "Food prefs", "Planner"]);
+    expect(MEALS_TAB_SECTIONS.map((s) => s.id)).toEqual(["Decide", "All meals", "My meals", "Food prefs", "Plan"]);
+    expect(MEALS_TAB_SECTIONS.map((s) => s.label)).toEqual(["Meal Coach", "All meals", "My meals", "Food prefs", "Planner"]);
+    expect(MEALS_TAB_SECTIONS[MEALS_TAB_SECTIONS.length - 1].quiet).toBe(true);
     expect(MEALS_TAB_SLOT_FILTERS).toEqual(["Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"]);
     expect(isMealsTabSlotFilter("Breakfast")).toBe(true);
     expect(isMealsTabSlotFilter("Pantry")).toBe(true);
