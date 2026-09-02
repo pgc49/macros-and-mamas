@@ -7,7 +7,15 @@ import { joinPersonName } from "./lib/personName";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
-import { resolveLogSlot } from "./utils/mealSlots";
+import { normalizeSlot, resolveLogSlot } from "./utils/mealSlots";
+import {
+  addMealToDay,
+  customMealToPlanMeal,
+  recipeToPlanMeal,
+  replaceMealById,
+} from "./utils/weekPlan";
+import { decidePencilForSlot } from "./utils/decideBudget";
+import { namesMatch, stripPortionSuffix } from "./utils/decidePrefs";
 import {
   adherenceForWeek,
   buildMacroHistory,
@@ -36,6 +44,7 @@ import { OnboardingBannersPreview } from "./views/OnboardingBannersPreview";
 import { MealLogPreview } from "./views/MealLogPreview";
 import { MealsTabPreview } from "./views/MealsTabPreview";
 import { RecipeBankPreview } from "./views/RecipeBankPreview";
+import { DecidePreview } from "./views/DecidePreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
@@ -1214,6 +1223,84 @@ export default function App() {
     }, 600);
   };
 
+  const onPencilPlanMeal = async (meal, slotOverride) => {
+    const today = localDateIso();
+    const dayKey = planDayLabel(today);
+    const ws = wkStartOf(today);
+    const slot = normalizeSlot(slotOverride || meal.slot) || "dinner";
+    let days;
+    if (ws === weekPlanWeekRef.current) {
+      days = weekPlanDays;
+    } else {
+      try {
+        const wp = await db.loadWeekPlan(ws);
+        days = Array.isArray(wp?.days) ? wp.days : [];
+      } catch (e) {
+        console.warn("load week for decide pencil failed", e);
+        days = [];
+      }
+    }
+    const servings = Number(meal.servings) || 1;
+    const base = {
+      name: stripPortionSuffix(meal.name),
+      cal: servings ? (Number(meal.cal) || 0) / servings : Number(meal.cal) || 0,
+      p: servings ? (Number(meal.p) || 0) / servings : Number(meal.p) || 0,
+      c: servings ? (Number(meal.c) || 0) / servings : Number(meal.c) || 0,
+      f: servings ? (Number(meal.f) || 0) / servings : Number(meal.f) || 0,
+      desc: meal.desc || "",
+      ingredients: meal.ingredients,
+      steps: meal.steps,
+      serving: meal.serving,
+      batch: meal.batch,
+      basedOn: meal.basedOn,
+      cat: meal.source === "pantry" ? "pantry" : slot,
+    };
+    const built = meal.source === "my"
+      ? customMealToPlanMeal({ ...meal, ...base }, slot)
+      : recipeToPlanMeal(base, slot);
+    built.via = "decide";
+    built.qty = servings;
+    built.cal = base.cal;
+    built.p = base.p;
+    built.c = base.c;
+    built.f = base.f;
+    const existing = decidePencilForSlot(
+      (days || []).find((d) => d.day === dayKey)?.meals,
+      slot,
+    );
+    const next = existing
+      ? replaceMealById(days, existing.id, built)
+      : addMealToDay(days, dayKey, built);
+    if (ws === weekPlanWeekRef.current) {
+      onWeekPlanChange(next, "manual");
+    } else {
+      await persistWeekPlan(next, "manual", ws);
+    }
+    const row = (next || []).find((d) => d.day === dayKey);
+    if ((mealLogDate || today) === today) {
+      setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
+    }
+  };
+
+  const onAteIt = async (meal) => {
+    const date = meal.logged_date || mealLogDate || localDateIso();
+    const slot = resolveLogSlot(meal.slot);
+    const rows = (todayLog?.date === date ? todayLog.entries : mealLogsByDate?.[date]) || [];
+    if (rows.some((e) => resolveLogSlot(e.slot) === slot && namesMatch(e.name, meal.name))) {
+      return true;
+    }
+    return logRecipe({
+      name: stripPortionSuffix(meal.name),
+      cal: meal.cal,
+      p: meal.p,
+      c: meal.c,
+      f: meal.f,
+      via: meal.via || "decide_bank",
+      slot,
+      logged_date: date,
+    });
+  };
+
   /** Flip planner week (like Today log). Future weeks start blank. */
   const changeWeekPlanWeek = async (weekStart) => {
     if (!weekStart || weekStart === weekPlanWeekRef.current) return;
@@ -1620,6 +1707,9 @@ export default function App() {
       onSuggestAiWeek={onSuggestAiWeek}
       onMealIdea={onMealIdea}
       onSaveFoodPrefs={onSaveFoodPrefs}
+      mealHistoryByDate={mealHistoryByDate}
+      onPencilPlanMeal={onPencilPlanMeal}
+      onAteIt={onAteIt}
       onHomescreenTipDismissed={(at) => {
         setProfile((p) => ({ ...p, homescreenTipDismissedAt: at }));
       }}
@@ -1650,6 +1740,7 @@ export default function App() {
           <Route path="/dev/meal-log" element={<MealLogPreview />} />
           <Route path="/dev/meals-tab" element={<MealsTabPreview />} />
           <Route path="/dev/recipe-bank" element={<RecipeBankPreview />} />
+          <Route path="/dev/decide" element={<DecidePreview />} />
         </>
       ) : null}
 

@@ -76,6 +76,9 @@ export function ClientApp({
   onSuggestAiWeek,
   onMealIdea,
   onSaveFoodPrefs,
+  mealHistoryByDate = {},
+  onPencilPlanMeal,
+  onAteIt,
   userId = null,
   unreadMessages = 0,
   onUnreadMessagesChange,
@@ -286,6 +289,15 @@ export function ClientApp({
             }
             plannedMeals={planMealsForLogDate}
             customMeals={customMeals}
+            profile={profile}
+            mealHistoryByDate={mealHistoryByDate}
+            onPencilPlanMeal={onPencilPlanMeal}
+            onAteIt={onAteIt}
+            onOpenFoodPrefs={() => setTab("meals")}
+            onBrowseMeals={() => {
+              setFitsRemainingOnly(true);
+              setTab("meals");
+            }}
             busy={estimateBusy}
             estimate={estimate}
             onAnalyzePhoto={analyzePhoto}
