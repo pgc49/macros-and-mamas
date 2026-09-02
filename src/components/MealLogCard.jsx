@@ -24,7 +24,7 @@ import {
 } from "../utils/mealSlots";
 import { formatServings, ServingStepper, snapServings } from "../utils/servings";
 import { recipeNoteFromMeal } from "../utils/planMealShape";
-import { targetBands } from "../utils/weekPlan";
+import { scaledMealMacros, targetBands } from "../utils/weekPlan";
 import { filterMealsByRemaining, formatRoomLeft, roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
 import { LogMealRefine } from "./LogMealRefine";
@@ -1830,7 +1830,9 @@ export function MealLogCard({
                       </button>
                     ),
                   )}
-                  {pencils.map((meal) => (
+                  {pencils.map((meal) => {
+                    const shown = scaledMealMacros(meal);
+                    return (
                     <div
                       key={meal.id || meal.name}
                       data-decide-pencil-row={meal.slot}
@@ -1848,12 +1850,16 @@ export function MealLogCard({
                         <div style={{ fontSize: 11.5, color: T.inkSoft }}>{DECIDE_COPY.pencilledHint}</div>
                       </div>
                       <div style={{ fontSize: 12, color: T.inkSoft, whiteSpace: "nowrap" }}>
-                        {Math.round(meal.cal || 0)} cal · P {Math.round(meal.p || 0)}g
+                        {Math.round(shown.cal)} cal · P {Math.round(shown.p)}g
                       </div>
                       <button
                         type="button"
                         onClick={() => onAteIt?.({
                           ...meal,
+                          cal: shown.cal,
+                          p: shown.p,
+                          c: shown.c,
+                          f: shown.f,
                           via: "decide_bank",
                           slot: normalizeSlot(meal.slot),
                         })}
@@ -1872,7 +1878,8 @@ export function MealLogCard({
                         {DECIDE_COPY.ateIt}
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })}

@@ -275,10 +275,12 @@ export function DecideSheet({
     : null;
   const laterRanked = useMemo(() => {
     if (!laterBudget) return { cards: [], meals: [] };
+    const slotBank = bankMeals.filter((m) => normalizeSlot(m.cat || m.slot) === laterSlot);
+    const slotMine = (customMeals || []).filter((m) => normalizeSlot(m.slot || m.cat) === laterSlot);
     return rankBankCards({
-      bankMeals,
-      myMeals: customMeals,
-      pantryItems,
+      bankMeals: slotBank.length >= 3 ? slotBank : bankMeals,
+      myMeals: slotMine.length ? slotMine : customMeals,
+      pantryItems: laterSlot === "snack" ? pantryItems : [],
       budget: laterBudget,
       likes: tokenizeLikes(slotPrefText(profile, laterSlot)),
       dislikes,
@@ -571,7 +573,7 @@ export function DecideSheet({
                 {(laterRanked.meals || []).slice(0, 3).map((m) => (
                   <div key={m.name} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 0", borderTop: `1px solid ${T.border}` }}>
                     <div>
-                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{m.name}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{m.title || m.name}</div>
                       <div style={{ fontSize: 11.5, color: T.inkSoft }}>{m.knowsYou} · {Math.round(m.cal)} cal · P {Math.round(m.p)}g</div>
                     </div>
                     <button

@@ -131,10 +131,10 @@ export function DecidePreview() {
       : recipeToPlanMeal({ ...base, name: meal.name }, slot);
     built.via = "decide";
     built.qty = servings;
-    built.cal = Number(meal.cal) || 0;
-    built.p = Number(meal.p) || 0;
-    built.c = Number(meal.c) || 0;
-    built.f = Number(meal.f) || 0;
+    built.cal = base.cal;
+    built.p = base.p;
+    built.c = base.c;
+    built.f = base.f;
     setPlanned((list) => {
       const dayKey = planDayLabel(today);
       const days = [{ day: dayKey, meals: list }];
