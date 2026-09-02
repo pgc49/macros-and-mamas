@@ -48,6 +48,22 @@ describe("Help me decide entry", () => {
     expect(screen.getAllByRole("button", { name: DECIDE_COPY.logIt }).length).toBeGreaterThan(0);
   });
 
+  it("pins Back to logging outside the card scroll", () => {
+    renderToday();
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    const dialog = screen.getByRole("dialog");
+    const scroll = document.querySelector("[data-decide-sheet-scroll]");
+    const chrome = document.querySelector("[data-decide-sheet-chrome]");
+    const back = screen.getByRole("button", { name: DECIDE_COPY.back });
+    expect(dialog.style.overflow).toBe("hidden");
+    expect(scroll).toBeTruthy();
+    expect(scroll.style.flexGrow).toBe("1");
+    expect(scroll.style.minHeight).toBe("0px");
+    expect(scroll.style.overflow).toBe("auto");
+    expect(scroll.contains(back)).toBe(false);
+    expect(chrome.contains(back)).toBe(true);
+  });
+
   it("closes on Escape and Back to logging", () => {
     renderToday();
     fireEvent.click(document.querySelector("[data-decide-bar]"));
@@ -58,6 +74,46 @@ describe("Help me decide entry", () => {
     fireEvent.click(document.querySelector("[data-decide-bar]"));
     fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.back }));
     expect(document.querySelector("[data-decide-sheet]")).toBeNull();
+  });
+
+  it("Esc from detail returns to the list, then dismisses; it does not un-log", () => {
+    const onLogRecipe = vi.fn(async () => true);
+    const onAteIt = vi.fn(async () => true);
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 12, 40)}
+        profile={{ prefL: "chicken", foodAvoids: "" }}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+        onLogRecipe={onLogRecipe}
+        onAteIt={onAteIt}
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    const logIt = screen.getAllByRole("button", { name: DECIDE_COPY.logIt })[0];
+    const openBtn = logIt.parentElement?.previousElementSibling;
+    fireEvent.click(openBtn);
+    expect(screen.getByRole("button", { name: "← Back" })).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(document.querySelector("[data-decide-sheet]")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "← Back" })).toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(document.querySelector("[data-decide-sheet]")).toBeNull();
+    expect(onLogRecipe).not.toHaveBeenCalled();
+    expect(onAteIt).not.toHaveBeenCalled();
   });
 
   it("names the later-slot CTA for lunch, not always dinner", () => {

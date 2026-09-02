@@ -328,17 +328,24 @@ export function DecideSheet({
   };
   const dismissRef = useRef(dismiss);
   dismissRef.current = dismiss;
+  const levelRef = useRef(level);
+  levelRef.current = level;
 
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        dismissRef.current();
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (levelRef.current === "detail") {
+        setLevel("list");
+        setDetail(null);
+        return;
       }
+      dismissRef.current();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [open]);
 
   if (!open || !budget) return null;
@@ -453,17 +460,18 @@ export function DecideSheet({
           height: "90vh",
           background: "#fff",
           borderRadius: "28px 28px 0 0",
-          padding: "8px 16px 18px",
+          padding: "8px 16px 0",
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
           boxShadow: "0 -12px 40px rgba(51,39,46,0.12)",
           position: "relative",
           zIndex: 1,
         }}
       >
-        <div style={{ width: 40, height: 5, borderRadius: 3, background: T.track, margin: "2px auto 10px" }} />
+        <div style={{ width: 40, height: 5, borderRadius: 3, background: T.track, margin: "2px auto 10px", flexShrink: 0 }} />
         {level === "detail" && detail ? (
-          <div style={{ overflow: "auto", flex: 1 }}>
+          <div style={{ overflow: "auto", flex: 1, minHeight: 0, paddingBottom: 18 }}>
             <button
               type="button"
               onClick={() => { setLevel("list"); setDetail(null); }}
@@ -511,6 +519,7 @@ export function DecideSheet({
           </div>
         ) : (
           <>
+            <div style={{ flexShrink: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
               <h3 style={{ fontFamily: FD, fontWeight: 400, fontSize: 24, margin: 0 }}>{DECIDE_COPY.title}</h3>
               <div style={{ fontSize: 11, color: T.inkSoft, textAlign: "right", maxWidth: 140, lineHeight: 1.3 }}>
@@ -691,7 +700,11 @@ export function DecideSheet({
                 </button>
               ))}
             </div>
-            <div style={{ overflow: "auto", flex: 1, marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+            </div>
+            <div
+              data-decide-sheet-scroll
+              style={{ overflow: "auto", flex: 1, minHeight: 0, marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}
+            >
               {mode !== "pick" && ((mode === "kitchen" && !KITCHEN_FLAG) || (mode === "out" && !EATING_OUT_FLAG)) ? (
                 <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, padding: "8px 2px" }}>
                   {DECIDE_COPY.comingSoon}
@@ -757,29 +770,39 @@ export function DecideSheet({
                 </div>
               ) : null}
             </div>
-            <button
-              type="button"
-              data-decide-dismiss="back"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                dismiss();
-              }}
+            <div
+              data-decide-sheet-chrome
               style={{
-                border: "none",
-                background: "none",
-                fontFamily: F,
-                fontWeight: 700,
-                fontSize: 13.5,
-                color: T.inkSoft,
-                padding: "10px 0 2px",
-                cursor: "pointer",
                 flexShrink: 0,
+                background: "#fff",
+                padding: "10px 0 18px",
+                position: "relative",
                 zIndex: 2,
               }}
             >
-              {DECIDE_COPY.back}
-            </button>
+              <button
+                type="button"
+                data-decide-dismiss="back"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  dismiss();
+                }}
+                style={{
+                  border: "none",
+                  background: "none",
+                  fontFamily: F,
+                  fontWeight: 700,
+                  fontSize: 13.5,
+                  color: T.inkSoft,
+                  padding: "4px 0 0",
+                  cursor: "pointer",
+                  width: "100%",
+                }}
+              >
+                {DECIDE_COPY.back}
+              </button>
+            </div>
           </>
         )}
       </div>
