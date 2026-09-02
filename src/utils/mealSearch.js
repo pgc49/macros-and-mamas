@@ -17,30 +17,64 @@ function ingredientBits(value) {
   });
 }
 
-function stepBits(value) {
-  if (!value) return [];
-  if (typeof value === "string") return [value];
-  if (!Array.isArray(value)) return [];
-  return value.map((step) => (typeof step === "string" ? step : String(step || ""))).filter(Boolean);
+/** Proteins named in the title — used so “chicken” does not match chicken-sausage. */
+const PROTEIN_NAME_TOKENS = [
+  "chicken", "turkey", "beef", "pork", "lamb", "salmon", "tuna", "halibut",
+  "cod", "shrimp", "yogurt", "cottage", "egg", "eggs", "tofu", "tempeh",
+  "sausage", "steak", "bacon",
+];
+
+function searchWords(text) {
+  return String(text || "")
+    .toLowerCase()
+    .split(/[^a-z0-9+]+/)
+    .filter(Boolean);
 }
 
-/** Lowercased haystack for one meal / pantry item / saved recipe. */
+function wordHits(words, token) {
+  const t = String(token || "").toLowerCase();
+  if (!t) return false;
+  return words.some((w) => (
+    w === t
+    || (t.length >= 3 && w.startsWith(t))
+    || (w.length >= 3 && t.startsWith(w))
+  ));
+}
+
+function nameProteinToken(name) {
+  const words = searchWords(name);
+  return PROTEIN_NAME_TOKENS.find((key) => wordHits(words, key)) || null;
+}
+
+/** Name + slot + ingredients + short desc. Steps stay out (too noisy). */
 export function mealSearchHaystack(meal) {
   if (!meal || typeof meal !== "object") return "";
   const parts = [
     meal.name,
-    meal.desc,
+    meal.title,
     meal.cat,
     meal.slot,
     meal.group,
     meal.basedOn,
-    meal.note,
+    meal.desc,
+    meal.notes,
     ...ingredientBits(meal.ingredients),
     ...ingredientBits(meal.serving),
-    ...ingredientBits(meal.batch),
-    ...stepBits(meal.steps),
   ];
   return parts.filter(Boolean).join(" ").toLowerCase();
+}
+
+/**
+ * Decide / All meals search pool: Callie's bank + My meals together.
+ * Custom meals first so a saved plate wins a name collision.
+ */
+export function allMealsSearchPool(bankMeals = [], customMeals = []) {
+  const bank = Array.isArray(bankMeals) ? bankMeals : [];
+  const mine = Array.isArray(customMeals) ? customMeals : [];
+  return [
+    ...mine.map((m) => (m?.source ? m : { ...m, source: "my" })),
+    ...bank.map((m) => (m?.source ? m : { ...m, source: m.source || "bank" })),
+  ].filter((m) => m && (m.name || m.title));
 }
 
 export function mealQueryTokens(query) {
@@ -54,8 +88,14 @@ export function mealQueryTokens(query) {
 export function mealMatchesQuery(meal, query) {
   const tokens = mealQueryTokens(query);
   if (!tokens.length) return true;
-  const hay = mealSearchHaystack(meal);
-  return tokens.every((token) => hay.includes(token));
+  const hayWords = searchWords(mealSearchHaystack(meal));
+  const namedProtein = nameProteinToken(meal?.name);
+  return tokens.every((token) => {
+    if (PROTEIN_NAME_TOKENS.includes(token) && namedProtein && namedProtein !== token) {
+      if (!wordHits(searchWords(meal?.name), token)) return false;
+    }
+    return wordHits(hayWords, token);
+  });
 }
 
 export function filterMealsByQuery(meals, query) {
@@ -67,15 +107,26 @@ export function filterMealsByQuery(meals, query) {
 /** Today → My plan filter chips. My meals is the saved list; the rest match Meals-tab slots. */
 export const MEAL_SLOT_FILTERS = ["My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Treats"];
 
+/** Meals landing / home. Named pill: Meal Coach. Internal id stays Decide. */
+export const MEALS_DECIDE_FILTER = "Decide";
+export const MEALS_DECIDE_LABEL = "Meal Coach";
+
 /**
- * Meals tab section chips. All meals is the default (no chip) — the filter's
- * All / Breakfast / … picks a slot. Internal `id` stays on mealFilter.
+ * Meals pills. Meal Coach is the landing. Planner stays last and quiet.
+ * Internal `id` stays on mealFilter — Plan is the weekly planner (label Planner).
  */
 export const MEALS_TAB_SECTIONS = [
-  { id: "Plan", label: "Weekly Planner" },
-  { id: "Food prefs", label: "Food prefs" },
+  { id: MEALS_DECIDE_FILTER, label: MEALS_DECIDE_LABEL },
+  { id: "All meals", label: "All meals" },
   { id: "My meals", label: "My meals" },
+  { id: "Food prefs", label: "Food prefs" },
+  { id: "Plan", label: "Planner", quiet: true },
 ];
+
+export function isMealsDecideFilter(filter) {
+  return String(filter || "").trim() === MEALS_DECIDE_FILTER;
+}
+
 export const MEALS_TAB_SLOT_FILTERS = ["Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"];
 
 export function isMealsTabSlotFilter(filter) {

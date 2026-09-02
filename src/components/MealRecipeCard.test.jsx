@@ -44,6 +44,30 @@ describe("MealRecipeCard Meals tab logging chrome", () => {
     expect(document.querySelector("[data-recipe-meta]")).toBeNull();
   });
 
+  it("keeps the All meals collapsed layout: title, Open recipe, one pill, cal, P·C·F, chips, servings", () => {
+    render(<MealRecipeCard meal={oatmeal} onLog={vi.fn()} />);
+    const card = document.querySelector("[data-meal-recipe-card]");
+    const text = card.textContent;
+    const titleAt = text.indexOf("Protein oatmeal");
+    const openAt = text.indexOf("Open recipe");
+    const addAt = text.indexOf("Add to Today");
+    const calAt = text.indexOf("310 cal");
+    const macrosAt = text.indexOf("P 30g");
+    const servingsAt = text.indexOf("Servings to log");
+    expect(titleAt).toBeGreaterThanOrEqual(0);
+    expect(openAt).toBeGreaterThan(titleAt);
+    expect(addAt).toBeGreaterThan(titleAt);
+    expect(calAt).toBeGreaterThan(addAt);
+    expect(macrosAt).toBeGreaterThan(calAt);
+    expect(servingsAt).toBeGreaterThan(macrosAt);
+    expect(screen.getByRole("button", { name: "Breakfast" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Lunch" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Dinner" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Snack" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Fewer servings" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "More servings" })).toBeTruthy();
+  });
+
   it("advertises Open recipe as its own control and drops the redundant category stamp", () => {
     render(<MealRecipeCard meal={oatmeal} onLog={vi.fn()} />);
 

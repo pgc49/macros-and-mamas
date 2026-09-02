@@ -7,7 +7,10 @@ import { joinPersonName } from "./lib/personName";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
-import { resolveLogSlot } from "./utils/mealSlots";
+import { normalizeSlot, resolveLogSlot } from "./utils/mealSlots";
+import { clearDecidePencil, removeDecidePencilMatchingLog, writeDecidePencil } from "./utils/decidePencil";
+import { tabFromSearch, writeClientTab } from "./lib/clientTab";
+import { namesMatch, stripPortionSuffix } from "./utils/decidePrefs";
 import {
   adherenceForWeek,
   buildMacroHistory,
@@ -36,6 +39,7 @@ import { OnboardingBannersPreview } from "./views/OnboardingBannersPreview";
 import { MealLogPreview } from "./views/MealLogPreview";
 import { MealsTabPreview } from "./views/MealsTabPreview";
 import { RecipeBankPreview } from "./views/RecipeBankPreview";
+import { DecidePreview } from "./views/DecidePreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
@@ -311,11 +315,13 @@ export default function App() {
   const [signInNext, setSignInNext] = useState(() => (
     isAdminSignupLockedSurface() ? "app" : "intake"
   )); // "intake" → create; "app" → returning
-  const [tab, setTab] = useState(() => {
-    if (typeof window === "undefined") return "today";
-    const q = new URLSearchParams(window.location.search).get("tab");
-    return ["today", "meals", "messages", "progress"].includes(q) ? q : "today";
-  });
+  const [tab, setTabState] = useState(() => (
+    typeof window === "undefined" ? "today" : tabFromSearch(window.location.search)
+  ));
+  const setTab = (next) => {
+    setTabState(next);
+    writeClientTab(next);
+  };
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   // Home Screen icon badge mirrors unread (iOS 16.4+ / supported browsers).
@@ -364,7 +370,7 @@ export default function App() {
   const [viewWk, setViewWk] = useState(curWk);
   const [editPast, setEditPast] = useState(false);
   const [weighins, setWeighins] = useState([]);
-  const [mealFilter, setMealFilter] = useState("All meals");
+  const [mealFilter, setMealFilter] = useState("Decide");
   const [mealPlanMode, setMealPlanMode] = useState("default");
   const [publishedPlan, setPublishedPlan] = useState(null);
   const [weekPlanDays, setWeekPlanDays] = useState([]);
@@ -1184,10 +1190,17 @@ export default function App() {
     setWeekPlanSaving(true);
     try {
       const saved = await db.saveWeekPlan(days, source, ws);
+      const echoed = saved.days || days;
       // Only apply echo if still viewing that week
       if (weekPlanWeekRef.current === ws) {
-        setWeekPlanDays(saved.days || days);
+        setWeekPlanDays(echoed);
         setWeekPlanSource(saved.source || source || "manual");
+      }
+      const today = localDateIso();
+      const date = mealLogDate || today;
+      if (wkStartOf(date) === ws) {
+        const row = (echoed || []).find((d) => d.day === planDayLabel(date));
+        setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
       }
     } catch (e) {
       console.error("saveWeekPlan failed", e);
@@ -1212,6 +1225,84 @@ export default function App() {
     weekPlanSaveTimer.current = window.setTimeout(() => {
       persistWeekPlan(days, source, ws);
     }, 600);
+  };
+
+  const onPencilPlanMeal = async (meal, slotOverride, qtyOverride) => {
+    const today = localDateIso();
+    const dayKey = planDayLabel(today);
+    const ws = wkStartOf(today);
+    const slot = normalizeSlot(slotOverride || meal.slot) || "dinner";
+    let days;
+    if (ws === weekPlanWeekRef.current) {
+      days = weekPlanDays;
+    } else {
+      try {
+        const wp = await db.loadWeekPlan(ws);
+        days = Array.isArray(wp?.days) ? wp.days : [];
+      } catch (e) {
+        console.warn("load week for decide pencil failed", e);
+        days = [];
+      }
+    }
+    const { days: next } = writeDecidePencil(days, dayKey, meal, slot, qtyOverride);
+    if (ws === weekPlanWeekRef.current) {
+      onWeekPlanChange(next, "manual");
+    } else {
+      await persistWeekPlan(next, "manual", ws);
+    }
+    const row = (next || []).find((d) => d.day === dayKey);
+    if ((mealLogDate || today) === today) {
+      setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
+    }
+  };
+
+  const onClearDecidePencil = async (meal) => {
+    const today = localDateIso();
+    const dayKey = planDayLabel(today);
+    const ws = wkStartOf(today);
+    const slot = normalizeSlot(meal?.slot);
+    if (!slot) return;
+    let days;
+    if (ws === weekPlanWeekRef.current) {
+      days = weekPlanDays;
+    } else {
+      try {
+        const wp = await db.loadWeekPlan(ws);
+        days = Array.isArray(wp?.days) ? wp.days : [];
+      } catch (e) {
+        console.warn("load week for decide pencil clear failed", e);
+        days = [];
+      }
+    }
+    const next = clearDecidePencil(days, dayKey, slot);
+    if (ws === weekPlanWeekRef.current) {
+      onWeekPlanChange(next, "manual");
+    } else {
+      await persistWeekPlan(next, "manual", ws);
+    }
+    const row = (next || []).find((d) => d.day === dayKey);
+    if ((mealLogDate || today) === today) {
+      setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
+    }
+  };
+
+  const onAteIt = async (meal) => {
+    const date = meal.logged_date || mealLogDate || localDateIso();
+    const slot = resolveLogSlot(meal.slot);
+    const rows = (todayLog?.date === date ? todayLog.entries : mealLogsByDate?.[date]) || [];
+    if (rows.some((e) => resolveLogSlot(e.slot) === slot && namesMatch(e.name, meal.name))) {
+      return true;
+    }
+    return logRecipe({
+      name: stripPortionSuffix(meal.name),
+      cal: meal.cal,
+      p: meal.p,
+      c: meal.c,
+      f: meal.f,
+      via: meal.via || "decide_bank",
+      slot,
+      logged_date: date,
+    });
   };
 
   /** Flip planner week (like Today log). Future weeks start blank. */
@@ -1375,10 +1466,40 @@ export default function App() {
 
   const deleteMealEntry = async (id) => {
     if (!id) return;
+    const date = mealLogDate || localDateIso();
+    const rows = (todayLog?.date === date ? todayLog.entries : mealLogsByDate?.[date]) || [];
+    const entry = rows.find((e) => e.id === id);
     try {
       await db.deleteMealLog(id);
-      const date = mealLogDate;
       syncEntryIntoWeek(date, (list) => list.filter((e) => e.id !== id));
+      if (entry?.via === "decide_bank" || entry?.via === "decide") {
+        const dayKey = planDayLabel(date);
+        const ws = wkStartOf(date);
+        let days;
+        if (ws === weekPlanWeekRef.current) {
+          days = weekPlanDays;
+        } else {
+          try {
+            const wp = await db.loadWeekPlan(ws);
+            days = Array.isArray(wp?.days) ? wp.days : [];
+          } catch (loadErr) {
+            console.warn("load week for decide pencil remove failed", loadErr);
+            days = [];
+          }
+        }
+        const next = removeDecidePencilMatchingLog(days, dayKey, entry);
+        if (next !== days) {
+          if (ws === weekPlanWeekRef.current) {
+            onWeekPlanChange(next, "manual");
+          } else {
+            await persistWeekPlan(next, "manual", ws);
+          }
+          if ((mealLogDate || date) === date) {
+            const row = (next || []).find((d) => d.day === dayKey);
+            setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
+          }
+        }
+      }
     } catch (e) {
       console.error("deleteMealLog failed", e);
     }
@@ -1620,6 +1741,10 @@ export default function App() {
       onSuggestAiWeek={onSuggestAiWeek}
       onMealIdea={onMealIdea}
       onSaveFoodPrefs={onSaveFoodPrefs}
+      mealHistoryByDate={mealHistoryByDate}
+      onPencilPlanMeal={onPencilPlanMeal}
+      onClearDecidePencil={onClearDecidePencil}
+      onAteIt={onAteIt}
       onHomescreenTipDismissed={(at) => {
         setProfile((p) => ({ ...p, homescreenTipDismissedAt: at }));
       }}
@@ -1650,6 +1775,7 @@ export default function App() {
           <Route path="/dev/meal-log" element={<MealLogPreview />} />
           <Route path="/dev/meals-tab" element={<MealsTabPreview />} />
           <Route path="/dev/recipe-bank" element={<RecipeBankPreview />} />
+          <Route path="/dev/decide" element={<DecidePreview />} />
         </>
       ) : null}
 

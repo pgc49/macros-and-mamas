@@ -235,8 +235,8 @@ export function recipeToPlanMeal(recipe, slotOverride = null) {
     p: Number(recipe.p) || 0,
     c: Number(recipe.c) || 0,
     f: Number(recipe.f) || 0,
-    servings: Number(recipe.serves) || 1,
-    qty: 1,
+    servings: Number(recipe.servings ?? recipe.serves) || 1,
+    qty: recipe.qty ?? 1,
     // Pantry staples are single line items — no recipe ingredients for grocery.
     ingredients: isPantry
       ? [{ amount: recipe.desc || "1 serving", item: recipe.name }]
@@ -280,7 +280,7 @@ export function customMealToPlanMeal(custom, slotOverride = "snack") {
     c: Number(custom.c) || 0,
     f: Number(custom.f) || 0,
     servings: serves > 0 ? serves : 1,
-    qty: 1,
+    qty: custom.qty ?? 1,
     ingredients,
     batch: null,
     steps: [],
@@ -379,7 +379,7 @@ export function removeMealById(days, mealId) {
   });
 }
 
-/** Replace a meal in place (swap recipe, keep id/position/qty). */
+/** Replace a meal in place (swap recipe, keep id/position). Planner swaps keep qty; decide pencils use the new qty. */
 export function replaceMealById(days, mealId, meal) {
   if (!mealId || !meal) return normalizeWeekDays(days);
   return normalizeWeekDays(days).map((d) => {
@@ -387,7 +387,10 @@ export function replaceMealById(days, mealId, meal) {
     if (idx < 0) return d;
     const prev = d.meals[idx];
     const meals = [...d.meals];
-    meals[idx] = withMealId({ ...meal, id: mealId, qty: prev.qty ?? meal.qty ?? 1 });
+    const qty = meal.via === "decide"
+      ? (meal.qty ?? prev.qty ?? 1)
+      : (prev.qty ?? meal.qty ?? 1);
+    meals[idx] = withMealId({ ...meal, id: mealId, qty });
     return { ...d, meals: sortMeals(meals), dayTotals: sumDayTotals(meals) };
   });
 }

@@ -25,9 +25,27 @@ import {
 import { formatServings, ServingStepper, snapServings } from "../utils/servings";
 import { recipeNoteFromMeal } from "../utils/planMealShape";
 import { targetBands } from "../utils/weekPlan";
+import { decideDisplayMacros } from "../utils/decideScale";
 import { filterMealsByRemaining, formatRoomLeft, roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
 import { LogMealRefine } from "./LogMealRefine";
+import { DecideSheet } from "./DecideSheet";
+import { DECIDE_COPY, holdingRoomTitle } from "../content/decideVoice";
+import { ownPointerClick } from "../lib/decidePointerTrap";
+import {
+  attachCoachContext,
+  bandsFromMacros,
+  canOpenDecide,
+  coachRead,
+  computeSlotBudget,
+  decideBarHint,
+  decideReservePlaceholders,
+  defaultDecideSlot,
+  deriveMealShares,
+  isOverDay,
+  loggedSlotsFromEntries,
+  unmatchedDecidePencils,
+} from "../utils/decideBudget";
 import {
   enrichMealsWithBankSlot,
   filterMealsByQuery,
@@ -52,9 +70,12 @@ const VIA_LABEL = {
   manual: "entered by you",
   adjusted: "adjusted by you",
   menu: "from menu · rough estimate",
+  decide_bank: DECIDE_COPY.viaBank,
+  decide_ai: DECIDE_COPY.viaAi,
+  decide_out: DECIDE_COPY.viaOut,
 };
 
-const AI_VIA = new Set(["photo", "describe", "menu"]);
+const AI_VIA = new Set(["photo", "describe", "menu", "decide_out"]);
 
 const stripServingSuffix = (name) => String(name || "Meal").replace(/\s·\s[\d.]+×$/, "");
 
@@ -142,6 +163,15 @@ export function MealLogCard({
   onChangeMealWeek,
   earliestWeekStart,
   initialMethod = null,
+  profile,
+  mealHistoryByDate = {},
+  onPencilPlanMeal,
+  onClearDecidePencil,
+  onAteIt,
+  onOpenFoodPrefs,
+  onBrowseMeals,
+  onOpenDecide,
+  decideNow,
 }) {
   const [method, setMethod] = useState(initialMethod); // snap | describe | recipes | manual
   const [desc, setDesc] = useState("");
@@ -168,6 +198,8 @@ export function MealLogCard({
   const [lastInput, setLastInput] = useState(null);
   const [rowRefineBusy, setRowRefineBusy] = useState(false);
   const [rowRefineError, setRowRefineError] = useState("");
+  const [decideOpen, setDecideOpen] = useState(false);
+  const [decideEntry, setDecideEntry] = useState("bar");
   const camRef = useRef(null);
   const libRef = useRef(null);
   // Read at estimate-arrival time only — putting lastInput in the effect
@@ -695,6 +727,58 @@ export function MealLogCard({
 
   const slotBuckets = groupEntriesBySlot(entries, { logDate: date, todayIso: today });
   const hasAnyEntries = entries.length > 0;
+  const decidePencils = onToday ? unmatchedDecidePencils(plannedMeals, entries) : [];
+  const decideLogged = loggedSlotsFromEntries(entries);
+  const decideBands = bandsFromMacros(macros);
+  const decideShares = deriveMealShares(mealHistoryByDate);
+  const decideSlotGuess = defaultDecideSlot({ now: decideNow, loggedSlots: decideLogged });
+  const decideBudget = decideBands
+    ? attachCoachContext(computeSlotBudget({
+      totals,
+      bands: decideBands,
+      slot: decideSlotGuess,
+      plannedMeals,
+      shares: decideShares,
+      loggedSlots: decideLogged,
+    }), decideBands)
+    : null;
+  const decidePlaceholders = onToday
+    ? decideReservePlaceholders({
+      plannedMeals,
+      entries,
+      budget: decideBudget,
+      shares: decideShares,
+      bands: decideBands,
+    })
+    : [];
+  const showLogBody = hasAnyEntries || decidePencils.length > 0 || decidePlaceholders.length > 0;
+  const showDecide = canOpenDecide({
+    macros,
+    remaining: remainingRoom,
+    isToday: onToday,
+    budget: decideBudget,
+  });
+  const decideHint = showDecide
+    ? decideBarHint({
+      loggedSlots: decideLogged,
+      plannedMeals,
+      coach: coachRead({
+        budget: decideBudget,
+        remaining: decideBudget?.remaining,
+        slot: decideSlotGuess,
+        over: isOverDay(decideBudget?.remaining),
+      }),
+    })
+    : "";
+
+  const openDecide = (entry, slot = decideSlotGuess) => {
+    if (onOpenDecide) {
+      onOpenDecide({ slot, entry });
+      return;
+    }
+    setDecideEntry(entry);
+    setDecideOpen(true);
+  };
 
   return (
     <div style={{ marginTop: 4 }}>
@@ -796,6 +880,35 @@ export function MealLogCard({
           {methodTile("recipes", "🍳", "My plan", "exact")}
           {methodTile("manual", "＃", "Macros", "I know them")}
         </div>
+
+        {showDecide && (
+          <button
+            type="button"
+            data-decide-bar="1"
+            {...ownPointerClick(() => openDecide("bar"))}
+            style={{
+              marginTop: 12,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              width: "100%",
+              background: T.accentSoft,
+              border: "none",
+              borderRadius: 16,
+              padding: "12px 14px",
+              cursor: "pointer",
+              fontFamily: F,
+              textAlign: "left",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: T.accentDeep }}>{DECIDE_COPY.title}</div>
+              <div style={{ fontSize: 12.5, color: "#7A4C5E", marginTop: 2, lineHeight: 1.4 }}>{decideHint}</div>
+            </div>
+            <span style={{ fontSize: 22, color: T.accentDeep, flexShrink: 0 }}>›</span>
+          </button>
+        )}
 
         {method === "snap" && (
           <div style={{ marginTop: 12 }}>
@@ -1559,13 +1672,13 @@ export function MealLogCard({
         <div style={{ fontFamily: FD, fontSize: 17, marginBottom: 4 }}>
           {onToday ? "Today's log" : `${formatLongDay(date)} log`}
         </div>
-        {hasAnyEntries && (
+        {showLogBody && (
           <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 10 }}>
             Grouped by meal — tap any item to move or edit.
           </div>
         )}
 
-        {!hasAnyEntries ? (
+        {!showLogBody ? (
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6, padding: "6px 0 10px" }}>
             Nothing logged this day. Snap a plate or menu, describe, or tap a recipe.
           </div>
@@ -1573,7 +1686,9 @@ export function MealLogCard({
           <>
             {SLOT_SECTION_ORDER.map((slotKey) => {
               const list = slotBuckets[slotKey] || [];
-              if (!list.length) return null;
+              const pencils = decidePencils.filter((m) => normalizeSlot(m.slot) === slotKey);
+              const holds = decidePlaceholders.filter((p) => p.slot === slotKey);
+              if (!list.length && !pencils.length && !holds.length) return null;
               return (
                 <div key={slotKey} style={{ marginBottom: 12 }}>
                   <div
@@ -1700,7 +1815,7 @@ export function MealLogCard({
                       <button
                         key={e.id}
                         type="button"
-                        onClick={() => startEdit(e)}
+                        {...ownPointerClick(() => startEdit(e))}
                         style={{
                           display: "flex",
                           width: "100%",
@@ -1734,6 +1849,120 @@ export function MealLogCard({
                       </button>
                     ),
                   )}
+                  {pencils.map((meal) => {
+                    const shown = decideDisplayMacros(meal);
+                    return (
+                    <div
+                      key={meal.id || meal.name}
+                      data-decide-pencil-row={meal.slot}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "9px 2px",
+                        borderBottom: `1px solid ${T.border}`,
+                        opacity: 0.72,
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{meal.name}</div>
+                        <div style={{ fontSize: 11.5, color: T.inkSoft }}>{DECIDE_COPY.pencilledHint}</div>
+                      </div>
+                      <div style={{ fontSize: 12, color: T.inkSoft, whiteSpace: "nowrap" }}>
+                        {Math.round(shown.cal)} cal · P {Math.round(shown.p)}g
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onClearDecidePencil?.({
+                          ...meal,
+                          slot: normalizeSlot(meal.slot),
+                        })}
+                        style={{
+                          fontFamily: F,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          color: T.inkSoft,
+                          background: "transparent",
+                          border: `1px solid ${T.border}`,
+                          borderRadius: 999,
+                          padding: "6px 10px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {DECIDE_COPY.clearPencil}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onAteIt?.({
+                          ...meal,
+                          cal: shown.cal,
+                          p: shown.p,
+                          c: shown.c,
+                          f: shown.f,
+                          via: "decide_bank",
+                          slot: normalizeSlot(meal.slot),
+                        })}
+                        style={{
+                          fontFamily: F,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          color: T.accentDeep,
+                          background: T.accentSoft,
+                          border: "none",
+                          borderRadius: 999,
+                          padding: "6px 10px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {DECIDE_COPY.ateIt}
+                      </button>
+                    </div>
+                    );
+                  })}
+                  {holds.map((hold) => (
+                    <button
+                      key={`hold-${hold.slot}`}
+                      type="button"
+                      data-decide-hold-row={hold.slot}
+                      {...ownPointerClick(() => openDecide("placeholder", hold.slot))}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        width: "100%",
+                        padding: "9px 2px",
+                        border: "none",
+                        borderBottom: `1px dashed ${T.border}`,
+                        background: "none",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        fontFamily: F,
+                        opacity: 0.78,
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>
+                          {holdingRoomTitle(hold.slot)}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: T.inkSoft }}>{DECIDE_COPY.reservedHint}</div>
+                      </div>
+                      <div style={{ fontSize: 12, color: T.inkSoft, whiteSpace: "nowrap" }}>
+                        {Math.round(hold.cal)} cal · P {Math.round(hold.p)}g
+                      </div>
+                      <span style={{
+                        fontFamily: F,
+                        fontWeight: 700,
+                        fontSize: 12,
+                        color: T.accentDeep,
+                        background: T.accentSoft,
+                        borderRadius: 999,
+                        padding: "6px 10px",
+                      }}
+                      >
+                        {DECIDE_COPY.decideThis}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               );
             })}
@@ -1748,12 +1977,56 @@ export function MealLogCard({
                 </div>
                 <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.5 }}>
                   {totalsCaption(totals, ranges)}
+                  {showDecide ? (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        onClick={() => openDecide("caption")}
+                        style={{
+                          border: "none",
+                          background: "none",
+                          padding: 0,
+                          fontFamily: F,
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          color: T.accentDeep,
+                          textDecoration: "underline",
+                          textUnderlineOffset: 3,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {DECIDE_COPY.captionLink}
+                      </button>
+                    </>
+                  ) : null}
                 </div>
               </>
             )}
           </>
         )}
       </div>
+
+      {showDecide && (
+        <DecideSheet
+          open={decideOpen}
+          onClose={() => setDecideOpen(false)}
+          dateKey={date}
+          now={decideNow}
+          macros={macros}
+          entries={entries}
+          plannedMeals={plannedMeals}
+          recipes={recipes}
+          customMeals={customMeals}
+          profile={profile}
+          mealHistoryByDate={mealHistoryByDate}
+          entry={decideEntry}
+          onLog={onLogRecipe}
+          onPencil={onPencilPlanMeal}
+          onBrowseMeals={onBrowseMeals}
+          onOpenPrefs={onOpenFoodPrefs}
+        />
+      )}
     </div>
   );
 }

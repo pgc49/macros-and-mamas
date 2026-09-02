@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  allMealsSearchPool,
   enrichMealsWithBankSlot,
   filterMealsByQuery,
   filterMealsBySlot,
+  isMealsDecideFilter,
   isMealsTabSlotFilter,
+  MEALS_DECIDE_FILTER,
   MEALS_TAB_SECTIONS,
   MEALS_TAB_SLOT_FILTERS,
   mealMatchesQuery,
@@ -43,6 +46,18 @@ describe("mealMatchesQuery", () => {
     expect(mealMatchesQuery(oatmeal, "protein steak")).toBe(false);
     expect(mealMatchesQuery(chicken, "chicken pasta")).toBe(false);
   });
+
+  it("does not treat chicken sausage as a chicken meal", () => {
+    const sausage = {
+      cat: "Breakfast",
+      name: "Sausage, egg + whites",
+      desc: "2 chicken breakfast sausage links, 1 large egg",
+      ingredients: [{ item: "chicken or turkey breakfast sausage links" }],
+    };
+    expect(mealMatchesQuery(sausage, "chicken")).toBe(false);
+    expect(mealMatchesQuery(sausage, "sausage")).toBe(true);
+    expect(mealMatchesQuery(chicken, "chicken")).toBe(true);
+  });
 });
 
 describe("filterMealsByQuery", () => {
@@ -50,6 +65,33 @@ describe("filterMealsByQuery", () => {
     const list = [oatmeal, chicken];
     expect(filterMealsByQuery(list, "")).toBe(list);
     expect(filterMealsByQuery(list, "chicken")).toEqual([chicken]);
+  });
+
+  it("matches a My meals plate by name, notes, or desc", () => {
+    const leftover = {
+      name: "Leftover taco bowl",
+      desc: "Tuesday night leftovers",
+      notes: "extra salsa",
+      ingredients: "3 oz chicken\n½ cup rice",
+      cal: 380,
+      p: 32,
+      c: 28,
+      f: 10,
+    };
+    expect(filterMealsByQuery([oatmeal, leftover], "taco")).toEqual([leftover]);
+    expect(filterMealsByQuery([leftover], "salsa")).toEqual([leftover]);
+    expect(filterMealsByQuery([leftover], "Tuesday")).toEqual([leftover]);
+  });
+});
+
+describe("allMealsSearchPool", () => {
+  it("puts Callie's bank and My meals in one pool", () => {
+    const mine = { name: "Leftover taco bowl", cal: 380, p: 32, c: 28, f: 10 };
+    const pool = allMealsSearchPool([chicken], [mine]);
+    expect(pool.map((m) => m.name)).toEqual(["Leftover taco bowl", chicken.name]);
+    expect(pool[0].source).toBe("my");
+    expect(filterMealsByQuery(pool, "taco").map((m) => m.name)).toEqual(["Leftover taco bowl"]);
+    expect(filterMealsByQuery(pool, "teriyaki").map((m) => m.name)).toEqual([chicken.name]);
   });
 });
 
@@ -98,15 +140,19 @@ describe("enrichMealsWithBankSlot", () => {
 });
 
 describe("Meals tab filter split", () => {
-  it("keeps Weekly Planner, Food prefs, and My meals as top chips", () => {
-    expect(MEALS_TAB_SECTIONS.map((s) => s.id)).toEqual(["Plan", "Food prefs", "My meals"]);
-    expect(MEALS_TAB_SECTIONS.map((s) => s.label)).toEqual(["Weekly Planner", "Food prefs", "My meals"]);
+  it("lands Meal Coach first with Planner last and quiet", () => {
+    expect(MEALS_DECIDE_FILTER).toBe("Decide");
+    expect(isMealsDecideFilter("Decide")).toBe(true);
+    expect(MEALS_TAB_SECTIONS.map((s) => s.id)).toEqual(["Decide", "All meals", "My meals", "Food prefs", "Plan"]);
+    expect(MEALS_TAB_SECTIONS.map((s) => s.label)).toEqual(["Meal Coach", "All meals", "My meals", "Food prefs", "Planner"]);
+    expect(MEALS_TAB_SECTIONS[MEALS_TAB_SECTIONS.length - 1].quiet).toBe(true);
     expect(MEALS_TAB_SLOT_FILTERS).toEqual(["Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"]);
     expect(isMealsTabSlotFilter("Breakfast")).toBe(true);
     expect(isMealsTabSlotFilter("Pantry")).toBe(true);
     expect(isMealsTabSlotFilter("My meals")).toBe(false);
     expect(isMealsTabSlotFilter("Food prefs")).toBe(false);
     expect(isMealsTabSlotFilter("All meals")).toBe(false);
+    expect(isMealsTabSlotFilter("Decide")).toBe(false);
   });
 });
 

@@ -61,6 +61,7 @@ export const inputStyle = {
 export function MealSearchInput({
   value,
   onChange,
+  onFocus,
   placeholder = "Search meals",
   style,
 }) {
@@ -69,6 +70,7 @@ export function MealSearchInput({
       type="search"
       value={value}
       onChange={(e) => onChange?.(e.target.value)}
+      onFocus={onFocus}
       placeholder={placeholder}
       autoCapitalize="none"
       autoCorrect="off"
@@ -86,11 +88,18 @@ export function MealSearchInput({
   );
 }
 
-export const Chip = ({ active, onClick, children }) => (
+export const Chip = ({ active, onClick, children, compact, quiet }) => (
   <button onClick={onClick} style={{
-    padding: "10px 16px", borderRadius: 999, fontSize: 14, fontWeight: 600, cursor: "pointer",
-    border: `1.5px solid ${active ? T.accent : T.border}`,
-    background: active ? T.accentSoft : "#fff", color: active ? T.accentDeep : T.inkSoft,
+    padding: compact || quiet ? "7px 12px" : "10px 16px",
+    borderRadius: 999,
+    fontSize: quiet ? 12 : compact ? 12.5 : 14,
+    fontWeight: quiet ? 600 : 600,
+    cursor: "pointer",
+    flexShrink: 0,
+    border: `1.5px solid ${active ? T.accent : quiet ? T.track : T.border}`,
+    background: active ? T.accentSoft : quiet ? "transparent" : T.card,
+    color: active ? T.accentDeep : T.inkSoft,
+    opacity: quiet && !active ? 0.72 : 1,
   }}>{children}</button>
 );
 
