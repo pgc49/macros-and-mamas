@@ -313,6 +313,27 @@ export function computeSlotBudget({
     return { slot, laterSlots: later, remaining, reserve: rawReserve, ...leftoverFrom(remaining, rawReserve) };
   }
 
+  // Extra snacks the user added on top of a reserve that already fit:
+  // this meal goes to 0 and later pieces scale into what's left. Do not
+  // re-split the day (that made +snack increase leftover).
+  if (snacks > 1) {
+    const atOne = reserveForLater({
+      laterSlots: reserveSlotsAfter(slot, logged, 1),
+      shares: resolvedShares,
+      bands,
+      plannedMeals,
+      snackCount: 1,
+    });
+    if (remaining.cal - atOne.cal >= 0 && rawReserve.cal > 0) {
+      const factor = remaining.cal / rawReserve.cal;
+      const bySlot = Object.fromEntries(
+        Object.entries(rawReserve.bySlot).map(([s, piece]) => [s, scalePiece(piece, factor)]),
+      );
+      const reserve = packReserve(bySlot);
+      return { slot, laterSlots: later, remaining, reserve, ...leftoverFrom(remaining, reserve) };
+    }
+  }
+
   // Raw later shares (full-day) do not fit what's left. Split the leftover
   // day across this slot and later unlogged slots so the cards add up and
   // breakfast is not wiped to 0. Pencilled later meals still take first.
@@ -444,8 +465,13 @@ export function budgetSentence(budget) {
   const usedUsual = laterSharePieces.length > 0
     && laterSharePieces.every((p) => p.source === "usual");
   const how = usedUsual ? DECIDE_COPY.usualEat : DECIDE_COPY.normalShare;
-  const aboutCal = budget.reserve?.cal ?? piece?.cal ?? 0;
-  const aboutP = budget.reserve?.p ?? piece?.p ?? 0;
+  const named = later.reduce((acc, s) => {
+    const p = budget.reserve?.bySlot?.[s];
+    if (!p) return acc;
+    return { cal: acc.cal + p.cal, p: acc.p + p.p };
+  }, { cal: 0, p: 0 });
+  const aboutCal = named.cal || piece?.cal || 0;
+  const aboutP = named.p || piece?.p || 0;
   return `${DECIDE_COPY.savingRoom} ${laterLabel} ${how} (about ${fmtCal(aboutCal)} cal, ${fmtP(aboutP)}). ${leaves}`;
 }
 

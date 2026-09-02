@@ -259,6 +259,24 @@ describe("last meal / over / snack", () => {
     expect(two.cal + two.reserve.cal).toBeCloseTo(BANDS.calHi, 0);
   });
 
+  it("never increases this meal’s leftover when snack room goes up", () => {
+    const base = {
+      totals: BREAKFAST,
+      bands: BANDS,
+      slot: "lunch",
+      shares: DEFAULT_MEAL_SHARES,
+      loggedSlots: new Set(["breakfast"]),
+    };
+    const zero = computeSlotBudget({ ...base, snackCount: 0 });
+    const one = computeSlotBudget({ ...base, snackCount: 1 });
+    const two = computeSlotBudget({ ...base, snackCount: 2 });
+    const three = computeSlotBudget({ ...base, snackCount: 3 });
+    expect(one.cal).toBeLessThan(zero.cal);
+    expect(two.cal).toBeLessThanOrEqual(one.cal);
+    expect(three.cal).toBeLessThanOrEqual(two.cal);
+    expect(two.cal + two.reserve.cal).toBeCloseTo(one.remaining.cal, 0);
+  });
+
   it("flags over when calories are spent or fat is past slack", () => {
     expect(isOverDay({ cal: -10, f: 4 })).toBe(true);
     expect(isOverDay({ cal: 200, f: -9 })).toBe(true);
