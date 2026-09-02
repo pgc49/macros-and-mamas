@@ -15,6 +15,8 @@ export function LoggableMealRow({
   onRemove,
   onSaveIngredients,
   onSlotDraftChange,
+  /** Controlled display slot — do not write this onto `meal` (keeps row identity stable). */
+  slotValue,
   accent = false,
   /** Show breakfast/lunch/dinner/snack chips before Add (default on). */
   showSlotPicker = true,
@@ -22,7 +24,7 @@ export function LoggableMealRow({
   compact = false,
 }) {
   const controlledSlot = typeof onSlotDraftChange === "function";
-  const parentSlot = normalizeSlot(meal.slot || meal.cat);
+  const parentSlot = normalizeSlot(slotValue ?? meal.slot ?? meal.cat);
   const [qty, setQty] = useState(1);
   const [localSlot, setLocalSlot] = useState(() => parentSlot || guessSlotFromTime());
   const [phase, setPhase] = useState("idle"); // idle | busy | done
@@ -86,7 +88,7 @@ export function LoggableMealRow({
       const saved = await onSaveIngredients({
         ...meal,
         ingredients: ingDraft.trim(),
-        slot,
+        slot: controlledSlot ? (meal.slot || meal.cat) : slot,
       });
       if (saved === false || saved == null) {
         setIngNote("Couldn't save — try again");

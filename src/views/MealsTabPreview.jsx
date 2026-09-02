@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ClientApp } from "./ClientApp";
 import { mergeSavedCustomMeal } from "../utils/customMeals";
+import { MEALS_DECIDE_FILTER } from "../utils/mealSearch";
 
 const noop = () => {};
 const noopAsync = async () => true;
@@ -18,7 +19,10 @@ export function MealsTabPreview() {
   return (
     <ClientApp
       tab={tab}
-      setTab={setTab}
+      setTab={(next) => {
+        if (next === "meals") setMealFilter(MEALS_DECIDE_FILTER);
+        setTab(next);
+      }}
       profile={{ name: "Pat" }}
       macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
       totals={{ cal: 1400, p: 90, c: 120, f: 45 }}

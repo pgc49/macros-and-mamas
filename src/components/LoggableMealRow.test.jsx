@@ -87,4 +87,23 @@ describe("LoggableMealRow slot draft", () => {
     }));
   });
 
+  it("does not persist a controlled draft slot when saving ingredients", () => {
+    const onSaveIngredients = vi.fn(async (meal) => meal);
+    const onSlotDraftChange = vi.fn();
+    renderRow({
+      slotValue: "dinner",
+      onSlotDraftChange,
+      onSaveIngredients,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Recipe" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save recipe note" }));
+
+    expect(onSaveIngredients).toHaveBeenCalledWith(expect.objectContaining({
+      ingredients: "6 oz steak\n2 tortillas",
+      slot: "lunch",
+    }));
+    expect(onSlotDraftChange).not.toHaveBeenCalled();
+  });
+
 });

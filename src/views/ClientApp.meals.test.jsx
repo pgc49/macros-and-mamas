@@ -95,6 +95,11 @@ function pressedSlot(mealId) {
   return row?.querySelector("[aria-pressed='true']")?.textContent.trim() || "";
 }
 
+function pendingSlotsFromDom() {
+  const el = document.querySelector("[data-pending-slots]");
+  return JSON.parse(el?.getAttribute("data-pending-slots") || "{}");
+}
+
 describe("Meals tab search filter", { timeout: 15_000 }, () => {
   it("opens on Help me decide with library chips, not a fifth Decide chip", () => {
     const onOpenDecide = vi.fn();
@@ -264,7 +269,10 @@ describe("Meals tab search filter", { timeout: 15_000 }, () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Snack" })[1]);
     fireEvent.click(screen.getAllByRole("button", { name: "Lunch" })[2]);
     expect(screen.getByText("3 meal slots changed")).toBeTruthy();
-    expect(document.querySelector("[data-my-meals-save-all]").style.bottom).toBe("0px");
+    const saveAll = document.querySelector("[data-my-meals-save-all]");
+    expect(saveAll.style.position).toBe("fixed");
+    expect(saveAll.parentElement).toBe(document.body);
+    expect(document.querySelector("[data-shell-content] [data-my-meals-save-all]")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Save all" }));
     await vi.waitFor(() => {
@@ -405,9 +413,28 @@ describe("Meals tab search filter", { timeout: 15_000 }, () => {
     });
 
     clickRowSlot("c-a", "Breakfast");
-    clickRowSlot("c-b", "Lunch");
-    clickRowSlot("c-c", "Dinner");
+    expect(pendingSlotsFromDom()).toEqual({ "id:c-a": "breakfast" });
+    expect(pressedSlot("c-a")).toBe("Breakfast");
+    expect(pressedSlot("c-b")).toBe("Snack");
+    expect(pressedSlot("c-c")).toBe("Snack");
+    expect(onSaveCustomMeal).not.toHaveBeenCalled();
 
+    clickRowSlot("c-b", "Lunch");
+    expect(pendingSlotsFromDom()).toEqual({
+      "id:c-a": "breakfast",
+      "id:c-b": "lunch",
+    });
+    expect(pressedSlot("c-a")).toBe("Breakfast");
+    expect(pressedSlot("c-b")).toBe("Lunch");
+    expect(pressedSlot("c-c")).toBe("Snack");
+    expect(onSaveCustomMeal).not.toHaveBeenCalled();
+
+    clickRowSlot("c-c", "Dinner");
+    expect(pendingSlotsFromDom()).toEqual({
+      "id:c-a": "breakfast",
+      "id:c-b": "lunch",
+      "id:c-c": "dinner",
+    });
     expect(pressedSlot("c-a")).toBe("Breakfast");
     expect(pressedSlot("c-b")).toBe("Lunch");
     expect(pressedSlot("c-c")).toBe("Dinner");
@@ -489,6 +516,72 @@ describe("Meals tab search filter", { timeout: 15_000 }, () => {
     expect(screen.getByRole("heading", { name: "All meals" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Meals" }));
     expect(screen.getByRole("heading", { name: "Help me decide" })).toBeTruthy();
+  });
+
+  it("shows Help me decide the same paint when Meals is entered with leftover All meals", () => {
+    function Harness() {
+      const [tab, setTab] = useState("today");
+      const mealFilter = "All meals";
+      const setMealFilter = vi.fn();
+      return (
+        <MemoryRouter>
+          <ClientApp
+            tab={tab}
+            setTab={setTab}
+            profile={{ name: "Pat" }}
+            macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
+            totals={{ p: 0, c: 0, f: 0, cal: 0 }}
+            waterOz={80}
+            estimateBusy={false}
+            estimate={null}
+            analyzePhoto={noop}
+            analyzeText={noop}
+            confirmEstimate={noop}
+            discardEstimate={noop}
+            logManualMeal={noop}
+            logRecipe={noop}
+            todayLog={{ date: "2026-08-30", entries: [] }}
+            deleteMealEntry={noop}
+            updateMealEntry={noop}
+            mealLogDate="2026-08-30"
+            mealLogWeekStart="2026-08-24"
+            mealLogsByDate={{}}
+            selectMealLogDate={noop}
+            changeMealWeek={noop}
+            waterLogsByDate={{}}
+            waterBusy={false}
+            onAddWater={noop}
+            onUndoWater={noop}
+            onChangeBottleOz={noop}
+            viewWk={1}
+            setViewWk={noop}
+            curWk={1}
+            editPast={false}
+            setEditPast={noop}
+            checksByWeek={{}}
+            toggleCheck={noop}
+            adherenceFor={() => 0}
+            progWeekNum={() => 1}
+            earliestWk="2026-08-24"
+            weighins={[]}
+            logWeighin={noop}
+            deleteWeighin={noop}
+            weeklyRate={0}
+            trends={{ locked: true, items: [] }}
+            macroHistory={[]}
+            mealFilter={mealFilter}
+            setMealFilter={setMealFilter}
+            customMeals={[{ id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 }]}
+          />
+        </MemoryRouter>
+      );
+    }
+
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Meals" }));
+    expect(screen.getByRole("heading", { name: "Help me decide" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "All meals" })).toBeNull();
+    expect(screen.queryByText("Protein oatmeal")).toBeNull();
   });
 
   it("reloads onto Help me decide both times", () => {

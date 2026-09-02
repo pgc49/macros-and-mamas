@@ -8,6 +8,7 @@ import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
 import { resolveLogSlot } from "./utils/mealSlots";
+import { MEALS_DECIDE_FILTER } from "./utils/mealSearch";
 import {
   adherenceForWeek,
   buildMacroHistory,
@@ -1551,7 +1552,10 @@ export default function App() {
   const clientApp = (
     <ClientApp
       tab={tab}
-      setTab={setTab}
+      setTab={(next) => {
+        if (next === "meals") setMealFilter(MEALS_DECIDE_FILTER);
+        setTab(next);
+      }}
       profile={profile}
       macros={macros}
       totals={totals}
