@@ -367,7 +367,7 @@ export default function App() {
   const [viewWk, setViewWk] = useState(curWk);
   const [editPast, setEditPast] = useState(false);
   const [weighins, setWeighins] = useState([]);
-  const [mealFilter, setMealFilter] = useState("All meals");
+  const [mealFilter, setMealFilter] = useState("Decide");
   const [mealPlanMode, setMealPlanMode] = useState("default");
   const [publishedPlan, setPublishedPlan] = useState(null);
   const [weekPlanDays, setWeekPlanDays] = useState([]);

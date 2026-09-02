@@ -84,6 +84,10 @@ export const DECIDE_COPY = {
   kitchen: "From my kitchen",
   eatingOut: "Eating out",
   comingSoon: "That's next. For now, Pick for me uses your bank and what's left.",
+  searchToPlan: "Search meals to pencil in",
+  holdingRoom: "Holding room",
+  reservedHint: "Reserved from what's left",
+  decideThis: "Decide",
   usingPrefs: "Using your prefs",
   reasonFills: "Fills your protein, leaves",
   reasonFillsTail: "g fat.",
@@ -107,6 +111,13 @@ export function snackRoomCopy(count) {
 
 export function snackReserveCopy(count) {
   return Number(count) === 1 ? DECIDE_COPY.snackReserveOne : DECIDE_COPY.snackReserveMany;
+}
+
+export function capitalizeDecideLine(text) {
+  const s = String(text || "");
+  const i = s.search(/\S/);
+  if (i < 0) return s;
+  return s.slice(0, i) + s.charAt(i).toUpperCase() + s.slice(i + 1);
 }
 
 export function decideNextCopy(slot) {

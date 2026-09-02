@@ -1,7 +1,7 @@
 import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { RECIPES, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
-import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
+import { addDaysIso, fmtRange, formatLongDay, isTodayIso, localDateIso, weekdayKey, wkStartOf } from "../utils/dates";
 import { Shell, Card, Chip, RangeBand, rangeState } from "../components/ui";
 import { MealSlotFilterBar } from "../components/MealSlotFilterBar";
 import { formatRangeProgress } from "../utils/rangeProgress";
@@ -29,9 +29,12 @@ import {
   formatRoomLeft,
   roomLeftFromTotals,
 } from "../utils/eatingOutImpact";
+import { DecideSheet } from "../components/DecideSheet";
 import {
   filterMealsByQuery,
+  isMealsDecideFilter,
   isMealsTabSlotFilter,
+  MEALS_DECIDE_FILTER,
   MEALS_TAB_SECTIONS,
   MEALS_TAB_SLOT_FILTERS,
   mealMatchesQuery,
@@ -79,6 +82,8 @@ export function ClientApp({
   mealHistoryByDate = {},
   onPencilPlanMeal,
   onAteIt,
+  onOpenDecide,
+  decideFocusSlot = null,
   userId = null,
   unreadMessages = 0,
   onUnreadMessagesChange,
@@ -89,6 +94,7 @@ export function ClientApp({
   const [fitsRemainingOnly, setFitsRemainingOnly] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [myMealsAddOpen, setMyMealsAddOpen] = useState(false);
+  const [decideSlot, setDecideSlot] = useState(decideFocusSlot);
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
@@ -116,6 +122,13 @@ export function ClientApp({
       ? "My meals"
       : "All meals";
   const showMealsSearch = isBankFilter || mealFilter === "My meals" || mealFilter === "Pantry";
+  const onDecideHome = isMealsDecideFilter(mealFilter);
+  const openMealsDecide = ({ slot } = {}) => {
+    if (slot) setDecideSlot(slot);
+    setMealFilter(MEALS_DECIDE_FILTER);
+    setTab("meals");
+    onOpenDecide?.({ slot });
+  };
   const visibleBank = applyFitsFilter(bankSource.filter((m) => {
     if (mealFilter !== "All meals" && (m.cat || "") !== mealFilter) return false;
     return mealMatchesQuery(m, mealQuery);
@@ -293,11 +306,16 @@ export function ClientApp({
             mealHistoryByDate={mealHistoryByDate}
             onPencilPlanMeal={onPencilPlanMeal}
             onAteIt={onAteIt}
-            onOpenFoodPrefs={() => setTab("meals")}
-            onBrowseMeals={() => {
-              setFitsRemainingOnly(true);
+            onOpenFoodPrefs={() => {
+              setMealFilter("Food prefs");
               setTab("meals");
             }}
+            onBrowseMeals={() => {
+              setFitsRemainingOnly(true);
+              setMealFilter("All meals");
+              setTab("meals");
+            }}
+            onOpenDecide={openMealsDecide}
             busy={estimateBusy}
             estimate={estimate}
             onAnalyzePhoto={analyzePhoto}
@@ -409,30 +427,67 @@ export function ClientApp({
             </Card>
           ) : null}
 
-          {mealFilter !== "Plan" && mealFilter !== "Food prefs" && (
+          {onDecideHome ? (
             <>
               <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
-                {mealFilter === "My meals"
-                  ? "My meals"
-                  : mealFilter === "Pantry"
-                    ? "Pantry staples"
-                    : mealFilter === "All meals"
-                      ? "All meals"
-                      : "Recipe bank"}
+                Help me decide
               </h2>
               <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-                {mealFilter === "My meals"
-                  ? "Saved meals for one-tap logging — add a few, then hop to Today when you’re ready."
-                  : mealFilter === "Pantry"
-                    ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap Add to Today as many times as you need."
-                    : mealFilter === "All meals"
-                      ? "Search Callie’s recipes, or pick a slot. Tap Add to Today — you stay here so you can keep going."
-                      : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
+                Knows your prefs, your saved meals, your log.
               </p>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setMealFilter(MEALS_DECIDE_FILTER);
+                  setMealQuery("");
+                  setSlotFilterOpen(false);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  margin: "4px 0 8px",
+                  fontFamily: F,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: T.accentDeep,
+                  cursor: "pointer",
+                }}
+              >
+                Help me decide
+              </button>
+              {mealFilter !== "Plan" && mealFilter !== "Food prefs" && (
+                <>
+                  <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
+                    {mealFilter === "My meals"
+                      ? "My meals"
+                      : mealFilter === "Pantry"
+                        ? "Pantry staples"
+                        : mealFilter === "All meals"
+                          ? "All meals"
+                          : "Recipe bank"}
+                  </h2>
+                  <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
+                    {mealFilter === "My meals"
+                      ? "Saved meals for one-tap logging — add a few, then hop to Today when you’re ready."
+                      : mealFilter === "Pantry"
+                        ? "Callie’s cheat-sheet brands & staples — fruit, yogurt, bars, proteins. Tap Add to Today as many times as you need."
+                        : mealFilter === "All meals"
+                          ? "Search Callie’s recipes, or pick a slot. Tap Add to Today — you stay here so you can keep going."
+                          : "Browse Callie’s recipes by slot. Tap Add to Today for each meal — you stay here so you can keep going."}
+                  </p>
+                </>
+              )}
             </>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          <div
+            data-meals-sections
+            style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "nowrap", overflowX: "auto" }}
+          >
             {MEALS_TAB_SECTIONS.map((section) => {
               const active = mealFilter === section.id;
               const label = section.id === "Plan" && plannedCount
@@ -441,9 +496,10 @@ export function ClientApp({
               return (
                 <Chip
                   key={section.id}
+                  compact
                   active={active}
                   onClick={() => {
-                    setMealFilter(active ? "All meals" : section.id);
+                    setMealFilter(active ? MEALS_DECIDE_FILTER : section.id);
                     setMealQuery("");
                     setSlotFilterOpen(false);
                   }}
@@ -453,6 +509,35 @@ export function ClientApp({
               );
             })}
           </div>
+
+          {onDecideHome ? (
+            <DecideSheet
+              variant="page"
+              open
+              dateKey={mealLogDate || todayLog?.date || localDateIso()}
+              now={undefined}
+              macros={macros}
+              entries={todayLog?.entries || []}
+              plannedMeals={planMealsForLogDate}
+              recipes={personalized ? flatPersonalized : RECIPES}
+              customMeals={customMeals}
+              profile={profile}
+              mealHistoryByDate={mealHistoryByDate}
+              initialSlot={decideSlot}
+              onLog={async (meal) => {
+                const ok = await logRecipe?.(meal);
+                return ok;
+              }}
+              onLogged={() => setTab("today")}
+              onPencil={onPencilPlanMeal}
+              onClose={() => setTab("today")}
+              onBrowseMeals={() => {
+                setFitsRemainingOnly(true);
+                setMealFilter("All meals");
+              }}
+              onOpenPrefs={() => setMealFilter("Food prefs")}
+            />
+          ) : null}
 
           {showMealsSearch && (
             <>

@@ -1,4 +1,4 @@
-import { DECIDE_COPY, DECIDE_SLOT_LABEL, DECIDE_SLOT_PHRASE, snackReserveCopy } from "../content/decideVoice.js";
+import { capitalizeDecideLine, DECIDE_COPY, DECIDE_SLOT_LABEL, DECIDE_SLOT_PHRASE, snackReserveCopy } from "../content/decideVoice.js";
 import { REMAINING_OVER_SLACK, mealMacros } from "./eatingOutImpact.js";
 import { MEAL_SLOTS, guessSlotFromTime, normalizeSlot } from "./mealSlots.js";
 import { namesMatch, stripPortionSuffix } from "./decidePrefs.js";
@@ -47,6 +47,42 @@ export function defaultDecideSlot({ now = new Date(), loggedSlots = new Set() } 
   }
   if (!loggedSlots.has("snack")) return "snack";
   return guess;
+}
+
+/** Any planned meal for a slot counts as pencilled / taken. */
+export function pencilledSlotsFromPlan(plannedMeals) {
+  const set = new Set();
+  for (const m of plannedMeals || []) {
+    const slot = normalizeSlot(m?.slot);
+    if (slot) set.add(slot);
+  }
+  return set;
+}
+
+export function decideTakenSlots({ entries = [], plannedMeals = [], extraSlots = [] } = {}) {
+  const set = loggedSlotsFromEntries(entries);
+  for (const slot of pencilledSlotsFromPlan(plannedMeals)) set.add(slot);
+  for (const raw of extraSlots) {
+    const slot = normalizeSlot(raw);
+    if (slot) set.add(slot);
+  }
+  return set;
+}
+
+/**
+ * Next slot after a log or pencil. Pencilled slots count as done.
+ * Never returns the slot she just pencilled / logged when another is open.
+ */
+export function nextDecideSlot({
+  now = new Date(),
+  entries = [],
+  plannedMeals = [],
+  extraTaken = [],
+} = {}) {
+  const taken = decideTakenSlots({ entries, plannedMeals, extraSlots: extraTaken });
+  const next = defaultDecideSlot({ now, loggedSlots: taken });
+  if (!next || taken.has(next)) return null;
+  return next;
 }
 
 function median(values) {
@@ -452,39 +488,65 @@ export function budgetSentence(budget) {
   const snackReserved = Boolean(snackPiece && snackPiece.cal > 0);
   const snackName = snackReserveCopy(budget.snackCount ?? 1);
   const leaves = `${DECIDE_COPY.thatLeaves} ${fmtCal(budget.cal)} cal and ${fmtP(budget.pNeed)} for ${DECIDE_SLOT_LABEL[budget.slot] || budget.slot}.`;
+  let line;
   if (!later.length) {
     if (snackReserved && !snackPiece.meal) {
       const how = snackPiece.source === "usual" ? DECIDE_COPY.usualEat : DECIDE_COPY.normalShare;
-      return `${DECIDE_COPY.savingRoom} ${snackName} ${how} (about ${fmtCal(snackPiece.cal)} cal, ${fmtP(snackPiece.p)}). ${leaves}`;
+      line = `${DECIDE_COPY.savingRoom} ${snackName} ${how} (about ${fmtCal(snackPiece.cal)} cal, ${fmtP(snackPiece.p)}). ${leaves}`;
+    } else {
+      line = `${DECIDE_COPY.lastMealLead} ${DECIDE_COPY.lastMealRest}: about ${fmtCal(budget.cal)} cal, ${fmtP(budget.pNeed)} to hit range.`;
     }
-    return `${DECIDE_COPY.lastMealLead} ${DECIDE_COPY.lastMealRest}: about ${fmtCal(budget.cal)} cal, ${fmtP(budget.pNeed)} to hit range.`;
+  } else {
+    const first = later[0];
+    const piece = budget.reserve?.bySlot?.[first];
+    if (piece?.meal) {
+      const name = piece.meal.name || "Dinner";
+      const snackBit = snackReserved
+        ? ` ${DECIDE_COPY.savingRoom} ${snackName} too.`
+        : "";
+      line = `${DECIDE_SLOT_LABEL[first] || first} ${DECIDE_COPY.pencilledIn} (${name}, ${fmtCal(piece.cal)} cal, ${fmtP(piece.p)}).${snackBit} ${leaves}`;
+    } else {
+      const names = later.map((s) => DECIDE_SLOT_LABEL[s] || s);
+      if (snackReserved) names.push(snackName);
+      const laterLabel = joinReserveNames(names);
+      const laterSharePieces = later
+        .map((s) => budget.reserve?.bySlot?.[s])
+        .filter((p) => p && !p.meal);
+      const usedUsual = laterSharePieces.length > 0
+        && laterSharePieces.every((p) => p.source === "usual");
+      const how = usedUsual ? DECIDE_COPY.usualEat : DECIDE_COPY.normalShare;
+      const named = later.reduce((acc, s) => {
+        const p = budget.reserve?.bySlot?.[s];
+        if (!p) return acc;
+        return { cal: acc.cal + p.cal, p: acc.p + p.p };
+      }, { cal: 0, p: 0 });
+      const aboutCal = named.cal + (snackReserved ? snackPiece.cal : 0);
+      const aboutP = named.p + (snackReserved ? snackPiece.p : 0);
+      line = `${DECIDE_COPY.savingRoom} ${laterLabel} ${how} (about ${fmtCal(aboutCal)} cal, ${fmtP(aboutP)}). ${leaves}`;
+    }
   }
-  const first = later[0];
-  const piece = budget.reserve?.bySlot?.[first];
-  if (piece?.meal) {
-    const name = piece.meal.name || "Dinner";
-    const snackBit = snackReserved
-      ? ` ${DECIDE_COPY.savingRoom} ${snackName} too.`
-      : "";
-    return `${DECIDE_SLOT_LABEL[first] || first} ${DECIDE_COPY.pencilledIn} (${name}, ${fmtCal(piece.cal)} cal, ${fmtP(piece.p)}).${snackBit} ${leaves}`;
+  return capitalizeDecideLine(line);
+}
+
+/** Lunch/dinner share-reserves that are not yet a named pencil or a log. */
+export function decideReservePlaceholders({ plannedMeals = [], entries = [], budget } = {}) {
+  const logged = loggedSlotsFromEntries(entries);
+  const out = [];
+  for (const slot of ["lunch", "dinner"]) {
+    if (logged.has(slot)) continue;
+    if (planMealForSlot(plannedMeals, slot)) continue;
+    const piece = budget?.reserve?.bySlot?.[slot];
+    if (!piece || !(piece.cal > 0)) continue;
+    out.push({
+      slot,
+      cal: piece.cal,
+      p: piece.p,
+      c: piece.c,
+      f: piece.f,
+      source: piece.source,
+    });
   }
-  const names = later.map((s) => DECIDE_SLOT_LABEL[s] || s);
-  if (snackReserved) names.push(snackName);
-  const laterLabel = joinReserveNames(names);
-  const laterSharePieces = later
-    .map((s) => budget.reserve?.bySlot?.[s])
-    .filter((p) => p && !p.meal);
-  const usedUsual = laterSharePieces.length > 0
-    && laterSharePieces.every((p) => p.source === "usual");
-  const how = usedUsual ? DECIDE_COPY.usualEat : DECIDE_COPY.normalShare;
-  const named = later.reduce((acc, s) => {
-    const p = budget.reserve?.bySlot?.[s];
-    if (!p) return acc;
-    return { cal: acc.cal + p.cal, p: acc.p + p.p };
-  }, { cal: 0, p: 0 });
-  const aboutCal = named.cal + (snackReserved ? snackPiece.cal : 0);
-  const aboutP = named.p + (snackReserved ? snackPiece.p : 0);
-  return `${DECIDE_COPY.savingRoom} ${laterLabel} ${how} (about ${fmtCal(aboutCal)} cal, ${fmtP(aboutP)}). ${leaves}`;
+  return out;
 }
 
 export function decideBarHint({

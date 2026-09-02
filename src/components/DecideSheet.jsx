@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
-import { Btn } from "./ui";
+import { Btn, MealSearchInput } from "./ui";
 import { SlotChips } from "./SlotChips";
 import { ServingStepper } from "../utils/servings";
 import { DECIDE_COPY, DECIDE_SLOT_LABEL, decideNextCopy, knowLaterCopy, snackRoomCopy } from "../content/decideVoice";
+import { SLOT_CHIP } from "../utils/mealSlots";
 import { decideLogFromCard } from "../utils/decideScale";
 import { withRecipeDetail } from "../content/recipeDetails";
 import { RECIPES, PANTRY_ITEMS } from "../content/data";
@@ -23,10 +24,19 @@ import {
   isOverDay,
   laterSlotAsBudget,
   loggedSlotsFromEntries,
+  nextDecideSlot,
 } from "../utils/decideBudget";
 import { dislikeTokens, prefsLine, slotPrefText, tokenizeLikes } from "../utils/decidePrefs";
 import { EATING_OUT_FLAG, KITCHEN_FLAG, rankBankCards } from "../utils/decideRank";
-import { clearDecideSession, decideTrack, loadDecideSession, saveDecideSession } from "../lib/decideEvents";
+import { filterMealsByQuery } from "../utils/mealSearch";
+import {
+  clearDecideSession,
+  decideTrack,
+  loadDecideSession,
+  loadDecideSnackCount,
+  saveDecideSession,
+  saveDecideSnackCount,
+} from "../lib/decideEvents";
 
 function historyNames(mealHistoryByDate, { slot, sinceIso, dates } = {}) {
   const any = [];
@@ -206,7 +216,11 @@ function SnackRoomStepper({ count, onChange, piece }) {
           type="button"
           aria-label="Fewer snacks"
           disabled={count <= 0}
-          onClick={() => onChange(count - 1)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onChange(-1);
+          }}
           style={stepBtn("less", count <= 0)}
         >
           −
@@ -218,7 +232,11 @@ function SnackRoomStepper({ count, onChange, piece }) {
           type="button"
           aria-label="More snacks"
           disabled={count >= 4}
-          onClick={() => onChange(count + 1)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onChange(1);
+          }}
           style={stepBtn("more", count >= 4)}
         >
           +
@@ -245,10 +263,14 @@ export function DecideSheet({
   onPencil,
   onBrowseMeals,
   onOpenPrefs,
+  onLogged,
   entry = "bar",
+  variant = "sheet",
+  initialSlot,
 }) {
   const openedAt = useRef(Date.now());
-  const [slot, setSlot] = useState(() => defaultDecideSlot({
+  const page = variant === "page";
+  const [slot, setSlot] = useState(() => initialSlot || defaultDecideSlot({
     now,
     loggedSlots: loggedSlotsFromEntries(entries),
   }));
@@ -262,9 +284,12 @@ export function DecideSheet({
   const [offset, setOffset] = useState(0);
   const [logging, setLogging] = useState(false);
   const [refineText, setRefineText] = useState("");
-  const [snackCount, setSnackCount] = useState(1);
+  const [planQuery, setPlanQuery] = useState("");
+  const [snackCount, setSnackCount] = useState(() => loadDecideSnackCount(dateKey));
   const [afterMove, setAfterMove] = useState(null);
   const refines = useRef(0);
+  const snackLock = useRef(0);
+  const lastFocusSlot = useRef(initialSlot);
 
   const bands = useMemo(() => bandsFromMacros(macros), [macros]);
   const totals = useMemo(() => (entries || []).reduce((a, e) => ({
@@ -365,9 +390,23 @@ export function DecideSheet({
   }, [laterBudget, bankMeals, customMeals, pantryItems, profile, laterSlot, dislikes]);
 
   useEffect(() => {
+    if (!initialSlot || initialSlot === lastFocusSlot.current) return;
+    lastFocusSlot.current = initialSlot;
+    setSlot(initialSlot);
+    setLevel("list");
+    setDetail(null);
+    setPencilOpen(false);
+    setAfterMove(null);
+    setPlanQuery("");
+  }, [initialSlot]);
+
+  useEffect(() => {
     if (!open) return;
     const saved = loadDecideSession(dateKey, slot);
     if (saved?.mode) setMode(saved.mode);
+    // Restore snack room from the day cache — never reset to 0/1 on refine remount.
+    const kept = loadDecideSnackCount(dateKey, snackCount);
+    if (kept !== snackCount) setSnackCount(kept);
     openedAt.current = Date.now();
     decideTrack("decide_open", {
       slot,
@@ -423,6 +462,13 @@ export function DecideSheet({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open]);
 
+  const searchHits = useMemo(() => {
+    const q = String(planQuery || "").trim();
+    if (!q) return [];
+    const pool = [...bankMeals, ...(customMeals || [])];
+    return filterMealsByQuery(pool, q).slice(0, 12);
+  }, [planQuery, bankMeals, customMeals]);
+
   if (!open || !budget) return null;
 
   const changeSlot = (next) => {
@@ -434,6 +480,18 @@ export function DecideSheet({
     setPrefer(null);
     setOffset(0);
     setAfterMove(null);
+    setPlanQuery("");
+  };
+
+  const stepSnack = (delta) => {
+    const nowMs = Date.now();
+    if (nowMs - snackLock.current < 280) return;
+    snackLock.current = nowMs;
+    setSnackCount((n) => {
+      const next = Math.max(0, Math.min(4, n + delta));
+      saveDecideSnackCount(dateKey, next);
+      return next;
+    });
   };
 
   const logCard = async (card, { fromDetail = false, servings } = {}) => {
@@ -456,16 +514,24 @@ export function DecideSheet({
         secondsOpen: Math.round((Date.now() - openedAt.current) / 1000),
       });
       clearDecideSession(dateKey, slot);
-      const nextLogged = new Set(loggedSlots);
-      nextLogged.add(slot);
-      const nextSlot = defaultDecideSlot({ now, loggedSlots: nextLogged });
-      setSlot(nextSlot);
+      const nextSlot = nextDecideSlot({
+        now,
+        entries,
+        plannedMeals,
+        extraTaken: [slot],
+      });
       setLevel("list");
       setDetail(null);
       setPencilOpen(false);
       setSkipNames([]);
       setOffset(0);
-      setAfterMove({ kind: "logged", nextSlot });
+      setPlanQuery("");
+      if (page) {
+        onLogged?.({ slot, nextSlot });
+        return;
+      }
+      if (nextSlot && nextSlot !== slot) setSlot(nextSlot);
+      setAfterMove(nextSlot && nextSlot !== slot ? { kind: "logged", nextSlot } : null);
     } finally {
       setLogging(false);
     }
@@ -477,12 +543,14 @@ export function DecideSheet({
     setPencilOpen(false);
     setLevel("list");
     setDetail(null);
-    const pencilledLogged = new Set(loggedSlots);
-    if (forSlot === slot) pencilledLogged.add(slot);
-    const nextSlot = forSlot !== slot
-      ? forSlot
-      : defaultDecideSlot({ now, loggedSlots: pencilledLogged });
-    setAfterMove({ kind: "pencilled", nextSlot });
+    setPlanQuery("");
+    const nextSlot = nextDecideSlot({
+      now,
+      entries,
+      plannedMeals,
+      extraTaken: [forSlot],
+    });
+    setAfterMove(nextSlot && nextSlot !== forSlot && nextSlot !== slot ? { kind: "pencilled", nextSlot } : null);
   };
 
   const openCard = (card) => {
@@ -514,10 +582,16 @@ export function DecideSheet({
     ? mealFitsRemaining(detailScaled, budgetAsRemaining(budget))
     : false;
 
+  const searching = Boolean(String(planQuery || "").trim());
+
   return (
     <div
-      data-decide-sheet="open"
-      style={{
+      data-decide-sheet={page ? "page" : "open"}
+      style={page ? {
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+      } : {
         position: "fixed",
         inset: 0,
         zIndex: 80,
@@ -527,22 +601,30 @@ export function DecideSheet({
         overflow: "hidden",
       }}
     >
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={dismiss}
-        style={{
-          border: "none",
-          background: "rgba(51,39,46,0.35)",
-          flex: 1,
-          cursor: "pointer",
-        }}
-      />
+      {page ? null : (
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={dismiss}
+          style={{
+            border: "none",
+            background: "rgba(51,39,46,0.35)",
+            flex: 1,
+            cursor: "pointer",
+          }}
+        />
+      )}
       <div
-        role="dialog"
+        role={page ? "region" : "dialog"}
         aria-label={DECIDE_COPY.title}
         onMouseDown={(e) => e.stopPropagation()}
-        style={{
+        style={page ? {
+          minHeight: 0,
+          background: "transparent",
+          padding: 0,
+          display: "flex",
+          flexDirection: "column",
+        } : {
           height: "90vh",
           maxHeight: "90vh",
           minHeight: 0,
@@ -558,7 +640,9 @@ export function DecideSheet({
           zIndex: 1,
         }}
       >
-        <div style={{ width: 40, height: 5, borderRadius: 3, background: T.track, margin: "2px auto 10px", flexShrink: 0 }} />
+        {page ? null : (
+          <div style={{ width: 40, height: 5, borderRadius: 3, background: T.track, margin: "2px auto 10px", flexShrink: 0 }} />
+        )}
         {level === "detail" && detail ? (
           <div style={{ overflow: "auto", flex: 1, minHeight: 0, paddingBottom: 18 }}>
             <button
@@ -609,12 +693,18 @@ export function DecideSheet({
         ) : (
           <>
             <div style={{ flexShrink: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
-              <h3 style={{ fontFamily: FD, fontWeight: 400, fontSize: 24, margin: 0 }}>{DECIDE_COPY.title}</h3>
-              <div style={{ fontSize: 11, color: T.inkSoft, textAlign: "right", maxWidth: 140, lineHeight: 1.3 }}>
+            {page ? (
+              <div style={{ fontSize: 12, color: T.inkSoft, lineHeight: 1.35, marginBottom: 2 }}>
                 {DECIDE_COPY.headerKnows}
               </div>
-            </div>
+            ) : (
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                <h3 style={{ fontFamily: FD, fontWeight: 400, fontSize: 24, margin: 0 }}>{DECIDE_COPY.title}</h3>
+                <div style={{ fontSize: 11, color: T.inkSoft, textAlign: "right", maxWidth: 140, lineHeight: 1.3 }}>
+                  {DECIDE_COPY.headerKnows}
+                </div>
+              </div>
+            )}
             <p style={{ fontFamily: F, fontSize: 14.5, lineHeight: 1.45, margin: "8px 0 0", color: T.ink }}>
               {coach.line1}
             </p>
@@ -664,7 +754,7 @@ export function DecideSheet({
                 >
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft }}>
                     {laterPiece?.meal
-                      ? `${DECIDE_SLOT_LABEL[laterSlot]}, ${DECIDE_COPY.pencilledBox}`
+                      ? `${SLOT_CHIP[laterSlot] || laterSlot}, ${DECIDE_COPY.pencilledBox}`
                       : `${DECIDE_COPY.savedFor} ${DECIDE_SLOT_LABEL[laterSlot]}`}
                   </div>
                   <div style={{ fontFamily: FD, fontSize: 20, marginTop: 2 }}>
@@ -689,7 +779,7 @@ export function DecideSheet({
             {slot !== "snack" ? (
               <SnackRoomStepper
                 count={snackCount}
-                onChange={setSnackCount}
+                onChange={stepSnack}
                 piece={budget.reserve?.bySlot?.snack}
               />
             ) : null}
@@ -775,6 +865,13 @@ export function DecideSheet({
                 </button>
               </div>
             ) : null}
+            <div data-decide-search style={{ marginTop: 10 }}>
+              <MealSearchInput
+                value={planQuery}
+                onChange={setPlanQuery}
+                placeholder={DECIDE_COPY.searchToPlan}
+              />
+            </div>
             {prefs ? (
               <button
                 type="button"
@@ -837,7 +934,66 @@ export function DecideSheet({
               data-decide-sheet-scroll
               style={{ overflow: "auto", flex: 1, minHeight: 0, marginTop: 10, display: "flex", flexDirection: "column", gap: 8, paddingBottom: 12 }}
             >
-              {mode !== "pick" && ((mode === "kitchen" && !KITCHEN_FLAG) || (mode === "out" && !EATING_OUT_FLAG)) ? (
+              {searching ? (
+                searchHits.length ? searchHits.map((meal) => (
+                  <div
+                    key={meal.id || meal.name}
+                    data-decide-search-row={meal.name}
+                    style={{
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 16,
+                      padding: "10px 12px",
+                      background: "#FFFCFD",
+                    }}
+                  >
+                    <div style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>{meal.name}</div>
+                    <div style={{ fontSize: 11.5, color: T.inkSoft, fontWeight: 600, marginTop: 4 }}>
+                      {Math.round(meal.cal || 0)} cal · {macrosLine(meal.p, meal.c, meal.f)}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => pencilCard(meal, slot)}
+                        style={{
+                          fontFamily: F,
+                          fontWeight: 700,
+                          fontSize: 12.5,
+                          color: "#fff",
+                          background: T.accent,
+                          border: "none",
+                          borderRadius: 999,
+                          padding: "7px 12px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {DECIDE_COPY.pencilIn}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => logCard(meal)}
+                        disabled={logging}
+                        style={{
+                          fontFamily: F,
+                          fontWeight: 700,
+                          fontSize: 12.5,
+                          color: T.accentDeep,
+                          background: T.accentSoft,
+                          border: "none",
+                          borderRadius: 999,
+                          padding: "7px 12px",
+                          cursor: logging ? "default" : "pointer",
+                        }}
+                      >
+                        {DECIDE_COPY.logIt}
+                      </button>
+                    </div>
+                  </div>
+                )) : (
+                  <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, padding: "8px 2px" }}>
+                    No meals match “{planQuery.trim()}”.
+                  </div>
+                )
+              ) : mode !== "pick" && ((mode === "kitchen" && !KITCHEN_FLAG) || (mode === "out" && !EATING_OUT_FLAG)) ? (
                 <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, padding: "8px 2px" }}>
                   {DECIDE_COPY.comingSoon}
                 </div>
@@ -864,7 +1020,7 @@ export function DecideSheet({
                 zIndex: 2,
               }}
             >
-              {mode === "pick" ? (
+              {mode === "pick" && !searching ? (
                 <div data-decide-refine style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                   {[
                     ["none", DECIDE_COPY.noneOfThese],

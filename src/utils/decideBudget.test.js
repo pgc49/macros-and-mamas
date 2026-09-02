@@ -6,10 +6,12 @@ import {
   budgetSentence,
   coachRead,
   computeSlotBudget,
+  decideReservePlaceholders,
   defaultDecideSlot,
   deriveMealShares,
   isOverDay,
   laterSlotsAfter,
+  nextDecideSlot,
   remainingForDecide,
   unmatchedDecidePencils,
 } from "./decideBudget.js";
@@ -186,7 +188,7 @@ describe("12:40 leftover lunch budget", () => {
     expect(pencilled.reserve.bySlot.dinner.cal).toBe(720);
     expect(pencilled.cal).toBeCloseTo(123, 0);
     expect(pencilled.pNeed).toBe(0);
-    expect(budgetSentence(pencilled)).toMatch(/pencilled in/);
+    expect(budgetSentence(pencilled)).toMatch(/^Dinner is pencilled in/);
     expect(budgetSentence(pencilled)).toMatch(/Chicken and rice bowl/);
   });
 
@@ -206,6 +208,62 @@ describe("12:40 leftover lunch budget", () => {
     });
     expect(usual.reserve.bySlot.dinner.source).toBe("usual");
     expect(budgetSentence(usual)).toMatch(DECIDE_COPY.usualEat);
+  });
+});
+
+describe("nextDecideSlot", () => {
+  const now = new Date(2026, 8, 2, 12, 40);
+
+  it("does not offer the slot she just pencilled", () => {
+    const next = nextDecideSlot({
+      now,
+      entries: [{ slot: "breakfast" }],
+      plannedMeals: [],
+      extraTaken: ["dinner"],
+    });
+    expect(next).not.toBe("dinner");
+    expect(next).toBe("lunch");
+  });
+
+  it("treats pencilled slots like logged when picking next", () => {
+    const next = nextDecideSlot({
+      now,
+      entries: [{ slot: "breakfast" }],
+      plannedMeals: [{ slot: "lunch", via: "decide", name: "Salad" }],
+      extraTaken: ["lunch"],
+    });
+    expect(next).toBe("dinner");
+  });
+});
+
+describe("decideReservePlaceholders", () => {
+  it("shows lunch and dinner holds when those slots are reserved and empty", () => {
+    const budget = computeSlotBudget({
+      totals: { cal: 0, p: 0, c: 0, f: 0 },
+      bands: BANDS,
+      slot: "breakfast",
+      shares: DEFAULT_MEAL_SHARES,
+      loggedSlots: new Set(),
+    });
+    const holds = decideReservePlaceholders({ plannedMeals: [], entries: [], budget });
+    expect(holds.map((h) => h.slot)).toEqual(["lunch", "dinner"]);
+    expect(holds[0].cal).toBeGreaterThan(0);
+  });
+
+  it("hides a hold once that slot is pencilled", () => {
+    const budget = computeSlotBudget({
+      totals: BREAKFAST,
+      bands: BANDS,
+      slot: "lunch",
+      shares: DEFAULT_MEAL_SHARES,
+      loggedSlots: new Set(["breakfast"]),
+      plannedMeals: [{ slot: "dinner", via: "decide", name: "Tacos", cal: 400, p: 40, c: 30, f: 10 }],
+    });
+    expect(decideReservePlaceholders({
+      plannedMeals: [{ slot: "dinner", via: "decide", name: "Tacos" }],
+      entries: [{ slot: "breakfast" }],
+      budget,
+    })).toEqual([]);
   });
 });
 

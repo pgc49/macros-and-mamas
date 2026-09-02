@@ -7,8 +7,10 @@ import { DECIDE_COPY, decideNextCopy, knowLaterCopy, snackRoomCopy } from "../co
 import { localDateIso } from "../utils/dates";
 import { writeDecidePencil } from "../utils/decidePencil";
 import { emptyWeekPlan } from "../utils/weekPlan";
+import { resetDecideSnackCounts } from "../lib/decideEvents";
 
 afterEach(() => {
+  resetDecideSnackCounts();
   cleanup();
 });
 
@@ -369,6 +371,99 @@ describe("Help me decide entry", () => {
     expect(screen.getByRole("button", { name: DECIDE_COPY.lighter })).toBeTruthy();
     expect(screen.getByRole("button", { name: DECIDE_COPY.moreProtein })).toBeTruthy();
     expect(screen.getByPlaceholderText("Something else")).toBeTruthy();
+  });
+
+  it("does not offer Decide dinner next after pencilling dinner", async () => {
+    const onPencilPlanMeal = vi.fn(async () => true);
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 12, 40)}
+        profile={{ prefL: "chicken", prefD: "tacos", foodAvoids: "" }}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+        onPencilPlanMeal={onPencilPlanMeal}
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    fireEvent.click(screen.getByText(knowLaterCopy("dinner")));
+    const pencils = screen.getAllByRole("button", { name: DECIDE_COPY.pencilIn });
+    fireEvent.click(pencils[pencils.length - 1]);
+    expect(onPencilPlanMeal).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: decideNextCopy("dinner") })).toBeNull();
+  });
+
+  it("steps snack room once when + fires twice", () => {
+    renderToday();
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    const more = screen.getByRole("button", { name: "More snacks" });
+    fireEvent.click(more);
+    fireEvent.click(more);
+    expect(document.querySelector("[data-snack-room-count]")?.textContent).toBe("2");
+  });
+
+  it("keeps snack room through a Lighter refine", () => {
+    renderToday();
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    fireEvent.click(screen.getByRole("button", { name: "More snacks" }));
+    expect(document.querySelector("[data-snack-room-count]")?.textContent).toBe("2");
+    const snackCal = document.querySelector("[data-snack-room]").textContent;
+    fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.lighter }));
+    expect(document.querySelector("[data-snack-room-count]")?.textContent).toBe("2");
+    expect(document.querySelector("[data-snack-room]").textContent).toBe(snackCal);
+    expect(document.querySelector("[data-snack-room]").textContent).not.toMatch(/^0 cal|[\s]0 cal/);
+  });
+
+  it("pencils a search hit into the current slot", async () => {
+    const onPencilPlanMeal = vi.fn(async () => true);
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 12, 40)}
+        profile={{ prefL: "chicken", foodAvoids: "" }}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+        onPencilPlanMeal={onPencilPlanMeal}
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    fireEvent.change(screen.getByLabelText(DECIDE_COPY.searchToPlan), {
+      target: { value: "oatmeal" },
+    });
+    expect(document.querySelector("[data-decide-search-row]")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: DECIDE_COPY.pencilIn })[0]);
+    expect(onPencilPlanMeal).toHaveBeenCalled();
+    expect(onPencilPlanMeal.mock.calls[0][1]).toBe("lunch");
+  });
+
+  it("shows a reserved dinner hold on Today's log strip", () => {
+    renderToday();
+    expect(document.querySelector("[data-decide-hold-row='dinner']")).toBeTruthy();
+    expect(screen.getByText(DECIDE_COPY.holdingRoom)).toBeTruthy();
   });
 
   it("offers Decide dinner next after Log it so the sheet does not dead-end", async () => {

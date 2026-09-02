@@ -34,6 +34,61 @@ export function saveDecideSession(dateKey, slot, state) {
   }
 }
 
+const snackMem = new Map();
+
+function snackKey(dateKey) {
+  return `mm_decide_snack_v1:${dateKey}`;
+}
+
+function clampSnackCount(n, fallback = 1) {
+  const count = Math.round(Number(n));
+  if (!Number.isFinite(count)) return fallback;
+  return Math.max(0, Math.min(4, count));
+}
+
+/** Day-level snack room. Survives refine remounts; not reset per slot. */
+export function loadDecideSnackCount(dateKey, fallback = 1) {
+  if (!dateKey) return fallback;
+  if (snackMem.has(dateKey)) return snackMem.get(dateKey);
+  if (typeof sessionStorage === "undefined") return fallback;
+  try {
+    const raw = sessionStorage.getItem(snackKey(dateKey));
+    if (raw == null) return fallback;
+    const n = clampSnackCount(raw, fallback);
+    snackMem.set(dateKey, n);
+    return n;
+  } catch {
+    return fallback;
+  }
+}
+
+export function resetDecideSnackCounts() {
+  snackMem.clear();
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    const keys = [];
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const k = sessionStorage.key(i);
+      if (k && k.startsWith("mm_decide_snack_v1:")) keys.push(k);
+    }
+    keys.forEach((k) => sessionStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function saveDecideSnackCount(dateKey, count) {
+  if (!dateKey) return;
+  const n = clampSnackCount(count, 1);
+  snackMem.set(dateKey, n);
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.setItem(snackKey(dateKey), String(n));
+  } catch {
+    /* quota */
+  }
+}
+
 export function clearDecideSession(dateKey, slot) {
   if (typeof sessionStorage === "undefined" || !dateKey) return;
   if (slot) {

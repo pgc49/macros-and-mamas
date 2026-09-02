@@ -38,6 +38,7 @@ import {
   coachRead,
   computeSlotBudget,
   decideBarHint,
+  decideReservePlaceholders,
   defaultDecideSlot,
   deriveMealShares,
   isOverDay,
@@ -167,6 +168,7 @@ export function MealLogCard({
   onAteIt,
   onOpenFoodPrefs,
   onBrowseMeals,
+  onOpenDecide,
   decideNow,
 }) {
   const [method, setMethod] = useState(initialMethod); // snap | describe | recipes | manual
@@ -724,7 +726,6 @@ export function MealLogCard({
   const slotBuckets = groupEntriesBySlot(entries, { logDate: date, todayIso: today });
   const hasAnyEntries = entries.length > 0;
   const decidePencils = onToday ? unmatchedDecidePencils(plannedMeals, entries) : [];
-  const showLogBody = hasAnyEntries || decidePencils.length > 0;
   const decideLogged = loggedSlotsFromEntries(entries);
   const decideBands = bandsFromMacros(macros);
   const decideShares = deriveMealShares(mealHistoryByDate);
@@ -739,6 +740,10 @@ export function MealLogCard({
       loggedSlots: decideLogged,
     }), decideBands)
     : null;
+  const decidePlaceholders = onToday
+    ? decideReservePlaceholders({ plannedMeals, entries, budget: decideBudget })
+    : [];
+  const showLogBody = hasAnyEntries || decidePencils.length > 0 || decidePlaceholders.length > 0;
   const showDecide = canOpenDecide({
     macros,
     remaining: remainingRoom,
@@ -758,7 +763,11 @@ export function MealLogCard({
     })
     : "";
 
-  const openDecide = (entry) => {
+  const openDecide = (entry, slot = decideSlotGuess) => {
+    if (onOpenDecide) {
+      onOpenDecide({ slot, entry });
+      return;
+    }
     setDecideEntry(entry);
     setDecideOpen(true);
   };
@@ -1670,7 +1679,8 @@ export function MealLogCard({
             {SLOT_SECTION_ORDER.map((slotKey) => {
               const list = slotBuckets[slotKey] || [];
               const pencils = decidePencils.filter((m) => normalizeSlot(m.slot) === slotKey);
-              if (!list.length && !pencils.length) return null;
+              const holds = decidePlaceholders.filter((p) => p.slot === slotKey);
+              if (!list.length && !pencils.length && !holds.length) return null;
               return (
                 <div key={slotKey} style={{ marginBottom: 12 }}>
                   <div
@@ -1881,6 +1891,50 @@ export function MealLogCard({
                     </div>
                     );
                   })}
+                  {holds.map((hold) => (
+                    <button
+                      key={`hold-${hold.slot}`}
+                      type="button"
+                      data-decide-hold-row={hold.slot}
+                      onClick={() => openDecide("placeholder", hold.slot)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        width: "100%",
+                        padding: "9px 2px",
+                        border: "none",
+                        borderBottom: `1px dashed ${T.border}`,
+                        background: "none",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        fontFamily: F,
+                        opacity: 0.78,
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>
+                          {DECIDE_COPY.holdingRoom}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: T.inkSoft }}>{DECIDE_COPY.reservedHint}</div>
+                      </div>
+                      <div style={{ fontSize: 12, color: T.inkSoft, whiteSpace: "nowrap" }}>
+                        {Math.round(hold.cal)} cal · P {Math.round(hold.p)}g
+                      </div>
+                      <span style={{
+                        fontFamily: F,
+                        fontWeight: 700,
+                        fontSize: 12,
+                        color: T.accentDeep,
+                        background: T.accentSoft,
+                        borderRadius: 999,
+                        padding: "6px 10px",
+                      }}
+                      >
+                        {DECIDE_COPY.decideThis}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               );
             })}

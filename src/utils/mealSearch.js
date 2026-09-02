@@ -67,15 +67,24 @@ export function filterMealsByQuery(meals, query) {
 /** Today → My plan filter chips. My meals is the saved list; the rest match Meals-tab slots. */
 export const MEAL_SLOT_FILTERS = ["My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Treats"];
 
+/** Meals landing / home. Not a filter chip — Help me decide sits above the row. */
+export const MEALS_DECIDE_FILTER = "Decide";
+
 /**
- * Meals tab section chips. All meals is the default (no chip) — the filter's
- * All / Breakfast / … picks a slot. Internal `id` stays on mealFilter.
+ * Library chips under Help me decide. All meals is the library default.
+ * Internal `id` stays on mealFilter — Plan is the weekly planner (label Planner).
  */
 export const MEALS_TAB_SECTIONS = [
-  { id: "Plan", label: "Weekly Planner" },
-  { id: "Food prefs", label: "Food prefs" },
+  { id: "All meals", label: "All meals" },
   { id: "My meals", label: "My meals" },
+  { id: "Food prefs", label: "Food prefs" },
+  { id: "Plan", label: "Planner" },
 ];
+
+export function isMealsDecideFilter(filter) {
+  return String(filter || "").trim() === MEALS_DECIDE_FILTER;
+}
+
 export const MEALS_TAB_SLOT_FILTERS = ["Breakfast", "Lunch", "Dinner", "Snack", "Treats", "Pantry"];
 
 export function isMealsTabSlotFilter(filter) {

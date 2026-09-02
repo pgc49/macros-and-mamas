@@ -6,7 +6,7 @@ const noopAsync = async () => true;
 
 /** Local-only preview of Meals tab chips + search filter. */
 export function MealsTabPreview() {
-  const [mealFilter, setMealFilter] = useState("All meals");
+  const [mealFilter, setMealFilter] = useState("Decide");
   const [tab, setTab] = useState("meals");
 
   return (
