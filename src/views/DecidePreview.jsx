@@ -136,12 +136,14 @@ export function DecidePreview() {
     built.c = Number(meal.c) || 0;
     built.f = Number(meal.f) || 0;
     setPlanned((list) => {
-      const days = [{ day: planDayLabel(today), meals: list }];
+      const dayKey = planDayLabel(today);
+      const days = [{ day: dayKey, meals: list }];
       const existing = decidePencilForSlot(list, slot);
       const nextDays = existing
         ? replaceMealById(days, existing.id, built)
-        : addMealToDay(days, planDayLabel(today), built);
-      return nextDays[0]?.meals || [built];
+        : addMealToDay(days, dayKey, built);
+      const row = nextDays.find((d) => d.day === dayKey);
+      return Array.isArray(row?.meals) && row.meals.length ? row.meals : [built];
     });
     return true;
   };
