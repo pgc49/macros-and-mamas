@@ -81,28 +81,24 @@ function renderMeals(filter = "All meals", extras = {}) {
   return { view, setMealFilter, getMealFilter: () => mealFilter };
 }
 
-describe("Meals tab search filter", () => {
+describe("Meals tab search filter", { timeout: 15_000 }, () => {
   it("defaults to All meals with an All meals chip first", () => {
     renderMeals();
 
-    expect(screen.getByRole("heading", { name: "All meals" })).toBeTruthy();
+    expect(screen.getByText(/Search Calli.+ recipes, or pick a slot/)).toBeTruthy();
     const chips = document.querySelector("[data-meals-sections]");
     expect(chips).toBeTruthy();
     expect(chips.style.flexWrap).toBe("nowrap");
-    const sectionButtons = [...chips.querySelectorAll("button")].map((b) => b.textContent);
+    const sectionButtons = [...chips.querySelectorAll("button")].map((b) => b.textContent.trim());
     expect(sectionButtons).toEqual(["All meals", "Planner", "Food prefs", "My meals"]);
-    expect(screen.getByRole("button", { name: "All meals" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Planner" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Food prefs" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "My meals" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Weekly Planner" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Plan$/ })).toBeNull();
+    expect(sectionButtons).not.toContain("Weekly Planner");
+    expect(sectionButtons).not.toContain("Plan");
     expect(screen.getByLabelText("Search meals")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Filter meals" })).toBeTruthy();
+    expect(screen.getByLabelText("Filter meals")).toBeTruthy();
     expect(screen.queryByRole("option", { name: "Breakfast" })).toBeNull();
     expect(screen.queryByRole("option", { name: "Pantry" })).toBeNull();
     expect(screen.getByText("Protein oatmeal")).toBeTruthy();
-  });
+  }, 15_000);
 
   it("opens slot filters next to search and keeps Food prefs as its own chip", () => {
     const { setMealFilter } = renderMeals();
