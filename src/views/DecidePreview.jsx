@@ -4,9 +4,7 @@ import { T, F, FD } from "../theme/tokens";
 import { MealLogCard } from "../components/MealLogCard";
 import { RECIPES } from "../content/data";
 import { addDaysIso, localDateIso, planDayLabel } from "../utils/dates";
-import { addMealToDay, customMealToPlanMeal, recipeToPlanMeal, replaceMealById } from "../utils/weekPlan";
-import { decidePencilForSlot } from "../utils/decideBudget";
-import { decidePlanFieldsFromCard } from "../utils/decideScale";
+import { writeDecidePencil } from "../utils/decidePencil";
 import { namesMatch } from "../utils/decidePrefs";
 
 const MACROS = { cal: 1750, protein: 145, carbs: 180, fat: 60 };
@@ -118,24 +116,15 @@ export function DecidePreview() {
   };
 
   const onPencil = async (meal, slot, qtyOverride) => {
-    const fields = decidePlanFieldsFromCard(meal, qtyOverride);
-    const built = meal.source === "my"
-      ? customMealToPlanMeal({ ...meal, ...fields, serves: 1 }, slot)
-      : recipeToPlanMeal({ ...fields, name: fields.name, cat: slot, serves: 1 }, slot);
-    built.via = "decide";
-    built.qty = fields.qty;
-    built.servings = fields.qty;
-    built.cal = fields.cal;
-    built.p = fields.p;
-    built.c = fields.c;
-    built.f = fields.f;
     setPlanned((list) => {
       const dayKey = planDayLabel(today);
-      const days = [{ day: dayKey, meals: list }];
-      const existing = decidePencilForSlot(list, slot);
-      const nextDays = existing
-        ? replaceMealById(days, existing.id, built)
-        : addMealToDay(days, dayKey, built);
+      const { days: nextDays, meal: built } = writeDecidePencil(
+        [{ day: dayKey, meals: list }],
+        dayKey,
+        meal,
+        slot,
+        qtyOverride,
+      );
       const row = nextDays.find((d) => d.day === dayKey);
       return Array.isArray(row?.meals) && row.meals.length ? row.meals : [built];
     });

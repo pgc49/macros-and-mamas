@@ -8,14 +8,7 @@ import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
 import { normalizeSlot, resolveLogSlot } from "./utils/mealSlots";
-import {
-  addMealToDay,
-  customMealToPlanMeal,
-  recipeToPlanMeal,
-  replaceMealById,
-} from "./utils/weekPlan";
-import { decidePencilForSlot } from "./utils/decideBudget";
-import { decidePlanFieldsFromCard } from "./utils/decideScale";
+import { writeDecidePencil } from "./utils/decidePencil";
 import { namesMatch, stripPortionSuffix } from "./utils/decidePrefs";
 import {
   adherenceForWeek,
@@ -1241,29 +1234,7 @@ export default function App() {
         days = [];
       }
     }
-    const fields = decidePlanFieldsFromCard(meal, qtyOverride);
-    const base = {
-      ...fields,
-      cat: meal.source === "pantry" ? "pantry" : slot,
-      serves: 1,
-    };
-    const built = meal.source === "my"
-      ? customMealToPlanMeal({ ...meal, ...base }, slot)
-      : recipeToPlanMeal(base, slot);
-    built.via = "decide";
-    built.qty = fields.qty;
-    built.servings = fields.qty;
-    built.cal = fields.cal;
-    built.p = fields.p;
-    built.c = fields.c;
-    built.f = fields.f;
-    const existing = decidePencilForSlot(
-      (days || []).find((d) => d.day === dayKey)?.meals,
-      slot,
-    );
-    const next = existing
-      ? replaceMealById(days, existing.id, built)
-      : addMealToDay(days, dayKey, built);
+    const { days: next } = writeDecidePencil(days, dayKey, meal, slot, qtyOverride);
     if (ws === weekPlanWeekRef.current) {
       onWeekPlanChange(next, "manual");
     } else {
