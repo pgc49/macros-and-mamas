@@ -20,6 +20,7 @@ export function SlotChips({ value, onChange, compact = false, fill = false }) {
           <button
             key={s}
             type="button"
+            aria-pressed={active}
             onClick={(e) => {
               e.stopPropagation();
               onChange?.(s);

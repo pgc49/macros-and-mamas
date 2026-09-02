@@ -13,6 +13,7 @@ vi.mock("../auth/useAuth.jsx", () => ({
 }));
 
 import { ClientApp } from "./ClientApp";
+import { mergeSavedCustomMeal } from "../utils/customMeals";
 
 afterEach(() => {
   cleanup();
@@ -115,6 +116,9 @@ describe("Meals tab search filter", { timeout: 15_000 }, () => {
     expect(screen.queryByRole("option", { name: "Breakfast" })).toBeNull();
     expect(screen.queryByRole("option", { name: "Pantry" })).toBeNull();
     expect(screen.getByText("Protein oatmeal")).toBeTruthy();
+    expect(document.querySelector("[data-meal-recipe-card] [data-slot-chips]")).toBeNull();
+    expect(screen.queryByText("Meal slot")).toBeNull();
+    expect(screen.queryByText("Add to")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Help me decide" }));
     expect(setMealFilter).toHaveBeenCalledWith("Decide");
   }, 15_000);
@@ -160,6 +164,8 @@ describe("Meals tab search filter", { timeout: 15_000 }, () => {
     expect(screen.queryByRole("button", { name: "Pantry" })).toBeNull();
     expect(screen.getByRole("button", { name: "Planner" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "All meals" })).toBeTruthy();
+    expect(document.querySelector("[data-loggable-meal] [data-slot-chips]")).toBeNull();
+    expect(screen.queryByText("Meal slot")).toBeNull();
   });
 
   it("filters the bank to meals that fit remaining room from today's log", () => {
@@ -217,16 +223,14 @@ describe("Meals tab search filter", { timeout: 15_000 }, () => {
     await vi.waitFor(() => {
       expect(onSaveCustomMeal).toHaveBeenCalledTimes(2);
     });
-    expect(onSaveCustomMeal).toHaveBeenCalledWith(expect.objectContaining({
+    expect(onSaveCustomMeal).toHaveBeenCalledWith({
       id: "c-steak",
-      name: "Steak Tacos",
       slot: "dinner",
-    }), { keepOrder: true });
-    expect(onSaveCustomMeal).toHaveBeenCalledWith(expect.objectContaining({
+    }, { keepOrder: true, slotOnly: true });
+    expect(onSaveCustomMeal).toHaveBeenCalledWith({
       id: "c-yogurt",
-      name: "Yogurt bowl",
       slot: "dinner",
-    }), { keepOrder: true });
+    }, { keepOrder: true, slotOnly: true });
     await vi.waitFor(() => {
       expect(screen.getByText("Saved")).toBeTruthy();
     });
@@ -254,21 +258,97 @@ describe("Meals tab search filter", { timeout: 15_000 }, () => {
     await vi.waitFor(() => {
       expect(onSaveCustomMeal).toHaveBeenCalledTimes(3);
     });
-    expect(onSaveCustomMeal).toHaveBeenCalledWith(expect.objectContaining({
+    expect(onSaveCustomMeal).toHaveBeenCalledWith({
       id: "c-sheet",
-      name: "Sheet Pan",
       slot: "dinner",
-    }), { keepOrder: true });
-    expect(onSaveCustomMeal).toHaveBeenCalledWith(expect.objectContaining({
+    }, { keepOrder: true, slotOnly: true });
+    expect(onSaveCustomMeal).toHaveBeenCalledWith({
       id: "c-sausage",
-      name: "Sausage, egg + whites",
       slot: "snack",
-    }), { keepOrder: true });
-    expect(onSaveCustomMeal).toHaveBeenCalledWith(expect.objectContaining({
+    }, { keepOrder: true, slotOnly: true });
+    expect(onSaveCustomMeal).toHaveBeenCalledWith({
       id: "c-greek",
-      name: "Greek yogurt + berries",
       slot: "lunch",
-    }), { keepOrder: true });
+    }, { keepOrder: true, slotOnly: true });
+  });
+
+  it("keeps a mid-save slot flip dirty so Save all stays", async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const onSaveCustomMeal = vi.fn(async (meal) => {
+      await gate;
+      return meal;
+    });
+    renderMeals("My meals", {
+      customMeals: [{
+        id: "c-steak",
+        name: "Steak Tacos",
+        cal: 480,
+        p: 38,
+        c: 36,
+        f: 18,
+        slot: "lunch",
+      }],
+      onSaveCustomMeal,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Dinner" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Snack" }));
+    release();
+
+    await vi.waitFor(() => {
+      expect(onSaveCustomMeal).toHaveBeenCalledWith({
+        id: "c-steak",
+        slot: "dinner",
+      }, { keepOrder: true, slotOnly: true });
+    });
+    expect(screen.getByRole("button", { name: "Save all" })).toBeTruthy();
+    expect(screen.getByText("1 meal slot changed")).toBeTruthy();
+    expect(screen.queryByText("Saved")).toBeNull();
+    expect(screen.getByRole("button", { name: "Snack" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("reload keeps slots on the same meal ids twice even if list order shuffles", async () => {
+    let persisted = [
+      { id: "c-sheet", name: "Sheet Pan", cal: 500, p: 40, c: 20, f: 22, slot: "lunch" },
+      { id: "c-sausage", name: "Sausage, egg + whites", cal: 380, p: 32, c: 8, f: 22, slot: "breakfast" },
+      { id: "c-greek", name: "Greek yogurt + berries", cal: 220, p: 20, c: 18, f: 6, slot: "breakfast" },
+    ];
+    const onSaveCustomMeal = vi.fn(async (meal, opts) => {
+      const current = persisted.find((m) => m.id === meal.id);
+      const saved = { ...current, slot: meal.slot };
+      persisted = mergeSavedCustomMeal(persisted, saved, opts);
+      return saved;
+    });
+
+    renderMeals("My meals", { customMeals: persisted, onSaveCustomMeal });
+    fireEvent.click(screen.getAllByRole("button", { name: "Dinner" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Snack" })[1]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Lunch" })[2]);
+    fireEvent.click(screen.getByRole("button", { name: "Save all" }));
+    await vi.waitFor(() => {
+      expect(onSaveCustomMeal).toHaveBeenCalledTimes(3);
+    });
+
+    const expected = {
+      "c-sheet": "Dinner",
+      "c-sausage": "Snack",
+      "c-greek": "Lunch",
+    };
+    const assertReload = (meals) => {
+      cleanup();
+      renderMeals("My meals", { customMeals: meals });
+      for (const [id, slotLabel] of Object.entries(expected)) {
+        const row = document.querySelector(`[data-loggable-meal][data-meal-id="${id}"]`);
+        expect(row).toBeTruthy();
+        const pressed = row.querySelector("[aria-pressed='true']");
+        expect(pressed?.textContent).toBe(slotLabel);
+      }
+    };
+
+    assertReload([...persisted].reverse());
+    assertReload(persisted);
   });
 
   it("keeps pending slots when Save all fails", async () => {

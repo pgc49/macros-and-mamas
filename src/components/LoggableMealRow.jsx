@@ -98,6 +98,8 @@ export function LoggableMealRow({
 
   return (
     <div
+      data-loggable-meal=""
+      data-meal-id={meal.id || undefined}
       style={{
         border: `1.5px solid ${accent ? T.accent : T.border}`,
         borderRadius: compact ? 10 : 12,
@@ -181,7 +183,7 @@ export function LoggableMealRow({
       {showSlotPicker && !compact && (
         <div style={{ marginTop: 10 }}>
           <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginBottom: 6 }}>
-            Add to
+            Meal slot
           </div>
           <SlotChips value={slot} onChange={handleSlotChange} compact />
         </div>

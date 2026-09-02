@@ -62,6 +62,7 @@ import { signedOutJoinRedirect } from "./auth/quizSignupBounce";
 import { isAdminSignupLockedSurface } from "./auth/adminSignupLock";
 import { nextAuthSwitch, resolveSignInMode } from "./auth/signInMode";
 import { ageFromDateOfBirth } from "./db/db";
+import { mergeSavedCustomMeal } from "./utils/customMeals";
 
 /**
  * /signin entry: quiz Lock my spot carries ?from=quiz&email=.
@@ -1158,17 +1159,10 @@ export default function App() {
 
   const saveCustomMeal = async (meal, opts = {}) => {
     try {
-      const saved = await db.saveCustomMeal(meal);
-      setCustomMeals((list) => {
-        const same = (m) => (saved.id && m.id === saved.id) || m.name === saved.name;
-        const idx = list.findIndex(same);
-        if (opts.keepOrder && idx >= 0) {
-          const next = list.slice();
-          next[idx] = { ...list[idx], ...saved };
-          return next;
-        }
-        return [saved, ...list.filter((m) => !same(m))];
-      });
+      const saved = opts.slotOnly
+        ? await db.saveCustomMealSlot(meal.id, meal.slot)
+        : await db.saveCustomMeal(meal);
+      setCustomMeals((list) => mergeSavedCustomMeal(list, saved, opts));
       return saved;
     } catch (e) {
       console.error("saveCustomMeal failed", e);

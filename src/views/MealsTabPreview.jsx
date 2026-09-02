@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ClientApp } from "./ClientApp";
+import { mergeSavedCustomMeal } from "../utils/customMeals";
 
 const noop = () => {};
 const noopAsync = async () => true;
@@ -63,17 +64,10 @@ export function MealsTabPreview() {
       setMealFilter={setMealFilter}
       customMeals={customMeals}
       onSaveCustomMeal={async (meal, opts = {}) => {
-        const saved = { ...meal, id: meal.id || `c-${meal.name}` };
-        setCustomMeals((list) => {
-          const same = (m) => (saved.id && m.id === saved.id) || m.name === saved.name;
-          const idx = list.findIndex(same);
-          if (opts.keepOrder && idx >= 0) {
-            const next = list.slice();
-            next[idx] = { ...list[idx], ...saved };
-            return next;
-          }
-          return [saved, ...list.filter((m) => !same(m))];
-        });
+        const saved = opts.slotOnly
+          ? { ...customMeals.find((m) => m.id === meal.id), slot: meal.slot }
+          : { ...meal, id: meal.id || `c-${meal.name}` };
+        setCustomMeals((list) => mergeSavedCustomMeal(list, saved, opts));
         return saved;
       }}
       weekPlanDays={[]}

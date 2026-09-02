@@ -53,12 +53,24 @@ describe("LoggableMealRow slot draft", () => {
     expect(onSlotDraftChange).not.toHaveBeenCalled();
   });
 
-  it("keeps bank or pantry slot chips local", () => {
+  it("keeps My meals slot chips and labels them Meal slot, not Add to", () => {
     renderRow({});
 
+    expect(screen.getByText("Meal slot")).toBeTruthy();
+    expect(screen.queryByText("Add to")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Dinner" }));
 
-    expect(screen.getByRole("button", { name: "Dinner" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Dinner" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("hides slot chips on bank or pantry rows", () => {
+    renderRow({ showSlotPicker: false });
+
+    expect(screen.queryByRole("button", { name: "Breakfast" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Dinner" })).toBeNull();
+    expect(screen.queryByText("Meal slot")).toBeNull();
+    expect(screen.queryByText("Add to")).toBeNull();
+    expect(screen.getByRole("button", { name: "Add to Today" })).toBeTruthy();
   });
 
   it("includes the current slot when saving ingredients", () => {

@@ -41,11 +41,8 @@ import {
 } from "../utils/mealSearch";
 import { db } from "../db/db";
 import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
+import { customMealId, customMealKey, slotOnlySavePayload } from "../utils/customMeals";
 import { useState } from "react";
-
-function customMealKey(meal) {
-  return String(meal?.id || meal?.name || "").trim();
-}
 
 function customMealSavedSlot(meal) {
   return normalizeSlot(meal?.slot || meal?.cat);
@@ -165,16 +162,11 @@ export function ClientApp({
     });
   };
 
-  const persistCustomMealSlot = (meal, slot) => onSaveCustomMeal?.({
-    id: meal.id,
-    name: meal.name,
-    cal: meal.cal,
-    p: meal.p,
-    c: meal.c,
-    f: meal.f,
-    serves: meal.serves,
-    slot,
-  }, { keepOrder: true });
+  const persistCustomMealSlot = (meal, slot) => {
+    const payload = slotOnlySavePayload(meal, slot);
+    if (!payload) return null;
+    return onSaveCustomMeal?.(payload, { keepOrder: true, slotOnly: true });
+  };
 
   const saveAllMyMealSlots = async () => {
     if (saveAllBusy || !pendingSlotCount) return;
@@ -182,27 +174,35 @@ export function ClientApp({
     if (!entries.length) return;
     setSaveAllBusy(true);
     setSaveAllNote("");
-    const results = await Promise.all(entries.map(async ([key, slot]) => {
+    const confirmed = [];
+    let failed = false;
+    // Sequential + id-only so parallel name upserts cannot retag the wrong row.
+    for (const [key, slot] of entries) {
       const meal = customMeals.find((m) => customMealKey(m) === key);
-      if (!meal) return { key, ok: false };
+      if (!meal || !customMealId(meal)) {
+        failed = true;
+        continue;
+      }
       try {
         const saved = await persistCustomMealSlot(meal, slot);
-        return { key, ok: saved != null && saved !== false };
+        if (saved != null && saved !== false) confirmed.push({ key, slot });
+        else failed = true;
       } catch {
-        return { key, ok: false };
+        failed = true;
       }
-    }));
+    }
+    let remaining = 0;
     setPendingSlots((prev) => {
       const next = { ...prev };
-      for (const { key, ok } of results) {
-        if (ok) delete next[key];
+      for (const { key, slot } of confirmed) {
+        if (next[key] === slot) delete next[key];
       }
+      remaining = Object.keys(next).length;
       return next;
     });
-    const failed = results.some((r) => !r.ok);
     if (failed) {
       setSaveAllNote("Couldn't save some slots — try again");
-    } else {
+    } else if (remaining === 0) {
       setSaveAllNote("Saved");
       window.setTimeout(() => {
         setSaveAllNote((note) => (note === "Saved" ? "" : note));
@@ -815,6 +815,7 @@ export function ClientApp({
                   key={item.name}
                   meal={item}
                   via="recipe"
+                  showSlotPicker={false}
                   onLog={logRecipe}
                 />
               ))}
