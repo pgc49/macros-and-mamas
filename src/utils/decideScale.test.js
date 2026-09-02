@@ -28,7 +28,7 @@ describe("decideLogFromCard", () => {
 });
 
 describe("pencil → Ate it keeps the sheet portion", () => {
-  it("logs ~1.5× bank macros for a 1.5× ranked card", () => {
+  it("stores sheet-scaled macros at qty 1 so grey needs no remultiply", () => {
     const card = {
       name: "Salmon salad bowl",
       cal: 503,
@@ -38,13 +38,28 @@ describe("pencil → Ate it keeps the sheet portion", () => {
       servings: 1.5,
     };
     const fields = decidePlanFieldsFromCard(card);
-    expect(fields.qty).toBe(1.5);
-    expect(fields.servings).toBe(1.5);
-    expect(fields.cal).toBeCloseTo(335.333, 0);
-    expect(fields.p).toBeCloseTo(39.333, 0);
-    const shown = decideDisplayMacros(fields);
-    expect(shown.cal).toBeCloseTo(503, 0);
-    expect(shown.p).toBeCloseTo(59, 0);
+    expect(fields.qty).toBe(1);
+    expect(fields.servings).toBe(1);
+    expect(fields.cal).toBe(503);
+    expect(fields.p).toBe(59);
+    const shown = decideDisplayMacros({ ...fields, via: "decide" });
+    expect(shown.cal).toBe(503);
+    expect(shown.p).toBe(59);
+  });
+
+  it("decide grey ignores recipe serves / leftover servings", () => {
+    const shown = decideDisplayMacros({
+      via: "decide",
+      cal: 368,
+      p: 47,
+      c: 42,
+      f: 3,
+      qty: 1,
+      servings: 4,
+    });
+    expect(shown.cal).toBe(368);
+    expect(shown.p).toBe(47);
+    expect(shown.qty).toBe(1);
   });
 });
 

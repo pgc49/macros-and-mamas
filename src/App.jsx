@@ -8,7 +8,7 @@ import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
 import { normalizeSlot, resolveLogSlot } from "./utils/mealSlots";
-import { writeDecidePencil } from "./utils/decidePencil";
+import { removeDecidePencilMatchingLog, writeDecidePencil } from "./utils/decidePencil";
 import { namesMatch, stripPortionSuffix } from "./utils/decidePrefs";
 import {
   adherenceForWeek,
@@ -1187,10 +1187,17 @@ export default function App() {
     setWeekPlanSaving(true);
     try {
       const saved = await db.saveWeekPlan(days, source, ws);
+      const echoed = saved.days || days;
       // Only apply echo if still viewing that week
       if (weekPlanWeekRef.current === ws) {
-        setWeekPlanDays(saved.days || days);
+        setWeekPlanDays(echoed);
         setWeekPlanSource(saved.source || source || "manual");
+      }
+      const today = localDateIso();
+      const date = mealLogDate || today;
+      if (wkStartOf(date) === ws) {
+        const row = (echoed || []).find((d) => d.day === planDayLabel(date));
+        setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
       }
     } catch (e) {
       console.error("saveWeekPlan failed", e);
@@ -1426,10 +1433,40 @@ export default function App() {
 
   const deleteMealEntry = async (id) => {
     if (!id) return;
+    const date = mealLogDate || localDateIso();
+    const rows = (todayLog?.date === date ? todayLog.entries : mealLogsByDate?.[date]) || [];
+    const entry = rows.find((e) => e.id === id);
     try {
       await db.deleteMealLog(id);
-      const date = mealLogDate;
       syncEntryIntoWeek(date, (list) => list.filter((e) => e.id !== id));
+      if (entry?.via === "decide_bank" || entry?.via === "decide") {
+        const dayKey = planDayLabel(date);
+        const ws = wkStartOf(date);
+        let days;
+        if (ws === weekPlanWeekRef.current) {
+          days = weekPlanDays;
+        } else {
+          try {
+            const wp = await db.loadWeekPlan(ws);
+            days = Array.isArray(wp?.days) ? wp.days : [];
+          } catch (loadErr) {
+            console.warn("load week for decide pencil remove failed", loadErr);
+            days = [];
+          }
+        }
+        const next = removeDecidePencilMatchingLog(days, dayKey, entry);
+        if (next !== days) {
+          if (ws === weekPlanWeekRef.current) {
+            onWeekPlanChange(next, "manual");
+          } else {
+            await persistWeekPlan(next, "manual", ws);
+          }
+          if ((mealLogDate || date) === date) {
+            const row = (next || []).find((d) => d.day === dayKey);
+            setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
+          }
+        }
+      }
     } catch (e) {
       console.error("deleteMealLog failed", e);
     }

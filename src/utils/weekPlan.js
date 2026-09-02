@@ -235,7 +235,7 @@ export function recipeToPlanMeal(recipe, slotOverride = null) {
     p: Number(recipe.p) || 0,
     c: Number(recipe.c) || 0,
     f: Number(recipe.f) || 0,
-    servings: Number(recipe.serves) || 1,
+    servings: Number(recipe.servings ?? recipe.serves) || 1,
     qty: recipe.qty ?? 1,
     // Pantry staples are single line items — no recipe ingredients for grocery.
     ingredients: isPantry

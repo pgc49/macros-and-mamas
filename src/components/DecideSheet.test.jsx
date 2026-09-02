@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MealLogCard } from "./MealLogCard";
 import { DECIDE_COPY, knowLaterCopy } from "../content/decideVoice";
 import { localDateIso } from "../utils/dates";
+import { writeDecidePencil } from "../utils/decidePencil";
+import { emptyWeekPlan } from "../utils/weekPlan";
 
 afterEach(() => {
   cleanup();
@@ -193,6 +195,88 @@ describe("Help me decide entry", () => {
     expect(logged.cal).toBeGreaterThan(400);
     expect(logged.cal).toBeLessThan(1200);
     expect((logged.name.match(/×/g) || []).length).toBeLessThanOrEqual(1);
+  });
+
+  it("grey row and Ate it match writeDecidePencil 1.5× sheet totals", async () => {
+    const onAteIt = vi.fn(async () => true);
+    const { days } = writeDecidePencil(emptyWeekPlan(), "Wed", {
+      name: "Tuna salad lettuce wraps",
+      cal: 367.5,
+      p: 46.5,
+      c: 42,
+      f: 3,
+      servings: 1.5,
+    }, "lunch");
+    const planned = days.find((d) => d.day === "Wed")?.meals || [];
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 12, 40)}
+        plannedMeals={planned}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+        onAteIt={onAteIt}
+      />,
+    );
+    expect(screen.getByText(/368 cal · P 47g/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.ateIt }));
+    const payload = onAteIt.mock.calls[0][0];
+    expect(payload.cal).toBe(368);
+    expect(payload.p).toBe(47);
+  });
+
+  it("replace-path pencil still greys the 1.5× sheet totals", async () => {
+    const first = writeDecidePencil(emptyWeekPlan(), "Wed", {
+      name: "Tuna salad lettuce wraps",
+      cal: 245,
+      p: 31,
+      c: 28,
+      f: 2,
+      servings: 1,
+    }, "lunch");
+    const { days } = writeDecidePencil(first.days, "Wed", {
+      name: "Tuna salad lettuce wraps",
+      cal: 367.5,
+      p: 46.5,
+      c: 42,
+      f: 3,
+      servings: 1.5,
+    }, "lunch");
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 12, 40)}
+        plannedMeals={days.find((d) => d.day === "Wed")?.meals || []}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+      />,
+    );
+    expect(screen.getByText(/368 cal · P 47g/)).toBeTruthy();
+    expect(screen.queryByText(/245 cal · P 31g/)).toBeNull();
   });
 
   it("Ate it logs the 1.5× pencilled totals the sheet showed", async () => {

@@ -31,18 +31,21 @@ export function decideLogFromCard(card, qtyOverride) {
   };
 }
 
-/** 1× macros + qty for the week plan so grocery and scaledMealMacros stay honest. */
+/**
+ * Sheet-scaled macros + qty 1 for the week plan.
+ * Grey / Ate it must not remultiply. recipe.serves must not become qty.
+ */
 export function decidePlanFieldsFromCard(card, qtyOverride) {
-  const qty = rankedServings(card, qtyOverride);
+  const logged = decideLogFromCard(card, qtyOverride);
   const base = unscaleRankedCard(card);
   return {
-    name: base.name,
-    cal: base.cal,
-    p: base.p,
-    c: base.c,
-    f: base.f,
-    qty,
-    servings: qty,
+    name: stripPortionSuffix(card?.name || logged.name),
+    cal: logged.cal,
+    p: logged.p,
+    c: logged.c,
+    f: logged.f,
+    qty: 1,
+    servings: 1,
     desc: base.desc || "",
     ingredients: base.ingredients,
     steps: base.steps,
@@ -53,9 +56,11 @@ export function decidePlanFieldsFromCard(card, qtyOverride) {
   };
 }
 
-/** Grey row / Ate it totals. Prefer qty, then servings (recipe.serves must not win). */
+/** Grey row / Ate it. Decide pencils use qty only — never servings / recipe.serves. */
 export function decideDisplayMacros(planMeal) {
-  const qty = snapServings(planMeal?.qty ?? planMeal?.servings ?? 1);
+  const qty = planMeal?.via === "decide"
+    ? snapServings(planMeal?.qty ?? 1)
+    : snapServings(planMeal?.qty ?? planMeal?.servings ?? 1);
   const mul = (v) => Math.round((Number(v) || 0) * qty);
   return {
     cal: mul(planMeal?.cal),
