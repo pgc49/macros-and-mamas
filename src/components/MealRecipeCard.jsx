@@ -40,7 +40,6 @@ export function MealRecipeCard({
   showLog = true,
   logLabel = "Add to Today",
   pencilLabel = "Pencil in",
-  primaryAction = "log",
   via = "recipe",
   initialSlot,
   initialServings = 1,
@@ -79,14 +78,14 @@ export function MealRecipeCard({
     slot,
     fromPlanner: via === "recipe",
   }, servings);
-  const actionBtn = (kind) => {
+  const isPencilAction = /pencil/i.test(logLabel);
+  const pill = (kind, { ghost = false } = {}) => {
     const isLog = kind === "log";
     const phase = isLog ? logPhase : pencilPhase;
     const setPhase = isLog ? setLogPhase : setPencilPhase;
-    const primary = Boolean(onPencil) && primaryAction === kind;
-    const label = isLog
-      ? (phase === "idle" ? logLabel : phase === "busy" ? "Adding…" : "Added ✓")
-      : (phase === "idle" ? pencilLabel : phase === "busy" ? "Saving…" : "Pencilled ✓");
+    const idle = isLog ? logLabel : pencilLabel;
+    const busy = isLog && !isPencilAction ? "Adding…" : "Saving…";
+    const done = isLog && !isPencilAction ? "Added ✓" : "Pencilled ✓";
     const run = isLog ? onLog : onPencil;
     return (
       <button
@@ -116,22 +115,17 @@ export function MealRecipeCard({
           padding: "6px 12px",
           borderRadius: 999,
           border: `1.5px solid ${T.accent}`,
-          background: primary ? T.accent : T.accentSoft,
-          color: primary ? "#fff" : T.accentDeep,
+          background: ghost ? "transparent" : T.accentSoft,
+          color: T.accentDeep,
           cursor: phase === "busy" || phase === "done" ? "default" : "pointer",
           opacity: phase === "busy" ? 0.7 : 1,
         }}
       >
-        {label}
+        {phase === "idle" ? idle : phase === "busy" ? busy : done}
       </button>
     );
   };
-  const logBtn = (
-    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
-      {onPencil ? actionBtn("pencil") : null}
-      {showLog ? actionBtn("log") : null}
-    </div>
-  );
+  const logBtn = showLog ? pill("log") : null;
 
   return (
     <div
@@ -308,7 +302,10 @@ export function MealRecipeCard({
           </div>
 
           {showLog && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>{logBtn}</div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              {onPencil ? pill("pencil", { ghost: true }) : null}
+              {logBtn}
+            </div>
           )}
         </div>
       )}

@@ -29,7 +29,7 @@ import {
   slotLeftRead,
 } from "../utils/decideBudget";
 import { dislikeTokens, namesMatch, prefsLine, slotPrefText, tokenizeLikes } from "../utils/decidePrefs";
-import { EATING_OUT_FLAG, KITCHEN_FLAG, rankBankCards, sourceTag } from "../utils/decideRank";
+import { EATING_OUT_FLAG, KITCHEN_FLAG, rankBankCards } from "../utils/decideRank";
 import { allMealsSearchPool, filterMealsByQuery } from "../utils/mealSearch";
 import {
   clearDecideSession,
@@ -1217,7 +1217,7 @@ export function DecideSheet({
               ))}
             </div>
             ) : null}
-              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ marginTop: 12 }}>
               {searching ? (
                 searchHits.length ? searchHits.map((meal) => (
                   <div key={meal.id || meal.name} data-decide-search-row={meal.name}>
@@ -1225,12 +1225,8 @@ export function DecideSheet({
                       meal={decideRecipeMeal(meal)}
                       initialSlot={slot}
                       via="decide_bank"
-                      sourceLabel={sourceTag(meal.source || (meal.id ? "my" : "bank"))}
-                      logLabel={DECIDE_COPY.logIt}
-                      pencilLabel={DECIDE_COPY.pencilIn}
-                      primaryAction="pencil"
-                      onLog={(scaled) => logCard({ ...meal, kind: "meal" }, { scaled, servings: scaled.servingsLogged })}
-                      onPencil={(scaled) => pencilCard({
+                      logLabel={DECIDE_COPY.pencilIn}
+                      onLog={(scaled) => pencilCard({
                         ...meal,
                         source: meal.source || "bank",
                         servings: 1,
@@ -1254,10 +1250,8 @@ export function DecideSheet({
                     initialSlot={slot}
                     initialServings={featuredMeal.servings || 1}
                     via="decide_bank"
-                    sourceLabel={featuredMeal.tag || sourceTag(featuredMeal.source)}
                     logLabel={DECIDE_COPY.logIt}
                     pencilLabel={DECIDE_COPY.pencilIn}
-                    primaryAction="log"
                     onLog={(scaled) => logCard(featuredMeal, { scaled, servings: scaled.servingsLogged })}
                     onPencil={(scaled) => pencilCard(featuredMeal, scaled.slot || slot, scaled.servingsLogged)}
                   />
@@ -1279,10 +1273,8 @@ export function DecideSheet({
                       initialSlot={slot}
                       initialServings={card.servings || 1}
                       via="decide_bank"
-                      sourceLabel={card.tag || sourceTag(card.source)}
                       logLabel={DECIDE_COPY.logIt}
                       pencilLabel={DECIDE_COPY.pencilIn}
-                      primaryAction="log"
                       onLog={(scaled) => logCard(card, { scaled, servings: scaled.servingsLogged })}
                       onPencil={(scaled) => pencilCard(card, scaled.slot || slot, scaled.servingsLogged)}
                     />

@@ -465,10 +465,15 @@ describe("Help me decide entry", () => {
     expect(featured).toBeTruthy();
     expect(featured.querySelector("[data-meal-recipe-card]")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open recipe ▾" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: DECIDE_COPY.pencilIn })).toBeTruthy();
     expect(screen.getByRole("button", { name: DECIDE_COPY.logIt })).toBeTruthy();
-    expect(featured.querySelector("[data-slot-chips='fill']") || featured.querySelector("[data-slot-chips]")).toBeTruthy();
-    expect(featured.querySelector("[data-servings-hint]")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: DECIDE_COPY.pencilIn })).toBeNull();
+    expect(featured.querySelector("[data-slot-chips='fill']")).toBeTruthy();
+    expect(featured.querySelector("[data-servings-hint]")?.textContent).toMatch(/Servings to log/);
+    expect(featured.querySelector("[data-servings-hint]")?.textContent).toMatch(/recipe stays 1 serving/);
+    expect(featured.textContent).toMatch(/P \d+g · C \d+g · F \d+g/);
+    expect(featured.textContent).not.toMatch(/Callie's bank|My meals/);
+    fireEvent.click(screen.getByRole("button", { name: "Open recipe ▾" }));
+    expect(screen.getByRole("button", { name: DECIDE_COPY.pencilIn })).toBeTruthy();
     expect(screen.queryByText(DECIDE_COPY.seeRecipe)).toBeNull();
     expect(screen.queryByRole("button", { name: DECIDE_COPY.kitchen })).toBeNull();
     expect(screen.queryByRole("button", { name: DECIDE_COPY.eatingOut })).toBeNull();
@@ -564,6 +569,7 @@ describe("Help me decide entry", () => {
     fireEvent.click(document.querySelector("[data-decide-bar]"));
     expect(screen.queryByText(DECIDE_COPY.doneToday)).toBeNull();
     expect(screen.getByText(decideNextCopy("lunch"))).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open recipe ▾" }));
     fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.pencilIn }));
     expect(onPencilPlanMeal).toHaveBeenCalled();
     expect(screen.queryByText(DECIDE_COPY.doneToday)).toBeNull();
@@ -589,6 +595,7 @@ describe("Help me decide entry", () => {
     );
     fireEvent.click(document.querySelector("[data-decide-bar]"));
     expect(document.querySelector("[data-decide-slot-left]")?.textContent).toMatch(/breakfast/i);
+    fireEvent.click(screen.getByRole("button", { name: "Open recipe ▾" }));
     fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.pencilIn }));
     expect(onPencilPlanMeal).toHaveBeenCalled();
     expect(onPencilPlanMeal.mock.calls[0][1]).toBe("breakfast");
@@ -687,7 +694,13 @@ describe("Help me decide entry", () => {
     });
     const hits = [...document.querySelectorAll("[data-decide-search-row]")].map((el) => el.getAttribute("data-decide-search-row"));
     expect(hits).toContain("Leftover taco bowl");
-    expect(document.querySelector("[data-decide-search-row='Leftover taco bowl'] [data-meal-recipe-card]")).toBeTruthy();
+    const row = document.querySelector("[data-decide-search-row='Leftover taco bowl']");
+    expect(row.querySelector("[data-meal-recipe-card]")).toBeTruthy();
+    expect(row.querySelector("[data-slot-chips='fill']")).toBeTruthy();
+    expect(row.querySelector("[data-servings-hint]")).toBeTruthy();
+    expect(row.textContent).toMatch(/Open recipe/);
+    expect(row.textContent).toMatch(/P \d+g · C \d+g · F \d+g/);
+    expect([...row.querySelectorAll("button")].some((b) => b.textContent === DECIDE_COPY.pencilIn)).toBe(true);
   });
 
   it("pencils a search hit into the current slot", async () => {
