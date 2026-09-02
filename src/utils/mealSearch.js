@@ -46,19 +46,35 @@ function nameProteinToken(name) {
   return PROTEIN_NAME_TOKENS.find((key) => wordHits(words, key)) || null;
 }
 
-/** Name + slot + ingredient items. Steps / long desc are too noisy for search. */
+/** Name + slot + ingredients + short desc. Steps stay out (too noisy). */
 export function mealSearchHaystack(meal) {
   if (!meal || typeof meal !== "object") return "";
   const parts = [
     meal.name,
+    meal.title,
     meal.cat,
     meal.slot,
     meal.group,
     meal.basedOn,
+    meal.desc,
+    meal.notes,
     ...ingredientBits(meal.ingredients),
     ...ingredientBits(meal.serving),
   ];
   return parts.filter(Boolean).join(" ").toLowerCase();
+}
+
+/**
+ * Decide / All meals search pool: Callie's bank + My meals together.
+ * Custom meals first so a saved plate wins a name collision.
+ */
+export function allMealsSearchPool(bankMeals = [], customMeals = []) {
+  const bank = Array.isArray(bankMeals) ? bankMeals : [];
+  const mine = Array.isArray(customMeals) ? customMeals : [];
+  return [
+    ...mine.map((m) => (m?.source ? m : { ...m, source: "my" })),
+    ...bank.map((m) => (m?.source ? m : { ...m, source: m.source || "bank" })),
+  ].filter((m) => m && (m.name || m.title));
 }
 
 export function mealQueryTokens(query) {

@@ -113,11 +113,8 @@ describe("Help me decide entry", () => {
       />,
     );
     fireEvent.click(document.querySelector("[data-decide-bar]"));
-    fireEvent.click(document.querySelector("[data-decide-featured-card] button"));
-    expect(screen.getByRole("button", { name: "← Back" })).toBeTruthy();
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(document.querySelector("[data-decide-sheet]")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "← Back" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open recipe ▾" }));
+    expect(screen.getByRole("button", { name: "Hide recipe ▴" })).toBeTruthy();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(document.querySelector("[data-decide-sheet]")).toBeNull();
     expect(onLogRecipe).not.toHaveBeenCalled();
@@ -167,7 +164,7 @@ describe("Help me decide entry", () => {
   it("names the later-slot CTA for lunch, not always dinner", () => {
     renderToday();
     fireEvent.click(document.querySelector("[data-decide-bar]"));
-    fireEvent.click(screen.getByRole("button", { name: "Breakfast" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Breakfast" })[0]);
     expect(screen.getByText(knowLaterCopy("lunch"))).toBeTruthy();
     expect(screen.queryByText(DECIDE_COPY.knowDinner)).toBeNull();
   });
@@ -420,21 +417,28 @@ describe("Help me decide entry", () => {
     const after = card?.textContent || "";
     expect(after).not.toBe(before);
     expect(after).not.toMatch(/to range/);
+    expect(card?.textContent).toMatch(/Left for/i);
+    expect(document.querySelector("[data-decide-held-later]")).toBeTruthy();
   });
 
-  it("keeps refine chips and Back in the bottom chrome", () => {
+  it("scrolls the sheet as a whole and pins only Back", () => {
     renderToday();
     fireEvent.click(document.querySelector("[data-decide-bar]"));
     const scroll = document.querySelector("[data-decide-sheet-scroll]");
     const chrome = document.querySelector("[data-decide-sheet-chrome]");
     const none = screen.getByRole("button", { name: DECIDE_COPY.noneOfThese });
     const back = screen.getByRole("button", { name: DECIDE_COPY.back });
-    expect(chrome.contains(none)).toBe(true);
+    const featured = document.querySelector("[data-decide-featured-card]");
+    expect(scroll.contains(document.querySelector("[data-decide-slot-left]"))).toBe(true);
+    expect(scroll.contains(featured)).toBe(true);
+    expect(scroll.contains(none)).toBe(true);
     expect(chrome.contains(back)).toBe(true);
-    expect(scroll.contains(none)).toBe(false);
+    expect(chrome.contains(none)).toBe(false);
+    expect(featured.querySelector("[data-meal-recipe-card]")).toBeTruthy();
+    expect(featured.style.minHeight || "").not.toBe("200px");
     expect(screen.getByRole("button", { name: DECIDE_COPY.lighter })).toBeTruthy();
     expect(screen.getByRole("button", { name: DECIDE_COPY.moreProtein })).toBeTruthy();
-    expect(screen.getByPlaceholderText("Something else")).toBeTruthy();
+    expect(screen.getByPlaceholderText(DECIDE_COPY.somethingElsePlaceholder)).toBeTruthy();
   });
 
   it("Lighter twice walks to a new top card", () => {
@@ -451,7 +455,7 @@ describe("Help me decide entry", () => {
     expect(afterTwo === first && afterOne === first).toBe(false);
   });
 
-  it("uses cream surface and a tall Pick-for-me card", () => {
+  it("uses the All meals card on Pick for me, not a clipped mini-card", () => {
     renderToday();
     fireEvent.click(document.querySelector("[data-decide-bar]"));
     const dialog = screen.getByRole("dialog");
@@ -459,10 +463,13 @@ describe("Help me decide entry", () => {
     expect(document.querySelector("[data-decide-sheet-chrome]").style.background.replace(/\s/g, "")).toMatch(/#FAF5F2|rgb\(250,245,242\)/i);
     const featured = document.querySelector("[data-decide-featured-card]");
     expect(featured).toBeTruthy();
-    expect(Number.parseInt(featured.style.minHeight, 10)).toBeGreaterThanOrEqual(200);
-    expect(featured.style.background.replace(/\s/g, "")).toMatch(/#FFFFFF|#fff|rgb\(255,255,255\)/i);
+    expect(featured.querySelector("[data-meal-recipe-card]")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open recipe ▾" })).toBeTruthy();
     expect(screen.getByRole("button", { name: DECIDE_COPY.pencilIn })).toBeTruthy();
-    expect(screen.getByText(DECIDE_COPY.seeRecipe)).toBeTruthy();
+    expect(screen.getByRole("button", { name: DECIDE_COPY.logIt })).toBeTruthy();
+    expect(featured.querySelector("[data-slot-chips='fill']") || featured.querySelector("[data-slot-chips]")).toBeTruthy();
+    expect(featured.querySelector("[data-servings-hint]")).toBeTruthy();
+    expect(screen.queryByText(DECIDE_COPY.seeRecipe)).toBeNull();
     expect(screen.queryByRole("button", { name: DECIDE_COPY.kitchen })).toBeNull();
     expect(screen.queryByRole("button", { name: DECIDE_COPY.eatingOut })).toBeNull();
   });
@@ -557,12 +564,35 @@ describe("Help me decide entry", () => {
     fireEvent.click(document.querySelector("[data-decide-bar]"));
     expect(screen.queryByText(DECIDE_COPY.doneToday)).toBeNull();
     expect(screen.getByText(decideNextCopy("lunch"))).toBeTruthy();
-    const openCard = document.querySelector("[data-decide-sheet-scroll] button");
-    fireEvent.click(openCard);
     fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.pencilIn }));
     expect(onPencilPlanMeal).toHaveBeenCalled();
     expect(screen.queryByText(DECIDE_COPY.doneToday)).toBeNull();
     expect(screen.queryByRole("button", { name: decideNextCopy("snack") })).toBeNull();
+    expect(await screen.findByRole("button", { name: decideNextCopy("lunch") })).toBeTruthy();
+  });
+
+  it("after pencilling breakfast offers Decide lunch next, not dinner", async () => {
+    const onPencilPlanMeal = vi.fn(async () => true);
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 8, 15)}
+        profile={{ prefB: "oatmeal", foodAvoids: "" }}
+        plannedMeals={[
+          { slot: "lunch", name: "Meal prep bowls", via: "manual", cal: 400, p: 30, c: 40, f: 10 },
+          { slot: "dinner", name: "Tacos", via: "manual", cal: 500, p: 40, c: 40, f: 15 },
+        ]}
+        todayLog={{ date: localDateIso(), entries: [] }}
+        onPencilPlanMeal={onPencilPlanMeal}
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    expect(document.querySelector("[data-decide-slot-left]")?.textContent).toMatch(/breakfast/i);
+    fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.pencilIn }));
+    expect(onPencilPlanMeal).toHaveBeenCalled();
+    expect(onPencilPlanMeal.mock.calls[0][1]).toBe("breakfast");
+    expect(screen.queryByRole("button", { name: decideNextCopy("dinner") })).toBeNull();
     expect(await screen.findByRole("button", { name: decideNextCopy("lunch") })).toBeTruthy();
   });
 
@@ -620,6 +650,46 @@ describe("Help me decide entry", () => {
     expect(document.querySelector("[data-snack-room]").textContent).not.toMatch(/^0 cal|[\s]0 cal/);
   });
 
+  it("search finds a saved My meals plate in the All meals pool", () => {
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 12, 40)}
+        profile={{ prefL: "chicken", foodAvoids: "" }}
+        customMeals={[{
+          id: "c-taco",
+          name: "Leftover taco bowl",
+          cal: 380,
+          p: 32,
+          c: 28,
+          f: 10,
+          ingredients: "3 oz chicken\n½ cup rice",
+        }]}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    fireEvent.change(screen.getByLabelText(DECIDE_COPY.searchToPlan), {
+      target: { value: "taco" },
+    });
+    const hits = [...document.querySelectorAll("[data-decide-search-row]")].map((el) => el.getAttribute("data-decide-search-row"));
+    expect(hits).toContain("Leftover taco bowl");
+    expect(document.querySelector("[data-decide-search-row='Leftover taco bowl'] [data-meal-recipe-card]")).toBeTruthy();
+  });
+
   it("pencils a search hit into the current slot", async () => {
     const onPencilPlanMeal = vi.fn(async () => true);
     render(
@@ -652,6 +722,46 @@ describe("Help me decide entry", () => {
     fireEvent.click(screen.getAllByRole("button", { name: DECIDE_COPY.pencilIn })[0]);
     expect(onPencilPlanMeal).toHaveBeenCalled();
     expect(onPencilPlanMeal.mock.calls[0][1]).toBe("lunch");
+  });
+
+  it("Something else re-rolls toward a My meals hint without becoming a second search", async () => {
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 12, 40)}
+        profile={{ prefL: "chicken", foodAvoids: "" }}
+        customMeals={[{
+          id: "c-taco",
+          name: "Leftover taco bowl",
+          cal: 380,
+          p: 32,
+          c: 28,
+          f: 10,
+          ingredients: "3 oz chicken\n½ cup rice",
+        }]}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    const hint = screen.getByPlaceholderText(DECIDE_COPY.somethingElsePlaceholder);
+    fireEvent.change(hint, { target: { value: "taco bowl" } });
+    fireEvent.keyDown(hint, { key: "Enter" });
+    expect(document.querySelector("[data-decide-search-row]")).toBeNull();
+    expect(await screen.findByText("Leftover taco bowl")).toBeTruthy();
+    expect(document.querySelector("[data-decide-featured-card]")?.textContent).toMatch(/Leftover taco bowl/);
   });
 
   it("search for chicken does not return sausage and stays off kitchen mode", () => {

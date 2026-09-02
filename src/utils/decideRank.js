@@ -9,6 +9,7 @@ import {
   primaryProtein,
 } from "./decidePrefs.js";
 import { budgetAsRemaining } from "./decideBudget.js";
+import { mealMatchesQuery } from "./mealSearch.js";
 
 export const SCALE_CANDIDATES = [1, 1.5, 2, 0.75, 0.5];
 export const KITCHEN_FLAG = false;
@@ -201,6 +202,7 @@ export function rankBankCards({
   slotHistoryNames = [],
   anyHistoryNames = [],
   skipNames = [],
+  matchQuery = "",
   prefer = null,
   offset = 0,
   pencilled = null,
@@ -221,6 +223,10 @@ export function rankBankCards({
     && !mealHitsDislike(m, dislikes)
     && !isSkippedName(m.name, skipNames));
 
+  const hint = String(matchQuery || "").trim();
+  const hinted = hint ? pool.filter((m) => mealMatchesQuery(m, hint)) : pool;
+  const usePool = hinted.length ? hinted : pool;
+
   const ctx = {
     likes,
     loggedTodayNames,
@@ -232,7 +238,7 @@ export function rankBankCards({
   };
 
   const scaled = [];
-  for (const meal of pool) {
+  for (const meal of usePool) {
     const servings = pickScale(meal, budget);
     if (!servings) continue;
     const next = scaleMeal(meal, servings);

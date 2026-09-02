@@ -5,8 +5,15 @@ import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings
 import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
 import { SlotChips } from "./SlotChips";
 
-function IngList({ items }) {
+function IngList({ items, raw }) {
   const lines = Array.isArray(items) ? items : [];
+  if (!lines.length && typeof raw === "string" && raw.trim()) {
+    return (
+      <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+        {raw.trim()}
+      </div>
+    );
+  }
   if (!lines.length) {
     return <div style={{ fontSize: 13.5, color: T.inkSoft }}>No structured ingredient list yet.</div>;
   }
@@ -14,7 +21,7 @@ function IngList({ items }) {
     <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.55, color: T.ink }}>
       {lines.map((ing, i) => (
         <li key={i} style={{ marginBottom: 3 }}>
-          <b>{ing?.amount}</b> {ing?.item}
+          {typeof ing === "string" ? ing : <><b>{ing?.amount}</b> {ing?.item || ing?.name}</>}
         </li>
       ))}
     </ul>
@@ -26,9 +33,21 @@ function IngList({ items }) {
  * Open: batch cook (if any) → one-serving ingredients → steps.
  * Serving stepper scales macros for logging only — ingredient list stays base recipe.
  */
-export function MealRecipeCard({ meal, onLog, showLog = true }) {
+export function MealRecipeCard({
+  meal,
+  onLog,
+  onPencil,
+  showLog = true,
+  logLabel = "Add to Today",
+  pencilLabel = "Pencil in",
+  primaryAction = "log",
+  via = "recipe",
+  initialSlot,
+  initialServings = 1,
+  sourceLabel,
+}) {
   const [open, setOpen] = useState(false);
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(() => snapServings(initialServings));
   const r = withRecipeDetail(meal);
   const cat = r.cat || r.slot || "Meal";
   const serves = Number(r.serves) || 1;
@@ -36,6 +55,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
   const serving = Array.isArray(r.serving) && r.serving.length
     ? r.serving
     : (Array.isArray(r.ingredients) ? r.ingredients : []);
+  const rawIngredients = typeof r.ingredients === "string" ? r.ingredients : "";
   const steps = Array.isArray(r.steps) ? r.steps : [];
   const servings = snapServings(qty);
   const scaled = scaleMealForLog(r, servings);
@@ -43,57 +63,74 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
   const isDinner = catKey === "dinner";
   const isTreat = catKey === "treat" || catKey === "treats";
   const metaBits = [];
+  if (sourceLabel) metaBits.push(sourceLabel);
   if (isTreat) metaBits.push("Treat");
   if (serves > 1) metaBits.push(isDinner ? `batch · serves ${serves}` : `batch serves ${serves}`);
   const recipeMeta = metaBits.join(" · ");
   const [slot, setSlot] = useState(
-    () => normalizeSlot(r.slot || r.cat) || guessSlotFromTime(),
+    () => normalizeSlot(initialSlot || r.slot || r.cat) || guessSlotFromTime(),
   );
 
   const [logPhase, setLogPhase] = useState("idle");
-  const logBtn = (
-    <button
-      type="button"
-      disabled={logPhase === "busy" || logPhase === "done"}
-      onClick={async (e) => {
-        e.stopPropagation();
-        if (logPhase !== "idle") return;
-        setLogPhase("busy");
-        try {
-          const ok = await onLog?.(scaleMealForLog({
-            ...r,
-            via: "recipe",
-            slot,
-            fromPlanner: true,
-          }, servings));
-          if (ok === false) {
-            setLogPhase("idle");
-            return;
+  const [pencilPhase, setPencilPhase] = useState("idle");
+  const packed = () => scaleMealForLog({
+    ...r,
+    via,
+    slot,
+    fromPlanner: via === "recipe",
+  }, servings);
+  const actionBtn = (kind) => {
+    const isLog = kind === "log";
+    const phase = isLog ? logPhase : pencilPhase;
+    const setPhase = isLog ? setLogPhase : setPencilPhase;
+    const primary = Boolean(onPencil) && primaryAction === kind;
+    const label = isLog
+      ? (phase === "idle" ? logLabel : phase === "busy" ? "Adding…" : "Added ✓")
+      : (phase === "idle" ? pencilLabel : phase === "busy" ? "Saving…" : "Pencilled ✓");
+    const run = isLog ? onLog : onPencil;
+    return (
+      <button
+        type="button"
+        disabled={phase === "busy" || phase === "done"}
+        onClick={async (e) => {
+          e.stopPropagation();
+          if (phase !== "idle") return;
+          setPhase("busy");
+          try {
+            const ok = await run?.(packed());
+            if (ok === false) {
+              setPhase("idle");
+              return;
+            }
+            setQty(snapServings(initialServings));
+            setPhase("done");
+            window.setTimeout(() => setPhase("idle"), 2000);
+          } catch {
+            setPhase("idle");
           }
-          setQty(1);
-          setLogPhase("done");
-          window.setTimeout(() => setLogPhase("idle"), 2000);
-        } catch {
-          setLogPhase("idle");
-        }
-      }}
-      style={{
-        fontFamily: F,
-        fontSize: 12,
-        fontWeight: 700,
-        padding: "6px 12px",
-        borderRadius: 999,
-        border: `1.5px solid ${T.accent}`,
-        background: T.accentSoft,
-        color: T.accentDeep,
-        cursor: logPhase === "busy" || logPhase === "done" ? "default" : "pointer",
-        opacity: logPhase === "busy" ? 0.7 : 1,
-      }}
-    >
-      {logPhase === "idle" && "Add to Today"}
-      {logPhase === "busy" && "Adding…"}
-      {logPhase === "done" && "Added ✓"}
-    </button>
+        }}
+        style={{
+          fontFamily: F,
+          fontSize: 12,
+          fontWeight: 700,
+          padding: "6px 12px",
+          borderRadius: 999,
+          border: `1.5px solid ${T.accent}`,
+          background: primary ? T.accent : T.accentSoft,
+          color: primary ? "#fff" : T.accentDeep,
+          cursor: phase === "busy" || phase === "done" ? "default" : "pointer",
+          opacity: phase === "busy" ? 0.7 : 1,
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
+  const logBtn = (
+    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+      {onPencil ? actionBtn("pencil") : null}
+      {showLog ? actionBtn("log") : null}
+    </div>
   );
 
   return (
@@ -251,7 +288,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
                 ? "What goes on the logged plate from that batch."
                 : "Base recipe amounts. If you ate more, bump Servings to log — macros update; this list stays the recipe."}
             </div>
-            <IngList items={serving} />
+              <IngList items={serving} raw={rawIngredients} />
           </div>
 
           <div>

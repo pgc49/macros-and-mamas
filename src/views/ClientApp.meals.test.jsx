@@ -101,7 +101,7 @@ describe("Meals tab search filter", () => {
     const chips = [...document.querySelector("[data-meals-sections]").querySelectorAll("button")].map((el) => el.textContent);
     expect(chips[0]).toBe("Meal Coach");
     expect(chips[chips.length - 1]).toBe("Planner");
-    expect(screen.getByLabelText("Search meals to pencil in")).toBeTruthy();
+    expect(screen.getByLabelText(DECIDE_COPY.searchToPlan)).toBeTruthy();
   }, 10_000);
 
   it("shows All meals as a library chip, not the landing", () => {

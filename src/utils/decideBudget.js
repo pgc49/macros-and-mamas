@@ -57,10 +57,11 @@ export function defaultDecideSlot({ now = new Date(), loggedSlots = new Set(), i
   return guess;
 }
 
-/** Any planned meal for a slot counts as pencilled / taken. */
+/** Decide pencils only. A week-plan lunch does not skip lunch after breakfast. */
 export function pencilledSlotsFromPlan(plannedMeals) {
   const set = new Set();
   for (const m of plannedMeals || []) {
+    if (m?.via !== "decide") continue;
     const slot = normalizeSlot(m?.slot);
     if (slot) set.add(slot);
   }
@@ -487,6 +488,55 @@ function joinReserveNames(names) {
   if (names.length <= 1) return names[0] || "";
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+function macrosShort(p, c, f) {
+  return `P ${Math.round(p || 0)}g · C ${Math.round(c || 0)}g · F ${Math.round(f || 0)}g`;
+}
+
+/** Concise leftover for this slot + held-later pieces. Numbers match the budget. */
+export function slotLeftRead(budget) {
+  if (!budget) return { title: "", cal: 0, macros: "", held: "", heldPieces: [] };
+  const slot = DECIDE_SLOT_LABEL[budget.slot] || budget.slot;
+  const heldPieces = [];
+  for (const s of budget.laterSlots || []) {
+    const piece = budget.reserve?.bySlot?.[s];
+    if (!piece || !(piece.cal > 0)) continue;
+    heldPieces.push({
+      slot: s,
+      cal: piece.cal,
+      p: piece.p,
+      c: piece.c,
+      f: piece.f,
+      meal: piece.meal || null,
+    });
+  }
+  const snack = budget.reserve?.bySlot?.snack;
+  if (snack && snack.cal > 0) {
+    heldPieces.push({
+      slot: "snack",
+      cal: snack.cal,
+      p: snack.p,
+      c: snack.c,
+      f: snack.f,
+      meal: snack.meal || null,
+    });
+  }
+  const heldBits = heldPieces.map((h) => {
+    const label = DECIDE_SLOT_LABEL[h.slot] || h.slot;
+    if (h.meal?.name) return `${fmtCal(h.cal)} cal ${label} (${h.meal.name})`;
+    return `${fmtCal(h.cal)} cal ${label}`;
+  });
+  return {
+    title: `${DECIDE_COPY.leftFor} ${slot}`,
+    cal: budget.cal,
+    p: budget.pNeed,
+    c: budget.c,
+    f: budget.f,
+    macros: macrosShort(budget.pNeed, budget.c, budget.f),
+    held: heldBits.length ? `${DECIDE_COPY.holdingLead} ${heldBits.join(" · ")}` : "",
+    heldPieces,
+  };
 }
 
 export function budgetSentence(budget) {

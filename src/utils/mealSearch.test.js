@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  allMealsSearchPool,
   enrichMealsWithBankSlot,
   filterMealsByQuery,
   filterMealsBySlot,
@@ -64,6 +65,33 @@ describe("filterMealsByQuery", () => {
     const list = [oatmeal, chicken];
     expect(filterMealsByQuery(list, "")).toBe(list);
     expect(filterMealsByQuery(list, "chicken")).toEqual([chicken]);
+  });
+
+  it("matches a My meals plate by name, notes, or desc", () => {
+    const leftover = {
+      name: "Leftover taco bowl",
+      desc: "Tuesday night leftovers",
+      notes: "extra salsa",
+      ingredients: "3 oz chicken\n½ cup rice",
+      cal: 380,
+      p: 32,
+      c: 28,
+      f: 10,
+    };
+    expect(filterMealsByQuery([oatmeal, leftover], "taco")).toEqual([leftover]);
+    expect(filterMealsByQuery([leftover], "salsa")).toEqual([leftover]);
+    expect(filterMealsByQuery([leftover], "Tuesday")).toEqual([leftover]);
+  });
+});
+
+describe("allMealsSearchPool", () => {
+  it("puts Callie's bank and My meals in one pool", () => {
+    const mine = { name: "Leftover taco bowl", cal: 380, p: 32, c: 28, f: 10 };
+    const pool = allMealsSearchPool([chicken], [mine]);
+    expect(pool.map((m) => m.name)).toEqual(["Leftover taco bowl", chicken.name]);
+    expect(pool[0].source).toBe("my");
+    expect(filterMealsByQuery(pool, "taco").map((m) => m.name)).toEqual(["Leftover taco bowl"]);
+    expect(filterMealsByQuery(pool, "teriyaki").map((m) => m.name)).toEqual([chicken.name]);
   });
 });
 

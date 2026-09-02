@@ -13,6 +13,7 @@ import {
   laterSlotsAfter,
   nextDecideSlot,
   remainingForDecide,
+  slotLeftRead,
   unmatchedDecidePencils,
 } from "./decideBudget.js";
 import { targetBands } from "./weekPlan.js";
@@ -235,6 +236,25 @@ describe("nextDecideSlot", () => {
     expect(next).toBe("dinner");
   });
 
+  it("after a breakfast pencil walks to lunch, never dinner", () => {
+    const dinnerTime = new Date(2026, 8, 2, 18, 30);
+    expect(nextDecideSlot({
+      now: dinnerTime,
+      entries: [],
+      plannedMeals: [
+        { slot: "lunch", name: "Meal prep bowls", via: "manual" },
+        { slot: "dinner", name: "Tacos", via: "manual" },
+      ],
+      extraTaken: ["breakfast"],
+    })).toBe("lunch");
+    expect(nextDecideSlot({
+      now: dinnerTime,
+      entries: [],
+      plannedMeals: [{ slot: "lunch", via: "decide", name: "Salad" }],
+      extraTaken: ["breakfast"],
+    })).toBe("dinner");
+  });
+
   it("does not jump to snack or Done while lunch is still open", () => {
     const snackTime = new Date(2026, 8, 2, 15, 10);
     expect(nextDecideSlot({
@@ -447,6 +467,32 @@ describe("coachRead", () => {
       slot: "lunch",
     });
     expect(read.line2).toMatch(/About 250 cal to work with/);
+  });
+});
+
+describe("slotLeftRead", () => {
+  it("shows this-slot leftover and held-later numbers that match the budget", () => {
+    const budget = computeSlotBudget({
+      totals: { cal: 0, p: 0, c: 0, f: 0 },
+      bands: BANDS,
+      slot: "breakfast",
+      shares: DEFAULT_MEAL_SHARES,
+      loggedSlots: new Set(),
+      snackCount: 0,
+    });
+    const read = slotLeftRead(budget);
+    expect(read.title).toMatch(/breakfast/i);
+    expect(read.cal).toBe(budget.cal);
+    expect(read.p).toBe(budget.pNeed);
+    expect(read.macros).toMatch(/P \d+g · C \d+g · F \d+g/);
+    expect(read.held).toMatch(/Holding/);
+    expect(read.held).toMatch(/lunch/);
+    expect(read.held).toMatch(/dinner/);
+    const lunch = read.heldPieces.find((h) => h.slot === "lunch");
+    const dinner = read.heldPieces.find((h) => h.slot === "dinner");
+    expect(lunch.cal).toBe(budget.reserve.bySlot.lunch.cal);
+    expect(dinner.cal).toBe(budget.reserve.bySlot.dinner.cal);
+    expect(budget.cal + budget.reserve.cal).toBeCloseTo(budget.remaining.cal, 0);
   });
 });
 

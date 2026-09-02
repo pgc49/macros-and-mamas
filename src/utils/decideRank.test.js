@@ -182,6 +182,19 @@ describe("rankBankCards", () => {
     expect(overlap).toEqual([]);
   });
 
+  it("matchQuery can land on a My meals plate", () => {
+    const leftover = { name: "Leftover taco bowl", cal: 380, p: 32, c: 28, f: 10 };
+    const { meals } = rankBankCards({
+      bankMeals: [chicken, salmon],
+      myMeals: [leftover],
+      budget: { cal: 500, pNeed: 20, pHigh: 30, c: 50, f: 16 },
+      matchQuery: "taco",
+    });
+    expect(meals.map((m) => m.name)).toContain("Leftover taco bowl");
+    expect(meals[0].name).toBe("Leftover taco bowl");
+    expect(meals[0].source).toBe("my");
+  });
+
   it("scores My meals and a like token above a generic bank row", () => {
     const bank = scoreScaledMeal({ ...chicken, source: "bank", servings: 1 }, BUDGET, {});
     const mine = scoreScaledMeal({ ...chicken, source: "my", servings: 1 }, BUDGET, { likes: ["chicken"] });
