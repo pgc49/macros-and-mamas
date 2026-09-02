@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { localDateIso } from "../utils/dates";
 import { DECIDE_COPY } from "../content/decideVoice";
@@ -304,7 +304,7 @@ describe("Meals Decide from Today", () => {
     expect(document.querySelector("[data-decide-sheet='page']")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: DECIDE_COPY.logIt })[0]);
     expect(logRecipe).toHaveBeenCalled();
-    expect(setTab).toHaveBeenCalledWith("today");
+    await waitFor(() => expect(setTab).toHaveBeenCalledWith("today"));
     expect(document.querySelector("[data-decide-sheet='open']")).toBeNull();
   });
 });
