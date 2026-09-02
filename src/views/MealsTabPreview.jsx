@@ -48,15 +48,15 @@ export function MealsTabPreview() {
       onAddWater={noop}
       onUndoWater={noop}
       onChangeBottleOz={noop}
-      viewWk={1}
+      viewWk="2026-08-24"
       setViewWk={noop}
-      curWk={1}
+      curWk="2026-08-24"
       editPast={false}
       setEditPast={noop}
       checksByWeek={{}}
       toggleCheck={noop}
-      adherenceFor={() => ({})}
-      progWeekNum={1}
+      adherenceFor={() => 0}
+      progWeekNum={() => 1}
       earliestWk="2026-08-24"
       weighins={[]}
       logWeighin={noop}
