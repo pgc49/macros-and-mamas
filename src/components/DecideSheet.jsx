@@ -318,6 +318,7 @@ export function DecideSheet({
   const coach = coachRead({ budget, remaining: budget?.remaining, slot, over });
   const laterSlot = budget?.laterSlots?.[0] || null;
   const laterPiece = laterSlot ? budget?.reserve?.bySlot?.[laterSlot] : null;
+  const nextOpenSlot = nextDecideSlot({ now, entries, plannedMeals });
 
   const likes = useMemo(() => tokenizeLikes(slotPrefText(profile, slot)), [profile, slot]);
   const dislikes = useMemo(() => dislikeTokens(profile), [profile]);
@@ -403,7 +404,10 @@ export function DecideSheet({
   useEffect(() => {
     if (!open) return;
     const saved = loadDecideSession(dateKey, slot);
-    if (saved?.mode) setMode(saved.mode);
+    if (saved?.mode === "pick") setMode("pick");
+    else if (saved?.mode === "kitchen" && KITCHEN_FLAG) setMode("kitchen");
+    else if (saved?.mode === "out" && EATING_OUT_FLAG) setMode("out");
+    else if (saved?.mode) setMode("pick");
     // Restore snack room from the day cache — never reset to 0/1 on refine remount.
     const kept = loadDecideSnackCount(dateKey, snackCount);
     if (kept !== snackCount) setSnackCount(kept);
@@ -427,7 +431,10 @@ export function DecideSheet({
 
   useEffect(() => {
     if (!open || !dateKey) return;
-    saveDecideSession(dateKey, slot, { mode, skipNames, prefer, offset });
+    const persistMode = (
+      (mode === "kitchen" && !KITCHEN_FLAG) || (mode === "out" && !EATING_OUT_FLAG)
+    ) ? "pick" : mode;
+    saveDecideSession(dateKey, slot, { mode: persistMode, skipNames, prefer, offset });
   }, [open, dateKey, slot, mode, skipNames, prefer, offset]);
 
   const dismiss = () => {
@@ -556,7 +563,8 @@ export function DecideSheet({
   const openCard = (card) => {
     if (card.kind === "soft") {
       if (card.action === "browse") onBrowseMeals?.();
-      else setMode("kitchen");
+      else if (card.action === "kitchen" && KITCHEN_FLAG) setMode("kitchen");
+      else onBrowseMeals?.();
       return;
     }
     setDetail(card);
@@ -568,10 +576,11 @@ export function DecideSheet({
   const refine = (kind) => {
     refines.current += 1;
     decideTrack("decide_refine", { chip: kind, mode, askIndex: refines.current });
-    if (kind === "none") {
+    if (kind === "none" || kind === "lighter" || kind === "protein") {
       setSkipNames((prev) => [...prev, ...ranked.meals.map((m) => m.name)]);
       setOffset(0);
-    } else if (kind === "lighter") setPrefer("lighter");
+    }
+    if (kind === "lighter") setPrefer("lighter");
     else if (kind === "protein") setPrefer("protein");
   };
 
@@ -769,6 +778,26 @@ export function DecideSheet({
                     {laterPiece?.meal ? DECIDE_COPY.change : knowLaterCopy(laterSlot)}
                   </div>
                 </button>
+              ) : nextOpenSlot && nextOpenSlot !== slot ? (
+                <button
+                  type="button"
+                  data-decide-next-open={nextOpenSlot}
+                  onClick={() => changeSlot(nextOpenSlot)}
+                  style={{
+                    textAlign: "left",
+                    border: `1px solid ${T.border}`,
+                    borderRadius: 12,
+                    padding: "8px 10px",
+                    background: T.sageSoft,
+                    fontFamily: F,
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.sage }}>{DECIDE_COPY.afterThis}</div>
+                  <div style={{ fontFamily: FD, fontSize: 20, marginTop: 2 }}>
+                    {decideNextCopy(nextOpenSlot)}
+                  </div>
+                </button>
               ) : (
                 <div style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: "8px 10px", background: T.sageSoft }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.sage }}>{DECIDE_COPY.afterThis}</div>
@@ -868,7 +897,13 @@ export function DecideSheet({
             <div data-decide-search style={{ marginTop: 10 }}>
               <MealSearchInput
                 value={planQuery}
-                onChange={setPlanQuery}
+                onChange={(value) => {
+                  setPlanQuery(value);
+                  if (mode !== "pick") setMode("pick");
+                }}
+                onFocus={() => {
+                  if (mode !== "pick") setMode("pick");
+                }}
                 placeholder={DECIDE_COPY.searchToPlan}
               />
             </div>
@@ -953,7 +988,11 @@ export function DecideSheet({
                     <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                       <button
                         type="button"
-                        onClick={() => pencilCard(meal, slot)}
+                        onClick={() => pencilCard({
+                          ...meal,
+                          source: meal.source || "bank",
+                          servings: meal.servings || 1,
+                        }, slot)}
                         style={{
                           fontFamily: F,
                           fontWeight: 700,

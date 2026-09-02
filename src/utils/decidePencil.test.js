@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { removeDecidePencilMatchingLog, writeDecidePencil } from "./decidePencil.js";
+import { clearDecidePencil, removeDecidePencilMatchingLog, writeDecidePencil } from "./decidePencil.js";
 import { decideDisplayMacros } from "./decideScale.js";
 import { emptyWeekPlan } from "./weekPlan.js";
 
@@ -52,6 +52,15 @@ describe("writeDecidePencil add + replace", () => {
     const shown = decideDisplayMacros(row);
     expect(shown.cal).toBe(368);
     expect(shown.p).toBe(47);
+  });
+});
+
+describe("clearDecidePencil", () => {
+  it("removes the via=decide row so the slot is empty again", () => {
+    const { days } = writeDecidePencil(emptyWeekPlan(), "Wed", TUNA_15, "lunch");
+    expect(lunchPencil(days)).toBeTruthy();
+    const next = clearDecidePencil(days, "Wed", "lunch");
+    expect(lunchPencil(next)).toBeFalsy();
   });
 });
 

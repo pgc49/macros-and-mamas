@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DECIDE_COPY, knowLaterCopy } from "../content/decideVoice.js";
+import { DECIDE_COPY, holdingRoomTitle, knowLaterCopy } from "../content/decideVoice.js";
 import {
   decideDisplayMacros,
   decideLogFromCard,
@@ -68,5 +68,13 @@ describe("knowLaterCopy", () => {
     expect(knowLaterCopy("lunch")).toBe("Know what lunch is yet?");
     expect(knowLaterCopy("snack")).toBe("Know what snack is yet?");
     expect(knowLaterCopy("dinner")).toBe(DECIDE_COPY.knowDinner);
+  });
+});
+
+describe("holdingRoomTitle", () => {
+  it("names lunch and dinner holds instead of the generic line", () => {
+    expect(holdingRoomTitle("lunch")).toBe(DECIDE_COPY.holdingLunch);
+    expect(holdingRoomTitle("dinner")).toBe(DECIDE_COPY.holdingDinner);
+    expect(holdingRoomTitle("lunch")).not.toBe(DECIDE_COPY.holdingRoom);
   });
 });

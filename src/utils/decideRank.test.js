@@ -112,6 +112,35 @@ describe("rankBankCards", () => {
     expect(cards.some((c) => c.action === "browse")).toBe(true);
   });
 
+  it("lighter prefer plus skipNames changes the top cards", () => {
+    const heavy = { name: "Heavy bowl", cal: 260, p: 28, c: 20, f: 8 };
+    const mid = { name: "Mid bowl", cal: 200, p: 26, c: 18, f: 6 };
+    const light = { name: "Light bowl", cal: 140, p: 24, c: 12, f: 3 };
+    const first = rankBankCards({
+      bankMeals: [heavy, mid, light, yogurt],
+      budget: BUDGET,
+    });
+    const next = rankBankCards({
+      bankMeals: [heavy, mid, light, yogurt],
+      budget: BUDGET,
+      prefer: "lighter",
+      skipNames: first.meals.map((m) => m.name),
+    });
+    expect(next.meals.map((m) => m.name).some((n) => first.meals.some((f) => f.name === n)))
+      .toBe(false);
+  });
+
+  it("protein prefer keeps real protein and drops Honey", () => {
+    const { meals } = rankBankCards({
+      bankMeals: [chicken, yogurt],
+      pantryItems: [{ name: "Honey", cal: 21, p: 0, c: 6, f: 0 }],
+      budget: BUDGET,
+      prefer: "protein",
+    });
+    expect(meals.map((m) => m.name)).not.toContain("Honey");
+    expect(meals.every((m) => (m.p || 0) > 0)).toBe(true);
+  });
+
   it("None of these walks to the next three", () => {
     const first = rankBankCards({
       bankMeals: [chicken, salmon, yogurt, turkey],
@@ -152,5 +181,11 @@ describe("knows-you and reason", () => {
     expect(decideReason({ ...chicken, servings: 1, p: 18 }, { pNeed: 25, f: 20 }))
       .toBe(DECIDE_COPY.reasonMost);
     expect(decideReason(chicken, BUDGET, { over: true })).toBe(DECIDE_COPY.reasonOver);
+  });
+
+  it("never says Gets protein into range when protein is nowhere near pNeed", () => {
+    const honey = { name: "Honey", servings: 1, cal: 21, p: 0, c: 6, f: 0 };
+    expect(decideReason(honey, { pNeed: 25, f: 20 })).toBe(DECIDE_COPY.reasonFits);
+    expect(decideReason(honey, { pNeed: 25, f: 20 })).not.toBe(DECIDE_COPY.reasonGets);
   });
 });

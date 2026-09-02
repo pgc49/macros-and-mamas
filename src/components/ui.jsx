@@ -61,6 +61,7 @@ export const inputStyle = {
 export function MealSearchInput({
   value,
   onChange,
+  onFocus,
   placeholder = "Search meals",
   style,
 }) {
@@ -69,6 +70,7 @@ export function MealSearchInput({
       type="search"
       value={value}
       onChange={(e) => onChange?.(e.target.value)}
+      onFocus={onFocus}
       placeholder={placeholder}
       autoCapitalize="none"
       autoCorrect="off"

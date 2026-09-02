@@ -41,7 +41,7 @@ import {
   uniqueMealsByName,
 } from "../utils/mealSearch";
 import { db } from "../db/db";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export function ClientApp({
   tab, setTab,
@@ -81,6 +81,7 @@ export function ClientApp({
   onSaveFoodPrefs,
   mealHistoryByDate = {},
   onPencilPlanMeal,
+  onClearDecidePencil,
   onAteIt,
   onOpenDecide,
   decideFocusSlot = null,
@@ -95,6 +96,11 @@ export function ClientApp({
   const [composerFocused, setComposerFocused] = useState(false);
   const [myMealsAddOpen, setMyMealsAddOpen] = useState(false);
   const [decideSlot, setDecideSlot] = useState(decideFocusSlot);
+  const decideNavLock = useRef(0);
+  const goTodayFromDecide = () => {
+    decideNavLock.current = Date.now();
+    setTab("today");
+  };
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
@@ -124,6 +130,7 @@ export function ClientApp({
   const showMealsSearch = isBankFilter || mealFilter === "My meals" || mealFilter === "Pantry";
   const onDecideHome = isMealsDecideFilter(mealFilter);
   const openMealsDecide = ({ slot } = {}) => {
+    if (Date.now() - decideNavLock.current < 500) return;
     if (slot) setDecideSlot(slot);
     setMealFilter(MEALS_DECIDE_FILTER);
     setTab("meals");
@@ -187,7 +194,14 @@ export function ClientApp({
         <button
           key={k}
           type="button"
-          onClick={() => setTab(k)}
+          onClick={() => {
+            if (k === "today") {
+              if (tab === "meals" && onDecideHome) decideNavLock.current = Date.now();
+              setTab("today");
+              return;
+            }
+            setTab(k);
+          }}
           style={{
             fontFamily: F,
             fontSize: 13.5,
@@ -305,6 +319,7 @@ export function ClientApp({
             profile={profile}
             mealHistoryByDate={mealHistoryByDate}
             onPencilPlanMeal={onPencilPlanMeal}
+            onClearDecidePencil={onClearDecidePencil}
             onAteIt={onAteIt}
             onOpenFoodPrefs={() => {
               setMealFilter("Food prefs");
@@ -528,9 +543,9 @@ export function ClientApp({
                 const ok = await logRecipe?.(meal);
                 return ok;
               }}
-              onLogged={() => setTab("today")}
+              onLogged={goTodayFromDecide}
               onPencil={onPencilPlanMeal}
-              onClose={() => setTab("today")}
+              onClose={goTodayFromDecide}
               onBrowseMeals={() => {
                 setFitsRemainingOnly(true);
                 setMealFilter("All meals");

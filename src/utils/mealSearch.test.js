@@ -45,6 +45,18 @@ describe("mealMatchesQuery", () => {
     expect(mealMatchesQuery(oatmeal, "protein steak")).toBe(false);
     expect(mealMatchesQuery(chicken, "chicken pasta")).toBe(false);
   });
+
+  it("does not treat chicken sausage as a chicken meal", () => {
+    const sausage = {
+      cat: "Breakfast",
+      name: "Sausage, egg + whites",
+      desc: "2 chicken breakfast sausage links, 1 large egg",
+      ingredients: [{ item: "chicken or turkey breakfast sausage links" }],
+    };
+    expect(mealMatchesQuery(sausage, "chicken")).toBe(false);
+    expect(mealMatchesQuery(sausage, "sausage")).toBe(true);
+    expect(mealMatchesQuery(chicken, "chicken")).toBe(true);
+  });
 });
 
 describe("filterMealsByQuery", () => {

@@ -42,6 +42,18 @@ export function writeDecidePencil(days, dayKey, card, slot, qtyOverride) {
   return { days: next, meal: built, replaced: Boolean(existing) };
 }
 
+/** Drop today's decide pencil for a slot so the Holding row can come back. */
+export function clearDecidePencil(days, dayKey, slotOrMeal) {
+  const slot = normalizeSlot(typeof slotOrMeal === "string" ? slotOrMeal : slotOrMeal?.slot);
+  if (!slot) return days;
+  const existing = decidePencilForSlot(
+    (days || []).find((d) => d.day === dayKey)?.meals,
+    slot,
+  );
+  if (!existing?.id) return days;
+  return removeMealById(days, existing.id);
+}
+
 /** Drop the via=decide plan row that Ate-it / decide_bank logged. */
 export function removeDecidePencilMatchingLog(days, dayKey, entry) {
   const slot = normalizeSlot(entry?.slot);

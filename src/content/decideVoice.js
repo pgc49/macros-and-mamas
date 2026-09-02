@@ -86,13 +86,18 @@ export const DECIDE_COPY = {
   comingSoon: "That's next. For now, Pick for me uses your bank and what's left.",
   searchToPlan: "Search meals to pencil in",
   holdingRoom: "Holding room",
+  holdingLunch: "Holding room for lunch",
+  holdingDinner: "Holding room for dinner",
+  holdingSnack: "Holding room for a snack",
   reservedHint: "Reserved from what's left",
+  clearPencil: "Clear",
   decideThis: "Decide",
   usingPrefs: "Using your prefs",
   reasonFills: "Fills your protein, leaves",
   reasonFillsTail: "g fat.",
   reasonGets: "Gets protein into range. Fits everything else.",
   reasonMost: "Most of your protein. Add a yogurt later and you're there.",
+  reasonFits: "Fits what's left. Protein is still open.",
   reasonOver: "Light and protein forward.",
   knowsPencilled: "Pencilled in earlier",
   knowsUsualSlot: "One of your usuals at",
@@ -131,4 +136,12 @@ export function knowLaterCopy(slot) {
   if (slot === "snack") return "Know what snack is yet?";
   if (slot === "breakfast") return "Know what breakfast is yet?";
   return DECIDE_COPY.knowDinner;
+}
+
+/** Today strip title for an empty reserved later slot. */
+export function holdingRoomTitle(slot) {
+  if (slot === "lunch") return DECIDE_COPY.holdingLunch;
+  if (slot === "dinner") return DECIDE_COPY.holdingDinner;
+  if (slot === "snack") return DECIDE_COPY.holdingSnack;
+  return DECIDE_COPY.holdingRoom;
 }

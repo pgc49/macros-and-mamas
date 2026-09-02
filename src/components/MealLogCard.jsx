@@ -30,7 +30,7 @@ import { filterMealsByRemaining, formatRoomLeft, roomLeftFromTotals } from "../u
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
 import { LogMealRefine } from "./LogMealRefine";
 import { DecideSheet } from "./DecideSheet";
-import { DECIDE_COPY } from "../content/decideVoice";
+import { DECIDE_COPY, holdingRoomTitle } from "../content/decideVoice";
 import {
   attachCoachContext,
   bandsFromMacros,
@@ -165,6 +165,7 @@ export function MealLogCard({
   profile,
   mealHistoryByDate = {},
   onPencilPlanMeal,
+  onClearDecidePencil,
   onAteIt,
   onOpenFoodPrefs,
   onBrowseMeals,
@@ -763,6 +764,16 @@ export function MealLogCard({
     })
     : "";
 
+  const pointerStart = useRef(null);
+  const rememberPointer = (e) => {
+    pointerStart.current = { x: e.clientX, y: e.clientY };
+  };
+  const wasScroll = (e) => {
+    const start = pointerStart.current;
+    if (!start) return false;
+    return Math.abs(e.clientX - start.x) > 12 || Math.abs(e.clientY - start.y) > 12;
+  };
+
   const openDecide = (entry, slot = decideSlotGuess) => {
     if (onOpenDecide) {
       onOpenDecide({ slot, entry });
@@ -877,7 +888,11 @@ export function MealLogCard({
           <button
             type="button"
             data-decide-bar="1"
-            onClick={() => openDecide("bar")}
+            onPointerDown={rememberPointer}
+            onClick={(e) => {
+              if (wasScroll(e)) return;
+              openDecide("bar");
+            }}
             style={{
               marginTop: 12,
               display: "flex",
@@ -1865,6 +1880,26 @@ export function MealLogCard({
                       </div>
                       <button
                         type="button"
+                        onClick={() => onClearDecidePencil?.({
+                          ...meal,
+                          slot: normalizeSlot(meal.slot),
+                        })}
+                        style={{
+                          fontFamily: F,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          color: T.inkSoft,
+                          background: "transparent",
+                          border: `1px solid ${T.border}`,
+                          borderRadius: 999,
+                          padding: "6px 10px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {DECIDE_COPY.clearPencil}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => onAteIt?.({
                           ...meal,
                           cal: shown.cal,
@@ -1896,7 +1931,11 @@ export function MealLogCard({
                       key={`hold-${hold.slot}`}
                       type="button"
                       data-decide-hold-row={hold.slot}
-                      onClick={() => openDecide("placeholder", hold.slot)}
+                      onPointerDown={rememberPointer}
+                      onClick={(e) => {
+                        if (wasScroll(e)) return;
+                        openDecide("placeholder", hold.slot);
+                      }}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -1914,7 +1953,7 @@ export function MealLogCard({
                     >
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>
-                          {DECIDE_COPY.holdingRoom}
+                          {holdingRoomTitle(hold.slot)}
                         </div>
                         <div style={{ fontSize: 11.5, color: T.inkSoft }}>{DECIDE_COPY.reservedHint}</div>
                       </div>

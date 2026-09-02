@@ -234,6 +234,31 @@ describe("nextDecideSlot", () => {
     });
     expect(next).toBe("dinner");
   });
+
+  it("does not jump to snack or Done while lunch is still open", () => {
+    const snackTime = new Date(2026, 8, 2, 15, 10);
+    expect(nextDecideSlot({
+      now: snackTime,
+      entries: [{ slot: "breakfast" }],
+      plannedMeals: [],
+      extraTaken: ["dinner"],
+    })).toBe("lunch");
+    expect(nextDecideSlot({
+      now: snackTime,
+      entries: [{ slot: "breakfast" }, { slot: "lunch" }, { slot: "dinner" }],
+      plannedMeals: [],
+    })).toBe("snack");
+    expect(nextDecideSlot({
+      now: snackTime,
+      entries: [
+        { slot: "breakfast" },
+        { slot: "lunch" },
+        { slot: "dinner" },
+        { slot: "snack" },
+      ],
+      plannedMeals: [],
+    })).toBe(null);
+  });
 });
 
 describe("decideReservePlaceholders", () => {

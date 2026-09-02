@@ -8,7 +8,8 @@ import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
 import { normalizeSlot, resolveLogSlot } from "./utils/mealSlots";
-import { removeDecidePencilMatchingLog, writeDecidePencil } from "./utils/decidePencil";
+import { clearDecidePencil, removeDecidePencilMatchingLog, writeDecidePencil } from "./utils/decidePencil";
+import { tabFromSearch, writeClientTab } from "./lib/clientTab";
 import { namesMatch, stripPortionSuffix } from "./utils/decidePrefs";
 import {
   adherenceForWeek,
@@ -314,11 +315,13 @@ export default function App() {
   const [signInNext, setSignInNext] = useState(() => (
     isAdminSignupLockedSurface() ? "app" : "intake"
   )); // "intake" → create; "app" → returning
-  const [tab, setTab] = useState(() => {
-    if (typeof window === "undefined") return "today";
-    const q = new URLSearchParams(window.location.search).get("tab");
-    return ["today", "meals", "messages", "progress"].includes(q) ? q : "today";
-  });
+  const [tab, setTabState] = useState(() => (
+    typeof window === "undefined" ? "today" : tabFromSearch(window.location.search)
+  ));
+  const setTab = (next) => {
+    setTabState(next);
+    writeClientTab(next);
+  };
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   // Home Screen icon badge mirrors unread (iOS 16.4+ / supported browsers).
@@ -1253,6 +1256,36 @@ export default function App() {
     }
   };
 
+  const onClearDecidePencil = async (meal) => {
+    const today = localDateIso();
+    const dayKey = planDayLabel(today);
+    const ws = wkStartOf(today);
+    const slot = normalizeSlot(meal?.slot);
+    if (!slot) return;
+    let days;
+    if (ws === weekPlanWeekRef.current) {
+      days = weekPlanDays;
+    } else {
+      try {
+        const wp = await db.loadWeekPlan(ws);
+        days = Array.isArray(wp?.days) ? wp.days : [];
+      } catch (e) {
+        console.warn("load week for decide pencil clear failed", e);
+        days = [];
+      }
+    }
+    const next = clearDecidePencil(days, dayKey, slot);
+    if (ws === weekPlanWeekRef.current) {
+      onWeekPlanChange(next, "manual");
+    } else {
+      await persistWeekPlan(next, "manual", ws);
+    }
+    const row = (next || []).find((d) => d.day === dayKey);
+    if ((mealLogDate || today) === today) {
+      setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
+    }
+  };
+
   const onAteIt = async (meal) => {
     const date = meal.logged_date || mealLogDate || localDateIso();
     const slot = resolveLogSlot(meal.slot);
@@ -1710,6 +1743,7 @@ export default function App() {
       onSaveFoodPrefs={onSaveFoodPrefs}
       mealHistoryByDate={mealHistoryByDate}
       onPencilPlanMeal={onPencilPlanMeal}
+      onClearDecidePencil={onClearDecidePencil}
       onAteIt={onAteIt}
       onHomescreenTipDismissed={(at) => {
         setProfile((p) => ({ ...p, homescreenTipDismissedAt: at }));

@@ -17,28 +17,46 @@ function ingredientBits(value) {
   });
 }
 
-function stepBits(value) {
-  if (!value) return [];
-  if (typeof value === "string") return [value];
-  if (!Array.isArray(value)) return [];
-  return value.map((step) => (typeof step === "string" ? step : String(step || ""))).filter(Boolean);
+/** Proteins named in the title — used so “chicken” does not match chicken-sausage. */
+const PROTEIN_NAME_TOKENS = [
+  "chicken", "turkey", "beef", "pork", "lamb", "salmon", "tuna", "halibut",
+  "cod", "shrimp", "yogurt", "cottage", "egg", "eggs", "tofu", "tempeh",
+  "sausage", "steak", "bacon",
+];
+
+function searchWords(text) {
+  return String(text || "")
+    .toLowerCase()
+    .split(/[^a-z0-9+]+/)
+    .filter(Boolean);
 }
 
-/** Lowercased haystack for one meal / pantry item / saved recipe. */
+function wordHits(words, token) {
+  const t = String(token || "").toLowerCase();
+  if (!t) return false;
+  return words.some((w) => (
+    w === t
+    || (t.length >= 3 && w.startsWith(t))
+    || (w.length >= 3 && t.startsWith(w))
+  ));
+}
+
+function nameProteinToken(name) {
+  const words = searchWords(name);
+  return PROTEIN_NAME_TOKENS.find((key) => wordHits(words, key)) || null;
+}
+
+/** Name + slot + ingredient items. Steps / long desc are too noisy for search. */
 export function mealSearchHaystack(meal) {
   if (!meal || typeof meal !== "object") return "";
   const parts = [
     meal.name,
-    meal.desc,
     meal.cat,
     meal.slot,
     meal.group,
     meal.basedOn,
-    meal.note,
     ...ingredientBits(meal.ingredients),
     ...ingredientBits(meal.serving),
-    ...ingredientBits(meal.batch),
-    ...stepBits(meal.steps),
   ];
   return parts.filter(Boolean).join(" ").toLowerCase();
 }
@@ -54,8 +72,14 @@ export function mealQueryTokens(query) {
 export function mealMatchesQuery(meal, query) {
   const tokens = mealQueryTokens(query);
   if (!tokens.length) return true;
-  const hay = mealSearchHaystack(meal);
-  return tokens.every((token) => hay.includes(token));
+  const hayWords = searchWords(mealSearchHaystack(meal));
+  const namedProtein = nameProteinToken(meal?.name);
+  return tokens.every((token) => {
+    if (PROTEIN_NAME_TOKENS.includes(token) && namedProtein && namedProtein !== token) {
+      if (!wordHits(searchWords(meal?.name), token)) return false;
+    }
+    return wordHits(hayWords, token);
+  });
 }
 
 export function filterMealsByQuery(meals, query) {

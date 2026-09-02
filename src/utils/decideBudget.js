@@ -35,7 +35,15 @@ export function laterSlotsAfter(selected, loggedSlots = new Set()) {
   return MAIN_SLOTS.filter((s, i) => i > idx && !loggedSlots.has(s));
 }
 
-export function defaultDecideSlot({ now = new Date(), loggedSlots = new Set() } = {}) {
+const DECIDE_SLOT_ORDER = [...MAIN_SLOTS, "snack"];
+
+export function defaultDecideSlot({ now = new Date(), loggedSlots = new Set(), ignoreTime = false } = {}) {
+  if (ignoreTime) {
+    for (const s of DECIDE_SLOT_ORDER) {
+      if (!loggedSlots.has(s)) return s;
+    }
+    return null;
+  }
   const guess = guessSlotFromTime(now);
   if (guess === "snack") return "snack";
   const start = MAIN_SLOTS.indexOf(guess);
@@ -80,7 +88,7 @@ export function nextDecideSlot({
   extraTaken = [],
 } = {}) {
   const taken = decideTakenSlots({ entries, plannedMeals, extraSlots: extraTaken });
-  const next = defaultDecideSlot({ now, loggedSlots: taken });
+  const next = defaultDecideSlot({ now, loggedSlots: taken, ignoreTime: true });
   if (!next || taken.has(next)) return null;
   return next;
 }

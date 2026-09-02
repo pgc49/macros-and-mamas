@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { localDateIso } from "../utils/dates";
-import { DECIDE_COPY } from "../content/decideVoice";
+import { DECIDE_COPY, holdingRoomTitle } from "../content/decideVoice";
 
 vi.mock("../auth/useAuth.jsx", () => ({
   useAuth: () => ({
@@ -231,7 +231,66 @@ describe("Meals Decide from Today", () => {
     expect(setTab).toHaveBeenCalledWith("meals");
     expect(setMealFilter).toHaveBeenCalledWith("Decide");
     expect(document.querySelector("[data-decide-sheet='open']")).toBeNull();
-    expect(screen.getByText(DECIDE_COPY.holdingRoom)).toBeTruthy();
+    expect(screen.getByText(holdingRoomTitle("dinner"))).toBeTruthy();
+  });
+
+  it("Today nav from Meals Decide returns to Today once", () => {
+    const setTab = vi.fn();
+    render(
+      <MemoryRouter>
+        <ClientApp
+          tab="meals"
+          setTab={setTab}
+          profile={{ name: "Pat" }}
+          macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
+          totals={{ p: 64, c: 53, f: 47, cal: 905 }}
+          waterOz={80}
+          estimateBusy={false}
+          estimate={null}
+          analyzePhoto={noop}
+          analyzeText={noop}
+          confirmEstimate={noop}
+          discardEstimate={noop}
+          logManualMeal={noop}
+          logRecipe={noop}
+          todayLog={{ date: localDateIso(), entries: [] }}
+          deleteMealEntry={noop}
+          updateMealEntry={noop}
+          mealLogDate={localDateIso()}
+          mealLogWeekStart="2026-08-24"
+          mealLogsByDate={{}}
+          selectMealLogDate={noop}
+          changeMealWeek={noop}
+          waterLogsByDate={{}}
+          waterBusy={false}
+          onAddWater={noop}
+          onUndoWater={noop}
+          onChangeBottleOz={noop}
+          viewWk={1}
+          setViewWk={noop}
+          curWk={1}
+          editPast={false}
+          setEditPast={noop}
+          checksByWeek={{}}
+          toggleCheck={noop}
+          adherenceFor={() => 0}
+          progWeekNum={() => 1}
+          earliestWk="2026-08-24"
+          weighins={[]}
+          logWeighin={noop}
+          deleteWeighin={noop}
+          weeklyRate={0}
+          trends={{ locked: true, items: [] }}
+          macroHistory={[]}
+          mealFilter="Decide"
+          setMealFilter={noop}
+          customMeals={[]}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(setTab).toHaveBeenCalledWith("today");
+    expect(setTab).not.toHaveBeenCalledWith("meals");
   });
 
   it("returns to Today after Log it from Meals Decide", async () => {

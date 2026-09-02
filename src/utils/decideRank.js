@@ -85,18 +85,29 @@ export function scoreScaledMeal(meal, budget, ctx = {}) {
   return protein + myBonus + likeBonus + scaleBonus + slotUsual + todayPen + recentPen;
 }
 
+function proteinClosesNeed(p, pNeed) {
+  return pNeed > 0 && p >= pNeed;
+}
+
+function meaningfulProtein(meal, budget) {
+  const p = mealMacros(meal).p;
+  const need = budget?.pNeed || 0;
+  if (p <= 0) return false;
+  if (need <= 0) return p >= 8;
+  return p >= Math.min(8, need * 0.25);
+}
+
 export function decideReason(meal, budget, { over = false } = {}) {
   if (over) return DECIDE_COPY.reasonOver;
   const { p, f } = mealMacros(meal);
   const pNeed = budget?.pNeed || 0;
   const prefix = (meal.servings || 1) !== 1 ? `${meal.servings} servings. ` : "";
-  const closes = pNeed <= 0 || p >= pNeed;
-  if (closes && (budget?.f ?? 99) < 6) {
+  if (proteinClosesNeed(p, pNeed) && (budget?.f ?? 99) < 6) {
     return `${prefix}${DECIDE_COPY.reasonFills} ${Math.round(Math.max(0, (budget?.f || 0) - f))}${DECIDE_COPY.reasonFillsTail}`;
   }
-  if (closes) return `${prefix}${DECIDE_COPY.reasonGets}`;
+  if (proteinClosesNeed(p, pNeed)) return `${prefix}${DECIDE_COPY.reasonGets}`;
   if (pNeed > 0 && p / pNeed >= 0.7) return `${prefix}${DECIDE_COPY.reasonMost}`;
-  return `${prefix}${DECIDE_COPY.reasonGets}`;
+  return `${prefix}${DECIDE_COPY.reasonFits}`;
 }
 
 export function decideKnowsYou(meal, ctx = {}) {
@@ -213,8 +224,15 @@ export function rankBankCards({
     scaled.push(next);
   }
 
-  scaled.sort((a, b) => compareMeals(a, b, prefer));
-  const unique = uniqueByName(scaled);
+  const rankedPool = prefer === "protein"
+    ? (() => {
+      const withP = scaled.filter((m) => meaningfulProtein(m, budget));
+      return withP.length ? withP : scaled;
+    })()
+    : scaled;
+
+  rankedPool.sort((a, b) => compareMeals(a, b, prefer));
+  const unique = uniqueByName(rankedPool);
   const windowed = unique.slice(offset);
   let meals = diversify(windowed);
 
@@ -244,6 +262,6 @@ export function rankBankCards({
   return {
     cards: cards.slice(0, 3),
     meals,
-    scaledCount: scaled.filter((m) => (m.servings || 1) !== 1).length,
+    scaledCount: rankedPool.filter((m) => (m.servings || 1) !== 1).length,
   };
 }

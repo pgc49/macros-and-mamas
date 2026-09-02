@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MealLogCard } from "./MealLogCard";
-import { DECIDE_COPY, decideNextCopy, knowLaterCopy, snackRoomCopy } from "../content/decideVoice";
+import { DECIDE_COPY, decideNextCopy, holdingRoomTitle, knowLaterCopy, snackRoomCopy } from "../content/decideVoice";
 import { localDateIso } from "../utils/dates";
 import { writeDecidePencil } from "../utils/decidePencil";
 import { emptyWeekPlan } from "../utils/weekPlan";
@@ -335,6 +335,47 @@ describe("Help me decide entry", () => {
     }]);
     expect(screen.getByText(DECIDE_COPY.pencilledHint)).toBeTruthy();
     expect(screen.getByRole("button", { name: DECIDE_COPY.ateIt })).toBeTruthy();
+    expect(screen.getByRole("button", { name: DECIDE_COPY.clearPencil })).toBeTruthy();
+  });
+
+  it("clears a pencilled row so Holding can come back", () => {
+    const onClearDecidePencil = vi.fn();
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 12, 40)}
+        plannedMeals={[{
+          id: "d1",
+          slot: "dinner",
+          via: "decide",
+          name: "Pulled chicken tacos",
+          cal: 425,
+          p: 48,
+          c: 38,
+          f: 7,
+        }]}
+        profile={{ prefL: "chicken", foodAvoids: "" }}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+        onClearDecidePencil={onClearDecidePencil}
+      />,
+    );
+    expect(document.querySelector("[data-decide-hold-row='dinner']")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: DECIDE_COPY.clearPencil }));
+    expect(onClearDecidePencil).toHaveBeenCalled();
+    expect(onClearDecidePencil.mock.calls[0][0].slot).toBe("dinner");
   });
 
   it("shows save-room-for-a-snack defaulting to 1 and changing leftover for this meal", () => {
@@ -460,10 +501,68 @@ describe("Help me decide entry", () => {
     expect(onPencilPlanMeal.mock.calls[0][1]).toBe("lunch");
   });
 
+  it("search for chicken does not return sausage and stays off kitchen mode", () => {
+    renderToday();
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    const search = screen.getByLabelText(DECIDE_COPY.searchToPlan);
+    fireEvent.focus(search);
+    expect(screen.queryByText(DECIDE_COPY.comingSoon)).toBeNull();
+    fireEvent.change(search, { target: { value: "chicken" } });
+    expect(screen.queryByText(DECIDE_COPY.comingSoon)).toBeNull();
+    expect(screen.queryByText("Sausage, egg + whites")).toBeNull();
+    const hits = [...document.querySelectorAll("[data-decide-search-row]")].map((el) => el.getAttribute("data-decide-search-row"));
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.some((name) => /chicken/i.test(name))).toBe(true);
+    expect(hits.some((name) => /sausage/i.test(name))).toBe(false);
+  });
+
   it("shows a reserved dinner hold on Today's log strip", () => {
     renderToday();
     expect(document.querySelector("[data-decide-hold-row='dinner']")).toBeTruthy();
-    expect(screen.getByText(DECIDE_COPY.holdingRoom)).toBeTruthy();
+    expect(screen.getByText(holdingRoomTitle("dinner"))).toBeTruthy();
+  });
+
+  it("names a lunch hold when breakfast is the current slot", () => {
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 8, 15)}
+        profile={{ prefL: "chicken", foodAvoids: "" }}
+        todayLog={{ date: localDateIso(), entries: [] }}
+      />,
+    );
+    expect(document.querySelector("[data-decide-hold-row='lunch']")).toBeTruthy();
+    expect(screen.getByText(holdingRoomTitle("lunch"))).toBeTruthy();
+    expect(screen.getByText(holdingRoomTitle("dinner"))).toBeTruthy();
+  });
+
+  it("does not say Done for today while lunch is still open", () => {
+    render(
+      <MealLogCard
+        macros={MACROS}
+        mealLogDate={localDateIso()}
+        decideNow={new Date(2026, 8, 2, 18, 10)}
+        profile={{ prefL: "chicken", foodAvoids: "" }}
+        todayLog={{
+          date: localDateIso(),
+          entries: [{
+            id: "b1",
+            name: "Breakfast",
+            cal: 905,
+            p: 64,
+            c: 53,
+            f: 47,
+            slot: "breakfast",
+            via: "recipe",
+          }],
+        }}
+      />,
+    );
+    fireEvent.click(document.querySelector("[data-decide-bar]"));
+    expect(screen.queryByText(DECIDE_COPY.doneToday)).toBeNull();
+    expect(document.querySelector("[data-decide-next-open='lunch']")).toBeTruthy();
+    expect(screen.getByText(decideNextCopy("lunch"))).toBeTruthy();
   });
 
   it("offers Decide dinner next after Log it so the sheet does not dead-end", async () => {
