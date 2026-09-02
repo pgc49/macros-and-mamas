@@ -19,6 +19,7 @@ import {
   coachRead,
   computeSlotBudget,
   decidePencilForSlot,
+  decideTakenSlots,
   defaultDecideSlot,
   deriveMealShares,
   isOverDay,
@@ -37,6 +38,7 @@ import {
   saveDecideSession,
   saveDecideSnackCount,
 } from "../lib/decideEvents";
+import { markDecideScroll, ownPointerClick, trapDecideEvent } from "../lib/decidePointerTrap";
 
 function historyNames(mealHistoryByDate, { slot, sinceIso, dates } = {}) {
   const any = [];
@@ -287,6 +289,7 @@ export function DecideSheet({
   const [planQuery, setPlanQuery] = useState("");
   const [snackCount, setSnackCount] = useState(() => loadDecideSnackCount(dateKey));
   const [afterMove, setAfterMove] = useState(null);
+  const [takenExtra, setTakenExtra] = useState([]);
   const refines = useRef(0);
   const snackLock = useRef(0);
   const lastFocusSlot = useRef(initialSlot);
@@ -318,7 +321,19 @@ export function DecideSheet({
   const coach = coachRead({ budget, remaining: budget?.remaining, slot, over });
   const laterSlot = budget?.laterSlots?.[0] || null;
   const laterPiece = laterSlot ? budget?.reserve?.bySlot?.[laterSlot] : null;
-  const nextOpenSlot = nextDecideSlot({ now, entries, plannedMeals });
+  const takenNow = decideTakenSlots({
+    entries,
+    plannedMeals,
+    extraSlots: takenExtra,
+  });
+  const laterCtaSlot = (budget?.laterSlots || []).find((s) => !takenNow.has(s)) || null;
+  const laterCtaPiece = laterCtaSlot ? budget?.reserve?.bySlot?.[laterCtaSlot] : null;
+  const nextOpenSlot = nextDecideSlot({
+    now,
+    entries,
+    plannedMeals,
+    extraTaken: takenExtra,
+  });
 
   const likes = useMemo(() => tokenizeLikes(slotPrefText(profile, slot)), [profile, slot]);
   const dislikes = useMemo(() => dislikeTokens(profile), [profile]);
@@ -371,24 +386,24 @@ export function DecideSheet({
     skipNames, prefer, offset, pencilled, over, slot,
   ]);
 
-  const laterBudget = laterSlot && bands
-    ? laterSlotAsBudget(laterSlot, shares, bands)
+  const laterBudget = laterCtaSlot && bands
+    ? laterSlotAsBudget(laterCtaSlot, shares, bands)
     : null;
   const laterRanked = useMemo(() => {
-    if (!laterBudget) return { cards: [], meals: [] };
-    const slotBank = bankMeals.filter((m) => normalizeSlot(m.cat || m.slot) === laterSlot);
-    const slotMine = (customMeals || []).filter((m) => normalizeSlot(m.slot || m.cat) === laterSlot);
+    if (!laterBudget || !laterCtaSlot) return { cards: [], meals: [] };
+    const slotBank = bankMeals.filter((m) => normalizeSlot(m.cat || m.slot) === laterCtaSlot);
+    const slotMine = (customMeals || []).filter((m) => normalizeSlot(m.slot || m.cat) === laterCtaSlot);
     return rankBankCards({
       bankMeals: slotBank.length >= 3 ? slotBank : bankMeals,
       myMeals: slotMine.length ? slotMine : customMeals,
-      pantryItems: laterSlot === "snack" ? pantryItems : [],
+      pantryItems: laterCtaSlot === "snack" ? pantryItems : [],
       budget: laterBudget,
-      likes: tokenizeLikes(slotPrefText(profile, laterSlot)),
+      likes: tokenizeLikes(slotPrefText(profile, laterCtaSlot)),
       dislikes,
       diet: profile?.diet,
-      slot: laterSlot,
+      slot: laterCtaSlot,
     });
-  }, [laterBudget, bankMeals, customMeals, pantryItems, profile, laterSlot, dislikes]);
+  }, [laterBudget, bankMeals, customMeals, pantryItems, profile, laterCtaSlot, dislikes]);
 
   useEffect(() => {
     if (!initialSlot || initialSlot === lastFocusSlot.current) return;
@@ -398,6 +413,7 @@ export function DecideSheet({
     setDetail(null);
     setPencilOpen(false);
     setAfterMove(null);
+    setTakenExtra([]);
     setPlanQuery("");
   }, [initialSlot]);
 
@@ -454,6 +470,19 @@ export function DecideSheet({
 
   useEffect(() => {
     if (!open) return undefined;
+    const mark = () => markDecideScroll();
+    window.addEventListener("scroll", mark, true);
+    window.addEventListener("wheel", mark, { capture: true, passive: true });
+    window.addEventListener("touchmove", mark, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("scroll", mark, true);
+      window.removeEventListener("wheel", mark, true);
+      window.removeEventListener("touchmove", mark, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const onKey = (e) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
@@ -487,6 +516,7 @@ export function DecideSheet({
     setPrefer(null);
     setOffset(0);
     setAfterMove(null);
+    setTakenExtra([]);
     setPlanQuery("");
   };
 
@@ -551,13 +581,14 @@ export function DecideSheet({
     setLevel("list");
     setDetail(null);
     setPlanQuery("");
+    setTakenExtra([forSlot]);
     const nextSlot = nextDecideSlot({
       now,
       entries,
       plannedMeals,
       extraTaken: [forSlot],
     });
-    setAfterMove(nextSlot && nextSlot !== forSlot && nextSlot !== slot ? { kind: "pencilled", nextSlot } : null);
+    setAfterMove(nextSlot && nextSlot !== forSlot ? { kind: "pencilled", nextSlot } : null);
   };
 
   const openCard = (card) => {
@@ -596,10 +627,22 @@ export function DecideSheet({
   return (
     <div
       data-decide-sheet={page ? "page" : "open"}
+      onPointerDown={trapDecideEvent}
+      onPointerUp={trapDecideEvent}
+      onClick={trapDecideEvent}
+      onTouchStart={trapDecideEvent}
+      onTouchEnd={trapDecideEvent}
       style={page ? {
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
+        flex: 1,
+        overflow: "hidden",
+        background: "#fff",
+        pointerEvents: "auto",
+        position: "relative",
+        zIndex: 4,
+        isolation: "isolate",
       } : {
         position: "fixed",
         inset: 0,
@@ -608,6 +651,7 @@ export function DecideSheet({
         flexDirection: "column",
         justifyContent: "flex-end",
         overflow: "hidden",
+        pointerEvents: "auto",
       }}
     >
       {page ? null : (
@@ -627,12 +671,20 @@ export function DecideSheet({
         role={page ? "region" : "dialog"}
         aria-label={DECIDE_COPY.title}
         onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={trapDecideEvent}
+        onPointerUp={trapDecideEvent}
+        onClick={trapDecideEvent}
+        onTouchStart={trapDecideEvent}
+        onTouchEnd={trapDecideEvent}
         style={page ? {
           minHeight: 0,
-          background: "transparent",
+          flex: 1,
+          background: "#fff",
           padding: 0,
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
+          pointerEvents: "auto",
         } : {
           height: "90vh",
           maxHeight: "90vh",
@@ -747,13 +799,13 @@ export function DecideSheet({
                   {macrosLine(budget.pNeed, budget.c, budget.f)}
                 </div>
               </div>
-              {laterSlot ? (
+              {laterCtaSlot ? (
                 <button
                   type="button"
                   onClick={() => setPencilOpen((v) => !v)}
                   style={{
                     textAlign: "left",
-                    border: laterPiece?.meal ? `1px solid ${T.border}` : `1px dashed ${T.border}`,
+                    border: laterCtaPiece?.meal ? `1px solid ${T.border}` : `1px dashed ${T.border}`,
                     borderRadius: 12,
                     padding: "8px 10px",
                     background: "#F8F3F5",
@@ -762,25 +814,26 @@ export function DecideSheet({
                   }}
                 >
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.inkSoft }}>
-                    {laterPiece?.meal
-                      ? `${SLOT_CHIP[laterSlot] || laterSlot}, ${DECIDE_COPY.pencilledBox}`
-                      : `${DECIDE_COPY.savedFor} ${DECIDE_SLOT_LABEL[laterSlot]}`}
+                    {laterCtaPiece?.meal
+                      ? `${SLOT_CHIP[laterCtaSlot] || laterCtaSlot}, ${DECIDE_COPY.pencilledBox}`
+                      : `${DECIDE_COPY.savedFor} ${DECIDE_SLOT_LABEL[laterCtaSlot]}`}
                   </div>
                   <div style={{ fontFamily: FD, fontSize: 20, marginTop: 2 }}>
-                    {laterPiece?.meal ? laterPiece.meal.name : `${Math.round(laterPiece?.cal || 0)} cal`}
+                    {laterCtaPiece?.meal ? laterCtaPiece.meal.name : `${Math.round(laterCtaPiece?.cal || 0)} cal`}
                   </div>
                   <div style={{ fontSize: 11.5, color: T.inkSoft, fontWeight: 600 }}>
-                    {laterPiece?.meal
-                      ? `${Math.round(laterPiece.cal)} cal · ${macrosLine(laterPiece.p, laterPiece.c, laterPiece.f)}`
-                      : macrosLine(laterPiece?.p, laterPiece?.c, laterPiece?.f)}
+                    {laterCtaPiece?.meal
+                      ? `${Math.round(laterCtaPiece.cal)} cal · ${macrosLine(laterCtaPiece.p, laterCtaPiece.c, laterCtaPiece.f)}`
+                      : macrosLine(laterCtaPiece?.p, laterCtaPiece?.c, laterCtaPiece?.f)}
                   </div>
                   <div style={{ fontSize: 11.5, color: T.accentDeep, fontWeight: 700, marginTop: 3 }}>
-                    {laterPiece?.meal ? DECIDE_COPY.change : knowLaterCopy(laterSlot)}
+                    {laterCtaPiece?.meal ? DECIDE_COPY.change : knowLaterCopy(laterCtaSlot)}
                   </div>
                 </button>
               ) : nextOpenSlot && nextOpenSlot !== slot ? (
                 <button
                   type="button"
+                  data-decide-next
                   data-decide-next-open={nextOpenSlot}
                   onClick={() => changeSlot(nextOpenSlot)}
                   style={{
@@ -798,6 +851,16 @@ export function DecideSheet({
                     {decideNextCopy(nextOpenSlot)}
                   </div>
                 </button>
+              ) : nextOpenSlot ? (
+                <div
+                  data-decide-next-open={nextOpenSlot}
+                  style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: "8px 10px", background: T.sageSoft }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.sage }}>{DECIDE_COPY.afterThis}</div>
+                  <div style={{ fontFamily: FD, fontSize: 20, marginTop: 2 }}>
+                    {decideNextCopy(nextOpenSlot)}
+                  </div>
+                </div>
               ) : (
                 <div style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: "8px 10px", background: T.sageSoft }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.sage }}>{DECIDE_COPY.afterThis}</div>
@@ -812,7 +875,7 @@ export function DecideSheet({
                 piece={budget.reserve?.bySlot?.snack}
               />
             ) : null}
-            {pencilOpen && laterSlot ? (
+            {pencilOpen && laterCtaSlot ? (
               <div style={{ marginTop: 8, border: `1px solid ${T.border}`, borderRadius: 14, padding: "8px 10px", background: "#FFF9FB" }}>
                 {(laterRanked.meals || []).slice(0, 3).map((m) => (
                   <div key={m.name} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 0", borderTop: `1px solid ${T.border}` }}>
@@ -822,7 +885,7 @@ export function DecideSheet({
                     </div>
                     <button
                       type="button"
-                      onClick={() => pencilCard(m, laterSlot)}
+                      onClick={() => pencilCard(m, laterCtaSlot)}
                       style={{
                         fontFamily: F,
                         fontWeight: 700,
@@ -967,7 +1030,8 @@ export function DecideSheet({
             </div>
             <div
               data-decide-sheet-scroll
-              style={{ overflow: "auto", flex: 1, minHeight: 0, marginTop: 10, display: "flex", flexDirection: "column", gap: 8, paddingBottom: 12 }}
+              onScroll={markDecideScroll}
+              style={{ overflow: "auto", flex: 1, minHeight: 0, marginTop: 10, display: "flex", flexDirection: "column", gap: 8, paddingBottom: 12, touchAction: "pan-y" }}
             >
               {searching ? (
                 searchHits.length ? searchHits.map((meal) => (
@@ -1053,10 +1117,11 @@ export function DecideSheet({
               style={{
                 flexShrink: 0,
                 background: "#fff",
-                padding: "8px 0 max(48px, env(safe-area-inset-bottom, 48px))",
+                padding: page ? "8px 0 10px" : "8px 0 max(48px, env(safe-area-inset-bottom, 48px))",
                 boxShadow: "0 -8px 16px rgba(51,39,46,0.04)",
                 position: "relative",
-                zIndex: 2,
+                zIndex: 3,
+                pointerEvents: "auto",
               }}
             >
               {mode === "pick" && !searching ? (
@@ -1069,7 +1134,11 @@ export function DecideSheet({
                     <button
                       key={id}
                       type="button"
-                      onClick={() => refine(id)}
+                      {...ownPointerClick((e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        refine(id);
+                      })}
                       style={{
                         fontFamily: F,
                         fontSize: 12,

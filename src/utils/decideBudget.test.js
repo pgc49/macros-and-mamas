@@ -275,6 +275,24 @@ describe("decideReservePlaceholders", () => {
     expect(holds[0].cal).toBeGreaterThan(0);
   });
 
+  it("still names a lunch hold at lunch time when lunch is empty", () => {
+    const budget = computeSlotBudget({
+      totals: BREAKFAST,
+      bands: BANDS,
+      slot: "lunch",
+      shares: DEFAULT_MEAL_SHARES,
+      loggedSlots: new Set(["breakfast"]),
+    });
+    const holds = decideReservePlaceholders({
+      plannedMeals: [],
+      entries: [{ slot: "breakfast" }],
+      budget,
+      shares: DEFAULT_MEAL_SHARES,
+      bands: BANDS,
+    });
+    expect(holds.map((h) => h.slot)).toEqual(["lunch", "dinner"]);
+  });
+
   it("hides a hold once that slot is pencilled", () => {
     const budget = computeSlotBudget({
       totals: BREAKFAST,
@@ -284,11 +302,14 @@ describe("decideReservePlaceholders", () => {
       loggedSlots: new Set(["breakfast"]),
       plannedMeals: [{ slot: "dinner", via: "decide", name: "Tacos", cal: 400, p: 40, c: 30, f: 10 }],
     });
-    expect(decideReservePlaceholders({
+    const holds = decideReservePlaceholders({
       plannedMeals: [{ slot: "dinner", via: "decide", name: "Tacos" }],
       entries: [{ slot: "breakfast" }],
       budget,
-    })).toEqual([]);
+      shares: DEFAULT_MEAL_SHARES,
+      bands: BANDS,
+    });
+    expect(holds.map((h) => h.slot)).toEqual(["lunch"]);
   });
 });
 

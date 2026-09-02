@@ -537,13 +537,27 @@ export function budgetSentence(budget) {
 }
 
 /** Lunch/dinner share-reserves that are not yet a named pencil or a log. */
-export function decideReservePlaceholders({ plannedMeals = [], entries = [], budget } = {}) {
+export function decideReservePlaceholders({
+  plannedMeals = [],
+  entries = [],
+  budget,
+  shares,
+  bands,
+} = {}) {
   const logged = loggedSlotsFromEntries(entries);
+  const useShares = shares || DEFAULT_MEAL_SHARES;
+  const highs = budget?.dayHighs;
+  const useBands = bands || (highs
+    ? { calHi: highs.cal, pLo: highs.p, pHi: highs.p, cHi: highs.c, fHi: highs.f }
+    : null);
   const out = [];
   for (const slot of ["lunch", "dinner"]) {
     if (logged.has(slot)) continue;
     if (planMealForSlot(plannedMeals, slot)) continue;
-    const piece = budget?.reserve?.bySlot?.[slot];
+    let piece = budget?.reserve?.bySlot?.[slot];
+    if ((!piece || !(piece.cal > 0)) && useBands) {
+      piece = shareReserve(slot, useShares, useBands);
+    }
     if (!piece || !(piece.cal > 0)) continue;
     out.push({
       slot,

@@ -16,9 +16,11 @@ vi.mock("../auth/useAuth.jsx", () => ({
 
 import { ClientApp } from "./ClientApp";
 import { resetDecideSnackCounts } from "../lib/decideEvents";
+import { resetDecideScroll } from "../lib/decidePointerTrap";
 
 afterEach(() => {
   resetDecideSnackCounts();
+  resetDecideScroll();
   cleanup();
 });
 

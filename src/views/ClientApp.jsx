@@ -42,6 +42,7 @@ import {
 } from "../utils/mealSearch";
 import { db } from "../db/db";
 import { useRef, useState } from "react";
+import { ownPointerClick } from "../lib/decidePointerTrap";
 
 export function ClientApp({
   tab, setTab,
@@ -190,18 +191,21 @@ export function ClientApp({
       }}
       aria-label="Main"
     >
-      {[["today", "Today"], ["meals", "Meals"], ["progress", "Progress"], ["messages", "Messages"]].map(([k, l]) => (
+      {[["today", "Today"], ["meals", "Meals"], ["progress", "Progress"], ["messages", "Messages"]].map(([k, l]) => {
+        const tabClick = ownPointerClick(() => {
+          if (k === "today") {
+            if (tab === "meals" && onDecideHome) decideNavLock.current = Date.now();
+            setTab("today");
+            return;
+          }
+          setTab(k);
+        });
+        return (
         <button
           key={k}
           type="button"
-          onClick={() => {
-            if (k === "today") {
-              if (tab === "meals" && onDecideHome) decideNavLock.current = Date.now();
-              setTab("today");
-              return;
-            }
-            setTab(k);
-          }}
+          onPointerDown={tabClick.onPointerDown}
+          onClick={tabClick.onClick}
           style={{
             fontFamily: F,
             fontSize: 13.5,
@@ -238,7 +242,8 @@ export function ClientApp({
             </span>
           )}
         </button>
-      ))}
+        );
+      })}
     </nav>
   );
 
@@ -526,6 +531,16 @@ export function ClientApp({
           </div>
 
           {onDecideHome ? (
+            <div
+              data-meals-decide-home
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
+                maxHeight: "calc(100dvh - 210px)",
+                overflow: "hidden",
+              }}
+            >
             <DecideSheet
               variant="page"
               open
@@ -552,6 +567,7 @@ export function ClientApp({
               }}
               onOpenPrefs={() => setMealFilter("Food prefs")}
             />
+            </div>
           ) : null}
 
           {showMealsSearch && (
