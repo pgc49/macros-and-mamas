@@ -6,6 +6,7 @@ import {
   QUIZ_DRIP_7D_PAUSED,
   QUIZ_PREGNANCY_NOTE,
 } from "../../functions/_shared/quizDrip.mjs";
+import { QUIZ_OPENING_WEEK_1H } from "../../functions/_shared/quizOpeningWeek1h.mjs";
 import {
   dripStopCopy,
   nextDripLine,
@@ -67,6 +68,20 @@ describe("planLeadDrips", () => {
     );
     expect(nextDripLine(plan, NOW)).toMatch(/^Next: Quiz drip \(\+2d\) · /);
     expect(nextDripLine(plan, NOW)).not.toMatch(/Due now/);
+  });
+
+  it("schedules opening week +1h before the +2d drip while still in the recovery window", () => {
+    const rangesAt = NOW - 90 * 60 * 1000;
+    const plan = planLeadDrips({
+      now: NOW,
+      lead: quizLead({ created_at: new Date(rangesAt).toISOString() }),
+      events: [rangesEvent({ created_at: new Date(rangesAt).toISOString() })],
+    });
+    expect(plan.remaining[0]).toEqual(expect.objectContaining({
+      emailType: QUIZ_OPENING_WEEK_1H,
+      due: true,
+    }));
+    expect(nextDripLine(plan, NOW)).toBe("Next: Quiz opening week (+1h) · Due now");
   });
 
   it("marks a due-but-unsent drip as due now, not sent", () => {

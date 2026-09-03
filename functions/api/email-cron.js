@@ -8,6 +8,7 @@
    #1 Finish joining: unpaid, created ≥1h / ≥24h, plus one Aug 26 PT last note
    #3 Intake reminder: paid, no macros, paid_at ≥24h / ≥72h (max two)
    Track A quiz drip: marketing_leads with no profile, +2d / last (+6d or Aug 26 PT)
+   Track A opening-week +1h: quiz_opening_week_1h (distinct from quiz_drip_2d)
    Track B finish-joining: unpaid profiles only — do not merge the tracks
    ================================================================== */
 
@@ -32,6 +33,10 @@ import {
 } from "../_shared/finishJoining.mjs";
 import { emailHasQuizUnlock } from "../_shared/pricing.js";
 import { sendQuizDripEmail } from "../_shared/quizDripSend.js";
+import { QUIZ_OPENING_WEEK_1H } from "../_shared/quizOpeningWeek1h.mjs";
+import { runQuizOpeningWeek1h } from "../_shared/quizOpeningWeek1hRun.js";
+
+export { runQuizOpeningWeek1h };
 
 const HOUR = 60 * 60 * 1000;
 
@@ -53,6 +58,7 @@ export async function onRequestPost({ request, env }) {
       quiz_drip_2d: 0,
       quiz_drip_7d: 0,
       quiz_pregnancy_note: 0,
+      quiz_opening_week_1h: 0,
       skipped: 0,
       errors: 0,
     };
@@ -146,6 +152,13 @@ export async function onRequestPost({ request, env }) {
         sent.errors += 1;
       }
     }
+
+    const openingWeek = await runQuizOpeningWeek1h({
+      env, base, key, now, profiles, mode: "cron", dryRun: false,
+    });
+    sent.quiz_opening_week_1h += openingWeek[QUIZ_OPENING_WEEK_1H] || 0;
+    sent.skipped += openingWeek.skipped;
+    sent.errors += openingWeek.errors;
 
     const drip = await runQuizLeadDrip({ env, base, key, now, profiles });
     sent.quiz_drip_2d += drip.quiz_drip_2d;

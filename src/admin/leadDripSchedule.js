@@ -10,6 +10,7 @@ import {
   planRemainingQuizDrips,
   QUIZ_RANGES_TYPE,
 } from "../../functions/_shared/quizDrip.mjs";
+import { planRemainingOpeningWeek1h } from "../../functions/_shared/quizOpeningWeek1h.mjs";
 import { canFinishPaying } from "../config";
 import { emailTypeLabel, normalizeEmailAddress } from "./emailLog";
 
@@ -100,6 +101,16 @@ export function planLeadDrips({
     return { track: "paid", remaining: [], stopReason: "paid", email };
   }
 
+  const quizRangesAt = quizRangesAtFromEvents(events);
+  const openingWeek = planRemainingOpeningWeek1h({
+    now,
+    lead,
+    profile,
+    unsubscribed: false,
+    sentTypes,
+    quizRangesAt,
+  });
+
   if (profile) {
     const nudgeAllowed = enrollmentOpen === false
       ? false
@@ -111,7 +122,12 @@ export function planLeadDrips({
       sentTypes,
       nudgeAllowed,
     });
-    return { track: "finish_joining", ...planned, email };
+    return {
+      track: "finish_joining",
+      remaining: [...openingWeek.remaining, ...planned.remaining],
+      stopReason: planned.stopReason,
+      email,
+    };
   }
 
   const planned = planRemainingQuizDrips({
@@ -120,7 +136,12 @@ export function planLeadDrips({
     profile: null,
     unsubscribed: false,
     sentTypes,
-    quizRangesAt: quizRangesAtFromEvents(events),
+    quizRangesAt,
   });
-  return { track: "quiz", ...planned, email };
+  return {
+    track: "quiz",
+    remaining: [...openingWeek.remaining, ...planned.remaining],
+    stopReason: planned.stopReason,
+    email,
+  };
 }
