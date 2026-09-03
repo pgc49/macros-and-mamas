@@ -50,6 +50,7 @@ describe("emailTypeLabel", () => {
       .toBe("Message to mama");
     expect(emailTypeLabel({ email_type: "welcome" })).toBe("Welcome");
     expect(emailTypeLabel({ email_type: "quiz_drip_2d" })).toBe("Quiz drip (+2d)");
+    expect(emailTypeLabel({ email_type: "quiz_opening_week_1h" })).toBe("Quiz opening week (+1h)");
     expect(emailTypeLabel({ email_type: "quiz_pregnancy_note" })).toBe("Quiz pregnancy note (+3d)");
   });
 });

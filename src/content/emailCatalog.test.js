@@ -42,11 +42,21 @@ describe("quiz drip catalog", () => {
     const ids = EMAIL_CATALOG.map((e) => e.id);
     expect(ids).toEqual(expect.arrayContaining([
       "quiz_ranges",
+      "quiz_opening_week_1h",
       "quiz_drip_2d",
       "quiz_drip_7d",
       "quiz_pregnancy_note",
     ]));
     expect(ids).not.toContain("quiz_drip_1d");
+    expect(ids).not.toContain("quiz_drip_1h");
+
+    const opening = EMAIL_CATALOG.find((e) => e.id === "quiz_opening_week_1h");
+    expect(opening.subject).toBe("[First name], opening week is underway");
+    expect(opening.trigger).toMatch(/quiz_opening_week_1h/);
+    expect(opening.trigger).not.toMatch(/quiz_drip_2d follow-up/);
+    expect(opening.bodyPreview).toMatch(/Join for \$249 after your quiz/);
+    expect(opening.bodyPreview).toMatch(/Finish checkout/);
+    expect(opening.bodyPreview).not.toMatch(/Doors close|Aug 27|Aug 31/);
     expect(ids).not.toContain("quiz_drip_3d");
     expect(ids).not.toContain("quiz_drip_plantbased");
 
@@ -108,6 +118,7 @@ describe("email catalog journey", () => {
     const journeys = catalogByJourney();
     expect(journeys[0].ids).toEqual([
       "quiz_ranges",
+      "quiz_opening_week_1h",
       "quiz_drip_2d",
       "quiz_drip_7d",
       "quiz_pregnancy_note",
@@ -139,6 +150,7 @@ describe("email catalog journey", () => {
 
     expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "welcome"))).toBe("#2");
     expect(EMAIL_CATALOG.find((e) => e.id === "welcome").trigger).toMatch(/complimentary/i);
+    expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "quiz_opening_week_1h"))).toBe("Q1h");
     expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "quiz_drip_2d"))).toBe("Q2");
     expect(catalogNumberLabel(EMAIL_CATALOG.find((e) => e.id === "quiz_one_more"))).toBe("Q+");
     const oneMore = EMAIL_CATALOG.find((e) => e.id === "quiz_one_more");

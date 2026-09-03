@@ -251,6 +251,30 @@ Callie
 (Reply anytime. Address footer on the branded template. Unsubscribe link in the footer.)`,
   },
   {
+    id: "quiz_opening_week_1h",
+    number: "Q1h",
+    name: "Quiz opening week · +1h",
+    status: "live",
+    trigger: "Track A sales quiz leads (main / early_pp_nurture). +1 hour after quiz_ranges (hourly cron, 8h recovery lookback). Distinct event quiz_opening_week_1h, not quiz_drip_2d. Suppress paid and unsubscribe only. Account-unpaid stays eligible with Finish checkout. No-account uses the quiz join path. CTA links carry utm_campaign=quiz_opening_week_1h for quiz-to-pay attribution. Idempotent via email_events + Resend key quiz_opening_week_1h/<lead-id>.",
+    subject: "[First name], opening week is underway",
+    audience: "Lead",
+    cta: "Join for $249 after your quiz · Finish checkout if they already have an unpaid account",
+    bodyPreview: `Hi [First name],
+
+You have your ranges. September's opening week is already underway, and if you want to start with this group, join today so you don't miss more of the kickoff.
+
+You'll have the mama community when you need it, plus me coaching you through the week.
+
+[Join for $249 after your quiz]
+
+Questions? Just reply. It comes to me.
+
+Callie
+Macros and Mamas
+
+(Account-unpaid CTA is Finish checkout. Reply anytime. Unsubscribe in the footer. No fake deadline. Subject stays off "Your ranges" so Gmail does not thread.)`,
+  },
+  {
     id: "quiz_drip_2d",
     number: "Q2",
     name: "Quiz drip · day 2",
@@ -408,7 +432,7 @@ export const EMAIL_JOURNEYS = [
     title: "Quiz, no account",
     track: "Track A",
     note: "Plant-based gets the first email only — no follow-up drip.",
-    ids: ["quiz_ranges", "quiz_drip_2d", "quiz_drip_7d", "quiz_pregnancy_note"],
+    ids: ["quiz_ranges", "quiz_opening_week_1h", "quiz_drip_2d", "quiz_drip_7d", "quiz_pregnancy_note"],
   },
   {
     id: "unpaid",
@@ -465,6 +489,7 @@ export const EMAIL_TYPE_LABELS = {
   eligibility_refund: "Refund confirm",
   cohort_open: "Cohort open (waitlist)",
   quiz_ranges: "Quiz ranges",
+  quiz_opening_week_1h: "Quiz opening week (+1h)",
   quiz_drip_2d: "Quiz drip (+2d)",
   quiz_drip_7d: "Quiz drip (last)",
   quiz_one_more: "Quiz one more note",
