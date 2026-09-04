@@ -16,6 +16,11 @@ import { CoachPanel } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
 import { COACH_COPY, COACH_DEFLECT } from "../content/coachVoice";
 
+// jsdom has no canvas, so the real downscale resolves null and no preview
+// would ever render here.
+const downscaleMock = vi.hoisted(() => vi.fn(async () => "QUJD"));
+vi.mock("../utils/imageDownscale", () => ({ downscaleImage: downscaleMock }));
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -246,6 +251,27 @@ describe("the coach only appears when it can help", () => {
     renderPanel({ macros: null });
     expect(screen.getByText(/unlocks once Callie approves/i)).toBeTruthy();
     expect(within(document.body).queryByRole("button", { name: COACH_COPY.askEat })).toBeNull();
+  });
+});
+
+/**
+ * A menu she photographs is tall and mostly white paper. As a plain flex child
+ * it got squashed to a one-pixel sliver against the "Menu ready" line, so the
+ * shot she just took looked like nothing had attached at all.
+ */
+describe("the photo she attached", () => {
+  it("stays a square she can see, not a sliver", async () => {
+    renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+
+    const file = new File(["x"], "menu.jpg", { type: "image/jpeg" });
+    const input = document.querySelector('input[type="file"]');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const img = await screen.findByAltText("Menu photo");
+    expect(img.style.flexShrink).toBe("0");
+    expect(img.style.flexBasis).toBe("44px");
+    expect(img.style.border).not.toBe("");
   });
 });
 

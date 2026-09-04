@@ -546,10 +546,13 @@ export function CoachPanel({
               style={{
                 width: 44,
                 height: 44,
+                // A flex row squashed the tall menu shot down to a sliver, so
+                // the photo she just took looked like nothing had attached.
+                flex: "0 0 44px",
                 borderRadius: 8,
                 objectFit: "cover",
-                // A photographed menu is mostly white paper. Without an edge it
-                // disappears into the composer and looks like nothing attached.
+                // And a photographed menu is mostly white paper, so without an
+                // edge it disappears into the composer.
                 border: `1px solid ${T.border}`,
                 background: "#fff",
               }}

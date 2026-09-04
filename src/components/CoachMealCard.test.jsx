@@ -100,9 +100,29 @@ describe("coach card after it is taken", () => {
 describe("the recipe sheet", () => {
   it("shows what's in it and how to make it", () => {
     render(<CoachMealSheet card={builtCard} onClose={vi.fn()} onLog={vi.fn()} />);
-    expect(screen.getByText("6 oz chicken thigh")).toBeTruthy();
+    expect(screen.getByText("6 oz Chicken thigh")).toBeTruthy();
     expect(screen.getByText("1 cup rice")).toBeTruthy();
     expect(screen.getByText("Sear 6 minutes a side.")).toBeTruthy();
+  });
+
+  it("gives every ingredient the same capital, however the model wrote it", () => {
+    render(
+      <CoachMealSheet
+        card={{
+          ...builtCard,
+          ingredients: [
+            { amount: "1/2c", item: "Farro" },
+            { amount: "1/2c", item: "blistered tomatoes" },
+            { amount: "2 tbsp", item: "salsa verde" },
+          ],
+        }}
+        onClose={vi.fn()}
+        onLog={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("1/2c Farro")).toBeTruthy();
+    expect(screen.getByText("1/2c Blistered tomatoes")).toBeTruthy();
+    expect(screen.getByText("2 tbsp Salsa verde")).toBeTruthy();
   });
 
   it("leaves out the headings when there is no recipe to show", () => {

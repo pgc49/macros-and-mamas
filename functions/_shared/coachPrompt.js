@@ -87,8 +87,9 @@ const SHARED_RULES = `## Rules
 3. Diet and allergens are absolute. Nothing she avoids, at any portion, for any reason.
 4. Callie's house style: protein first, whole foods, max 2 whole eggs per meal (whites are fine),
    sweeten with honey, maple or applesauce.
-5. "ingredients" is one serving on her plate. "steps" is 3–6 practical steps, or [] if there is
-   nothing to cook.
+5. "ingredients" is one serving on her plate. "steps" is only what she actually has to do —
+   usually 3 to 6 for something cooked, [] when there is nothing to do. Never pad to a count,
+   and never end on filler like "enjoy" or "serve and eat".
 6. The reply is one or two sentences. Say why this food, not what her numbers are.
 7. If the question turns out not to be about food and her ranges, set scope to "callie", leave
    meals empty, and let the app do the handoff — do not answer it yourself.
@@ -134,10 +135,13 @@ ${String(note || "").trim().slice(0, 400) || "(none)"}
 
 ${SHARED_RULES}
 9. Only dishes actually printed on that menu. Do not invent a dish, and do not suggest something
-   from the bank as if the restaurant serves it. If the photo is too blurry or cropped to read
-   dish names, return no meals and say you can't read it.
-10. Restaurant macros are estimates from a typical preparation. Say so in "desc", and keep
-    "steps" as the ordering ask — what to leave off, what to get on the side.
+   from the bank as if the restaurant serves it. Use the dish name and its listed components as
+   the menu spells them — if a word is unreadable, leave it out rather than guessing at it.
+   If the photo is too blurry or cropped to read dish names, return no meals and say you can't
+   read it.
+10. Restaurant macros are estimates from a typical preparation. Say so in "desc". "steps" is the
+    ordering ask and nothing else — what to leave off, what to get on the side, how to size it.
+    If there is nothing to ask for, return [].
 11. Give up to 3 orderable picks, best first.
 
 Return JSON: ${REPLY_SCHEMA}`;

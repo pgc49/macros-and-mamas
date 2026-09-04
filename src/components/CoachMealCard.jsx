@@ -11,14 +11,20 @@ function macroLine(meal) {
   return `${Math.round(meal.cal || 0)} cal · P ${Math.round(meal.p || 0)} · C ${Math.round(meal.c || 0)} · F ${Math.round(meal.f || 0)}`;
 }
 
+/**
+ * The model capitalises ingredient names however it feels, so one list came
+ * back as "1/2c Farro" over "1/2c blistered tomatoes". Lead every name with a
+ * capital rather than lowering any of them — lowering would eat proper nouns.
+ */
 function ingredientLines(meal) {
   const raw = Array.isArray(meal?.ingredients) ? meal.ingredients : [];
   return raw
     .map((line) => {
-      if (typeof line === "string") return line;
+      if (typeof line === "string") return line.trim();
       const amount = String(line?.amount || "").trim();
       const item = String(line?.item || line?.name || "").trim();
-      return [amount, item].filter(Boolean).join(" ");
+      const named = item ? item.charAt(0).toUpperCase() + item.slice(1) : "";
+      return [amount, named].filter(Boolean).join(" ");
     })
     .filter(Boolean);
 }
