@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { T, F, FD } from "../theme/tokens";
+import { logSaveSucceeded } from "../utils/logSave";
 import { Btn, Card, inputStyle } from "./ui";
 import {
   addDaysIso,
@@ -98,7 +99,7 @@ export function WeighInCard({
     setSaveError("");
     try {
       const ok = await onSave?.(w, selected);
-      if (ok !== true) setSaveError("Couldn't save that weigh-in — try again.");
+      if (!logSaveSucceeded(ok)) setSaveError("Couldn't save that weigh-in — try again.");
     } catch {
       setSaveError("Couldn't save that weigh-in — try again.");
     } finally {
