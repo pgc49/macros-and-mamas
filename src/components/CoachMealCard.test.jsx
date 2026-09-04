@@ -167,4 +167,15 @@ describe("the recipe sheet", () => {
     expect(screen.getByText("How to order it")).toBeTruthy();
     expect(screen.queryByText("How to make it")).toBeNull();
   });
+
+  it("does not offer a recipe for something the restaurant cooks", () => {
+    const menuCard = { ...builtCard, tag: "From the menu", source: "menu" };
+    const { unmount } = render(<CoachMealCard card={menuCard} onLog={vi.fn()} onOpen={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "How to order" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "See recipe" })).toBeNull();
+    unmount();
+
+    render(<CoachMealCard card={builtCard} onLog={vi.fn()} onOpen={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "See recipe" })).toBeTruthy();
+  });
 });

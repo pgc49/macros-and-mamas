@@ -62,6 +62,7 @@ export const COACH_COPY = {
   pencilIn: "Pencil in",
   ateIt: "Ate it",
   seeRecipe: "See recipe",
+  seeOrder: "How to order",
   saveToMine: "Save to My meals",
   savedToMine: "Saved to My meals",
   close: "Close",

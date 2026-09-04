@@ -165,7 +165,7 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
             style={{ ...actionBtn("ghost", false), border: "none", color: T.accentDeep }}
             onClick={() => onOpen(card)}
           >
-            {COACH_COPY.seeRecipe}
+            {card.source === "menu" ? COACH_COPY.seeOrder : COACH_COPY.seeRecipe}
           </button>
         )}
       </div>
