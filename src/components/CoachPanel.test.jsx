@@ -115,7 +115,7 @@ describe("the coach answers on the device", () => {
 describe("what isn't the coach's goes to Callie", () => {
   it("hands the deflected question over with her own words in it", async () => {
     const onAskCallie = vi.fn();
-    const postCoach = vi.fn(async () => ({ ok: true, deflect: "weight", meals: [] }));
+    const postCoach = vi.fn();
     renderPanel({ postCoach, onAskCallie });
 
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
@@ -124,9 +124,49 @@ describe("what isn't the coach's goes to Callie", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await screen.findByText(COACH_DEFLECT.weight.line);
-    fireEvent.click(screen.getByRole("button", { name: COACH_DEFLECT.weight.cta }));
+    expect(postCoach).not.toHaveBeenCalled();
 
+    fireEvent.click(screen.getByRole("button", { name: COACH_DEFLECT.weight.cta }));
     expect(onAskCallie).toHaveBeenCalledWith("why has the scale not moved in two weeks");
+  });
+
+  it("refuses the ones that matter without spending a request", async () => {
+    const cases = [
+      ["I've been dizzy since this morning", COACH_DEFLECT.care.line],
+      ["can I lower my calories", COACH_DEFLECT.ranges.line],
+      ["when does my plan end", COACH_DEFLECT.admin.line],
+      ["what workout should I do today", COACH_DEFLECT.offTopic.line],
+    ];
+
+    for (const [question, line] of cases) {
+      const postCoach = vi.fn();
+      renderPanel({ postCoach });
+
+      fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), { target: { value: question } });
+      fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+      await screen.findByText(line);
+      expect(postCoach).not.toHaveBeenCalled();
+      cleanup();
+    }
+  });
+
+  it("still answers the food part when the question also touched supply", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Eggs and toast with a yogurt on the side.",
+      meals: [],
+      aside: "supply",
+    }));
+    renderPanel({ postCoach });
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "what should I eat for breakfast if I'm nursing, will it affect my supply" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+    await screen.findByText("Eggs and toast with a yogurt on the side.");
+    expect(screen.getByText(COACH_DEFLECT.care.line)).toBeTruthy();
   });
 });
 

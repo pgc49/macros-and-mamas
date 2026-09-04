@@ -12,6 +12,7 @@ import { buildCoachAnswer, buildSuggestedCards, recentNamesForPrompt } from "../
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries } from "../utils/coachBudget";
 import { localCoachIntent } from "../utils/coachIntent";
+import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
 import { downscaleImage } from "../utils/imageDownscale";
 
 const QUICK_ASKS = [
@@ -273,18 +274,32 @@ export function CoachPanel({
       await send({ mode: kind, text, images });
       return;
     }
+    // The same guardrail the endpoint runs, run here as well. A question that
+    // isn't the coach's is handed to Callie in the frame she asked it, with no
+    // request made and nothing spent. The server keeps its copy as the
+    // authority, since this one is only as trustworthy as the browser.
+    const verdict = classifyAsk(text);
+    push({ role: "mama", body: text });
+    if (verdict.scope === "urgent") {
+      push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
+      return;
+    }
+
     // Answered here when it can be. She gets the cards in the same frame she
     // pressed send, and the model call is saved for a question that needs one.
     const intent = localCoachIntent(text);
     if (intent) {
-      push({ role: "mama", body: text });
       if (intent.kind === "read") answerWithRead({ echo: false });
       else if (intent.kind === "more") showMore({ echo: false });
       else answerWithCards({ prefer: intent.prefer, slot: intent.slot, echo: false });
       return;
     }
 
-    push({ role: "mama", body: text });
+    if (scopeIsRefused(verdict.scope)) {
+      push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
+      return;
+    }
+
     await send({ mode: "ask", text });
   };
 

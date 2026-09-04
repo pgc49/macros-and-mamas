@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyAsk, macrosPlausible, replyIsClean } from "./coachGuardrails.js";
+import {
+  classifyAsk,
+  macrosPlausible,
+  replyIsClean,
+  scopeIsRefused,
+} from "./coachGuardrails.js";
 
 const scopeOf = (text) => classifyAsk(text).scope;
 
@@ -95,14 +100,54 @@ describe("what the coach hands to Callie", () => {
     for (const ask of asks) expect(scopeOf(ask), ask).toBe("admin");
   });
 
-  it("declines anything that is not about food at all", () => {
+  it("declines anything that is plainly not about food", () => {
     const asks = [
       "write me a poem about the ocean",
       "what's a good name for a puppy",
       "help me write an email to my boss",
       "who won the game last night",
+      "what workout should I do today",
+      "how do I get the baby to sleep through the night",
+      "what should I watch tonight",
     ];
     for (const ask of asks) expect(scopeOf(ask), ask).toBe("off_topic");
+  });
+
+  it("refuses every scope that is Callie's, and only those", () => {
+    expect(scopeIsRefused("food")).toBe(false);
+    expect(scopeIsRefused("unclear")).toBe(false);
+    for (const scope of ["urgent", "ranges", "weight", "admin", "off_topic"]) {
+      expect(scopeIsRefused(scope), scope).toBe(true);
+    }
+  });
+});
+
+describe("a food question with no food word in it", () => {
+  /**
+   * The coach exists to answer these. Refusing a restaurant question because
+   * the mama happened not to type "eat" would fail her at the moment she is
+   * standing in a queue deciding, so they go to the model instead.
+   */
+  it("lets a restaurant or brand question through to the model", () => {
+    const asks = [
+      "is Chipotle ok tonight",
+      "we're going to Olive Garden",
+      "Panera or Sweetgreen",
+      "what about a burrito bowl",
+      "friend's birthday at an Italian place",
+    ];
+    for (const ask of asks) expect(scopeOf(ask), ask).toBe("unclear");
+  });
+
+  it("does not let an unclear ask outrank a refusal", () => {
+    expect(scopeOf("is Chipotle ok, I've been dizzy")).toBe("urgent");
+    expect(scopeOf("is Chipotle ok if I want to lose weight faster")).toBe("weight");
+    expect(scopeOf("Panera, and can you raise my calories")).toBe("ranges");
+  });
+
+  it("still prefers food over an off-topic word when both appear", () => {
+    expect(scopeOf("what should I eat after the gym")).toBe("food");
+    expect(scopeOf("breakfast ideas I can make while the baby naps")).toBe("food");
   });
 });
 

@@ -17,9 +17,19 @@
  * ranges   — her numbers are Callie's to set.
  * weight   — the scale is Callie's conversation, not a chatbot's.
  * admin    — plan, billing, dates, approval.
+ * off_topic— plainly not food: fitness, sleep, the baby, or being asked to be
+ *            a general assistant.
  * supply   — breastfeeding output. Cards are still fine; the supply part isn't.
+ * unclear  — none of the above and no food word either. "Is Chipotle ok
+ *            tonight?" is a food question with no food word in it, and
+ *            refusing it would fail the mama at exactly the moment she needs
+ *            the coach. These go to the model, which is told to hand anything
+ *            that isn't food back to Callie.
+ *
+ * The four refusal lists are what carry the guarantee, and they run first.
+ * Nothing that is Callie's reaches a model regardless of how the rest reads.
  */
-export const COACH_SCOPES = ["food", "urgent", "ranges", "weight", "admin", "off_topic"];
+export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "admin", "off_topic"];
 
 const URGENT = [
   // Symptoms
@@ -78,18 +88,47 @@ const SUPPLY = [
   /\b(enough|affect|hurt|drop|boost|increase|impact)\b[^.?!]{0,30}\b(milk|supply)\b/,
 ];
 
-/** Words that mean she is asking about food, not about herself. */
+/**
+ * Words that mean she is asking about food. Deliberately not a catch-all —
+ * "what should I" used to live here and swallowed every question in the app.
+ */
 const FOOD_ASK = new RegExp(
   [
     "\\beat(ing)?\\b", "\\bmeals?\\b", "\\blunch\\b", "\\bdinner\\b", "\\bbreakfast\\b",
-    "\\bsnacks?\\b", "\\bfood\\b", "\\brecipes?\\b", "\\border(ing)?\\b", "\\bmenu\\b",
-    "\\brestaurants?\\b", "\\bhungry\\b", "\\bcook(ing)?\\b", "\\bfridge\\b", "\\bpantry\\b",
-    "\\bcraving\\b", "\\bmacros?\\b", "\\bfits?\\b", "\\bleft\\b", "\\bprotein\\b",
-    "\\bcarbs?\\b", "\\bcalories\\b", "\\btakeout\\b", "\\btake[- ]out\\b", "\\bgrocer",
-    "\\bmake\\b", "\\bhave for\\b", "\\bwhat should i\\b",
+    "\\bbrunch\\b", "\\bsnacks?\\b", "\\bfood\\b", "\\brecipes?\\b", "\\border(ing)?\\b",
+    "\\bmenu\\b", "\\brestaurants?\\b", "\\bhungry\\b", "\\bcook(ing)?\\b", "\\bfridge\\b",
+    "\\bpantry\\b", "\\bcraving\\b", "\\bmacros?\\b", "\\bfits?\\b", "\\bleft\\b",
+    "\\bprotein\\b", "\\bcarbs?\\b", "\\bcalories\\b", "\\btakeout\\b", "\\btake[- ]out\\b",
+    "\\bgrocer", "\\bdelivery\\b", "\\bdoordash\\b", "\\buber eats\\b", "\\bgrubhub\\b",
+    "\\bhave for\\b", "\\bportions?\\b", "\\bserving\\b", "\\bplate\\b", "\\bdish\\b",
   ].join("|"),
   "i",
 );
+
+/**
+ * Plainly not food. Narrow on purpose: this list refuses outright, so anything
+ * arguable belongs in `unclear` where the model gets to look at it.
+ */
+const OFF_TOPIC = [
+  // Being asked to be a general assistant
+  /\b(write|draft|compose) (me )?(a|an|my)\b/, /\bhelp me write\b/, /\bsummari[sz]e\b/,
+  /\btranslate\b/, /\bwrite some code\b/, /\bdebug\b/,
+  // General knowledge and small talk
+  /\bwho (won|is|was)\b/, /\bwhat('?s| is) the (capital|weather|score|time in)\b/,
+  /\btell me a (joke|story)\b/, /\bpoem\b/, /\bname for (a|my)\b/,
+  // Fitness
+  /\b(workout|exercise|gym|cardio|lifting|weights|treadmill|yoga|pilates|peloton)\b/,
+  /\b(steps|running|jogging) (goal|target|per day)\b/,
+  // Sleep, the baby, the house
+  /\bsleep(ing)?\b/, /\bnaps?\b/, /\bbedtime\b/, /\binsomnia\b/,
+  /\b(daycare|teething|diapers?|stroller|car seat|nursery)\b/,
+  // Screens and downtime
+  /\b(tv|netflix|movie|watch|podcast|playlist)\b/,
+  // Other people
+  /\bmy (husband|partner|boss|coworker|mother in law|in ?laws)\b/,
+  // Appearance
+  /\b(skincare|hair loss|stretch marks|botox)\b/,
+];
 
 function hits(patterns, text) {
   return patterns.some((re) => re.test(text));
@@ -119,9 +158,29 @@ export function classifyAsk(raw) {
   if (hits(RANGES, text)) return { scope: "ranges", aside: null };
   if (hits(WEIGHT, text)) return { scope: "weight", aside: null };
   if (hits(ADMIN, text)) return { scope: "admin", aside: null };
-  if (!foodAsk) return { scope: "off_topic", aside: null };
+  if (foodAsk) return { scope: "food", aside: null };
+  if (hits(OFF_TOPIC, text)) return { scope: "off_topic", aside: null };
 
-  return { scope: "food", aside: null };
+  // No refusal matched and no food word either. The model looks at it.
+  return { scope: "unclear", aside: null };
+}
+
+/** True when the ask is Callie's and the coach must not put it to a model. */
+export function scopeIsRefused(scope) {
+  return scope !== "food" && scope !== "unclear";
+}
+
+/** Which of Callie's handoff lines a refused scope gets. */
+const DEFLECT_FOR_SCOPE = {
+  urgent: "care",
+  ranges: "ranges",
+  weight: "weight",
+  admin: "admin",
+  off_topic: "offTopic",
+};
+
+export function deflectForScope(scope) {
+  return DEFLECT_FOR_SCOPE[scope] || "offTopic";
 }
 
 /**

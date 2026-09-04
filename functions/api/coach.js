@@ -29,7 +29,13 @@ import {
   buildCoachMenuPrompt,
   COACH_SYSTEM,
 } from "../_shared/coachPrompt.js";
-import { classifyAsk, macrosPlausible, replyIsClean } from "../_shared/coachGuardrails.js";
+import {
+  classifyAsk,
+  deflectForScope,
+  macrosPlausible,
+  replyIsClean,
+  scopeIsRefused,
+} from "../_shared/coachGuardrails.js";
 import {
   callOpenRouter,
   logAiFailure,
@@ -57,15 +63,6 @@ const MODES = new Set(["ask", "menu", "kitchen"]);
 const COACH_FAILURE_COPY = {
   retryLabel: "ask me again",
   manualLabel: "pick something from Meals",
-};
-
-/** Said the same way every time, so a refusal never reads like a glitch. */
-const DEFLECT_MESSAGE = {
-  urgent: "care",
-  ranges: "ranges",
-  weight: "weight",
-  admin: "admin",
-  off_topic: "offTopic",
 };
 
 export async function onRequestPost({ request, env }) {
@@ -99,14 +96,16 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "Add a photo first." }, 400);
     }
 
-    // The guardrail runs before anything is spent. A photo of a menu is a
-    // food question by construction, so only free text is classified.
+    // The guardrail runs before anything is spent. The client runs the same
+    // classifier so most refusals never get here at all; this is the copy that
+    // can't be skipped by editing a request. A photo of a menu is a food
+    // question by construction, so only free text is classified.
     const verdict = mode === "ask" ? classifyAsk(text) : { scope: "food", aside: null };
-    if (verdict.scope !== "food") {
+    if (scopeIsRefused(verdict.scope)) {
       return json({
         ok: true,
         scope: verdict.scope,
-        deflect: DEFLECT_MESSAGE[verdict.scope] || "offTopic",
+        deflect: deflectForScope(verdict.scope),
         meals: [],
       });
     }
