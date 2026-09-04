@@ -24,6 +24,7 @@ import {
 } from "../utils/mealSlots";
 import { formatServings, ServingStepper, snapServings } from "../utils/servings";
 import { recipeNoteFromMeal } from "../utils/planMealShape";
+import { logSaveSucceeded } from "../utils/logSave";
 import { targetBands } from "../utils/weekPlan";
 import { filterMealsByRemaining, formatRoomLeft, roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
@@ -356,7 +357,7 @@ export function MealLogCard({
       serves: Number(meal.servings) || 1,
       ...(recipeNote ? { ingredients: recipeNote } : {}),
     });
-    if (ok === false) return false;
+    if (!logSaveSucceeded(ok)) return false;
     setSnapMenuOpen(false);
     setMethod(null);
     return true;
@@ -451,7 +452,7 @@ export function MealLogCard({
         logged_date: date,
         saveCustom: saveManualCustom,
       });
-      if (ok === false) {
+      if (!logSaveSucceeded(ok)) {
         setManualError("Couldn't save that meal — try again.");
         return;
       }
@@ -528,7 +529,7 @@ export function MealLogCard({
         via: nextVia,
         slot: resolveLogSlot(draft.slot),
       });
-      if (ok === false) {
+      if (!logSaveSucceeded(ok)) {
         setEditError("Couldn't save that meal — try again.");
         return;
       }
@@ -597,7 +598,7 @@ export function MealLogCard({
   const removeWhileEditing = async (id) => {
     if (savingEditRef.current) return;
     const ok = await onDeleteEntry?.(id);
-    if (ok === false) {
+    if (!logSaveSucceeded(ok)) {
       setEditError("Couldn't remove that meal — try again.");
       return;
     }
@@ -723,7 +724,7 @@ export function MealLogCard({
         saveCustom: saveEstimateCustom,
         slot: resolveLogSlot(logSlot),
       });
-      if (ok === false) return;
+      if (!logSaveSucceeded(ok)) return;
       setEstimateDraft(null);
       setSaveEstimateCustom(false);
       clearEstimateInputs();

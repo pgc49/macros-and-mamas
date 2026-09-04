@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { Fonts } from "../theme/Fonts";
 import { T, F, FD } from "../theme/tokens";
 import { MealLogCard } from "../components/MealLogCard";
 import { RecipeCreator } from "../components/RecipeCreator";
 
-/** Local-only preview of Today → My plan list + slot filter. */
+/** Local-only preview of Today logging — in-memory saves so QA can click every path. */
 const PREVIEW_CUSTOM = [
   { id: "c1", name: "Pulled Chicken Tacos", cal: 425, p: 48, c: 38, f: 7, ingredients: "5 oz chicken\n3 corn tortillas" },
   { id: "c2", name: "Turkey and Bacon", cal: 410, p: 36, c: 8, f: 22, slot: "dinner" },
@@ -17,7 +18,29 @@ const PREVIEW_PLAN = [
   { id: "p2", name: "Big pasta night", cal: 720, p: 28, c: 90, f: 22, slot: "dinner" },
 ];
 
+const PREVIEW_DATE = "2026-08-30";
+
 export function MealLogPreview() {
+  const [entries, setEntries] = useState([
+    { id: "seed", name: "Lunch bowl", cal: 1400, p: 90, c: 120, f: 45, via: "manual", slot: "lunch" },
+  ]);
+  const [customMeals, setCustomMeals] = useState(PREVIEW_CUSTOM);
+
+  const append = async (entry) => {
+    const row = {
+      id: `local-${Date.now()}`,
+      name: entry.name,
+      cal: Number(entry.cal) || 0,
+      p: Number(entry.p) || 0,
+      c: Number(entry.c) || 0,
+      f: Number(entry.f) || 0,
+      via: entry.via || "manual",
+      slot: entry.slot || "snack",
+    };
+    setEntries((list) => [...list, row]);
+    return true;
+  };
+
   return (
     <div style={{
       maxWidth: 430,
@@ -49,21 +72,34 @@ export function MealLogPreview() {
         color: T.ink,
       }}
       >
-        My plan list
+        Today log saves
       </h1>
       <p style={{ fontFamily: F, fontSize: 13, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
-        Compact cards, taller list, and the filter icon next to search.
+        In-memory only. Use Macros, My plan Add, and edit Save — a failed write keeps the form.
       </p>
       <MealLogCard
-        initialMethod="recipes"
-        customMeals={PREVIEW_CUSTOM}
+        initialMethod="manual"
+        customMeals={customMeals}
         plannedMeals={PREVIEW_PLAN}
         macros={{ cal: 1700, protein: 120, carbs: 150, fat: 50 }}
-        todayLog={{
-          date: "2026-08-30",
-          entries: [{ name: "Lunch bowl", cal: 1400, p: 90, c: 120, f: 45 }],
+        todayLog={{ date: PREVIEW_DATE, entries }}
+        mealLogDate={PREVIEW_DATE}
+        onManualLog={append}
+        onLogRecipe={append}
+        onConfirmEstimate={async (payload) => append({ ...payload, via: "adjusted" })}
+        onUpdateEntry={async (id, patch) => {
+          setEntries((list) => list.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+          return true;
         }}
-        mealLogDate="2026-08-30"
+        onDeleteEntry={async (id) => {
+          setEntries((list) => list.filter((e) => e.id !== id));
+          return true;
+        }}
+        onSaveCustomMeal={async (meal) => {
+          const saved = { ...meal, id: `c-${Date.now()}` };
+          setCustomMeals((list) => [saved, ...list]);
+          return saved;
+        }}
       />
       <div style={{ marginTop: 20 }}>
         <h2 style={{

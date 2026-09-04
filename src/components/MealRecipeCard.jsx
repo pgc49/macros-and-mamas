@@ -4,6 +4,7 @@ import { withRecipeDetail } from "../content/recipeDetails";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
 import { SlotChips } from "./SlotChips";
+import { logSaveSucceeded } from "../utils/logSave";
 
 function IngList({ items }) {
   const lines = Array.isArray(items) ? items : [];
@@ -66,7 +67,7 @@ export function MealRecipeCard({ meal, onLog, showLog = true }) {
             slot,
             fromPlanner: true,
           }, servings));
-          if (ok === false) {
+          if (!logSaveSucceeded(ok)) {
             setLogPhase("idle");
             return;
           }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card } from "./ui";
 import { formatLongDay, isTodayIso } from "../utils/dates";
+import { logSaveSucceeded } from "../utils/logSave";
 
 /** Soft water blue — distinct from brand accent, not purple. */
 const WATER = "#4F7F97";
@@ -45,7 +46,7 @@ export function WaterLogCard({
     const n = Number(customOz);
     if (!n || n <= 0 || busy) return;
     const ok = await onAdd?.(n);
-    if (ok === false) return;
+    if (!logSaveSucceeded(ok)) return;
     setCustomOz("");
     setCustomOpen(false);
   };

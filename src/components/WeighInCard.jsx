@@ -53,6 +53,7 @@ export function WeighInCard({
   const [selected, setSelected] = useState(today);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const byDate = useMemo(() => {
     const map = {};
@@ -94,8 +95,12 @@ export function WeighInCard({
     const w = parseFloat(input);
     if (!w || w <= 0) return;
     setBusy(true);
+    setSaveError("");
     try {
-      await onSave?.(w, selected);
+      const ok = await onSave?.(w, selected);
+      if (ok !== true) setSaveError("Couldn't save that weigh-in — try again.");
+    } catch {
+      setSaveError("Couldn't save that weigh-in — try again.");
     } finally {
       setBusy(false);
     }
@@ -249,6 +254,11 @@ export function WeighInCard({
             {busy ? "…" : existing ? "Save" : "Log it"}
           </Btn>
         </div>
+        {saveError ? (
+          <div style={{ marginTop: 8, fontSize: 13, color: T.amber, fontFamily: F }}>
+            {saveError}
+          </div>
+        ) : null}
 
         {existing && (
           <button
