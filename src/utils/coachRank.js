@@ -297,6 +297,12 @@ export function buildCoachCard(meal, budget, ctx = {}) {
   if (!servings) return null;
   const next = scaleMeal(meal, servings);
   next.affinity = slotAffinity(next, ctx.slot, ctx);
+  // The meal this card was sized for, stamped on so logging it can never land
+  // somewhere else. She asked about dinner, went to Messages and came back,
+  // and the panel had gone back to breakfast — the dinner she logged from the
+  // card still in front of her was filed under breakfast. Read after affinity,
+  // which must judge where the meal is from, not where it is being offered.
+  next.slot = ctx.slot || next.slot || null;
   next.score = scoreScaledMeal(next, budget, ctx);
   next.knowsYou = ctx.knowsYou || coachKnowsYou(next, ctx);
   next.reason = coachReason(next, budget, { over: ctx.over });

@@ -19,14 +19,27 @@ const SLOT_WORDS = [
   [/\b(breakfast|morning)\b/, "breakfast"],
   [/\b(lunch|midday)\b/, "lunch"],
   [/\b(dinner|supper|tonight|evening)\b/, "dinner"],
-  [/\b(snack)\b/, "snack"],
+  // "snack on" is one phrase; leaving "on" behind made "what should I snack
+  // on" unrecognisable and sent the one question the bank answers best to the
+  // model.
+  [/\b(snacks?)( on)?\b/, "snack"],
 ];
 
 /** Words that never change which answer she wants. */
 const STOPWORDS = /\b(for|the|a|an|of|today|right now|now|please|pls|hey|hi|ok|okay|coach|some|any|good|idea|ideas|option|options|suggestion|suggestions)\b/g;
 
-/** A question that has been reduced to nothing but its question word. */
-const STUB = /^(what|whats|what is|ideas|eat|food|meal|meals)$/;
+/**
+ * What's left once the slot word has been lifted out — "dinner?" on its own,
+ * or "what should I ___ for dinner". Only consulted when a slot was named, so
+ * these can be looser than the patterns that stand alone.
+ */
+const STUB = new RegExp([
+  "^(",
+  "what|whats|what is|ideas|eat|food|meal|meals",
+  "|what (should|can|could|do|will) i( do| have| eat| make| get)?",
+  "|im hungry for|i want|i need|how about|what about",
+  ")$",
+].join(""));
 
 const CARD_ASKS = [
   /^what (should|can|could|do|will) i (eat|have|make|cook|order|get)$/,

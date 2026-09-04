@@ -446,6 +446,23 @@ describe("a meal belongs at a meal", () => {
     expect(meals[0].name).toBe("Greek yogurt + berries");
   });
 
+  /**
+   * She asked about dinner, went to Messages, came back, and the panel had
+   * gone back to breakfast — the dinner she logged off the card still in front
+   * of her was filed under breakfast. The card carries its own slot now.
+   */
+  it("stamps a card with the meal it was sized for", () => {
+    const { meals } = rankBankCards({ bankMeals: mixed, budget: roomyBreakfast(), slot: "breakfast" });
+    expect(meals.every((m) => m.slot === "breakfast")).toBe(true);
+
+    const dinner = budgetFor({ cal: 900, p: 90, c: 80, f: 25 }, {
+      slot: "dinner",
+      loggedSlots: new Set(["breakfast", "lunch"]),
+    });
+    const built = buildCoachCard({ name: "Fridge scramble", cal: 380, p: 34, c: 18, f: 16 }, dinner, { slot: "dinner" });
+    expect(built.slot).toBe("dinner");
+  });
+
   it("never claims to know her when it doesn't", () => {
     const { meals } = rankBankCards({ bankMeals: mixed, budget: roomyBreakfast(), slot: "breakfast" });
     expect(meals.every((m) => !m.knowsYou || m.knowsYou !== "Close to what you usually eat")).toBe(true);
