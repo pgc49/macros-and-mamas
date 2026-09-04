@@ -551,8 +551,12 @@ export function CoachPanel({
                 flex: "0 0 44px",
                 borderRadius: 8,
                 objectFit: "cover",
-                // And a photographed menu is mostly white paper, so without an
-                // edge it disappears into the composer.
+                // Centre-cropping a menu lands on the blank gap between two
+                // courses. The top has the restaurant's name on it, so she can
+                // tell at a glance which photo she picked.
+                objectPosition: "top",
+                // And a menu is mostly white paper, so without an edge the
+                // preview disappears into the composer.
                 border: `1px solid ${T.border}`,
                 background: "#fff",
               }}
