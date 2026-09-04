@@ -28,6 +28,7 @@ import { coachRead, leftLine, macroStanding, slotLeftRead, tightestMacro, budget
 import { formatRangeProgress } from "./rangeProgress.js";
 import { mealFitsRemaining } from "./eatingOutImpact.js";
 import { targetBands } from "./weekPlan.js";
+import { COACH_COPY } from "../content/coachVoice.js";
 
 const MACROS = { cal: 1750, protein: 140, carbs: 160, fat: 55 };
 const BANDS = targetBands(MACROS);
@@ -385,6 +386,28 @@ describe("ranking", () => {
     });
     const { meals } = rankBankCards({ bankMeals: bank, budget: tiny, slot: "snack" });
     expect(meals).toHaveLength(0);
+  });
+
+  /**
+   * The card already says "· half portion" in its title. Saying "0.5
+   * servings." underneath is the same fact twice, in two different words.
+   */
+  it("does not restate the portion under a title that already carries it", () => {
+    const snackRoom = { cal: 220, pNeed: 12, pHigh: 20, c: 18, f: 8, remaining: { pHigh: 120 } };
+    const half = buildCoachCard(
+      { name: "Big scramble", cal: 420, p: 36, c: 29, f: 14 },
+      snackRoom,
+      { slot: "snack" },
+    );
+    expect(half.title).toContain("half portion");
+    expect(half.reason).not.toMatch(/servings/i);
+  });
+
+  it("never tells her a meal leaves 0g of fat", () => {
+    const tight = { ...budgetFor({ cal: 900, p: 90, c: 80, f: 25 }, { slot: "dinner" }), f: 4, pNeed: 20 };
+    const card = buildCoachCard({ name: "Lean plate", cal: 300, p: 30, c: 20, f: 6 }, tight, { slot: "dinner" });
+    expect(card.reason).not.toMatch(/leaves 0g/i);
+    expect(card.reason).toBe(COACH_COPY.reasonGets);
   });
 
   it("dresses a built meal with the same fit check as a bank meal", () => {

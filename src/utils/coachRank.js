@@ -180,22 +180,30 @@ export function proteinOverNote(meal, budget) {
   return p > headroom + 5 ? COACH_COPY.proteinOver : null;
 }
 
+/**
+ * The reason is not the place to restate the portion. The title above it
+ * already says "half portion", and "0.5 servings." underneath said the same
+ * fact in different words — two sentences for one number.
+ */
 export function coachReason(meal, budget, { over = false } = {}) {
   if (over) return COACH_COPY.reasonOver;
   const { p, f } = mealMacros(meal);
   const pNeed = budget?.pNeed || 0;
-  const prefix = (meal.servings || 1) !== 1 ? `${meal.servings} servings. ` : "";
   if (proteinClosesNeed(p, pNeed) && (budget?.f ?? 99) < 6) {
-    return `${prefix}${COACH_COPY.reasonFills} ${Math.round(Math.max(0, (budget?.f || 0) - f))}${COACH_COPY.reasonFillsTail}`;
+    // "Leaves 0g fat" is a sentence that tells her nothing and reads like the
+    // meal only just scraped in. Say the plain thing instead.
+    const fatLeft = Math.round(Math.max(0, (budget?.f || 0) - f));
+    if (fatLeft > 0) return `${COACH_COPY.reasonFills} ${fatLeft}${COACH_COPY.reasonFillsTail}`;
+    return COACH_COPY.reasonGets;
   }
-  if (proteinClosesNeed(p, pNeed)) return `${prefix}${COACH_COPY.reasonGets}`;
+  if (proteinClosesNeed(p, pNeed)) return COACH_COPY.reasonGets;
   if (pNeed > 0 && p / pNeed >= 0.7) {
     // The gap, not a stock line. Three cards in a row all saying "add a yogurt
     // later" is the tell of something with one sentence and three slots.
     const gap = Math.max(1, Math.round(pNeed - p));
-    return `${prefix}${COACH_COPY.reasonMost} ${gap}g ${COACH_COPY.reasonMostTail}`;
+    return `${COACH_COPY.reasonMost} ${gap}g ${COACH_COPY.reasonMostTail}`;
   }
-  return `${prefix}${COACH_COPY.reasonFits}`;
+  return COACH_COPY.reasonFits;
 }
 
 /**
