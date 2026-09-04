@@ -3,6 +3,8 @@ import { Fonts } from "../theme/Fonts";
 import { T, F, FD } from "../theme/tokens";
 import { MealLogCard } from "../components/MealLogCard";
 import { RecipeCreator } from "../components/RecipeCreator";
+import { WaterLogCard } from "../components/WaterLogCard";
+import { WeighInCard } from "../components/WeighInCard";
 
 /** Local-only preview of Today logging — in-memory saves so QA can click every path. */
 const PREVIEW_CUSTOM = [
@@ -25,6 +27,9 @@ export function MealLogPreview() {
     { id: "seed", name: "Lunch bowl", cal: 1400, p: 90, c: 120, f: 45, via: "manual", slot: "lunch" },
   ]);
   const [customMeals, setCustomMeals] = useState(PREVIEW_CUSTOM);
+  const [waterEntries, setWaterEntries] = useState([]);
+  const [weighins, setWeighins] = useState([]);
+  const [estimate, setEstimate] = useState(null);
 
   const append = async (entry) => {
     const row = {
@@ -75,8 +80,34 @@ export function MealLogPreview() {
         Today log saves
       </h1>
       <p style={{ fontFamily: F, fontSize: 13, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
-        In-memory only. Use Macros, My plan Add, and edit Save — a failed write keeps the form.
+        In-memory only. Click every save: Macros, My plan, estimate Save, edit, water, weigh-in.
       </p>
+      <button
+        type="button"
+        onClick={() => setEstimate({
+          meal: "Eggs and toast",
+          calories: 420,
+          protein_g: 28,
+          carbs_g: 32,
+          fat_g: 18,
+          items: ["2 eggs"],
+          confidence: "medium",
+        })}
+        style={{
+          fontFamily: F,
+          fontSize: 12,
+          fontWeight: 700,
+          margin: "0 0 12px",
+          padding: "8px 12px",
+          borderRadius: 999,
+          border: `1.5px solid ${T.border}`,
+          background: "#fff",
+          color: T.ink,
+          cursor: "pointer",
+        }}
+      >
+        Load demo estimate
+      </button>
       <MealLogCard
         initialMethod="manual"
         customMeals={customMeals}
@@ -84,9 +115,15 @@ export function MealLogPreview() {
         macros={{ cal: 1700, protein: 120, carbs: 150, fat: 50 }}
         todayLog={{ date: PREVIEW_DATE, entries }}
         mealLogDate={PREVIEW_DATE}
+        estimate={estimate}
         onManualLog={append}
         onLogRecipe={append}
-        onConfirmEstimate={async (payload) => append({ ...payload, via: "adjusted" })}
+        onConfirmEstimate={async (payload) => {
+          const ok = await append({ ...payload, via: "adjusted" });
+          if (ok) setEstimate(null);
+          return ok;
+        }}
+        onDiscardEstimate={() => setEstimate(null)}
         onUpdateEntry={async (id, patch) => {
           setEntries((list) => list.map((e) => (e.id === id ? { ...e, ...patch } : e)));
           return true;
@@ -129,6 +166,34 @@ export function MealLogPreview() {
             confidence: "high",
           })}
           onSaveCustomMeal={async (meal) => meal}
+        />
+      </div>
+      <WaterLogCard
+        date={PREVIEW_DATE}
+        goalOz={80}
+        bottleOz={24}
+        entries={waterEntries}
+        onAdd={async (oz) => {
+          setWaterEntries((list) => [...list, { id: `w-${Date.now()}`, oz }]);
+          return true;
+        }}
+        onUndo={async () => {
+          setWaterEntries((list) => list.slice(0, -1));
+        }}
+      />
+      <div style={{ marginTop: 16 }}>
+        <WeighInCard
+          weighins={weighins}
+          onSave={async (w, date) => {
+            setWeighins((list) => {
+              const without = list.filter((x) => x.date !== date);
+              return [...without, { date, w }].sort((a, b) => (a.date < b.date ? -1 : 1));
+            });
+            return true;
+          }}
+          onDelete={async (date) => {
+            setWeighins((list) => list.filter((x) => x.date !== date));
+          }}
         />
       </div>
     </div>

@@ -60,7 +60,17 @@ export function MealsTabPreview() {
         { id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 },
         { id: "c2", name: "Yogurt bowl", cal: 280, p: 28, c: 30, f: 6, slot: "breakfast" },
       ]}
-      weekPlanDays={[]}
+      weekPlanDays={[
+        {
+          day: "Mon",
+          meals: [
+            { id: "p1", name: "Protein oatmeal", cal: 310, p: 30, c: 40, f: 4, slot: "breakfast" },
+          ],
+        },
+      ]}
+      weekPlanWeekStart="2026-08-24"
+      onWeekPlanChange={noop}
+      onChangeWeekPlanWeek={noop}
     />
   );
 }
