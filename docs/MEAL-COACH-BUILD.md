@@ -134,6 +134,8 @@ other log surface.
   real macros for its slot instead of a generic share, and offers "Ate it" later.
 - **Save to My meals** → `custom_meals`, now including `steps`, so a coach-built recipe can be made again.
 - **See recipe** → the full ingredient list and method, for bank meals and coach-built ones alike.
+  Something off a menu says **How to order** instead, and the sheet behind it lists the ordering asks
+  — what to leave off, what to get on the side — because the restaurant is doing the cooking.
 
 A card carries the slot it was sized for. She asked about dinner, went to Messages, came back, the panel
 had reset to breakfast — and the dinner she logged from the card still in front of her filed under
