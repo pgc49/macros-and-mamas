@@ -20,6 +20,16 @@ describe("buildClientSummaryPayload", () => {
     expect(payload.meals[0].cal).toBe(1800);
     expect(assertNoMessageBodies(payload)).toBe(true);
     expect(JSON.stringify(payload)).not.toMatch(/attachment|image|photo/i);
+    expect(payload.started).toBe(false);
+    expect(payload.week).toBeNull();
+  });
+
+  it("marks her as not started when ranges are not approved", () => {
+    const payload = buildClientSummaryPayload({
+      client: { name: "Kristen", programWeek: null, programStarted: false },
+    });
+    expect(payload.week).toBeNull();
+    expect(payload.started).toBe(false);
   });
 
   it("rejects a payload that includes DM bodies", () => {

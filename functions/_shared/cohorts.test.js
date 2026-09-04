@@ -3,6 +3,7 @@ import {
   cohortByLabel,
   freeMonthEndsAt,
   hasFoundingFreeMonth,
+  mamaProgramWeekNumber,
   programWeekNumber,
 } from "./cohorts.js";
 
@@ -12,6 +13,13 @@ describe("shared August cohort dates", () => {
     expect(c2.programStart).toBe("2026-08-31T00:00:00.000Z");
     expect(c2.programEnd).toBe("2026-10-26T00:00:00.000Z");
     expect(programWeekNumber("2026-08", "2026-08-18T12:00:00.000Z")).toBe(0);
+  });
+
+  it("does not start a personal week before ranges are approved", () => {
+    expect(mamaProgramWeekNumber({
+      macrosApproved: false,
+      cohortLabel: "2026-07",
+    }, "2026-09-04T12:00:00.000Z")).toBe(0);
   });
 });
 

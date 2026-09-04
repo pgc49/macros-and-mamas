@@ -16,7 +16,7 @@ import {
 import { T, F, FD } from "../theme/tokens";
 import { rateOf } from "../utils/dates";
 import { buildMacroHistory, buildTrends, buildWaterHistory } from "../utils/progressSeries";
-import { adminCohortName, programWeekNumber, resolveProgramStartWeekIso } from "../lib/cohorts";
+import { adminCohortName, mamaProgramOpts, mamaProgramStartWeekIso, mamaProgramWeekNumber } from "../lib/cohorts";
 import { mergeGoalItems } from "../lib/goals";
 import { db } from "../db/db";
 import { PATHS } from "../routing";
@@ -317,7 +317,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
           goalItems,
           mealHistoryByDate: payload.mealHistoryByDate || {},
           waterLogsByDate: payload.waterLogsByDate || {},
-          programStartWeek: resolveProgramStartWeekIso(client?.cohort_label),
+          programStartWeek: mamaProgramStartWeekIso(mamaProgramOpts(client)),
         });
       })
       .catch((e) => {
@@ -426,13 +426,13 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   if (sel) {
     const r = rateOf(sel.weighins || []);
     const stage = sel.stage || (sel.status === "active" ? "active" : "awaiting_approval");
-    const weekNum = programWeekNumber(sel.cohort_label);
+    const weekNum = mamaProgramWeekNumber(mamaProgramOpts(sel));
     const flagChips = buildClientFlagChips({
       client: sel,
       checksByWeek: clientProgress?.checksByWeek || {},
       goalItems: clientProgress?.goalItems || [],
       macroHistory: clientProgress?.macroHistory || [],
-      programStartWeek: resolveProgramStartWeekIso(sel.cohort_label),
+      programStartWeek: mamaProgramStartWeekIso(mamaProgramOpts(sel)),
     });
     const referredLine = formatReferredBy(sel.referredBy);
     const thankLabel = thankReferrerLabel(sel.referredBy);
@@ -562,7 +562,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
               color: stage === "active" ? T.sage : T.amber,
             }}>
               {stage === "active"
-                ? (weekNum != null ? `Week ${weekNum} of 8` : "Active")
+                ? (weekNum >= 1 ? `Week ${weekNum} of 8` : "Active")
                 : "Pending"}
             </span>
           </div>
@@ -720,7 +720,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
                 waterGoalOz={clientProgress.waterGoalOz}
                 checksByWeek={clientProgress.checksByWeek}
                 goalItems={clientProgress.goalItems}
-                programStartWeek={resolveProgramStartWeekIso(sel.cohort_label)}
+                programStartWeek={mamaProgramStartWeekIso(mamaProgramOpts(sel))}
               />
               {!clientProgress.trends.locked && clientProgress.trends.items?.length > 0 && (
                 <Card style={{ marginTop: 12 }}>
