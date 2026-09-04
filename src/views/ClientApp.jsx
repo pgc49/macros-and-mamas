@@ -187,9 +187,10 @@ export function ClientApp({
   const tabs = [["today", "Today"], ["meals", "Meals"]];
   if (coachReady) tabs.push(["coach", "Coach"]);
   tabs.push(["progress", "Progress"], ["messages", "Messages"]);
-  // Five tabs no longer fit at the old padding: measured content was 397px
-  // against 366px of usable width on a 390px phone. These values fit down to
-  // a 320px screen and keep every tap target over 44px.
+  // Five labels are 24px wider than a 320px screen at comfortable padding, so
+  // the padding is small and the buttons take the width back with flex-grow.
+  // That way a 430px phone spends its extra 110px on tap targets instead of
+  // leaving a huddle of small text in the middle, and 320px still fits.
   const tight = tabs.length > 4;
 
   const tabBar = (
@@ -214,10 +215,11 @@ export function ClientApp({
           onClick={() => setTab(k)}
           style={{
             fontFamily: F,
-            fontSize: tight ? 13 : 13.5,
+            fontSize: 13.5,
             fontWeight: 700,
-            padding: tight ? "14px 7px" : "14px 14px",
+            padding: tight ? "14px 4px" : "14px 14px",
             minHeight: 48,
+            flex: tight ? "1 1 auto" : "0 0 auto",
             whiteSpace: "nowrap",
             borderRadius: 999,
             border: "none",

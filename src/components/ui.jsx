@@ -191,6 +191,14 @@ function accountInitials(profile, email) {
   return local.slice(0, 2).toUpperCase();
 }
 
+/**
+ * The gap under the scrolling content when the tab bar is docked. A panel with
+ * a `position: sticky` footer has to know this: sticky bottom:0 lands on the
+ * content edge, not the padding edge, so anything scrolling past shows through
+ * this strip underneath the footer unless the footer is stretched over it.
+ */
+export const SHELL_TAB_CONTENT_PAD = 20;
+
 export const Shell = ({ children, bottomBar = null, hideBottomBar = false, contentMaxWidth = 560 }) => {
   const { user, profile, isAdmin } = useAuth();
   const { pathname } = useLocation();
@@ -231,7 +239,7 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false, conte
           maxWidth: contentMaxWidth,
           width: "100%",
           margin: "0 auto",
-          padding: hasBarSlot ? "0 16px 20px" : "0 16px 90px",
+          padding: hasBarSlot ? `0 16px ${SHELL_TAB_CONTENT_PAD}px` : "0 16px 90px",
           boxSizing: "border-box",
           ...(hasBarSlot
             ? {

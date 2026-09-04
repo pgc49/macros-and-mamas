@@ -15,6 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { CoachPanel } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
 import { COACH_COPY, COACH_DEFLECT } from "../content/coachVoice";
+import { SHELL_TAB_CONTENT_PAD } from "./ui";
 
 // jsdom has no canvas, so the real downscale resolves null and no preview
 // would ever render here.
@@ -272,6 +273,58 @@ describe("the photo she attached", () => {
     expect(img.style.flexShrink).toBe("0");
     expect(img.style.flexBasis).toBe("44px");
     expect(img.style.border).not.toBe("");
+  });
+
+  it("lets her reach the photo library, not only the camera", async () => {
+    renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+
+    const input = document.querySelector('input[type="file"]');
+    expect(input.getAttribute("accept")).toBe("image/*");
+    // `capture` sends iOS straight to the camera with no way back to a menu
+    // she photographed earlier.
+    expect(input.hasAttribute("capture")).toBe(false);
+  });
+
+  it("says the photo chips open a photo", async () => {
+    renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+
+    expect(screen.getByRole("button", { name: "Photo of the menu" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Photo of my fridge" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "What's in my kitchen" })).toBeNull();
+  });
+
+  it("puts her own words in her bubble, not the chip's instruction", async () => {
+    const postCoach = vi.fn(async () => ({ ok: true, reply: "Go for the salmon.", meals: [] }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+
+    const file = new File(["x"], "menu.jpg", { type: "image/jpeg" });
+    fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } });
+    await screen.findByAltText("Menu photo");
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+    await screen.findByText("I'm eating out — here's the menu");
+    expect(screen.queryByText("Photo of the menu", { selector: "div" })).toBeNull();
+  });
+});
+
+/**
+ * The shell's bottom padding sits below the scrolling content, and a sticky
+ * footer stops at the content edge. Cards slid through the strip underneath
+ * the composer while she scrolled back up the thread.
+ */
+describe("the composer covers the bottom of the scroller", () => {
+  it("stretches over the shell's padding instead of leaving a window", async () => {
+    renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+
+    const composer = screen.getByLabelText(COACH_COPY.placeholder).closest("div").parentElement;
+    expect(composer.style.position).toBe("sticky");
+    expect(composer.style.bottom).toBe("0px");
+    expect(composer.style.marginBottom).toBe(`-${SHELL_TAB_CONTENT_PAD}px`);
+    expect(composer.style.paddingBottom).toBe(`${SHELL_TAB_CONTENT_PAD}px`);
   });
 });
 

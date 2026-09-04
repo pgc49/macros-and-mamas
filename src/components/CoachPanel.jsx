@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { T, F, FD } from "../theme/tokens";
+import { SHELL_TAB_CONTENT_PAD } from "./ui";
 import {
   COACH_ASK_CALLIE_PREFILL,
   COACH_COPY,
@@ -292,7 +293,7 @@ export function CoachPanel({
     setInput("");
     if (photo) {
       const kind = photo.kind;
-      push({ role: "mama", body: text || (kind === "menu" ? COACH_COPY.askOut : COACH_COPY.askKitchen), kind: "photo" });
+      push({ role: "mama", body: text || (kind === "menu" ? COACH_COPY.sentMenu : COACH_COPY.sentFridge), kind: "photo" });
       const images = [{ image_b64: photo.b64, media_type: "image/jpeg" }];
       setPhoto(null);
       await send({ mode: kind, text, images });
@@ -488,6 +489,10 @@ export function CoachPanel({
         <div ref={endRef} style={{ height: 1, scrollMarginBottom: 132 }} />
       </div>
 
+      {/* Sticky bottom:0 lands on the scroller's content edge, so the shell's
+          bottom padding stayed a live window onto the thread: scrolling back
+          up, cards slid through a strip below the composer. Stretched over it
+          with a negative margin so the footer is the last thing she can see. */}
       <div
         style={{
           position: "sticky",
@@ -495,6 +500,8 @@ export function CoachPanel({
           background: T.bg,
           paddingTop: 10,
           marginTop: 12,
+          marginBottom: -SHELL_TAB_CONTENT_PAD,
+          paddingBottom: SHELL_TAB_CONTENT_PAD,
         }}
       >
         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch" }}>
@@ -586,18 +593,31 @@ export function CoachPanel({
               borderRadius: "50%",
               border: `1.5px solid ${T.border}`,
               background: "#fff",
-              fontSize: 18,
+              color: T.inkSoft,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 0,
               cursor: "pointer",
               flex: "0 0 auto",
             }}
           >
-            ⌾
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M20.5 11.5 12 20a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.9-7.8"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
+          {/* No `capture` attribute. With it, iOS goes straight to the camera
+              and there is no way to reach a menu she photographed earlier. */}
           <input
             ref={fileRef}
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={onFile}
             style={{ display: "none" }}
           />

@@ -40,7 +40,7 @@ export const COACH_COPY = {
   placeholder: "Ask about a meal…",
   placeholderBusy: "One sec…",
   send: "Send",
-  addPhoto: "Add a photo",
+  addPhoto: "Attach a photo",
   photoMenu: "Menu",
   photoFridge: "Fridge",
   photoRemove: "Remove photo",
@@ -51,11 +51,18 @@ export const COACH_COPY = {
   openerFresh: "Nothing logged yet today, so the whole day is open.",
   openerDone: "You're done for today as far as I can tell.",
 
-  // Quick asks
+  // Quick asks. Two of these open a photo picker, so they say so — "What's in
+  // my kitchen" read like a question the coach would answer, then the camera
+  // came up unannounced.
   askEat: "What should I eat?",
-  askOut: "I'm eating out",
-  askKitchen: "What's in my kitchen",
+  askOut: "Photo of the menu",
+  askKitchen: "Photo of my fridge",
   askDay: "How's my day looking?",
+
+  // What her own message says once the photo is on its way. The chip label is
+  // an instruction; this is her sentence, and it should sound like one.
+  sentMenu: "I'm eating out — here's the menu",
+  sentFridge: "Here's what's in my fridge",
 
   // Card actions
   logIt: "Log it",

@@ -62,6 +62,26 @@ ${buildCustomMealsBlock(customMeals)}
 - Season note: ${profile?.seasonNote || "(none)"}`;
 }
 
+const SLOT_WHEN = {
+  breakfast: "breakfast, first thing in the morning",
+  lunch: "lunch, in the middle of the day",
+  dinner: "dinner, the evening meal",
+  snack: "a snack between meals",
+};
+
+/**
+ * Naming the slot once inside the budget heading was not enough: asked for
+ * breakfast ideas, the model offered a pan-seared salmon dinner. It has to be
+ * told what time of day it is answering for, in its own paragraph.
+ */
+function slotBlock(slot) {
+  const when = SLOT_WHEN[slot] || "her next meal";
+  return `## What she is deciding
+${when}. Every meal you suggest has to be something people actually eat then. A seared fish
+dinner is not breakfast however well the numbers land. If the only thing that fits is really
+another meal of the day, say so in the reply and suggest what does belong here.`;
+}
+
 function budgetBlock(budget, slot) {
   if (!budget) return "## Room for this meal\n(not available — suggest a normal-sized meal for the slot)";
   const n = (v) => Math.round(Number(v) || 0);
@@ -85,6 +105,8 @@ const SHARED_RULES = `## Rules
 2. Prefer her saved My meals first, then Callie's bank, then something original.
    Set "basedOn" to the exact saved or bank name when you used one.
 3. Diet and allergens are absolute. Nothing she avoids, at any portion, for any reason.
+   The time of day is nearly as firm: match the slot named above, and lean on what she says she
+   likes at that slot rather than her preferences for the others.
 4. Callie's house style: protein first, whole foods, max 2 whole eggs per meal (whites are fine),
    sweeten with honey, maple or applesauce.
 5. "ingredients" is one serving on her plate. "steps" is only what she actually has to do —
@@ -97,6 +119,8 @@ const SHARED_RULES = `## Rules
 
 export function buildCoachAskPrompt({ profile, budget, slot, question, customMeals = [], recentNames = [] }) {
   return `A mama in the program is asking you something. Answer it, or hand it back.
+
+${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
 
@@ -121,6 +145,8 @@ Return JSON: ${REPLY_SCHEMA}`;
 
 export function buildCoachMenuPrompt({ profile, budget, slot, note, customMeals = [], recentNames = [] }) {
   return `She is out and sent a photo of the menu. Tell her what to order.
+
+${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
 
@@ -149,6 +175,8 @@ Return JSON: ${REPLY_SCHEMA}`;
 
 export function buildCoachKitchenPrompt({ profile, budget, slot, note, customMeals = [], recentNames = [] }) {
   return `She sent a photo of what she has in. Build her something from it.
+
+${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
 
