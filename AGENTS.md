@@ -97,10 +97,10 @@ Cloudflare previews share the live Supabase project. Signing in as a paying mama
 not allowed. Use only the labeled accounts below. They are **comp — do not email or blast**.
 `pgchammas+…` addresses are hidden from Callie’s Home / People queues.
 
-- **Cohort 2 preview QA** — `pgchammas+qa-active@gmail.com` (`cohort_label=2026-08`, paid, comp,
-  `status=active`, macros approved, profile name “QA Tester”). Use this for Cloudflare PR preview
-  click-throughs (Today log, Meals, Progress, Messages). Ask Patrick for the password if you need
-  to sign in. Do not reset it (that emails him and breaks his login). Do not store the password here.
+- **Cohort 2 preview QA** — `pgchammas+qa-active@gmail.com` / `qatesting777`
+  (`cohort_label=2026-08`, paid, comp, `status=active`, macros approved, profile name “QA Tester”).
+  Use this for Cloudflare PR preview click-throughs (Today log, Meals, Progress, Messages).
+  Comp — do not email or blast. Do not reset the password unless Patrick asks.
 - **Founding** mama (`cohort_label=2026-07`, paid/active, not a real customer) — **not created yet**.
   Say so and skip founding-only checks.
 - Admin dogfood stays Callie/Patrick — **never** use `pgchammas@gmail.com` (no plus) as a throwaway.
