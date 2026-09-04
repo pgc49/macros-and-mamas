@@ -79,6 +79,11 @@ face, permanently — not in a tooltip. If the photo can't be read, the coach sa
 the top: no guilt, no exclamation points, no emojis, never "cheat", never "just", never call the coach
 an AI. She can edit that one file without touching a component.
 
+**Food for the time of day it actually is.** The deterministic engine ranks by slot affinity, and the
+model is told in its own paragraph which meal it is answering for (`slotBlock` in `coachPrompt.js`).
+Naming the slot once inside the budget heading was not enough in practice: asked for other breakfast
+ideas, the model offered a pan-seared salmon dinner that fit the numbers perfectly.
+
 **No fake intimacy.** A "knows you" chip appears only when it's true — she has eaten it at this meal 3+
 times, it matches a stated like, it was pencilled in earlier. An earlier draft fell through to "Close to
 what you usually eat" when nothing was known, which for a week-one mama is a sentence about a history
@@ -140,6 +145,18 @@ other log surface.
 A card carries the slot it was sized for. She asked about dinner, went to Messages, came back, the panel
 had reset to breakfast — and the dinner she logged from the card still in front of her filed under
 breakfast. The slot is stamped on the card at build time now.
+
+**Attaching a photo.** One paperclip, one picker: camera, library or files, whichever she has the shot
+in. It carried `capture="environment"` at first, which sends iOS straight to the lens with no way back
+to a menu she photographed at the table an hour ago.
+
+### The composer sits at the bottom of the scroller
+
+`Shell` takes `flushContent` for this tab, and the composer supplies the bottom spacing itself. A
+`position: sticky` footer pins inside its own containing block, so it stops at the scroller's *content*
+edge — the shell's 20px of padding below that stayed a live window, and the thread could be watched
+sliding through the strip under the composer. Stretching the footer over it does nothing: sticky clamps
+the margin box, so a negative bottom margin moves the painted edge nowhere. The padding has to go.
 
 ---
 
