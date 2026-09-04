@@ -42,7 +42,13 @@ function attachReplyPreviewLocal(list) {
 }
 
 /** Mama Messages tab — Callie 1:1 plus cohort channels. */
-export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange }) {
+export function MessagesPanel({
+  userId,
+  onUnreadChange,
+  onComposerFocusChange,
+  initialDraft = "",
+  onInitialDraftUsed,
+}) {
   const [dmMessages, setDmMessages] = useState([]);
   const [dmUnread, setDmUnread] = useState(0);
   const [channels, setChannels] = useState([]);
@@ -113,6 +119,12 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     refreshDm();
     refreshChannels();
   }, [refreshDm, refreshChannels]);
+
+  // A question handed over from the coach belongs to Callie, so a mama sitting
+  // on a cohort channel is moved back to the DM before the draft lands.
+  useEffect(() => {
+    if (String(initialDraft || "").trim()) setActivePill("callie");
+  }, [initialDraft]);
 
   useEffect(() => {
     if (!channels.length || deepLinkedChannel.current) return;
@@ -453,6 +465,8 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             showPushPrompt
             onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
             onComposerFocusChange={onComposerFocusChange}
+            initialDraft={initialDraft}
+            onInitialDraftUsed={onInitialDraftUsed}
           />
         </ErrorBoundary>
       )}

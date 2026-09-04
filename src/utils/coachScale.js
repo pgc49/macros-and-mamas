@@ -61,6 +61,22 @@ export function coachPlanFieldsFromCard(card, qtyOverride) {
   };
 }
 
+/**
+ * How the log row should describe where its numbers came from.
+ *
+ * The coach must not make a bank recipe look like a guess or a guess look
+ * exact, so this maps the card's source onto the same `via` values the rest
+ * of the log uses. That the coach was involved is recorded separately, as
+ * `origin`.
+ */
+export function coachCardVia(card) {
+  const source = card?.source;
+  if (source === "my") return "custom";
+  if (source === "menu") return "menu";
+  if (source === "kitchen" || source === "new") return "describe";
+  return "recipe";
+}
+
 /** Grey pencilled row and "Ate it". Coach pencils use qty only. */
 export function coachDisplayMacros(planMeal) {
   const qty = planMeal?.via === COACH_VIA

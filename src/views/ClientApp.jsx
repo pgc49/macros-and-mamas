@@ -23,6 +23,9 @@ import { FoodPrefsEditor } from "../components/FoodPrefsEditor";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { TechHelpFooter } from "../components/TechHelpFooter";
 import { MessagesPanel } from "../components/MessagesPanel";
+import { CoachPanel } from "../components/CoachPanel";
+import { CoachEntry } from "../components/CoachEntry";
+import { buildCoachAnswer, coachIsAvailable } from "../utils/coachSession";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals, targetBands } from "../utils/weekPlan";
 import {
@@ -39,7 +42,7 @@ import {
   uniqueMealsByName,
 } from "../utils/mealSearch";
 import { db } from "../db/db";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 export function ClientApp({
   tab, setTab,
@@ -80,6 +83,16 @@ export function ClientApp({
   userId = null,
   unreadMessages = 0,
   onUnreadMessagesChange,
+  mealHistoryByDate = {},
+  onLogCoachCard,
+  onPencilCoachCard,
+  onSaveCoachCard,
+  onAskCallie,
+  onLoadCoachThread,
+  onAppendCoachMessage,
+  postCoach,
+  messagesDraft = "",
+  onMessagesDraftUsed,
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
   const [mealQuery, setMealQuery] = useState("");
@@ -153,14 +166,40 @@ export function ClientApp({
     const floor = addDaysIso(wkStartOf(), -7 * 52);
     return fromChecks < floor ? fromChecks : floor;
   })();
+  const todayEntries = entriesForLogDate(mealLogDate || todayLog?.date, mealLogsByDate, todayLog);
+  const coachReady = coachIsAvailable({ macros, mealLogDate: mealLogDate || todayLog?.date });
+  const coachAnswer = useMemo(
+    () => (coachReady
+      ? buildCoachAnswer({
+        profile,
+        macros,
+        totals,
+        entries: todayEntries,
+        plannedMeals: planMealsForLogDate,
+        mealHistoryByDate,
+        customMeals,
+      })
+      : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [coachReady, profile, macros, totals, mealLogsByDate, mealLogDate, planMealsForLogDate, mealHistoryByDate, customMeals],
+  );
+
+  const tabs = [["today", "Today"], ["meals", "Meals"]];
+  if (coachReady) tabs.push(["coach", "Coach"]);
+  tabs.push(["progress", "Progress"], ["messages", "Messages"]);
+  // Five tabs no longer fit at the old padding: measured content was 397px
+  // against 366px of usable width on a 390px phone. These values fit down to
+  // a 320px screen and keep every tap target over 44px.
+  const tight = tabs.length > 4;
+
   const tabBar = (
     <nav
       style={{
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        gap: 4,
-        padding: "12px 12px 4px",
+        gap: tight ? 2 : 4,
+        padding: tight ? "12px 6px 4px" : "12px 12px 4px",
         maxWidth: 560,
         margin: "0 auto",
         boxSizing: "border-box",
@@ -168,17 +207,18 @@ export function ClientApp({
       }}
       aria-label="Main"
     >
-      {[["today", "Today"], ["meals", "Meals"], ["progress", "Progress"], ["messages", "Messages"]].map(([k, l]) => (
+      {tabs.map(([k, l]) => (
         <button
           key={k}
           type="button"
           onClick={() => setTab(k)}
           style={{
             fontFamily: F,
-            fontSize: 13.5,
+            fontSize: tight ? 13 : 13.5,
             fontWeight: 700,
-            padding: "14px 14px",
+            padding: tight ? "14px 7px" : "14px 14px",
             minHeight: 48,
+            whiteSpace: "nowrap",
             borderRadius: 999,
             border: "none",
             cursor: "pointer",
@@ -271,6 +311,15 @@ export function ClientApp({
               </div>
             )}
           </Card>
+
+          {coachAnswer && (
+            <CoachEntry
+              answer={coachAnswer}
+              entries={todayEntries}
+              plannedMeals={planMealsForLogDate}
+              onOpen={() => setTab("coach")}
+            />
+          )}
 
           <MealLogCard
             macros={macros}
@@ -628,6 +677,37 @@ export function ClientApp({
         </>
       )}
 
+      {tab === "coach" && (
+        <ErrorBoundary
+          name="CustomerCoach"
+          title="The coach hit a snag"
+          message="Nothing you logged is affected. Meals still has the full bank, and Today still works."
+          resetKeys={[userId, tab]}
+        >
+          <CoachPanel
+            profile={profile}
+            macros={macros}
+            totals={totals}
+            entries={todayEntries}
+            plannedMeals={planMealsForLogDate}
+            mealHistoryByDate={mealHistoryByDate}
+            customMeals={customMeals}
+            weekPlanDays={weekPlanDays}
+            mealLogDate={mealLogDate}
+            onLogCard={onLogCoachCard}
+            onPencilCard={onPencilCoachCard}
+            onSaveCard={onSaveCoachCard}
+            onAskCallie={(text) => {
+              onAskCallie?.(text);
+              setTab("messages");
+            }}
+            onLoadThread={onLoadCoachThread}
+            onAppendMessage={onAppendCoachMessage}
+            postCoach={postCoach}
+          />
+        </ErrorBoundary>
+      )}
+
       {tab === "messages" && (
         <>
           <ErrorBoundary
@@ -640,6 +720,8 @@ export function ClientApp({
               userId={userId}
               onUnreadChange={onUnreadMessagesChange}
               onComposerFocusChange={setComposerFocused}
+              initialDraft={messagesDraft}
+              onInitialDraftUsed={onMessagesDraftUsed}
             />
           </ErrorBoundary>
           {!composerFocused && <TechHelpFooter />}

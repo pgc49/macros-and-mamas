@@ -131,6 +131,7 @@ export const COACH_COPY = {
   // Results
   noneFit:
     "Nothing in the bank fits what's left at a normal portion. Tell me what you've got and I'll build something.",
+  seenAll: "That's everything that fits, so here's the round again.",
   browseEverything: "Browse everything",
   fridgeThird: "Tell me what's in your kitchen and I'll build a third.",
   loggedShort: "Logged.",
