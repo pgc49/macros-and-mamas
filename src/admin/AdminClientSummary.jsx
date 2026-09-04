@@ -4,7 +4,7 @@ import { Card, Btn } from "../components/ui";
 import { db } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { buildClientSummaryPayload } from "./clientSummaryPayload";
-import { programWeekNumber } from "../lib/cohorts";
+import { mamaProgramOpts, mamaProgramWeekNumber } from "../lib/cohorts";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -26,19 +26,6 @@ export function AdminClientSummary({ client, progress, progressLoading = false, 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const loadCached = async (force) => {
-    if (!client?.id) return;
-    if (!force) {
-      const cached = await db.loadClientSummary(client.id, todayIso());
-      if (cached) {
-        setRow(cached);
-        setError("");
-        return cached;
-      }
-    }
-    return null;
-  };
-
   const generate = async () => {
     if (!client?.id) return;
     setBusy(true);
@@ -47,8 +34,13 @@ export function AdminClientSummary({ client, progress, progressLoading = false, 
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error("Sign in again to generate a summary.");
+      const week = mamaProgramWeekNumber(mamaProgramOpts(client));
       const payload = buildClientSummaryPayload({
-        client: { ...client, programWeek: programWeekNumber(client.cohort_label) },
+        client: {
+          ...client,
+          programWeek: week >= 1 ? week : null,
+          programStarted: week >= 1,
+        },
         progress,
         weighins: client.weighins || [],
         macros: client.macros,
@@ -86,14 +78,12 @@ export function AdminClientSummary({ client, progress, progressLoading = false, 
     let cancelled = false;
     setRow(null);
     setError("");
-    if (progressLoading) return undefined;
-    loadCached(false).then((cached) => {
-      if (cancelled || cached) return;
-      generate();
+    if (!client?.id) return undefined;
+    db.loadLatestClientSummary(client.id).then((cached) => {
+      if (!cancelled) setRow(cached);
     });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- generate once progress is ready
-  }, [client?.id, progressLoading]);
+  }, [client?.id]);
 
   return (
     <>
@@ -119,8 +109,8 @@ export function AdminClientSummary({ client, progress, progressLoading = false, 
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
           <div style={{ fontFamily: FD, fontSize: 18 }}>Summary</div>
-          <Btn small ghost disabled={busy} onClick={generate}>
-            {busy ? "Updating…" : "Refresh"}
+          <Btn small ghost disabled={busy || progressLoading} onClick={generate}>
+            {busy ? "Updating…" : row ? "Refresh" : "Write summary"}
           </Btn>
         </div>
         {row ? (
@@ -139,7 +129,10 @@ export function AdminClientSummary({ client, progress, progressLoading = false, 
           </>
         ) : (
           <p style={{ fontSize: 13.5, color: error ? T.amber : T.inkSoft, margin: "8px 0 0" }}>
-            {error || (busy ? "Writing a summary from her logs…" : "Summary unavailable")}
+            {error
+              || (busy
+                ? "Writing a summary from her logs…"
+                : "No summary yet. Refresh when you want a snapshot from her logs.")}
           </p>
         )}
       </Card>

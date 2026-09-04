@@ -6,4 +6,5 @@ export function assertNoMessageBodies(payload) {
 
 export const CLIENT_SUMMARY_HINT = `Respond with ONLY a JSON object:
 {"summary":"2-3 sentences, descriptive only, facts from the payload","suggested_touch":"one sentence message idea: celebrate, nudge, or check in"}
-Do not give medical advice or diagnoses. Do not invent weigh-ins, meals, or habits that are not in the payload.`;
+Do not give medical advice or diagnoses. Do not invent weigh-ins, meals, or habits that are not in the payload.
+If week is null or started is false she has not started — Callie has not approved her ranges yet. Do not invent a program week.`;
