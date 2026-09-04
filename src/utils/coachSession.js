@@ -99,7 +99,7 @@ export function buildCoachAnswer({
   const loggedSlots = loggedSlotsFromEntries(entries);
   const shares = deriveMealShares(mealHistoryByDate);
   const budget = attachDayHighs(
-    computeSlotBudget({ totals, bands, slot, plannedMeals, shares, loggedSlots, snackCount }),
+    computeSlotBudget({ totals, bands, slot, plannedMeals, shares, loggedSlots, snackCount, now }),
     bands,
   );
   const remaining = remainingForCoach(totals, bands);

@@ -117,14 +117,24 @@ export function CoachPanel({
    * Catch up on today, or — if there's nothing to catch up on — answer the
    * question she opened the coach to ask. Making her tap "What should I eat?"
    * to get an answer that was already worked out is a step for nothing.
+   *
+   * No cancel-on-unmount flag here, deliberately. StrictMode runs an effect,
+   * tears it down and runs it again: the first pass claimed `openedRef` and
+   * started the read, the second pass saw the claim and stood down, and then
+   * the first pass came back to a torn-down flag and dropped the rows on the
+   * floor. Both halves of the coach failed that way — it never answered on
+   * open, and the thread looked wiped every time she came back from Messages
+   * even though every message was safely in the table.
+   *
+   * `answerReady` is in the deps because macros can arrive a paint late, and
+   * an effect that bails on a null answer and never re-runs never answers.
    */
+  const answerReady = Boolean(answer);
   useEffect(() => {
-    if (openedRef.current || !answerRef.current) return;
+    if (openedRef.current || !answerReady) return;
     openedRef.current = true;
-    let alive = true;
     (async () => {
       const rows = await onLoadThread?.();
-      if (!alive) return;
       if (Array.isArray(rows) && rows.length) {
         setThread(rows.map((r) => ({
           id: r.id,
@@ -139,9 +149,8 @@ export function CoachPanel({
       }
       answerWithCards({ echo: false });
     })();
-    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onLoadThread]);
+  }, [onLoadThread, answerReady]);
 
   useEffect(() => {
     if (!thread.length) return;

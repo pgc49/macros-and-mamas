@@ -8,6 +8,7 @@
  *  - the coach doesn't hand back a card she has already turned down
  */
 
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
@@ -245,5 +246,80 @@ describe("the coach only appears when it can help", () => {
     renderPanel({ macros: null });
     expect(screen.getByText(/unlocks once Callie approves/i)).toBeTruthy();
     expect(within(document.body).queryByRole("button", { name: COACH_COPY.askEat })).toBeNull();
+  });
+});
+
+/**
+ * The app renders under StrictMode, which runs an effect, tears it down and
+ * runs it again. Both halves of the open — answering, and coming back to
+ * today's thread — went missing under it while every plain-render test here
+ * stayed green, so the double-invoke has its own tests.
+ */
+describe("opening the coach twice over, the way React does", () => {
+  const renderStrict = (props = {}) => render(
+    <StrictMode>
+      <CoachPanel
+        profile={PROFILE}
+        macros={MACROS}
+        totals={TOTALS}
+        entries={[]}
+        plannedMeals={[]}
+        mealHistoryByDate={{}}
+        customMeals={[]}
+        {...props}
+      />
+    </StrictMode>,
+  );
+
+  it("still answers on open", async () => {
+    renderStrict({ postCoach: vi.fn(), onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+  });
+
+  it("still comes back to today's thread", async () => {
+    renderStrict({
+      postCoach: vi.fn(),
+      onLoadThread: async () => [
+        { id: "r1", role: "mama", body: "what should I eat", kind: "text", payload: null },
+        { id: "r2", role: "coach", body: "Earlier answer.", kind: "text", payload: null },
+      ],
+    });
+    await screen.findByText("Earlier answer.");
+  });
+
+  it("answers once, not once per pass", async () => {
+    const onAppendMessage = vi.fn();
+    renderStrict({ postCoach: vi.fn(), onLoadThread: async () => [], onAppendMessage });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    expect(onAppendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers once her ranges arrive, even a paint late", async () => {
+    // Stable across the rerender, the way App.jsx's useCallback is. A fresh
+    // one each render would re-run the effect for the wrong reason and the
+    // test would pass without proving anything.
+    const onLoadThread = async () => [];
+    const postCoach = vi.fn();
+    const tree = (macros) => (
+      <StrictMode>
+        <CoachPanel
+          profile={PROFILE}
+          macros={macros}
+          totals={TOTALS}
+          entries={[]}
+          plannedMeals={[]}
+          mealHistoryByDate={{}}
+          customMeals={[]}
+          postCoach={postCoach}
+          onLoadThread={onLoadThread}
+        />
+      </StrictMode>
+    );
+
+    const { rerender } = render(tree(null));
+    expect(cardTitles()).toHaveLength(0);
+
+    rerender(tree(MACROS));
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
   });
 });

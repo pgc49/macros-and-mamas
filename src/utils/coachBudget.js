@@ -37,15 +37,27 @@ export function loggedSlotsFromEntries(entries) {
   return set;
 }
 
-export function laterSlotsAfter(selected, loggedSlots = new Set()) {
-  // A snack is squeezed between meals, so every main she hasn't eaten yet is
-  // still to come. Placing it after lunch meant a 3pm snack was handed lunch's
-  // room on a day she hadn't eaten lunch, and 57g of protein came back as a
-  // snack suggestion.
-  if (selected === "snack") return MAIN_SLOTS.filter((s) => !loggedSlots.has(s));
-  const idx = MAIN_SLOTS.indexOf(selected);
-  if (idx < 0) return MAIN_SLOTS.filter((s) => !loggedSlots.has(s));
-  return MAIN_SLOTS.filter((s, i) => i > idx && !loggedSlots.has(s));
+/**
+ * The meals still to come, which is what this one has to leave room for.
+ *
+ * "Later in the day" alone is not the test. Asking at 8am what dinner should
+ * be made dinner the last slot, so it was handed the entire day and the coach
+ * offered a 1,610-calorie plate — she still has breakfast and lunch ahead of
+ * her. And a snack is squeezed between meals rather than parked after lunch,
+ * so an unlogged lunch is still lunch's room, not the snack's.
+ *
+ * A meal is still to come if it falls after the one she's asking about, or if
+ * the clock hasn't passed it yet. A meal the clock has gone by and she never
+ * logged was skipped, and holding room for it would shrink every meal left.
+ */
+export function laterSlotsAfter(selected, loggedSlots = new Set(), now = new Date()) {
+  const clock = guessSlotFromTime(now);
+  const nowIdx = Math.max(0, MAIN_SLOTS.indexOf(clock === "snack" ? "lunch" : clock));
+  // A snack has no place of its own in the order; the clock is all it has.
+  const selectedIdx = selected === "snack" ? nowIdx - 1 : MAIN_SLOTS.indexOf(selected);
+  return MAIN_SLOTS.filter((s, i) => s !== selected
+    && !loggedSlots.has(s)
+    && (i > selectedIdx || i >= nowIdx));
 }
 
 export function defaultCoachSlot({ now = new Date(), loggedSlots = new Set(), ignoreTime = false } = {}) {
@@ -175,8 +187,8 @@ function slotShareWeight(slot, shares, snackCount = 1) {
   return base * clampSnackCount(snackCount);
 }
 
-function reserveSlotsAfter(selected, loggedSlots = new Set(), snackCount = 1) {
-  const later = laterSlotsAfter(selected, loggedSlots);
+function reserveSlotsAfter(selected, loggedSlots = new Set(), snackCount = 1, now = new Date()) {
+  const later = laterSlotsAfter(selected, loggedSlots, now);
   if (selected === "snack") return later;
   if (clampSnackCount(snackCount) <= 0) return later;
   // A snack she has already eaten is not a snack to save room for. Reserving
@@ -402,15 +414,16 @@ export function computeSlotBudget({
   shares = DEFAULT_MEAL_SHARES,
   loggedSlots,
   snackCount = 1,
+  now = new Date(),
 } = {}) {
   if (!bands || !slot) return null;
   const remaining = remainingForCoach(totals, bands);
   if (!remaining) return null;
   const logged = loggedSlots || loggedSlotsFromEntries([]);
   const snacks = clampSnackCount(snackCount);
-  const later = laterSlotsAfter(slot, logged);
+  const later = laterSlotsAfter(slot, logged, now);
   const resolvedShares = resolveCoachShares(shares, later);
-  const reserveSlots = reserveSlotsAfter(slot, logged, snacks);
+  const reserveSlots = reserveSlotsAfter(slot, logged, snacks, now);
   const rawReserve = capReserveToRemaining(
     reserveForLater({
       laterSlots: reserveSlots,
@@ -449,7 +462,7 @@ export function computeSlotBudget({
   // "+1 snack" increase the leftover, which is nonsense.
   if (snacks > 1) {
     const atOne = reserveForLater({
-      laterSlots: reserveSlotsAfter(slot, logged, 1),
+      laterSlots: reserveSlotsAfter(slot, logged, 1, now),
       shares: resolvedShares,
       bands,
       plannedMeals,

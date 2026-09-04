@@ -32,6 +32,10 @@ import { targetBands } from "./weekPlan.js";
 const MACROS = { cal: 1750, protein: 140, carbs: 160, fat: 55 };
 const BANDS = targetBands(MACROS);
 
+/** Fixed clocks. Which meals are still ahead of her depends on the time. */
+const MORNING = new Date(2026, 8, 4, 8, 0);
+const EVENING = new Date(2026, 8, 4, 18, 30);
+
 function budgetFor(totals, opts = {}) {
   return attachDayHighs(
     computeSlotBudget({
@@ -42,6 +46,9 @@ function budgetFor(totals, opts = {}) {
       shares: opts.shares || DEFAULT_MEAL_SHARES,
       loggedSlots: opts.loggedSlots || loggedSlotsFromEntries(opts.entries || []),
       snackCount: opts.snackCount ?? 1,
+      // Late enough that an unlogged breakfast reads as skipped rather than
+      // still to come, which is what most of these cases are about.
+      now: opts.now || EVENING,
     }),
     BANDS,
   );
@@ -203,10 +210,26 @@ describe("slot order", () => {
     })).toBe(null);
   });
 
-  it("keeps every meal she hasn't eaten out of a snack's budget", () => {
-    expect(laterSlotsAfter("snack", new Set())).toEqual(["breakfast", "lunch", "dinner"]);
-    expect(laterSlotsAfter("snack", new Set(["breakfast", "lunch"]))).toEqual(["dinner"]);
-    expect(laterSlotsAfter("snack", new Set(["breakfast", "lunch", "dinner"]))).toEqual([]);
+  /**
+   * She asked at 8am what dinner should be. Dinner is last in the day, so it
+   * used to be handed everything left and came back with a 1,610-calorie
+   * plate — she still has breakfast and lunch in front of her.
+   */
+  it("holds room for the meals still ahead of her, not only the later ones", () => {
+    expect(laterSlotsAfter("dinner", new Set(), MORNING)).toEqual(["breakfast", "lunch"]);
+    expect(laterSlotsAfter("breakfast", new Set(), MORNING)).toEqual(["lunch", "dinner"]);
+  });
+
+  it("treats a meal the clock went past and she never logged as skipped", () => {
+    expect(laterSlotsAfter("dinner", new Set(), EVENING)).toEqual([]);
+    expect(laterSlotsAfter("lunch", new Set(), new Date(2026, 8, 4, 13, 0))).toEqual(["dinner"]);
+  });
+
+  it("keeps a meal she hasn't eaten out of a snack's budget", () => {
+    const afternoon = new Date(2026, 8, 4, 15, 0);
+    expect(laterSlotsAfter("snack", new Set(), afternoon)).toEqual(["lunch", "dinner"]);
+    expect(laterSlotsAfter("snack", new Set(["lunch"]), afternoon)).toEqual(["dinner"]);
+    expect(laterSlotsAfter("snack", new Set(["breakfast", "lunch", "dinner"]), afternoon)).toEqual([]);
   });
 });
 
