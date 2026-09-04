@@ -11,7 +11,7 @@
     "qa:surfaces": "npm run build:customer && npm run build:admin",
     "build:www-cutover": "MARKETING_WWW_CUTOVER=1 npm run build",
     "test": "npm run test:pixel && npm run test:pricing && npm run test:product && npm run test:coach",
-    "test:coach": "vitest run src/utils/coachEngine.test.js src/utils/coachIntent.test.js src/components/CoachPanel.test.jsx src/views/ClientApp.coach.test.jsx functions/_shared/coachGuardrails.test.js functions/api/coach.test.js",
+    "test:coach": "vitest run src/utils/coachEngine.test.js src/utils/coachIntent.test.js src/components/CoachMealCard.test.jsx src/components/CoachPanel.test.jsx src/views/ClientApp.coach.test.jsx functions/_shared/coachGuardrails.test.js functions/api/coach.test.js",
     "lint": "oxlint",
     "qa:credits": "node scripts/qa-credits-math.mjs",
     "qa:channels": "node scripts/qa-channels-notify.mjs",

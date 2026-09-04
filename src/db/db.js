@@ -3289,7 +3289,9 @@ export const db = {
       .select("id, role, body, kind, payload, local_date, created_at")
       .eq("profile_id", uid)
       .eq("local_date", localDate || localDateIso())
-      .order("created_at", { ascending: false })
+      // Arrival order, not clock order: her question and its answer are written
+      // in the same tick and their timestamps tie.
+      .order("seq", { ascending: false })
       .limit(limit);
     if (error) {
       console.warn("loadCoachThread failed", error);

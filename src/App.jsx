@@ -1255,8 +1255,17 @@ export default function App() {
 
   const loadCoachThread = useCallback(() => db.loadCoachThread(), []);
 
+  /**
+   * One at a time. Her question and the answer to it are pushed in the same
+   * tick, and two inserts in flight together can land either way round — the
+   * thread came back on reload with the answer above the question. Nothing
+   * waits on this, so the queue costs her nothing.
+   */
+  const coachWriteRef = useRef(Promise.resolve());
   const appendCoachMessage = useCallback((message) => {
-    db.appendCoachMessage({ ...message, localDate: localDateIso() });
+    coachWriteRef.current = coachWriteRef.current
+      .then(() => db.appendCoachMessage({ ...message, localDate: localDateIso() }))
+      .catch((e) => { console.warn("appendCoachMessage failed", e); });
   }, []);
 
   const postCoach = async (payload) => {
