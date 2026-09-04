@@ -18,7 +18,7 @@ import {
   primaryProtein,
 } from "./coachPrefs.js";
 import { budgetAsRemaining } from "./coachBudget.js";
-import { mealMatchesQuery } from "./mealSearch.js";
+import { mealMatchesQuery, mealSlotFilterKey } from "./mealSearch.js";
 
 export const SCALE_CANDIDATES = [1, 1.5, 2, 0.75, 0.5];
 
@@ -96,6 +96,48 @@ function usualCount(name, historyNames) {
   return (historyNames || []).filter((n) => namesMatch(n, name)).length;
 }
 
+const SLOT_FILTER_KEY = {
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  dinner: "Dinner",
+  snack: "Snack",
+};
+
+/**
+ * Does this meal belong at this meal?
+ *
+ * Halibut and rice fits a 582-calorie breakfast on every number the budget
+ * checks, and offering it at 7am is the fastest way to look like something
+ * that has never eaten breakfast. The bank is already categorised and her own
+ * meals carry a slot, so the question is answerable without guessing.
+ *
+ * "belongs" — she has eaten it at this meal before, or it is filed under it.
+ * "neutral" — nothing filed, which is most of My meals; no claim either way,
+ *   and punishing her own meals for missing metadata would be wrong.
+ * "elsewhere" — filed under a different meal.
+ *
+ * Leftovers for breakfast are a real thing, so this orders rather than
+ * filters: an "elsewhere" meal still shows once the ones that belong run out.
+ */
+export function slotAffinity(meal, slot, { slotHistoryNames = [] } = {}) {
+  if (!slot) return "neutral";
+  if (usualCount(meal?.name, slotHistoryNames) >= 1) return "belongs";
+  const want = SLOT_FILTER_KEY[slot];
+  if (!want) return "neutral";
+  // A pantry item is a component, not a meal. Fine to reach for at a snack,
+  // filler at a meal — but never ahead of an actual snack from the bank, or
+  // "what should I snack on" answers with cooked chicken breast.
+  if (meal?.source === "pantry") return slot === "snack" ? "neutral" : "elsewhere";
+  const key = mealSlotFilterKey(meal);
+  if (!key) return "neutral";
+  if (key === want) return "belongs";
+  // Treats sit next to snacks, never at a meal.
+  if (key === "Treats") return slot === "snack" ? "belongs" : "elsewhere";
+  return "elsewhere";
+}
+
+const AFFINITY_RANK = { belongs: 2, neutral: 1, elsewhere: 0 };
+
 export function scoreScaledMeal(meal, budget, ctx = {}) {
   const { p } = mealMacros(meal);
   const pNeed = budget?.pNeed || 0;
@@ -141,10 +183,23 @@ export function coachReason(meal, budget, { over = false } = {}) {
     return `${prefix}${COACH_COPY.reasonFills} ${Math.round(Math.max(0, (budget?.f || 0) - f))}${COACH_COPY.reasonFillsTail}`;
   }
   if (proteinClosesNeed(p, pNeed)) return `${prefix}${COACH_COPY.reasonGets}`;
-  if (pNeed > 0 && p / pNeed >= 0.7) return `${prefix}${COACH_COPY.reasonMost}`;
+  if (pNeed > 0 && p / pNeed >= 0.7) {
+    // The gap, not a stock line. Three cards in a row all saying "add a yogurt
+    // later" is the tell of something with one sentence and three slots.
+    const gap = Math.max(1, Math.round(pNeed - p));
+    return `${prefix}${COACH_COPY.reasonMost} ${gap}g ${COACH_COPY.reasonMostTail}`;
+  }
   return `${prefix}${COACH_COPY.reasonFits}`;
 }
 
+/**
+ * The one true thing worth saying about this card, or nothing.
+ *
+ * This used to fall through to "Close to what you usually eat", which for a
+ * mama in her first week is a sentence about a history that doesn't exist. A
+ * coach that pads gets read as one that guesses, and then the chips that are
+ * true stop counting for anything. No chip is a fine outcome.
+ */
 export function coachKnowsYou(meal, ctx = {}) {
   if (ctx.pencilledName && namesMatch(ctx.pencilledName, meal.name)) {
     return COACH_COPY.knowsPencilled;
@@ -157,7 +212,13 @@ export function coachKnowsYou(meal, ctx = {}) {
   const like = likeMatch(meal, ctx.likes);
   if (like) return `${COACH_COPY.knowsLike} ${like}`;
   if (meal.source === "pantry") return COACH_COPY.knowsPantry;
-  return COACH_COPY.knowsClose;
+  // Say why a dinner is sitting in her breakfast list rather than let her
+  // wonder whether the coach knows what time it is.
+  if (meal.affinity === "elsewhere") {
+    const home = mealSlotFilterKey(meal);
+    if (home) return `${COACH_COPY.knowsOffSlot} ${home.toLowerCase()}`;
+  }
+  return null;
 }
 
 function tagSource(meal, source) {
@@ -194,7 +255,13 @@ function diversify(ranked) {
   return picked;
 }
 
+/**
+ * Where it belongs first, then how good it is. "Lighter" means the lightest
+ * breakfast, not the lightest thing in the bank, so the tier holds there too.
+ */
 function compareMeals(a, b, prefer) {
+  const tier = AFFINITY_RANK[b.affinity] - AFFINITY_RANK[a.affinity];
+  if (tier !== 0) return tier;
   if (prefer === "lighter") return (a.cal || 0) - (b.cal || 0);
   if (prefer === "protein") return (b.p || 0) - (a.p || 0);
   if (b.score !== a.score) return b.score - a.score;
@@ -229,6 +296,7 @@ export function buildCoachCard(meal, budget, ctx = {}) {
   const servings = pickScale(meal, budget);
   if (!servings) return null;
   const next = scaleMeal(meal, servings);
+  next.affinity = slotAffinity(next, ctx.slot, ctx);
   next.score = scoreScaledMeal(next, budget, ctx);
   next.knowsYou = ctx.knowsYou || coachKnowsYou(next, ctx);
   next.reason = coachReason(next, budget, { over: ctx.over });

@@ -24,7 +24,7 @@ import {
   namesMatch,
   primaryProtein,
 } from "./coachPrefs.js";
-import { leftLine, macroStanding, slotLeftRead, tightestMacro, budgetSentence } from "./coachLines.js";
+import { coachRead, leftLine, macroStanding, slotLeftRead, tightestMacro, budgetSentence } from "./coachLines.js";
 import { formatRangeProgress } from "./rangeProgress.js";
 import { mealFitsRemaining } from "./eatingOutImpact.js";
 import { targetBands } from "./weekPlan.js";
@@ -203,8 +203,10 @@ describe("slot order", () => {
     })).toBe(null);
   });
 
-  it("only reserves after a snack, never before", () => {
-    expect(laterSlotsAfter("snack", new Set())).toEqual(["dinner"]);
+  it("keeps every meal she hasn't eaten out of a snack's budget", () => {
+    expect(laterSlotsAfter("snack", new Set())).toEqual(["breakfast", "lunch", "dinner"]);
+    expect(laterSlotsAfter("snack", new Set(["breakfast", "lunch"]))).toEqual(["dinner"]);
+    expect(laterSlotsAfter("snack", new Set(["breakfast", "lunch", "dinner"]))).toEqual([]);
   });
 });
 
@@ -357,6 +359,77 @@ describe("ranking", () => {
   });
 });
 
+/**
+ * Halibut and rice fits a 582-calorie breakfast on every number, and offering
+ * it at 7am is the difference between a coach and a filter.
+ */
+describe("a meal belongs at a meal", () => {
+  const mixed = [
+    { cat: "Breakfast", name: "Protein oatmeal", cal: 310, p: 30, c: 40, f: 4 },
+    { cat: "Breakfast", name: "Greek yogurt bowl", cal: 350, p: 25, c: 49, f: 5 },
+    { cat: "Dinner", name: "Halibut + rice", cal: 455, p: 44, c: 50, f: 7 },
+    { cat: "Dinner", name: "Sheet pan chicken", cal: 440, p: 45, c: 35, f: 14 },
+    { cat: "Snack", name: "Greek yogurt + berries", cal: 180, p: 24, c: 16, f: 2 },
+  ];
+  const roomyBreakfast = () => budgetFor({ cal: 0, p: 0, c: 0, f: 0 }, { slot: "breakfast" });
+
+  it("answers breakfast with breakfast", () => {
+    const { meals } = rankBankCards({ bankMeals: mixed, budget: roomyBreakfast(), slot: "breakfast" });
+    expect(meals[0].cat).toBe("Breakfast");
+    expect(meals.slice(0, 2).map((m) => m.cat)).toEqual(["Breakfast", "Breakfast"]);
+  });
+
+  it("keeps the slot when she asks for lighter or for more protein", () => {
+    for (const prefer of ["lighter", "protein"]) {
+      const { meals } = rankBankCards({ bankMeals: mixed, budget: roomyBreakfast(), prefer, slot: "breakfast" });
+      expect(meals[0].cat).toBe("Breakfast");
+    }
+  });
+
+  it("still offers a dinner at breakfast rather than nothing, and says it is one", () => {
+    const { meals } = rankBankCards({
+      bankMeals: mixed,
+      budget: roomyBreakfast(),
+      skipNames: ["Protein oatmeal", "Greek yogurt bowl"],
+      slot: "breakfast",
+    });
+    expect(meals.length).toBeGreaterThan(0);
+    expect(meals[0].cat).toBe("Dinner");
+    expect(meals[0].knowsYou).toBe("Usually dinner");
+  });
+
+  it("counts a meal she has actually eaten at this slot as belonging there", () => {
+    const { meals } = rankBankCards({
+      bankMeals: mixed,
+      budget: roomyBreakfast(),
+      slotHistoryNames: ["Sheet pan chicken"],
+      slot: "breakfast",
+    });
+    expect(meals.some((m) => m.name === "Sheet pan chicken")).toBe(true);
+    expect(meals.find((m) => m.name === "Sheet pan chicken").knowsYou).not.toBe("Usually dinner");
+  });
+
+  it("answers a snack with a snack, not a block of chicken breast", () => {
+    const budget = budgetFor({ cal: 400, p: 30, c: 40, f: 12 }, {
+      slot: "snack",
+      loggedSlots: new Set(["breakfast", "lunch", "dinner"]),
+    });
+    const { meals } = rankBankCards({
+      bankMeals: mixed,
+      pantryItems: [{ name: "Chicken breast, cooked, skinless", cal: 280, p: 53, c: 0, f: 6 }],
+      budget,
+      slot: "snack",
+    });
+    expect(meals[0].name).toBe("Greek yogurt + berries");
+  });
+
+  it("never claims to know her when it doesn't", () => {
+    const { meals } = rankBankCards({ bankMeals: mixed, budget: roomyBreakfast(), slot: "breakfast" });
+    expect(meals.every((m) => !m.knowsYou || m.knowsYou !== "Close to what you usually eat")).toBe(true);
+    expect(meals[0].knowsYou).toBe(null);
+  });
+});
+
 describe("copy matches the rest of the app", () => {
   it("uses the same words the Today card uses", () => {
     expect(macroStanding(120, 140, 150, "g").text).toBe("20–30g");
@@ -409,6 +482,24 @@ describe("copy matches the rest of the app", () => {
     const held = slotLeftRead(budget).held;
     expect(held).toMatch(/^Holding \d+ cal for lunch · \d+ for dinner/);
     expect(held).not.toMatch(/cal a snack/);
+  });
+
+  it("gives one protein number, not the strip's and a rounder one below it", () => {
+    const budget = budgetFor({ cal: 300, p: 12, c: 30, f: 10 }, { slot: "lunch", loggedSlots: new Set(["breakfast"]) });
+    const strip = slotLeftRead(budget).macros.match(/Aim for (\d+)g protein/);
+    const read = coachRead({ budget, slot: "lunch" }).line1.match(/(\d+)g of protein/);
+    expect(strip[1]).toBe(read[1]);
+  });
+
+  it("does not tell an over day it has 0g of carbs and 0g of fat", () => {
+    const budget = budgetFor({ cal: 2000, p: 120, c: 200, f: 90 }, {
+      slot: "snack",
+      loggedSlots: new Set(["breakfast", "lunch", "dinner"]),
+    });
+    const strip = slotLeftRead(budget);
+    expect(strip.over).toBe(true);
+    expect(strip.macros).not.toMatch(/0g carbs/);
+    expect(strip.macros).toContain("protein");
   });
 });
 

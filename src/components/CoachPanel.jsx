@@ -383,7 +383,8 @@ export function CoachPanel({
         }}
       >
         <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: T.accentDeep }}>
-          {slotTitle} · {Math.round(answer.budget.cal)} cal to play with
+          {/* "0 cal to play with" is not a headline to give anyone. */}
+          {answer.strip.over ? slotTitle : `${slotTitle} · ${Math.round(answer.budget.cal)} cal to play with`}
         </div>
         {/* This slot's numbers, not the day's. The day's live on Today, and
             two sets of totals stacked here only made her do arithmetic. */}

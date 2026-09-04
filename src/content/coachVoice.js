@@ -102,12 +102,15 @@ export const COACH_COPY = {
   snackReserveMany: "snacks",
   leftFor: "Left for",
   holdingLead: "Holding",
+  overStrip: "Everything but protein is spent for today. Protein's still worth getting.",
+  overStripDone: "You're past your ranges for today, protein included.",
 
   // Why a card is here
   reasonFills: "Fills your protein, leaves",
   reasonFillsTail: "g fat.",
   reasonGets: "Gets protein into range. Fits everything else.",
-  reasonMost: "Most of your protein. Add a yogurt later and you're there.",
+  reasonMost: "Most of your protein —",
+  reasonMostTail: "short, easy to pick up later.",
   reasonFits: "Fits what's left. Protein is still open.",
   reasonOver: "Light and protein forward.",
 
@@ -117,7 +120,7 @@ export const COACH_COPY = {
   knowsUsual: "One of your usuals",
   knowsLike: "You like",
   knowsPantry: "Quick one from your staples",
-  knowsClose: "Close to what you usually eat",
+  knowsOffSlot: "Usually",
 
   // Sources
   sourceBank: "Callie's bank",

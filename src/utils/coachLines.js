@@ -14,7 +14,7 @@ import {
   snackReserveCopy,
 } from "../content/coachVoice.js";
 import { rangeProgress } from "./rangeProgress.js";
-import { planMealForSlot } from "./coachBudget.js";
+import { isOverDay, planMealForSlot } from "./coachBudget.js";
 
 const MACRO_ROWS = [
   { key: "cal", label: "", lo: "calLo", hi: "calHi", unit: " cal" },
@@ -73,10 +73,6 @@ export function tightestMacro(totals, bands) {
   return { key, ratio: ratios[key] };
 }
 
-function round5(n) {
-  return Math.max(0, Math.round(n / 5) * 5);
-}
-
 function round25(n) {
   return Math.max(0, Math.round(n / 25) * 25);
 }
@@ -89,7 +85,10 @@ export function coachRead({ budget, slot, over } = {}) {
   const pNeed = budget?.pNeed ?? 0;
   let line1;
   if (pNeed >= 15) {
-    line1 = `${COACH_COPY.proteinNeed} ${round5(pNeed)} g ${COACH_COPY.proteinNeedTail} ${phrase}.`;
+    // The same rounding the strip uses. It said 42g and this said 40g, one
+    // above the other, and two numbers for one number is a number she has to
+    // reconcile.
+    line1 = `${COACH_COPY.proteinNeed} ${Math.round(pNeed)}g ${COACH_COPY.proteinNeedTail} ${phrase}.`;
   } else if (pNeed > 0) {
     line1 = `${COACH_COPY.proteinShy} ${Math.round(pNeed)}g ${COACH_COPY.proteinShyTail} ${phrase}. ${COACH_COPY.easyClose}`;
   } else {
@@ -187,7 +186,7 @@ function macrosShort(p, c, f) {
 
 /** The header strip above a set of cards: this slot's room, and what's held back. */
 export function slotLeftRead(budget) {
-  if (!budget) return { title: "", cal: 0, macros: "", held: "", heldPieces: [] };
+  if (!budget) return { title: "", over: false, cal: 0, macros: "", held: "", heldPieces: [] };
   const slot = COACH_SLOT_LABEL[budget.slot] || budget.slot;
   const heldPieces = [];
   for (const s of budget.laterSlots || []) {
@@ -206,13 +205,22 @@ export function slotLeftRead(budget) {
     if (h.meal?.name) return `${amount} for ${label} (${h.meal.name})`;
     return `${amount} for ${label}`;
   });
+  // "Up to 0g carbs and 0g fat" is a door closed in her face, and it lands
+  // directly above cards she is being told to eat. On a day she has gone past,
+  // say the one thing that is still worth doing.
+  const over = isOverDay(budget.remaining);
+  const macros = over
+    ? (budget.pNeed > 0 ? COACH_COPY.overStrip : COACH_COPY.overStripDone)
+    : macrosShort(budget.pNeed, budget.c, budget.f);
+
   return {
     title: `${COACH_COPY.leftFor} ${slot}`,
+    over,
     cal: budget.cal,
     p: budget.pNeed,
     c: budget.c,
     f: budget.f,
-    macros: macrosShort(budget.pNeed, budget.c, budget.f),
+    macros,
     held: heldBits.length ? `${COACH_COPY.holdingLead} ${heldBits.join(" · ")}` : "",
     heldPieces,
   };

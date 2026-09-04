@@ -38,11 +38,11 @@ export function loggedSlotsFromEntries(entries) {
 }
 
 export function laterSlotsAfter(selected, loggedSlots = new Set()) {
-  if (selected === "snack") {
-    return MAIN_SLOTS.filter(
-      (s) => MAIN_SLOTS.indexOf(s) > MAIN_SLOTS.indexOf("lunch") && !loggedSlots.has(s),
-    );
-  }
+  // A snack is squeezed between meals, so every main she hasn't eaten yet is
+  // still to come. Placing it after lunch meant a 3pm snack was handed lunch's
+  // room on a day she hadn't eaten lunch, and 57g of protein came back as a
+  // snack suggestion.
+  if (selected === "snack") return MAIN_SLOTS.filter((s) => !loggedSlots.has(s));
   const idx = MAIN_SLOTS.indexOf(selected);
   if (idx < 0) return MAIN_SLOTS.filter((s) => !loggedSlots.has(s));
   return MAIN_SLOTS.filter((s, i) => i > idx && !loggedSlots.has(s));
