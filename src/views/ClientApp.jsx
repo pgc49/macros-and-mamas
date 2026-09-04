@@ -36,10 +36,39 @@ import {
   MEALS_TAB_SECTIONS,
   MEALS_TAB_SLOT_FILTERS,
   mealMatchesQuery,
+  mealsTabSectionId,
   uniqueMealsByName,
 } from "../utils/mealSearch";
 import { db } from "../db/db";
 import { useState } from "react";
+
+/** Meals-tab section pill. Text and padding scale so all four hold one phone row. */
+function MealsSectionChip({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        // No `min-width: 0` — nowrap text is the shrink floor, so a narrow
+        // phone trims padding instead of clipping a label.
+        flex: "0 1 auto",
+        fontFamily: F,
+        fontSize: "clamp(10px, 3vw, 13.5px)",
+        fontWeight: 600,
+        lineHeight: 1.2,
+        padding: "11px clamp(5px, 1.85vw, 14px)",
+        borderRadius: 999,
+        whiteSpace: "nowrap",
+        border: `1.5px solid ${active ? T.accent : T.border}`,
+        background: active ? T.accentSoft : "#fff",
+        color: active ? T.accentDeep : T.inkSoft,
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 export function ClientApp({
   tab, setTab,
@@ -114,6 +143,7 @@ export function ClientApp({
       ? "My meals"
       : "All meals";
   const showMealsSearch = isBankFilter || mealFilter === "My meals" || mealFilter === "Pantry";
+  const mealsSection = mealsTabSectionId(mealFilter);
   const visibleBank = applyFitsFilter(bankSource.filter((m) => {
     if (mealFilter !== "All meals" && (m.cat || "") !== mealFilter) return false;
     return mealMatchesQuery(m, mealQuery);
@@ -424,24 +454,35 @@ export function ClientApp({
             </>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "nowrap",
+              gap: "clamp(3px, 1.2vw, 8px)",
+              marginBottom: 12,
+              // Sized to fit one row from 320px up; scrolls instead of
+              // clipping if a label or the planned count ever runs long.
+              overflowX: "auto",
+              scrollbarWidth: "none",
+            }}
+          >
             {MEALS_TAB_SECTIONS.map((section) => {
-              const active = mealFilter === section.id;
+              const active = mealsSection === section.id;
               const label = section.id === "Plan" && plannedCount
                 ? `${section.label} · ${plannedCount}`
                 : section.label;
               return (
-                <Chip
+                <MealsSectionChip
                   key={section.id}
                   active={active}
                   onClick={() => {
-                    setMealFilter(active ? "All meals" : section.id);
+                    setMealFilter(section.id);
                     setMealQuery("");
                     setSlotFilterOpen(false);
                   }}
                 >
                   {label}
-                </Chip>
+                </MealsSectionChip>
               );
             })}
           </div>

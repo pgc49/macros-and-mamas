@@ -81,11 +81,11 @@ function renderMeals(filter = "All meals", extras = {}) {
 }
 
 describe("Meals tab search filter", () => {
-  it("defaults to All meals without an All meals chip", () => {
+  it("defaults to All meals with an All meals chip", () => {
     renderMeals();
 
     expect(screen.getByRole("heading", { name: "All meals" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "All meals" })).toBeNull();
+    expect(screen.getByRole("button", { name: "All meals" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Weekly Planner" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Food prefs" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "My meals" })).toBeTruthy();
@@ -109,10 +109,29 @@ describe("Meals tab search filter", () => {
     expect(setMealFilter).toHaveBeenCalledWith("Breakfast");
   });
 
-  it("toggles Weekly Planner back to All meals", () => {
+  it("goes back to All meals from Weekly Planner", () => {
     const { setMealFilter } = renderMeals("Plan");
 
-    fireEvent.click(screen.getByRole("button", { name: "Weekly Planner" }));
+    fireEvent.click(screen.getByRole("button", { name: "All meals" }));
+    expect(setMealFilter).toHaveBeenCalledWith("All meals");
+  });
+
+  it("goes back to All meals from Food prefs and My meals", () => {
+    const prefs = renderMeals("Food prefs");
+    fireEvent.click(screen.getByRole("button", { name: "All meals" }));
+    expect(prefs.setMealFilter).toHaveBeenCalledWith("All meals");
+    cleanup();
+
+    const saved = renderMeals("My meals");
+    fireEvent.click(screen.getByRole("button", { name: "All meals" }));
+    expect(saved.setMealFilter).toHaveBeenCalledWith("All meals");
+  });
+
+  it("clears a slot filter from the All meals chip", () => {
+    const { setMealFilter } = renderMeals("Breakfast");
+
+    expect(screen.getByRole("button", { name: "All meals" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "All meals" }));
     expect(setMealFilter).toHaveBeenCalledWith("All meals");
   });
 
