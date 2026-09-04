@@ -157,6 +157,9 @@ export function MealLogCard({
   const [estimateDraft, setEstimateDraft] = useState(null);
   const [savingEstimate, setSavingEstimate] = useState(false);
   const savingEstimateRef = useRef(false);
+  const [savingManual, setSavingManual] = useState(false);
+  const [manualError, setManualError] = useState("");
+  const savingManualRef = useRef(false);
   const [pantryGroup, setPantryGroup] = useState("all");
   const [planSearch, setPlanSearch] = useState("");
   const [slotFilter, setSlotFilter] = useState("all");
@@ -428,21 +431,35 @@ export function MealLogCard({
     </button>
   );
 
-  const submitManual = () => {
-    if (!manual.name.trim()) return;
-    onManualLog?.({
-      name: manual.name.trim(),
-      cal: Number(manual.cal) || 0,
-      p: Number(manual.p) || 0,
-      c: Number(manual.c) || 0,
-      f: Number(manual.f) || 0,
-      via: "manual",
-      slot: resolveLogSlot(logSlot),
-      logged_date: date,
-      saveCustom: saveManualCustom,
-    });
-    setManual({ name: "", cal: "", p: "", c: "", f: "" });
-    setMethod(null);
+  const submitManual = async () => {
+    if (!manual.name.trim() || savingManualRef.current) return;
+    savingManualRef.current = true;
+    setSavingManual(true);
+    setManualError("");
+    try {
+      const ok = await onManualLog?.({
+        name: manual.name.trim(),
+        cal: Number(manual.cal) || 0,
+        p: Number(manual.p) || 0,
+        c: Number(manual.c) || 0,
+        f: Number(manual.f) || 0,
+        via: "manual",
+        slot: resolveLogSlot(logSlot),
+        logged_date: date,
+        saveCustom: saveManualCustom,
+      });
+      if (ok === false) {
+        setManualError("Couldn't save that meal — try again.");
+        return;
+      }
+      setManual({ name: "", cal: "", p: "", c: "", f: "" });
+      setMethod(null);
+    } catch {
+      setManualError("Couldn't save that meal — try again.");
+    } finally {
+      savingManualRef.current = false;
+      setSavingManual(false);
+    }
   };
 
   const startEdit = (e) => {
@@ -1322,10 +1339,20 @@ export function MealLogCard({
                   />
                 </div>
               ))}
-              <button type="button" disabled={!manual.name.trim()} style={pill(false, !manual.name.trim())} onClick={submitManual}>
-                Add
+              <button
+                type="button"
+                disabled={!manual.name.trim() || savingManual}
+                style={pill(false, !manual.name.trim() || savingManual)}
+                onClick={submitManual}
+              >
+                {savingManual ? "Adding…" : "Add"}
               </button>
             </div>
+            {manualError ? (
+              <div style={{ marginTop: 8, fontSize: 13, color: T.amber, fontFamily: F }}>
+                {manualError}
+              </div>
+            ) : null}
             <div style={{ marginTop: 10 }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, marginBottom: 6, letterSpacing: 0.3 }}>
                 Meal

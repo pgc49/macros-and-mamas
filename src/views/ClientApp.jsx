@@ -2,6 +2,7 @@ import { CONFIG, hasPublicUrl } from "../config";
 import { T, F, FD } from "../theme/tokens";
 import { RECIPES, PANTRY_ITEMS, PANTRY_GROUPS } from "../content/data";
 import { addDaysIso, fmtRange, formatLongDay, isTodayIso, weekdayKey, wkStartOf } from "../utils/dates";
+import { entriesForLogDate } from "../utils/mealLogState";
 import { Shell, Card, Chip, RangeBand, rangeState } from "../components/ui";
 import { MealSlotFilterBar } from "../components/MealSlotFilterBar";
 import { formatRangeProgress } from "../utils/rangeProgress";
@@ -297,7 +298,10 @@ export function ClientApp({
             onSaveCustomMeal={onSaveCustomMeal}
             onEstimateRefine={onEstimateRefine}
             onMealIdea={onMealIdea}
-            todayLog={todayLog}
+            todayLog={{
+              date: mealLogDate || todayLog?.date,
+              entries: entriesForLogDate(mealLogDate || todayLog?.date, mealLogsByDate, todayLog),
+            }}
             onUpdateEntry={updateMealEntry}
             onDeleteEntry={deleteMealEntry}
             mealLogDate={mealLogDate}
