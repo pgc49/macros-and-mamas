@@ -39,6 +39,23 @@ describe("Shell content width", () => {
     expect(content.style.maxWidth).toBe("1120px");
   });
 
+  it("locks page scroll so Messages can pin the composer", () => {
+    const view = render(
+      <MemoryRouter>
+        <Shell bottomBar={<nav>tabs</nav>} lockContentScroll>body</Shell>
+      </MemoryRouter>,
+    );
+    const content = view.container.querySelector("[data-shell-content]");
+    const fill = view.container.querySelector("[data-shell-fill]");
+    expect(content.getAttribute("data-lock-scroll")).toBe("true");
+    expect(content.style.overflowY).toBe("hidden");
+    expect(content.style.display).toBe("flex");
+    expect(fill).toBeTruthy();
+    expect(fill.style.flex).toBe("1");
+    expect(fill.style.minHeight).toBe("0px");
+    expect(fill.style.overflow).toBe("hidden");
+  });
+
   it("keeps the Admin link same-origin on combined/admin surfaces", () => {
     const view = render(
       <MemoryRouter>

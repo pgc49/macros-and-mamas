@@ -656,11 +656,11 @@ export function MessagesThread({
       flexDirection: "column",
       minHeight: 0,
       flex: 1,
-      height: compact ? "100%" : "min(62vh, 582px)",
+      height: "100%",
       minWidth: 0,
-      // Keep history inside a fixed viewport box on every phone. Bottom padding
-      // leaves room for composer borders/radii so overflow clipping never
-      // shaves the input row.
+      // Fill the leftover Messages pane so the composer stays put and only
+      // history scrolls. Bottom padding leaves room for composer borders/radii
+      // so overflow clipping never shaves the input row.
       overflow: "hidden",
       paddingBottom: 4,
       boxSizing: "border-box",

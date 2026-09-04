@@ -191,7 +191,14 @@ function accountInitials(profile, email) {
   return local.slice(0, 2).toUpperCase();
 }
 
-export const Shell = ({ children, bottomBar = null, hideBottomBar = false, contentMaxWidth = 560 }) => {
+export const Shell = ({
+  children,
+  bottomBar = null,
+  hideBottomBar = false,
+  contentMaxWidth = 560,
+  /** Messages: fill leftover height and stop the page from scrolling the composer away. */
+  lockContentScroll = false,
+}) => {
   const { user, profile, isAdmin } = useAuth();
   const { pathname } = useLocation();
   const linkStyle = {
@@ -227,23 +234,33 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false, conte
       <Fonts />
       <div
         data-shell-content
+        data-lock-scroll={lockContentScroll ? "true" : undefined}
         style={{
           maxWidth: contentMaxWidth,
           width: "100%",
           margin: "0 auto",
-          padding: hasBarSlot ? "0 16px 20px" : "0 16px 90px",
+          padding: hasBarSlot ? (lockContentScroll ? "0 16px 8px" : "0 16px 20px") : "0 16px 90px",
           boxSizing: "border-box",
           ...(hasBarSlot
             ? {
                 flex: "1 1 auto",
                 minHeight: 0,
-                overflowY: "auto",
+                display: lockContentScroll ? "flex" : undefined,
+                flexDirection: lockContentScroll ? "column" : undefined,
+                overflowY: lockContentScroll ? "hidden" : "auto",
                 WebkitOverflowScrolling: "touch",
               }
             : null),
         }}
       >
-        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 2px 6px", gap: 12 }}>
+        <header style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "18px 2px 6px",
+          gap: 12,
+          flexShrink: lockContentScroll ? 0 : undefined,
+        }}>
           <a href={PATHS.home} style={{ textDecoration: "none", color: "inherit" }}>
             <div style={{ fontFamily: FD, fontSize: 24, letterSpacing: 0.3 }}>Macros and Mamas</div>
             <div style={{ fontSize: 12, color: T.accentDeep, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase" }}>ranges, not rules</div>
@@ -286,7 +303,20 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false, conte
             </div>
           )}
         </header>
-        {children}
+        {lockContentScroll ? (
+          <div
+            data-shell-fill
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            {children}
+          </div>
+        ) : children}
       </div>
       {showBar && (
         <div
