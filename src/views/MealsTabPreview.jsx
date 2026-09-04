@@ -26,8 +26,8 @@ export function MealsTabPreview() {
       logManualMeal={noopAsync}
       logRecipe={noopAsync}
       todayLog={{ date: "2026-08-30", entries: [] }}
-      deleteMealEntry={noop}
-      updateMealEntry={noop}
+      deleteMealEntry={noopAsync}
+      updateMealEntry={noopAsync}
       mealLogDate="2026-08-30"
       mealLogWeekStart="2026-08-24"
       mealLogsByDate={{}}
@@ -35,8 +35,8 @@ export function MealsTabPreview() {
       changeMealWeek={noop}
       waterLogsByDate={{}}
       waterBusy={false}
-      onAddWater={noop}
-      onUndoWater={noop}
+      onAddWater={noopAsync}
+      onUndoWater={noopAsync}
       onChangeBottleOz={noop}
       viewWk={1}
       setViewWk={noop}
@@ -49,8 +49,8 @@ export function MealsTabPreview() {
       progWeekNum={1}
       earliestWk="2026-08-24"
       weighins={[]}
-      logWeighin={noop}
-      deleteWeighin={noop}
+      logWeighin={noopAsync}
+      deleteWeighin={noopAsync}
       weeklyRate={0}
       trends={{ locked: true, items: [] }}
       macroHistory={[]}

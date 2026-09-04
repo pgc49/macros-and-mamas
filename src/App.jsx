@@ -1388,15 +1388,17 @@ export default function App() {
 
   const logWeighin = async (weight, date = localDateIso()) => {
     const w = typeof weight === "number" ? weight : parseFloat(weight);
-    if (!w) return;
+    if (!w) return false;
     try {
       const row = await db.addWeighin(w, date);
       setWeighins((arr) => {
         const without = arr.filter((x) => x.date !== row.date);
         return [...without, row].sort((a, b) => (a.date < b.date ? -1 : 1));
       });
+      return true;
     } catch (e) {
       console.error("weigh-in failed", e);
+      return false;
     }
   };
 
