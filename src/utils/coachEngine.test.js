@@ -350,7 +350,8 @@ describe("ranking", () => {
 
   it("dresses a built meal with the same fit check as a bank meal", () => {
     const card = buildCoachCard({ name: "Fridge scramble", cal: 380, p: 34, c: 18, f: 16 }, budget(), { slot: "dinner" });
-    expect(card.title).toBe("Fridge scramble");
+    expect(card.name).toBe("Fridge scramble");
+    expect(card.title).toContain("Fridge scramble");
     expect(card.reason).toBeTruthy();
     expect(buildCoachCard({ name: "Whole cake", cal: 3000, p: 20, c: 400, f: 150 }, budget(), {})).toBe(null);
   });

@@ -179,6 +179,9 @@ function reserveSlotsAfter(selected, loggedSlots = new Set(), snackCount = 1) {
   const later = laterSlotsAfter(selected, loggedSlots);
   if (selected === "snack") return later;
   if (clampSnackCount(snackCount) <= 0) return later;
+  // A snack she has already eaten is not a snack to save room for. Reserving
+  // for it anyway charged this meal twice for the same food.
+  if (loggedSlots.has("snack")) return later;
   return [...later, "snack"];
 }
 
@@ -299,6 +302,57 @@ function packReserve(bySlot) {
   return { ...totals, bySlot };
 }
 
+const CAPPED_MACROS = ["cal", "p", "pHigh", "c", "f"];
+
+/**
+ * A reserve may not claim more of a macro than the later slots' fair share of
+ * what is actually left.
+ *
+ * Shares are taken against the day's targets, which is what stops breakfast
+ * spending dinner's room. But the targets don't know what she has already
+ * eaten, so a macro she went heavy on earlier — 11g of fat in one chocolate,
+ * say — was subtracted from what's left and then reserved for again at full
+ * strength, and the next meal absorbed the entire overspend on its own. Her
+ * breakfast came back with 8g of fat to work with and nothing in the bank fit.
+ *
+ * Capping at the proportional share shares that shortfall across the meals
+ * that are still to come. On a day where she is tracking her targets the raw
+ * reserve is already under the cap and nothing here changes.
+ */
+function capReserveToRemaining(reserve, remaining, { currentWeight, weightFor }) {
+  if (!remaining) return reserve;
+  const entries = Object.entries(reserve.bySlot);
+  // A meal she has pencilled in costs what it costs; only shares give way.
+  const shared = entries.filter(([, piece]) => !piece.meal);
+  const planned = entries.filter(([, piece]) => piece.meal);
+  if (!shared.length) return reserve;
+
+  const laterWeight = shared.reduce((n, [slot]) => n + weightFor(slot), 0);
+  const total = currentWeight + laterWeight;
+  if (!(total > 0)) return reserve;
+  const laterFraction = laterWeight / total;
+
+  const factors = {};
+  let capped = false;
+  for (const key of CAPPED_MACROS) {
+    const claimed = shared.reduce((n, [, piece]) => n + piece[key], 0);
+    const spokenFor = planned.reduce((n, [, piece]) => n + piece[key], 0);
+    const allowed = Math.max(0, (remaining[key] ?? 0) - spokenFor) * laterFraction;
+    if (!(claimed > allowed)) continue;
+    factors[key] = claimed > 0 ? allowed / claimed : 0;
+    capped = true;
+  }
+  if (!capped) return reserve;
+
+  const bySlot = Object.fromEntries(entries.map(([slot, piece]) => {
+    if (piece.meal) return [slot, piece];
+    const next = { ...piece };
+    for (const [key, factor] of Object.entries(factors)) next[key] = piece[key] * factor;
+    return [slot, next];
+  }));
+  return packReserve(bySlot);
+}
+
 export function reserveForLater({ laterSlots = [], shares, bands, plannedMeals, snackCount = 1 } = {}) {
   if (!bands) return { ...emptyMacros(), bySlot: {} };
   const bySlot = {};
@@ -357,13 +411,20 @@ export function computeSlotBudget({
   const later = laterSlotsAfter(slot, logged);
   const resolvedShares = resolveCoachShares(shares, later);
   const reserveSlots = reserveSlotsAfter(slot, logged, snacks);
-  const rawReserve = reserveForLater({
-    laterSlots: reserveSlots,
-    shares: resolvedShares,
-    bands,
-    plannedMeals,
-    snackCount: snacks,
-  });
+  const rawReserve = capReserveToRemaining(
+    reserveForLater({
+      laterSlots: reserveSlots,
+      shares: resolvedShares,
+      bands,
+      plannedMeals,
+      snackCount: snacks,
+    }),
+    remaining,
+    {
+      currentWeight: slotShareWeight(slot, resolvedShares, snacks),
+      weightFor: (s) => slotShareWeight(s, resolvedShares, snacks),
+    },
+  );
 
   if (remaining.cal <= 0) {
     const reserve = packReserve(
