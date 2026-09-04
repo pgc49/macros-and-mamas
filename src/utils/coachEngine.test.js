@@ -121,6 +121,20 @@ describe("protein is a floor, not a wall", () => {
     expect(proteinOverNote({ p: 10 }, budget)).toBe(null);
   });
 
+  it("reads the day's protein headroom, not the slot's share of it", () => {
+    // 8:29am, one chocolate logged, asking about a snack. The snack's share of
+    // what is left is ~12g of protein, so a 24g yogurt clears it easily — but
+    // she is 137g short of her range and nothing about it is "over the top".
+    const budget = budgetFor({ cal: 170, p: 3, c: 14, f: 11 }, {
+      slot: "snack",
+      loggedSlots: new Set(["snack"]),
+      now: MORNING,
+    });
+    expect(budget.pHigh).toBeLessThan(20);
+    expect(budget.remaining.pHigh).toBeGreaterThan(140);
+    expect(proteinOverNote({ p: 24 }, budget)).toBe(null);
+  });
+
   it("does not call a protein overshoot an over day", () => {
     expect(isOverDay(remainingForCoach({ cal: 900, p: 200, c: 80, f: 25 }, BANDS))).toBe(false);
     expect(isOverDay(remainingForCoach({ cal: 2000, p: 100, c: 80, f: 25 }, BANDS))).toBe(true);

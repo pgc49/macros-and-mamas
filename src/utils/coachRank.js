@@ -166,10 +166,16 @@ function meaningfulProtein(meal, budget) {
 /**
  * A card that takes her past the top of her protein range is still a good card.
  * Say so on the card instead of hiding it, so the number is never a surprise.
+ *
+ * Measured against the day, not the slot. A slot's protein share is small by
+ * construction — a snack squeezed behind three unlogged meals gets around 12g
+ * of what's left — so reading the slot's number flagged a Greek yogurt as
+ * "over the top" on a morning she was still 130g short of her range. Only the
+ * day's high can make that sentence true.
  */
 export function proteinOverNote(meal, budget) {
   const p = mealMacros(meal).p;
-  const headroom = budget?.pHigh;
+  const headroom = budget?.remaining?.pHigh;
   if (!Number.isFinite(headroom)) return null;
   return p > headroom + 5 ? COACH_COPY.proteinOver : null;
 }
