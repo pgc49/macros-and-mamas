@@ -256,7 +256,12 @@ export function ClientApp({
   );
 
   return (
-    <Shell bottomBar={tabBar} hideBottomBar={tab === "messages" && composerFocused}>
+    <Shell
+      bottomBar={tabBar}
+      hideBottomBar={tab === "messages" && composerFocused}
+      // The coach docks its own composer at the bottom of the scroller.
+      flushContent={tab === "coach"}
+    >
       {tab === "today" && macros && (
         <>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>

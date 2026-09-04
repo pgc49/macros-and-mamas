@@ -121,6 +121,29 @@ describe("where the coach shows up", () => {
     }
   });
 
+  it("gives the five tabs the width the phone has", () => {
+    renderApp();
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    // Fixed padding left a 430px phone with 110px unused around a huddle of
+    // small text in the middle. jsdom has no layout, so the contract under
+    // test is that the buttons are allowed to grow.
+    for (const button of nav.querySelectorAll("button")) {
+      expect(button.style.flex).toBe("1 1 auto");
+      expect(button.style.fontSize).toBe("13.5px");
+    }
+  });
+
+  it("runs the coach's content to the bottom edge, and no other tab's", () => {
+    const { view } = renderApp({ tab: "coach" });
+    // Padding below the scrolling content is a window the coach's sticky
+    // composer cannot cover; it owns that spacing itself instead.
+    expect(document.querySelector("[data-shell-content]").style.paddingBottom).toBe("0px");
+    view.unmount();
+
+    renderApp({ tab: "today" });
+    expect(document.querySelector("[data-shell-content]").style.paddingBottom).toBe("20px");
+  });
+
   it("opens the coach from the Today card", () => {
     const { setTab } = renderApp();
     fireEvent.click(screen.getByText(COACH_COPY.entryTitle).closest("button"));

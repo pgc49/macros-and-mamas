@@ -192,14 +192,28 @@ function accountInitials(profile, email) {
 }
 
 /**
- * The gap under the scrolling content when the tab bar is docked. A panel with
- * a `position: sticky` footer has to know this: sticky bottom:0 lands on the
- * content edge, not the padding edge, so anything scrolling past shows through
- * this strip underneath the footer unless the footer is stretched over it.
+ * Breathing room between the last card and the tab bar, so nothing sits
+ * against the border. Normally the scroller's own padding; a panel that docks
+ * a `position: sticky` footer takes it over instead — see `flushContent`.
  */
 export const SHELL_TAB_CONTENT_PAD = 20;
 
-export const Shell = ({ children, bottomBar = null, hideBottomBar = false, contentMaxWidth = 560 }) => {
+/**
+ * @param flushContent  Run the scrolling content all the way to the bottom
+ *   edge and let the panel space itself. A sticky footer is pinned inside its
+ *   own containing block, so it stops at the scroller's *content* edge: any
+ *   padding below that stays a live window onto the thread scrolling past
+ *   underneath it. Measured at 20px of cards sliding under the coach's
+ *   composer. Stretching the footer over the strip does not help — sticky
+ *   clamps the margin box, so a negative bottom margin moves nothing.
+ */
+export const Shell = ({
+  children,
+  bottomBar = null,
+  hideBottomBar = false,
+  contentMaxWidth = 560,
+  flushContent = false,
+}) => {
   const { user, profile, isAdmin } = useAuth();
   const { pathname } = useLocation();
   const linkStyle = {
@@ -239,7 +253,9 @@ export const Shell = ({ children, bottomBar = null, hideBottomBar = false, conte
           maxWidth: contentMaxWidth,
           width: "100%",
           margin: "0 auto",
-          padding: hasBarSlot ? `0 16px ${SHELL_TAB_CONTENT_PAD}px` : "0 16px 90px",
+          padding: hasBarSlot
+            ? `0 16px ${flushContent ? 0 : SHELL_TAB_CONTENT_PAD}px`
+            : "0 16px 90px",
           boxSizing: "border-box",
           ...(hasBarSlot
             ? {

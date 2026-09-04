@@ -311,20 +311,24 @@ describe("the photo she attached", () => {
 });
 
 /**
- * The shell's bottom padding sits below the scrolling content, and a sticky
- * footer stops at the content edge. Cards slid through the strip underneath
- * the composer while she scrolled back up the thread.
+ * A sticky footer pins inside its own containing block, so it stops at the
+ * scroller's content edge. Any padding the shell left below that stayed a live
+ * window onto the thread: measured 20px of cards sliding under the composer
+ * while she scrolled back up. The shell runs flush for this tab now, and the
+ * footer carries that spacing itself.
  */
-describe("the composer covers the bottom of the scroller", () => {
-  it("stretches over the shell's padding instead of leaving a window", async () => {
+describe("the composer reaches the bottom of the scroller", () => {
+  it("carries the room the shell would have left below it", async () => {
     renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
 
     const composer = screen.getByLabelText(COACH_COPY.placeholder).closest("div").parentElement;
     expect(composer.style.position).toBe("sticky");
     expect(composer.style.bottom).toBe("0px");
-    expect(composer.style.marginBottom).toBe(`-${SHELL_TAB_CONTENT_PAD}px`);
     expect(composer.style.paddingBottom).toBe(`${SHELL_TAB_CONTENT_PAD}px`);
+    // A negative margin here would be the fix that does nothing: sticky clamps
+    // the margin box, so the painted edge never moves.
+    expect(composer.style.marginBottom).toBe("");
   });
 });
 

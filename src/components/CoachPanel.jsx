@@ -489,10 +489,9 @@ export function CoachPanel({
         <div ref={endRef} style={{ height: 1, scrollMarginBottom: 132 }} />
       </div>
 
-      {/* Sticky bottom:0 lands on the scroller's content edge, so the shell's
-          bottom padding stayed a live window onto the thread: scrolling back
-          up, cards slid through a strip below the composer. Stretched over it
-          with a negative margin so the footer is the last thing she can see. */}
+      {/* The shell runs its content to the bottom edge for this tab, so the
+          footer pins flush and nothing scrolls past underneath it. The room
+          the shell would have left below is added here instead. */}
       <div
         style={{
           position: "sticky",
@@ -500,7 +499,6 @@ export function CoachPanel({
           background: T.bg,
           paddingTop: 10,
           marginTop: 12,
-          marginBottom: -SHELL_TAB_CONTENT_PAD,
           paddingBottom: SHELL_TAB_CONTENT_PAD,
         }}
       >
