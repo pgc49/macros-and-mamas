@@ -692,8 +692,6 @@ export function ClientApp({
             plannedMeals={planMealsForLogDate}
             mealHistoryByDate={mealHistoryByDate}
             customMeals={customMeals}
-            weekPlanDays={weekPlanDays}
-            mealLogDate={mealLogDate}
             onLogCard={onLogCoachCard}
             onPencilCard={onPencilCoachCard}
             onSaveCard={onSaveCoachCard}
