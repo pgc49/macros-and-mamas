@@ -68,10 +68,11 @@ export function filterMealsByQuery(meals, query) {
 export const MEAL_SLOT_FILTERS = ["My meals", "Breakfast", "Lunch", "Dinner", "Snack", "Treats"];
 
 /**
- * Meals tab section chips. All meals is the default (no chip) — the filter's
- * All / Breakfast / … picks a slot. Internal `id` stays on mealFilter.
+ * Meals tab section chips. All meals is the default and gets its own chip so a
+ * slot or another section always has a way back. Internal `id` stays on mealFilter.
  */
 export const MEALS_TAB_SECTIONS = [
+  { id: "All meals", label: "All meals" },
   { id: "Plan", label: "Weekly Planner" },
   { id: "Food prefs", label: "Food prefs" },
   { id: "My meals", label: "My meals" },
@@ -80,6 +81,15 @@ export const MEALS_TAB_SLOT_FILTERS = ["Breakfast", "Lunch", "Dinner", "Snack", 
 
 export function isMealsTabSlotFilter(filter) {
   return MEALS_TAB_SLOT_FILTERS.includes(filter);
+}
+
+/**
+ * Which section chip owns a mealFilter. Slots and Pantry come from the funnel
+ * inside the All meals section, so they keep that chip lit.
+ */
+export function mealsTabSectionId(filter) {
+  const f = String(filter || "").trim();
+  return f === "Plan" || f === "Food prefs" || f === "My meals" ? f : "All meals";
 }
 
 function titleSlotFilter(raw) {
