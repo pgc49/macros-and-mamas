@@ -3,6 +3,7 @@ import { T, F, FD } from "../theme/tokens";
 import { ServingStepper, scaleMealForLog, snapServings } from "../utils/servings";
 import { guessSlotFromTime, normalizeSlot } from "../utils/mealSlots";
 import { SlotChips } from "./SlotChips";
+import { logSaveSucceeded } from "../utils/logSave";
 
 /**
  * Compact row: meal name, scaled macros, slot chips, serving stepper, Add to Today.
@@ -48,7 +49,7 @@ export function LoggableMealRow({
         via,
         slot: showSlotPicker ? slot : (meal.slot || meal.cat || slot),
       });
-      if (ok === false) {
+      if (!logSaveSucceeded(ok)) {
         setPhase("idle");
         return;
       }

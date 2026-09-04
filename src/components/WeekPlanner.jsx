@@ -11,6 +11,7 @@ import { addDaysIso, fmtRange, wkStartOf } from "../utils/dates";
 import { safeBuildGroceryList } from "../utils/groceryList";
 import { recipeNoteFromMeal, weekPlanHasPoisonShapes } from "../utils/planMealShape";
 import { roomLeftFromTotals } from "../utils/eatingOutImpact";
+import { logSaveSucceeded } from "../utils/logSave";
 import { RecipeCreator } from "./RecipeCreator";
 import {
   PLAN_DAYS,
@@ -850,7 +851,7 @@ function PlanMealTile({
                   logged_date: undefined, // App forces today for planner adds
                   fromPlanner: true,
                 }, qty));
-                if (ok === false) {
+                if (!logSaveSucceeded(ok)) {
                   setLogPhase("idle");
                   return;
                 }

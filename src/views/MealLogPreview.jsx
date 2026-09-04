@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { Fonts } from "../theme/Fonts";
 import { T, F, FD } from "../theme/tokens";
 import { MealLogCard } from "../components/MealLogCard";
 import { RecipeCreator } from "../components/RecipeCreator";
+import { WaterLogCard } from "../components/WaterLogCard";
+import { WeighInCard } from "../components/WeighInCard";
 
-/** Local-only preview of Today → My plan list + slot filter. */
+/** Local-only preview of Today logging — in-memory saves so QA can click every path. */
 const PREVIEW_CUSTOM = [
   { id: "c1", name: "Pulled Chicken Tacos", cal: 425, p: 48, c: 38, f: 7, ingredients: "5 oz chicken\n3 corn tortillas" },
   { id: "c2", name: "Turkey and Bacon", cal: 410, p: 36, c: 8, f: 22, slot: "dinner" },
@@ -17,7 +20,32 @@ const PREVIEW_PLAN = [
   { id: "p2", name: "Big pasta night", cal: 720, p: 28, c: 90, f: 22, slot: "dinner" },
 ];
 
+const PREVIEW_DATE = "2026-08-30";
+
 export function MealLogPreview() {
+  const [entries, setEntries] = useState([
+    { id: "seed", name: "Lunch bowl", cal: 1400, p: 90, c: 120, f: 45, via: "manual", slot: "lunch" },
+  ]);
+  const [customMeals, setCustomMeals] = useState(PREVIEW_CUSTOM);
+  const [waterEntries, setWaterEntries] = useState([]);
+  const [weighins, setWeighins] = useState([]);
+  const [estimate, setEstimate] = useState(null);
+
+  const append = async (entry) => {
+    const row = {
+      id: `local-${Date.now()}`,
+      name: entry.name,
+      cal: Number(entry.cal) || 0,
+      p: Number(entry.p) || 0,
+      c: Number(entry.c) || 0,
+      f: Number(entry.f) || 0,
+      via: entry.via || "manual",
+      slot: entry.slot || "snack",
+    };
+    setEntries((list) => [...list, row]);
+    return true;
+  };
+
   return (
     <div style={{
       maxWidth: 430,
@@ -49,21 +77,66 @@ export function MealLogPreview() {
         color: T.ink,
       }}
       >
-        My plan list
+        Today log saves
       </h1>
       <p style={{ fontFamily: F, fontSize: 13, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
-        Compact cards, taller list, and the filter icon next to search.
+        In-memory only. Click every save: Macros, My plan, estimate Save, edit, water, weigh-in.
       </p>
+      <button
+        type="button"
+        onClick={() => setEstimate({
+          meal: "Eggs and toast",
+          calories: 420,
+          protein_g: 28,
+          carbs_g: 32,
+          fat_g: 18,
+          items: ["2 eggs"],
+          confidence: "medium",
+        })}
+        style={{
+          fontFamily: F,
+          fontSize: 12,
+          fontWeight: 700,
+          margin: "0 0 12px",
+          padding: "8px 12px",
+          borderRadius: 999,
+          border: `1.5px solid ${T.border}`,
+          background: "#fff",
+          color: T.ink,
+          cursor: "pointer",
+        }}
+      >
+        Load demo estimate
+      </button>
       <MealLogCard
-        initialMethod="recipes"
-        customMeals={PREVIEW_CUSTOM}
+        initialMethod="manual"
+        customMeals={customMeals}
         plannedMeals={PREVIEW_PLAN}
         macros={{ cal: 1700, protein: 120, carbs: 150, fat: 50 }}
-        todayLog={{
-          date: "2026-08-30",
-          entries: [{ name: "Lunch bowl", cal: 1400, p: 90, c: 120, f: 45 }],
+        todayLog={{ date: PREVIEW_DATE, entries }}
+        mealLogDate={PREVIEW_DATE}
+        estimate={estimate}
+        onManualLog={append}
+        onLogRecipe={append}
+        onConfirmEstimate={async (payload) => {
+          const ok = await append({ ...payload, via: "adjusted" });
+          if (ok) setEstimate(null);
+          return ok;
         }}
-        mealLogDate="2026-08-30"
+        onDiscardEstimate={() => setEstimate(null)}
+        onUpdateEntry={async (id, patch) => {
+          setEntries((list) => list.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+          return true;
+        }}
+        onDeleteEntry={async (id) => {
+          setEntries((list) => list.filter((e) => e.id !== id));
+          return true;
+        }}
+        onSaveCustomMeal={async (meal) => {
+          const saved = { ...meal, id: `c-${Date.now()}` };
+          setCustomMeals((list) => [saved, ...list]);
+          return saved;
+        }}
       />
       <div style={{ marginTop: 20 }}>
         <h2 style={{
@@ -93,6 +166,34 @@ export function MealLogPreview() {
             confidence: "high",
           })}
           onSaveCustomMeal={async (meal) => meal}
+        />
+      </div>
+      <WaterLogCard
+        date={PREVIEW_DATE}
+        goalOz={80}
+        bottleOz={24}
+        entries={waterEntries}
+        onAdd={async (oz) => {
+          setWaterEntries((list) => [...list, { id: `w-${Date.now()}`, oz }]);
+          return true;
+        }}
+        onUndo={async () => {
+          setWaterEntries((list) => list.slice(0, -1));
+        }}
+      />
+      <div style={{ marginTop: 16 }}>
+        <WeighInCard
+          weighins={weighins}
+          onSave={async (w, date) => {
+            setWeighins((list) => {
+              const without = list.filter((x) => x.date !== date);
+              return [...without, { date, w }].sort((a, b) => (a.date < b.date ? -1 : 1));
+            });
+            return true;
+          }}
+          onDelete={async (date) => {
+            setWeighins((list) => list.filter((x) => x.date !== date));
+          }}
         />
       </div>
     </div>

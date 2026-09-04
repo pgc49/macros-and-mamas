@@ -3,6 +3,7 @@ import { T, F } from "../theme/tokens";
 import { Btn } from "./ui";
 import { AiMealPreview } from "./AiMealPreview";
 import { eatingOutDayImpact, rankEatingOutPicks } from "../utils/eatingOutImpact";
+import { logSaveSucceeded } from "../utils/logSave";
 
 export const MAX_MENU_PHOTOS = 3;
 
@@ -122,7 +123,7 @@ export function EatingOutMenuFlow({
     try {
       const ok = await onPick?.(meal, { saveToMine: saveMine });
       if (!aliveRef.current) return;
-      if (ok === false) {
+      if (!logSaveSucceeded(ok)) {
         setErr("Couldn't log that meal — try again.");
       }
     } catch (e) {

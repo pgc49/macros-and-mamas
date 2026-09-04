@@ -2,6 +2,7 @@ import { useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card } from "./ui";
 import { formatLongDay, isTodayIso } from "../utils/dates";
+import { logSaveSucceeded } from "../utils/logSave";
 
 /** Soft water blue — distinct from brand accent, not purple. */
 const WATER = "#4F7F97";
@@ -27,6 +28,8 @@ export function WaterLogCard({
   const [customOz, setCustomOz] = useState("");
   const [editingBottle, setEditingBottle] = useState(false);
   const [bottleDraft, setBottleDraft] = useState(String(bottleOz));
+  const [addingQuick, setAddingQuick] = useState(false);
+  const [addError, setAddError] = useState("");
 
   const total = (entries || []).reduce((s, e) => s + (Number(e.oz) || 0), 0);
   const goal = Number(goalOz) || 0;
@@ -41,10 +44,28 @@ export function WaterLogCard({
   const barColor = hit ? T.sage : WATER;
   const barTrack = hit ? T.sageSoft : WATER_SOFT;
 
-  const addCustom = () => {
+  const addLocked = busy || addingQuick;
+
+  const addAmount = async (n) => {
+    if (!n || n <= 0 || addLocked) return;
+    setAddingQuick(true);
+    setAddError("");
+    try {
+      const ok = await onAdd?.(n);
+      if (!logSaveSucceeded(ok)) {
+        setAddError("Couldn't save that water — try again.");
+      }
+      return ok;
+    } finally {
+      setAddingQuick(false);
+    }
+  };
+
+  const addCustom = async () => {
     const n = Number(customOz);
-    if (!n || n <= 0) return;
-    onAdd?.(n);
+    if (!n || n <= 0 || addLocked) return;
+    const ok = await addAmount(n);
+    if (!logSaveSucceeded(ok)) return;
     setCustomOz("");
     setCustomOpen(false);
   };
@@ -96,8 +117,8 @@ export function WaterLogCard({
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button
           type="button"
-          disabled={busy}
-          onClick={() => onAdd?.(bottle)}
+          disabled={addLocked}
+          onClick={() => addAmount(bottle)}
           style={{
             flex: "1 1 140px",
             fontFamily: F,
@@ -108,15 +129,15 @@ export function WaterLogCard({
             border: "none",
             background: WATER,
             color: "#fff",
-            cursor: busy ? "default" : "pointer",
+            cursor: addLocked ? "default" : "pointer",
           }}
         >
           + My bottle · {bottle} oz
         </button>
         <button
           type="button"
-          disabled={busy}
-          onClick={() => onAdd?.(8)}
+          disabled={addLocked}
+          onClick={() => addAmount(8)}
           style={{
             flex: "0 0 auto",
             fontFamily: F,
@@ -127,14 +148,14 @@ export function WaterLogCard({
             border: `1.5px solid ${WATER_BORDER}`,
             background: WATER_SOFT,
             color: WATER,
-            cursor: busy ? "default" : "pointer",
+            cursor: addLocked ? "default" : "pointer",
           }}
         >
           + Glass · 8 oz
         </button>
         <button
           type="button"
-          disabled={busy}
+          disabled={addLocked}
           onClick={() => setCustomOpen((o) => !o)}
           style={{
             flex: "0 0 auto",
@@ -146,12 +167,17 @@ export function WaterLogCard({
             border: `1.5px solid ${T.border}`,
             background: "#fff",
             color: T.ink,
-            cursor: busy ? "default" : "pointer",
+            cursor: addLocked ? "default" : "pointer",
           }}
         >
           + oz
         </button>
       </div>
+      {addError && (
+        <div style={{ fontSize: 12.5, color: T.amber, fontWeight: 700, marginTop: 8 }}>
+          {addError}
+        </div>
+      )}
 
       {customOpen && (
         <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
@@ -174,7 +200,7 @@ export function WaterLogCard({
           />
           <button
             type="button"
-            disabled={busy || !Number(customOz)}
+            disabled={addLocked || !Number(customOz)}
             onClick={addCustom}
             style={{
               fontFamily: F,

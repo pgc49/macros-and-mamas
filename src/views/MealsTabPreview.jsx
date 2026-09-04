@@ -8,6 +8,14 @@ const noopAsync = async () => true;
 export function MealsTabPreview() {
   const [mealFilter, setMealFilter] = useState("All meals");
   const [tab, setTab] = useState("meals");
+  const [logFlash, setLogFlash] = useState("");
+
+  const logRecipe = async (recipe) => {
+    const name = recipe?.name || "meal";
+    setLogFlash(`Added ${name} to Today`);
+    window.setTimeout(() => setLogFlash(""), 4000);
+    return true;
+  };
 
   return (
     <ClientApp
@@ -24,10 +32,11 @@ export function MealsTabPreview() {
       confirmEstimate={noopAsync}
       discardEstimate={noop}
       logManualMeal={noopAsync}
-      logRecipe={noopAsync}
+      logRecipe={logRecipe}
+      logFlash={logFlash}
       todayLog={{ date: "2026-08-30", entries: [] }}
-      deleteMealEntry={noop}
-      updateMealEntry={noop}
+      deleteMealEntry={noopAsync}
+      updateMealEntry={noopAsync}
       mealLogDate="2026-08-30"
       mealLogWeekStart="2026-08-24"
       mealLogsByDate={{}}
@@ -35,8 +44,8 @@ export function MealsTabPreview() {
       changeMealWeek={noop}
       waterLogsByDate={{}}
       waterBusy={false}
-      onAddWater={noop}
-      onUndoWater={noop}
+      onAddWater={noopAsync}
+      onUndoWater={noopAsync}
       onChangeBottleOz={noop}
       viewWk={1}
       setViewWk={noop}
@@ -49,8 +58,8 @@ export function MealsTabPreview() {
       progWeekNum={1}
       earliestWk="2026-08-24"
       weighins={[]}
-      logWeighin={noop}
-      deleteWeighin={noop}
+      logWeighin={noopAsync}
+      deleteWeighin={noopAsync}
       weeklyRate={0}
       trends={{ locked: true, items: [] }}
       macroHistory={[]}
@@ -60,7 +69,17 @@ export function MealsTabPreview() {
         { id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 },
         { id: "c2", name: "Yogurt bowl", cal: 280, p: 28, c: 30, f: 6, slot: "breakfast" },
       ]}
-      weekPlanDays={[]}
+      weekPlanDays={[
+        {
+          day: "Mon",
+          meals: [
+            { id: "p1", name: "Protein oatmeal", cal: 310, p: 30, c: 40, f: 4, slot: "breakfast" },
+          ],
+        },
+      ]}
+      weekPlanWeekStart="2026-08-24"
+      onWeekPlanChange={noop}
+      onChangeWeekPlanWeek={noop}
     />
   );
 }

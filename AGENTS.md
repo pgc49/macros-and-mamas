@@ -94,15 +94,16 @@ clicking through the thing a mama or Callie will see.
 ### Test accounts (preview + production-shaped data)
 
 Cloudflare previews share the live Supabase project. Signing in as a paying mama to “just check” is
-not allowed. We need dedicated, labeled accounts the agent can use on preview:
+not allowed. Use only the labeled accounts below. They are **comp — do not email or blast**.
+`pgchammas+…` addresses are hidden from Callie’s Home / People queues.
 
-- One **Cohort 2** mama (`cohort_label=2026-08`, paid/active, not a real customer)
-- One **Founding** mama (`cohort_label=2026-07`, paid/active, not a real customer)
-- Admin dogfood stays Callie/Patrick — **never** use `pgchammas@gmail.com` as a throwaway
-
-Until those exist, say so in the write-up, test what you can locally, and do not invent a login.
-When they are created, list the emails here (plus “comp, do not email/blast”) so every agent uses the
-same three.
+- **Cohort 2 preview QA** — `pgchammas+qa-active@gmail.com` / `qatesting777`
+  (`cohort_label=2026-08`, paid, comp, `status=active`, macros approved, profile name “QA Tester”).
+  Use this for Cloudflare PR preview click-throughs (Today log, Meals, Progress, Messages).
+  Comp — do not email or blast. Do not reset the password unless Patrick asks.
+- **Founding** mama (`cohort_label=2026-07`, paid/active, not a real customer) — **not created yet**.
+  Say so and skip founding-only checks.
+- Admin dogfood stays Callie/Patrick — **never** use `pgchammas@gmail.com` (no plus) as a throwaway.
 
 ## Deploys
 
