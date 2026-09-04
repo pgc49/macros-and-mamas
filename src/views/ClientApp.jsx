@@ -244,7 +244,11 @@ export function ClientApp({
   );
 
   return (
-    <Shell bottomBar={tabBar} hideBottomBar={tab === "messages" && composerFocused}>
+    <Shell
+      bottomBar={tabBar}
+      hideBottomBar={tab === "messages" && composerFocused}
+      lockContentScroll={tab === "messages"}
+    >
       {tab === "today" && macros && (
         <>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
@@ -670,21 +674,18 @@ export function ClientApp({
       )}
 
       {tab === "messages" && (
-        <>
-          <ErrorBoundary
-            name="CustomerMessages"
-            title="Messages hit a snag"
-            message="Your conversations are safe. Try again here — Today and the rest of the app still work."
-            resetKeys={[userId, tab]}
-          >
-            <MessagesPanel
-              userId={userId}
-              onUnreadChange={onUnreadMessagesChange}
-              onComposerFocusChange={setComposerFocused}
-            />
-          </ErrorBoundary>
-          {!composerFocused && <TechHelpFooter />}
-        </>
+        <ErrorBoundary
+          name="CustomerMessages"
+          title="Messages hit a snag"
+          message="Your conversations are safe. Try again here — Today and the rest of the app still work."
+          resetKeys={[userId, tab]}
+        >
+          <MessagesPanel
+            userId={userId}
+            onUnreadChange={onUnreadMessagesChange}
+            onComposerFocusChange={setComposerFocused}
+          />
+        </ErrorBoundary>
       )}
 
       {tab === "progress" && (

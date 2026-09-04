@@ -359,11 +359,21 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   const notifyChannel = channels.find((item) => item.conversation.id === notifyChannelId) || null;
 
   return (
-    <>
+    <div
+      data-messages-panel
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       {error && (
-        <div style={{ fontSize: 13, color: "#B4416B", marginBottom: 8 }}>{error}</div>
+        <div style={{ fontSize: 13, color: "#B4416B", marginBottom: 8, flexShrink: 0 }}>{error}</div>
       )}
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: 10, flexShrink: 0 }}>
         <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Messages</h2>
         <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45 }}>
           {activeSubtitle}
@@ -387,6 +397,16 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
         </div>
       </div>
 
+      <div
+        data-messages-thread-slot
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
       {activeChannel ? (
         <ErrorBoundary
           name="CustomerChannelThread"
@@ -456,6 +476,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           />
         </ErrorBoundary>
       )}
+      </div>
 
       {notifyChannel && (
         <NotifySettingsSheet
@@ -465,7 +486,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           onSave={saveNotifyLevel}
         />
       )}
-    </>
+    </div>
   );
 }
 
