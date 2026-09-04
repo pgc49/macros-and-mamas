@@ -56,13 +56,38 @@ function renderPanel(props = {}) {
 const cardTitles = () => screen.queryAllByTestId("coach-card-title").map((n) => n.textContent);
 
 describe("the coach answers on the device", () => {
+  it("has already answered by the time she gets there", async () => {
+    const postCoach = vi.fn();
+    const onLoadThread = vi.fn(async () => []);
+    renderPanel({ postCoach, onLoadThread });
+
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    expect(postCoach).not.toHaveBeenCalled();
+  });
+
+  it("shows today's thread instead when there is one to come back to", async () => {
+    const onLoadThread = vi.fn(async () => [
+      { id: "r1", role: "mama", body: "what should I eat", kind: "text", payload: null },
+      { id: "r2", role: "coach", body: "Earlier answer.", kind: "text", payload: null },
+    ]);
+    renderPanel({ postCoach: vi.fn(), onLoadThread });
+
+    await screen.findByText("Earlier answer.");
+    expect(cardTitles()).toHaveLength(0);
+  });
+
   it("gives her cards for What should I eat? without calling the model", async () => {
     const postCoach = vi.fn();
-    renderPanel({ postCoach });
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    const opening = await waitFor(() => {
+      const titles = cardTitles();
+      expect(titles.length).toBeGreaterThan(0);
+      return titles.length;
+    });
 
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askEat }));
 
-    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(opening));
     expect(postCoach).not.toHaveBeenCalled();
   });
 

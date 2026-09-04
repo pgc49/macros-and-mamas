@@ -3274,12 +3274,21 @@ export const db = {
    * a source of macros. A missing table (migration not run) is not an error —
    * the coach still works, it just forgets between visits.
    */
-  async loadCoachThread({ limit = 60 } = {}) {
+  /**
+   * Today's thread only.
+   *
+   * The coach is a decision tool, not a correspondence. Yesterday's "what
+   * should I eat" is noise this morning, and the meal cards inside it were
+   * sized against yesterday's budget — showing them again would offer her a
+   * portion that no longer fits.
+   */
+  async loadCoachThread({ limit = 60, localDate = null } = {}) {
     const uid = await requireUserId();
     const { data, error } = await supabase
       .from("coach_messages")
       .select("id, role, body, kind, payload, local_date, created_at")
       .eq("profile_id", uid)
+      .eq("local_date", localDate || localDateIso())
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) {

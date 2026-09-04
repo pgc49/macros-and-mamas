@@ -90,6 +90,7 @@ export function CoachPanel({
   const photoKindRef = useRef("menu");
   const endRef = useRef(null);
   const sentRef = useRef(false);
+  const openedRef = useRef(false);
   // What she's already been shown. A ref, not state: it only ever feeds the
   // next answer she asks for, and as state it would be a render behind the tap.
   const skipRef = useRef([]);
@@ -109,23 +110,37 @@ export function CoachPanel({
     }),
     [profile, macros, totals, entries, plannedMeals, mealHistoryByDate, customMeals, slotOverride],
   );
+  const answerRef = useRef(answer);
+  answerRef.current = answer;
 
+  /**
+   * Catch up on today, or — if there's nothing to catch up on — answer the
+   * question she opened the coach to ask. Making her tap "What should I eat?"
+   * to get an answer that was already worked out is a step for nothing.
+   */
   useEffect(() => {
+    if (openedRef.current || !answerRef.current) return;
+    openedRef.current = true;
     let alive = true;
     (async () => {
       const rows = await onLoadThread?.();
-      if (!alive || !Array.isArray(rows)) return;
-      setThread(rows.map((r) => ({
-        id: r.id,
-        role: r.role,
-        body: r.body,
-        kind: r.kind,
-        cards: r.payload?.cards || [],
-        deflect: r.payload?.deflect || null,
-        aside: r.payload?.aside || null,
-      })));
+      if (!alive) return;
+      if (Array.isArray(rows) && rows.length) {
+        setThread(rows.map((r) => ({
+          id: r.id,
+          role: r.role,
+          body: r.body,
+          kind: r.kind,
+          cards: r.payload?.cards || [],
+          deflect: r.payload?.deflect || null,
+          aside: r.payload?.aside || null,
+        })));
+        return;
+      }
+      answerWithCards({ echo: false });
     })();
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onLoadThread]);
 
   useEffect(() => {
@@ -370,15 +385,17 @@ export function CoachPanel({
         <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: T.accentDeep }}>
           {slotTitle} · {Math.round(answer.budget.cal)} cal to play with
         </div>
-        <div style={{ fontSize: 13, color: T.ink, marginTop: 3 }}>{answer.left}</div>
+        {/* This slot's numbers, not the day's. The day's live on Today, and
+            two sets of totals stacked here only made her do arithmetic. */}
+        <div style={{ fontSize: 13, color: T.ink, marginTop: 3, lineHeight: 1.45 }}>{answer.strip.macros}</div>
         {answer.strip.held && (
-          <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 3 }}>{answer.strip.held}</div>
+          <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 3, lineHeight: 1.45 }}>{answer.strip.held}</div>
         )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: "1 1 auto" }}>
         <div style={bubble(false)}>
-          {COACH_COPY.openerLead} {opener} {COACH_COPY.openerAsk}
+          {COACH_COPY.openerLead} {opener}
         </div>
 
         {thread.map((m) => (

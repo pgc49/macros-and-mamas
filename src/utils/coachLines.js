@@ -171,8 +171,18 @@ export function budgetSentence(budget) {
   return capitalizeLine(line);
 }
 
+/**
+ * Protein and the two ceilings, said as what they are.
+ *
+ * `P 30g · C 44g · F 13g` gives all three the same weight, which is the one
+ * thing the program does not believe: protein is a number to reach and the
+ * other two are room not to blow through.
+ */
 function macrosShort(p, c, f) {
-  return `P ${Math.round(p || 0)}g · C ${Math.round(c || 0)}g · F ${Math.round(f || 0)}g`;
+  const protein = Math.round(p || 0);
+  const ceilings = `up to ${Math.round(c || 0)}g carbs and ${Math.round(f || 0)}g fat`;
+  if (protein <= 0) return `${capitalizeLine(ceilings)}. Protein's already covered.`;
+  return `Aim for ${protein}g protein. ${capitalizeLine(ceilings)}.`;
 }
 
 /** The header strip above a set of cards: this slot's room, and what's held back. */
@@ -189,10 +199,12 @@ export function slotLeftRead(budget) {
   if (snack && snack.cal > 0) {
     heldPieces.push({ slot: "snack", cal: snack.cal, p: snack.p, c: snack.c, f: snack.f, meal: snack.meal || null });
   }
-  const heldBits = heldPieces.map((h) => {
+  // "cal" once, on the first number, so a three-slot strip stays readable.
+  const heldBits = heldPieces.map((h, i) => {
     const label = COACH_SLOT_LABEL[h.slot] || h.slot;
-    if (h.meal?.name) return `${fmtCal(h.cal)} cal ${label} (${h.meal.name})`;
-    return `${fmtCal(h.cal)} cal ${label}`;
+    const amount = i === 0 ? `${fmtCal(h.cal)} cal` : fmtCal(h.cal);
+    if (h.meal?.name) return `${amount} for ${label} (${h.meal.name})`;
+    return `${amount} for ${label}`;
   });
   return {
     title: `${COACH_COPY.leftFor} ${slot}`,

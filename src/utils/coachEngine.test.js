@@ -385,6 +385,30 @@ describe("copy matches the rest of the app", () => {
     expect(sentence).toContain("That leaves");
     expect(slotLeftRead(budget).title).toBe("Left for lunch");
   });
+
+  /**
+   * The strip is the last thing she reads before picking a meal, so it has to
+   * say which numbers are targets and which are ceilings. Giving protein,
+   * carbs and fat the same shape was telling her protein was a limit.
+   */
+  it("calls protein a target and the other two ceilings", () => {
+    const budget = budgetFor({ cal: 640, p: 55, c: 60, f: 20 }, { slot: "lunch", loggedSlots: new Set(["breakfast"]) });
+    const strip = slotLeftRead(budget);
+    expect(strip.macros).toMatch(/^Aim for \d+g protein\. Up to \d+g carbs and \d+g fat\.$/);
+  });
+
+  it("says protein is covered rather than asking for 0g of it", () => {
+    const budget = budgetFor({ cal: 400, p: 150, c: 30, f: 12 }, { slot: "dinner" });
+    expect(slotLeftRead(budget).macros).toContain("Protein's already covered");
+    expect(slotLeftRead(budget).macros).not.toContain("Aim for 0g");
+  });
+
+  it("holds back later slots by name, with the unit said once", () => {
+    const budget = budgetFor({ cal: 0, p: 0, c: 0, f: 0 }, { slot: "breakfast" });
+    const held = slotLeftRead(budget).held;
+    expect(held).toMatch(/^Holding \d+ cal for lunch · \d+ for dinner/);
+    expect(held).not.toMatch(/cal a snack/);
+  });
 });
 
 describe("reconciliation", () => {

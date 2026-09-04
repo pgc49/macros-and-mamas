@@ -48,7 +48,6 @@ export const COACH_COPY = {
 
   // Openers
   openerLead: "Hey.",
-  openerAsk: "What are we figuring out?",
   openerFresh: "Nothing logged yet today, so the whole day is open.",
   openerDone: "You're done for today as far as I can tell.",
 
