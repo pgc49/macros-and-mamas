@@ -160,6 +160,9 @@ export function MealLogCard({
   const [savingManual, setSavingManual] = useState(false);
   const [manualError, setManualError] = useState("");
   const savingManualRef = useRef(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
+  const savingEditRef = useRef(false);
   const [pantryGroup, setPantryGroup] = useState("all");
   const [planSearch, setPlanSearch] = useState("");
   const [slotFilter, setSlotFilter] = useState("all");
@@ -465,6 +468,7 @@ export function MealLogCard({
   const startEdit = (e) => {
     setEditingId(e.id);
     setRowRefineError("");
+    setEditError("");
     const baseName = stripServingSuffix(e.name);
     const base = {
       cal: Number(e.cal) || 0,
@@ -506,32 +510,46 @@ export function MealLogCard({
   };
 
   const saveEdit = async () => {
-    if (!editingId || !draft) return;
-    const prevVia = draft.via;
-    const nextVia = draft.handTweaked && AI_VIA.has(prevVia)
-      ? "adjusted"
-      : (prevVia || "manual");
-    await onUpdateEntry?.(editingId, {
-      name: draft.name,
-      cal: Number(draft.cal) || 0,
-      p: Number(draft.p) || 0,
-      c: Number(draft.c) || 0,
-      f: Number(draft.f) || 0,
-      via: nextVia,
-      slot: resolveLogSlot(draft.slot),
-    });
-    if (draft.saveCustom) {
-      await onSaveCustomMeal?.({
-        name: draft.baseName || stripServingSuffix(draft.name),
-        cal: Number(draft.base?.cal ?? draft.cal) || 0,
-        p: Number(draft.base?.p ?? draft.p) || 0,
-        c: Number(draft.base?.c ?? draft.c) || 0,
-        f: Number(draft.base?.f ?? draft.f) || 0,
+    if (!editingId || !draft || savingEditRef.current) return;
+    savingEditRef.current = true;
+    setSavingEdit(true);
+    setEditError("");
+    try {
+      const prevVia = draft.via;
+      const nextVia = draft.handTweaked && AI_VIA.has(prevVia)
+        ? "adjusted"
+        : (prevVia || "manual");
+      const ok = await onUpdateEntry?.(editingId, {
+        name: draft.name,
+        cal: Number(draft.cal) || 0,
+        p: Number(draft.p) || 0,
+        c: Number(draft.c) || 0,
+        f: Number(draft.f) || 0,
+        via: nextVia,
+        slot: resolveLogSlot(draft.slot),
       });
+      if (ok === false) {
+        setEditError("Couldn't save that meal — try again.");
+        return;
+      }
+      if (draft.saveCustom) {
+        await onSaveCustomMeal?.({
+          name: draft.baseName || stripServingSuffix(draft.name),
+          cal: Number(draft.base?.cal ?? draft.cal) || 0,
+          p: Number(draft.base?.p ?? draft.p) || 0,
+          c: Number(draft.base?.c ?? draft.c) || 0,
+          f: Number(draft.base?.f ?? draft.f) || 0,
+        });
+      }
+      setEditingId(null);
+      setDraft(null);
+      setRowRefineError("");
+    } catch {
+      setEditError("Couldn't save that meal — try again.");
+    } finally {
+      savingEditRef.current = false;
+      setSavingEdit(false);
     }
-    setEditingId(null);
-    setDraft(null);
-    setRowRefineError("");
   };
 
   const refineRowEstimate = async ({ files, description } = {}) => {
@@ -577,9 +595,15 @@ export function MealLogCard({
   };
 
   const removeWhileEditing = async (id) => {
-    await onDeleteEntry?.(id);
+    if (savingEditRef.current) return;
+    const ok = await onDeleteEntry?.(id);
+    if (ok === false) {
+      setEditError("Couldn't remove that meal — try again.");
+      return;
+    }
     setEditingId(null);
     setDraft(null);
+    setEditError("");
   };
 
   const numIn = (k, w = 58) => (
@@ -1686,11 +1710,12 @@ export function MealLogCard({
                             </div>
                           ))}
                           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-                            <button type="button" style={pill(false)} onClick={saveEdit}>
-                              Save
+                            <button type="button" disabled={savingEdit} style={pill(false, savingEdit)} onClick={saveEdit}>
+                              {savingEdit ? "Saving…" : "Save"}
                             </button>
                             <button
                               type="button"
+                              disabled={savingEdit}
                               onClick={() => removeWhileEditing(e.id)}
                               style={{
                                 background: "none",
@@ -1706,6 +1731,11 @@ export function MealLogCard({
                             </button>
                           </div>
                         </div>
+                        {editError ? (
+                          <div style={{ marginTop: 8, fontSize: 13, color: T.amber, fontFamily: F }}>
+                            {editError}
+                          </div>
+                        ) : null}
                         {onEstimateRefine && (
                           <LogMealRefine
                             onRefine={refineRowEstimate}
