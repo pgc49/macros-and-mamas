@@ -51,7 +51,7 @@ describe("Shell content width", () => {
     expect(content.style.overflowY).toBe("hidden");
     expect(content.style.display).toBe("flex");
     expect(fill).toBeTruthy();
-    expect(fill.style.flex).toBe("1");
+    expect(fill.style.flexGrow).toBe("1");
     expect(fill.style.minHeight).toBe("0px");
     expect(fill.style.overflow).toBe("hidden");
   });

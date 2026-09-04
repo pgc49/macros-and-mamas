@@ -142,7 +142,7 @@ describe("messaging crash containment", () => {
 
     expect(input).toBeTruthy();
     expect(thread.style.height).toBe("100%");
-    expect(thread.style.flex).toBe("1");
+    expect(thread.style.flexGrow).toBe("1");
     expect(thread.style.minHeight).toBe("0px");
     expect(thread.style.overflow).toBe("hidden");
     expect(thread.style.paddingBottom).toBe("4px");
