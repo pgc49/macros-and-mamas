@@ -51,10 +51,19 @@ const URGENT = [
   // Mental health
   /\banxiety\b/, /\banxious\b/, /\bdepress/, /\bppd\b/, /\bpanic attack/,
   /\btherapist\b/, /\bsuicid/, /\bself[- ]harm/,
-  // Restriction and disordered eating
-  /\bbinge/, /\bpurge/, /\bpurging\b/, /\bstarv/, /\banorexi/, /\bbulimi/,
-  /\bnot eating\b/, /\bstop eating\b/, /\bskip(ping)? meals\b/, /\bfast(ing)? all day\b/,
-  /\bhate my body\b/, /\bdisgusting\b/, /\bfeel guilty\b/, /\bpunish/,
+  // Restriction and disordered eating.
+  //
+  // Three of these are idioms before they are symptoms, and the literal
+  // versions refused the mamas this was built for. "I'm nursing so I'm always
+  // starving" is a hungry woman asking for breakfast; only the reflexive form
+  // is about restriction. "I'm not eating enough protein" is the whole point
+  // of the app. And a food she finds disgusting is a preference, not shame.
+  /\bbinge/, /\bpurge/, /\bpurging\b/, /\banorexi/, /\bbulimi/,
+  /\bstarv(e|es|ed|ing)\s+(myself|my ?self|my body)\b/, /\bstarvation\b/,
+  /\bnot eating\b(?![^.?!]{0,24}\b(protein|carbs?|fats?|fibre|fiber|veg|vegetables|breakfast|lunch|dinner|meat|dairy|gluten)\b)/,
+  /\bstop eating\b/, /\bskip(ping)? meals\b/, /\bfast(ing)? all day\b/,
+  /\bhate my body\b/, /\bfeel guilty\b/, /\bpunish/,
+  /\b(i (feel|look|am)|feeling|felt)\b[^.?!]{0,18}\bdisgusting\b/,
   /\bhow (few|little) calories can i\b/, /\beat as little as\b/,
 ];
 
@@ -75,7 +84,10 @@ const WEIGHT = [
 
 const ADMIN = [
   /\brefund/, /\bcancel/, /\bbilling\b/, /\bcharged?\b/, /\bsubscription\b/,
-  /\bpayment\b/, /\binvoice\b/, /\bmy plan\b/, /\bcohort\b/, /\bpassword\b/,
+  /\bpayment\b/, /\binvoice\b/, /\bcohort\b/, /\bpassword\b/,
+  // "My plan" is the week plan more often than it is the thing she pays for.
+  /\b(cancel|change|upgrade|downgrade|pause|renew)\b[^.?!]{0,15}\bmy plan\b/,
+  /\bmy plan\b[^.?!]{0,25}\b(cost|price|renew|expires?|ends?|starts?|finish|over|include)\b/,
   /\blog ?in\b/, /\bsign ?in\b/, /\bapprove/, /\bapproval\b/,
   /\bweek \d+\b[^.?!]{0,20}\bstart/, /\bwhen does\b[^.?!]{0,25}\b(program|course|cohort)\b/,
   /\bcallie hasn'?t\b/, /\bhear back from callie\b/,

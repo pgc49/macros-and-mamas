@@ -163,8 +163,40 @@ describe("milk supply", () => {
   });
 
   it("does not fire on someone just mentioning that she nurses", () => {
-    expect(scopeOf("quick breakfast ideas, I'm nursing so I'm always starving")).toBe("urgent");
+    expect(scopeOf("quick breakfast ideas, I'm nursing so I'm always starving")).toBe("food");
     expect(scopeOf("quick breakfast ideas, I'm nursing and short on time")).toBe("food");
+  });
+});
+
+/**
+ * Each of these reads as a symptom to a keyword and as an ordinary sentence to
+ * a person. Refusing them would hand a mama to Callie for saying she is hungry.
+ */
+describe("idioms that are not symptoms", () => {
+  it("lets hunger be hunger", () => {
+    expect(scopeOf("I'm starving, what should I eat")).toBe("food");
+    expect(scopeOf("starving after that walk, lunch ideas")).toBe("food");
+    expect(scopeOf("I've been starving myself all week")).toBe("urgent");
+    expect(scopeOf("is starvation mode real")).toBe("urgent");
+  });
+
+  it("lets her say she is short on a macro", () => {
+    expect(scopeOf("I'm not eating enough protein, what should I have")).toBe("food");
+    expect(scopeOf("I'm not eating enough veg")).toBe("food");
+    expect(scopeOf("I'm not eating today")).toBe("urgent");
+    expect(scopeOf("I've not eating much at all lately")).toBe("urgent");
+  });
+
+  it("lets her dislike a food without it being about her body", () => {
+    expect(scopeOf("greek yogurt is disgusting, what else has protein")).toBe("food");
+    expect(scopeOf("I feel disgusting today")).toBe("urgent");
+  });
+
+  it("keeps the week plan out of billing", () => {
+    expect(scopeOf("what's on my plan for dinner")).toBe("food");
+    expect(scopeOf("I want to cancel my plan")).toBe("admin");
+    expect(scopeOf("how much does my plan cost after 8 weeks")).toBe("admin");
+    expect(scopeOf("when does my plan end")).toBe("admin");
   });
 });
 
