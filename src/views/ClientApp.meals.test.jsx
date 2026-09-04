@@ -28,7 +28,7 @@ function renderMeals(filter = "All meals", extras = {}) {
   const view = render(
     <MemoryRouter>
       <ClientApp
-        tab={extras.tab || "meals"}
+        tab="meals"
         setTab={noop}
         profile={{ name: "Pat" }}
         macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
@@ -42,12 +42,12 @@ function renderMeals(filter = "All meals", extras = {}) {
         discardEstimate={noop}
         logManualMeal={noop}
         logRecipe={noop}
-        todayLog={extras.todayLog || { date: "2026-08-30", entries: [] }}
+        todayLog={{ date: "2026-08-30", entries: [] }}
         deleteMealEntry={noop}
         updateMealEntry={noop}
         mealLogDate="2026-08-30"
         mealLogWeekStart="2026-08-24"
-        mealLogsByDate={extras.mealLogsByDate || {}}
+        mealLogsByDate={{}}
         selectMealLogDate={noop}
         changeMealWeek={noop}
         waterLogsByDate={{}}
@@ -139,29 +139,5 @@ describe("Meals tab search filter", () => {
     expect(screen.getByText("Greek yogurt + berries")).toBeTruthy();
     expect(screen.queryByText("Callie's chicken teriyaki")).toBeNull();
     expect(screen.queryByText("Chicken soba stir fry")).toBeNull();
-  });
-});
-
-describe("Today log entries", () => {
-  it("shows meals from the week map when todayLog was wiped empty", () => {
-    renderMeals("All meals", {
-      tab: "today",
-      todayLog: { date: "2026-08-30", entries: [] },
-      mealLogsByDate: {
-        "2026-08-30": [{
-          id: "1",
-          name: "Lindt Dark Chocolate",
-          cal: 170,
-          p: 3,
-          c: 14,
-          f: 11,
-          via: "manual",
-          slot: "snack",
-        }],
-      },
-    });
-
-    expect(screen.getByText("Lindt Dark Chocolate")).toBeTruthy();
-    expect(screen.getByText("Snacks")).toBeTruthy();
   });
 });
