@@ -41,10 +41,11 @@ export function WaterLogCard({
   const barColor = hit ? T.sage : WATER;
   const barTrack = hit ? T.sageSoft : WATER_SOFT;
 
-  const addCustom = () => {
+  const addCustom = async () => {
     const n = Number(customOz);
-    if (!n || n <= 0) return;
-    onAdd?.(n);
+    if (!n || n <= 0 || busy) return;
+    const ok = await onAdd?.(n);
+    if (ok === false) return;
     setCustomOz("");
     setCustomOpen(false);
   };

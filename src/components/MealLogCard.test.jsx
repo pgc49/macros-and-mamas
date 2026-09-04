@@ -212,3 +212,38 @@ describe("MealLogCard I know the Macros", () => {
     expect(screen.getByRole("button", { name: "Add" }).disabled).toBe(false);
   });
 });
+
+describe("MealLogCard edit Save", () => {
+  it("keeps the editor open when update fails", async () => {
+    const onUpdateEntry = vi.fn(async () => false);
+
+    render(
+      <MealLogCard
+        todayLog={{
+          date: "2026-09-03",
+          entries: [{
+            id: "m1",
+            name: "Lindt Dark Chocolate",
+            cal: 170,
+            p: 3,
+            c: 14,
+            f: 11,
+            via: "manual",
+            slot: "snack",
+          }],
+        }}
+        mealLogDate="2026-09-03"
+        onUpdateEntry={onUpdateEntry}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Lindt Dark Chocolate"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Couldn't save that meal — try again.")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(onUpdateEntry).toHaveBeenCalledTimes(1);
+  });
+});

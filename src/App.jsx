@@ -7,7 +7,7 @@ import { joinPersonName } from "./lib/personName";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
-import { hydrateTodayLog } from "./utils/mealLogState";
+import { entriesForLogDate, hydrateTodayLog, sumLogTotals } from "./utils/mealLogState";
 import { resolveLogSlot } from "./utils/mealSlots";
 import {
   adherenceForWeek,
@@ -942,10 +942,7 @@ export default function App() {
       applyDayFromCache(nextDate, byDate);
     } catch (e) {
       console.error("loadMealLogsWeek failed", e);
-      setMealLogsByDate({});
-      const today = localDateIso();
-      const fallback = preferDate && preferDate <= today ? preferDate : weekStart;
-      applyDayFromCache(fallback > today ? today : fallback, {});
+      setMealLogWeekStart(mealLogWeekStart);
     }
   };
 
@@ -979,8 +976,11 @@ export default function App() {
       await maybeAutoCheckWater(date, dayTotal, waterOz);
     } catch (e) {
       console.error("addWater failed", e);
+      setWaterBusy(false);
+      return false;
     }
     setWaterBusy(false);
+    return true;
   };
 
   const undoWater = async () => {
@@ -1055,13 +1055,13 @@ export default function App() {
     // Prefer explicit review-panel overrides so Save still works after a
     // failed re-estimate (estimate may be an error object or briefly null).
     const o = overrides && typeof overrides === "object" ? overrides : null;
-    if (!o && (!estimate || estimate.error)) return;
+    if (!o && (!estimate || estimate.error)) return false;
     const name = o?.name ?? estimate?.meal;
     const cal = o?.cal ?? estimate?.calories;
     const p = o?.p ?? estimate?.protein_g;
     const c = o?.c ?? estimate?.carbs_g;
     const f = o?.f ?? estimate?.fat_g;
-    if (name == null || String(name).trim() === "") return;
+    if (name == null || String(name).trim() === "") return false;
     const baseVia = estimateSource === "text" ? "describe" : (estimateSource || "photo");
     const ok = await appendMealEntry({
       name,
@@ -1361,24 +1361,28 @@ export default function App() {
   };
 
   const updateMealEntry = async (id, patch) => {
-    if (!id) return;
+    if (!id) return false;
     try {
       const row = await db.updateMealLog(id, patch);
       const date = mealLogDate;
       syncEntryIntoWeek(date, (list) => list.map((e) => (e.id === id ? { ...e, ...row } : e)));
+      return true;
     } catch (e) {
       console.error("updateMealLog failed", e);
+      return false;
     }
   };
 
   const deleteMealEntry = async (id) => {
-    if (!id) return;
+    if (!id) return false;
     try {
       await db.deleteMealLog(id);
       const date = mealLogDate;
       syncEntryIntoWeek(date, (list) => list.filter((e) => e.id !== id));
+      return true;
     } catch (e) {
       console.error("deleteMealLog failed", e);
+      return false;
     }
   };
 
@@ -1406,10 +1410,11 @@ export default function App() {
     }
   };
 
-  const totals = useMemo(() => todayLog.entries.reduce(
-    (a, e) => ({ cal: a.cal + (e.cal || 0), p: a.p + (e.p || 0), c: a.c + (e.c || 0), f: a.f + (e.f || 0) }),
-    { cal: 0, p: 0, c: 0, f: 0 }
-  ), [todayLog]);
+  const visibleLogEntries = useMemo(
+    () => entriesForLogDate(mealLogDate || todayLog?.date, mealLogsByDate, todayLog),
+    [mealLogDate, mealLogsByDate, todayLog],
+  );
+  const totals = useMemo(() => sumLogTotals(visibleLogEntries), [visibleLogEntries]);
 
   const weeklyRate = useMemo(() => {
     // Dedupe by date (newest wins) before rate math — same-day doubles break the chart.

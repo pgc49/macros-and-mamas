@@ -23,3 +23,15 @@ export function hydrateTodayLog(state, today) {
   }
   return { date: today, entries: [] };
 }
+
+export function sumLogTotals(entries) {
+  return (entries || []).reduce(
+    (a, e) => ({
+      cal: a.cal + (Number(e.cal) || 0),
+      p: a.p + (Number(e.p) || 0),
+      c: a.c + (Number(e.c) || 0),
+      f: a.f + (Number(e.f) || 0),
+    }),
+    { cal: 0, p: 0, c: 0, f: 0 },
+  );
+}

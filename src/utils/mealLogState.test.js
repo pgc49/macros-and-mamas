@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { entriesForLogDate, hydrateTodayLog } from "./mealLogState";
+import { entriesForLogDate, hydrateTodayLog, sumLogTotals } from "./mealLogState";
 
 const chocolate = { id: "1", name: "Lindt Dark Chocolate", cal: 170 };
 
@@ -52,5 +52,14 @@ describe("hydrateTodayLog", () => {
       todayLog: { date: "2026-09-03", entries: [chocolate] },
     }, "2026-09-03");
     expect(next).toEqual({ date: "2026-09-03", entries: [chocolate] });
+  });
+});
+
+describe("sumLogTotals", () => {
+  it("sums the week-map day so range bands match a wiped todayLog", () => {
+    expect(sumLogTotals([
+      chocolate,
+      { cal: 100, p: 1, c: 5, f: 6 },
+    ])).toEqual({ cal: 270, p: 1, c: 5, f: 6 });
   });
 });
