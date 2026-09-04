@@ -8,6 +8,14 @@ const noopAsync = async () => true;
 export function MealsTabPreview() {
   const [mealFilter, setMealFilter] = useState("All meals");
   const [tab, setTab] = useState("meals");
+  const [logFlash, setLogFlash] = useState("");
+
+  const logRecipe = async (recipe) => {
+    const name = recipe?.name || "meal";
+    setLogFlash(`Added ${name} to Today`);
+    window.setTimeout(() => setLogFlash(""), 4000);
+    return true;
+  };
 
   return (
     <ClientApp
@@ -24,7 +32,8 @@ export function MealsTabPreview() {
       confirmEstimate={noopAsync}
       discardEstimate={noop}
       logManualMeal={noopAsync}
-      logRecipe={noopAsync}
+      logRecipe={logRecipe}
+      logFlash={logFlash}
       todayLog={{ date: "2026-08-30", entries: [] }}
       deleteMealEntry={noopAsync}
       updateMealEntry={noopAsync}
