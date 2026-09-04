@@ -119,4 +119,32 @@ describe("the recipe sheet", () => {
     fireEvent.click(screen.getByRole("dialog"));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("says the meal once — the sheet is not a second card", () => {
+    render(<CoachMealSheet card={builtCard} onClose={vi.fn()} onLog={vi.fn()} onSave={vi.fn()} />);
+    expect(screen.getAllByText("Chicken and rice bowl")).toHaveLength(1);
+    expect(screen.getAllByText("310 cal · P 30 · C 40 · F 4")).toHaveLength(1);
+    expect(screen.getAllByText(ESTIMATE)).toHaveLength(1);
+    expect(screen.queryByText("From your kitchen")).toBeNull();
+  });
+
+  it("still logs from inside the sheet", async () => {
+    const onLog = vi.fn(async () => true);
+    render(<CoachMealSheet card={builtCard} onClose={vi.fn()} onLog={onLog} onSave={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Log it" }));
+    await waitFor(() => expect(screen.getByText("Logged.")).toBeTruthy());
+    expect(onLog).toHaveBeenCalledWith(builtCard);
+  });
+
+  it("tells her how to order a restaurant plate, not how to cook it", () => {
+    render(
+      <CoachMealSheet
+        card={{ ...builtCard, tag: "From the menu", source: "menu", steps: ["Order the half chicken.", "Ask for the jus on the side."] }}
+        onClose={vi.fn()}
+        onLog={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("How to order it")).toBeTruthy();
+    expect(screen.queryByText("How to make it")).toBeNull();
+  });
 });

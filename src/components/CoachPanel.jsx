@@ -543,7 +543,16 @@ export function CoachPanel({
             <img
               src={`data:image/jpeg;base64,${photo.b64}`}
               alt={photo.kind === "menu" ? "Menu photo" : "Kitchen photo"}
-              style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 8,
+                objectFit: "cover",
+                // A photographed menu is mostly white paper. Without an edge it
+                // disappears into the composer and looks like nothing attached.
+                border: `1px solid ${T.border}`,
+                background: "#fff",
+              }}
             />
             <span style={{ fontSize: 12.5, color: T.inkSoft }}>
               {photo.kind === "menu" ? COACH_COPY.photoMenu : COACH_COPY.photoFridge} ready

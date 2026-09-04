@@ -65,6 +65,11 @@ export const COACH_COPY = {
   saveToMine: "Save to My meals",
   savedToMine: "Saved to My meals",
   close: "Close",
+  recipeWhat: "What's in it",
+  recipeHow: "How to make it",
+  // A restaurant plate has no method, only an order. Saying "how to make it"
+  // over "ask for the jus on the side" reads like the coach isn't looking.
+  recipeOrder: "How to order it",
   notThese: "None of these",
   lighter: "Lighter",
   moreProtein: "More protein",

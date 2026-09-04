@@ -54,7 +54,7 @@ const actionBtn = (kind, disabled) => ({
  * app uses, and follow the save contract: only an explicit true clears the
  * button, so a failed write can never look like a logged meal.
  */
-export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact = false }) {
+export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact = false, actionsOnly = false }) {
   const [phase, setPhase] = useState("idle");
   const [error, setError] = useState("");
   const busyRef = useRef(false);
@@ -85,28 +85,36 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
 
   return (
     <div
-      style={{
-        background: "#fff",
-        border: `1px solid ${done ? T.sageSoft : T.border}`,
-        borderRadius: 14,
-        padding: compact ? 12 : 14,
-        marginTop: 8,
-      }}
+      style={
+        actionsOnly
+          ? { marginTop: 8 }
+          : {
+              background: "#fff",
+              border: `1px solid ${done ? T.sageSoft : T.border}`,
+              borderRadius: 14,
+              padding: compact ? 12 : 14,
+              marginTop: 8,
+            }
+      }
     >
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
-        <span style={chip(T.track, T.inkSoft)}>{card.tag}</span>
-        {card.knowsYou && <span style={chip(T.accentSoft, T.accentDeep)}>{card.knowsYou}</span>}
-      </div>
+      {!actionsOnly && (
+        <>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+            <span style={chip(T.track, T.inkSoft)}>{card.tag}</span>
+            {card.knowsYou && <span style={chip(T.accentSoft, T.accentDeep)}>{card.knowsYou}</span>}
+          </div>
 
-      <div data-testid="coach-card-title" style={{ fontFamily: FD, fontSize: 18, lineHeight: 1.25, marginBottom: 2 }}>
-        {card.title}
-      </div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{macroLine(card)}</div>
-      {card.reason && (
-        <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>{card.reason}</div>
-      )}
-      {card.proteinNote && (
-        <div style={{ fontSize: 12.5, color: T.sage, marginTop: 4 }}>{card.proteinNote}</div>
+          <div data-testid="coach-card-title" style={{ fontFamily: FD, fontSize: 18, lineHeight: 1.25, marginBottom: 2 }}>
+            {card.title}
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{macroLine(card)}</div>
+          {card.reason && (
+            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>{card.reason}</div>
+          )}
+          {card.proteinNote && (
+            <div style={{ fontSize: 12.5, color: T.sage, marginTop: 4 }}>{card.proteinNote}</div>
+          )}
+        </>
       )}
       {isEstimate && (
         <div style={{ fontSize: 12, color: T.amber, marginTop: 4 }}>{COACH_COPY.estimateNote}</div>
@@ -246,7 +254,7 @@ export function CoachMealSheet({ card, onClose, onLog, onPencil, onSave }) {
         {ingredients.length > 0 && (
           <>
             <h3 style={{ fontFamily: F, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5, color: T.inkSoft, margin: "16px 0 6px" }}>
-              What's in it
+              {COACH_COPY.recipeWhat}
             </h3>
             <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6 }}>
               {ingredients.map((line) => <li key={line}>{line}</li>)}
@@ -257,7 +265,7 @@ export function CoachMealSheet({ card, onClose, onLog, onPencil, onSave }) {
         {steps.length > 0 && (
           <>
             <h3 style={{ fontFamily: F, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5, color: T.inkSoft, margin: "16px 0 6px" }}>
-              How to make it
+              {card.source === "menu" ? COACH_COPY.recipeOrder : COACH_COPY.recipeHow}
             </h3>
             <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6 }}>
               {steps.map((line) => <li key={line}>{line}</li>)}
@@ -265,13 +273,15 @@ export function CoachMealSheet({ card, onClose, onLog, onPencil, onSave }) {
           </>
         )}
 
-        <div style={{ marginTop: 16 }}>
+        {/* Actions only. The sheet already shows the title, the macros and the
+            caveat, so re-rendering the whole card here read as a second meal. */}
+        <div style={{ marginTop: 8, borderTop: `1px solid ${T.border}`, paddingTop: 4 }}>
           <CoachMealCard
             card={card}
             onLog={onLog}
             onPencil={onPencil}
             onSave={onSave}
-            compact
+            actionsOnly
           />
         </div>
       </div>
