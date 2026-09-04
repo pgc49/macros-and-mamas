@@ -155,3 +155,60 @@ describe("MealLogCard Save to today", () => {
     expect(onConfirmEstimate).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("MealLogCard I know the Macros", () => {
+  it("does not call onManualLog twice while the first save is pending", async () => {
+    let resolveLog;
+    const onManualLog = vi.fn(() => new Promise((resolve) => {
+      resolveLog = resolve;
+    }));
+
+    render(
+      <MealLogCard
+        initialMethod="manual"
+        onManualLog={onManualLog}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("What was it?"), {
+      target: { value: "Lindt Dark Chocolate" },
+    });
+    const add = screen.getByRole("button", { name: "Add" });
+    fireEvent.click(add);
+    fireEvent.click(add);
+    expect(onManualLog).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => {
+      const adding = screen.getByRole("button", { name: "Adding…" });
+      expect(adding.disabled).toBe(true);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Adding…" }));
+    expect(onManualLog).toHaveBeenCalledTimes(1);
+
+    resolveLog(true);
+    await waitFor(() => expect(screen.queryByPlaceholderText("What was it?")).toBeNull());
+    expect(onManualLog).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the form and shows an error when save fails", async () => {
+    const onManualLog = vi.fn(async () => false);
+
+    render(
+      <MealLogCard
+        initialMethod="manual"
+        onManualLog={onManualLog}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("What was it?"), {
+      target: { value: "Chocolate rice crackers" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Couldn't save that meal — try again.")).toBeTruthy();
+    });
+    expect(screen.getByPlaceholderText("What was it?").value).toBe("Chocolate rice crackers");
+    expect(screen.getByRole("button", { name: "Add" }).disabled).toBe(false);
+  });
+});

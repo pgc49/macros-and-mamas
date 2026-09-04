@@ -7,6 +7,7 @@ import { joinPersonName } from "./lib/personName";
 import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
+import { hydrateTodayLog } from "./utils/mealLogState";
 import { resolveLogSlot } from "./utils/mealSlots";
 import {
   adherenceForWeek,
@@ -453,12 +454,9 @@ export default function App() {
             setRefunded(!!s.refunded);
             if (s.checksByWeek) setChecksByWeek(s.checksByWeek);
             if (s.weighins) setWeighins(s.weighins);
-            if (s.todayLog && s.todayLog.date === localDateIso()) {
-              setTodayLog(s.todayLog);
-              setMealLogDate(s.todayLog.date);
-            } else {
+            {
               const today = localDateIso();
-              setTodayLog({ date: today, entries: [] });
+              setTodayLog(hydrateTodayLog(s, today));
               setMealLogDate(today);
             }
             if (s.mealLogsByDate) setMealLogsByDate(s.mealLogsByDate);
