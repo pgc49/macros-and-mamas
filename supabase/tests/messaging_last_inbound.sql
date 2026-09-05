@@ -28,10 +28,13 @@ values
 insert into public.conversations (id, type, label)
 values ('30000000-0000-0000-0000-000000000001', 'cohort', 'August Group');
 
+-- last_read_at must be earlier than the fixture message times. `now()` made
+-- test 6 fail on main: CI ran after 12:05 UTC on 2026-09-05, so the 12:05
+-- inbound was already "read" and last_inbound_at > last_read_at was false.
 insert into public.conversation_members (conversation_id, user_id, last_read_at)
 values
-  ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', now()),
-  ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', now());
+  ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '2026-09-05 11:00:00+00'),
+  ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', '2026-09-05 11:00:00+00');
 
 insert into public.conversation_messages (
   conversation_id, sender_id, body, created_at
