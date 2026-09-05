@@ -15,6 +15,10 @@ import {
   applyMessageChange,
   applyReactionEvent,
 } from "../lib/realtimeMessageApply";
+import {
+  restoreAndResignMessageWindow,
+  writeMessageWindow,
+} from "../lib/messageWindowCache";
 
 
 /**
@@ -47,6 +51,27 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!clientId || !adminUserId) return undefined;
+    let cancelled = false;
+    restoreAndResignMessageWindow(
+      `dm:${clientId}:${adminUserId}`,
+      (row) => db.hydrateDmMessageRow(row),
+    ).then((cached) => {
+      if (cancelled || !cached.length) return;
+      setMessages((current) => mergeMessagesById(cached, current));
+    });
+    return () => { cancelled = true; };
+  }, [adminUserId, clientId]);
+
+  useEffect(() => {
+    if (!clientId || !adminUserId || !messages.length) return undefined;
+    const timer = window.setTimeout(() => {
+      writeMessageWindow(`dm:${clientId}:${adminUserId}`, messages);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [adminUserId, clientId, messages]);
 
   useEffect(() => {
     if (!clientId) return undefined;

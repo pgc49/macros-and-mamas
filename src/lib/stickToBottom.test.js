@@ -253,6 +253,26 @@ describe("createBottomPin", () => {
     pin.dispose();
   });
 
+  it("does not snap to the tip when it starts unpinned for a deep-link", () => {
+    const callbacks = [];
+    globalThis.ResizeObserver = class {
+      constructor(fn) { callbacks.push(fn); }
+      observe() {}
+      disconnect() {}
+    };
+    const el = fakeScroller({ scrollTop: 80 });
+    const pin = createBottomPin(el, { initialPinned: false });
+    expect(pin.isPinned()).toBe(false);
+
+    el.grow(200);
+    for (const fn of callbacks) fn();
+    el.emit("load");
+
+    expect(el.scrollTop).toBe(80);
+    expect(pin.isPinned()).toBe(false);
+    pin.dispose();
+  });
+
   it("unpins and holds the anchor row when an older page is restored", () => {
     const el = fakeScroller();
     const pin = createBottomPin(el);

@@ -80,8 +80,9 @@ export function createBottomPin(scroller, {
   content = null,
   slack = BOTTOM_SLACK_PX,
   onPinnedChange = null,
+  initialPinned = true,
 } = {}) {
-  let pinned = true;
+  let pinned = initialPinned !== false;
   let disposed = false;
   const teardown = [];
 

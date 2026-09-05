@@ -41,8 +41,24 @@ import {
   copyableMessageBody,
   holdOpensMenu,
 } from "../lib/messageSelect";
+import {
+  jumpLatestLabel,
+  nextUnseenCount,
+  shouldMarkThreadRead,
+} from "../lib/threadReadState";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
+
+function cssAttrValue(value) {
+  return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
+}
+
+function findMessageElement(root, messageId) {
+  const id = String(messageId || "");
+  if (!root || !id) return null;
+  const attr = cssAttrValue(id);
+  return root.querySelector(`[data-msg-id="${attr}"], [data-server-id="${attr}"]`);
+}
 
 /**
  * Shared chat thread UI (mama Messages tab + admin per-client thread).
@@ -98,6 +114,11 @@ export function MessagesThread({
   onLoadEarlier = null,
   /** False once the thread has reached its first message. */
   hasEarlier = false,
+  /**
+   * Push / `?message=` target. Scroll that row into view and hold unread
+   * until the live tip (or this target, if it is the tip) is on screen.
+   */
+  focusMessageId = "",
 }) {
   const [outboxTick, setOutboxTick] = useState(0);
   const attemptScope = threadKey || `thread:${selfId || "unknown"}`;
@@ -124,7 +145,9 @@ export function MessagesThread({
   const [recording, setRecording] = useState(false);
   const [recordMs, setRecordMs] = useState(0);
   const [voicePreview, setVoicePreview] = useState(null); // { file, url, durationMs }
-  const [atLatest, setAtLatest] = useState(true);
+  const [atLatest, setAtLatest] = useState(() => !focusMessageId);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const [focusPending, setFocusPending] = useState(() => !!focusMessageId);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const listRef = useRef(null);
   const listContentRef = useRef(null);
@@ -138,6 +161,10 @@ export function MessagesThread({
   const recorderRef = useRef(null);
   const markReadRef = useRef(onMarkRead);
   const sendInFlightIds = useRef(new Set());
+  const latestIdRef = useRef(latestMessageId);
+  const atLatestRef = useRef(atLatest);
+  const focusPendingRef = useRef(focusPending);
+  const initialFocusRef = useRef(focusMessageId);
 
   const bumpOutbox = () => setOutboxTick((n) => n + 1);
 
@@ -148,6 +175,9 @@ export function MessagesThread({
   useEffect(() => {
     markReadRef.current = onMarkRead;
   }, [onMarkRead]);
+
+  useEffect(() => { atLatestRef.current = atLatest; }, [atLatest]);
+  useEffect(() => { focusPendingRef.current = focusPending; }, [focusPending]);
 
   useEffect(() => {
     reconcilePendingWithMessages(attemptScope, messages);
@@ -166,8 +196,16 @@ export function MessagesThread({
     const pin = createBottomPin(el, {
       content: listContentRef.current,
       onPinnedChange: setAtLatest,
+      initialPinned: !initialFocusRef.current,
     });
     bottomPinRef.current = pin;
+    if (initialFocusRef.current) {
+      pin.sync();
+      return () => {
+        pin.dispose();
+        bottomPinRef.current = null;
+      };
+    }
     pin.toBottom();
     // One frame later the flex pane often first receives a real clientHeight.
     // Pin again then so the reader never sees the oldest row flash in.
@@ -184,8 +222,29 @@ export function MessagesThread({
   // trigger this — prepending an older page must not yank them to the bottom.
   useEffect(() => {
     if (!latestMessageId) return;
+    const tipChanged = latestMessageId !== latestIdRef.current;
+    if (tipChanged) {
+      setUnseenCount((n) => nextUnseenCount({
+        unseenCount: n,
+        atLatest: atLatestRef.current,
+        tipChanged: true,
+      }));
+      latestIdRef.current = latestMessageId;
+    }
     bottomPinRef.current?.repin();
   }, [latestMessageId]);
+
+  useLayoutEffect(() => {
+    if (!focusMessageId || !focusPending) return;
+    const el = listRef.current;
+    if (!el) return;
+    const target = findMessageElement(el, focusMessageId);
+    if (!target) return;
+    const top = Math.max(0, target.offsetTop - 16);
+    el.scrollTop = top;
+    bottomPinRef.current?.sync();
+    setFocusPending(false);
+  }, [focusMessageId, focusPending, safeMessages]);
 
   // Hold the anchor row once the prepended page has laid out. Runs before paint
   // so the reader never sees the intermediate offset.
@@ -215,13 +274,29 @@ export function MessagesThread({
     }
   }, [onLoadEarlier, loadingEarlier]);
 
-  useEffect(() => {
+  const markReadIfTipVisible = useCallback(() => {
+    if (!shouldMarkThreadRead({
+      latestMessageId,
+      atLatest: atLatestRef.current,
+      focusPending: focusPendingRef.current,
+    })) return;
+    setUnseenCount(0);
     Promise.resolve()
       .then(() => markReadRef.current?.())
       .catch((e) => {
-      console.warn("mark messages read failed", e);
+        console.warn("mark messages read failed", e);
       });
   }, [latestMessageId]);
+
+  useEffect(() => {
+    markReadIfTipVisible();
+  }, [latestMessageId, atLatest, focusPending, markReadIfTipVisible]);
+
+  const jumpToLatest = useCallback(() => {
+    setFocusPending(false);
+    setUnseenCount(0);
+    bottomPinRef.current?.toBottom();
+  }, []);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -938,6 +1013,7 @@ export function MessagesThread({
             >
               <div
                 data-msg-id={bubbleKey}
+                data-server-id={m.id && m.id !== bubbleKey ? m.id : undefined}
                 data-send-status={m.send_status || undefined}
                 {...pressHandlers(m)}
                 style={{
@@ -1324,8 +1400,8 @@ export function MessagesThread({
         <button
           type="button"
           data-jump-latest
-          aria-label="Jump to latest message"
-          onClick={() => bottomPinRef.current?.toBottom()}
+          aria-label={unseenCount > 0 ? `${unseenCount} new messages` : "Jump to latest message"}
+          onClick={jumpToLatest}
           style={{
             position: "absolute",
             bottom: 12,
@@ -1343,7 +1419,7 @@ export function MessagesThread({
             boxShadow: "0 4px 14px rgba(51,39,46,0.16)",
           }}
         >
-          Jump to latest ↓
+          {jumpLatestLabel(unseenCount)}
         </button>
       )}
       </div>

@@ -22,6 +22,11 @@ import {
 import { T, F, FD } from "../theme/tokens";
 import { Btn } from "./ui";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { parseMessageDeepLink } from "../lib/messageDeepLink";
+import {
+  restoreAndResignMessageWindow,
+  writeMessageWindow,
+} from "../lib/messageWindowCache";
 
 function friendlyError(e, fallback) {
   const msg = String(e?.message || "");
@@ -65,7 +70,11 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   const [dmUnread, setDmUnread] = useState(0);
   const [channels, setChannels] = useState([]);
   const [channelMessages, setChannelMessages] = useState({});
-  const [activePill, setActivePill] = useState("callie");
+  const deepLink = useMemo(
+    () => parseMessageDeepLink(typeof window !== "undefined" ? window.location.search : ""),
+    [],
+  );
+  const [activePill, setActivePill] = useState(() => deepLink.channel || "callie");
   const [busy] = useState(false);
   const [error, setError] = useState("");
   const [notifyChannelId, setNotifyChannelId] = useState(null);
@@ -75,7 +84,8 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   const [dmHasEarlier, setDmHasEarlier] = useState(false);
   const [channelHasEarlier, setChannelHasEarlier] = useState({});
   const [loadingChannelId, setLoadingChannelId] = useState(null);
-  const deepLinkedChannel = useRef(false);
+  const deepLinkedChannel = useRef(!!deepLink.channel);
+  const fetchedChannels = useRef(new Set());
 
   // Realtime handlers and "load earlier" read the live values through refs so a
   // re-render never tears down and rebuilds the Realtime subscription.
@@ -183,12 +193,57 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     refreshChannelList();
   }, [refreshDm, refreshChannelList]);
 
-  // Open a group's history only once the mama taps its pill.
   useEffect(() => {
-    if (!activePill || activePill === "callie") return;
-    if (channelMessagesRef.current[activePill]) return;
-    loadChannel(activePill);
-  }, [activePill, loadChannel]);
+    if (!userId) return undefined;
+    let cancelled = false;
+    restoreAndResignMessageWindow(`dm:${userId}`, (row) => db.hydrateDmMessageRow(row))
+      .then((cached) => {
+        if (cancelled || !cached.length) return;
+        setDmMessages((current) => mergeMessagesById(cached, current));
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId || !dmMessages.length) return undefined;
+    const timer = window.setTimeout(() => {
+      writeMessageWindow(`dm:${userId}`, dmMessages);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [userId, dmMessages]);
+
+  // Open a group's history only once the mama taps its pill. Cache paints the
+  // last window immediately; a first-open fetch still runs so the page is live.
+  useEffect(() => {
+    if (!userId || !activePill || activePill === "callie") return undefined;
+    let cancelled = false;
+    const conversationId = activePill;
+    restoreAndResignMessageWindow(
+      `channel:${conversationId}:${userId}`,
+      (row) => db.hydrateChannelMessageRow(row),
+    ).then((cached) => {
+      if (cancelled || !cached.length) return;
+      setChannelMessages((all) => ({
+        ...all,
+        [conversationId]: mergeMessagesById(cached, all[conversationId] || []),
+      }));
+    });
+    if (!fetchedChannels.current.has(conversationId)) {
+      fetchedChannels.current.add(conversationId);
+      loadChannel(conversationId);
+    }
+    return () => { cancelled = true; };
+  }, [activePill, loadChannel, userId]);
+
+  useEffect(() => {
+    if (!userId || !activePill || activePill === "callie") return undefined;
+    const rows = channelMessages[activePill];
+    if (!rows?.length) return undefined;
+    const timer = window.setTimeout(() => {
+      writeMessageWindow(`channel:${activePill}:${userId}`, rows);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [userId, activePill, channelMessages]);
 
   const loadEarlierDm = useCallback(async () => {
     const before = earlierCursor(dmMessagesRef.current);
@@ -659,6 +714,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             }
             onLoadEarlier={loadEarlierChannel}
             hasEarlier={!!channelHasEarlier[activeChannel.conversation.id]}
+            focusMessageId={deepLink.channel === activeChannel.conversation.id ? (deepLink.message || "") : ""}
             showPushPrompt
             onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
             onComposerFocusChange={onComposerFocusChange}
@@ -687,6 +743,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             onMarkRead={markRead}
             onLoadEarlier={loadEarlierDm}
             hasEarlier={dmHasEarlier}
+            focusMessageId={!deepLink.channel ? (deepLink.message || "") : ""}
             enableReply
             showPushPrompt
             onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
