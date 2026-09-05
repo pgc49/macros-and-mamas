@@ -20,7 +20,7 @@ import {
 import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { splitLinkedMessageText } from "../lib/messageLinks";
-import { createBottomPin } from "../lib/stickToBottom";
+import { createBottomPin, scrollChildIntoScroller } from "../lib/stickToBottom";
 import { mergeMessagesById } from "../lib/messageOrdering";
 import {
   buildPendingRow,
@@ -235,15 +235,28 @@ export function MessagesThread({
   }, [latestMessageId]);
 
   useLayoutEffect(() => {
-    if (!focusMessageId || !focusPending) return;
+    if (!focusMessageId || !focusPending) return undefined;
     const el = listRef.current;
-    if (!el) return;
-    const target = findMessageElement(el, focusMessageId);
-    if (!target) return;
-    const top = Math.max(0, target.offsetTop - 16);
-    el.scrollTop = top;
-    bottomPinRef.current?.sync();
-    setFocusPending(false);
+    if (!el) return undefined;
+    let cancelled = false;
+    const tryScroll = () => {
+      if (cancelled) return;
+      const target = findMessageElement(el, focusMessageId);
+      if (!target) return;
+      if (!scrollChildIntoScroller(el, target)) return;
+      bottomPinRef.current?.sync();
+      setFocusPending(false);
+    };
+    tryScroll();
+    const raf = window.requestAnimationFrame(tryScroll);
+    const later = window.setTimeout(tryScroll, 80);
+    const settle = window.setTimeout(tryScroll, 240);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(later);
+      window.clearTimeout(settle);
+    };
   }, [focusMessageId, focusPending, safeMessages]);
 
   // Hold the anchor row once the prepended page has laid out. Runs before paint

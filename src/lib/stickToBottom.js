@@ -49,6 +49,23 @@ export function isScrollable(metrics) {
  * page is prepended above it. Measured after the prepend commits, so it also
  * overrides whatever the browser's own scroll anchoring picked.
  */
+/**
+ * Scroll a nested row into a chat scroller. `offsetTop` is wrong here — the
+ * bubble's offsetParent is the flex row, not the pane — so we use the
+ * bounding-box delta against the live scroll port.
+ */
+export function scrollChildIntoScroller(scroller, child, pad = 16) {
+  if (!scroller || !child?.getBoundingClientRect || !scroller.getBoundingClientRect) {
+    return false;
+  }
+  const scrollerRect = scroller.getBoundingClientRect();
+  const childRect = child.getBoundingClientRect();
+  if (scrollerRect.height < 2) return false;
+  const next = num(scroller.scrollTop) + (childRect.top - scrollerRect.top) - Math.max(0, num(pad));
+  scroller.scrollTop = Math.max(0, next);
+  return true;
+}
+
 export function preservedScrollTop({ scrollHeight, previousScrollHeight, previousScrollTop }) {
   const grew = num(scrollHeight) - num(previousScrollHeight);
   return Math.max(0, num(previousScrollTop) + grew);

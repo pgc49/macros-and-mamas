@@ -8,6 +8,7 @@ import {
   isNearBottom,
   isScrollable,
   preservedScrollTop,
+  scrollChildIntoScroller,
   scrollIntent,
   scrollMetrics,
 } from "./stickToBottom";
@@ -251,6 +252,25 @@ describe("createBottomPin", () => {
 
     expect(el.scrollTop).toBe(900);
     pin.dispose();
+  });
+
+  it("scrolls a nested child by bounding-box delta, not offsetTop", () => {
+    const el = fakeScroller({ scrollTop: 40, clientHeight: 400, scrollHeight: 2000 });
+    el.getBoundingClientRect = () => ({ top: 100, height: 400 });
+    const child = {
+      offsetTop: 8,
+      getBoundingClientRect: () => ({ top: 520, height: 80 }),
+    };
+    expect(scrollChildIntoScroller(el, child, 16)).toBe(true);
+    expect(el.scrollTop).toBe(40 + (520 - 100) - 16);
+  });
+
+  it("waits when the pane has no height yet", () => {
+    const el = fakeScroller();
+    el.getBoundingClientRect = () => ({ top: 0, height: 0 });
+    const child = { getBoundingClientRect: () => ({ top: 200, height: 40 }) };
+    expect(scrollChildIntoScroller(el, child)).toBe(false);
+    expect(el.scrollTop).toBe(0);
   });
 
   it("does not snap to the tip when it starts unpinned for a deep-link", () => {
