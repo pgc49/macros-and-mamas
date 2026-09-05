@@ -17,7 +17,10 @@ function assert(cond, msg) {
 
 const src = readFileSync(new URL("../src/components/MessagesThread.jsx", import.meta.url), "utf8");
 assert(!/\bbottomRef\b/.test(src), "MessagesThread must not reference bottomRef");
-assert(src.includes("scrollTop = el.scrollHeight"), "MessagesThread should scroll list to tip");
+assert(src.includes("createBottomPin"), "MessagesThread should pin the live edge while content settles");
+assert(!src.includes("setTimeout(jump"), "MessagesThread must not one-shot jump after a delay");
+const pinSrc = readFileSync(new URL("../src/lib/stickToBottom.js", import.meta.url), "utf8");
+assert(pinSrc.includes("scrollTop = scroller.scrollHeight") || pinSrc.includes("scroller.scrollTop = scroller.scrollHeight"), "bottom pin should scroll the list to the tip");
 assert(src.includes('height: "100%"'), "customer thread must fill the leftover Messages pane");
 assert(!src.includes("62vh"), "customer thread must not use a scrollable 62vh box");
 assert(src.includes('minHeight: 0'), "message flex items must be allowed to shrink");

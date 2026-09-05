@@ -7,6 +7,8 @@ import {
   isAllowedReactionEmoji,
 } from "../lib/messageReactions";
 import { chronologicalMessages } from "../lib/messageOrdering";
+import { attachmentUrlCache } from "../lib/attachmentUrls";
+import { MESSAGE_PAGE_MAX, MESSAGE_PAGE_SIZE } from "../lib/messageChannels";
 import { referredByByUserId } from "../lib/referredBy";
 import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
@@ -480,24 +482,43 @@ async function uploadMessageAttachment({ clientId, file, allowAudio = false }) {
   };
 }
 
-async function hydrateMessageAttachments(rows) {
+async function signAttachmentBatch(bucket, paths, ttlSeconds) {
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrls(paths, ttlSeconds);
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Resolve every attachment in a window against the shared URL cache.
+ *
+ * Signing per row meant a thread with twenty photos made twenty round trips on
+ * every load, and each load handed React a different URL for an unchanged
+ * image — the browser dropped the decoded frame, the bubble collapsed to zero
+ * height, and the list jumped under whoever was reading it.
+ */
+async function hydrateAttachmentUrls(bucket, rows) {
   const list = rows || [];
-  return Promise.all(list.map(async (m) => {
+  const paths = list.map((m) => m?.attachment_path).filter(Boolean);
+  if (!paths.length) return list;
+  let urls = new Map();
+  try {
+    urls = await attachmentUrlCache.resolve(bucket, paths, signAttachmentBatch);
+  } catch (e) {
+    console.warn("message attachment signed url failed", bucket, e);
+  }
+  return list.map((m) => {
     if (!m?.attachment_path) return m;
-    try {
-      const { data, error } = await supabase.storage
-        .from(MESSAGE_ATTACHMENT_BUCKET)
-        .createSignedUrl(m.attachment_path, 60 * 60);
-      if (error) {
-        console.warn("message attachment signed url failed", error);
-        return m;
-      }
-      return { ...m, attachmentUrl: data?.signedUrl || null };
-    } catch (e) {
-      console.warn("message attachment signed url failed", e);
-      return m;
-    }
-  }));
+    // Falling back to the URL already on the row keeps a transient signing
+    // failure from blanking an attachment that is rendering fine.
+    const url = urls.get(m.attachment_path) || m.attachmentUrl || null;
+    return { ...m, attachmentUrl: url };
+  });
+}
+
+async function hydrateMessageAttachments(rows) {
+  return hydrateAttachmentUrls(MESSAGE_ATTACHMENT_BUCKET, rows);
 }
 
 async function uploadChannelAttachment({ conversationId, file, allowAudio = false }) {
@@ -546,23 +567,7 @@ async function uploadChannelAttachment({ conversationId, file, allowAudio = fals
 }
 
 async function hydrateChannelAttachments(rows) {
-  const list = rows || [];
-  return Promise.all(list.map(async (m) => {
-    if (!m?.attachment_path) return m;
-    try {
-      const { data, error } = await supabase.storage
-        .from(CHANNEL_ATTACHMENT_BUCKET)
-        .createSignedUrl(m.attachment_path, 60 * 60);
-      if (error) {
-        console.warn("channel attachment signed url failed", error);
-        return m;
-      }
-      return { ...m, attachmentUrl: data?.signedUrl || null };
-    } catch (e) {
-      console.warn("channel attachment signed url failed", e);
-      return m;
-    }
-  }));
+  return hydrateAttachmentUrls(CHANNEL_ATTACHMENT_BUCKET, rows);
 }
 
 async function removeUploadedAttachment(bucket, path) {
@@ -687,6 +692,29 @@ async function hydrateChannelSenders(rows, conversationId = null) {
 
 const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
 const DM_MESSAGE_SELECT = "id, client_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
+
+function pageLimit(limit) {
+  return Math.min(MESSAGE_PAGE_MAX, Math.max(1, Number(limit) || MESSAGE_PAGE_SIZE));
+}
+
+/**
+ * Filter the next page back, keyed on the row the reader can already see.
+ *
+ * Keyset rather than offset: a group forum gains messages while someone is
+ * scrolling, and an offset would shift under them and repeat or skip rows. The
+ * (thread, created_at desc, id desc) index serves this directly.
+ */
+function olderThan(query, before) {
+  const createdAt = before?.created_at;
+  const id = before?.id;
+  if (!createdAt) return query;
+  if (!id) return query.lt("created_at", createdAt);
+  // Quoted so a fractional-second timestamp cannot be mistaken for PostgREST
+  // filter syntax.
+  return query.or(
+    `created_at.lt."${createdAt}",and(created_at.eq."${createdAt}",id.lt."${id}")`,
+  );
+}
 
 /** Attach in-thread reply preview objects from the loaded window (DMs + channels). */
 function attachReplyPreviews(rows) {
@@ -2251,20 +2279,52 @@ export const db = {
       ));
   },
 
-  async loadChannelMessages(conversationId, { limit = 150 } = {}) {
+  /**
+   * Newest window of a group channel, or the page before `before` when paging
+   * back through history.
+   * @param {{ limit?: number, before?: { created_at: string, id: string } }} options
+   */
+  async loadChannelMessages(conversationId, { limit = MESSAGE_PAGE_SIZE, before = null } = {}) {
     if (!conversationId) return [];
-    const { data, error } = await supabase
-      .from("conversation_messages")
-      .select(CHANNEL_MESSAGE_SELECT)
-      .eq("conversation_id", conversationId)
+    const { data, error } = await olderThan(
+      supabase
+        .from("conversation_messages")
+        .select(CHANNEL_MESSAGE_SELECT)
+        .eq("conversation_id", conversationId),
+      before,
+    )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .limit(Math.min(300, Math.max(1, limit)));
+      .limit(pageLimit(limit));
     if (error) throw error;
     const withAttachments = await hydrateChannelAttachments(chronologicalMessages(data));
     const withSenders = await hydrateChannelSenders(withAttachments, conversationId);
     const withReplies = attachChannelReplyPreviews(withSenders);
     return hydrateChannelReactions(withReplies);
+  },
+
+  /**
+   * Unread dot for a channel the reader is not looking at. One indexed row
+   * lookup, instead of loading and hydrating that channel's whole window just
+   * to compare timestamps client-side.
+   */
+  async channelHasUnreadMessages(conversationId, membership) {
+    const userId = membership?.user_id;
+    if (!conversationId || !userId) return false;
+    let query = supabase
+      .from("conversation_messages")
+      .select("id")
+      .eq("conversation_id", conversationId)
+      .is("deleted_at", null)
+      .neq("sender_id", userId)
+      .limit(1);
+    if (membership?.last_read_at) query = query.gt("created_at", membership.last_read_at);
+    const { data, error } = await query;
+    if (error) {
+      console.warn("channel unread check failed", error);
+      return false;
+    }
+    return (data || []).length > 0;
   },
 
   async toggleChannelReaction(messageId, emoji) {
@@ -2504,15 +2564,22 @@ export const db = {
   channelHasUnread,
 
   /** Load 1:1 thread for a mama (self or admin viewing client). */
-  async loadMessages(clientId, { limit = 100 } = {}) {
+  /**
+   * Newest window of a DM thread, or the page before `before` when paging back.
+   * @param {{ limit?: number, before?: { created_at: string, id: string } }} options
+   */
+  async loadMessages(clientId, { limit = MESSAGE_PAGE_SIZE, before = null } = {}) {
     if (!clientId) return [];
-    const { data, error } = await supabase
-      .from("messages")
-      .select(DM_MESSAGE_SELECT)
-      .eq("client_id", clientId)
+    const { data, error } = await olderThan(
+      supabase
+        .from("messages")
+        .select(DM_MESSAGE_SELECT)
+        .eq("client_id", clientId),
+      before,
+    )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .limit(Math.min(200, Math.max(1, limit)));
+      .limit(pageLimit(limit));
     if (error) throw error;
     const withAttachments = await hydrateMessageAttachments(chronologicalMessages(data));
     const withReplies = attachReplyPreviews(withAttachments);

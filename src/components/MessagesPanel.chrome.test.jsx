@@ -17,9 +17,11 @@ const { dbMock, realtimeChannel, profileQuery } = vi.hoisted(() => {
     profileQuery: query,
     dbMock: {
       loadMessages: vi.fn(async () => []),
+      countUnreadMessages: vi.fn(async () => 0),
       listMyChannels: vi.fn(async () => []),
       loadChannelMessages: vi.fn(async () => []),
       channelHasUnread: vi.fn(() => false),
+      channelHasUnreadMessages: vi.fn(async () => false),
       markMessagesRead: vi.fn(async () => {}),
       markChannelRead: vi.fn(async () => ({ last_read_at: "2026-09-04T12:00:00Z" })),
       sendMessage: vi.fn(),

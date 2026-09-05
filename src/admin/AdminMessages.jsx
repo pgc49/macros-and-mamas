@@ -3,9 +3,17 @@ import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { db, channelHasUnread } from "../db/db";
+import { db } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { mergeMessagesById } from "../lib/messageOrdering";
+import {
+  applyReactionToMessages,
+  earlierCursor,
+  mergeChannelList,
+  MESSAGE_PAGE_SIZE,
+  pageHasMore,
+} from "../lib/messageChannels";
+import { createCoalescedRefresh } from "../lib/realtimeCoalesce";
 import { adminPersonTitle as displayName, inboxThreadTitle } from "./clientRoster";
 
 function isAdminProfile(c) {
@@ -75,8 +83,16 @@ export function AdminMessages({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [dmHasEarlier, setDmHasEarlier] = useState(false);
+  const [channelHasEarlier, setChannelHasEarlier] = useState({});
   const activeRef = useRef(active);
   const dmLoadSequence = useRef(new Map());
+  const channelLoadSequence = useRef(new Map());
+  const dmMessagesRef = useRef(dmMessages);
+  const channelMessagesRef = useRef(channelMessages);
+
+  useEffect(() => { dmMessagesRef.current = dmMessages; }, [dmMessages]);
+  useEffect(() => { channelMessagesRef.current = channelMessages; }, [channelMessages]);
 
   const rosterMap = useMemo(() => {
     const m = new Map();
@@ -107,39 +123,60 @@ export function AdminMessages({
     }
   }, [adminUserId, onUnreadTotalChange]);
 
-  const refreshChannels = useCallback(async () => {
+  /**
+   * Group rows and their unread dots — never every group's history.
+   *
+   * Loading each channel's window here meant Callie paid for every cohort's
+   * backlog to open her inbox, and paid again on every group message.
+   */
+  const refreshChannelList = useCallback(async () => {
     if (!adminUserId) return;
     try {
       const list = await db.listMyChannels();
-      const withPreview = await Promise.all(list.map(async (item) => {
-        const messages = await db.loadChannelMessages(item.conversation.id, { limit: 80 });
-        return {
-          ...item,
-          messages,
-          hasUnread: channelHasUnread(item.conversation, item.membership, messages),
-        };
-      }));
-      setChannels(withPreview);
-      setChannelMessages(Object.fromEntries(
-        withPreview.map((item) => [item.conversation.id, item.messages]),
-      ));
+      setChannels((prev) => mergeChannelList(prev, list));
+      const withUnread = await Promise.all(list.map(async (item) => ({
+        ...item,
+        hasUnread: await db.channelHasUnreadMessages(item.conversation.id, item.membership),
+      })));
+      setChannels(withUnread);
     } catch (e) {
       console.error(e);
       setError(e.message || "Couldn’t load group chats.");
     }
   }, [adminUserId]);
 
+  const refreshChannelThread = useCallback(async (conversationId) => {
+    if (!conversationId) return;
+    const sequence = (channelLoadSequence.current.get(conversationId) || 0) + 1;
+    channelLoadSequence.current.set(conversationId, sequence);
+    try {
+      const messages = await db.loadChannelMessages(conversationId);
+      if (channelLoadSequence.current.get(conversationId) !== sequence) return;
+      setChannelMessages((all) => ({ ...all, [conversationId]: messages }));
+      setChannelHasEarlier((all) => ({
+        ...all,
+        [conversationId]: pageHasMore(messages, MESSAGE_PAGE_SIZE),
+      }));
+    } catch (e) {
+      if (channelLoadSequence.current.get(conversationId) !== sequence) return;
+      console.error(e);
+      setError(e.message || "Couldn’t load group chats.");
+    }
+  }, []);
+
   const refreshDmThread = useCallback(async (clientId, { clear = false } = {}) => {
     const sequence = (dmLoadSequence.current.get(clientId) || 0) + 1;
     dmLoadSequence.current.set(clientId, sequence);
     if (!clientId) {
       setDmMessages([]);
+      setDmHasEarlier(false);
       setDmLoadedClientId(null);
       setDmLoadErrorClientId(null);
       return;
     }
     if (clear) {
       setDmMessages([]);
+      setDmHasEarlier(false);
       setDmLoadedClientId(null);
       setDmLoadErrorClientId(null);
       setError("");
@@ -150,6 +187,7 @@ export function AdminMessages({
         && activeRef.current.id === clientId;
       if (sequence !== dmLoadSequence.current.get(clientId) || !stillCurrent) return;
       setDmMessages(list);
+      setDmHasEarlier(pageHasMore(list, MESSAGE_PAGE_SIZE));
       setDmLoadedClientId(clientId);
       setDmLoadErrorClientId(null);
     } catch (e) {
@@ -162,10 +200,19 @@ export function AdminMessages({
     }
   }, []);
 
+  const refreshInboxRef = useRef(refreshInbox);
+  const refreshChannelListRef = useRef(refreshChannelList);
+  const refreshChannelThreadRef = useRef(refreshChannelThread);
+  const refreshDmThreadRef = useRef(refreshDmThread);
+  useEffect(() => { refreshInboxRef.current = refreshInbox; }, [refreshInbox]);
+  useEffect(() => { refreshChannelListRef.current = refreshChannelList; }, [refreshChannelList]);
+  useEffect(() => { refreshChannelThreadRef.current = refreshChannelThread; }, [refreshChannelThread]);
+  useEffect(() => { refreshDmThreadRef.current = refreshDmThread; }, [refreshDmThread]);
+
   useEffect(() => {
     refreshInbox();
-    refreshChannels();
-  }, [refreshInbox, refreshChannels]);
+    refreshChannelList();
+  }, [refreshInbox, refreshChannelList]);
 
   useEffect(() => {
     if (initialClientId) {
@@ -183,50 +230,89 @@ export function AdminMessages({
     if (active?.type === "dm") refreshDmThread(active.id, { clear: true });
   }, [active, refreshDmThread]);
 
+  // A group's history loads when Callie opens it — not when the inbox mounts.
   useEffect(() => {
+    if (active?.type !== "channel") return;
+    if (channelMessagesRef.current[active.id]) return;
+    refreshChannelThread(active.id);
+  }, [active, refreshChannelThread]);
+
+  /**
+   * One subscription for the inbox, with every handler coalesced.
+   *
+   * A busy August group used to reload every channel window and the whole
+   * inbox on each event, and the effect re-subscribed whenever `active`
+   * changed. Handlers now read through refs so a thread switch no longer
+   * drops the socket, and each event refreshes only what it can affect.
+   */
+  useEffect(() => {
+    const inboxRefresh = createCoalescedRefresh(() => refreshInboxRef.current?.());
+    const listRefresh = createCoalescedRefresh(() => refreshChannelListRef.current?.());
+    const openDmRefresh = createCoalescedRefresh(() => {
+      const current = activeRef.current;
+      if (current?.type !== "dm") return undefined;
+      return refreshDmThreadRef.current?.(current.id);
+    });
+    const openChannelRefresh = createCoalescedRefresh(() => {
+      const current = activeRef.current;
+      if (current?.type !== "channel") return undefined;
+      return refreshChannelThreadRef.current?.(current.id);
+    });
+
+    const isOpenChannel = (payload) => {
+      const conversationId = payload?.new?.conversation_id
+        || payload?.old?.conversation_id
+        || null;
+      return !!conversationId && conversationId === activeRef.current?.id
+        && activeRef.current?.type === "channel";
+    };
+
     const channel = supabase
       .channel("messages-admin-inbox")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages" },
         () => {
-          refreshInbox();
-          if (active?.type === "dm") refreshDmThread(active.id);
+          inboxRefresh.request();
+          openDmRefresh.request();
         },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "message_reactions" },
-        () => {
-          if (active?.type === "dm") refreshDmThread(active.id);
-        },
+        () => { openDmRefresh.request(); },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversation_messages" },
-        () => {
-          refreshChannels();
+        (payload) => {
+          if (isOpenChannel(payload)) openChannelRefresh.request();
+          listRefresh.request();
         },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversation_message_reactions" },
-        () => {
-          refreshChannels();
-        },
+        () => { openChannelRefresh.request(); },
       )
       .subscribe();
     return () => {
+      inboxRefresh.dispose();
+      listRefresh.dispose();
+      openDmRefresh.dispose();
+      openChannelRefresh.dispose();
       supabase.removeChannel(channel);
     };
-  }, [active, refreshInbox, refreshDmThread, refreshChannels]);
+  }, []);
 
   const activeChannel = active?.type === "channel"
     ? channels.find((c) => c.conversation.id === active.id) || null
     : null;
-  const activeChannelMessages = active?.type === "channel"
-    ? (channelMessages[active.id] || activeChannel?.messages || [])
-    : [];
+  const activeChannelMessages = useMemo(() => (
+    active?.type === "channel"
+      ? (channelMessages[active.id] || [])
+      : []
+  ), [active, channelMessages]);
 
   const activePeerId = useMemo(() => {
     if (active?.type !== "dm" || !adminUserId) return active?.id || null;
@@ -339,7 +425,7 @@ export function AdminMessages({
         ...all,
         [conversationId]: mergeMessagesById(all[conversationId] || [], [row]),
       }));
-      refreshChannels();
+      refreshChannelList();
     } catch (e) {
       console.error(e);
       setError(e.message || "Couldn’t send.");
@@ -391,16 +477,23 @@ export function AdminMessages({
     }));
   };
 
+  // Tapbacks patch the loaded window instead of re-fetching the thread. A
+  // reload would replace every message object on screen to render one emoji.
   const reactDm = async (messageId, emoji) => {
     const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
     if (!clientId) return;
+    setDmMessages((list) => applyReactionToMessages(list, messageId, emoji, adminUserId));
     await db.toggleDmReaction(messageId, emoji);
-    await refreshDmThread(clientId);
   };
 
   const reactChannel = async (messageId, emoji) => {
+    const conversationId = activeRef.current?.type === "channel" ? activeRef.current.id : null;
+    if (!conversationId) return;
+    setChannelMessages((all) => ({
+      ...all,
+      [conversationId]: applyReactionToMessages(all[conversationId], messageId, emoji, adminUserId),
+    }));
     await db.toggleChannelReaction(messageId, emoji);
-    await refreshChannels();
   };
 
   const markDmRead = async () => {
@@ -411,22 +504,45 @@ export function AdminMessages({
   };
 
   const markChannelRead = async () => {
-    if (active?.type !== "channel") return;
-    const membership = await db.markChannelRead(active.id);
+    const conversationId = activeRef.current?.type === "channel" ? activeRef.current.id : null;
+    if (!conversationId) return;
+    const membership = await db.markChannelRead(conversationId);
     if (!membership) return;
     setChannels((list) => list.map((item) => {
-      if (item.conversation.id !== active.id) return item;
-      const next = { ...item, membership: { ...item.membership, ...membership } };
+      if (item.conversation.id !== conversationId) return item;
       return {
-        ...next,
-        hasUnread: channelHasUnread(
-          next.conversation,
-          next.membership,
-          channelMessages[active.id] || next.messages || [],
-        ),
+        ...item,
+        membership: { ...item.membership, ...membership },
+        hasUnread: false,
       };
     }));
   };
+
+  const loadEarlierDm = useCallback(async () => {
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    const before = earlierCursor(dmMessagesRef.current);
+    if (!clientId || !before) return;
+    const older = await db.loadMessages(clientId, { before });
+    if (activeRef.current?.type !== "dm" || activeRef.current.id !== clientId) return;
+    setDmMessages((list) => mergeMessagesById(older, list));
+    setDmHasEarlier(pageHasMore(older, MESSAGE_PAGE_SIZE));
+  }, []);
+
+  const loadEarlierChannel = useCallback(async () => {
+    const conversationId = activeRef.current?.type === "channel" ? activeRef.current.id : null;
+    const before = earlierCursor(channelMessagesRef.current[conversationId]);
+    if (!conversationId || !before) return;
+    const older = await db.loadChannelMessages(conversationId, { before });
+    if (activeRef.current?.type !== "channel" || activeRef.current.id !== conversationId) return;
+    setChannelMessages((all) => ({
+      ...all,
+      [conversationId]: mergeMessagesById(older, all[conversationId] || []),
+    }));
+    setChannelHasEarlier((all) => ({
+      ...all,
+      [conversationId]: pageHasMore(older, MESSAGE_PAGE_SIZE),
+    }));
+  }, []);
 
   const inboxIds = useMemo(() => new Set(inbox.map((i) => i.clientId)), [inbox]);
   const q = query.trim().toLowerCase();
@@ -722,6 +838,8 @@ export function AdminMessages({
                   onDelete={removeChannel}
                   onReact={reactChannel}
                   onMarkRead={markChannelRead}
+                  onLoadEarlier={loadEarlierChannel}
+                  hasEarlier={!!channelHasEarlier[active.id]}
                   canModerate
                   allowVoiceMemo
                   enableReply
@@ -738,7 +856,11 @@ export function AdminMessages({
                     </div>
                   ) : null}
                   hideComposer={!!activeChannel?.conversation?.read_only}
-                  emptyState="No group messages yet."
+                  emptyState={
+                    channelMessages[active.id]
+                      ? "No group messages yet."
+                      : "Loading the group…"
+                  }
                   showPushPrompt
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
                   compact
@@ -768,6 +890,8 @@ export function AdminMessages({
                   onDelete={removeDm}
                   onReact={reactDm}
                   onMarkRead={dmLoadedClientId === active.id ? markDmRead : undefined}
+                  onLoadEarlier={loadEarlierDm}
+                  hasEarlier={dmLoadedClientId === active.id && dmHasEarlier}
                   showReadReceipts
                   allowVoiceMemo
                   enableReply

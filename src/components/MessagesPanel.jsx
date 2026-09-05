@@ -4,6 +4,14 @@ import { MessagesThread } from "./MessagesThread";
 import { db } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { mergeMessagesById } from "../lib/messageOrdering";
+import {
+  applyReactionToMessages,
+  earlierCursor,
+  mergeChannelList,
+  MESSAGE_PAGE_SIZE,
+  pageHasMore,
+} from "../lib/messageChannels";
+import { createCoalescedRefresh } from "../lib/realtimeCoalesce";
 import { T, F, FD } from "../theme/tokens";
 import { Btn } from "./ui";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -17,6 +25,9 @@ function friendlyError(e, fallback) {
   if (/Invalid notification/i.test(msg)) return msg;
   return fallback;
 }
+
+/** Stable identity for "no messages loaded", so memos downstream can hold. */
+const NO_MESSAGES = Object.freeze([]);
 
 /** Re-attach reply previews after appending a just-sent row. */
 function attachReplyPreviewLocal(list) {
@@ -54,7 +65,22 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   const [notifyBusy, setNotifyBusy] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [guidelinesOpen, setGuidelinesOpen] = useState(false);
+  const [dmHasEarlier, setDmHasEarlier] = useState(false);
+  const [channelHasEarlier, setChannelHasEarlier] = useState({});
+  const [loadingChannelId, setLoadingChannelId] = useState(null);
   const deepLinkedChannel = useRef(false);
+
+  // Realtime handlers and "load earlier" read the live values through refs so a
+  // re-render never tears down and rebuilds the Realtime subscription.
+  const activePillRef = useRef(activePill);
+  const dmMessagesRef = useRef(dmMessages);
+  const channelMessagesRef = useRef(channelMessages);
+  /** Per-channel load counter: a slower response must not overwrite a newer one. */
+  const channelLoadSeq = useRef(new Map());
+
+  useEffect(() => { activePillRef.current = activePill; }, [activePill]);
+  useEffect(() => { dmMessagesRef.current = dmMessages; }, [dmMessages]);
+  useEffect(() => { channelMessagesRef.current = channelMessages; }, [channelMessages]);
 
   useEffect(() => {
     if (!userId) return;
@@ -79,7 +105,10 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     try {
       const list = await db.loadMessages(userId);
       setDmMessages(list);
-      const unread = list.filter((m) => !m.deleted_at && !m.read_at && m.sender_id !== userId).length;
+      setDmHasEarlier(pageHasMore(list, MESSAGE_PAGE_SIZE));
+      // Counted in the database rather than over the loaded page: the page is
+      // only the newest slice, so counting it would undercount a long absence.
+      const unread = await db.countUnreadMessages(userId, userId);
       setDmUnread(unread);
       onUnreadChange?.(unread);
     } catch (e) {
@@ -88,32 +117,98 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     }
   }, [userId, onUnreadChange]);
 
-  const refreshChannels = useCallback(async () => {
+  /**
+   * Channel pills and their unread dots — never their message history.
+   *
+   * Loading every channel's window here is what made opening Messages slow:
+   * each one was a full page plus attachment signing, and all of them had to
+   * finish before a single pill appeared.
+   */
+  const refreshChannelList = useCallback(async () => {
     if (!userId) return;
     try {
       const list = await db.listMyChannels();
-      const loaded = await Promise.all(list.map(async (item) => {
-        const messages = await db.loadChannelMessages(item.conversation.id);
-        return {
-          ...item,
-          messages,
-          hasUnread: db.channelHasUnread(item.conversation, item.membership, messages),
-        };
-      }));
-      setChannels(loaded);
-      setChannelMessages(Object.fromEntries(
-        loaded.map((item) => [item.conversation.id, item.messages]),
-      ));
+      setChannels((prev) => mergeChannelList(prev, list));
+      const withUnread = await Promise.all(list.map(async (item) => ({
+        ...item,
+        hasUnread: await db.channelHasUnreadMessages(item.conversation.id, item.membership),
+      })));
+      setChannels(withUnread);
     } catch (e) {
       console.error(e);
       setError(friendlyError(e, "Couldn’t load group messages."));
     }
   }, [userId]);
 
+  /** Newest page of one channel — the one the mama is actually looking at. */
+  const loadChannel = useCallback(async (conversationId, { silent = false } = {}) => {
+    if (!conversationId) return;
+    const seq = (channelLoadSeq.current.get(conversationId) || 0) + 1;
+    channelLoadSeq.current.set(conversationId, seq);
+    if (!silent) setLoadingChannelId(conversationId);
+    try {
+      const messages = await db.loadChannelMessages(conversationId);
+      if (channelLoadSeq.current.get(conversationId) !== seq) return;
+      setChannelMessages((all) => ({ ...all, [conversationId]: messages }));
+      setChannelHasEarlier((all) => ({
+        ...all,
+        [conversationId]: pageHasMore(messages, MESSAGE_PAGE_SIZE),
+      }));
+    } catch (e) {
+      if (channelLoadSeq.current.get(conversationId) !== seq) return;
+      console.error(e);
+      setError(friendlyError(e, "Couldn’t load group messages."));
+    } finally {
+      setLoadingChannelId((current) => (current === conversationId ? null : current));
+    }
+  }, []);
+
+  const refreshDmRef = useRef(refreshDm);
+  const refreshChannelListRef = useRef(refreshChannelList);
+  const loadChannelRef = useRef(loadChannel);
+  useEffect(() => { refreshDmRef.current = refreshDm; }, [refreshDm]);
+  useEffect(() => { refreshChannelListRef.current = refreshChannelList; }, [refreshChannelList]);
+  useEffect(() => { loadChannelRef.current = loadChannel; }, [loadChannel]);
+
   useEffect(() => {
     refreshDm();
-    refreshChannels();
-  }, [refreshDm, refreshChannels]);
+    refreshChannelList();
+  }, [refreshDm, refreshChannelList]);
+
+  // Open a group's history only once the mama taps its pill.
+  useEffect(() => {
+    if (!activePill || activePill === "callie") return;
+    if (channelMessagesRef.current[activePill]) return;
+    loadChannel(activePill);
+  }, [activePill, loadChannel]);
+
+  const loadEarlierDm = useCallback(async () => {
+    const before = earlierCursor(dmMessagesRef.current);
+    if (!userId || !before) return;
+    const older = await db.loadMessages(userId, { before });
+    setDmMessages((list) => attachReplyPreviewLocal(mergeMessagesById(older, list)));
+    setDmHasEarlier(pageHasMore(older, MESSAGE_PAGE_SIZE));
+  }, [userId]);
+
+  const loadEarlierChannel = useCallback(async () => {
+    const conversationId = activePillRef.current;
+    if (!conversationId || conversationId === "callie") return;
+    const before = earlierCursor(channelMessagesRef.current[conversationId]);
+    if (!before) return;
+    const older = await db.loadChannelMessages(conversationId, { before });
+    setChannelMessages((all) => ({
+      ...all,
+      // Reply previews are built per page, so a quote whose parent was over the
+      // page boundary resolves once that older page lands.
+      [conversationId]: attachReplyPreviewLocal(
+        mergeMessagesById(older, all[conversationId] || []),
+      ),
+    }));
+    setChannelHasEarlier((all) => ({
+      ...all,
+      [conversationId]: pageHasMore(older, MESSAGE_PAGE_SIZE),
+    }));
+  }, []);
 
   useEffect(() => {
     if (!channels.length || deepLinkedChannel.current) return;
@@ -128,8 +223,32 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     setGuidelinesOpen(false);
   }, [activePill]);
 
+  /**
+   * One subscription for the whole panel, with every handler coalesced.
+   *
+   * A busy group used to fire a full reload of every channel per event, and the
+   * effect re-subscribed whenever a handler's identity changed. Handlers now
+   * read through refs, and each event refreshes only what it can affect: the
+   * open thread, or just the unread dots.
+   */
   useEffect(() => {
     if (!userId) return undefined;
+
+    const dmRefresh = createCoalescedRefresh(() => refreshDmRef.current?.());
+    const listRefresh = createCoalescedRefresh(() => refreshChannelListRef.current?.());
+    const openChannelRefresh = createCoalescedRefresh(() => {
+      const conversationId = activePillRef.current;
+      if (!conversationId || conversationId === "callie") return undefined;
+      return loadChannelRef.current?.(conversationId, { silent: true });
+    });
+
+    const isOpenChannel = (payload) => {
+      const conversationId = payload?.new?.conversation_id
+        || payload?.old?.conversation_id
+        || null;
+      return !!conversationId && conversationId === activePillRef.current;
+    };
+
     const channel = supabase
       .channel(`messages-mama-${userId}`)
       .on(
@@ -140,27 +259,18 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           table: "messages",
           filter: `client_id=eq.${userId}`,
         },
-        () => { refreshDm(); },
+        () => { dmRefresh.request(); },
       )
       .on(
+        // Reactions carry no thread id, so this cannot be narrowed server-side.
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "message_reactions",
         },
-        () => { refreshDm(); },
+        () => { dmRefresh.request(); },
       )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId, refreshDm]);
-
-  useEffect(() => {
-    if (!userId) return undefined;
-    const channel = supabase
-      .channel(`channels-mama-${userId}`)
       .on(
         "postgres_changes",
         {
@@ -168,7 +278,11 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           schema: "public",
           table: "conversation_messages",
         },
-        () => { refreshChannels(); },
+        (payload) => {
+          if (isOpenChannel(payload)) openChannelRefresh.request();
+          // Any other group only needs its unread dot re-checked.
+          listRefresh.request();
+        },
       )
       .on(
         "postgres_changes",
@@ -177,7 +291,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           schema: "public",
           table: "conversation_message_reactions",
         },
-        () => { refreshChannels(); },
+        () => { openChannelRefresh.request(); },
       )
       .on(
         "postgres_changes",
@@ -187,22 +301,30 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           table: "conversation_members",
           filter: `user_id=eq.${userId}`,
         },
-        () => { refreshChannels(); },
+        () => { listRefresh.request(); },
       )
       .subscribe();
+
     return () => {
+      dmRefresh.dispose();
+      listRefresh.dispose();
+      openChannelRefresh.dispose();
       supabase.removeChannel(channel);
     };
-  }, [userId, refreshChannels]);
+  }, [userId]);
 
   const activeChannel = useMemo(
     () => channels.find((item) => item.conversation.id === activePill) || null,
     [channels, activePill],
   );
 
-  const activeChannelMessages = activeChannel
-    ? channelMessages[activeChannel.conversation.id] || []
-    : [];
+  // Memoized against a shared empty array so the sender-name map below is not
+  // rebuilt over the whole thread on every keystroke in the composer.
+  const activeChannelMessages = useMemo(() => (
+    activeChannel
+      ? channelMessages[activeChannel.conversation.id] || NO_MESSAGES
+      : NO_MESSAGES
+  ), [activeChannel, channelMessages]);
 
   const senderNameById = useMemo(() => {
     const map = {};
@@ -244,9 +366,11 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     setDmMessages((list) => list.map((m) => (m.id === row.id ? { ...m, ...row, attachmentUrl: null } : m)));
   };
 
+  // Tapbacks patch the loaded window instead of re-fetching the thread. A
+  // reload would replace every message object on screen to render one emoji.
   const reactDm = async (messageId, emoji) => {
+    setDmMessages((list) => applyReactionToMessages(list, messageId, emoji, userId));
     await db.toggleDmReaction(messageId, emoji);
-    await refreshDm();
   };
 
   const markRead = async () => {
@@ -311,8 +435,13 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   };
 
   const reactChannel = async (messageId, emoji) => {
+    if (!activeChannel) return;
+    const conversationId = activeChannel.conversation.id;
+    setChannelMessages((all) => ({
+      ...all,
+      [conversationId]: applyReactionToMessages(all[conversationId], messageId, emoji, userId),
+    }));
     await db.toggleChannelReaction(messageId, emoji);
-    await refreshChannels();
   };
 
   const markChannelRead = async () => {
@@ -322,17 +451,12 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     if (!membership) return;
     setChannels((list) => list.map((item) => {
       if (item.conversation.id !== conversationId) return item;
-      const next = {
+      return {
         ...item,
         membership: { ...item.membership, ...membership },
-      };
-      return {
-        ...next,
-        hasUnread: db.channelHasUnread(
-          next.conversation,
-          next.membership,
-          channelMessages[conversationId] || [],
-        ),
+        // The mama is reading this thread right now, so it is caught up. No
+        // need to ask the database what it already told us.
+        hasUnread: false,
       };
     }));
   };
@@ -465,7 +589,13 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             enableReply
             banner={activeChannel.conversation.read_only ? <ReadOnlyBanner /> : null}
             hideComposer={!!activeChannel.conversation.read_only}
-            emptyState="No group messages yet — say hi when you’re ready."
+            emptyState={
+              loadingChannelId === activeChannel.conversation.id
+                ? "Loading the group…"
+                : "No group messages yet — say hi when you’re ready."
+            }
+            onLoadEarlier={loadEarlierChannel}
+            hasEarlier={!!channelHasEarlier[activeChannel.conversation.id]}
             showPushPrompt
             onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
             onComposerFocusChange={onComposerFocusChange}
@@ -492,6 +622,8 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             onDelete={remove}
             onReact={reactDm}
             onMarkRead={markRead}
+            onLoadEarlier={loadEarlierDm}
+            hasEarlier={dmHasEarlier}
             enableReply
             showPushPrompt
             onSavePushSubscription={(sub) => db.savePushSubscription(sub)}

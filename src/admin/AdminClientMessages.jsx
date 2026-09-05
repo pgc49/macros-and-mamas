@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
 import { db, fullName } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { mergeMessagesById } from "../lib/messageOrdering";
+import {
+  applyReactionToMessages,
+  earlierCursor,
+  MESSAGE_PAGE_SIZE,
+  pageHasMore,
+} from "../lib/messageChannels";
+import { createCoalescedRefresh } from "../lib/realtimeCoalesce";
 
 /**
  * Per-client Messages on the admin client detail page.
@@ -13,8 +20,11 @@ import { mergeMessagesById } from "../lib/messageOrdering";
 export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const clientId = client?.id;
   const [messages, setMessages] = useState([]);
+  const [hasEarlier, setHasEarlier] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const name = fullName(client) || client?.name || "her";
   const first = String(name).trim().split(/\s+/)[0] || "her";
@@ -24,11 +34,15 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     try {
       const list = await db.loadMessages(clientId);
       setMessages(list);
+      setHasEarlier(pageHasMore(list, MESSAGE_PAGE_SIZE));
     } catch (e) {
       console.error(e);
       setError(e.message || "Couldn’t load messages.");
     }
   }, [clientId]);
+
+  const refreshRef = useRef(refresh);
+  useEffect(() => { refreshRef.current = refresh; }, [refresh]);
 
   useEffect(() => {
     refresh();
@@ -36,6 +50,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
 
   useEffect(() => {
     if (!clientId) return undefined;
+    const coalesced = createCoalescedRefresh(() => refreshRef.current?.());
     const channel = supabase
       .channel(`messages-admin-client-${clientId}`)
       .on(
@@ -46,7 +61,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           table: "messages",
           filter: `client_id=eq.${clientId}`,
         },
-        () => { refresh(); },
+        () => { coalesced.request(); },
       )
       .on(
         "postgres_changes",
@@ -55,13 +70,22 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           schema: "public",
           table: "message_reactions",
         },
-        () => { refresh(); },
+        () => { coalesced.request(); },
       )
       .subscribe();
     return () => {
+      coalesced.dispose();
       supabase.removeChannel(channel);
     };
-  }, [clientId, refresh]);
+  }, [clientId]);
+
+  const loadEarlier = useCallback(async () => {
+    const before = earlierCursor(messagesRef.current);
+    if (!clientId || !before) return;
+    const older = await db.loadMessages(clientId, { before });
+    setMessages((list) => mergeMessagesById(older, list));
+    setHasEarlier(pageHasMore(older, MESSAGE_PAGE_SIZE));
+  }, [clientId]);
 
   const send = async (body, file = null, opts = {}) => {
     if (!clientId) return;
@@ -99,8 +123,8 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   };
 
   const react = async (messageId, emoji) => {
+    setMessages((list) => applyReactionToMessages(list, messageId, emoji, adminUserId));
     await db.toggleDmReaction(messageId, emoji);
-    await refresh();
   };
 
   const markRead = async () => {
@@ -145,6 +169,8 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           onDelete={remove}
           onReact={react}
           onMarkRead={markRead}
+          onLoadEarlier={loadEarlier}
+          hasEarlier={hasEarlier}
           showReadReceipts
           allowVoiceMemo
           enableReply
