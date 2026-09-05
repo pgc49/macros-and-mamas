@@ -15,7 +15,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { CoachPanel } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
 import { COACH_COPY, COACH_DEFLECT } from "../content/coachVoice";
-import { SHELL_TAB_CONTENT_PAD } from "./ui";
 
 // jsdom has no canvas, so the real downscale resolves null and no preview
 // would ever render here.
@@ -311,24 +310,34 @@ describe("the photo she attached", () => {
 });
 
 /**
- * A sticky footer pins inside its own containing block, so it stops at the
- * scroller's content edge. Any padding the shell left below that stayed a live
- * window onto the thread: measured 20px of cards sliding under the composer
- * while she scrolled back up. The shell runs flush for this tab now, and the
- * footer carries that spacing itself.
+ * The composer was sticky inside the shell's scroller, and the shell's padding
+ * below it stayed a live window: 20px of cards could be watched sliding under
+ * the composer on the way back up the thread. It sits outside the scrolling
+ * area now, the same way Messages does it, so there is no strip to leak
+ * through and nothing to pin.
  */
-describe("the composer reaches the bottom of the scroller", () => {
-  it("carries the room the shell would have left below it", async () => {
+describe("the conversation scrolls, the composer does not", () => {
+  it("keeps the composer out of the scrolling area", async () => {
     renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
 
+    const scroller = document.querySelector("[data-coach-scroll]");
+    expect(scroller.style.overflowY).toBe("auto");
+
     const composer = screen.getByLabelText(COACH_COPY.placeholder).closest("div").parentElement;
-    expect(composer.style.position).toBe("sticky");
-    expect(composer.style.bottom).toBe("0px");
-    expect(composer.style.paddingBottom).toBe(`${SHELL_TAB_CONTENT_PAD}px`);
-    // A negative margin here would be the fix that does nothing: sticky clamps
-    // the margin box, so the painted edge never moves.
-    expect(composer.style.marginBottom).toBe("");
+    expect(scroller.contains(composer)).toBe(false);
+    expect(composer.style.flexShrink).toBe("0");
+    // Sticky is what created the strip. It must not come back.
+    expect(composer.style.position).toBe("");
+  });
+
+  it("puts the thread inside the scrolling area", async () => {
+    renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+
+    const scroller = document.querySelector("[data-coach-scroll]");
+    const card = screen.getByText(cardTitles()[0]);
+    expect(scroller.contains(card)).toBe(true);
   });
 });
 

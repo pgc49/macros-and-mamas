@@ -21,7 +21,7 @@ import {
   buildWaterHistory,
   weekKeysFromChecks,
 } from "./utils/progressSeries";
-import { programRelativeWeekNum, resolveProgramStartWeekIso } from "./lib/cohorts";
+import { mamaProgramStartWeekIso, programRelativeWeekNum } from "./lib/cohorts";
 import { isBeforeGoalCreated, isFutureDayInWeek, mergeGoalItems } from "./lib/goals";
 import { PATHS, canonicalPath, homePathFor, pathFromClientView, canAccessDashboard, goMarketingHome } from "./routing";
 import { needsMembershipPaywall } from "./lib/membershipAccess";
@@ -1588,8 +1588,12 @@ export default function App() {
   );
   const earliestWk = wkKeys[0];
   const programStartWeek = useMemo(
-    () => resolveProgramStartWeekIso(profile?.cohort_label ?? authProfile?.cohort_label),
-    [profile?.cohort_label, authProfile?.cohort_label],
+    () => mamaProgramStartWeekIso({
+      macrosApproved: approved,
+      approvedAt: macros?.approvedAt,
+      cohortLabel: profile?.cohort_label ?? authProfile?.cohort_label,
+    }),
+    [approved, macros?.approvedAt, profile?.cohort_label, authProfile?.cohort_label],
   );
   const progWeekNum = (wk) => programRelativeWeekNum(wk, programStartWeek, earliestWk);
 

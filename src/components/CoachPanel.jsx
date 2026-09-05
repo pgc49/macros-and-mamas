@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { T, F, FD } from "../theme/tokens";
-import { SHELL_TAB_CONTENT_PAD } from "./ui";
 import {
   COACH_ASK_CALLIE_PREFILL,
   COACH_COPY,
@@ -378,128 +377,149 @@ export function CoachPanel({
   const shownCards = thread.some((m) => (m.cards || []).length > 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
-      <div style={{ padding: "4px 0 10px" }}>
-        <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>{COACH_COPY.title}</h2>
-        <p style={{ fontSize: 13.5, color: T.inkSoft, margin: 0 }}>{COACH_COPY.tagline}</p>
-      </div>
-
+    // Same shape Messages uses under the shell's `lockContentScroll`: fill the
+    // leftover height, scroll the conversation inside, and leave the composer
+    // out of the scrolling area entirely.
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       <div
+        data-coach-scroll
         style={{
-          background: T.accentSoft,
-          borderRadius: 14,
-          padding: "10px 13px",
-          marginBottom: 12,
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: T.accentDeep }}>
-          {/* "0 cal to play with" is not a headline to give anyone. */}
-          {answer.strip.over ? slotTitle : `${slotTitle} · ${Math.round(answer.budget.cal)} cal to play with`}
-        </div>
-        {/* This slot's numbers, not the day's. The day's live on Today, and
-            two sets of totals stacked here only made her do arithmetic. */}
-        <div style={{ fontSize: 13, color: T.ink, marginTop: 3, lineHeight: 1.45 }}>{answer.strip.macros}</div>
-        {answer.strip.held && (
-          <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 3, lineHeight: 1.45 }}>{answer.strip.held}</div>
-        )}
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: "1 1 auto" }}>
-        <div style={bubble(false)}>
-          {COACH_COPY.openerLead} {opener}
+        <div style={{ padding: "4px 0 10px" }}>
+          <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>{COACH_COPY.title}</h2>
+          <p style={{ fontSize: 13.5, color: T.inkSoft, margin: 0 }}>{COACH_COPY.tagline}</p>
         </div>
 
-        {thread.map((m) => (
-          <div key={m.id} style={{ display: "flex", flexDirection: "column" }}>
-            {m.body && <div style={bubble(m.role === "mama")}>{m.body}</div>}
-
-            {m.kind === "deflect" && (
-              <div style={{ ...bubble(false), background: T.amberSoft, border: "none" }}>
-                <div style={{ marginBottom: 10 }}>{(COACH_DEFLECT[m.deflect] || COACH_DEFLECT.offTopic).line}</div>
-                <button
-                  type="button"
-                  onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}
-                  style={{
-                    fontFamily: F,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    padding: "9px 14px",
-                    minHeight: 40,
-                    borderRadius: 999,
-                    border: "none",
-                    background: T.accent,
-                    color: "#fff",
-                    cursor: "pointer",
-                  }}
-                >
-                  {(COACH_DEFLECT[m.deflect] || COACH_DEFLECT.offTopic).cta}
-                </button>
-              </div>
-            )}
-
-            {(m.cards || []).map((card, i) => (
-              <CoachMealCard
-                key={`${m.id}-${card.name}-${i}`}
-                card={card}
-                onLog={logCard}
-                onPencil={pencilCard}
-                onSave={saveCard}
-                onOpen={setSheetCard}
-              />
-            ))}
-
-            {m.aside === "supply" && (
-              <div style={{ ...bubble(false), background: T.amberSoft, border: "none", marginTop: 8 }}>
-                <div style={{ marginBottom: 10 }}>{COACH_DEFLECT.care.line}</div>
-                <button
-                  type="button"
-                  onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}
-                  style={{
-                    fontFamily: F,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    padding: "9px 14px",
-                    minHeight: 40,
-                    borderRadius: 999,
-                    border: "none",
-                    background: T.accent,
-                    color: "#fff",
-                    cursor: "pointer",
-                  }}
-                >
-                  {COACH_DEFLECT.care.cta}
-                </button>
-              </div>
-            )}
+        <div
+          style={{
+            background: T.accentSoft,
+            borderRadius: 14,
+            padding: "10px 13px",
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: T.accentDeep }}>
+            {/* "0 cal to play with" is not a headline to give anyone. */}
+            {answer.strip.over ? slotTitle : `${slotTitle} · ${Math.round(answer.budget.cal)} cal to play with`}
           </div>
-        ))}
+          {/* This slot's numbers, not the day's. The day's live on Today, and
+              two sets of totals stacked here only made her do arithmetic. */}
+          <div style={{ fontSize: 13, color: T.ink, marginTop: 3, lineHeight: 1.45 }}>{answer.strip.macros}</div>
+          {answer.strip.held && (
+            <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 3, lineHeight: 1.45 }}>{answer.strip.held}</div>
+          )}
+        </div>
 
-        {busy && (
-          <div style={{ ...bubble(false), color: T.inkSoft }} aria-live="polite">
-            {COACH_COPY.thinking}…
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: "1 1 auto" }}>
+          <div style={bubble(false)}>
+            {COACH_COPY.openerLead} {opener}
           </div>
-        )}
-        {error && (
-          <div style={{ ...bubble(false), background: T.amberSoft, border: "none", color: T.amber }} role="alert">
-            {error}
-          </div>
-        )}
-        {/* Scroll target. The margin keeps the newest card clear of the
-            composer, which is sticky and would otherwise sit on top of it. */}
-        <div ref={endRef} style={{ height: 1, scrollMarginBottom: 132 }} />
+
+          {thread.map((m) => (
+            <div key={m.id} style={{ display: "flex", flexDirection: "column" }}>
+              {m.body && <div style={bubble(m.role === "mama")}>{m.body}</div>}
+
+              {m.kind === "deflect" && (
+                <div style={{ ...bubble(false), background: T.amberSoft, border: "none" }}>
+                  <div style={{ marginBottom: 10 }}>{(COACH_DEFLECT[m.deflect] || COACH_DEFLECT.offTopic).line}</div>
+                  <button
+                    type="button"
+                    onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}
+                    style={{
+                      fontFamily: F,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      padding: "9px 14px",
+                      minHeight: 40,
+                      borderRadius: 999,
+                      border: "none",
+                      background: T.accent,
+                      color: "#fff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {(COACH_DEFLECT[m.deflect] || COACH_DEFLECT.offTopic).cta}
+                  </button>
+                </div>
+              )}
+
+              {(m.cards || []).map((card, i) => (
+                <CoachMealCard
+                  key={`${m.id}-${card.name}-${i}`}
+                  card={card}
+                  onLog={logCard}
+                  onPencil={pencilCard}
+                  onSave={saveCard}
+                  onOpen={setSheetCard}
+                />
+              ))}
+
+              {m.aside === "supply" && (
+                <div style={{ ...bubble(false), background: T.amberSoft, border: "none", marginTop: 8 }}>
+                  <div style={{ marginBottom: 10 }}>{COACH_DEFLECT.care.line}</div>
+                  <button
+                    type="button"
+                    onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}
+                    style={{
+                      fontFamily: F,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      padding: "9px 14px",
+                      minHeight: 40,
+                      borderRadius: 999,
+                      border: "none",
+                      background: T.accent,
+                      color: "#fff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {COACH_DEFLECT.care.cta}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {busy && (
+            <div style={{ ...bubble(false), color: T.inkSoft }} aria-live="polite">
+              {COACH_COPY.thinking}…
+            </div>
+          )}
+          {error && (
+            <div style={{ ...bubble(false), background: T.amberSoft, border: "none", color: T.amber }} role="alert">
+              {error}
+            </div>
+          )}
+          {/* Scroll target. The composer lives outside this scroller now, so
+              this only needs to clear the edge rather than a sticky footer. */}
+          <div ref={endRef} style={{ height: 1, scrollMarginBottom: 8 }} />
+        </div>
       </div>
 
-      {/* The shell runs its content to the bottom edge for this tab, so the
-          footer pins flush and nothing scrolls past underneath it. The room
-          the shell would have left below is added here instead. */}
+      {/* Outside the scroller, so there is no strip for the thread to show
+          through and nothing to pin. It was sticky once, and the shell's
+          padding below it stayed a live window onto the cards going past. */}
       <div
         style={{
-          position: "sticky",
-          bottom: 0,
+          flexShrink: 0,
           background: T.bg,
           paddingTop: 10,
-          marginTop: 12,
-          paddingBottom: SHELL_TAB_CONTENT_PAD,
         }}
       >
         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch" }}>

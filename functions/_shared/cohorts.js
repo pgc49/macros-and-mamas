@@ -113,6 +113,14 @@ export function programLastDayIso(cohortOrLabel) {
   return new Date(end - 24 * 60 * 60 * 1000).toISOString();
 }
 
+export function programStartWeekIso(cohortOrLabel) {
+  const cohort = typeof cohortOrLabel === "string"
+    ? cohortByLabel(cohortOrLabel)
+    : cohortOrLabel;
+  if (!cohort?.programStart) return null;
+  return mondayYmd(cohort.programStart);
+}
+
 /**
  * Program week from programStart.
  * 0 = early-access week(s) before official Week 1
@@ -127,6 +135,40 @@ export function programWeekNumber(cohortOrLabel, now = new Date()) {
   const start = Date.parse(cohort.programStart);
   const t = now instanceof Date ? now.getTime() : Date.parse(now);
   if (!Number.isFinite(start) || !Number.isFinite(t)) return null;
+  if (t < start) return 0;
+  const week = Math.floor((t - start) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  return Math.min(Math.max(week, 0), 8);
+}
+
+function mondayYmd(isoOrDate) {
+  if (!isoOrDate) return null;
+  const ymd = String(isoOrDate instanceof Date ? isoOrDate.toISOString() : isoOrDate).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const back = (dt.getUTCDay() + 6) % 7;
+  dt.setUTCDate(dt.getUTCDate() - back);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Personal Week 1 Monday — keep in sync with src/lib/cohorts.js. */
+export function mamaProgramStartWeekIso({
+  macrosApproved = false,
+  approvedAt = null,
+  cohortLabel = null,
+} = {}) {
+  if (!macrosApproved) return null;
+  if (approvedAt) return mondayYmd(approvedAt);
+  return programStartWeekIso(cohortLabel);
+}
+
+export function mamaProgramWeekNumber(opts = {}, now = new Date()) {
+  if (!opts.macrosApproved) return 0;
+  const startYmd = mamaProgramStartWeekIso(opts);
+  if (!startYmd) return 0;
+  const start = Date.parse(`${startYmd}T00:00:00.000Z`);
+  const t = now instanceof Date ? now.getTime() : Date.parse(now);
+  if (!Number.isFinite(start) || !Number.isFinite(t)) return 0;
   if (t < start) return 0;
   const week = Math.floor((t - start) / (7 * 24 * 60 * 60 * 1000)) + 1;
   return Math.min(Math.max(week, 0), 8);

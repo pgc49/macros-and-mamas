@@ -133,15 +133,17 @@ describe("where the coach shows up", () => {
     }
   });
 
-  it("runs the coach's content to the bottom edge, and no other tab's", () => {
+  it("locks the coach's height like Messages, and leaves other tabs scrolling", () => {
+    // Both chat tabs fill the leftover viewport so the composer stays put.
+    // The page scroller must not scroll, or the composer goes with it.
     const { view } = renderApp({ tab: "coach" });
-    // Padding below the scrolling content is a window the coach's sticky
-    // composer cannot cover; it owns that spacing itself instead.
-    expect(document.querySelector("[data-shell-content]").style.paddingBottom).toBe("0px");
+    expect(document.querySelector("[data-shell-content]").dataset.lockScroll).toBe("true");
+    expect(document.querySelector("[data-shell-fill]")).toBeTruthy();
     view.unmount();
 
     renderApp({ tab: "today" });
-    expect(document.querySelector("[data-shell-content]").style.paddingBottom).toBe("20px");
+    expect(document.querySelector("[data-shell-content]").dataset.lockScroll).toBeUndefined();
+    expect(document.querySelector("[data-shell-fill]")).toBeNull();
   });
 
   it("opens the coach from the Today card", () => {

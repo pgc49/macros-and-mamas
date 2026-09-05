@@ -59,6 +59,7 @@ export function MessagesPanel({
   const [notifyChannelId, setNotifyChannelId] = useState(null);
   const [notifyBusy, setNotifyBusy] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [guidelinesOpen, setGuidelinesOpen] = useState(false);
   const deepLinkedChannel = useRef(false);
 
   useEffect(() => {
@@ -134,6 +135,10 @@ export function MessagesPanel({
       deepLinkedChannel.current = true;
     }
   }, [channels]);
+
+  useEffect(() => {
+    setGuidelinesOpen(false);
+  }, [activePill]);
 
   useEffect(() => {
     if (!userId) return undefined;
@@ -364,41 +369,86 @@ export function MessagesPanel({
     }
   };
 
-  const activeSubtitle = activeChannel
-    ? "Your cohort — what’s shared here stays here."
-    : "Private chat with Callie — stays in the app";
-
   const notifyChannel = channels.find((item) => item.conversation.id === notifyChannelId) || null;
+  const guidelines = String(activeChannel?.conversation?.guidelines || "").trim();
 
   return (
-    <>
+    <div
+      data-messages-panel
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       {error && (
-        <div style={{ fontSize: 13, color: "#B4416B", marginBottom: 8 }}>{error}</div>
+        <div style={{ fontSize: 13, color: "#B4416B", marginBottom: 8, flexShrink: 0 }}>{error}</div>
       )}
-      <div style={{ marginBottom: 10 }}>
-        <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>Messages</h2>
-        <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45 }}>
-          {activeSubtitle}
-        </p>
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
-          <PillButton
-            active={activePill === "callie"}
-            onClick={() => setActivePill("callie")}
-            label="Callie"
-            count={dmUnread}
-          />
-          {channels.map((item) => (
+      <div data-messages-toolbar style={{ marginBottom: 8, flexShrink: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            minWidth: 0,
+          }}
+        >
+          <div
+            data-messages-pills
+            style={{
+              display: "flex",
+              gap: 6,
+              overflowX: "auto",
+              minWidth: 0,
+              flex: 1,
+              paddingBottom: 1,
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
             <PillButton
-              key={item.conversation.id}
-              active={activePill === item.conversation.id}
-              onClick={() => setActivePill(item.conversation.id)}
-              label={item.conversation.label || "Group"}
-              dot={item.hasUnread}
+              active={activePill === "callie"}
+              onClick={() => setActivePill("callie")}
+              label="Callie"
+              count={dmUnread}
             />
-          ))}
+            {channels.map((item) => (
+              <PillButton
+                key={item.conversation.id}
+                active={activePill === item.conversation.id}
+                onClick={() => setActivePill(item.conversation.id)}
+                label={item.conversation.label || "Group"}
+                dot={item.hasUnread}
+              />
+            ))}
+          </div>
+          {activeChannel && (
+            <ChannelActions
+              hasGuidelines={!!guidelines}
+              guidelinesOpen={guidelinesOpen}
+              notifyLevel={activeChannel.membership?.notify_level}
+              onToggleGuidelines={() => setGuidelinesOpen((v) => !v)}
+              onOpenNotifySettings={() => setNotifyChannelId(activeChannel.conversation.id)}
+            />
+          )}
         </div>
+        {guidelines && guidelinesOpen && (
+          <GuidelinesCard text={guidelines} />
+        )}
       </div>
 
+      <div
+        data-messages-thread-slot
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
       {activeChannel ? (
         <ErrorBoundary
           name="CustomerChannelThread"
@@ -425,13 +475,6 @@ export function MessagesPanel({
             canModerate={isAdmin}
             allowVoiceMemo={isAdmin}
             enableReply
-            headerExtra={(
-              <ChannelHeader
-                conversation={activeChannel.conversation}
-                membership={activeChannel.membership}
-                onOpenNotifySettings={() => setNotifyChannelId(activeChannel.conversation.id)}
-              />
-            )}
             banner={activeChannel.conversation.read_only ? <ReadOnlyBanner /> : null}
             hideComposer={!!activeChannel.conversation.read_only}
             emptyState="No group messages yet — say hi when you’re ready."
@@ -470,6 +513,7 @@ export function MessagesPanel({
           />
         </ErrorBoundary>
       )}
+      </div>
 
       {notifyChannel && (
         <NotifySettingsSheet
@@ -479,7 +523,7 @@ export function MessagesPanel({
           onSave={saveNotifyLevel}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -500,15 +544,15 @@ function PillButton({
         display: "inline-flex",
         alignItems: "center",
         gap: 7,
-        minHeight: 36,
+        minHeight: 32,
         borderRadius: 999,
         border: `1.5px solid ${active ? T.accent : T.border}`,
         background: active ? T.accentSoft : "#fff",
         color: active ? T.accentDeep : T.ink,
         fontFamily: F,
         fontWeight: 800,
-        fontSize: 13.5,
-        padding: "8px 13px",
+        fontSize: 13,
+        padding: "6px 11px",
         cursor: "pointer",
         whiteSpace: "nowrap",
       }}
@@ -545,68 +589,75 @@ function PillButton({
   );
 }
 
-function ChannelHeader({ conversation, membership, onOpenNotifySettings }) {
-  const [open, setOpen] = useState(false);
-  const guidelines = String(conversation?.guidelines || "").trim();
+function ChannelActions({
+  hasGuidelines,
+  guidelinesOpen,
+  notifyLevel,
+  onToggleGuidelines,
+  onOpenNotifySettings,
+}) {
+  const actionStyle = {
+    flexShrink: 0,
+    border: `1.5px solid ${T.border}`,
+    background: "#fff",
+    color: T.accentDeep,
+    borderRadius: 999,
+    minHeight: 32,
+    padding: "6px 10px",
+    fontFamily: F,
+    fontWeight: 800,
+    fontSize: 12.5,
+    whiteSpace: "nowrap",
+    cursor: "pointer",
+  };
   return (
-    <div style={{
-      display: "grid",
-      gap: 8,
-      marginBottom: 10,
-    }}
+    <div
+      data-messages-channel-actions
+      style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}
     >
-      <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+      {hasGuidelines && (
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
-          disabled={!guidelines}
-          style={{
-            border: `1.5px solid ${T.border}`,
-            background: "#fff",
-            color: guidelines ? T.accentDeep : T.inkSoft,
-            borderRadius: 999,
-            padding: "8px 12px",
-            fontFamily: F,
-            fontWeight: 800,
-            fontSize: 13,
-            cursor: guidelines ? "pointer" : "default",
-          }}
+          onClick={onToggleGuidelines}
+          aria-expanded={guidelinesOpen}
+          style={actionStyle}
         >
-          {open ? "Hide guidelines" : "Pinned guidelines"}
+          {guidelinesOpen ? "Hide" : "Guidelines"}
         </button>
-        <button
-          type="button"
-          onClick={onOpenNotifySettings}
-          style={{
-            border: "none",
-            background: T.accentSoft,
-            color: T.accentDeep,
-            borderRadius: 999,
-            padding: "8px 12px",
-            fontFamily: F,
-            fontWeight: 800,
-            fontSize: 13,
-            cursor: "pointer",
-          }}
-        >
-          Notify: {notifyLabel(membership?.notify_level)}
-        </button>
-      </div>
-      {guidelines && open && (
-        <div style={{
-          border: `1.5px solid ${T.border}`,
-          borderRadius: 14,
-          background: "#fff",
-          padding: "12px 14px",
-          fontSize: 13.5,
-          lineHeight: 1.5,
-          color: T.ink,
-          whiteSpace: "pre-wrap",
-        }}
-        >
-          {guidelines}
-        </div>
       )}
+      <button
+        type="button"
+        onClick={onOpenNotifySettings}
+        aria-label={`Notifications: ${notifyLabel(notifyLevel)}`}
+        style={{
+          ...actionStyle,
+          border: "none",
+          background: T.accentSoft,
+        }}
+      >
+        Notify
+      </button>
+    </div>
+  );
+}
+
+function GuidelinesCard({ text }) {
+  return (
+    <div
+      data-messages-guidelines
+      style={{
+        border: `1.5px solid ${T.border}`,
+        borderRadius: 14,
+        background: "#fff",
+        padding: "10px 12px",
+        marginTop: 8,
+        fontSize: 13.5,
+        lineHeight: 1.5,
+        color: T.ink,
+        whiteSpace: "pre-wrap",
+      }}
+    >
+      {text}
     </div>
   );
 }

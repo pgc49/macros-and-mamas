@@ -98,6 +98,24 @@ async function approveClient(env, clientId) {
     throw new Error(`macros approve failed: ${mResp.status} ${detail}`);
   }
 
+  const stampResp = await fetch(
+    `${base}/rest/v1/macros?profile_id=eq.${encodeURIComponent(clientId)}&approved_at=is.null`,
+    {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        apikey: key,
+        authorization: `Bearer ${key}`,
+        prefer: "return=minimal",
+      },
+      body: JSON.stringify({ approved_at: new Date().toISOString() }),
+    }
+  );
+  if (!stampResp.ok) {
+    const detail = await stampResp.text();
+    throw new Error(`macros approved_at failed: ${stampResp.status} ${detail}`);
+  }
+
   const pResp = await fetch(
     `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(clientId)}`,
     {

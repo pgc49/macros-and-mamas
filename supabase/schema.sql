@@ -57,7 +57,8 @@ create table if not exists public.macros (
   fat int not null,
   carbs int not null,
   notes jsonb not null default '[]'::jsonb,
-  approved boolean not null default false
+  approved boolean not null default false,
+  approved_at timestamptz
 );
 
 create table if not exists public.checkins (
@@ -433,8 +434,10 @@ begin
 
   if TG_OP = 'INSERT' then
     new.approved := false;
+    new.approved_at := null;
   elsif TG_OP = 'UPDATE' then
     new.approved := old.approved;
+    new.approved_at := old.approved_at;
   end if;
   return new;
 end;

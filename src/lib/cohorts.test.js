@@ -4,6 +4,8 @@ import {
   defaultVoiceDropCohort,
   freeMonthEndsAt,
   hasFoundingFreeMonth,
+  mamaProgramStartWeekIso,
+  mamaProgramWeekNumber,
   programStartWeekIso,
   programWeekNumber,
   resolveProgramStartWeekIso,
@@ -24,6 +26,49 @@ describe("August cohort program clock", () => {
   it("does not fall a C2 mama back to Founding Week 4", () => {
     expect(resolveProgramStartWeekIso("2026-08", "2026-08-18T15:00:00.000Z")).toBe("2026-08-31");
     expect(resolveProgramStartWeekIso("2026-07", "2026-08-18T15:00:00.000Z")).toBe("2026-07-27");
+  });
+
+  it("does not treat an unlabeled September signup as Founding week 6", () => {
+    expect(resolveProgramStartWeekIso(null, "2026-09-04T18:00:00.000Z")).toBe("2026-08-31");
+  });
+});
+
+describe("personal week starts at macro approval", () => {
+  it("is not started until Callie approves ranges", () => {
+    expect(mamaProgramWeekNumber({
+      macrosApproved: false,
+      cohortLabel: "2026-07",
+    }, "2026-09-04T18:00:00.000Z")).toBe(0);
+    expect(mamaProgramStartWeekIso({
+      macrosApproved: false,
+      cohortLabel: "2026-07",
+    })).toBeNull();
+  });
+
+  it("starts Week 1 on the Monday of the approval week", () => {
+    expect(mamaProgramStartWeekIso({
+      macrosApproved: true,
+      approvedAt: "2026-09-04T18:56:00.000Z",
+      cohortLabel: "2026-08",
+    })).toBe("2026-08-31");
+    expect(mamaProgramWeekNumber({
+      macrosApproved: true,
+      approvedAt: "2026-09-04T18:56:00.000Z",
+      cohortLabel: "2026-08",
+    }, "2026-09-04T19:00:00.000Z")).toBe(1);
+    expect(mamaProgramWeekNumber({
+      macrosApproved: true,
+      approvedAt: "2026-09-04T18:56:00.000Z",
+      cohortLabel: "2026-08",
+    }, "2026-09-07T12:00:00.000Z")).toBe(2);
+  });
+
+  it("keeps founding calendar weeks when approved_at is missing", () => {
+    expect(mamaProgramWeekNumber({
+      macrosApproved: true,
+      approvedAt: null,
+      cohortLabel: "2026-07",
+    }, "2026-09-04T12:00:00.000Z")).toBe(6);
   });
 });
 

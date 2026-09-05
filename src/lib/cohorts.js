@@ -133,12 +133,57 @@ export function programStartWeekIso(cohortOrLabel) {
 export function resolveProgramStartWeekIso(cohortLabel = null, now = new Date()) {
   const fromProfile = programStartWeekIso(cohortLabel);
   if (fromProfile) return fromProfile;
-  const live = COHORT_CALENDAR.find(
+  // Latest in-flight group, not founding-first — unlabeled C2 signups
+  // used to inherit Jul 27 and show as week 6 in September.
+  const live = [...COHORT_CALENDAR].reverse().find(
     (c) => c.programStart && !isProgramComplete(c, now),
   );
   if (live) return programStartWeekIso(live);
-  const withDates = COHORT_CALENDAR.find((c) => c.programStart);
+  const withDates = [...COHORT_CALENDAR].reverse().find((c) => c.programStart);
   return withDates ? programStartWeekIso(withDates) : null;
+}
+
+function mondayOfTimestamp(isoOrDate) {
+  if (!isoOrDate) return null;
+  const ymd = String(isoOrDate instanceof Date ? isoOrDate.toISOString() : isoOrDate).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+  return wkStartOf(parseLocalDate(ymd));
+}
+
+/**
+ * Personal Week 1 Monday: the week Callie approved her ranges.
+ * Null until approved — she has not started. Legacy approved rows
+ * without approved_at keep the cohort calendar so founding weeks stay put.
+ */
+export function mamaProgramStartWeekIso({
+  macrosApproved = false,
+  approvedAt = null,
+  cohortLabel = null,
+} = {}) {
+  if (!macrosApproved) return null;
+  if (approvedAt) return mondayOfTimestamp(approvedAt);
+  return programStartWeekIso(cohortLabel);
+}
+
+/** 0 = not started (ranges not approved). 1–8 after approval. */
+export function mamaProgramWeekNumber(opts = {}, now = new Date()) {
+  if (!opts.macrosApproved) return 0;
+  const startYmd = mamaProgramStartWeekIso(opts);
+  if (!startYmd) return 0;
+  const start = Date.parse(`${startYmd}T00:00:00.000Z`);
+  const t = now instanceof Date ? now.getTime() : Date.parse(now);
+  if (!Number.isFinite(start) || !Number.isFinite(t)) return 0;
+  if (t < start) return 0;
+  const week = Math.floor((t - start) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  return Math.min(Math.max(week, 0), 8);
+}
+
+export function mamaProgramOpts(client) {
+  return {
+    macrosApproved: !!(client?.macros?.approved || client?.status === "active"),
+    approvedAt: client?.macros?.approvedAt || client?.macros?.approved_at || null,
+    cohortLabel: client?.cohort_label || null,
+  };
 }
 
 /**

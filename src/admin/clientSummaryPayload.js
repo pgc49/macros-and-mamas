@@ -51,6 +51,7 @@ export function buildClientSummaryPayload({
   return {
     firstName: String(client?.name || "").trim().split(/\s+/)[0] || "Mama",
     week: client?.programWeek ?? null,
+    started: client?.programStarted ?? (client?.programWeek != null && client.programWeek > 0),
     lastActive: client?.lastActiveDate || client?.lastMealDate || null,
     ranges: macros ? {
       cal: macros.cal,

@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase";
-import { programWeekNumber } from "../lib/cohorts";
+import { mamaProgramWeekNumber } from "../lib/cohorts";
 import { parseLiveChannelCohorts } from "../lib/liveChannelCohorts";
 import { adherenceForItems, programGoalItems } from "../lib/goals";
 import {
@@ -941,6 +941,7 @@ export const db = {
           fat: macrosRow.fat,
           carbs: macrosRow.carbs,
           notes: macrosRow.notes || [],
+          approvedAt: macrosRow.approved_at || null,
         }
       : null;
 
@@ -1786,13 +1787,17 @@ export const db = {
         coachNoteAt: p.coach_note_at || null,
         coachNoteDismissedAt: p.coach_note_dismissed_at || null,
         status: p.status,
-        // Live cohort calendar (profiles.week is often stuck at activate-time 1).
-        // Guard so a calendar miss never blanks the whole admin roster / inbox names.
+        // Personal clock: Week 1 starts when Callie approves ranges.
+        // Unapproved / no approved_at + no cohort → 0 (not started).
         week: (() => {
           try {
-            return programWeekNumber(p.cohort_label) ?? p.week ?? 0;
+            return mamaProgramWeekNumber({
+              macrosApproved: !!(m?.approved || p.status === "active"),
+              approvedAt: m?.approved_at || null,
+              cohortLabel: p.cohort_label,
+            });
           } catch (e) {
-            console.warn("programWeekNumber failed", p.cohort_label, e);
+            console.warn("mamaProgramWeekNumber failed", p.cohort_label, e);
             return p.week ?? 0;
           }
         })(),
@@ -1813,6 +1818,7 @@ export const db = {
               carbs: m.carbs,
               notes: m.notes || [],
               approved: !!m.approved,
+              approvedAt: m.approved_at || null,
             }
           : null,
         weighins: weighBy[p.id] || [],
@@ -1985,6 +1991,23 @@ export const db = {
     return data;
   },
 
+  /** Latest summary for this mama, any date. Coach-triggered — do not auto-refresh. */
+  async loadLatestClientSummary(profileId) {
+    if (!profileId) return null;
+    const { data, error } = await supabase
+      .from("client_summaries")
+      .select("profile_id, for_date, summary, suggested_touch, model, created_at")
+      .eq("profile_id", profileId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      console.warn("loadLatestClientSummary failed", error);
+      return null;
+    }
+    return data;
+  },
+
   async saveClientSummary(row) {
     if (!row?.profile_id || !row?.for_date || !row?.summary) return null;
     const { data, error } = await supabase
@@ -2110,6 +2133,13 @@ export const db = {
       .update({ approved: true })
       .eq("profile_id", clientId);
     if (mErr) throw mErr;
+
+    const { error: stampErr } = await supabase
+      .from("macros")
+      .update({ approved_at: new Date().toISOString() })
+      .eq("profile_id", clientId)
+      .is("approved_at", null);
+    if (stampErr) throw stampErr;
 
     const { error: pErr } = await supabase
       .from("profiles")

@@ -18,7 +18,8 @@ function assert(cond, msg) {
 const src = readFileSync(new URL("../src/components/MessagesThread.jsx", import.meta.url), "utf8");
 assert(!/\bbottomRef\b/.test(src), "MessagesThread must not reference bottomRef");
 assert(src.includes("scrollTop = el.scrollHeight"), "MessagesThread should scroll list to tip");
-assert(src.includes('height: compact ? "100%" : "min(62vh, 582px)"'), "customer thread must have a stable viewport height");
+assert(src.includes('height: "100%"'), "customer thread must fill the leftover Messages pane");
+assert(!src.includes("62vh"), "customer thread must not use a scrollable 62vh box");
 assert(src.includes('minHeight: 0'), "message flex items must be allowed to shrink");
 assert(src.includes('maxHeight: "none"'), "message list sizing must come from its bounded thread");
 assert(src.includes("paddingBottom: 4"), "thread must pad composer away from overflow clip");
@@ -34,6 +35,8 @@ assert(boundarySrc.includes("Try again"), "ErrorBoundary must offer local recove
 
 const clientAppSrc = readFileSync(new URL("../src/views/ClientApp.jsx", import.meta.url), "utf8");
 assert(clientAppSrc.includes('name="CustomerMessages"'), "customer Messages needs a local boundary");
+assert(clientAppSrc.includes("lockContentScroll={tab === \"messages\"}"), "Messages must lock page scroll so the composer stays put");
+assert(!/tab === "messages"[\s\S]{0,400}TechHelpFooter/.test(clientAppSrc), "Messages must not show App help under the composer");
 
 const adminPortalSrc = readFileSync(new URL("../src/admin/AdminPortal.jsx", import.meta.url), "utf8");
 assert(adminPortalSrc.includes('name="AdminMessages"'), "admin inbox needs a local boundary");
@@ -43,6 +46,7 @@ assert(adminPortalSrc.includes("contentMaxWidth={tab === \"messages\" ? 1120 : 5
 const shellSrc = readFileSync(new URL("../src/components/ui.jsx", import.meta.url), "utf8");
 assert(shellSrc.includes("contentMaxWidth = 560"), "Shell must keep the phone-width default");
 assert(shellSrc.includes("maxWidth: contentMaxWidth"), "Shell must honor contentMaxWidth");
+assert(shellSrc.includes("lockContentScroll = false"), "Shell must support locking content scroll for Messages");
 
 assert(src.includes("flexWrap: \"wrap\""), "composer must wrap instead of crushing the textarea");
 assert(src.includes("flex: \"1 1 180px\""), "composer textarea needs a usable flex basis on desktop");
@@ -143,6 +147,8 @@ try {
     onComposerFocusChange: () => {},
   }));
   assert(panelHtml.includes("Callie"), "customer MessagesPanel renders");
+  assert(panelHtml.includes("data-messages-panel"), "customer MessagesPanel fills leftover height");
+  assert(panelHtml.includes("data-messages-thread-slot"), "customer thread slot pins the composer");
 
   const inboxMod = await vite.ssrLoadModule("/src/admin/AdminMessages.jsx");
   const inboxHtml = renderToString(createElement(inboxMod.AdminMessages, {
