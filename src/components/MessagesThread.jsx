@@ -21,6 +21,18 @@ import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { splitLinkedMessageText } from "../lib/messageLinks";
 import { createBottomPin } from "../lib/stickToBottom";
+import { mergeMessagesById } from "../lib/messageOrdering";
+import {
+  buildPendingRow,
+  createClientMessageId,
+  findPendingByFingerprint,
+  getPendingAttempt,
+  listPendingRows,
+  markPendingStatus,
+  reconcilePendingWithMessages,
+  sendPayloadFingerprint,
+  upsertPendingAttempt,
+} from "../lib/pendingSends";
 import {
   BUBBLE_HOLD_SELECT_CSS,
   MESSAGE_HOLD_MOVE_PX,
@@ -31,7 +43,6 @@ import {
 } from "../lib/messageSelect";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
-const pendingSendAttempts = new Map();
 
 /**
  * Shared chat thread UI (mama Messages tab + admin per-client thread).
@@ -88,10 +99,16 @@ export function MessagesThread({
   /** False once the thread has reached its first message. */
   hasEarlier = false,
 }) {
-  const safeMessages = Array.isArray(messages)
-    ? messages.map(normalizeMessageRow)
-    : [];
-  const latestMessageId = safeMessages[safeMessages.length - 1]?.id || "";
+  const [outboxTick, setOutboxTick] = useState(0);
+  const attemptScope = threadKey || `thread:${selfId || "unknown"}`;
+  const safeMessages = mergeMessagesById(
+    Array.isArray(messages) ? messages : [],
+    listPendingRows(attemptScope),
+  ).map(normalizeMessageRow);
+  const latestMessageId = safeMessages[safeMessages.length - 1]?.client_message_id
+    || safeMessages[safeMessages.length - 1]?.id
+    || "";
+  void outboxTick;
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -120,7 +137,9 @@ export function MessagesThread({
   const holdStart = useRef(null);
   const recorderRef = useRef(null);
   const markReadRef = useRef(onMarkRead);
-  const sendInFlightRef = useRef(false);
+  const sendInFlightIds = useRef(new Set());
+
+  const bumpOutbox = () => setOutboxTick((n) => n + 1);
 
   useEffect(() => {
     registerMessageServiceWorker();
@@ -129,6 +148,10 @@ export function MessagesThread({
   useEffect(() => {
     markReadRef.current = onMarkRead;
   }, [onMarkRead]);
+
+  useEffect(() => {
+    reconcilePendingWithMessages(attemptScope, messages);
+  }, [attemptScope, messages]);
 
   // Keep the latest message in view inside the list pane (iMessage-style).
   // Do NOT use scrollIntoView — it scrolls the page and fights flex height.
@@ -324,30 +347,64 @@ export function MessagesThread({
     setRecordMs(0);
   };
 
+  const flushSend = async ({
+    text,
+    attach,
+    reply,
+    previewUrl: pendingPreview,
+    clientMessageId,
+    fingerprint,
+  }) => {
+    if (!onSend || sendInFlightIds.current.has(clientMessageId)) return;
+    sendInFlightIds.current.add(clientMessageId);
+    bottomPinRef.current?.toBottom();
+    const generation = createClientMessageId();
+    const row = buildPendingRow({
+      clientMessageId,
+      selfId,
+      body: text,
+      file: attach,
+      previewUrl: pendingPreview,
+      replyTo: reply,
+    });
+    const sendPromise = Promise.resolve().then(() => onSend(text, attach, {
+      ...(reply?.id ? { replyToId: reply.id } : {}),
+      clientMessageId,
+    }));
+    upsertPendingAttempt(attemptScope, {
+      id: clientMessageId,
+      fingerprint,
+      generation,
+      promise: sendPromise,
+      status: "pending",
+      row: { ...row, send_status: "pending" },
+      payload: { text, file: attach, replyTo: reply },
+    });
+    bumpOutbox();
+    try {
+      await sendPromise;
+      markPendingStatus(attemptScope, clientMessageId, "sent");
+      bumpOutbox();
+    } catch (e) {
+      console.error(e);
+      markPendingStatus(attemptScope, clientMessageId, "failed", {
+        promise: null,
+        row: { ...row, send_status: "failed" },
+      });
+      bumpOutbox();
+    } finally {
+      sendInFlightIds.current.delete(clientMessageId);
+    }
+  };
+
   const send = async () => {
     const text = draft.trim();
     const attach = voicePreview?.file || file;
-    if ((!text && !attach) || busy || !onSend || recording || sendInFlightRef.current) return;
-    sendInFlightRef.current = true;
-    // Sending re-pins even from partway up the history: the reader is asking to
-    // be at the live edge, which is where their bubble is about to land.
-    bottomPinRef.current?.toBottom();
-    const keptText = text;
-    const keptFile = file;
-    const keptVoice = voicePreview;
+    if ((!text && !attach) || !onSend || recording) return;
     const keptReply = replyTo;
-    const attemptScope = threadKey || `thread:${selfId || "unknown"}`;
-    const fingerprint = sendPayloadFingerprint(keptText, attach, keptReply?.id);
-    const previousAttempt = pendingSendAttempts.get(attemptScope);
-    const matchingAttempt = previousAttempt?.fingerprint === fingerprint
-      ? previousAttempt
-      : null;
-    const clientMessageId = matchingAttempt
-      ? previousAttempt.id
-      : createClientMessageId();
+    const fingerprint = sendPayloadFingerprint(text, attach, keptReply?.id);
+    const matchingAttempt = findPendingByFingerprint(attemptScope, fingerprint);
 
-    // A remounted instance may retry while the original request is still
-    // settling. Await that shared operation rather than creating a duplicate.
     if (matchingAttempt?.promise) {
       try {
         await matchingAttempt.promise;
@@ -355,60 +412,59 @@ export function MessagesThread({
         clearFile();
         clearVoicePreview();
         setReplyTo(null);
-        if (pendingSendAttempts.get(attemptScope)?.generation === matchingAttempt.generation) {
-          pendingSendAttempts.delete(attemptScope);
-        }
-        sendInFlightRef.current = false;
         return;
       } catch {
-        // The original attempt failed; continue below with the same ID.
+        // Same payload, same id — retry below.
       }
     }
 
-    const generation = createClientMessageId();
-    const sendPromise = Promise.resolve().then(() => onSend(keptText, attach, {
-      ...(keptReply?.id ? { replyToId: keptReply.id } : {}),
-      clientMessageId,
-    }));
-    pendingSendAttempts.set(attemptScope, {
-      id: clientMessageId,
-      fingerprint,
-      generation,
-      promise: sendPromise,
-    });
+    const clientMessageId = matchingAttempt?.id || createClientMessageId();
+    const transferredPreview = voicePreview?.url
+      || previewUrl
+      || (attach && String(attach.type || "").startsWith("image/")
+        ? URL.createObjectURL(attach)
+        : null);
     setDraft("");
-    clearFile();
-    clearVoicePreview();
     setReplyTo(null);
-    try {
-      await sendPromise;
-      if (pendingSendAttempts.get(attemptScope)?.generation === generation) {
-        pendingSendAttempts.delete(attemptScope);
-      }
-    } catch (e) {
-      if (pendingSendAttempts.get(attemptScope)?.generation === generation) {
-        pendingSendAttempts.set(attemptScope, {
-          id: clientMessageId,
-          fingerprint,
-          generation,
-          promise: null,
-        });
-      }
-      console.error(e);
-      setDraft(keptText);
-      if (keptReply) setReplyTo(keptReply);
-      if (keptVoice) {
-        setVoicePreview(keptVoice);
-      } else if (keptFile) {
-        setFile(keptFile);
-        if (String(keptFile.type || "").startsWith("image/")) {
-          setPreviewUrl(URL.createObjectURL(keptFile));
-        }
-      }
-      setAttachError(e.message || "Couldn’t send.");
-    } finally {
-      sendInFlightRef.current = false;
+    setAttachError("");
+    if (voicePreview) {
+      setVoicePreview(null);
+    } else {
+      setFile(null);
+      setPreviewUrl(null);
+      if (fileRef.current) fileRef.current.value = "";
     }
+    await flushSend({
+      text,
+      attach,
+      reply: keptReply,
+      previewUrl: transferredPreview,
+      clientMessageId,
+      fingerprint,
+    });
+  };
+
+  const retryFailed = async (message) => {
+    const clientMessageId = String(message?.client_message_id || message?.id || "").trim();
+    const attempt = getPendingAttempt(attemptScope, clientMessageId);
+    if (!attempt || attempt.status === "pending") return;
+    const payload = attempt.payload || {};
+    markPendingStatus(attemptScope, clientMessageId, "pending", {
+      row: { ...(attempt.row || message), send_status: "pending" },
+    });
+    bumpOutbox();
+    await flushSend({
+      text: payload.text || message.body || "",
+      attach: payload.file || null,
+      reply: payload.replyTo || null,
+      previewUrl: attempt.row?.attachmentUrl || message.attachmentUrl || null,
+      clientMessageId,
+      fingerprint: attempt.fingerprint || sendPayloadFingerprint(
+        payload.text || message.body || "",
+        payload.file,
+        payload.replyTo?.id,
+      ),
+    });
   };
 
   const enablePush = async () => {
@@ -438,7 +494,7 @@ export function MessagesThread({
     && pushSupported()
     && notificationPermission() !== "granted";
 
-  const canSend = !hideComposer && !busy && !recording && (!!draft.trim() || !!file || !!voicePreview);
+  const canSend = !hideComposer && !recording && (!!draft.trim() || !!file || !!voicePreview);
 
   const startEdit = (m) => {
     if (!onEdit || m.deleted_at) return;
@@ -518,14 +574,18 @@ export function MessagesThread({
     return Math.hypot(x - start.x, y - start.y) >= MESSAGE_HOLD_MOVE_PX;
   };
 
+  const isLocalSend = (m) => m.send_status === "pending" || m.send_status === "failed";
+
   const canEditMsg = (m) => (
     !m.deleted_at
+    && !isLocalSend(m)
     && !!onEdit
     && m.sender_id === selfId
   );
 
   const canDeleteMsg = (m) => (
     !m.deleted_at
+    && !isLocalSend(m)
     && !!onDelete
     && (m.sender_id === selfId || canModerate)
   );
@@ -534,6 +594,7 @@ export function MessagesThread({
     enableReply
     && !hideComposer
     && !m.deleted_at
+    && !isLocalSend(m)
     && m.kind !== "system"
   );
 
@@ -541,6 +602,7 @@ export function MessagesThread({
     enableReactions
     && typeof onReact === "function"
     && !m.deleted_at
+    && !isLocalSend(m)
     && m.kind !== "system"
     && !!m.id
   );
@@ -638,7 +700,7 @@ export function MessagesThread({
   const openMenu = (m) => {
     if (!canManage(m) || editingId === m.id) return;
     window.getSelection?.()?.removeAllRanges?.();
-    setMenuId(m.id);
+    setMenuId(m.client_message_id || m.id);
   };
 
   const pressHandlers = (m) => {
@@ -841,24 +903,29 @@ export function MessagesThread({
             }
           }
           return safeMessages.map((m) => {
+          const bubbleKey = m.client_message_id || m.id;
           const mine = m.sender_id === selfId;
           const deleted = !!m.deleted_at;
           const isImage = String(m.attachment_mime || "").startsWith("image/");
           const isAudio = isAudioAttachmentMime(m.attachment_mime);
-          const hasAttach = !!m.attachment_path && !deleted;
+          const hasAttach = !!(!deleted && (m.attachment_path || m.attachmentUrl));
           const isEditing = editingId === m.id;
-          const showMenu = menuId === m.id && canManage(m) && !isEditing;
-          const receiptLabel = m.id === lastReadId
-            ? "Read"
-            : m.id === lastDeliveredId
-              ? "Sent"
-              : null;
+          const showMenu = menuId === bubbleKey && canManage(m) && !isEditing;
+          const receiptLabel = m.send_status === "pending"
+            ? "Sending…"
+            : m.send_status === "failed"
+              ? null
+              : m.id === lastReadId
+                ? "Read"
+                : m.id === lastDeliveredId
+                  ? "Sent"
+                  : null;
           const showReceipt = !!receiptLabel;
           return (
             <ErrorBoundary
-              key={m.id}
+              key={bubbleKey}
               name="MessageBubble"
-              resetKeys={[m.id, messageRenderVersion(m)]}
+              resetKeys={[bubbleKey, messageRenderVersion(m)]}
               fallback={<MessageBubbleFallback message={m} mine={mine} />}
             >
             <div
@@ -870,7 +937,8 @@ export function MessagesThread({
               }}
             >
               <div
-                data-msg-id={m.id}
+                data-msg-id={bubbleKey}
+                data-send-status={m.send_status || undefined}
                 {...pressHandlers(m)}
                 style={{
                   maxWidth: "85%",
@@ -1020,7 +1088,29 @@ export function MessagesThread({
                     {formatMsgTime(m.created_at)}
                     {!deleted && m.edited_at ? " · edited" : ""}
                   </span>
-                  {showReceipt ? (
+                  {m.send_status === "failed" ? (
+                    <button
+                      type="button"
+                      data-retry-send
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        retryFailed(m);
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "#B4416B",
+                        fontWeight: 700,
+                        fontSize: 11,
+                        fontFamily: F,
+                        cursor: "pointer",
+                        padding: 0,
+                        flexShrink: 0,
+                      }}
+                    >
+                      Not sent — tap to retry
+                    </button>
+                  ) : showReceipt ? (
                     <span style={{
                       fontWeight: receiptLabel === "Read" ? 700 : 600,
                       color: receiptLabel === "Read" ? T.accentDeep : T.inkSoft,
@@ -1643,29 +1733,6 @@ function MessageBodyLinks({ text }) {
   });
 }
 
-function createClientMessageId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  // RFC 4122 v4 fallback for older embedded browsers.
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
-    const random = Math.floor(Math.random() * 16);
-    const value = char === "x" ? random : ((random & 0x3) | 0x8);
-    return value.toString(16);
-  });
-}
-
-function sendPayloadFingerprint(body, file, replyToId) {
-  return [
-    safeString(body),
-    safeString(replyToId),
-    safeString(file?.name),
-    safeString(file?.type),
-    Number(file?.size) || 0,
-    Number(file?.lastModified) || 0,
-  ].join("\u001f");
-}
-
 function normalizeMessageRow(row, index) {
   const source = row && typeof row === "object" && !Array.isArray(row) ? row : {};
   const id = safeString(source.id).trim() || `invalid-message-${index}`;
@@ -1682,6 +1749,8 @@ function normalizeMessageRow(row, index) {
   return {
     ...source,
     id,
+    client_message_id: safeString(source.client_message_id).trim(),
+    send_status: safeString(source.send_status).trim(),
     body: safeString(source.body),
     sender_id: safeString(source.sender_id),
     attachment_path: safeString(source.attachment_path),
@@ -1745,6 +1814,7 @@ function messageRenderVersion(message) {
     safeString(message?.attachment_name),
     safeString(message?.attachment_mime),
     safeString(message?.attachmentUrl),
+    safeString(message?.send_status),
     safeString(message?.reply_to_id),
     safeString(message?.reply_to?.id),
     safeString(message?.reply_to?.body),

@@ -12,6 +12,7 @@ import {
 import { ErrorBoundary } from "./ErrorBoundary";
 import { MessagesThread } from "./MessagesThread";
 import { MESSAGE_HOLD_MS } from "../lib/messageSelect";
+import { clearAllPendingSends } from "../lib/pendingSends";
 
 vi.mock("@sentry/react", () => ({
   captureException: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@sentry/react", () => ({
 
 afterEach(() => {
   cleanup();
+  clearAllPendingSends();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -126,7 +128,10 @@ describe("messaging crash containment", () => {
     );
     await waitFor(() => expect(onMarkRead).toHaveBeenCalledTimes(1));
 
-    const nextWindow = [...firstWindow.slice(1), message("m-100", 59)];
+    const nextWindow = [...firstWindow.slice(1), {
+      ...message("m-100", 59),
+      created_at: "2026-08-10T11:00:00.000Z",
+    }];
     view.rerender(
       <MessagesThread {...threadProps({ messages: nextWindow, onMarkRead })} />,
     );
@@ -199,9 +204,11 @@ describe("messaging crash containment", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
-    await screen.findByDisplayValue("Send once");
+    const retry = await screen.findByRole("button", { name: "Not sent — tap to retry" });
+    expect(screen.getByText("Send once")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Write a message…").value).toBe("");
 
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(retry);
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
 
     const firstKey = onSend.mock.calls[0][2].clientMessageId;
@@ -234,20 +241,57 @@ describe("messaging crash containment", () => {
         threadKey="dm:mama-ambiguous"
       />,
     );
-    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
-      target: { value: "Original payload" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Not sent — tap to retry" }));
     await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(1));
     expect(remountSend.mock.calls[0][2].clientMessageId).toBe(originalKey);
 
-    await screen.findByDisplayValue("Original payload");
     fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
       target: { value: "Changed payload" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(2));
     expect(remountSend.mock.calls[1][2].clientMessageId).not.toBe(originalKey);
+  });
+
+  it("paints a pending bubble before the send resolves", async () => {
+    let settle;
+    const onSend = vi.fn(() => new Promise((resolve) => { settle = resolve; }));
+    render(<MessagesThread {...threadProps({ onSend, selfId: "admin-1" })} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Instant" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Instant")).toBeTruthy();
+    expect(screen.getByText("Sending…")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Write a message…").value).toBe("");
+    expect(onSend).toHaveBeenCalledTimes(1);
+
+    settle({});
+    await waitFor(() => expect(screen.getByText("Instant")).toBeTruthy());
+  });
+
+  it("lets a second send go out while the first is still in flight", async () => {
+    const holds = [];
+    const onSend = vi.fn(() => new Promise((resolve) => { holds.push(resolve); }));
+    render(<MessagesThread {...threadProps({ onSend, selfId: "admin-1" })} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "First" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Second" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("First")).toBeTruthy();
+    expect(screen.getByText("Second")).toBeTruthy();
+    expect(onSend.mock.calls[0][2].clientMessageId).not.toBe(onSend.mock.calls[1][2].clientMessageId);
+
+    holds.forEach((resolve) => resolve({}));
   });
 
   it("shares an in-flight send across remounted thread instances", async () => {

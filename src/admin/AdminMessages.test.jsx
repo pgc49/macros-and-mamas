@@ -65,6 +65,8 @@ const { deferredByClient, dbMock, realtimeChannel } = vi.hoisted(() => {
       markMessagesRead: vi.fn(async () => {}),
       countUnreadMessages: vi.fn(async () => 0),
       sendMessage: vi.fn(),
+      hydrateChannelMessageRow: vi.fn(async (row) => row),
+      hydrateDmMessageRow: vi.fn(async (row) => row),
       editMessage: vi.fn(),
       deleteMessage: vi.fn(),
       toggleDmReaction: vi.fn(),

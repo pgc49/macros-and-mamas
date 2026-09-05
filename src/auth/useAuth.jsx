@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/react";
 import { supabase } from "../lib/supabase";
 import { persistAttributionToProfile } from "../lib/attribution";
 import { resetAttachmentUrlCache } from "../lib/attachmentUrls";
+import { clearAllPendingSends } from "../lib/pendingSends";
 import {
   completeSignIn,
   completeSignup,
@@ -258,6 +259,7 @@ export function AuthProvider({ children }) {
     // Message attachment URLs are cached to keep image `src` stable between
     // refreshes. They outlive the session unless dropped here.
     resetAttachmentUrlCache();
+    clearAllPendingSends();
     await supabase.auth.signOut({ scope: "local" });
   };
 

@@ -82,10 +82,22 @@ export function MessagesThreadPreview() {
     setMessages((list) => mergeMessagesById(list, [row]));
   };
 
-  const send = async (body) => {
+  const [failNext, setFailNext] = useState(false);
+
+  const send = async (body, _file, opts = {}) => {
+    await new Promise((resolve) => { window.setTimeout(resolve, 350); });
+    if (failNext) {
+      setFailNext(false);
+      throw new Error("simulated send failure");
+    }
     const n = nextNewer;
     setNextNewer(n + 1);
-    const row = makeMessage(n, { sender_id: SELF, body });
+    const row = makeMessage(n, {
+      sender_id: SELF,
+      body,
+      id: `srv-${n}`,
+      client_message_id: opts.clientMessageId || `srv-${n}`,
+    });
     setMessages((list) => mergeMessagesById(list, [row]));
   };
 
@@ -126,10 +138,9 @@ export function MessagesThreadPreview() {
         August Group
       </h1>
       <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45 }}>
-        Scroll to the newest message and wait — the list should stay pinned
-        while photos settle. Scroll up, then tap “Someone else posted” to
-        confirm the pane holds. “Load earlier messages” should keep the row
-        you were reading.
+        Send should paint your bubble immediately. Turn on “Fail next send”
+        to retry from the bubble. “Someone else posted” should land without
+        a reload. Scroll up, then tap that button to confirm the pane holds.
       </p>
       <div style={{ display: "flex", gap: 8, marginBottom: 10, flexShrink: 0 }}>
         <button
@@ -149,6 +160,25 @@ export function MessagesThreadPreview() {
           }}
         >
           Someone else posted
+        </button>
+        <button
+          type="button"
+          data-demo-fail-next
+          aria-pressed={failNext}
+          onClick={() => setFailNext((v) => !v)}
+          style={{
+            border: `1.5px solid ${failNext ? T.accent : T.border}`,
+            background: failNext ? T.accentSoft : "#fff",
+            color: T.accentDeep,
+            borderRadius: 999,
+            padding: "6px 12px",
+            fontFamily: F,
+            fontWeight: 800,
+            fontSize: 12.5,
+            cursor: "pointer",
+          }}
+        >
+          {failNext ? "Next send will fail" : "Fail next send"}
         </button>
       </div>
       <div style={{

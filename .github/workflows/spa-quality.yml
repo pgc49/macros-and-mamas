@@ -82,6 +82,10 @@ jobs:
             cp supabase/migrations/20260905050000_messaging_scale_indexes.sql \
               "$DB_ROOT/supabase/migrations/"
           fi
+          if [ -f supabase/migrations/20260905120000_conversation_last_inbound_at.sql ]; then
+            cp supabase/migrations/20260905120000_conversation_last_inbound_at.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           if [ -f supabase/migrations/20260811064316_push_subscription_origin.sql ]; then
             cp supabase/migrations/20260811064316_push_subscription_origin.sql \
               "$DB_ROOT/supabase/migrations/"
@@ -91,6 +95,9 @@ jobs:
           cp supabase/migrations/*voice_drops_storage_select*.sql \
             "$DB_ROOT/supabase/migrations/"
           cp supabase/tests/messaging_inbox.sql "$DB_ROOT/supabase/tests/"
+          if [ -f supabase/tests/messaging_last_inbound.sql ]; then
+            cp supabase/tests/messaging_last_inbound.sql "$DB_ROOT/supabase/tests/"
+          fi
           if [ -f supabase/tests/messaging_idempotency_outbox.sql ]; then
             cp supabase/tests/messaging_idempotency_outbox.sql "$DB_ROOT/supabase/tests/"
           fi

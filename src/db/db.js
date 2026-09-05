@@ -8,7 +8,7 @@ import {
 } from "../lib/messageReactions";
 import { chronologicalMessages } from "../lib/messageOrdering";
 import { attachmentUrlCache } from "../lib/attachmentUrls";
-import { MESSAGE_PAGE_MAX, MESSAGE_PAGE_SIZE } from "../lib/messageChannels";
+import { MESSAGE_PAGE_MAX, MESSAGE_PAGE_SIZE, membershipHasUnread } from "../lib/messageChannels";
 import { referredByByUserId } from "../lib/referredBy";
 import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
@@ -753,6 +753,9 @@ function attachReplyPreviews(rows) {
 const attachChannelReplyPreviews = attachReplyPreviews;
 
 export function channelHasUnread(_conversation, membership, messages = []) {
+  if (membership && Object.hasOwn(membership, "last_inbound_at")) {
+    return membershipHasUnread(membership);
+  }
   const userId = membership?.user_id;
   if (!userId) return false;
   const lastReadMs = membership?.last_read_at
@@ -763,6 +766,27 @@ export function channelHasUnread(_conversation, membership, messages = []) {
     const createdMs = m.created_at ? new Date(m.created_at).getTime() : 0;
     return createdMs > (Number.isFinite(lastReadMs) ? lastReadMs : 0);
   });
+}
+
+async function hydrateChannelMessageRow(row) {
+  if (!row) return row;
+  const [hydrated] = await hydrateChannelReactions(
+    attachChannelReplyPreviews(
+      await hydrateChannelSenders(
+        await hydrateChannelAttachments([row]),
+        row.conversation_id,
+      ),
+    ),
+  );
+  return hydrated || row;
+}
+
+async function hydrateDmMessageRow(row) {
+  if (!row) return row;
+  const [hydrated] = await hydrateDmReactions(
+    attachReplyPreviews(await hydrateMessageAttachments([row])),
+  );
+  return hydrated || row;
 }
 
 async function loadReactionRows(table, messageIds) {
@@ -877,6 +901,36 @@ async function toggleMessageReaction(scope, messageId, emoji) {
     .insert({ message_id: messageId, user_id: uid, emoji });
   if (insErr) throw insErr;
   return { messageId, emoji, cleared: false };
+}
+
+function shapeMyChannels(profile, rows) {
+  const tier = String(profile?.tier || "none");
+  const isAdmin = String(profile?.role || "").toLowerCase() === "admin";
+  const myCohort = String(profile?.cohort_label || "");
+  const liveAdminCohorts = parseLiveChannelCohorts(
+    import.meta.env.VITE_LIVE_CHANNEL_COHORTS,
+  );
+  return (rows || [])
+    .map((row) => {
+      const { conversations, ...membership } = row;
+      return {
+        conversation: conversations || null,
+        membership,
+      };
+    })
+    .filter(({ conversation }) => {
+      if (!conversation) return false;
+      if (conversation.type === "alumni") return tier === "alumni_49";
+      if (conversation.type !== "cohort") return false;
+      if (!isAdmin) return !!myCohort && conversation.cohort_label === myCohort;
+      return liveAdminCohorts.has(String(conversation.cohort_label || ""))
+        || (!!myCohort && conversation.cohort_label === myCohort);
+    })
+    .sort((a, b) => String(a.conversation?.label || "").localeCompare(
+      String(b.conversation?.label || ""),
+      undefined,
+      { sensitivity: "base" },
+    ));
 }
 
 export const db = {
@@ -2232,6 +2286,7 @@ export const db = {
           removed_at,
           notify_level,
           last_read_at,
+          last_inbound_at,
           conversations (
             id,
             type,
@@ -2246,37 +2301,36 @@ export const db = {
         .is("removed_at", null),
     ]);
     if (profileErr) throw profileErr;
-    if (error) throw error;
-    const tier = String(profile?.tier || "none");
-    const isAdmin = String(profile?.role || "").toLowerCase() === "admin";
-    const myCohort = String(profile?.cohort_label || "");
-    // Live cohort pills for admins/Callie. Mamas always see only their own cohort.
-    const liveAdminCohorts = parseLiveChannelCohorts(
-      import.meta.env.VITE_LIVE_CHANNEL_COHORTS,
-    );
-    return (data || [])
-      .map((row) => {
-        const { conversations, ...membership } = row;
-        return {
-          conversation: conversations || null,
-          membership,
-        };
-      })
-      .filter(({ conversation }) => {
-        if (!conversation) return false;
-        // Alumni pill only when the mama is actually alumni (stage 4) — not for admin empty rooms.
-        if (conversation.type === "alumni") return tier === "alumni_49";
-        if (conversation.type !== "cohort") return false;
-        if (!isAdmin) return !!myCohort && conversation.cohort_label === myCohort;
-        // Admins: live cohorts + any cohort stamped on this admin profile (test accounts).
-        return liveAdminCohorts.has(String(conversation.cohort_label || ""))
-          || (!!myCohort && conversation.cohort_label === myCohort);
-      })
-      .sort((a, b) => String(a.conversation?.label || "").localeCompare(
-        String(b.conversation?.label || ""),
-        undefined,
-        { sensitivity: "base" },
-      ));
+    if (error) {
+      // Preview / local can load before the last_inbound_at migration lands.
+      if (/last_inbound_at/i.test(String(error.message || error.code || ""))) {
+        const retry = await supabase
+          .from("conversation_members")
+          .select(`
+            conversation_id,
+            user_id,
+            joined_at,
+            removed_at,
+            notify_level,
+            last_read_at,
+            conversations (
+              id,
+              type,
+              cohort_label,
+              label,
+              read_only,
+              guidelines,
+              created_at
+            )
+          `)
+          .eq("user_id", uid)
+          .is("removed_at", null);
+        if (retry.error) throw retry.error;
+        return shapeMyChannels(profile, retry.data);
+      }
+      throw error;
+    }
+    return shapeMyChannels(profile, data);
   },
 
   /**
@@ -2303,6 +2357,14 @@ export const db = {
     return hydrateChannelReactions(withReplies);
   },
 
+  async hydrateChannelMessageRow(row) {
+    return hydrateChannelMessageRow(row);
+  },
+
+  async hydrateDmMessageRow(row) {
+    return hydrateDmMessageRow(row);
+  },
+
   /**
    * Unread dot for a channel the reader is not looking at. One indexed row
    * lookup, instead of loading and hydrating that channel's whole window just
@@ -2311,6 +2373,9 @@ export const db = {
   async channelHasUnreadMessages(conversationId, membership) {
     const userId = membership?.user_id;
     if (!conversationId || !userId) return false;
+    if (membership && Object.hasOwn(membership, "last_inbound_at")) {
+      return membershipHasUnread(membership);
+    }
     let query = supabase
       .from("conversation_messages")
       .select("id")
@@ -2536,7 +2601,7 @@ export const db = {
       .eq("conversation_id", conversationId)
       .eq("user_id", uid)
       .is("removed_at", null)
-      .select("conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at")
+      .select("conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at, last_inbound_at")
       .maybeSingle();
     if (error) throw error;
     return data || { conversation_id: conversationId, user_id: uid, last_read_at: at };
@@ -2555,7 +2620,7 @@ export const db = {
       .eq("conversation_id", conversationId)
       .eq("user_id", uid)
       .is("removed_at", null)
-      .select("conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at")
+      .select("conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at, last_inbound_at")
       .maybeSingle();
     if (error) throw error;
     return data;

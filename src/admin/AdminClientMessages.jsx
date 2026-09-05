@@ -11,7 +11,11 @@ import {
   MESSAGE_PAGE_SIZE,
   pageHasMore,
 } from "../lib/messageChannels";
-import { createCoalescedRefresh } from "../lib/realtimeCoalesce";
+import {
+  applyMessageChange,
+  applyReactionEvent,
+} from "../lib/realtimeMessageApply";
+
 
 /**
  * Per-client Messages on the admin client detail page.
@@ -21,7 +25,6 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const clientId = client?.id;
   const [messages, setMessages] = useState([]);
   const [hasEarlier, setHasEarlier] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const messagesRef = useRef(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -33,7 +36,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     if (!clientId) return;
     try {
       const list = await db.loadMessages(clientId);
-      setMessages(list);
+      setMessages((current) => mergeMessagesById(current, list));
       setHasEarlier(pageHasMore(list, MESSAGE_PAGE_SIZE));
     } catch (e) {
       console.error(e);
@@ -41,16 +44,12 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     }
   }, [clientId]);
 
-  const refreshRef = useRef(refresh);
-  useEffect(() => { refreshRef.current = refresh; }, [refresh]);
-
   useEffect(() => {
     refresh();
   }, [refresh]);
 
   useEffect(() => {
     if (!clientId) return undefined;
-    const coalesced = createCoalescedRefresh(() => refreshRef.current?.());
     const channel = supabase
       .channel(`messages-admin-client-${clientId}`)
       .on(
@@ -61,7 +60,16 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           table: "messages",
           filter: `client_id=eq.${clientId}`,
         },
-        () => { coalesced.request(); },
+        (payload) => {
+          setMessages((list) => applyMessageChange(list, payload));
+          const row = payload?.new;
+          if (row && (payload.eventType === "INSERT" || payload.eventType === "UPDATE") && !row.deleted_at) {
+            db.hydrateDmMessageRow(row).then((hydrated) => {
+              if (!hydrated) return;
+              setMessages((list) => mergeMessagesById(list, [hydrated]));
+            }).catch(() => {});
+          }
+        },
       )
       .on(
         "postgres_changes",
@@ -70,14 +78,15 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           schema: "public",
           table: "message_reactions",
         },
-        () => { coalesced.request(); },
+        (payload) => {
+          setMessages((list) => applyReactionEvent(list, payload, adminUserId));
+        },
       )
       .subscribe();
     return () => {
-      coalesced.dispose();
       supabase.removeChannel(channel);
     };
-  }, [clientId]);
+  }, [clientId, adminUserId]);
 
   const loadEarlier = useCallback(async () => {
     const before = earlierCursor(messagesRef.current);
@@ -89,7 +98,6 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
 
   const send = async (body, file = null, opts = {}) => {
     if (!clientId) return;
-    setBusy(true);
     setError("");
     try {
       const row = await db.sendMessage({
@@ -105,8 +113,6 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
       console.error(e);
       setError(e.message || "Couldn’t send.");
       throw e;
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -163,7 +169,6 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           senderNameById={client?.id ? { [client.id]: first } : null}
           threadClientId={clientId}
           showSenderNames
-          busy={busy}
           onSend={send}
           onEdit={edit}
           onDelete={remove}

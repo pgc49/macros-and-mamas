@@ -26,6 +26,8 @@ const { dbMock, realtimeChannel, profileQuery } = vi.hoisted(() => {
       markChannelRead: vi.fn(async () => ({ last_read_at: "2026-09-04T12:00:00Z" })),
       sendMessage: vi.fn(),
       sendChannelMessage: vi.fn(),
+      hydrateChannelMessageRow: vi.fn(async (row) => row),
+      hydrateDmMessageRow: vi.fn(async (row) => row),
       editMessage: vi.fn(),
       deleteMessage: vi.fn(),
       editChannelMessage: vi.fn(),

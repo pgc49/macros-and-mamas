@@ -7,11 +7,18 @@ import { mergeMessagesById } from "../lib/messageOrdering";
 import {
   applyReactionToMessages,
   earlierCursor,
+  membershipHasUnread,
   mergeChannelList,
   MESSAGE_PAGE_SIZE,
   pageHasMore,
 } from "../lib/messageChannels";
 import { createCoalescedRefresh } from "../lib/realtimeCoalesce";
+import {
+  applyMessageChange,
+  applyReactionEvent,
+  conversationIdFromPayload,
+  inboundUnreadFromPayload,
+} from "../lib/realtimeMessageApply";
 import { T, F, FD } from "../theme/tokens";
 import { Btn } from "./ui";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -59,7 +66,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   const [channels, setChannels] = useState([]);
   const [channelMessages, setChannelMessages] = useState({});
   const [activePill, setActivePill] = useState("callie");
-  const [busy, setBusy] = useState(false);
+  const [busy] = useState(false);
   const [error, setError] = useState("");
   const [notifyChannelId, setNotifyChannelId] = useState(null);
   const [notifyBusy, setNotifyBusy] = useState(false);
@@ -104,7 +111,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     if (!userId) return;
     try {
       const list = await db.loadMessages(userId);
-      setDmMessages(list);
+      setDmMessages((current) => mergeMessagesById(current, list));
       setDmHasEarlier(pageHasMore(list, MESSAGE_PAGE_SIZE));
       // Counted in the database rather than over the loaded page: the page is
       // only the newest slice, so counting it would undercount a long absence.
@@ -131,7 +138,9 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       setChannels((prev) => mergeChannelList(prev, list));
       const withUnread = await Promise.all(list.map(async (item) => ({
         ...item,
-        hasUnread: await db.channelHasUnreadMessages(item.conversation.id, item.membership),
+        hasUnread: Object.hasOwn(item.membership || {}, "last_inbound_at")
+          ? membershipHasUnread(item.membership)
+          : await db.channelHasUnreadMessages(item.conversation.id, item.membership),
       })));
       setChannels(withUnread);
     } catch (e) {
@@ -149,7 +158,10 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     try {
       const messages = await db.loadChannelMessages(conversationId);
       if (channelLoadSeq.current.get(conversationId) !== seq) return;
-      setChannelMessages((all) => ({ ...all, [conversationId]: messages }));
+      setChannelMessages((all) => ({
+        ...all,
+        [conversationId]: mergeMessagesById(all[conversationId] || [], messages),
+      }));
       setChannelHasEarlier((all) => ({
         ...all,
         [conversationId]: pageHasMore(messages, MESSAGE_PAGE_SIZE),
@@ -163,12 +175,8 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
     }
   }, []);
 
-  const refreshDmRef = useRef(refreshDm);
   const refreshChannelListRef = useRef(refreshChannelList);
-  const loadChannelRef = useRef(loadChannel);
-  useEffect(() => { refreshDmRef.current = refreshDm; }, [refreshDm]);
   useEffect(() => { refreshChannelListRef.current = refreshChannelList; }, [refreshChannelList]);
-  useEffect(() => { loadChannelRef.current = loadChannel; }, [loadChannel]);
 
   useEffect(() => {
     refreshDm();
@@ -224,29 +232,70 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   }, [activePill]);
 
   /**
-   * One subscription for the whole panel, with every handler coalesced.
-   *
-   * A busy group used to fire a full reload of every channel per event, and the
-   * effect re-subscribed whenever a handler's identity changed. Handlers now
-   * read through refs, and each event refreshes only what it can affect: the
-   * open thread, or just the unread dots.
+   * One subscription for the whole panel. Open-thread events patch the loaded
+   * window in place. Other groups only flip an unread dot. Switching pills
+   * must not rebuild this socket.
    */
   useEffect(() => {
     if (!userId) return undefined;
 
-    const dmRefresh = createCoalescedRefresh(() => refreshDmRef.current?.());
     const listRefresh = createCoalescedRefresh(() => refreshChannelListRef.current?.());
-    const openChannelRefresh = createCoalescedRefresh(() => {
-      const conversationId = activePillRef.current;
-      if (!conversationId || conversationId === "callie") return undefined;
-      return loadChannelRef.current?.(conversationId, { silent: true });
-    });
 
-    const isOpenChannel = (payload) => {
-      const conversationId = payload?.new?.conversation_id
-        || payload?.old?.conversation_id
-        || null;
-      return !!conversationId && conversationId === activePillRef.current;
+    const applyOpenDm = (payload) => {
+      setDmMessages((list) => attachReplyPreviewLocal(applyMessageChange(list, payload)));
+      const row = payload?.new;
+      if (row && (payload.eventType === "INSERT" || payload.eventType === "UPDATE") && !row.deleted_at) {
+        db.hydrateDmMessageRow(row).then((hydrated) => {
+          if (!hydrated) return;
+          setDmMessages((list) => attachReplyPreviewLocal(mergeMessagesById(list, [hydrated])));
+        }).catch(() => {});
+      }
+      if (inboundUnreadFromPayload(payload, userId) && activePillRef.current !== "callie") {
+        setDmUnread((n) => {
+          const next = n + 1;
+          onUnreadChange?.(next);
+          return next;
+        });
+      }
+    };
+
+    const applyOpenChannel = (payload) => {
+      const conversationId = conversationIdFromPayload(payload);
+      if (!conversationId) return;
+      setChannelMessages((all) => ({
+        ...all,
+        [conversationId]: attachReplyPreviewLocal(
+          applyMessageChange(all[conversationId] || [], payload),
+        ),
+      }));
+      const row = payload?.new;
+      if (row && (payload.eventType === "INSERT" || payload.eventType === "UPDATE") && !row.deleted_at) {
+        db.hydrateChannelMessageRow(row).then((hydrated) => {
+          if (!hydrated) return;
+          setChannelMessages((all) => ({
+            ...all,
+            [conversationId]: attachReplyPreviewLocal(
+              mergeMessagesById(all[conversationId] || [], [hydrated]),
+            ),
+          }));
+        }).catch(() => {});
+      }
+    };
+
+    const markOtherChannelUnread = (payload) => {
+      const conversationId = conversationIdFromPayload(payload);
+      if (!conversationId || !inboundUnreadFromPayload(payload, userId)) return;
+      setChannels((list) => list.map((item) => {
+        if (item.conversation.id !== conversationId) return item;
+        return {
+          ...item,
+          hasUnread: true,
+          membership: {
+            ...item.membership,
+            last_inbound_at: payload.new?.created_at || item.membership?.last_inbound_at,
+          },
+        };
+      }));
     };
 
     const channel = supabase
@@ -259,17 +308,18 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           table: "messages",
           filter: `client_id=eq.${userId}`,
         },
-        () => { dmRefresh.request(); },
+        (payload) => { applyOpenDm(payload); },
       )
       .on(
-        // Reactions carry no thread id, so this cannot be narrowed server-side.
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "message_reactions",
         },
-        () => { dmRefresh.request(); },
+        (payload) => {
+          setDmMessages((list) => applyReactionEvent(list, payload, userId));
+        },
       )
       .on(
         "postgres_changes",
@@ -279,9 +329,12 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           table: "conversation_messages",
         },
         (payload) => {
-          if (isOpenChannel(payload)) openChannelRefresh.request();
-          // Any other group only needs its unread dot re-checked.
-          listRefresh.request();
+          const conversationId = conversationIdFromPayload(payload);
+          if (conversationId && conversationId === activePillRef.current) {
+            applyOpenChannel(payload);
+            return;
+          }
+          markOtherChannelUnread(payload);
         },
       )
       .on(
@@ -291,7 +344,14 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           schema: "public",
           table: "conversation_message_reactions",
         },
-        () => { openChannelRefresh.request(); },
+        (payload) => {
+          const openId = activePillRef.current;
+          if (!openId || openId === "callie") return;
+          setChannelMessages((all) => ({
+            ...all,
+            [openId]: applyReactionEvent(all[openId] || [], payload, userId),
+          }));
+        },
       )
       .on(
         "postgres_changes",
@@ -301,17 +361,26 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
           table: "conversation_members",
           filter: `user_id=eq.${userId}`,
         },
-        () => { listRefresh.request(); },
+        (payload) => {
+          const row = payload?.new;
+          if (!row?.conversation_id || payload.eventType === "INSERT") {
+            listRefresh.request();
+            return;
+          }
+          setChannels((list) => list.map((item) => {
+            if (item.conversation.id !== row.conversation_id) return item;
+            const membership = { ...item.membership, ...row };
+            return { ...item, membership, hasUnread: membershipHasUnread(membership) };
+          }));
+        },
       )
       .subscribe();
 
     return () => {
-      dmRefresh.dispose();
       listRefresh.dispose();
-      openChannelRefresh.dispose();
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, onUnreadChange]);
 
   const activeChannel = useMemo(
     () => channels.find((item) => item.conversation.id === activePill) || null,
@@ -336,7 +405,6 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   }, [activeChannelMessages, userId]);
 
   const send = async (body, file = null, opts = {}) => {
-    setBusy(true);
     setError("");
     try {
       const row = await db.sendMessage({
@@ -351,8 +419,6 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       console.error(e);
       setError(friendlyError(e, "Couldn’t send."));
       throw e;
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -388,7 +454,6 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   const sendChannel = async (body, file = null, opts = {}) => {
     if (!activeChannel) return;
     const conversationId = activeChannel.conversation.id;
-    setBusy(true);
     setError("");
     try {
       const row = await db.sendChannelMessage({
@@ -407,8 +472,6 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       console.error(e);
       setError(friendlyError(e, "Couldn’t send."));
       throw e;
-    } finally {
-      setBusy(false);
     }
   };
 
