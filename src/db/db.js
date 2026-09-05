@@ -8,6 +8,7 @@ import {
 } from "../lib/messageReactions";
 import { chronologicalMessages } from "../lib/messageOrdering";
 import { attachmentUrlCache } from "../lib/attachmentUrls";
+import { MESSAGE_PAGE_MAX, MESSAGE_PAGE_SIZE } from "../lib/messageChannels";
 import { referredByByUserId } from "../lib/referredBy";
 import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
@@ -691,14 +692,6 @@ async function hydrateChannelSenders(rows, conversationId = null) {
 
 const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
 const DM_MESSAGE_SELECT = "id, client_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
-
-/**
- * Opening window for a thread. A cohort group accumulates forever, so the first
- * paint takes a couple of screens and "Load earlier messages" walks back from
- * there. Loading the whole backlog up front is what made the August group slow.
- */
-export const MESSAGE_PAGE_SIZE = 40;
-const MESSAGE_PAGE_MAX = 200;
 
 function pageLimit(limit) {
   return Math.min(MESSAGE_PAGE_MAX, Math.max(1, Number(limit) || MESSAGE_PAGE_SIZE));

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { MESSAGE_FACE_FONT } from "../lib/messageFace";
 import { Btn } from "./ui";
@@ -20,6 +20,7 @@ import {
 import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { splitLinkedMessageText } from "../lib/messageLinks";
+import { createBottomPin } from "../lib/stickToBottom";
 import {
   BUBBLE_HOLD_SELECT_CSS,
   MESSAGE_HOLD_MOVE_PX,
@@ -79,6 +80,13 @@ export function MessagesThread({
   /** Stable DM/channel identity so ambiguous retries survive thread remounts. */
   threadKey = "",
   onComposerFocusChange,
+  /**
+   * Prepend the page of history before the oldest loaded message. Threads open
+   * on a window, so a long-running cohort group needs a way back through it.
+   */
+  onLoadEarlier = null,
+  /** False once the thread has reached its first message. */
+  hasEarlier = false,
 }) {
   const safeMessages = Array.isArray(messages)
     ? messages.map(normalizeMessageRow)
@@ -99,7 +107,13 @@ export function MessagesThread({
   const [recording, setRecording] = useState(false);
   const [recordMs, setRecordMs] = useState(0);
   const [voicePreview, setVoicePreview] = useState(null); // { file, url, durationMs }
+  const [atLatest, setAtLatest] = useState(true);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   const listRef = useRef(null);
+  const listContentRef = useRef(null);
+  const bottomPinRef = useRef(null);
+  /** Metrics captured before an older page is prepended, so we can hold the row. */
+  const restoreRef = useRef(null);
   const fileRef = useRef(null);
   const draftRef = useRef(null);
   const holdTimer = useRef(null);
@@ -118,21 +132,61 @@ export function MessagesThread({
 
   // Keep the latest message in view inside the list pane (iMessage-style).
   // Do NOT use scrollIntoView — it scrolls the page and fights flex height.
+  //
+  // The pin has to survive content settling after the first paint: images
+  // decode, voice players mount, reaction chips arrive. A one-shot jump landed
+  // on a list that was still growing and left the reader above the newest
+  // message, which read as the pane bouncing back up while it loaded.
   useEffect(() => {
     const el = listRef.current;
     if (!el) return undefined;
-    const jump = () => {
-      el.scrollTop = el.scrollHeight;
-    };
-    jump();
-    const t1 = window.setTimeout(jump, 50);
-    const t2 = window.setTimeout(jump, 250);
+    const pin = createBottomPin(el, {
+      content: listContentRef.current,
+      onPinnedChange: setAtLatest,
+    });
+    bottomPinRef.current = pin;
+    pin.toBottom();
     return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
+      pin.dispose();
+      bottomPinRef.current = null;
     };
-    // Last id: new tip message; length: empty → first load.
-  }, [safeMessages.length, latestMessageId]);
+  }, []);
+
+  // A new tip message: follow it when the reader is at the live edge, hold
+  // position when they are reading back. Message count deliberately does not
+  // trigger this — prepending an older page must not yank them to the bottom.
+  useEffect(() => {
+    if (!latestMessageId) return;
+    bottomPinRef.current?.repin();
+  }, [latestMessageId]);
+
+  // Hold the anchor row once the prepended page has laid out. Runs before paint
+  // so the reader never sees the intermediate offset.
+  useLayoutEffect(() => {
+    const previous = restoreRef.current;
+    if (!previous) return;
+    restoreRef.current = null;
+    bottomPinRef.current?.restore(previous);
+  }, [safeMessages.length]);
+
+  const loadEarlier = useCallback(async () => {
+    const el = listRef.current;
+    if (!el || !onLoadEarlier || loadingEarlier) return;
+    setLoadingEarlier(true);
+    // Captured before the fetch so the restore uses the pre-prepend offset.
+    restoreRef.current = {
+      previousScrollHeight: el.scrollHeight,
+      previousScrollTop: el.scrollTop,
+    };
+    try {
+      await onLoadEarlier();
+    } catch (e) {
+      console.warn("load earlier messages failed", e);
+      restoreRef.current = null;
+    } finally {
+      setLoadingEarlier(false);
+    }
+  }, [onLoadEarlier, loadingEarlier]);
 
   useEffect(() => {
     Promise.resolve()
@@ -271,6 +325,9 @@ export function MessagesThread({
     const attach = voicePreview?.file || file;
     if ((!text && !attach) || busy || !onSend || recording || sendInFlightRef.current) return;
     sendInFlightRef.current = true;
+    // Sending re-pins even from partway up the history: the reader is asking to
+    // be at the live edge, which is where their bubble is about to land.
+    bottomPinRef.current?.toBottom();
     const keptText = text;
     const keptFile = file;
     const keptVoice = voicePreview;
@@ -706,6 +763,7 @@ export function MessagesThread({
       {headerExtra}
       {banner}
 
+      <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex", minWidth: 0 }}>
       <div
         data-message-list
         ref={listRef}
@@ -725,9 +783,35 @@ export function MessagesThread({
           overscrollBehavior: "contain",
         }}
       >
+        {/* Wrapper exists so a ResizeObserver can watch the content grow — one
+            on the scroll port never fires when the list inside it gets taller. */}
+        <div data-message-list-content ref={listContentRef}>
         {!safeMessages.length && (
           <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, padding: "20px 8px", textAlign: "center" }}>
             {emptyState}
+          </div>
+        )}
+        {onLoadEarlier && hasEarlier && !!safeMessages.length && (
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+            <button
+              type="button"
+              data-load-earlier
+              onClick={loadEarlier}
+              disabled={loadingEarlier}
+              style={{
+                border: `1.5px solid ${T.border}`,
+                background: "#fff",
+                color: T.accentDeep,
+                borderRadius: 999,
+                padding: "6px 14px",
+                fontFamily: F,
+                fontWeight: 800,
+                fontSize: 12.5,
+                cursor: loadingEarlier ? "default" : "pointer",
+              }}
+            >
+              {loadingEarlier ? "Loading…" : "Load earlier messages"}
+            </button>
           </div>
         )}
         {(() => {
@@ -1133,6 +1217,34 @@ export function MessagesThread({
           );
           });
         })()}
+        </div>
+      </div>
+      {!atLatest && !!safeMessages.length && (
+        <button
+          type="button"
+          data-jump-latest
+          aria-label="Jump to latest message"
+          onClick={() => bottomPinRef.current?.toBottom()}
+          style={{
+            position: "absolute",
+            bottom: 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            border: `1.5px solid ${T.border}`,
+            background: "#fff",
+            color: T.accentDeep,
+            borderRadius: 999,
+            padding: "7px 14px",
+            fontFamily: F,
+            fontWeight: 800,
+            fontSize: 12.5,
+            cursor: "pointer",
+            boxShadow: "0 4px 14px rgba(51,39,46,0.16)",
+          }}
+        >
+          Jump to latest ↓
+        </button>
+      )}
       </div>
 
       {!hideComposer && replyTo && !recording && (

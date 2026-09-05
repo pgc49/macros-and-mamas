@@ -62,7 +62,8 @@ const { state, supabaseMock } = vi.hoisted(() => {
 vi.mock("../lib/supabase", () => ({ supabase: supabaseMock }));
 
 import { resetAttachmentUrlCache } from "../lib/attachmentUrls";
-import { MESSAGE_PAGE_SIZE, db } from "./db.js";
+import { MESSAGE_PAGE_SIZE } from "../lib/messageChannels";
+import { db } from "./db.js";
 
 function queriesFor(table) {
   return state.queries.filter((q) => q.table === table);
