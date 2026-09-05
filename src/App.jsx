@@ -248,6 +248,10 @@ const AdminMessagesPreview = import.meta.env.DEV && ADMIN_SURFACE_ENABLED
   ? lazy(() => import("./admin/AdminMessagesPreview").then((m) => ({ default: m.AdminMessagesPreview })))
   : null;
 
+const AdminTodayBannersPreview = import.meta.env.DEV && ADMIN_SURFACE_ENABLED
+  ? lazy(() => import("./admin/AdminTodayBannersPreview").then((m) => ({ default: m.AdminTodayBannersPreview })))
+  : null;
+
 function AdminSurfaceRedirect() {
   useEffect(() => {
     const target = new URL("/admin", CONFIG.ADMIN_APP_URL);
@@ -1671,6 +1675,16 @@ export default function App() {
               element={(
                 <Suspense fallback={null}>
                   <AdminMessagesPreview />
+                </Suspense>
+              )}
+            />
+          ) : null}
+          {AdminTodayBannersPreview ? (
+            <Route
+              path="/dev/today-banners"
+              element={(
+                <Suspense fallback={null}>
+                  <AdminTodayBannersPreview />
                 </Suspense>
               )}
             />

@@ -32,4 +32,13 @@ describe("NotificationsTip", () => {
     const view = render(<NotificationsTip cohortLabel="2026-07" />);
     expect(view.queryByText("Turn on notifications")).toBeNull();
   });
+
+  it("forceVisible previews the card without writing dismiss storage", () => {
+    localStorage.setItem("mm_notifications_tip_dismissed", "1");
+    const view = render(<NotificationsTip cohortLabel="2026-07" forceVisible />);
+    expect(view.getByRole("heading", { name: "Turn on notifications" })).toBeTruthy();
+    view.getByRole("button", { name: "Got it" }).click();
+    expect(localStorage.getItem("mm_notifications_tip_dismissed")).toBe("1");
+    expect(view.queryByRole("heading", { name: "Turn on notifications" })).toBeNull();
+  });
 });

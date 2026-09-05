@@ -41,8 +41,9 @@ function applyDrop(row, setDrop, setHidden) {
   setHidden(readDismissedId() === row.id);
 }
 
-export function MondayVoiceDropBanner() {
-  const seeded = peekVoiceDropCache();
+export function MondayVoiceDropBanner({ previewDrop = null } = {}) {
+  const isPreview = Boolean(previewDrop);
+  const seeded = isPreview ? previewDrop : peekVoiceDropCache();
   const [drop, setDrop] = useState(() => (seeded?.id ? seeded : null));
   const [hidden, setHidden] = useState(() => (
     seeded?.id ? readDismissedId() === seeded.id : false
@@ -50,6 +51,12 @@ export function MondayVoiceDropBanner() {
   const [loading, setLoading] = useState(() => seeded === undefined);
 
   useEffect(() => {
+    if (isPreview) {
+      setDrop(previewDrop);
+      setHidden(false);
+      setLoading(false);
+      return undefined;
+    }
     let cancelled = false;
     if (seeded !== undefined) {
       applyDrop(seeded, setDrop, setHidden);
@@ -69,14 +76,16 @@ export function MondayVoiceDropBanner() {
       }
     })();
     return () => { cancelled = true; };
-  }, [seeded]);
+  }, [seeded, isPreview, previewDrop]);
 
   const dismiss = () => {
-    if (drop?.id) persistDismissedId(drop.id);
+    if (!isPreview && drop?.id) persistDismissedId(drop.id);
     setHidden(true);
   };
 
-  if (loading || hidden || !drop?.audioUrl) return null;
+  if (isPreview) {
+    if (hidden || !drop) return null;
+  } else if (loading || hidden || !drop?.audioUrl) return null;
 
   const caption = String(drop.caption || "").trim();
   const durationLabel = drop.durationMs
@@ -144,12 +153,16 @@ export function MondayVoiceDropBanner() {
             {caption}
           </p>
         ) : null}
-        <VoiceMemoPlayer
-          src={drop.audioUrl}
-          label="Listen"
-          durationMs={drop.durationMs || 0}
-          style={{ maxWidth: "100%" }}
-        />
+        {drop.audioUrl ? (
+          <VoiceMemoPlayer
+            src={drop.audioUrl}
+            label="Listen"
+            durationMs={drop.durationMs || 0}
+            style={{ maxWidth: "100%" }}
+          />
+        ) : (
+          <div style={{ fontSize: 13, color: T.inkSoft }}>Listen (preview)</div>
+        )}
       </div>
     </div>
   );

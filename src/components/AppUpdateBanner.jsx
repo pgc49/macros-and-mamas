@@ -62,14 +62,16 @@ function NotesList({ notes }) {
  *
  * Preview: ?demoUpdateBanner=1  or  ?demoWhatsNew=1
  */
-export function AppUpdateBanner() {
-  const [mode, setMode] = useState(null); // "update" | "whatsNew" | null
-  const [remoteBuildId, setRemoteBuildId] = useState(null);
-  const [notes, setNotes] = useState(null);
-  const [demo, setDemo] = useState(false);
+export function AppUpdateBanner({ previewMode = null, previewNotes = null } = {}) {
+  const forced = previewMode === "update" || previewMode === "whatsNew" ? previewMode : null;
+  const [mode, setMode] = useState(forced); // "update" | "whatsNew" | null
+  const [remoteBuildId, setRemoteBuildId] = useState(forced ? "preview" : null);
+  const [notes, setNotes] = useState(forced === "whatsNew" ? previewNotes : null);
+  const [demo, setDemo] = useState(!!forced);
   const [busy, setBusy] = useState(false);
 
   const check = useCallback(async () => {
+    if (forced) return;
     if (queryFlag("demoUpdateBanner")) {
       setDemo(true);
       const remote = await fetchRemoteAppVersion();
@@ -127,9 +129,10 @@ export function AppUpdateBanner() {
     setMode(null);
     setNotes(null);
     setRemoteBuildId(null);
-  }, []);
+  }, [forced]);
 
   useEffect(() => {
+    if (forced) return undefined;
     check();
     const onVis = () => {
       if (document.visibilityState === "visible") check();
@@ -140,7 +143,7 @@ export function AppUpdateBanner() {
       document.removeEventListener("visibilitychange", onVis);
       window.clearInterval(interval);
     };
-  }, [check]);
+  }, [check, forced]);
 
   if (!mode) return null;
 
