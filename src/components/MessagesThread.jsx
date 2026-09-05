@@ -20,7 +20,7 @@ import {
 import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { splitLinkedMessageText } from "../lib/messageLinks";
-import { createBottomPin, scrollChildIntoScroller } from "../lib/stickToBottom";
+import { createBottomPin, pinChildToBottom, scrollChildIntoScroller } from "../lib/stickToBottom";
 import { mergeMessagesById } from "../lib/messageOrdering";
 import {
   buildPendingRow,
@@ -308,8 +308,14 @@ export function MessagesThread({
   const jumpToLatest = useCallback(() => {
     setFocusPending(false);
     setUnseenCount(0);
+    const el = listRef.current;
+    const tip = safeMessages[safeMessages.length - 1];
     bottomPinRef.current?.toBottom();
-  }, []);
+    pinChildToBottom(
+      el,
+      findMessageElement(el, tip?.client_message_id || tip?.id),
+    );
+  }, [safeMessages]);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);

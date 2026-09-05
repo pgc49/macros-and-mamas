@@ -8,9 +8,12 @@ import {
   isNearBottom,
   isScrollable,
   preservedScrollTop,
+  bottomScrollTop,
+  pinChildToBottom,
   scrollChildIntoScroller,
   scrollIntent,
   scrollMetrics,
+  scrollToBottom,
 } from "./stickToBottom";
 
 /**
@@ -252,6 +255,21 @@ describe("createBottomPin", () => {
 
     expect(el.scrollTop).toBe(900);
     pin.dispose();
+  });
+
+  it("computes the live-edge scrollTop instead of assigning scrollHeight", () => {
+    const el = fakeScroller({ scrollHeight: 1000, clientHeight: 400, scrollTop: 80 });
+    expect(bottomScrollTop(el)).toBe(600);
+    scrollToBottom(el);
+    expect(el.scrollTop).toBe(600);
+  });
+
+  it("pins the last bubble to the pane bottom", () => {
+    const el = fakeScroller({ scrollTop: 100, clientHeight: 400, scrollHeight: 2000 });
+    el.getBoundingClientRect = () => ({ top: 0, bottom: 400, height: 400 });
+    const child = { getBoundingClientRect: () => ({ top: 280, bottom: 360, height: 80 }) };
+    expect(pinChildToBottom(el, child)).toBe(true);
+    expect(el.scrollTop).toBe(60);
   });
 
   it("scrolls a nested child by bounding-box delta, not offsetTop", () => {

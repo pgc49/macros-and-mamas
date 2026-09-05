@@ -54,6 +54,31 @@ export function isScrollable(metrics) {
  * bubble's offsetParent is the flex row, not the pane — so we use the
  * bounding-box delta against the live scroll port.
  */
+/** Live-edge offset. `scrollTop = scrollHeight` is not clamped the same in every engine and can land at 0. */
+export function bottomScrollTop(scroller) {
+  return Math.max(0, num(scroller?.scrollHeight) - num(scroller?.clientHeight));
+}
+
+export function scrollToBottom(scroller) {
+  if (!scroller) return;
+  scroller.scrollTop = bottomScrollTop(scroller);
+}
+
+/**
+ * Put the last bubble's bottom on the pane's bottom. Survives a scroller
+ * whose `scrollHeight` has not caught up to the laid-out list yet.
+ */
+export function pinChildToBottom(scroller, child) {
+  if (!scroller || !child?.getBoundingClientRect || !scroller.getBoundingClientRect) {
+    return false;
+  }
+  const scrollerRect = scroller.getBoundingClientRect();
+  const childRect = child.getBoundingClientRect();
+  if (scrollerRect.height < 2) return false;
+  scroller.scrollTop = num(scroller.scrollTop) + (childRect.bottom - scrollerRect.bottom);
+  return true;
+}
+
 export function scrollChildIntoScroller(scroller, child, pad = 16) {
   if (!scroller || !child?.getBoundingClientRect || !scroller.getBoundingClientRect) {
     return false;
@@ -111,7 +136,7 @@ export function createBottomPin(scroller, {
 
   const toBottom = () => {
     if (disposed || !scroller) return;
-    scroller.scrollTop = scroller.scrollHeight;
+    scrollToBottom(scroller);
   };
 
   const repin = () => {
