@@ -2595,14 +2595,26 @@ export const db = {
     const uid = await requireUserId();
     if (!conversationId) return null;
     const at = new Date().toISOString();
-    const { data, error } = await supabase
+    const memberSelect = "conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at, last_inbound_at";
+    const memberSelectFallback = "conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at";
+    let { data, error } = await supabase
       .from("conversation_members")
       .update({ last_read_at: at })
       .eq("conversation_id", conversationId)
       .eq("user_id", uid)
       .is("removed_at", null)
-      .select("conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at, last_inbound_at")
+      .select(memberSelect)
       .maybeSingle();
+    if (error && /last_inbound_at/i.test(String(error.message || error.code || ""))) {
+      ({ data, error } = await supabase
+        .from("conversation_members")
+        .update({ last_read_at: at })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", uid)
+        .is("removed_at", null)
+        .select(memberSelectFallback)
+        .maybeSingle());
+    }
     if (error) throw error;
     return data || { conversation_id: conversationId, user_id: uid, last_read_at: at };
   },
@@ -2614,14 +2626,26 @@ export const db = {
     if (!["all", "highlights", "mute"].includes(normalized)) {
       throw new Error("Invalid notification setting");
     }
-    const { data, error } = await supabase
+    const memberSelect = "conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at, last_inbound_at";
+    const memberSelectFallback = "conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at";
+    let { data, error } = await supabase
       .from("conversation_members")
       .update({ notify_level: normalized })
       .eq("conversation_id", conversationId)
       .eq("user_id", uid)
       .is("removed_at", null)
-      .select("conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at, last_inbound_at")
+      .select(memberSelect)
       .maybeSingle();
+    if (error && /last_inbound_at/i.test(String(error.message || error.code || ""))) {
+      ({ data, error } = await supabase
+        .from("conversation_members")
+        .update({ notify_level: normalized })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", uid)
+        .is("removed_at", null)
+        .select(memberSelectFallback)
+        .maybeSingle());
+    }
     if (error) throw error;
     return data;
   },
