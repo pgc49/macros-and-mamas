@@ -29,7 +29,14 @@ import { AdminClientMessages } from "./AdminClientMessages";
 import { TextSmsButton } from "./AdminClientRoster";
 import { loadQuizLeads } from "./quizLeads";
 import { assemblePeople } from "./personModel";
-import { skipUntilIso, stampRosterOverrides } from "./dailySkip";
+import {
+  clearLocalSkip,
+  loadLocalSkips,
+  mergeOverrideRows,
+  skipUntilIso,
+  stampRosterOverrides,
+  writeLocalSkip,
+} from "./dailySkip";
 import {
   moreViewFromQuery,
   peopleSegmentFromQuery,
@@ -75,7 +82,8 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     return moreViewFromQuery(new URLSearchParams(window.location.search).get("tab"));
   });
   const [people, setPeople] = useState([]);
-  const [overrides, setOverrides] = useState([]);
+  const [overrides, setOverrides] = useState(() => loadLocalSkips());
+  const overridesRef = useRef([]);
   const [composerOffscreen, setComposerOffscreen] = useState(false);
   const composerRef = useRef(null);
   const [filter, setFilter] = useState(() => {
@@ -137,6 +145,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
 
   const all = roster || EMPTY_ROSTER;
   const boardRoster = useMemo(() => stampRosterOverrides(all, overrides), [all, overrides]);
+  overridesRef.current = overrides;
 
   // Keep unread count fresh on Overview (and elsewhere) so Callie sees it without opening Messages.
   const refreshUnread = useCallback(async () => {
@@ -185,11 +194,15 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
         db.loadLatestEmailEventsByEmails(emails),
         db.loadUnsubscribedEmailSet(emails),
       ]);
-      setOverrides(nextOverrides);
+      const merged = mergeOverrideRows(
+        nextOverrides || [],
+        [...loadLocalSkips(), ...overridesRef.current],
+      );
+      setOverrides(merged);
       setPeople(assemblePeople({
         clients: roster || [],
         leads: leadRows,
-        overrides: nextOverrides,
+        overrides: merged,
         eventsByEmail,
         unsubscribedEmails: unsubscribed,
       }));
@@ -238,25 +251,25 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     if (!client?.email) return;
     const snoozed_until = skipUntilIso();
     const last_touch_at = new Date().toISOString();
+    writeLocalSkip(client.email, { snoozed_until, last_touch_at });
     upsertOverride(client.email, { snoozed_until, last_touch_at });
     const saved = await db.savePersonOverride(client.email, { snoozed_until, last_touch_at });
-    if (!saved) {
-      await refreshPeople();
-      return;
+    if (saved) {
+      upsertOverride(client.email, saved);
+      db.recordAdminTouch(client.email, "skip", client.id).catch(() => {});
     }
-    db.recordAdminTouch(client.email, "skip", client.id).catch(() => {});
-  }, [refreshPeople, upsertOverride]);
+  }, [upsertOverride]);
 
   const undoPassClient = useCallback(async (client) => {
     if (!client?.email) return;
+    clearLocalSkip(client.email);
     upsertOverride(client.email, { snoozed_until: null });
     const saved = await db.savePersonOverride(client.email, { snoozed_until: null });
-    if (!saved) {
-      await refreshPeople();
-      return;
+    if (saved) {
+      upsertOverride(client.email, saved);
+      db.recordAdminTouch(client.email, "unskip", client.id).catch(() => {});
     }
-    db.recordAdminTouch(client.email, "unskip", client.id).catch(() => {});
-  }, [refreshPeople, upsertOverride]);
+  }, [upsertOverride]);
 
   useEffect(() => {
     let cancelled = false;

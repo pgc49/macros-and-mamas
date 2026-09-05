@@ -1923,11 +1923,23 @@ export const db = {
     const email_lower = String(email || "").trim().toLowerCase();
     if (!email_lower) return null;
     const uid = await requireUserId();
+    const { data: existing, error: loadError } = await supabase
+      .from("person_overrides")
+      .select("email_lower, snoozed_until, marked_cold, last_touch_at")
+      .eq("email_lower", email_lower)
+      .maybeSingle();
+    if (loadError) {
+      console.warn("savePersonOverride failed", loadError);
+      return null;
+    }
+    const has = (key) => Object.prototype.hasOwnProperty.call(patch, key);
     const row = {
       email_lower,
       updated_by: uid,
       updated_at: new Date().toISOString(),
-      ...patch,
+      snoozed_until: has("snoozed_until") ? patch.snoozed_until : (existing?.snoozed_until ?? null),
+      marked_cold: has("marked_cold") ? patch.marked_cold : (existing?.marked_cold ?? false),
+      last_touch_at: has("last_touch_at") ? patch.last_touch_at : (existing?.last_touch_at ?? null),
     };
     const { data, error } = await supabase
       .from("person_overrides")
