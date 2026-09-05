@@ -112,6 +112,7 @@ async function processClaimedChannel({ env, messageId, msg }) {
     url: channelNotificationUrl(
       loaded.conversation_id,
       adminSet.has(member.user_id),
+      loaded.id,
     ),
   }));
 
@@ -141,9 +142,13 @@ async function sendChannelPushes(env, recipients, payloadFor) {
   return pushSent;
 }
 
-export function channelNotificationUrl(conversationId, isAdminRecipient) {
+export function channelNotificationUrl(conversationId, isAdminRecipient, messageId) {
   const path = isAdminRecipient ? "/admin" : "/dashboard";
-  return `${path}?tab=messages&channel=${encodeURIComponent(conversationId)}`;
+  const params = new URLSearchParams();
+  params.set("tab", "messages");
+  if (conversationId) params.set("channel", conversationId);
+  if (messageId) params.set("message", messageId);
+  return `${path}?${params.toString()}`;
 }
 
 function shouldNotifyMember({

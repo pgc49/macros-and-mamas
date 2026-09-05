@@ -23,6 +23,11 @@ import {
   inboundUnreadFromPayload,
 } from "../lib/realtimeMessageApply";
 import { adminPersonTitle as displayName, inboxThreadTitle } from "./clientRoster";
+import { parseMessageDeepLink } from "../lib/messageDeepLink";
+import {
+  restoreAndResignMessageWindow,
+  writeMessageWindow,
+} from "../lib/messageWindowCache";
 
 function isAdminProfile(c) {
   return String(c?.role || "").toLowerCase() === "admin";
@@ -75,16 +80,27 @@ export function AdminMessages({
   roster = [],
   adminUserId,
   initialClientId = null,
+  initialChannelId = null,
+  focusMessageId = "",
   onUnreadTotalChange,
 }) {
   const isWide = useIsWide();
+  const deepLink = useMemo(
+    () => parseMessageDeepLink(typeof window !== "undefined" ? window.location.search : ""),
+    [],
+  );
+  const startChannel = initialChannelId || deepLink.channel;
+  const startClient = initialClientId || deepLink.client;
+  const focusId = focusMessageId || deepLink.message || "";
   const [inbox, setInbox] = useState([]);
   const [channels, setChannels] = useState([]);
   const [channelMessages, setChannelMessages] = useState({});
   /** @type {[{ type: 'dm'|'channel', id: string }|null, Function]} */
-  const [active, setActive] = useState(
-    initialClientId ? { type: "dm", id: initialClientId } : null,
-  );
+  const [active, setActive] = useState(() => {
+    if (startChannel) return { type: "channel", id: startChannel };
+    if (startClient) return { type: "dm", id: startClient };
+    return null;
+  });
   const [dmMessages, setDmMessages] = useState([]);
   const [dmLoadedClientId, setDmLoadedClientId] = useState(null);
   const [dmLoadErrorClientId, setDmLoadErrorClientId] = useState(null);
@@ -96,6 +112,7 @@ export function AdminMessages({
   const activeRef = useRef(active);
   const dmLoadSequence = useRef(new Map());
   const channelLoadSequence = useRef(new Map());
+  const fetchedChannels = useRef(new Set());
   const dmMessagesRef = useRef(dmMessages);
   const channelMessagesRef = useRef(channelMessages);
 
@@ -224,12 +241,18 @@ export function AdminMessages({
   }, [refreshInbox, refreshChannelList]);
 
   useEffect(() => {
-    if (initialClientId) {
-      const next = { type: "dm", id: initialClientId };
+    if (startChannel) {
+      const next = { type: "channel", id: startChannel };
+      activeRef.current = next;
+      setActive(next);
+      return;
+    }
+    if (startClient) {
+      const next = { type: "dm", id: startClient };
       activeRef.current = next;
       setActive(next);
     }
-  }, [initialClientId]);
+  }, [startChannel, startClient]);
 
   useEffect(() => {
     activeRef.current = active;
@@ -239,12 +262,59 @@ export function AdminMessages({
     if (active?.type === "dm") refreshDmThread(active.id, { clear: true });
   }, [active, refreshDmThread]);
 
-  // A group's history loads when Callie opens it — not when the inbox mounts.
   useEffect(() => {
-    if (active?.type !== "channel") return;
-    if (channelMessagesRef.current[active.id]) return;
-    refreshChannelThread(active.id);
-  }, [active, refreshChannelThread]);
+    if (active?.type !== "dm" || !active.id || !adminUserId) return undefined;
+    let cancelled = false;
+    restoreAndResignMessageWindow(
+      `dm:${active.id}:${adminUserId}`,
+      (row) => db.hydrateDmMessageRow(row),
+    ).then((cached) => {
+      if (cancelled || !cached.length) return;
+      setDmMessages((current) => mergeMessagesById(cached, current));
+    });
+    return () => { cancelled = true; };
+  }, [active, adminUserId]);
+
+  useEffect(() => {
+    if (active?.type !== "dm" || !active.id || !dmMessages.length) return undefined;
+    const timer = window.setTimeout(() => {
+      writeMessageWindow(`dm:${active.id}:${adminUserId}`, dmMessages);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [active, dmMessages]);
+
+  // A group's history loads when Callie opens it — not when the inbox mounts.
+  // Cache paints the last window; the first open in this session still fetches.
+  useEffect(() => {
+    if (active?.type !== "channel") return undefined;
+    const conversationId = active.id;
+    let cancelled = false;
+    restoreAndResignMessageWindow(
+      `channel:${conversationId}:${adminUserId}`,
+      (row) => db.hydrateChannelMessageRow(row),
+    ).then((cached) => {
+      if (cancelled || !cached.length) return;
+      setChannelMessages((all) => ({
+        ...all,
+        [conversationId]: mergeMessagesById(cached, all[conversationId] || []),
+      }));
+    });
+    if (!fetchedChannels.current.has(conversationId)) {
+      fetchedChannels.current.add(conversationId);
+      refreshChannelThread(conversationId);
+    }
+    return () => { cancelled = true; };
+  }, [active, adminUserId, refreshChannelThread]);
+
+  useEffect(() => {
+    if (active?.type !== "channel" || !active.id) return undefined;
+    const rows = channelMessages[active.id];
+    if (!rows?.length) return undefined;
+    const timer = window.setTimeout(() => {
+      writeMessageWindow(`channel:${active.id}:${adminUserId}`, rows);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [active, adminUserId, channelMessages]);
 
   /**
    * One subscription for the inbox. Open threads patch in place; other
@@ -897,6 +967,7 @@ export function AdminMessages({
                   onMarkRead={markChannelRead}
                   onLoadEarlier={loadEarlierChannel}
                   hasEarlier={!!channelHasEarlier[active.id]}
+                  focusMessageId={active.type === "channel" && startChannel === active.id ? focusId : ""}
                   canModerate
                   allowVoiceMemo
                   enableReply
@@ -949,6 +1020,7 @@ export function AdminMessages({
                   onMarkRead={dmLoadedClientId === active.id ? markDmRead : undefined}
                   onLoadEarlier={loadEarlierDm}
                   hasEarlier={dmLoadedClientId === active.id && dmHasEarlier}
+                  focusMessageId={!startChannel && startClient === active.id ? focusId : ""}
                   showReadReceipts
                   allowVoiceMemo
                   enableReply

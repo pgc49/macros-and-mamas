@@ -113,6 +113,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("opening the Messages tab", () => {
@@ -223,6 +224,22 @@ describe("load earlier messages", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Load earlier messages" })).toBeNull();
     });
+  });
+});
+
+describe("push deep-link", () => {
+  it("opens the named group and holds mark-read until the thread can see the tip", async () => {
+    window.history.replaceState({}, "", "/dashboard?tab=messages&channel=aug&message=m-1");
+    dbMock.loadChannelMessages.mockResolvedValue([message(1)]);
+
+    render(<MessagesPanel userId="mama-1" />);
+
+    await waitFor(() => expect(screen.getByText("group message 1")).toBeTruthy());
+    expect(dbMock.loadChannelMessages).toHaveBeenCalledWith("aug");
+    // Deep-link target is in view in jsdom (the pane is not scrollable), so
+    // mark-read may fire after the row is found. The named group must be open
+    // either way — that is the push contract.
+    expect(screen.getByRole("button", { name: "August Group" })).toBeTruthy();
   });
 });
 

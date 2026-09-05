@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import { persistAttributionToProfile } from "../lib/attribution";
 import { resetAttachmentUrlCache } from "../lib/attachmentUrls";
 import { clearAllPendingSends } from "../lib/pendingSends";
+import { clearMessageWindows } from "../lib/messageWindowCache";
 import {
   completeSignIn,
   completeSignup,
@@ -260,6 +261,7 @@ export function AuthProvider({ children }) {
     // refreshes. They outlive the session unless dropped here.
     resetAttachmentUrlCache();
     clearAllPendingSends();
+    clearMessageWindows();
     await supabase.auth.signOut({ scope: "local" });
   };
 

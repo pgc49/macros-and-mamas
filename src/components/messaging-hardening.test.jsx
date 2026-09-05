@@ -175,6 +175,42 @@ describe("messaging crash containment", () => {
     expect(view.container.querySelector("[data-message-composer]").style.flexShrink).toBe("0");
   });
 
+  it("does not mark read after the reader scrolls away until Jump to latest", async () => {
+    const onMarkRead = vi.fn();
+    const first = [message("m-1", 1)];
+    const view = render(
+      <MessagesThread {...threadProps({ messages: first, onMarkRead })} />,
+    );
+    await waitFor(() => expect(onMarkRead).toHaveBeenCalledTimes(1));
+
+    const list = view.container.querySelector("[data-message-list]");
+    Object.defineProperty(list, "scrollHeight", { configurable: true, value: 2000 });
+    Object.defineProperty(list, "clientHeight", { configurable: true, value: 400 });
+    list.scrollTop = 0;
+    fireEvent.scroll(list);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Jump to latest message" })).toBeTruthy();
+    });
+
+    view.rerender(
+      <MessagesThread
+        {...threadProps({
+          messages: [...first, message("m-2", 2)],
+          onMarkRead,
+        })}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "1 new messages" })).toBeTruthy();
+    });
+    expect(onMarkRead).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "1 new messages" }));
+    await waitFor(() => expect(onMarkRead).toHaveBeenCalledTimes(2));
+  });
+
   it("contains synchronous mark-read failures", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     render(

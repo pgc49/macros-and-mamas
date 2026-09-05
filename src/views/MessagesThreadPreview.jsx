@@ -83,6 +83,8 @@ export function MessagesThreadPreview() {
   };
 
   const [failNext, setFailNext] = useState(false);
+  const [focusId, setFocusId] = useState("");
+  const [threadEpoch, setThreadEpoch] = useState(0);
 
   const send = async (body, _file, opts = {}) => {
     await new Promise((resolve) => { window.setTimeout(resolve, 350); });
@@ -138,9 +140,9 @@ export function MessagesThreadPreview() {
         August Group
       </h1>
       <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45 }}>
-        Send should paint your bubble immediately. Turn on “Fail next send”
-        to retry from the bubble. “Someone else posted” should land without
-        a reload. Scroll up, then tap that button to confirm the pane holds.
+        Scroll up, then tap “Someone else posted” to see “N new”. Jump to
+        latest marks the thread read. “Open at an older post” remounts as a
+        push deep-link and must not jump to the tip.
       </p>
       <div style={{ display: "flex", gap: 8, marginBottom: 10, flexShrink: 0 }}>
         <button
@@ -180,6 +182,27 @@ export function MessagesThreadPreview() {
         >
           {failNext ? "Next send will fail" : "Fail next send"}
         </button>
+        <button
+          type="button"
+          data-demo-focus-older
+          onClick={() => {
+            setFocusId("m-70");
+            setThreadEpoch((n) => n + 1);
+          }}
+          style={{
+            border: `1.5px solid ${T.border}`,
+            background: "#fff",
+            color: T.accentDeep,
+            borderRadius: 999,
+            padding: "6px 12px",
+            fontFamily: F,
+            fontWeight: 800,
+            fontSize: 12.5,
+            cursor: "pointer",
+          }}
+        >
+          Open at an older post
+        </button>
       </div>
       <div style={{
         flex: 1,
@@ -189,11 +212,13 @@ export function MessagesThreadPreview() {
       }}
       >
         <MessagesThread
+          key={`preview-${threadEpoch}`}
           title=""
           subtitle=""
           messages={messages}
           selfId={SELF}
           threadKey="demo:august"
+          focusMessageId={focusId}
           peerName="August Group"
           senderNameById={senderNameById}
           showSenderNames
