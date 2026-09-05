@@ -96,6 +96,7 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   const [progressLoading, setProgressLoading] = useState(false);
   const [progressError, setProgressError] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [composerFocused, setComposerFocused] = useState(false);
   const [leadsFilter, setLeadsFilter] = useState("unpaid");
   const [selectedLeadEmail, setSelectedLeadEmail] = useState(null);
   const debounceRef = useRef({});
@@ -134,6 +135,10 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   useEffect(() => {
     syncAppBadge(unreadMessages);
   }, [unreadMessages]);
+
+  useEffect(() => {
+    if (tab !== "messages") setComposerFocused(false);
+  }, [tab]);
 
   const all = roster || EMPTY_ROSTER;
   const boardRoster = useMemo(() => stampRosterOverrides(all, overrides), [all, overrides]);
@@ -766,16 +771,22 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
     <Shell
       contentMaxWidth={tab === "messages" ? 1120 : 560}
       bottomBar={<AdminBottomNav tab={tab} setTab={setPrimaryTab} unreadMessages={unreadMessages} />}
+      hideBottomBar={tab === "messages" && composerFocused}
+      lockContentScroll={tab === "messages"}
     >
-      <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 4px" }}>Callie admin</h2>
-      <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
-        Today’s new leads and client health. People is Clients or Leads.{" "}
-        <Link to={PATHS.dashboard} style={{ color: T.accent, fontWeight: 700 }}>Your dashboard</Link>
-        {" · "}
-        Admin only.
-      </p>
+      {tab !== "messages" && (
+        <>
+          <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 4px" }}>Callie admin</h2>
+          <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "0 0 12px", lineHeight: 1.45 }}>
+            Today’s new leads and client health. People is Clients or Leads.{" "}
+            <Link to={PATHS.dashboard} style={{ color: T.accent, fontWeight: 700 }}>Your dashboard</Link>
+            {" · "}
+            Admin only.
+          </p>
 
-      <AppUpdateBanner />
+          <AppUpdateBanner />
+        </>
+      )}
 
       {tab === "home" && (
         <AdminHome
@@ -815,19 +826,31 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
       )}
 
       {tab === "messages" && (
-        <ErrorBoundary
-          name="AdminMessages"
-          title="Messages inbox hit a snag"
-          message="Conversations are safe. Try again here — other admin tabs still work."
-          resetKeys={[user?.id, adminSel, tab]}
+        <div
+          data-admin-messages-slot
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
         >
-          <AdminMessages
-            roster={all}
-            adminUserId={user?.id}
-            initialClientId={adminSel}
-            onUnreadTotalChange={setUnreadMessages}
-          />
-        </ErrorBoundary>
+          <ErrorBoundary
+            name="AdminMessages"
+            title="Messages inbox hit a snag"
+            message="Conversations are safe. Try again here — other admin tabs still work."
+            resetKeys={[user?.id, adminSel, tab]}
+          >
+            <AdminMessages
+              roster={all}
+              adminUserId={user?.id}
+              initialClientId={adminSel}
+              onUnreadTotalChange={setUnreadMessages}
+              onComposerFocusChange={setComposerFocused}
+            />
+          </ErrorBoundary>
+        </div>
       )}
 
       {tab === "more" && (

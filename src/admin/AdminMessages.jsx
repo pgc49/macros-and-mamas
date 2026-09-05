@@ -76,6 +76,7 @@ export function AdminMessages({
   adminUserId,
   initialClientId = null,
   onUnreadTotalChange,
+  onComposerFocusChange,
 }) {
   const isWide = useIsWide();
   const [inbox, setInbox] = useState([]);
@@ -648,12 +649,14 @@ export function AdminMessages({
   const showThread = isWide || !!active;
 
   const inboxPane = (
-    <div style={{
+    <div
+      data-admin-inbox-pane
+      style={{
       display: "flex",
       flexDirection: "column",
       minWidth: 0,
       minHeight: 0,
-      height: isWide ? "min(78vh, 820px)" : "auto",
+      height: "100%",
       background: "#fff",
       border: `1.5px solid ${T.border}`,
       borderRadius: 16,
@@ -773,15 +776,18 @@ export function AdminMessages({
   );
 
   const threadPane = (
-    <div style={{
+    <div
+      data-admin-thread-pane
+      style={{
       display: "flex",
       flexDirection: "column",
       minWidth: 0,
       minHeight: 0,
-      // Mobile: fill the screen under admin chrome for an iMessage-like thread.
-      // Fixed height + overflow hidden so long histories scroll inside, not the page.
-      height: isWide ? "min(78vh, 820px)" : "calc(100dvh - 132px)",
-      maxHeight: isWide ? "min(78vh, 820px)" : "calc(100dvh - 132px)",
+      // Fill leftover Shell height so the composer stays pinned. History
+      // scrolls inside; do not guess 100dvh minus chrome.
+      flex: 1,
+      height: "100%",
+      maxHeight: "none",
       background: "#fff",
       border: `1.5px solid ${T.border}`,
       borderRadius: 16,
@@ -920,6 +926,7 @@ export function AdminMessages({
                   }
                   showPushPrompt
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+                  onComposerFocusChange={onComposerFocusChange}
                   compact
                 />
               </ErrorBoundary>
@@ -994,6 +1001,7 @@ export function AdminMessages({
                     </div>
                   ) : null}
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+                  onComposerFocusChange={onComposerFocusChange}
                   compact
                 />
               </ErrorBoundary>
@@ -1005,16 +1013,26 @@ export function AdminMessages({
   );
 
   return (
-    <div>
+    <div
+      data-admin-messages
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       {(!active || isWide) && (
-        <>
+        <div style={{ flexShrink: 0 }}>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 28, margin: "4px 0 6px" }}>Messages</h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px", lineHeight: 1.5 }}>
             Reply to one mama, or open a group chat. To text many mamas the same note at once, use Announcements.
           </p>
-        </>
+        </div>
       )}
-      {error && <div style={{ fontSize: 13, color: T.amber, marginBottom: 10 }}>{error}</div>}
+      {error && <div style={{ fontSize: 13, color: T.amber, marginBottom: 10, flexShrink: 0 }}>{error}</div>}
 
       <div
         data-admin-messages-grid
@@ -1022,6 +1040,8 @@ export function AdminMessages({
         display: "grid",
         width: "100%",
         minWidth: 0,
+        flex: 1,
+        minHeight: 0,
         gridTemplateColumns: isWide && showInbox && showThread
           ? "minmax(220px, 280px) minmax(0, 1fr)"
           : "minmax(0, 1fr)",

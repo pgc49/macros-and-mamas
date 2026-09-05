@@ -467,11 +467,55 @@ describe("AdminMessages thread switching", () => {
     });
     expect(grid.style.minWidth).toBe("0px");
     expect(grid.style.width).toBe("100%");
+    expect(grid.style.minHeight).toBe("0px");
+    expect(grid.style.flexGrow).toBe("1");
     expect(grid.style.gridTemplateColumns).toBe("minmax(220px, 280px) minmax(0, 1fr)");
+
+    const pane = document.querySelector("[data-admin-thread-pane]");
+    expect(pane).toBeTruthy();
+    expect(pane.style.height).toBe("100%");
+    expect(pane.style.maxHeight).toBe("none");
+    expect(pane.style.minHeight).toBe("0px");
 
     const input = await screen.findByPlaceholderText("Write a message…");
     expect(input.style.minWidth).toBe("0px");
     expect(input.style.flex).toContain("180px");
+  });
+
+  it("fills leftover height on a phone instead of guessing 100dvh minus chrome", async () => {
+    window.matchMedia = vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+
+    render(
+      <AdminMessages
+        roster={[{ id: "mama-a", name: "Mama A", email: "a@example.com" }]}
+        adminUserId="admin-1"
+        initialClientId="mama-a"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    const root = await waitFor(() => {
+      const el = document.querySelector("[data-admin-messages]");
+      expect(el).toBeTruthy();
+      return el;
+    });
+    expect(root.style.flexGrow).toBe("1");
+    expect(root.style.minHeight).toBe("0px");
+    expect(root.style.height).toBe("100%");
+    expect(root.style.overflow).toBe("hidden");
+
+    const pane = document.querySelector("[data-admin-thread-pane]");
+    expect(pane).toBeTruthy();
+    expect(pane.style.height).toBe("100%");
+    expect(pane.style.maxHeight).toBe("none");
+    expect(pane.getAttribute("style") || "").not.toMatch(/100dvh/);
+
+    expect(await screen.findByPlaceholderText("Write a message…")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Messages" })).toBeNull();
   });
 });
 
