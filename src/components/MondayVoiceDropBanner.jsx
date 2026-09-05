@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { db } from "../db/db";
 import { formatVoiceDuration } from "../lib/voiceMemo";
+import {
+  loadCurrentVoiceDropCached,
+  peekVoiceDropCache,
+} from "../lib/voiceDropCache";
 import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 
 const STORAGE_KEY = "mm_voice_drop_dismissed";
@@ -27,28 +31,36 @@ function persistDismissedId(id) {
  * RLS returns this mama's drop (Founding and Cohort 2 can both be live).
  * Dismiss is per drop id (next Monday reappears).
  */
+function applyDrop(row, setDrop, setHidden) {
+  if (!row?.id) {
+    setDrop(null);
+    setHidden(false);
+    return;
+  }
+  setDrop(row);
+  setHidden(readDismissedId() === row.id);
+}
+
 export function MondayVoiceDropBanner() {
-  const [drop, setDrop] = useState(null);
-  const [hidden, setHidden] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const seeded = peekVoiceDropCache();
+  const [drop, setDrop] = useState(() => (seeded?.id ? seeded : null));
+  const [hidden, setHidden] = useState(() => (
+    seeded?.id ? readDismissedId() === seeded.id : false
+  ));
+  const [loading, setLoading] = useState(() => seeded === undefined);
 
   useEffect(() => {
     let cancelled = false;
+    if (seeded !== undefined) {
+      applyDrop(seeded, setDrop, setHidden);
+      setLoading(false);
+      return undefined;
+    }
     (async () => {
       try {
-        const row = await db.loadCurrentVoiceDrop();
+        const row = await loadCurrentVoiceDropCached(() => db.loadCurrentVoiceDrop());
         if (cancelled) return;
-        if (!row?.id) {
-          setDrop(null);
-          return;
-        }
-        if (readDismissedId() === row.id) {
-          setHidden(true);
-          setDrop(row);
-          return;
-        }
-        setDrop(row);
-        setHidden(false);
+        applyDrop(row, setDrop, setHidden);
       } catch (e) {
         console.warn("voice drop load failed", e);
         if (!cancelled) setDrop(null);
@@ -57,7 +69,7 @@ export function MondayVoiceDropBanner() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [seeded]);
 
   const dismiss = () => {
     if (drop?.id) persistDismissedId(drop.id);
@@ -80,6 +92,7 @@ export function MondayVoiceDropBanner() {
         background: `linear-gradient(145deg, ${T.accentSoft} 0%, #fff 55%)`,
         border: `1.5px solid ${T.border}`,
         position: "relative",
+        overflowAnchor: "none",
       }}
     >
       <button

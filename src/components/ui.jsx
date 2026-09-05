@@ -243,11 +243,14 @@ export const Shell = ({
           boxSizing: "border-box",
           ...(hasBarSlot
             ? {
+                /* Keep this pane a flex column + overflow:auto even on Messages.
+                   Toggling overflow hidden→auto (or remounting children in a
+                   fill wrapper) is what made Today feel frozen after a tab tap. */
                 flex: "1 1 auto",
                 minHeight: 0,
-                display: lockContentScroll ? "flex" : undefined,
-                flexDirection: lockContentScroll ? "column" : undefined,
-                overflowY: lockContentScroll ? "hidden" : "auto",
+                display: "flex",
+                flexDirection: "column",
+                overflowY: "auto",
                 WebkitOverflowScrolling: "touch",
               }
             : null),
@@ -259,7 +262,7 @@ export const Shell = ({
           alignItems: "center",
           padding: "18px 2px 6px",
           gap: 12,
-          flexShrink: lockContentScroll ? 0 : undefined,
+          flexShrink: 0,
         }}>
           <a href={PATHS.home} style={{ textDecoration: "none", color: "inherit" }}>
             <div style={{ fontFamily: FD, fontSize: 24, letterSpacing: 0.3 }}>Macros and Mamas</div>
@@ -303,20 +306,21 @@ export const Shell = ({
             </div>
           )}
         </header>
-        {lockContentScroll ? (
-          <div
-            data-shell-fill
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-            }}
-          >
-            {children}
-          </div>
-        ) : children}
+        <div
+          data-shell-main
+          data-shell-fill={lockContentScroll ? "true" : undefined}
+          style={lockContentScroll
+            ? {
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }
+            : undefined}
+        >
+          {children}
+        </div>
       </div>
       {showBar && (
         <div

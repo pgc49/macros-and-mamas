@@ -186,6 +186,7 @@ export function AppUpdateBanner() {
           borderRadius: 14,
           background: T.sageSoft,
           border: `1.5px solid ${T.border}`,
+          overflowAnchor: "none",
         }}
       >
         <div style={{ fontFamily: FD, fontSize: 18, color: T.ink, marginBottom: 4 }}>
@@ -216,6 +217,7 @@ export function AppUpdateBanner() {
         borderRadius: 14,
         background: T.amberSoft,
         border: `1.5px solid ${T.border}`,
+        overflowAnchor: "none",
       }}
     >
       <div style={{ fontFamily: FD, fontSize: 18, color: T.ink, marginBottom: 4 }}>
