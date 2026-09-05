@@ -30,7 +30,18 @@ describe("messageMedia", () => {
     expect(style.aspectRatio).toBe("640 / 400");
     expect(style.minHeight).toBeGreaterThanOrEqual(80);
     expect(style.height).toBe(style.minHeight);
-    expect(style.maxHeight).toBe(240);
+    expect(style.maxHeight).toBe(320);
+  });
+
+  it("lets photos without stored size use their real aspect", () => {
+    const style = imageBoxStyle({
+      attachment_mime: "image/jpeg",
+      attachmentUrl: "https://example.com/plate.jpg",
+    });
+    expect(style.height).toBe("auto");
+    expect(style.minHeight).toBe(80);
+    expect(style.objectFit).toBe("contain");
+    expect(style.aspectRatio).toBeUndefined();
   });
 
   it("caches signed Storage URLs by object path, not by token", () => {

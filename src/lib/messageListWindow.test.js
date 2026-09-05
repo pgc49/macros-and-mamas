@@ -33,6 +33,22 @@ describe("estimateBubbleHeight", () => {
     expect(reservedImageHeight({ attachment_mime: "image/jpeg" })).toBe(80);
   });
 
+  it("estimates an unsized photo taller than the 80px reserve strip", () => {
+    const unsized = estimateBubbleHeight({
+      body: "",
+      attachment_path: "x.jpg",
+      attachment_mime: "image/jpeg",
+    });
+    const strip = estimateBubbleHeight({
+      body: "",
+      attachment_path: "x.jpg",
+      attachment_mime: "image/jpeg",
+      attachment_width: 800,
+      attachment_height: 80,
+    });
+    expect(unsized).toBeGreaterThan(strip);
+  });
+
   it("uses a compact height for deleted rows", () => {
     expect(estimateBubbleHeight({ deleted_at: "2026-09-05T00:00:00Z", body: "gone" })).toBe(66);
   });

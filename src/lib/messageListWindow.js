@@ -11,8 +11,10 @@ export const MESSAGE_WINDOW_OVERSCAN = 8;
 /** Keep the mounted slice until the viewport walks this many rows. Stops the list remounting (and jumping) on every scroll tick. */
 export const WINDOW_HOLD_ROWS = 6;
 export const DEFAULT_BUBBLE_HEIGHT = 72;
-export const IMAGE_RESERVE_MAX = 240;
+export const IMAGE_RESERVE_MAX = 320;
 export const IMAGE_RESERVE_MIN = 80;
+/** Typical phone photo when width/height were never stored. Used for estimates only. */
+export const IMAGE_UNKNOWN_ESTIMATE = 200;
 export const BUBBLE_STACK_GAP = 10;
 export const DEFAULT_BUBBLE_WIDTH = 280;
 
@@ -42,7 +44,10 @@ export function estimateBubbleHeight(message, {
   if (body) height += Math.max(21, Math.ceil(body.length / 42) * 21);
   const mime = String(message.attachment_mime || "");
   if ((message.attachment_path || message.attachmentUrl) && mime.startsWith("image/")) {
-    height += reservedImageHeight(message, { maxImageHeight, maxBubbleWidth }) + 8;
+    const imageHeight = hasAttachmentSize(message)
+      ? reservedImageHeight(message, { maxImageHeight, maxBubbleWidth })
+      : IMAGE_UNKNOWN_ESTIMATE;
+    height += imageHeight + 8;
   } else if (mime.startsWith("audio/")) {
     height += 56;
   } else if (message.attachment_path || message.attachmentUrl) {
@@ -51,6 +56,10 @@ export function estimateBubbleHeight(message, {
   if (message.reply_to) height += 48;
   if (message.send_status === "pending" || message.send_status === "failed") height += 16;
   return Math.max(48, height + BUBBLE_STACK_GAP);
+}
+
+export function hasAttachmentSize(message) {
+  return num(message?.attachment_width) > 0 && num(message?.attachment_height) > 0;
 }
 
 export function reservedImageHeight(message, {

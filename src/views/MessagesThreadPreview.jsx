@@ -42,8 +42,9 @@ function seedWindow() {
         attachment_path: `aug/photo-${n}.jpg`,
         attachment_name: `photo-${n}.jpg`,
         attachment_mime: "image/jpeg",
-        attachment_width: 640,
-        attachment_height: 400,
+        // Live rows have no stored size. 96 matches that so the preview
+        // cannot hide a crushed 80px strip.
+        ...(n === 96 ? {} : { attachment_width: 640, attachment_height: 400 }),
         attachmentUrl: photoDataUrl(`Photo ${n}`, 20 + n),
       }));
       continue;

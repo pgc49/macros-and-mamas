@@ -3,7 +3,7 @@
  * image cannot collapse the list and yank a pinned reader off the tip.
  */
 
-import { IMAGE_RESERVE_MAX, reservedImageHeight } from "./messageListWindow";
+import { IMAGE_RESERVE_MAX, IMAGE_RESERVE_MIN, hasAttachmentSize, reservedImageHeight } from "./messageListWindow";
 
 export function isImageAttachmentMime(mime) {
   return String(mime || "").toLowerCase().startsWith("image/");
@@ -43,6 +43,7 @@ export function imageBoxStyle(message, {
   maxWidth = "100%",
   maxBubbleWidth,
 } = {}) {
+  const known = hasAttachmentSize(message);
   const reserve = reservedImageHeight(message, {
     maxImageHeight: maxHeight,
     maxBubbleWidth,
@@ -54,13 +55,13 @@ export function imageBoxStyle(message, {
     maxWidth,
     maxHeight,
     width: "100%",
-    // Lock the painted box to the reserved height so decode cannot shove
-    // the list. `height: auto` grew to the real aspect and shook scroll.
-    height: reserve,
-    minHeight: reserve,
-    aspectRatio: width > 0 && height > 0 ? `${width} / ${height}` : undefined,
+    // Live rows have no stored size yet. Locking those to the 80px reserve
+    // crushed every photo into a strip. Only lock when we know the box.
+    height: known ? reserve : "auto",
+    minHeight: known ? reserve : IMAGE_RESERVE_MIN,
+    aspectRatio: known ? `${width} / ${height}` : undefined,
     borderRadius: 10,
-    objectFit: "cover",
+    objectFit: known ? "cover" : "contain",
     background: "#EFE8E4",
   };
 }
