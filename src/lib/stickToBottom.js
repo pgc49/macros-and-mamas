@@ -12,8 +12,10 @@
  * history) separate from the mechanics of re-pinning on every content resize.
  */
 
-/** Within a bubble or two of the end still counts as pinned to the live edge. */
+/** Within a bubble or two of the end still counts as "at latest" for the jump chip. */
 export const BOTTOM_SLACK_PX = 72;
+/** Only follow resizes when the reader is actually on the tip. Slack-zone follow yanks the list. */
+export const FOLLOW_SLACK_PX = 8;
 
 function num(value) {
   const parsed = Number(value);
@@ -125,6 +127,9 @@ export function createBottomPin(scroller, {
   initialPinned = true,
 } = {}) {
   let pinned = initialPinned !== false;
+  // Follow resizes only while the reader is on the tip. Slack still counts
+  // as "at latest" for the jump chip — using that flag to follow yanks the list.
+  let following = initialPinned !== false;
   let disposed = false;
   const teardown = [];
 
@@ -139,15 +144,22 @@ export function createBottomPin(scroller, {
     scrollToBottom(scroller);
   };
 
+  const readIntent = () => {
+    if (!scroller) return;
+    const metrics = scrollMetrics(scroller);
+    const atEnd = !isScrollable(metrics) || isNearBottom(metrics, slack);
+    following = !isScrollable(metrics) || isNearBottom(metrics, FOLLOW_SLACK_PX);
+    setPinned(atEnd);
+  };
+
   const repin = () => {
-    if (disposed || !pinned) return;
+    if (disposed || !following) return;
     toBottom();
   };
 
   const onScroll = () => {
     if (disposed || !scroller) return;
-    const metrics = scrollMetrics(scroller);
-    setPinned(!isScrollable(metrics) || isNearBottom(metrics, slack));
+    readIntent();
   };
 
   if (scroller?.addEventListener) {
@@ -175,6 +187,7 @@ export function createBottomPin(scroller, {
     isPinned: () => pinned,
     /** Force the live edge — the reader's own send, or a fresh thread. */
     toBottom() {
+      following = true;
       setPinned(true);
       toBottom();
     },
@@ -183,6 +196,7 @@ export function createBottomPin(scroller, {
     repin,
     restore(previous) {
       if (disposed || !scroller) return;
+      following = false;
       setPinned(false);
       scroller.scrollTop = preservedScrollTop({
         scrollHeight: scroller.scrollHeight,

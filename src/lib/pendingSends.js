@@ -43,10 +43,14 @@ export function buildPendingRow({
   previewUrl = null,
   replyTo = null,
   createdAt = null,
+  width = null,
+  height = null,
 }) {
   const id = String(clientMessageId || "").trim();
   const mime = String(file?.type || "").toLowerCase().split(";")[0].trim();
   const hasFile = !!file;
+  const mediaWidth = Number(width || file?.attachment_width) || null;
+  const mediaHeight = Number(height || file?.attachment_height) || null;
   return {
     id,
     client_message_id: id,
@@ -59,6 +63,8 @@ export function buildPendingRow({
     attachment_name: hasFile ? String(file.name || "attachment").slice(0, 120) : "",
     attachment_mime: mime,
     attachment_bytes: hasFile ? (Number(file.size) || null) : null,
+    attachment_width: mediaWidth,
+    attachment_height: mediaHeight,
     attachmentUrl: previewUrl || null,
     reply_to_id: replyTo?.id || null,
     reply_to: replyTo

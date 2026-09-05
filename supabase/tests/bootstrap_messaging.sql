@@ -40,7 +40,9 @@ create table public.messages (
   attachment_path text,
   attachment_name text,
   attachment_mime text,
-  attachment_bytes integer
+  attachment_bytes integer,
+  attachment_width integer,
+  attachment_height integer
 );
 
 alter table public.messages enable row level security;
@@ -93,7 +95,9 @@ create table public.conversation_messages (
   attachment_path text,
   attachment_name text,
   attachment_mime text,
-  attachment_bytes integer
+  attachment_bytes integer,
+  attachment_width integer,
+  attachment_height integer
 );
 
 alter table public.conversation_messages enable row level security;

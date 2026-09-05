@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BOTTOM_SLACK_PX,
+  FOLLOW_SLACK_PX,
   createBottomPin,
   distanceFromBottom,
   isNearBottom,
@@ -235,6 +236,27 @@ describe("createBottomPin", () => {
     for (const fn of callbacks) fn();
 
     expect(el.scrollTop).toBe(600);
+    pin.dispose();
+  });
+
+  it("does not yank a slack-zone reader back to the tip on a content resize", () => {
+    const callbacks = [];
+    globalThis.ResizeObserver = class {
+      constructor(fn) { callbacks.push(fn); }
+      observe() {}
+      disconnect() {}
+    };
+    const startTop = 600 - 40;
+    const el = fakeScroller({ scrollHeight: 1000, clientHeight: 400, scrollTop: startTop });
+    const pin = createBottomPin(el, { content: { tagName: "DIV" } });
+    el.emit("scroll");
+    expect(pin.isPinned()).toBe(true);
+    expect(startTop).toBeLessThan(600 - FOLLOW_SLACK_PX);
+
+    el.grow(200);
+    for (const fn of callbacks) fn();
+
+    expect(el.scrollTop).toBe(startTop);
     pin.dispose();
   });
 

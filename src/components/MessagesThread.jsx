@@ -46,6 +46,23 @@ import {
   nextUnseenCount,
   shouldMarkThreadRead,
 } from "../lib/threadReadState";
+import {
+  MESSAGE_WINDOW_OVERSCAN,
+  bubbleContentWidth,
+  commitWindowRange,
+  fullMessageRange,
+  heightsForMessages,
+  indexOfMessage,
+  initialLatestRange,
+  offsetToIndex,
+  scrollTopAfterHeightChange,
+  shouldRemeasure,
+  shouldVirtualizeMessages,
+  visibleMessageRange,
+} from "../lib/messageListWindow";
+import { imageBoxStyle, isImageAttachmentMime, readImageDimensions } from "../lib/messageMedia";
+import { findLoadedMatchIndexes, nextMatchIndex } from "../lib/messageReplyParent";
+import { MessagePhotoViewer } from "./MessagePhotoViewer";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
 
@@ -119,6 +136,11 @@ export function MessagesThread({
    * until the live tip (or this target, if it is the tip) is on screen.
    */
   focusMessageId = "",
+  /**
+   * Load older pages until `messageId` is in the thread (quote jump).
+   * Resolves true when the row is present.
+   */
+  onEnsureMessage = null,
 }) {
   const [outboxTick, setOutboxTick] = useState(0);
   const attemptScope = threadKey || `thread:${selfId || "unknown"}`;
@@ -149,9 +171,28 @@ export function MessagesThread({
   const [unseenCount, setUnseenCount] = useState(0);
   const [focusPending, setFocusPending] = useState(() => !!focusMessageId);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [jumpTargetId, setJumpTargetId] = useState("");
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findIndex, setFindIndex] = useState(-1);
+  const [photoViewer, setPhotoViewer] = useState(null);
   const listRef = useRef(null);
   const listContentRef = useRef(null);
   const bottomPinRef = useRef(null);
+  const measuredHeightsRef = useRef(new Map());
+  const messagesRef = useRef(safeMessages);
+  const listWidthRef = useRef(0);
+  const scrollRafRef = useRef(0);
+  const userScrollingRef = useRef(false);
+  const scrollIdleTimerRef = useRef(0);
+  const pendingMeasureRef = useRef(false);
+  const [listWidth, setListWidth] = useState(0);
+  const [windowRange, setWindowRange] = useState(() => (
+    shouldVirtualizeMessages(safeMessages.length)
+      ? initialLatestRange(safeMessages)
+      : fullMessageRange(safeMessages.length)
+  ));
+  messagesRef.current = safeMessages;
   /** Metrics captured before an older page is prepended, so we can hold the row. */
   const restoreRef = useRef(null);
   const fileRef = useRef(null);
@@ -317,6 +358,166 @@ export function MessagesThread({
     );
   }, [safeMessages]);
 
+  const measureOptions = useCallback((el = listRef.current) => {
+    const width = el?.clientWidth || listWidthRef.current;
+    if (width > 0 && Math.abs(width - listWidthRef.current) > 2) {
+      listWidthRef.current = width;
+      setListWidth((prev) => (Math.abs(prev - width) > 2 ? width : prev));
+    }
+    return { maxBubbleWidth: bubbleContentWidth(listWidthRef.current) };
+  }, []);
+
+  const refreshWindow = useCallback((el = listRef.current, {
+    force = false,
+    expandOnly = false,
+  } = {}) => {
+    if (!el) return;
+    const rows = messagesRef.current;
+    if (!shouldVirtualizeMessages(rows.length)) {
+      setWindowRange((prev) => {
+        const next = fullMessageRange(rows.length);
+        return prev.start === next.start
+          && prev.end === next.end
+          && prev.topSpacer === 0
+          && prev.bottomSpacer === 0
+          ? prev
+          : next;
+      });
+      return;
+    }
+    const heights = heightsForMessages(rows, measuredHeightsRef.current, measureOptions(el));
+    const pinIndexes = [];
+    const tip = rows[rows.length - 1];
+    const tipIdx = indexOfMessage(rows, tip?.client_message_id || tip?.id);
+    if (tipIdx >= 0) pinIndexes.push(tipIdx);
+    if (focusMessageId) {
+      const idx = indexOfMessage(rows, focusMessageId);
+      if (idx >= 0) pinIndexes.push(idx);
+    }
+    if (jumpTargetId) {
+      const idx = indexOfMessage(rows, jumpTargetId);
+      if (idx >= 0) pinIndexes.push(idx);
+    }
+    const proposed = visibleMessageRange({
+      heights,
+      scrollTop: el.scrollTop,
+      clientHeight: el.clientHeight || 480,
+      overscan: MESSAGE_WINDOW_OVERSCAN,
+      pinIndexes,
+    });
+    setWindowRange((prev) => commitWindowRange(prev, proposed, heights, { force, expandOnly }));
+  }, [focusMessageId, jumpTargetId, measureOptions]);
+
+  useLayoutEffect(() => {
+    refreshWindow(listRef.current, { force: true });
+  }, [refreshWindow, safeMessages.length]);
+
+  const measureBubble = useCallback((key, node) => {
+    if (!node || !key) return;
+    const next = node.getBoundingClientRect().height + 10;
+    const previous = measuredHeightsRef.current.get(key);
+    if (!shouldRemeasure(previous || 0, next)) return;
+    measuredHeightsRef.current.set(key, next);
+    // Assigning scrollTop or setState mid-fling cancels iOS momentum and
+    // reads as the thread freezing. Record the height; apply after idle.
+    if (userScrollingRef.current) {
+      pendingMeasureRef.current = true;
+      return;
+    }
+    const rows = messagesRef.current;
+    const idx = indexOfMessage(rows, key);
+    const heights = heightsForMessages(rows, measuredHeightsRef.current, measureOptions());
+    const previousHeight = Number.isFinite(previous) ? previous : (idx >= 0 ? heights[idx] : next);
+    const el = listRef.current;
+    if (el && idx >= 0) {
+      el.scrollTop = scrollTopAfterHeightChange({
+        itemOffset: offsetToIndex(heights, idx, 0),
+        previousHeight,
+        nextHeight: next,
+        scrollTop: el.scrollTop,
+      });
+    }
+    refreshWindow();
+  }, [measureOptions, refreshWindow]);
+
+  const endUserScroll = useCallback(() => {
+    userScrollingRef.current = false;
+    if (scrollIdleTimerRef.current) {
+      window.clearTimeout(scrollIdleTimerRef.current);
+      scrollIdleTimerRef.current = 0;
+    }
+    if (!pendingMeasureRef.current) return;
+    pendingMeasureRef.current = false;
+    refreshWindow(listRef.current, { force: true });
+  }, [refreshWindow]);
+
+  const onListScroll = useCallback((event) => {
+    const el = event.currentTarget;
+    userScrollingRef.current = true;
+    if (scrollIdleTimerRef.current) window.clearTimeout(scrollIdleTimerRef.current);
+    scrollIdleTimerRef.current = window.setTimeout(endUserScroll, 160);
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      refreshWindow(el, { expandOnly: true });
+    });
+  }, [endUserScroll, refreshWindow]);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return undefined;
+    el.addEventListener("scrollend", endUserScroll);
+    return () => {
+      el.removeEventListener("scrollend", endUserScroll);
+      if (scrollRafRef.current) window.cancelAnimationFrame(scrollRafRef.current);
+      if (scrollIdleTimerRef.current) window.clearTimeout(scrollIdleTimerRef.current);
+    };
+  }, [endUserScroll]);
+
+  const scrollToLoadedMessage = useCallback((messageId) => {
+    const idx = indexOfMessage(messagesRef.current, messageId);
+    if (idx < 0) return false;
+    setJumpTargetId(messageId);
+    const el = listRef.current;
+    const heights = heightsForMessages(
+      messagesRef.current,
+      measuredHeightsRef.current,
+      measureOptions(el),
+    );
+    if (el) {
+      el.scrollTop = offsetToIndex(heights, idx, 16);
+      refreshWindow(el, { force: true });
+      window.requestAnimationFrame(() => {
+        const target = findMessageElement(el, messageId);
+        if (target) scrollChildIntoScroller(el, target);
+        bottomPinRef.current?.sync();
+      });
+    }
+    return true;
+  }, [measureOptions, refreshWindow]);
+
+  const jumpToQuoted = useCallback(async (parentId) => {
+    const id = String(parentId || "");
+    if (!id) return;
+    if (scrollToLoadedMessage(id)) return;
+    if (!onEnsureMessage) return;
+    try {
+      const found = await onEnsureMessage(id);
+      if (found) scrollToLoadedMessage(id);
+    } catch (e) {
+      console.warn("jump to quoted message failed", e);
+    }
+  }, [onEnsureMessage, scrollToLoadedMessage]);
+
+  const findMatches = findLoadedMatchIndexes(safeMessages, findQuery);
+  const jumpFind = useCallback((direction) => {
+    const next = nextMatchIndex(findMatches, findIndex, direction);
+    if (next < 0) return;
+    setFindIndex(next);
+    const row = safeMessages[next];
+    scrollToLoadedMessage(row?.client_message_id || row?.id);
+  }, [findIndex, findMatches, safeMessages, scrollToLoadedMessage]);
+
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
@@ -453,6 +654,9 @@ export function MessagesThread({
     sendInFlightIds.current.add(clientMessageId);
     bottomPinRef.current?.toBottom();
     const generation = createClientMessageId();
+    const media = attach && isImageAttachmentMime(attach.type)
+      ? await readImageDimensions(attach)
+      : null;
     const row = buildPendingRow({
       clientMessageId,
       selfId,
@@ -460,6 +664,8 @@ export function MessagesThread({
       file: attach,
       previewUrl: pendingPreview,
       replyTo: reply,
+      width: media?.width,
+      height: media?.height,
     });
     const sendPromise = Promise.resolve().then(() => onSend(text, attach, {
       ...(reply?.id ? { replyToId: reply.id } : {}),
@@ -883,7 +1089,14 @@ export function MessagesThread({
       boxSizing: "border-box",
     }}
     >
-      <style>{BUBBLE_HOLD_SELECT_CSS}</style>
+      <MessagePhotoViewer
+        src={photoViewer?.src || ""}
+        alt={photoViewer?.alt || "Photo"}
+        onClose={() => setPhotoViewer(null)}
+      />
+      <style>{`${BUBBLE_HOLD_SELECT_CSS}
+        @keyframes mm-upload-pulse { 0% { transform: translateX(-80%); } 100% { transform: translateX(280%); } }
+      `}</style>
       {(title || subtitle) && (
         <div style={{ marginBottom: 10 }}>
           {title ? (
@@ -927,6 +1140,7 @@ export function MessagesThread({
       <div
         data-message-list
         ref={listRef}
+        onScroll={onListScroll}
         style={{
           flex: 1,
           overflowY: "auto",
@@ -941,6 +1155,8 @@ export function MessagesThread({
           maxHeight: "none",
           WebkitOverflowScrolling: "touch",
           overscrollBehavior: "contain",
+          // Browser scroll-anchoring fights spacer remounts and reads as shake.
+          overflowAnchor: "none",
         }}
       >
         {/* Wrapper exists so a ResizeObserver can watch the content grow — one
@@ -949,6 +1165,55 @@ export function MessagesThread({
         {!safeMessages.length && (
           <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, padding: "20px 8px", textAlign: "center" }}>
             {emptyState}
+          </div>
+        )}
+        {!!safeMessages.length && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <button
+              type="button"
+              data-find-in-thread
+              onClick={() => setFindOpen((open) => !open)}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: T.accentDeep,
+                fontFamily: F,
+                fontWeight: 700,
+                fontSize: 12.5,
+                cursor: "pointer",
+                padding: "2px 0",
+              }}
+            >
+              {findOpen ? "Close find" : "Find in thread"}
+            </button>
+          </div>
+        )}
+        {findOpen && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+            <input
+              type="search"
+              value={findQuery}
+              onChange={(e) => {
+                setFindQuery(e.target.value);
+                setFindIndex(-1);
+              }}
+              placeholder="Search loaded messages"
+              aria-label="Search loaded messages"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                border: `1.5px solid ${T.border}`,
+                borderRadius: 10,
+                padding: "8px 10px",
+                fontFamily: F,
+                fontSize: 13.5,
+              }}
+            />
+            <span style={{ fontSize: 12, color: T.inkSoft, flexShrink: 0 }}>
+              {findQuery.trim() ? `${findMatches.length} in view` : ""}
+            </span>
+            <button type="button" onClick={() => jumpFind(-1)} disabled={!findMatches.length}>Prev</button>
+            <button type="button" onClick={() => jumpFind(1)} disabled={!findMatches.length}>Next</button>
           </div>
         )}
         {onLoadEarlier && hasEarlier && !!safeMessages.length && (
@@ -996,7 +1261,13 @@ export function MessagesThread({
               if (readIdx > delIdx) lastDeliveredId = null;
             }
           }
-          return safeMessages.map((m) => {
+          const visible = safeMessages.slice(windowRange.start, windowRange.end);
+          return (
+          <>
+          {windowRange.topSpacer > 0 ? (
+            <div data-virt-top style={{ height: windowRange.topSpacer }} aria-hidden />
+          ) : null}
+          {visible.map((m) => {
           const bubbleKey = m.client_message_id || m.id;
           const mine = m.sender_id === selfId;
           const deleted = !!m.deleted_at;
@@ -1023,6 +1294,7 @@ export function MessagesThread({
               fallback={<MessageBubbleFallback message={m} mine={mine} />}
             >
             <div
+              ref={(node) => measureBubble(bubbleKey, node)}
               style={{
                 display: "flex",
                 justifyContent: mine ? "flex-end" : "flex-start",
@@ -1060,6 +1332,16 @@ export function MessagesThread({
                 )}
                 {!deleted && m.reply_to && (
                   <div
+                    role="button"
+                    tabIndex={0}
+                    data-reply-quote
+                    onClick={() => jumpToQuoted(m.reply_to.id || m.reply_to_id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        jumpToQuoted(m.reply_to.id || m.reply_to_id);
+                      }
+                    }}
                     style={{
                       marginBottom: 8,
                       padding: "6px 8px",
@@ -1069,6 +1351,7 @@ export function MessagesThread({
                       fontSize: 12.5,
                       lineHeight: 1.35,
                       color: T.inkSoft,
+                      cursor: "pointer",
                     }}
                   >
                     <div style={{ fontWeight: 700, color: T.accentDeep, marginBottom: 2 }}>
@@ -1117,27 +1400,67 @@ export function MessagesThread({
                 ) : (
                   <>
                     {hasAttach && isImage && m.attachmentUrl && (
-                      <a href={m.attachmentUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: m.body ? 8 : 0 }}>
+                      <button
+                        type="button"
+                        className="msg-photo-open"
+                        data-open-photo={m.id}
+                        aria-label="View photo"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (m.send_status === "pending") return;
+                          // A still-hold already opened the bubble menu — don't
+                          // also jump into the enlarge overlay on the same tap.
+                          if (menuId === bubbleKey) return;
+                          setMenuId(null);
+                          setPhotoViewer({
+                            src: m.attachmentUrl,
+                            alt: m.attachment_name || "Photo",
+                          });
+                        }}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          marginBottom: m.body ? 8 : 0,
+                          padding: 0,
+                          border: 0,
+                          background: "none",
+                          position: "relative",
+                          cursor: m.send_status === "pending" ? "default" : "zoom-in",
+                        }}
+                      >
                         <img
                           src={m.attachmentUrl}
                           alt={m.attachment_name || "Attachment"}
                           draggable={false}
-                          loading="lazy"
+                          loading="eager"
                           decoding="async"
-                          style={{
-                            display: "block",
-                            maxWidth: "100%",
-                            maxHeight: 240,
-                            // Reserve height so a late-decoding photo cannot
-                            // collapse the bubble and yank the list away from
-                            // the newest message.
-                            minHeight: 80,
-                            borderRadius: 10,
-                            objectFit: "cover",
-                            background: T.track,
-                          }}
+                          style={imageBoxStyle(m, { maxBubbleWidth: bubbleContentWidth(listWidth) })}
                         />
-                      </a>
+                        {m.send_status === "pending" && (
+                          <div
+                            data-upload-progress
+                            style={{
+                              position: "absolute",
+                              left: 8,
+                              right: 8,
+                              bottom: 8,
+                              height: 4,
+                              borderRadius: 999,
+                              background: "rgba(255,255,255,0.55)",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div style={{
+                              width: "40%",
+                              height: "100%",
+                              borderRadius: 999,
+                              background: T.accent,
+                              animation: "mm-upload-pulse 1s ease-in-out infinite",
+                            }}
+                            />
+                          </div>
+                        )}
+                      </button>
                     )}
                     {hasAttach && isAudio && (
                       <div style={{ marginBottom: m.body ? 8 : 0 }}>
@@ -1411,7 +1734,12 @@ export function MessagesThread({
             </div>
             </ErrorBoundary>
           );
-          });
+          })}
+          {windowRange.bottomSpacer > 0 ? (
+            <div data-virt-bottom style={{ height: windowRange.bottomSpacer }} aria-hidden />
+          ) : null}
+          </>
+          );
         })()}
         </div>
       </div>
