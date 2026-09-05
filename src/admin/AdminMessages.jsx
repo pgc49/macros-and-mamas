@@ -873,7 +873,7 @@ export function AdminMessages({
             flex: 1,
             minHeight: 0,
             overflow: "hidden",
-            padding: "10px 12px 12px",
+            padding: "10px 12px 4px",
             display: "flex",
             flexDirection: "column",
           }}
