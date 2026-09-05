@@ -57,6 +57,7 @@ import {
 } from "../lib/messageListWindow";
 import { imageBoxStyle, isImageAttachmentMime, readImageDimensions } from "../lib/messageMedia";
 import { findLoadedMatchIndexes, nextMatchIndex } from "../lib/messageReplyParent";
+import { MessagePhotoViewer } from "./MessagePhotoViewer";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
 
@@ -169,6 +170,7 @@ export function MessagesThread({
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findIndex, setFindIndex] = useState(-1);
+  const [photoViewer, setPhotoViewer] = useState(null);
   const listRef = useRef(null);
   const listContentRef = useRef(null);
   const bottomPinRef = useRef(null);
@@ -995,6 +997,11 @@ export function MessagesThread({
       boxSizing: "border-box",
     }}
     >
+      <MessagePhotoViewer
+        src={photoViewer?.src || ""}
+        alt={photoViewer?.alt || "Photo"}
+        onClose={() => setPhotoViewer(null)}
+      />
       <style>{`${BUBBLE_HOLD_SELECT_CSS}
         @keyframes mm-upload-pulse { 0% { transform: translateX(-80%); } 100% { transform: translateX(280%); } }
       `}</style>
@@ -1299,7 +1306,34 @@ export function MessagesThread({
                 ) : (
                   <>
                     {hasAttach && isImage && m.attachmentUrl && (
-                      <a href={m.attachmentUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: m.body ? 8 : 0, position: "relative" }}>
+                      <button
+                        type="button"
+                        className="msg-photo-open"
+                        data-open-photo={m.id}
+                        aria-label="View photo"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (m.send_status === "pending") return;
+                          // A still-hold already opened the bubble menu — don't
+                          // also jump into the enlarge overlay on the same tap.
+                          if (menuId === bubbleKey) return;
+                          setMenuId(null);
+                          setPhotoViewer({
+                            src: m.attachmentUrl,
+                            alt: m.attachment_name || "Photo",
+                          });
+                        }}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          marginBottom: m.body ? 8 : 0,
+                          padding: 0,
+                          border: 0,
+                          background: "none",
+                          position: "relative",
+                          cursor: m.send_status === "pending" ? "default" : "zoom-in",
+                        }}
+                      >
                         <img
                           src={m.attachmentUrl}
                           alt={m.attachment_name || "Attachment"}
@@ -1332,7 +1366,7 @@ export function MessagesThread({
                             />
                           </div>
                         )}
-                      </a>
+                      </button>
                     )}
                     {hasAttach && isAudio && (
                       <div style={{ marginBottom: m.body ? 8 : 0 }}>

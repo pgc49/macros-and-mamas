@@ -580,6 +580,43 @@ describe("messaging crash containment", () => {
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
+  it("opens photos in an overlay instead of a new tab", () => {
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [{
+            id: "photo-1",
+            sender_id: "mama-1",
+            body: "",
+            attachment_path: "aug/photo.jpg",
+            attachment_name: "plate.jpg",
+            attachment_mime: "image/jpeg",
+            attachmentUrl: "https://example.com/photo.jpg",
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }, {
+            id: "pdf-1",
+            sender_id: "mama-1",
+            body: "",
+            attachment_path: "aug/labs.pdf",
+            attachment_name: "labs.pdf",
+            attachment_mime: "application/pdf",
+            attachmentUrl: "https://example.com/labs.pdf",
+            created_at: "2026-08-10T10:01:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    expect(document.querySelector('a[target="_blank"] img')).toBeNull();
+    expect(screen.getByRole("link", { name: "labs.pdf" }).getAttribute("target")).toBe("_blank");
+    fireEvent.click(screen.getByRole("button", { name: "View photo" }));
+    expect(screen.getByRole("dialog", { name: "Photo" })).toBeTruthy();
+    expect(screen.getByTestId("photo-viewer-image").getAttribute("src")).toBe("https://example.com/photo.jpg");
+    fireEvent.click(screen.getByRole("button", { name: "Close photo" }));
+    expect(screen.queryByRole("dialog", { name: "Photo" })).toBeNull();
+  });
+
   it("windows a 120-row thread instead of mounting every bubble", () => {
     const messages = Array.from({ length: 120 }, (_, i) => message(`m-${i}`, i % 60));
     render(<MessagesThread {...threadProps({ messages, selfId: "mama-1" })} />);
