@@ -9,6 +9,12 @@ import {
 import { chronologicalMessages } from "../lib/messageOrdering";
 import { attachmentUrlCache } from "../lib/attachmentUrls";
 import { MESSAGE_PAGE_MAX, MESSAGE_PAGE_SIZE, membershipHasUnread } from "../lib/messageChannels";
+import {
+  attachmentMediaFields,
+  isMissingAttachmentMediaColumn,
+  readImageDimensions,
+} from "../lib/messageMedia";
+import { applyFetchedReplyParents, missingReplyIds } from "../lib/messageReplyParent";
 import { referredByByUserId } from "../lib/referredBy";
 import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
@@ -474,11 +480,13 @@ async function uploadMessageAttachment({ clientId, file, allowAudio = false }) {
     console.error("message attachment upload failed", error);
     throw new Error("Couldn’t upload that attachment — try again.");
   }
+  const size = await readImageDimensions(file);
   return {
     path,
     name: String(file.name || "attachment").slice(0, 120),
     mime,
     bytes: Number(file.size) || null,
+    ...attachmentMediaFields(size),
   };
 }
 
@@ -558,11 +566,13 @@ async function uploadChannelAttachment({ conversationId, file, allowAudio = fals
     console.error("channel attachment upload failed", error);
     throw new Error("Couldn’t upload that attachment — try again.");
   }
+  const size = await readImageDimensions(file);
   return {
     path,
     name: String(file.name || "attachment").slice(0, 120),
     mime,
     bytes: Number(file.size) || null,
+    ...attachmentMediaFields(size),
   };
 }
 
@@ -692,6 +702,33 @@ async function hydrateChannelSenders(rows, conversationId = null) {
 
 const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
 const DM_MESSAGE_SELECT = "id, client_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
+let includeAttachmentMedia = true;
+
+function liveChannelSelect() {
+  return includeAttachmentMedia
+    ? `${CHANNEL_MESSAGE_SELECT}, attachment_width, attachment_height`
+    : CHANNEL_MESSAGE_SELECT;
+}
+
+function liveDmSelect() {
+  return includeAttachmentMedia
+    ? `${DM_MESSAGE_SELECT}, attachment_width, attachment_height`
+    : DM_MESSAGE_SELECT;
+}
+
+function noteMissingAttachmentMedia(error) {
+  if (!isMissingAttachmentMediaColumn(error)) return false;
+  includeAttachmentMedia = false;
+  return true;
+}
+
+async function runMessageQuery(factory) {
+  let result = await factory();
+  if (result?.error && noteMissingAttachmentMedia(result.error)) {
+    result = await factory();
+  }
+  return result;
+}
 
 function pageLimit(limit) {
   return Math.min(MESSAGE_PAGE_MAX, Math.max(1, Number(limit) || MESSAGE_PAGE_SIZE));
@@ -751,6 +788,43 @@ function attachReplyPreviews(rows) {
 }
 
 const attachChannelReplyPreviews = attachReplyPreviews;
+
+async function hydrateMissingReplyParents(rows, fetchByIds) {
+  const ids = missingReplyIds(rows);
+  if (!ids.length) return rows || [];
+  try {
+    const parents = await fetchByIds(ids);
+    return applyFetchedReplyParents(rows, parents);
+  } catch (e) {
+    console.warn("reply parent lookup failed", e);
+    return rows || [];
+  }
+}
+
+async function loadChannelMessagesByIds(conversationId, ids) {
+  const list = [...new Set((ids || []).map((id) => String(id || "")).filter(Boolean))];
+  if (!conversationId || !list.length) return [];
+  const { data, error } = await runMessageQuery(() => supabase
+    .from("conversation_messages")
+    .select(liveChannelSelect())
+    .eq("conversation_id", conversationId)
+    .in("id", list));
+  if (error) throw error;
+  const withAttachments = await hydrateChannelAttachments(data || []);
+  return hydrateChannelSenders(withAttachments, conversationId);
+}
+
+async function loadDmMessagesByIds(clientId, ids) {
+  const list = [...new Set((ids || []).map((id) => String(id || "")).filter(Boolean))];
+  if (!clientId || !list.length) return [];
+  const { data, error } = await runMessageQuery(() => supabase
+    .from("messages")
+    .select(liveDmSelect())
+    .eq("client_id", clientId)
+    .in("id", list));
+  if (error) throw error;
+  return hydrateMessageAttachments(data || []);
+}
 
 export function channelHasUnread(_conversation, membership, messages = []) {
   if (membership && Object.hasOwn(membership, "last_inbound_at")) {
@@ -2340,21 +2414,28 @@ export const db = {
    */
   async loadChannelMessages(conversationId, { limit = MESSAGE_PAGE_SIZE, before = null } = {}) {
     if (!conversationId) return [];
-    const { data, error } = await olderThan(
+    const { data, error } = await runMessageQuery(() => olderThan(
       supabase
         .from("conversation_messages")
-        .select(CHANNEL_MESSAGE_SELECT)
+        .select(liveChannelSelect())
         .eq("conversation_id", conversationId),
       before,
     )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .limit(pageLimit(limit));
+      .limit(pageLimit(limit)));
     if (error) throw error;
     const withAttachments = await hydrateChannelAttachments(chronologicalMessages(data));
     const withSenders = await hydrateChannelSenders(withAttachments, conversationId);
     const withReplies = attachChannelReplyPreviews(withSenders);
-    return hydrateChannelReactions(withReplies);
+    const withParents = await hydrateMissingReplyParents(withReplies, (ids) => (
+      loadChannelMessagesByIds(conversationId, ids)
+    ));
+    return hydrateChannelReactions(withParents);
+  },
+
+  async loadChannelMessagesByIds(conversationId, ids) {
+    return loadChannelMessagesByIds(conversationId, ids);
   },
 
   async hydrateChannelMessageRow(row) {
@@ -2409,7 +2490,7 @@ export const db = {
     const text = String(body || "").trim().slice(0, 2000);
     const prior = await supabase
       .from("conversation_messages")
-      .select(CHANNEL_MESSAGE_SELECT)
+      .select(liveChannelSelect())
       .eq("sender_id", uid)
       .eq("client_message_id", idempotencyKey)
       .maybeSingle();
@@ -2439,7 +2520,7 @@ export const db = {
     }
     if (!data) {
       if (text.length < 1 && !attachment) throw new Error("Message is empty");
-      const inserted = await supabase
+      const inserted = await runMessageQuery(() => supabase
         .from("conversation_messages")
         .insert({
           conversation_id: conversationId,
@@ -2454,11 +2535,12 @@ export const db = {
               attachment_name: attachment.name,
               attachment_mime: attachment.mime,
               attachment_bytes: attachment.bytes,
+              ...(includeAttachmentMedia ? attachmentMediaFields(attachment) : {}),
             }
             : {}),
         })
-        .select(CHANNEL_MESSAGE_SELECT)
-        .single();
+        .select(liveChannelSelect())
+        .single());
       if (!inserted.error) {
         data = inserted.data;
       } else {
@@ -2466,7 +2548,7 @@ export const db = {
         // before removing anything and only delete an object proven unreferenced.
         const existing = await supabase
           .from("conversation_messages")
-          .select(CHANNEL_MESSAGE_SELECT)
+          .select(liveChannelSelect())
           .eq("sender_id", uid)
           .eq("client_message_id", idempotencyKey)
           .maybeSingle();
@@ -2537,7 +2619,7 @@ export const db = {
       .eq("id", messageId)
       .eq("sender_id", uid)
       .is("deleted_at", null)
-      .select(CHANNEL_MESSAGE_SELECT)
+      .select(liveChannelSelect())
       .single();
     if (error) throw error;
     const [hydrated] = await hydrateChannelSenders(
@@ -2573,7 +2655,7 @@ export const db = {
       .eq("id", messageId)
       .is("deleted_at", null);
     if (!isAdmin) delQuery = delQuery.eq("sender_id", uid);
-    const { data, error } = await delQuery.select(CHANNEL_MESSAGE_SELECT).single();
+    const { data, error } = await delQuery.select(liveChannelSelect()).single();
     if (error) throw error;
 
     // Only remove storage if we own the file folder (or admin).
@@ -2659,20 +2741,27 @@ export const db = {
    */
   async loadMessages(clientId, { limit = MESSAGE_PAGE_SIZE, before = null } = {}) {
     if (!clientId) return [];
-    const { data, error } = await olderThan(
+    const { data, error } = await runMessageQuery(() => olderThan(
       supabase
         .from("messages")
-        .select(DM_MESSAGE_SELECT)
+        .select(liveDmSelect())
         .eq("client_id", clientId),
       before,
     )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .limit(pageLimit(limit));
+      .limit(pageLimit(limit)));
     if (error) throw error;
     const withAttachments = await hydrateMessageAttachments(chronologicalMessages(data));
     const withReplies = attachReplyPreviews(withAttachments);
-    return hydrateDmReactions(withReplies);
+    const withParents = await hydrateMissingReplyParents(withReplies, (ids) => (
+      loadDmMessagesByIds(clientId, ids)
+    ));
+    return hydrateDmReactions(withParents);
+  },
+
+  async loadMessagesByIds(clientId, ids) {
+    return loadDmMessagesByIds(clientId, ids);
   },
 
   async toggleDmReaction(messageId, emoji) {
@@ -2692,7 +2781,7 @@ export const db = {
     const text = String(body || "").trim().slice(0, 2000);
     const prior = await supabase
       .from("messages")
-      .select(DM_MESSAGE_SELECT)
+      .select(liveDmSelect())
       .eq("sender_id", uid)
       .eq("client_message_id", idempotencyKey)
       .maybeSingle();
@@ -2722,7 +2811,7 @@ export const db = {
     }
     if (!data) {
       if (text.length < 1 && !attachment) throw new Error("Message is empty");
-      const inserted = await supabase
+      const inserted = await runMessageQuery(() => supabase
         .from("messages")
         .insert({
           client_id: clientId,
@@ -2737,17 +2826,18 @@ export const db = {
               attachment_name: attachment.name,
               attachment_mime: attachment.mime,
               attachment_bytes: attachment.bytes,
+              ...(includeAttachmentMedia ? attachmentMediaFields(attachment) : {}),
             }
             : {}),
         })
-        .select(DM_MESSAGE_SELECT)
-        .single();
+        .select(liveDmSelect())
+        .single());
       if (!inserted.error) {
         data = inserted.data;
       } else {
         const existing = await supabase
           .from("messages")
-          .select(DM_MESSAGE_SELECT)
+          .select(liveDmSelect())
           .eq("sender_id", uid)
           .eq("client_message_id", idempotencyKey)
           .maybeSingle();
@@ -3009,7 +3099,7 @@ export const db = {
       .eq("id", messageId)
       .eq("sender_id", uid)
       .is("deleted_at", null)
-      .select(DM_MESSAGE_SELECT)
+      .select(liveDmSelect())
       .single();
     if (error) throw error;
     const [hydrated] = await hydrateMessageAttachments([data]);
@@ -3037,7 +3127,7 @@ export const db = {
       .eq("id", messageId)
       .eq("sender_id", uid)
       .is("deleted_at", null)
-      .select(DM_MESSAGE_SELECT)
+      .select(liveDmSelect())
       .single();
     if (error) throw error;
 

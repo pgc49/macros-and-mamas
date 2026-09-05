@@ -579,5 +579,15 @@ describe("messaging crash containment", () => {
     vi.advanceTimersByTime(MESSAGE_HOLD_MS + 50);
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
+
+  it("windows a 120-row thread instead of mounting every bubble", () => {
+    const messages = Array.from({ length: 120 }, (_, i) => message(`m-${i}`, i % 60));
+    render(<MessagesThread {...threadProps({ messages, selfId: "mama-1" })} />);
+    const bubbles = document.querySelectorAll("[data-msg-id]");
+    expect(bubbles.length).toBeGreaterThan(8);
+    expect(bubbles.length).toBeLessThan(80);
+    expect(bubbles.length).toBeLessThan(messages.length);
+    expect(document.querySelector("[data-virt-top], [data-virt-bottom]")).toBeTruthy();
+  });
 });
 

@@ -23,6 +23,9 @@ const pinSrc = readFileSync(new URL("../src/lib/stickToBottom.js", import.meta.u
 assert(pinSrc.includes("function bottomScrollTop"), "bottom pin must compute live-edge scrollTop");
 assert(pinSrc.includes("scroller.scrollTop = bottomScrollTop(scroller)"), "bottom pin should scroll the list to the tip");
 assert(pinSrc.includes("function pinChildToBottom"), "jump-to-latest must pin the tip bubble to the pane");
+const virtSrc = readFileSync(new URL("../src/lib/messageListWindow.js", import.meta.url), "utf8");
+assert(virtSrc.includes("function visibleMessageRange"), "thread must virtualize with a scroll-height-preserving window");
+assert(src.includes("data-virt-top") && src.includes("onEnsureMessage"), "thread must window bubbles and jump to quoted parents");
 assert(!/scrollTop\s*=\s*scroller\.scrollHeight/.test(pinSrc), "must not assign scrollHeight as scrollTop");
 assert(src.includes('height: "100%"'), "customer thread must fill the leftover Messages pane");
 assert(!src.includes("62vh"), "customer thread must not use a scrollable 62vh box");

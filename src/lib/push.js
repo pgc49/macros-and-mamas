@@ -23,7 +23,7 @@ export function pushSupported() {
 }
 
 export async function registerMessageServiceWorker() {
-  if (!pushSupported()) return null;
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return null;
   try {
     const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
     await navigator.serviceWorker.ready;
