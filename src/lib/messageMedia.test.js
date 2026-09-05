@@ -29,6 +29,7 @@ describe("messageMedia", () => {
     });
     expect(style.aspectRatio).toBe("640 / 400");
     expect(style.minHeight).toBeGreaterThanOrEqual(80);
+    expect(style.height).toBe(style.minHeight);
     expect(style.maxHeight).toBe(240);
   });
 

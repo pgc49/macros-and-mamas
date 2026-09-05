@@ -48,10 +48,13 @@ import {
 } from "../lib/threadReadState";
 import {
   MESSAGE_WINDOW_OVERSCAN,
+  bubbleContentWidth,
+  commitWindowRange,
   heightsForMessages,
   indexOfMessage,
   initialLatestRange,
   offsetToIndex,
+  scrollTopAfterHeightChange,
   shouldRemeasure,
   visibleMessageRange,
 } from "../lib/messageListWindow";
@@ -175,7 +178,12 @@ export function MessagesThread({
   const listContentRef = useRef(null);
   const bottomPinRef = useRef(null);
   const measuredHeightsRef = useRef(new Map());
+  const messagesRef = useRef(safeMessages);
+  const listWidthRef = useRef(0);
+  const scrollRafRef = useRef(0);
+  const [listWidth, setListWidth] = useState(0);
   const [windowRange, setWindowRange] = useState(() => initialLatestRange(safeMessages));
+  messagesRef.current = safeMessages;
   /** Metrics captured before an older page is prepended, so we can hold the row. */
   const restoreRef = useRef(null);
   const fileRef = useRef(null);
@@ -341,40 +349,43 @@ export function MessagesThread({
     );
   }, [safeMessages]);
 
-  const refreshWindow = useCallback((el = listRef.current) => {
+  const measureOptions = useCallback((el = listRef.current) => {
+    const width = el?.clientWidth || listWidthRef.current;
+    if (width > 0 && Math.abs(width - listWidthRef.current) > 2) {
+      listWidthRef.current = width;
+      setListWidth((prev) => (Math.abs(prev - width) > 2 ? width : prev));
+    }
+    return { maxBubbleWidth: bubbleContentWidth(listWidthRef.current) };
+  }, []);
+
+  const refreshWindow = useCallback((el = listRef.current, { force = false } = {}) => {
     if (!el) return;
-    const heights = heightsForMessages(safeMessages, measuredHeightsRef.current);
+    const rows = messagesRef.current;
+    const heights = heightsForMessages(rows, measuredHeightsRef.current, measureOptions(el));
     const pinIndexes = [];
-    const tip = safeMessages[safeMessages.length - 1];
-    const tipIdx = indexOfMessage(safeMessages, tip?.client_message_id || tip?.id);
+    const tip = rows[rows.length - 1];
+    const tipIdx = indexOfMessage(rows, tip?.client_message_id || tip?.id);
     if (tipIdx >= 0) pinIndexes.push(tipIdx);
     if (focusMessageId) {
-      const idx = indexOfMessage(safeMessages, focusMessageId);
+      const idx = indexOfMessage(rows, focusMessageId);
       if (idx >= 0) pinIndexes.push(idx);
     }
     if (jumpTargetId) {
-      const idx = indexOfMessage(safeMessages, jumpTargetId);
+      const idx = indexOfMessage(rows, jumpTargetId);
       if (idx >= 0) pinIndexes.push(idx);
     }
-    const next = visibleMessageRange({
+    const proposed = visibleMessageRange({
       heights,
       scrollTop: el.scrollTop,
       clientHeight: el.clientHeight || 480,
       overscan: MESSAGE_WINDOW_OVERSCAN,
       pinIndexes,
     });
-    setWindowRange((prev) => (
-      prev.start === next.start
-      && prev.end === next.end
-      && prev.topSpacer === next.topSpacer
-      && prev.bottomSpacer === next.bottomSpacer
-        ? prev
-        : next
-    ));
-  }, [safeMessages, focusMessageId, jumpTargetId]);
+    setWindowRange((prev) => commitWindowRange(prev, proposed, heights, { force }));
+  }, [focusMessageId, jumpTargetId, measureOptions]);
 
   useLayoutEffect(() => {
-    refreshWindow();
+    refreshWindow(listRef.current, { force: true });
   }, [refreshWindow, safeMessages.length]);
 
   const measureBubble = useCallback((key, node) => {
@@ -382,19 +393,49 @@ export function MessagesThread({
     const next = node.getBoundingClientRect().height + 10;
     const previous = measuredHeightsRef.current.get(key);
     if (!shouldRemeasure(previous || 0, next)) return;
+    const rows = messagesRef.current;
+    const idx = indexOfMessage(rows, key);
+    const heights = heightsForMessages(rows, measuredHeightsRef.current, measureOptions());
+    const previousHeight = Number.isFinite(previous) ? previous : (idx >= 0 ? heights[idx] : next);
     measuredHeightsRef.current.set(key, next);
+    const el = listRef.current;
+    if (el && idx >= 0) {
+      el.scrollTop = scrollTopAfterHeightChange({
+        itemOffset: offsetToIndex(heights, idx, 0),
+        previousHeight,
+        nextHeight: next,
+        scrollTop: el.scrollTop,
+      });
+    }
     refreshWindow();
+  }, [measureOptions, refreshWindow]);
+
+  const onListScroll = useCallback((event) => {
+    const el = event.currentTarget;
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      refreshWindow(el);
+    });
   }, [refreshWindow]);
 
+  useEffect(() => () => {
+    if (scrollRafRef.current) window.cancelAnimationFrame(scrollRafRef.current);
+  }, []);
+
   const scrollToLoadedMessage = useCallback((messageId) => {
-    const idx = indexOfMessage(safeMessages, messageId);
+    const idx = indexOfMessage(messagesRef.current, messageId);
     if (idx < 0) return false;
     setJumpTargetId(messageId);
-    const heights = heightsForMessages(safeMessages, measuredHeightsRef.current);
     const el = listRef.current;
+    const heights = heightsForMessages(
+      messagesRef.current,
+      measuredHeightsRef.current,
+      measureOptions(el),
+    );
     if (el) {
       el.scrollTop = offsetToIndex(heights, idx, 16);
-      refreshWindow(el);
+      refreshWindow(el, { force: true });
       window.requestAnimationFrame(() => {
         const target = findMessageElement(el, messageId);
         if (target) scrollChildIntoScroller(el, target);
@@ -402,7 +443,7 @@ export function MessagesThread({
       });
     }
     return true;
-  }, [refreshWindow, safeMessages]);
+  }, [measureOptions, refreshWindow]);
 
   const jumpToQuoted = useCallback(async (parentId) => {
     const id = String(parentId || "");
@@ -1048,7 +1089,7 @@ export function MessagesThread({
       <div
         data-message-list
         ref={listRef}
-        onScroll={(event) => refreshWindow(event.currentTarget)}
+        onScroll={onListScroll}
         style={{
           flex: 1,
           overflowY: "auto",
@@ -1063,6 +1104,8 @@ export function MessagesThread({
           maxHeight: "none",
           WebkitOverflowScrolling: "touch",
           overscrollBehavior: "contain",
+          // Browser scroll-anchoring fights spacer remounts and reads as shake.
+          overflowAnchor: "none",
         }}
       >
         {/* Wrapper exists so a ResizeObserver can watch the content grow — one
@@ -1340,7 +1383,7 @@ export function MessagesThread({
                           draggable={false}
                           loading="lazy"
                           decoding="async"
-                          style={imageBoxStyle(m)}
+                          style={imageBoxStyle(m, { maxBubbleWidth: bubbleContentWidth(listWidth) })}
                         />
                         {m.send_status === "pending" && (
                           <div

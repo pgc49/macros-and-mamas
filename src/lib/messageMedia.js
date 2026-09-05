@@ -41,8 +41,12 @@ export function attachmentMediaFields(size) {
 export function imageBoxStyle(message, {
   maxHeight = IMAGE_RESERVE_MAX,
   maxWidth = "100%",
+  maxBubbleWidth,
 } = {}) {
-  const reserve = reservedImageHeight(message, { maxImageHeight: maxHeight });
+  const reserve = reservedImageHeight(message, {
+    maxImageHeight: maxHeight,
+    maxBubbleWidth,
+  });
   const width = Number(message?.attachment_width) || 0;
   const height = Number(message?.attachment_height) || 0;
   return {
@@ -50,7 +54,9 @@ export function imageBoxStyle(message, {
     maxWidth,
     maxHeight,
     width: "100%",
-    height: "auto",
+    // Lock the painted box to the reserved height so decode cannot shove
+    // the list. `height: auto` grew to the real aspect and shook scroll.
+    height: reserve,
     minHeight: reserve,
     aspectRatio: width > 0 && height > 0 ? `${width} / ${height}` : undefined,
     borderRadius: 10,

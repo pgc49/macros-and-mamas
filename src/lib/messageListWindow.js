@@ -8,21 +8,35 @@
 
 export const MESSAGE_WINDOW_TARGET = 28;
 export const MESSAGE_WINDOW_OVERSCAN = 8;
+/** Keep the mounted slice until the viewport walks this many rows. Stops the list remounting (and jumping) on every scroll tick. */
+export const WINDOW_HOLD_ROWS = 6;
 export const DEFAULT_BUBBLE_HEIGHT = 72;
 export const IMAGE_RESERVE_MAX = 240;
 export const IMAGE_RESERVE_MIN = 80;
+export const BUBBLE_STACK_GAP = 10;
+export const DEFAULT_BUBBLE_WIDTH = 280;
 
 function num(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+export function bubbleContentWidth(listWidth, {
+  maxFraction = 0.85,
+  padding = 24,
+  min = 160,
+} = {}) {
+  const width = num(listWidth);
+  if (width < 1) return DEFAULT_BUBBLE_WIDTH;
+  return Math.max(min, Math.round(width * maxFraction - padding));
+}
+
 export function estimateBubbleHeight(message, {
   maxImageHeight = IMAGE_RESERVE_MAX,
-  maxBubbleWidth = 280,
+  maxBubbleWidth = DEFAULT_BUBBLE_WIDTH,
 } = {}) {
   if (!message) return DEFAULT_BUBBLE_HEIGHT;
-  if (message.deleted_at) return 56;
+  if (message.deleted_at) return 56 + BUBBLE_STACK_GAP;
   let height = 52;
   const body = String(message.body || "");
   if (body) height += Math.max(21, Math.ceil(body.length / 42) * 21);
@@ -36,12 +50,12 @@ export function estimateBubbleHeight(message, {
   }
   if (message.reply_to) height += 48;
   if (message.send_status === "pending" || message.send_status === "failed") height += 16;
-  return Math.max(48, height);
+  return Math.max(48, height + BUBBLE_STACK_GAP);
 }
 
 export function reservedImageHeight(message, {
   maxImageHeight = IMAGE_RESERVE_MAX,
-  maxBubbleWidth = 280,
+  maxBubbleWidth = DEFAULT_BUBBLE_WIDTH,
 } = {}) {
   const width = num(message?.attachment_width);
   const height = num(message?.attachment_height);
@@ -52,12 +66,12 @@ export function reservedImageHeight(message, {
   return IMAGE_RESERVE_MIN;
 }
 
-export function heightsForMessages(messages, measured = null) {
+export function heightsForMessages(messages, measured = null, options = {}) {
   return (messages || []).map((message, index) => {
     const key = message?.client_message_id || message?.id || String(index);
     const known = measured?.get?.(key);
     if (Number.isFinite(known) && known > 0) return known;
-    return estimateBubbleHeight(message);
+    return estimateBubbleHeight(message, options);
   });
 }
 
@@ -109,6 +123,55 @@ export function visibleMessageRange({
   const topSpacer = totalListHeight(heights.slice(0, start));
   const bottomSpacer = totalListHeight(heights.slice(end));
   return { start, end, topSpacer, bottomSpacer };
+}
+
+/**
+ * Hold the already-mounted slice while the reader is still inside it.
+ * Recomputing start/end on every scroll pixel remounts photos and the
+ * estimate→measure correction shoves the list.
+ */
+export function commitWindowRange(prev, next, heights, {
+  holdRows = WINDOW_HOLD_ROWS,
+  force = false,
+} = {}) {
+  if (!next) return prev || { start: 0, end: 0, topSpacer: 0, bottomSpacer: 0 };
+  if (force || !prev) return next;
+  const count = (heights || []).length;
+  const startDelta = Math.abs(num(next.start) - num(prev.start));
+  const endDelta = Math.abs(num(next.end) - num(prev.end));
+  const hitTop = next.start === 0 && prev.start !== 0;
+  const hitBottom = count > 0 && next.end >= count && prev.end < count;
+  const keepSlice = !hitTop && !hitBottom
+    && startDelta < holdRows
+    && endDelta < holdRows;
+  const start = keepSlice ? prev.start : next.start;
+  const end = keepSlice ? prev.end : next.end;
+  const topSpacer = totalListHeight((heights || []).slice(0, start));
+  const bottomSpacer = totalListHeight((heights || []).slice(end));
+  if (
+    start === prev.start
+    && end === prev.end
+    && topSpacer === prev.topSpacer
+    && bottomSpacer === prev.bottomSpacer
+  ) {
+    return prev;
+  }
+  return { start, end, topSpacer, bottomSpacer };
+}
+
+/** Keep the same row under the eye when a fully-above bubble changes height. */
+export function scrollTopAfterHeightChange({
+  itemOffset = 0,
+  previousHeight = 0,
+  nextHeight = 0,
+  scrollTop = 0,
+} = {}) {
+  const delta = num(nextHeight) - num(previousHeight);
+  if (!delta) return Math.max(0, num(scrollTop));
+  if (num(itemOffset) + num(previousHeight) <= num(scrollTop)) {
+    return Math.max(0, num(scrollTop) + delta);
+  }
+  return Math.max(0, num(scrollTop));
 }
 
 export function offsetToIndex(heights, index, pad = 16) {

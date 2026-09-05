@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  commitWindowRange,
   estimateBubbleHeight,
   heightsForMessages,
   indexOfMessage,
   offsetToIndex,
   reservedImageHeight,
+  scrollTopAfterHeightChange,
   shouldRemeasure,
   totalListHeight,
   visibleMessageRange,
@@ -32,7 +34,7 @@ describe("estimateBubbleHeight", () => {
   });
 
   it("uses a compact height for deleted rows", () => {
-    expect(estimateBubbleHeight({ deleted_at: "2026-09-05T00:00:00Z", body: "gone" })).toBe(56);
+    expect(estimateBubbleHeight({ deleted_at: "2026-09-05T00:00:00Z", body: "gone" })).toBe(66);
   });
 });
 
@@ -80,6 +82,66 @@ describe("heightsForMessages", () => {
     const measured = new Map([["a", 140]]);
     expect(heightsForMessages(rows, measured)).toEqual([140]);
     expect(heightsForMessages(rows, null)[0]).toBe(estimateBubbleHeight(rows[0]));
+  });
+});
+
+describe("commitWindowRange", () => {
+  const heights = Array.from({ length: 80 }, () => 80);
+
+  it("holds the mounted slice until the viewport walks several rows", () => {
+    const prev = visibleMessageRange({
+      heights,
+      scrollTop: 80 * 40,
+      clientHeight: 400,
+      overscan: 8,
+    });
+    const next = visibleMessageRange({
+      heights,
+      scrollTop: 80 * 42,
+      clientHeight: 400,
+      overscan: 8,
+    });
+    const held = commitWindowRange(prev, next, heights, { holdRows: 6 });
+    expect(held.start).toBe(prev.start);
+    expect(held.end).toBe(prev.end);
+  });
+
+  it("commits when the reader reaches the top or the jump is forced", () => {
+    const prev = { start: 12, end: 40, topSpacer: 960, bottomSpacer: 3200 };
+    const next = visibleMessageRange({
+      heights,
+      scrollTop: 0,
+      clientHeight: 400,
+      overscan: 8,
+    });
+    expect(commitWindowRange(prev, next, heights).start).toBe(0);
+    const forced = visibleMessageRange({
+      heights,
+      scrollTop: 80 * 60,
+      clientHeight: 400,
+      overscan: 8,
+    });
+    expect(commitWindowRange(prev, forced, heights, { force: true })).toEqual(forced);
+  });
+});
+
+describe("scrollTopAfterHeightChange", () => {
+  it("shifts scroll when the changed row sits fully above the viewport", () => {
+    expect(scrollTopAfterHeightChange({
+      itemOffset: 100,
+      previousHeight: 80,
+      nextHeight: 140,
+      scrollTop: 400,
+    })).toBe(460);
+  });
+
+  it("leaves scroll alone when the changed row is on screen", () => {
+    expect(scrollTopAfterHeightChange({
+      itemOffset: 380,
+      previousHeight: 80,
+      nextHeight: 140,
+      scrollTop: 400,
+    })).toBe(400);
   });
 });
 

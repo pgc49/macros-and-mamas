@@ -25,6 +25,8 @@ assert(pinSrc.includes("scroller.scrollTop = bottomScrollTop(scroller)"), "botto
 assert(pinSrc.includes("function pinChildToBottom"), "jump-to-latest must pin the tip bubble to the pane");
 const virtSrc = readFileSync(new URL("../src/lib/messageListWindow.js", import.meta.url), "utf8");
 assert(virtSrc.includes("function visibleMessageRange"), "thread must virtualize with a scroll-height-preserving window");
+assert(virtSrc.includes("function commitWindowRange"), "virtual window must hold the mounted slice while scrolling");
+assert(src.includes("overflowAnchor") && src.includes("onListScroll"), "thread scroll must not remount on every tick or fight anchoring");
 assert(src.includes("data-virt-top") && src.includes("onEnsureMessage"), "thread must window bubbles and jump to quoted parents");
 assert(!/scrollTop\s*=\s*scroller\.scrollHeight/.test(pinSrc), "must not assign scrollHeight as scrollTop");
 assert(src.includes('height: "100%"'), "customer thread must fill the leftover Messages pane");
