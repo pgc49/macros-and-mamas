@@ -15,6 +15,24 @@ export const MESSAGE_PAGE_MAX = 200;
  * paint immediately. Carrying the known dots across means a refresh does not
  * blink every dot off and back on again.
  */
+/**
+ * Unread from membership timestamps alone — no message fetch.
+ *
+ * `last_inbound_at` is stamped by the conversation_messages INSERT trigger
+ * for everyone except the sender. The pill dot is then
+ * last_inbound_at > last_read_at.
+ */
+export function membershipHasUnread(membership) {
+  const inbound = membership?.last_inbound_at;
+  if (!inbound) return false;
+  const inboundMs = Date.parse(String(inbound));
+  if (!Number.isFinite(inboundMs)) return false;
+  const lastRead = membership?.last_read_at;
+  if (!lastRead) return true;
+  const readMs = Date.parse(String(lastRead));
+  return inboundMs > (Number.isFinite(readMs) ? readMs : 0);
+}
+
 export function mergeChannelList(previous, incoming) {
   const knownUnread = new Map(
     (previous || [])
@@ -37,7 +55,7 @@ export function mergeChannelList(previous, incoming) {
 export function applyReactionToMessages(messages, messageId, emoji, selfId) {
   if (!messageId || !selfId) return messages || [];
   return (messages || []).map((m) => {
-    if (m?.id !== messageId) return m;
+    if (m?.id !== messageId && m?.client_message_id !== messageId) return m;
     const rows = toggleReactionRows(m.reaction_rows || [], selfId, emoji);
     return { ...m, reaction_rows: rows, reactions: aggregateReactions(rows, selfId) };
   });

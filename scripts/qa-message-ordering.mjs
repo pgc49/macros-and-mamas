@@ -86,6 +86,23 @@ const editedThenDelayed = mergeMessagesById([{
 }]);
 assert(editedThenDelayed[0].body === "new edit", "delayed response cannot undo edit");
 
+const pendingThenServer = mergeMessagesById([{
+  id: "cli-1",
+  client_message_id: "cli-1",
+  created_at: "2026-08-10T10:09:00Z",
+  body: "pending",
+  send_status: "pending",
+  attachmentUrl: "blob:preview",
+}], [{
+  id: "srv-1",
+  client_message_id: "cli-1",
+  created_at: "2026-08-10T10:09:00Z",
+  body: "pending",
+}]);
+assert(pendingThenServer.length === 1, "pending and server rows collapse");
+assert(pendingThenServer[0].id === "srv-1", "server id wins after send");
+assert(pendingThenServer[0].attachmentUrl === "blob:preview", "local preview survives until signed");
+
 const dbSource = readFileSync(new URL("../src/db/db.js", import.meta.url), "utf8");
 assert(
   dbSource.includes('.rpc("load_admin_message_inbox")'),

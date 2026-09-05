@@ -34,6 +34,8 @@ const { dbMock, realtimeChannel, profileQuery, handlers } = vi.hoisted(() => {
       markChannelRead: vi.fn(async () => ({ last_read_at: "2026-09-04T12:00:00Z" })),
       sendMessage: vi.fn(),
       sendChannelMessage: vi.fn(),
+      hydrateChannelMessageRow: vi.fn(async (row) => row),
+      hydrateDmMessageRow: vi.fn(async (row) => row),
       editMessage: vi.fn(),
       deleteMessage: vi.fn(),
       editChannelMessage: vi.fn(),
@@ -249,25 +251,35 @@ describe("Realtime traffic", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
-  it("collapses a burst of group messages into a single reload", async () => {
+  it("applies a burst of group messages in place without reloading", async () => {
     dbMock.loadChannelMessages.mockResolvedValue([message(1)]);
     render(<MessagesPanel userId="mama-1" />);
     await waitFor(() => screen.getByRole("button", { name: "August Group" }));
     fireEvent.click(screen.getByRole("button", { name: "August Group" }));
     await waitFor(() => expect(dbMock.loadChannelMessages).toHaveBeenCalledTimes(1));
     dbMock.loadChannelMessages.mockClear();
+    dbMock.channelHasUnreadMessages.mockClear();
 
     await act(async () => {
       for (let i = 0; i < 8; i += 1) {
         for (const handler of handlers.get("conversation_messages") || []) {
-          handler({ new: { conversation_id: "aug" } });
+          handler({
+            eventType: "INSERT",
+            new: {
+              id: `live-${i}`,
+              conversation_id: "aug",
+              sender_id: "other",
+              body: `live ${i}`,
+              created_at: new Date(Date.UTC(2026, 8, 5, 12, i)).toISOString(),
+            },
+          });
         }
-        await vi.advanceTimersByTimeAsync(20);
       }
-      await vi.advanceTimersByTimeAsync(REALTIME_COALESCE_MAX_MS + 50);
     });
 
-    expect(dbMock.loadChannelMessages.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(dbMock.loadChannelMessages).not.toHaveBeenCalled();
+    expect(await screen.findByText("live 7")).toBeTruthy();
+    expect(screen.getByText("group message 1")).toBeTruthy();
   });
 
   it("does not reload the open thread for a message in another group", async () => {
@@ -277,12 +289,22 @@ describe("Realtime traffic", () => {
     fireEvent.click(screen.getByRole("button", { name: "August Group" }));
     await waitFor(() => expect(dbMock.loadChannelMessages).toHaveBeenCalledTimes(1));
     dbMock.loadChannelMessages.mockClear();
+    dbMock.channelHasUnreadMessages.mockClear();
 
-    await emit("conversation_messages", { new: { conversation_id: "founding" } });
+    await emit("conversation_messages", {
+      eventType: "INSERT",
+      new: {
+        id: "f-1",
+        conversation_id: "founding",
+        sender_id: "other",
+        body: "other group",
+        created_at: "2026-09-05T12:00:00.000Z",
+      },
+    });
 
     expect(dbMock.loadChannelMessages).not.toHaveBeenCalled();
-    // The other group's unread dot still gets re-checked.
-    expect(dbMock.channelHasUnreadMessages).toHaveBeenCalled();
+    expect(dbMock.channelHasUnreadMessages).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Unread group messages")).toBeTruthy();
   });
 
   it("subscribes once and keeps the subscription across a pill switch", async () => {

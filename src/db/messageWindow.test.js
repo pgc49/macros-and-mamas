@@ -310,6 +310,20 @@ describe("channelHasUnreadMessages", () => {
     warn.mockRestore();
   });
 
+  it("uses last_inbound_at when the membership already has it", async () => {
+    expect(await db.channelHasUnreadMessages("aug", {
+      user_id: "mama-1",
+      last_read_at: "2026-08-02T00:00:00Z",
+      last_inbound_at: "2026-08-03T00:00:00Z",
+    })).toBe(true);
+    expect(await db.channelHasUnreadMessages("aug", {
+      user_id: "mama-1",
+      last_read_at: "2026-08-04T00:00:00Z",
+      last_inbound_at: "2026-08-03T00:00:00Z",
+    })).toBe(false);
+    expect(state.queries).toEqual([]);
+  });
+
   it("does not query without a conversation or a membership", async () => {
     expect(await db.channelHasUnreadMessages(null, { user_id: "mama-1" })).toBe(false);
     expect(await db.channelHasUnreadMessages("aug", null)).toBe(false);

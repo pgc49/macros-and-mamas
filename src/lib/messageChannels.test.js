@@ -3,6 +3,7 @@ import {
   MESSAGE_PAGE_SIZE,
   applyReactionToMessages,
   earlierCursor,
+  membershipHasUnread,
   mergeChannelList,
   pageHasMore,
 } from "./messageChannels";
@@ -99,6 +100,30 @@ describe("applyReactionToMessages", () => {
 
   it("tolerates an empty window", () => {
     expect(applyReactionToMessages(null, "m-1", "❤️", "mama-1")).toEqual([]);
+  });
+});
+
+describe("membershipHasUnread", () => {
+  it("is unread when inbound is newer than last read", () => {
+    expect(membershipHasUnread({
+      last_inbound_at: "2026-09-05T12:05:00Z",
+      last_read_at: "2026-09-05T12:00:00Z",
+    })).toBe(true);
+  });
+
+  it("is caught up when the reader is at or past inbound", () => {
+    expect(membershipHasUnread({
+      last_inbound_at: "2026-09-05T12:00:00Z",
+      last_read_at: "2026-09-05T12:00:00Z",
+    })).toBe(false);
+  });
+
+  it("is unread when they have inbound and have never opened the thread", () => {
+    expect(membershipHasUnread({ last_inbound_at: "2026-09-05T12:00:00Z" })).toBe(true);
+  });
+
+  it("is caught up when nothing has arrived", () => {
+    expect(membershipHasUnread({ last_read_at: "2026-09-05T12:00:00Z" })).toBe(false);
   });
 });
 

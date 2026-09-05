@@ -98,3 +98,26 @@ create table public.conversation_messages (
 
 alter table public.conversation_messages enable row level security;
 
+create table if not exists public.conversations (
+  id uuid primary key default gen_random_uuid(),
+  type text,
+  label text
+);
+
+create table if not exists public.conversation_members (
+  conversation_id uuid not null,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  removed_at timestamptz,
+  notify_level text,
+  last_read_at timestamptz,
+  primary key (conversation_id, user_id)
+);
+
+alter table public.conversation_members enable row level security;
+alter table public.conversation_members force row level security;
+
+grant select, insert, update on table public.conversation_members to authenticated;
+grant select, insert on table public.conversation_messages to authenticated;
+grant select, insert on table public.conversations to authenticated;
+

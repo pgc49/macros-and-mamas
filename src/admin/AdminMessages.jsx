@@ -9,11 +9,19 @@ import { mergeMessagesById } from "../lib/messageOrdering";
 import {
   applyReactionToMessages,
   earlierCursor,
+  membershipHasUnread,
   mergeChannelList,
   MESSAGE_PAGE_SIZE,
   pageHasMore,
 } from "../lib/messageChannels";
 import { createCoalescedRefresh } from "../lib/realtimeCoalesce";
+import {
+  applyMessageChange,
+  applyReactionEvent,
+  clientIdFromPayload,
+  conversationIdFromPayload,
+  inboundUnreadFromPayload,
+} from "../lib/realtimeMessageApply";
 import { adminPersonTitle as displayName, inboxThreadTitle } from "./clientRoster";
 
 function isAdminProfile(c) {
@@ -80,7 +88,7 @@ export function AdminMessages({
   const [dmMessages, setDmMessages] = useState([]);
   const [dmLoadedClientId, setDmLoadedClientId] = useState(null);
   const [dmLoadErrorClientId, setDmLoadErrorClientId] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [busy] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [dmHasEarlier, setDmHasEarlier] = useState(false);
@@ -136,7 +144,9 @@ export function AdminMessages({
       setChannels((prev) => mergeChannelList(prev, list));
       const withUnread = await Promise.all(list.map(async (item) => ({
         ...item,
-        hasUnread: await db.channelHasUnreadMessages(item.conversation.id, item.membership),
+        hasUnread: Object.hasOwn(item.membership || {}, "last_inbound_at")
+          ? membershipHasUnread(item.membership)
+          : await db.channelHasUnreadMessages(item.conversation.id, item.membership),
       })));
       setChannels(withUnread);
     } catch (e) {
@@ -152,7 +162,10 @@ export function AdminMessages({
     try {
       const messages = await db.loadChannelMessages(conversationId);
       if (channelLoadSequence.current.get(conversationId) !== sequence) return;
-      setChannelMessages((all) => ({ ...all, [conversationId]: messages }));
+      setChannelMessages((all) => ({
+        ...all,
+        [conversationId]: mergeMessagesById(all[conversationId] || [], messages),
+      }));
       setChannelHasEarlier((all) => ({
         ...all,
         [conversationId]: pageHasMore(messages, MESSAGE_PAGE_SIZE),
@@ -186,7 +199,7 @@ export function AdminMessages({
       const stillCurrent = activeRef.current?.type === "dm"
         && activeRef.current.id === clientId;
       if (sequence !== dmLoadSequence.current.get(clientId) || !stillCurrent) return;
-      setDmMessages(list);
+      setDmMessages((current) => mergeMessagesById(current, list));
       setDmHasEarlier(pageHasMore(list, MESSAGE_PAGE_SIZE));
       setDmLoadedClientId(clientId);
       setDmLoadErrorClientId(null);
@@ -202,12 +215,8 @@ export function AdminMessages({
 
   const refreshInboxRef = useRef(refreshInbox);
   const refreshChannelListRef = useRef(refreshChannelList);
-  const refreshChannelThreadRef = useRef(refreshChannelThread);
-  const refreshDmThreadRef = useRef(refreshDmThread);
   useEffect(() => { refreshInboxRef.current = refreshInbox; }, [refreshInbox]);
   useEffect(() => { refreshChannelListRef.current = refreshChannelList; }, [refreshChannelList]);
-  useEffect(() => { refreshChannelThreadRef.current = refreshChannelThread; }, [refreshChannelThread]);
-  useEffect(() => { refreshDmThreadRef.current = refreshDmThread; }, [refreshDmThread]);
 
   useEffect(() => {
     refreshInbox();
@@ -238,33 +247,45 @@ export function AdminMessages({
   }, [active, refreshChannelThread]);
 
   /**
-   * One subscription for the inbox, with every handler coalesced.
-   *
-   * A busy August group used to reload every channel window and the whole
-   * inbox on each event, and the effect re-subscribed whenever `active`
-   * changed. Handlers now read through refs so a thread switch no longer
-   * drops the socket, and each event refreshes only what it can affect.
+   * One subscription for the inbox. Open threads patch in place; other
+   * groups only flip an unread dot. Switching threads must not rebuild this
+   * socket.
    */
   useEffect(() => {
     const inboxRefresh = createCoalescedRefresh(() => refreshInboxRef.current?.());
     const listRefresh = createCoalescedRefresh(() => refreshChannelListRef.current?.());
-    const openDmRefresh = createCoalescedRefresh(() => {
-      const current = activeRef.current;
-      if (current?.type !== "dm") return undefined;
-      return refreshDmThreadRef.current?.(current.id);
-    });
-    const openChannelRefresh = createCoalescedRefresh(() => {
-      const current = activeRef.current;
-      if (current?.type !== "channel") return undefined;
-      return refreshChannelThreadRef.current?.(current.id);
-    });
 
-    const isOpenChannel = (payload) => {
-      const conversationId = payload?.new?.conversation_id
-        || payload?.old?.conversation_id
-        || null;
-      return !!conversationId && conversationId === activeRef.current?.id
-        && activeRef.current?.type === "channel";
+    const applyOpenDm = (payload) => {
+      const clientId = clientIdFromPayload(payload);
+      if (activeRef.current?.type !== "dm" || activeRef.current.id !== clientId) return;
+      setDmMessages((list) => applyMessageChange(list, payload));
+      const row = payload?.new;
+      if (row && (payload.eventType === "INSERT" || payload.eventType === "UPDATE") && !row.deleted_at) {
+        db.hydrateDmMessageRow(row).then((hydrated) => {
+          if (!hydrated) return;
+          if (activeRef.current?.type !== "dm" || activeRef.current.id !== clientId) return;
+          setDmMessages((list) => mergeMessagesById(list, [hydrated]));
+        }).catch(() => {});
+      }
+    };
+
+    const applyOpenChannel = (payload) => {
+      const conversationId = conversationIdFromPayload(payload);
+      if (!conversationId) return;
+      setChannelMessages((all) => ({
+        ...all,
+        [conversationId]: applyMessageChange(all[conversationId] || [], payload),
+      }));
+      const row = payload?.new;
+      if (row && (payload.eventType === "INSERT" || payload.eventType === "UPDATE") && !row.deleted_at) {
+        db.hydrateChannelMessageRow(row).then((hydrated) => {
+          if (!hydrated) return;
+          setChannelMessages((all) => ({
+            ...all,
+            [conversationId]: mergeMessagesById(all[conversationId] || [], [hydrated]),
+          }));
+        }).catch(() => {});
+      }
     };
 
     const channel = supabase
@@ -272,38 +293,81 @@ export function AdminMessages({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages" },
-        () => {
+        (payload) => {
           inboxRefresh.request();
-          openDmRefresh.request();
+          applyOpenDm(payload);
         },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "message_reactions" },
-        () => { openDmRefresh.request(); },
+        (payload) => {
+          if (activeRef.current?.type !== "dm") return;
+          setDmMessages((list) => applyReactionEvent(list, payload, adminUserId));
+        },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversation_messages" },
         (payload) => {
-          if (isOpenChannel(payload)) openChannelRefresh.request();
-          listRefresh.request();
+          const conversationId = conversationIdFromPayload(payload);
+          const open = activeRef.current?.type === "channel"
+            && conversationId === activeRef.current.id;
+          if (open) {
+            applyOpenChannel(payload);
+            return;
+          }
+          if (inboundUnreadFromPayload(payload, adminUserId) && conversationId) {
+            setChannels((list) => list.map((item) => (
+              item.conversation.id === conversationId
+                ? {
+                  ...item,
+                  hasUnread: true,
+                  membership: {
+                    ...item.membership,
+                    last_inbound_at: payload.new?.created_at || item.membership?.last_inbound_at,
+                  },
+                }
+                : item
+            )));
+          }
         },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversation_message_reactions" },
-        () => { openChannelRefresh.request(); },
+        (payload) => {
+          const current = activeRef.current;
+          if (current?.type !== "channel") return;
+          setChannelMessages((all) => ({
+            ...all,
+            [current.id]: applyReactionEvent(all[current.id] || [], payload, adminUserId),
+          }));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "conversation_members", filter: `user_id=eq.${adminUserId}` },
+        (payload) => {
+          const row = payload?.new;
+          if (!row?.conversation_id || payload.eventType === "INSERT") {
+            listRefresh.request();
+            return;
+          }
+          setChannels((list) => list.map((item) => {
+            if (item.conversation.id !== row.conversation_id) return item;
+            const membership = { ...item.membership, ...row };
+            return { ...item, membership, hasUnread: membershipHasUnread(membership) };
+          }));
+        },
       )
       .subscribe();
     return () => {
       inboxRefresh.dispose();
       listRefresh.dispose();
-      openDmRefresh.dispose();
-      openChannelRefresh.dispose();
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [adminUserId]);
 
   const activeChannel = active?.type === "channel"
     ? channels.find((c) => c.conversation.id === active.id) || null
@@ -385,7 +449,6 @@ export function AdminMessages({
   const sendDm = async (body, file = null, opts = {}) => {
     const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
     if (!clientId) return;
-    setBusy(true);
     setError("");
     try {
       const row = await db.sendMessage({
@@ -403,15 +466,12 @@ export function AdminMessages({
       console.error(e);
       setError(e.message || "Couldn’t send.");
       throw e;
-    } finally {
-      setBusy(false);
     }
   };
 
   const sendChannel = async (body, file = null, opts = {}) => {
     if (active?.type !== "channel") return;
     const conversationId = active.id;
-    setBusy(true);
     setError("");
     try {
       const row = await db.sendChannelMessage({
@@ -425,13 +485,10 @@ export function AdminMessages({
         ...all,
         [conversationId]: mergeMessagesById(all[conversationId] || [], [row]),
       }));
-      refreshChannelList();
     } catch (e) {
       console.error(e);
       setError(e.message || "Couldn’t send.");
       throw e;
-    } finally {
-      setBusy(false);
     }
   };
 
