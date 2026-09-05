@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import * as Sentry from "@sentry/react";
 import { supabase } from "../lib/supabase";
 import { persistAttributionToProfile } from "../lib/attribution";
+import { resetAttachmentUrlCache } from "../lib/attachmentUrls";
 import {
   completeSignIn,
   completeSignup,
@@ -254,6 +255,9 @@ export function AuthProvider({ children }) {
     setUser(null);
     setProfile(null);
     syncSentryUser(null);
+    // Message attachment URLs are cached to keep image `src` stable between
+    // refreshes. They outlive the session unless dropped here.
+    resetAttachmentUrlCache();
     await supabase.auth.signOut({ scope: "local" });
   };
 

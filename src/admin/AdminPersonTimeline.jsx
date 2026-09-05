@@ -28,7 +28,9 @@ export function AdminPersonTimeline({ client, lead }) {
     (async () => {
       const [mail, dms] = await Promise.all([
         email ? db.loadEmailEventsByEmail(email) : db.loadEmailEvents(profileId),
-        profileId ? db.loadMessages(profileId).catch(() => []) : [],
+        // Wider than a chat window on purpose: this is a CRM activity feed, not
+        // a thread someone scrolls back through.
+        profileId ? db.loadMessages(profileId, { limit: 100 }).catch(() => []) : [],
       ]);
       if (!cancelled) {
         setEvents(mail || []);
