@@ -117,10 +117,14 @@ export function createBottomPin(scroller, {
     teardown.push(() => scroller.removeEventListener("load", repin, true));
   }
 
-  const observed = content || scroller;
-  if (observed && typeof ResizeObserver === "function") {
+  // Watch both: content growing (images, older pages) and the scroll port
+  // shrinking into a real pane. Observing only the list missed the moment
+  // flex layout gave the port a height smaller than its content — the first
+  // paint stayed at the oldest row and looked like the thread opened mid-way.
+  if (typeof ResizeObserver === "function") {
     const observer = new ResizeObserver(repin);
-    observer.observe(observed);
+    if (scroller) observer.observe(scroller);
+    if (content && content !== scroller) observer.observe(content);
     teardown.push(() => observer.disconnect());
   }
 

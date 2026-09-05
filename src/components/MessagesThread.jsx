@@ -137,7 +137,7 @@ export function MessagesThread({
   // decode, voice players mount, reaction chips arrive. A one-shot jump landed
   // on a list that was still growing and left the reader above the newest
   // message, which read as the pane bouncing back up while it loaded.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = listRef.current;
     if (!el) return undefined;
     const pin = createBottomPin(el, {
@@ -146,7 +146,11 @@ export function MessagesThread({
     });
     bottomPinRef.current = pin;
     pin.toBottom();
+    // One frame later the flex pane often first receives a real clientHeight.
+    // Pin again then so the reader never sees the oldest row flash in.
+    const raf = window.requestAnimationFrame(() => pin.toBottom());
     return () => {
+      window.cancelAnimationFrame(raf);
       pin.dispose();
       bottomPinRef.current = null;
     };

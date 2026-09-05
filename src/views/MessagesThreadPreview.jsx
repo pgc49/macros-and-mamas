@@ -93,12 +93,13 @@ export function MessagesThreadPreview() {
     <div style={{
       maxWidth: 560,
       margin: "0 auto",
-      padding: "16px 12px 24px",
+      padding: "16px 12px 12px",
       background: T.bg,
-      minHeight: "100vh",
+      height: "100vh",
       boxSizing: "border-box",
       display: "flex",
       flexDirection: "column",
+      overflow: "hidden",
     }}
     >
       <Fonts />
@@ -152,8 +153,7 @@ export function MessagesThreadPreview() {
       </div>
       <div style={{
         flex: 1,
-        minHeight: 520,
-        height: "min(72vh, 720px)",
+        minHeight: 0,
         display: "flex",
         flexDirection: "column",
       }}

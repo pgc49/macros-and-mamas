@@ -211,6 +211,29 @@ describe("createBottomPin", () => {
     pin.dispose();
   });
 
+  it("re-pins when the scroll port itself shrinks into a pane", () => {
+    const callbacks = [];
+    const observed = [];
+    globalThis.ResizeObserver = class {
+      constructor(fn) { callbacks.push(fn); }
+      observe(node) { observed.push(node); }
+      disconnect() {}
+    };
+    const el = fakeScroller({ scrollHeight: 1000, clientHeight: 1000 });
+    const content = { tagName: "DIV" };
+    const pin = createBottomPin(el, { content });
+    expect(observed).toEqual([el, content]);
+
+    // First paint: the list is as tall as its content, so there is nothing to
+    // scroll. Flex then gives the port a real height and the newest row
+    // would sit below the fold unless we re-pin.
+    el.clientHeight = 400;
+    for (const fn of callbacks) fn();
+
+    expect(el.scrollTop).toBe(600);
+    pin.dispose();
+  });
+
   it("re-pins from a ResizeObserver on the content element", () => {
     const callbacks = [];
     globalThis.ResizeObserver = class {
