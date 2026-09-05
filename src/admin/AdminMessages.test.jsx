@@ -52,6 +52,12 @@ const { deferredByClient, dbMock, realtimeChannel } = vi.hoisted(() => {
       ]),
       listMyChannels: vi.fn(async () => []),
       loadChannelMessages: vi.fn(async () => []),
+      channelHasUnreadMessages: vi.fn(async () => false),
+      markChannelRead: vi.fn(async () => ({ last_read_at: "2026-09-04T12:00:00Z" })),
+      sendChannelMessage: vi.fn(),
+      editChannelMessage: vi.fn(),
+      deleteChannelMessage: vi.fn(),
+      toggleChannelReaction: vi.fn(),
       loadMessages: vi.fn((clientId) => {
         const pending = pendingByClient.get(clientId);
         return pending ? pending.promise : Promise.resolve([]);
@@ -464,6 +470,66 @@ describe("AdminMessages thread switching", () => {
     const input = await screen.findByPlaceholderText("Write a message…");
     expect(input.style.minWidth).toBe("0px");
     expect(input.style.flex).toContain("180px");
+  });
+});
+
+describe("AdminMessages group loading", () => {
+  function channelItem(id, label) {
+    return {
+      conversation: { id, label, guidelines: "", read_only: false },
+      membership: { user_id: "admin-1", notify_level: "highlights", last_read_at: "2026-09-01T00:00:00Z" },
+    };
+  }
+
+  it("does not load any group history until a row is opened", async () => {
+    dbMock.listMyChannels.mockResolvedValue([
+      channelItem("aug", "August Group"),
+    ]);
+    dbMock.channelHasUnreadMessages.mockResolvedValue(true);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /August Group/ })).toBeTruthy();
+    });
+    expect(dbMock.channelHasUnreadMessages).toHaveBeenCalledWith("aug", expect.any(Object));
+    expect(dbMock.loadChannelMessages).not.toHaveBeenCalled();
+  });
+
+  it("loads a group once when its inbox row is opened", async () => {
+    dbMock.listMyChannels.mockResolvedValue([
+      channelItem("aug", "August Group"),
+    ]);
+    dbMock.loadChannelMessages.mockResolvedValue([
+      {
+        id: "g-1",
+        conversation_id: "aug",
+        sender_id: "mama-a",
+        body: "group hello",
+        created_at: "2026-08-10T10:00:00Z",
+        reactions: [],
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /August Group/ }));
+    await waitFor(() => {
+      expect(dbMock.loadChannelMessages).toHaveBeenCalledWith("aug");
+    });
+    expect(await screen.findByText("group hello")).toBeTruthy();
   });
 });
 

@@ -955,12 +955,19 @@ export function MessagesThread({
                           src={m.attachmentUrl}
                           alt={m.attachment_name || "Attachment"}
                           draggable={false}
+                          loading="lazy"
+                          decoding="async"
                           style={{
                             display: "block",
                             maxWidth: "100%",
                             maxHeight: 240,
+                            // Reserve height so a late-decoding photo cannot
+                            // collapse the bubble and yank the list away from
+                            // the newest message.
+                            minHeight: 80,
                             borderRadius: 10,
                             objectFit: "cover",
+                            background: T.track,
                           }}
                         />
                       </a>
