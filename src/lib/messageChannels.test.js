@@ -118,6 +118,13 @@ describe("membershipHasUnread", () => {
     })).toBe(false);
   });
 
+  it("is caught up when last_read is later than a backdated inbound stamp", () => {
+    expect(membershipHasUnread({
+      last_inbound_at: "2026-09-05T12:05:00Z",
+      last_read_at: "2026-09-05T13:57:00Z",
+    })).toBe(false);
+  });
+
   it("is unread when they have inbound and have never opened the thread", () => {
     expect(membershipHasUnread({ last_inbound_at: "2026-09-05T12:00:00Z" })).toBe(true);
   });
