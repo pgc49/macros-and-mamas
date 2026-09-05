@@ -37,6 +37,7 @@ import { OnboardingBannersPreview } from "./views/OnboardingBannersPreview";
 import { MealLogPreview } from "./views/MealLogPreview";
 import { MealsTabPreview } from "./views/MealsTabPreview";
 import { RecipeBankPreview } from "./views/RecipeBankPreview";
+import { MessagesThreadPreview } from "./views/MessagesThreadPreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
@@ -1659,6 +1660,7 @@ export default function App() {
           <Route path="/dev/meal-log" element={<MealLogPreview />} />
           <Route path="/dev/meals-tab" element={<MealsTabPreview />} />
           <Route path="/dev/recipe-bank" element={<RecipeBankPreview />} />
+          <Route path="/dev/messages-thread" element={<MessagesThreadPreview />} />
         </>
       ) : null}
 
