@@ -318,6 +318,7 @@ function mapMealRows(mealRows) {
       via,
       slot: normalizeMealSlot(r.slot),
       source: r.source || viaToLegacySource(via),
+      origin: r.origin || null,
     };
   });
 }
@@ -349,6 +350,7 @@ function mapCustomMeal(r) {
     f: Number(r.f) || 0,
     serves: normalizeServes(r.serves ?? 1),
     ingredients: r.ingredients || "",
+    steps: r.steps || "",
     slot,
     cat: slot,
     updated_at: r.updated_at,
@@ -1312,12 +1314,20 @@ export const db = {
       c: entry.c,
       f: entry.f,
     };
-    // Prefer slot + via + source; degrade gracefully if columns aren't migrated yet.
+    const origin = entry.origin === "coach" ? "coach" : null;
+    // Prefer origin + slot + via + source; degrade gracefully if columns aren't migrated yet.
     let { data, error } = await supabase
       .from("meal_logs")
-      .insert({ ...base, via, source: viaToLegacySource(via), slot })
-      .select("id, date, name, cal, p, c, f, source, via, slot")
+      .insert({ ...base, via, source: viaToLegacySource(via), slot, origin })
+      .select("id, date, name, cal, p, c, f, source, via, slot, origin")
       .single();
+    if (error && /origin/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("meal_logs")
+        .insert({ ...base, via, source: viaToLegacySource(via), slot })
+        .select("id, date, name, cal, p, c, f, source, via, slot")
+        .single());
+    }
     if (error && /slot/i.test(error.message || "")) {
       ({ data, error } = await supabase
         .from("meal_logs")
@@ -3188,9 +3198,16 @@ export const db = {
     // Prefer the recipe columns; degrade if migration 019 hasn't run yet.
     let { data, error } = await supabase
       .from("custom_meals")
-      .select("id, name, cal, p, c, f, serves, ingredients, slot, updated_at")
+      .select("id, name, cal, p, c, f, serves, ingredients, steps, slot, updated_at")
       .eq("profile_id", uid)
       .order("updated_at", { ascending: false });
+    if (error && /steps/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("custom_meals")
+        .select("id, name, cal, p, c, f, serves, ingredients, slot, updated_at")
+        .eq("profile_id", uid)
+        .order("updated_at", { ascending: false }));
+    }
     if (error && /slot/i.test(error.message || "")) {
       ({ data, error } = await supabase
         .from("custom_meals")
@@ -3213,7 +3230,7 @@ export const db = {
   },
 
   /** Upsert by name for this user (re-saving the same lunch updates macros). */
-  async saveCustomMeal({ name, cal, p, c, f, serves, ingredients, slot }) {
+  async saveCustomMeal({ name, cal, p, c, f, serves, ingredients, slot, steps }) {
     const uid = await requireUserId();
     const trimmed = String(name || "").trim().slice(0, 80);
     if (!trimmed) throw new Error("Meal needs a name");
@@ -3229,12 +3246,14 @@ export const db = {
     const recipeFields = {};
     if (serves != null) recipeFields.serves = normalizeServes(serves);
     if (ingredients != null) recipeFields.ingredients = String(ingredients).slice(0, 4000) || null;
+    if (steps != null) recipeFields.steps = String(steps).slice(0, 4000) || null;
     const savedSlot = normalizeMealSlot(slot);
     if (savedSlot) recipeFields.slot = savedSlot;
 
     const extraCols = [
       recipeFields.serves != null ? "serves" : "",
       recipeFields.ingredients !== undefined ? "ingredients" : "",
+      recipeFields.steps !== undefined ? "steps" : "",
       recipeFields.slot ? "slot" : "",
     ].filter(Boolean).join(", ");
     let { data, error } = await supabase
@@ -3242,8 +3261,16 @@ export const db = {
       .upsert({ ...base, ...recipeFields }, { onConflict: "profile_id,name" })
       .select(`id, name, cal, p, c, f, updated_at${extraCols ? `, ${extraCols}` : ""}`)
       .single();
+    if (error && /steps/i.test(error.message || "")) {
+      const { steps: _st, ...noSteps } = recipeFields;
+      ({ data, error } = await supabase
+        .from("custom_meals")
+        .upsert({ ...base, ...noSteps }, { onConflict: "profile_id,name" })
+        .select("id, name, cal, p, c, f, updated_at, serves, ingredients, slot")
+        .single());
+    }
     if (error && /slot/i.test(error.message || "")) {
-      const { slot: _s, ...noSlot } = recipeFields;
+      const { slot: _s, steps: _st2, ...noSlot } = recipeFields;
       ({ data, error } = await supabase
         .from("custom_meals")
         .upsert({ ...base, ...noSlot }, { onConflict: "profile_id,name" })
@@ -3270,6 +3297,86 @@ export const db = {
       .eq("profile_id", uid)
       .eq("id", id);
     if (error) throw error;
+  },
+
+  /**
+   * Meal coach thread. Append-only; `payload` is rendered display state, never
+   * a source of macros. A missing table (migration not run) is not an error —
+   * the coach still works, it just forgets between visits.
+   */
+  /**
+   * Today's thread only.
+   *
+   * The coach is a decision tool, not a correspondence. Yesterday's "what
+   * should I eat" is noise this morning, and the meal cards inside it were
+   * sized against yesterday's budget — showing them again would offer her a
+   * portion that no longer fits.
+   */
+  async loadCoachThread({ limit = 60, localDate = null } = {}) {
+    const uid = await requireUserId();
+    const { data, error } = await supabase
+      .from("coach_messages")
+      .select("id, role, body, kind, payload, local_date, created_at")
+      .eq("profile_id", uid)
+      .eq("local_date", localDate || localDateIso())
+      // Arrival order, not clock order: her question and its answer are written
+      // in the same tick and their timestamps tie.
+      .order("seq", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("loadCoachThread failed", error);
+      return [];
+    }
+    return (data || [])
+      .map((r) => ({
+        id: r.id,
+        role: r.role,
+        body: r.body || "",
+        kind: r.kind || "text",
+        payload: r.payload || null,
+        localDate: r.local_date || null,
+        createdAt: r.created_at,
+      }))
+      .reverse();
+  },
+
+  async appendCoachMessage({ role, body = "", kind = "text", payload = null, localDate = null }) {
+    const uid = await requireUserId();
+    const { data, error } = await supabase
+      .from("coach_messages")
+      .insert({
+        profile_id: uid,
+        role: role === "coach" ? "coach" : "mama",
+        body: String(body || "").slice(0, 4000),
+        kind,
+        payload,
+        local_date: localDate || localDateIso(),
+      })
+      .select("id, role, body, kind, payload, local_date, created_at")
+      .single();
+    if (error) {
+      console.warn("appendCoachMessage failed", error);
+      return null;
+    }
+    return {
+      id: data.id,
+      role: data.role,
+      body: data.body || "",
+      kind: data.kind || "text",
+      payload: data.payload || null,
+      localDate: data.local_date || null,
+      createdAt: data.created_at,
+    };
+  },
+
+  async clearCoachThread() {
+    const uid = await requireUserId();
+    const { error } = await supabase.from("coach_messages").delete().eq("profile_id", uid);
+    if (error) {
+      console.warn("clearCoachThread failed", error);
+      return false;
+    }
+    return true;
   },
 
   /**

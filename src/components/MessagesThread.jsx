@@ -79,6 +79,13 @@ export function MessagesThread({
   /** Stable DM/channel identity so ambiguous retries survive thread remounts. */
   threadKey = "",
   onComposerFocusChange,
+  /**
+   * Text to drop into an empty composer once — the coach hands a question over
+   * this way. Never overwrites something she has already started typing, and
+   * never sends: she still reads it and presses send herself.
+   */
+  initialDraft = "",
+  onInitialDraftUsed,
 }) {
   const safeMessages = Array.isArray(messages)
     ? messages.map(normalizeMessageRow)
@@ -107,6 +114,19 @@ export function MessagesThread({
   const recorderRef = useRef(null);
   const markReadRef = useRef(onMarkRead);
   const sendInFlightRef = useRef(false);
+  const draftSeededRef = useRef("");
+
+  useEffect(() => {
+    const seed = String(initialDraft || "").trim();
+    if (!seed) {
+      draftSeededRef.current = "";
+      return;
+    }
+    if (draftSeededRef.current === seed) return;
+    draftSeededRef.current = seed;
+    setDraft((current) => (current.trim() ? current : seed));
+    onInitialDraftUsed?.();
+  }, [initialDraft, onInitialDraftUsed]);
 
   useEffect(() => {
     registerMessageServiceWorker();
