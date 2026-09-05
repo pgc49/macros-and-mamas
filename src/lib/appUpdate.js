@@ -67,11 +67,28 @@ export function normalizeReleaseNotes(raw) {
   };
 }
 
+const VERSION_CACHE_TTL_MS = 30_000;
+let versionCache = { at: 0, value: undefined };
+
+export function clearRemoteAppVersionCache() {
+  versionCache = { at: 0, value: undefined };
+}
+
 /**
  * Fetch deployed build id + optional release notes.
  * Returns null on network/parse failure.
+ * Successful results are remembered for 30s so Today remounts do not
+ * refetch and pop a banner into the top of the scroller.
  */
-export async function fetchRemoteAppVersion() {
+export async function fetchRemoteAppVersion({ bypassCache = false } = {}) {
+  const now = Date.now();
+  if (
+    !bypassCache
+    && versionCache.value !== undefined
+    && now - versionCache.at < VERSION_CACHE_TTL_MS
+  ) {
+    return versionCache.value;
+  }
   try {
     const resp = await fetch(`/api/app-version?t=${Date.now()}`, {
       method: "GET",
@@ -82,10 +99,12 @@ export async function fetchRemoteAppVersion() {
     const data = await resp.json().catch(() => null);
     const buildId = String(data?.buildId || "").trim();
     if (!buildId || buildId === "unknown") return null;
-    return {
+    const result = {
       buildId,
       notes: normalizeReleaseNotes(data?.notes),
     };
+    versionCache = { at: Date.now(), value: result };
+    return result;
   } catch {
     return null;
   }

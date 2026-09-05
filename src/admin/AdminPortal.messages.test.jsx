@@ -99,7 +99,7 @@ describe("AdminPortal Messages chrome", () => {
     const view = renderPortal();
     const content = view.container.querySelector("[data-shell-content]");
     expect(content.getAttribute("data-lock-scroll")).toBe("true");
-    expect(content.style.overflowY).toBe("hidden");
+    expect(content.style.overflowY).toBe("auto");
     expect(view.container.querySelector("[data-shell-fill]")).toBeTruthy();
     expect(view.container.querySelector("[data-admin-messages-slot]")).toBeTruthy();
     expect(screen.getByPlaceholderText("Write a message…")).toBeTruthy();
