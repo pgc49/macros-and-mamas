@@ -28,6 +28,7 @@ import {
   restoreAndResignMessageWindow,
   writeMessageWindow,
 } from "../lib/messageWindowCache";
+import { formatInboxTimestamp, latestInboxIso } from "../lib/inboxTimestamp";
 
 function isAdminProfile(c) {
   return String(c?.role || "").toLowerCase() === "admin";
@@ -36,6 +37,12 @@ function isAdminProfile(c) {
 /** One shared Patrick↔Callie thread (whichever uuid sorts first). */
 function canonicalAdminThreadId(a, b) {
   return String(a) < String(b) ? a : b;
+}
+
+function channelLastAt(item, loadedMessages) {
+  const msgs = loadedMessages?.[item?.conversation?.id] || [];
+  const lastLoaded = msgs.length ? msgs[msgs.length - 1]?.created_at : null;
+  return latestInboxIso(lastLoaded, item?.membership?.last_inbound_at);
 }
 
 function previewText(m) {
@@ -771,6 +778,7 @@ export function AdminMessages({
                   key={`ch-${id}`}
                   title={item.conversation.label || "Group"}
                   subtitle={item.hasUnread ? "New activity" : "Group chat"}
+                  timestamp={channelLastAt(item, channelMessages)}
                   unread={item.hasUnread ? 1 : 0}
                   unreadAsDot
                   active={selected}
@@ -803,6 +811,7 @@ export function AdminMessages({
               key={row.clientId}
               title={`${name}${isAdminRow ? " · admin" : ""}`}
               subtitle={previewText(row.lastMessage) || "No messages yet"}
+              timestamp={row.lastMessage?.created_at || ""}
               unread={row.unread || 0}
               active={selected}
               onClick={() => openDm(row.clientId)}
@@ -1144,14 +1153,16 @@ function SectionLabel({ children }) {
   );
 }
 
-function InboxRow({
+export function InboxRow({
   title,
   subtitle,
+  timestamp = "",
   unread = 0,
   unreadAsDot = false,
   active = false,
   onClick,
 }) {
+  const stamp = formatInboxTimestamp(timestamp);
   return (
     <button
       type="button"
@@ -1171,36 +1182,51 @@ function InboxRow({
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-        <span style={{ fontWeight: 700, fontSize: 15, minWidth: 0 }}>
+        <span style={{
+          fontWeight: 700,
+          fontSize: 15,
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+        >
           {title}
         </span>
-        {unread > 0 && (
-          unreadAsDot ? (
-            <span style={{
-              width: 9,
-              height: 9,
-              borderRadius: 99,
-              background: T.accent,
-              flexShrink: 0,
-            }}
-            />
-          ) : (
-            <span style={{
-              background: T.accent,
-              color: "#fff",
-              fontSize: 11,
-              fontWeight: 700,
-              borderRadius: 99,
-              padding: "2px 7px",
-              minWidth: 18,
-              textAlign: "center",
-              flexShrink: 0,
-            }}
-            >
-              {unread > 9 ? "9+" : unread}
-            </span>
-          )
-        )}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {stamp ? (
+            <time dateTime={timestamp} style={{ fontSize: 12.5, color: T.inkSoft, fontWeight: 500 }}>
+              {stamp}
+            </time>
+          ) : null}
+          {unread > 0 && (
+            unreadAsDot ? (
+              <span style={{
+                width: 9,
+                height: 9,
+                borderRadius: 99,
+                background: T.accent,
+                flexShrink: 0,
+              }}
+              />
+            ) : (
+              <span style={{
+                background: T.accent,
+                color: "#fff",
+                fontSize: 11,
+                fontWeight: 700,
+                borderRadius: 99,
+                padding: "2px 7px",
+                minWidth: 18,
+                textAlign: "center",
+                flexShrink: 0,
+              }}
+              >
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )
+          )}
+        </span>
       </div>
       <div style={{
         fontSize: 13,

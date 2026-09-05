@@ -8,6 +8,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { formatInboxTimestamp } from "../lib/inboxTimestamp";
 
 function deferred() {
   let resolve;
@@ -293,8 +294,50 @@ describe("AdminMessages inbox titles", () => {
     expect(screen.getByRole("button", { name: /Chelsea Park/ })).toBeTruthy();
     expect(screen.getByText("Lee preview")).toBeTruthy();
     expect(screen.getByText("Park preview")).toBeTruthy();
+    const leeStamp = formatInboxTimestamp("2026-08-10T10:00:00Z");
+    expect(leeStamp).toBeTruthy();
+    expect(screen.getAllByText(leeStamp).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /^Mama$/ })).toBeNull();
     expect(screen.queryAllByText("Mama")).toHaveLength(0);
+  });
+
+  it("stamps each inbox row like iMessage from the last message time", async () => {
+    const now = new Date();
+    const today = new Date(now);
+    today.setHours(10, 51, 0, 0);
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(9, 0, 0, 0);
+
+    dbMock.loadMessageInbox.mockResolvedValueOnce([
+      {
+        clientId: "c-today",
+        unread: 0,
+        participantIds: ["c-today"],
+        lastMessage: { id: "t1", body: "today preview", created_at: today.toISOString() },
+      },
+      {
+        clientId: "c-yday",
+        unread: 0,
+        participantIds: ["c-yday"],
+        lastMessage: { id: "y1", body: "yesterday preview", created_at: yesterday.toISOString() },
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[
+          { id: "c-today", name: "Today Mama", email: "today@example.com" },
+          { id: "c-yday", name: "Yesterday Mama", email: "yday@example.com" },
+        ]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText("today preview")).toBeTruthy();
+    expect(screen.getByText(formatInboxTimestamp(today.toISOString()))).toBeTruthy();
+    expect(screen.getByText("Yesterday")).toBeTruthy();
   });
 
   it("does not title a missing peer Mama when the inbox row has a profile", async () => {
@@ -521,10 +564,15 @@ describe("AdminMessages thread switching", () => {
 });
 
 describe("AdminMessages group loading", () => {
-  function channelItem(id, label) {
+  function channelItem(id, label, extraMembership = {}) {
     return {
       conversation: { id, label, guidelines: "", read_only: false },
-      membership: { user_id: "admin-1", notify_level: "highlights", last_read_at: "2026-09-01T00:00:00Z" },
+      membership: {
+        user_id: "admin-1",
+        notify_level: "highlights",
+        last_read_at: "2026-09-01T00:00:00Z",
+        ...extraMembership,
+      },
     };
   }
 
@@ -546,6 +594,27 @@ describe("AdminMessages group loading", () => {
       expect(screen.getByRole("button", { name: /August Group/ })).toBeTruthy();
     });
     expect(dbMock.channelHasUnreadMessages).toHaveBeenCalledWith("aug", expect.any(Object));
+    expect(dbMock.loadChannelMessages).not.toHaveBeenCalled();
+  });
+
+  it("stamps a group from last_inbound_at without loading history", async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(10, 48, 0, 0);
+    dbMock.listMyChannels.mockResolvedValue([
+      channelItem("aug", "August Group", { last_inbound_at: yesterday.toISOString() }),
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /August Group/ })).toBeTruthy();
+    expect(screen.getByText("Yesterday")).toBeTruthy();
     expect(dbMock.loadChannelMessages).not.toHaveBeenCalled();
   });
 
