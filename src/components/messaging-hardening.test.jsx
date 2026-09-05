@@ -626,5 +626,12 @@ describe("messaging crash containment", () => {
     expect(bubbles.length).toBeLessThan(messages.length);
     expect(document.querySelector("[data-virt-top], [data-virt-bottom]")).toBeTruthy();
   });
+
+  it("keeps a one-page thread fully mounted so scroll does not remount photos", () => {
+    const messages = Array.from({ length: 40 }, (_, i) => message(`m-${i}`, i % 60));
+    render(<MessagesThread {...threadProps({ messages, selfId: "mama-1" })} />);
+    expect(document.querySelectorAll("[data-msg-id]").length).toBe(40);
+    expect(document.querySelector("[data-virt-top], [data-virt-bottom]")).toBeNull();
+  });
 });
 

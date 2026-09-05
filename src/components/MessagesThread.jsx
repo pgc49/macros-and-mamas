@@ -50,12 +50,14 @@ import {
   MESSAGE_WINDOW_OVERSCAN,
   bubbleContentWidth,
   commitWindowRange,
+  fullMessageRange,
   heightsForMessages,
   indexOfMessage,
   initialLatestRange,
   offsetToIndex,
   scrollTopAfterHeightChange,
   shouldRemeasure,
+  shouldVirtualizeMessages,
   visibleMessageRange,
 } from "../lib/messageListWindow";
 import { imageBoxStyle, isImageAttachmentMime, readImageDimensions } from "../lib/messageMedia";
@@ -181,8 +183,15 @@ export function MessagesThread({
   const messagesRef = useRef(safeMessages);
   const listWidthRef = useRef(0);
   const scrollRafRef = useRef(0);
+  const userScrollingRef = useRef(false);
+  const scrollIdleTimerRef = useRef(0);
+  const pendingMeasureRef = useRef(false);
   const [listWidth, setListWidth] = useState(0);
-  const [windowRange, setWindowRange] = useState(() => initialLatestRange(safeMessages));
+  const [windowRange, setWindowRange] = useState(() => (
+    shouldVirtualizeMessages(safeMessages.length)
+      ? initialLatestRange(safeMessages)
+      : fullMessageRange(safeMessages.length)
+  ));
   messagesRef.current = safeMessages;
   /** Metrics captured before an older page is prepended, so we can hold the row. */
   const restoreRef = useRef(null);
@@ -358,9 +367,24 @@ export function MessagesThread({
     return { maxBubbleWidth: bubbleContentWidth(listWidthRef.current) };
   }, []);
 
-  const refreshWindow = useCallback((el = listRef.current, { force = false } = {}) => {
+  const refreshWindow = useCallback((el = listRef.current, {
+    force = false,
+    expandOnly = false,
+  } = {}) => {
     if (!el) return;
     const rows = messagesRef.current;
+    if (!shouldVirtualizeMessages(rows.length)) {
+      setWindowRange((prev) => {
+        const next = fullMessageRange(rows.length);
+        return prev.start === next.start
+          && prev.end === next.end
+          && prev.topSpacer === 0
+          && prev.bottomSpacer === 0
+          ? prev
+          : next;
+      });
+      return;
+    }
     const heights = heightsForMessages(rows, measuredHeightsRef.current, measureOptions(el));
     const pinIndexes = [];
     const tip = rows[rows.length - 1];
@@ -381,7 +405,7 @@ export function MessagesThread({
       overscan: MESSAGE_WINDOW_OVERSCAN,
       pinIndexes,
     });
-    setWindowRange((prev) => commitWindowRange(prev, proposed, heights, { force }));
+    setWindowRange((prev) => commitWindowRange(prev, proposed, heights, { force, expandOnly }));
   }, [focusMessageId, jumpTargetId, measureOptions]);
 
   useLayoutEffect(() => {
@@ -393,11 +417,17 @@ export function MessagesThread({
     const next = node.getBoundingClientRect().height + 10;
     const previous = measuredHeightsRef.current.get(key);
     if (!shouldRemeasure(previous || 0, next)) return;
+    measuredHeightsRef.current.set(key, next);
+    // Assigning scrollTop or setState mid-fling cancels iOS momentum and
+    // reads as the thread freezing. Record the height; apply after idle.
+    if (userScrollingRef.current) {
+      pendingMeasureRef.current = true;
+      return;
+    }
     const rows = messagesRef.current;
     const idx = indexOfMessage(rows, key);
     const heights = heightsForMessages(rows, measuredHeightsRef.current, measureOptions());
     const previousHeight = Number.isFinite(previous) ? previous : (idx >= 0 ? heights[idx] : next);
-    measuredHeightsRef.current.set(key, next);
     const el = listRef.current;
     if (el && idx >= 0) {
       el.scrollTop = scrollTopAfterHeightChange({
@@ -410,18 +440,39 @@ export function MessagesThread({
     refreshWindow();
   }, [measureOptions, refreshWindow]);
 
+  const endUserScroll = useCallback(() => {
+    userScrollingRef.current = false;
+    if (scrollIdleTimerRef.current) {
+      window.clearTimeout(scrollIdleTimerRef.current);
+      scrollIdleTimerRef.current = 0;
+    }
+    if (!pendingMeasureRef.current) return;
+    pendingMeasureRef.current = false;
+    refreshWindow(listRef.current, { force: true });
+  }, [refreshWindow]);
+
   const onListScroll = useCallback((event) => {
     const el = event.currentTarget;
+    userScrollingRef.current = true;
+    if (scrollIdleTimerRef.current) window.clearTimeout(scrollIdleTimerRef.current);
+    scrollIdleTimerRef.current = window.setTimeout(endUserScroll, 160);
     if (scrollRafRef.current) return;
     scrollRafRef.current = window.requestAnimationFrame(() => {
       scrollRafRef.current = 0;
-      refreshWindow(el);
+      refreshWindow(el, { expandOnly: true });
     });
-  }, [refreshWindow]);
+  }, [endUserScroll, refreshWindow]);
 
-  useEffect(() => () => {
-    if (scrollRafRef.current) window.cancelAnimationFrame(scrollRafRef.current);
-  }, []);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return undefined;
+    el.addEventListener("scrollend", endUserScroll);
+    return () => {
+      el.removeEventListener("scrollend", endUserScroll);
+      if (scrollRafRef.current) window.cancelAnimationFrame(scrollRafRef.current);
+      if (scrollIdleTimerRef.current) window.clearTimeout(scrollIdleTimerRef.current);
+    };
+  }, [endUserScroll]);
 
   const scrollToLoadedMessage = useCallback((messageId) => {
     const idx = indexOfMessage(messagesRef.current, messageId);
@@ -1381,7 +1432,7 @@ export function MessagesThread({
                           src={m.attachmentUrl}
                           alt={m.attachment_name || "Attachment"}
                           draggable={false}
-                          loading="lazy"
+                          loading="eager"
                           decoding="async"
                           style={imageBoxStyle(m, { maxBubbleWidth: bubbleContentWidth(listWidth) })}
                         />

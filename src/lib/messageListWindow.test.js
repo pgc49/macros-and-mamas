@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   commitWindowRange,
   estimateBubbleHeight,
+  fullMessageRange,
   heightsForMessages,
   indexOfMessage,
   offsetToIndex,
   reservedImageHeight,
   scrollTopAfterHeightChange,
   shouldRemeasure,
+  shouldVirtualizeMessages,
   totalListHeight,
   visibleMessageRange,
 } from "./messageListWindow";
@@ -138,6 +140,29 @@ describe("commitWindowRange", () => {
       overscan: 8,
     });
     expect(commitWindowRange(prev, forced, heights, { force: true })).toEqual(forced);
+  });
+
+  it("only expands the mounted slice while the reader is still scrolling", () => {
+    const prev = { start: 30, end: 55, topSpacer: 2400, bottomSpacer: 2000 };
+    const next = visibleMessageRange({
+      heights,
+      scrollTop: 80 * 20,
+      clientHeight: 400,
+      overscan: 8,
+    });
+    const expanded = commitWindowRange(prev, next, heights, { expandOnly: true });
+    expect(expanded.start).toBeLessThanOrEqual(prev.start);
+    expect(expanded.end).toBeGreaterThanOrEqual(prev.end);
+    expect(expanded.start).toBeLessThan(prev.start);
+  });
+});
+
+describe("shouldVirtualizeMessages", () => {
+  it("leaves a one- or two-page thread fully mounted", () => {
+    expect(shouldVirtualizeMessages(40)).toBe(false);
+    expect(shouldVirtualizeMessages(80)).toBe(false);
+    expect(shouldVirtualizeMessages(81)).toBe(true);
+    expect(fullMessageRange(40)).toEqual({ start: 0, end: 40, topSpacer: 0, bottomSpacer: 0 });
   });
 });
 

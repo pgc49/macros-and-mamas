@@ -7,9 +7,11 @@
  */
 
 export const MESSAGE_WINDOW_TARGET = 28;
-export const MESSAGE_WINDOW_OVERSCAN = 8;
+export const MESSAGE_WINDOW_OVERSCAN = 12;
 /** Keep the mounted slice until the viewport walks this many rows. Stops the list remounting (and jumping) on every scroll tick. */
-export const WINDOW_HOLD_ROWS = 6;
+export const WINDOW_HOLD_ROWS = 10;
+/** First loaded page is 40. Windowing that (or two pages) remounts photos mid-fling and freezes iOS. */
+export const MESSAGE_VIRTUALIZE_MIN = 80;
 export const DEFAULT_BUBBLE_HEIGHT = 72;
 export const IMAGE_RESERVE_MAX = 320;
 export const IMAGE_RESERVE_MIN = 80;
@@ -92,6 +94,15 @@ export function totalListHeight(heights) {
  * Inclusive [start, end) range of rows that should be in the DOM.
  * `pinIndexes` stay mounted so Jump to latest / deep-link / quote targets exist.
  */
+export function shouldVirtualizeMessages(count, min = MESSAGE_VIRTUALIZE_MIN) {
+  return (Number(count) || 0) > min;
+}
+
+export function fullMessageRange(count) {
+  const n = Math.max(0, Number(count) || 0);
+  return { start: 0, end: n, topSpacer: 0, bottomSpacer: 0 };
+}
+
 export function visibleMessageRange({
   heights = [],
   scrollTop = 0,
@@ -142,9 +153,25 @@ export function visibleMessageRange({
 export function commitWindowRange(prev, next, heights, {
   holdRows = WINDOW_HOLD_ROWS,
   force = false,
+  expandOnly = false,
 } = {}) {
   if (!next) return prev || { start: 0, end: 0, topSpacer: 0, bottomSpacer: 0 };
   if (force || !prev) return next;
+  if (expandOnly) {
+    const start = Math.min(num(prev.start), num(next.start));
+    const end = Math.max(num(prev.end), num(next.end));
+    const topSpacer = totalListHeight((heights || []).slice(0, start));
+    const bottomSpacer = totalListHeight((heights || []).slice(end));
+    if (
+      start === prev.start
+      && end === prev.end
+      && topSpacer === prev.topSpacer
+      && bottomSpacer === prev.bottomSpacer
+    ) {
+      return prev;
+    }
+    return { start, end, topSpacer, bottomSpacer };
+  }
   const count = (heights || []).length;
   const startDelta = Math.abs(num(next.start) - num(prev.start));
   const endDelta = Math.abs(num(next.end) - num(prev.end));

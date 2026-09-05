@@ -26,6 +26,8 @@ assert(pinSrc.includes("function pinChildToBottom"), "jump-to-latest must pin th
 const virtSrc = readFileSync(new URL("../src/lib/messageListWindow.js", import.meta.url), "utf8");
 assert(virtSrc.includes("function visibleMessageRange"), "thread must virtualize with a scroll-height-preserving window");
 assert(virtSrc.includes("function commitWindowRange"), "virtual window must hold the mounted slice while scrolling");
+assert(virtSrc.includes("function shouldVirtualizeMessages"), "short threads must stay fully mounted");
+assert(src.includes("expandOnly") && src.includes("userScrollingRef"), "must not remount or setState mid-fling");
 assert(src.includes("overflowAnchor") && src.includes("onListScroll"), "thread scroll must not remount on every tick or fight anchoring");
 assert(src.includes("data-virt-top") && src.includes("onEnsureMessage"), "thread must window bubbles and jump to quoted parents");
 assert(!/scrollTop\s*=\s*scroller\.scrollHeight/.test(pinSrc), "must not assign scrollHeight as scrollTop");
