@@ -1,5 +1,5 @@
 /* Service worker — web push + Home Screen icon badge (iOS 16.4+ / Android). */
-/* v9 — title is sender name only (iOS already shows from Macros & Mamas) */
+/* v10 — cache signed chat photos by object path so a token refresh stays warm */
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -71,6 +71,35 @@ self.addEventListener("notificationclick", (event) => {
       return undefined;
     }),
   );
+});
+
+const ATTACHMENT_CACHE = "mm-message-attachments-v1";
+
+function attachmentObjectPath(url) {
+  try {
+    const parsed = new URL(url);
+    return /\/storage\/v1\/object\/sign\/(message-attachments|channel-attachments)\//.test(parsed.pathname)
+      ? parsed.pathname
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+  const path = attachmentObjectPath(event.request.url);
+  if (!path) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(ATTACHMENT_CACHE);
+    const hit = await cache.match(path);
+    if (hit) return hit;
+    const response = await fetch(event.request);
+    if (response.ok) {
+      try { await cache.put(path, response.clone()); } catch { /* quota */ }
+    }
+    return response;
+  })());
 });
 
 /** Same-origin relative paths only — blocks javascript: / external open-redirects. */

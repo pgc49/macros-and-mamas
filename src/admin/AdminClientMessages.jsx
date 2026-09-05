@@ -31,7 +31,9 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const [hasEarlier, setHasEarlier] = useState(false);
   const [error, setError] = useState("");
   const messagesRef = useRef(messages);
+  const hasEarlierRef = useRef(hasEarlier);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { hasEarlierRef.current = hasEarlier; }, [hasEarlier]);
 
   const name = fullName(client) || client?.name || "her";
   const first = String(name).trim().split(/\s+/)[0] || "her";
@@ -121,6 +123,19 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     setHasEarlier(pageHasMore(older, MESSAGE_PAGE_SIZE));
   }, [clientId]);
 
+  const ensureMessage = useCallback(async (messageId) => {
+    let guard = 0;
+    while (guard < 24) {
+      if ((messagesRef.current || []).some((row) => String(row?.id || "") === String(messageId || ""))) {
+        return true;
+      }
+      if (!hasEarlierRef.current) break;
+      await loadEarlier();
+      guard += 1;
+    }
+    return (messagesRef.current || []).some((row) => String(row?.id || "") === String(messageId || ""));
+  }, [loadEarlier]);
+
   const send = async (body, file = null, opts = {}) => {
     if (!clientId) return;
     setError("");
@@ -200,6 +215,7 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           onReact={react}
           onMarkRead={markRead}
           onLoadEarlier={loadEarlier}
+          onEnsureMessage={ensureMessage}
           hasEarlier={hasEarlier}
           showReadReceipts
           allowVoiceMemo

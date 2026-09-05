@@ -86,6 +86,10 @@ jobs:
             cp supabase/migrations/20260905120000_conversation_last_inbound_at.sql \
               "$DB_ROOT/supabase/migrations/"
           fi
+          if [ -f supabase/migrations/20260905160000_message_attachment_media.sql ]; then
+            cp supabase/migrations/20260905160000_message_attachment_media.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           if [ -f supabase/migrations/20260811064316_push_subscription_origin.sql ]; then
             cp supabase/migrations/20260811064316_push_subscription_origin.sql \
               "$DB_ROOT/supabase/migrations/"

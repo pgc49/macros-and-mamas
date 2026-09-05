@@ -92,12 +92,16 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
   const activePillRef = useRef(activePill);
   const dmMessagesRef = useRef(dmMessages);
   const channelMessagesRef = useRef(channelMessages);
+  const dmHasEarlierRef = useRef(dmHasEarlier);
+  const channelHasEarlierRef = useRef(channelHasEarlier);
   /** Per-channel load counter: a slower response must not overwrite a newer one. */
   const channelLoadSeq = useRef(new Map());
 
   useEffect(() => { activePillRef.current = activePill; }, [activePill]);
   useEffect(() => { dmMessagesRef.current = dmMessages; }, [dmMessages]);
   useEffect(() => { channelMessagesRef.current = channelMessages; }, [channelMessages]);
+  useEffect(() => { dmHasEarlierRef.current = dmHasEarlier; }, [dmHasEarlier]);
+  useEffect(() => { channelHasEarlierRef.current = channelHasEarlier; }, [channelHasEarlier]);
 
   useEffect(() => {
     if (!userId) return;
@@ -272,6 +276,36 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
       [conversationId]: pageHasMore(older, MESSAGE_PAGE_SIZE),
     }));
   }, []);
+
+  const messageInList = (list, messageId) => (
+    (list || []).some((row) => String(row?.id || "") === String(messageId || "")
+      || String(row?.client_message_id || "") === String(messageId || ""))
+  );
+
+  const ensureChannelMessage = useCallback(async (messageId) => {
+    const conversationId = activePillRef.current;
+    if (!conversationId || conversationId === "callie" || !messageId) return false;
+    let guard = 0;
+    while (guard < 24) {
+      if (messageInList(channelMessagesRef.current[conversationId], messageId)) return true;
+      if (!channelHasEarlierRef.current[conversationId]) break;
+      await loadEarlierChannel();
+      guard += 1;
+    }
+    return messageInList(channelMessagesRef.current[conversationId], messageId);
+  }, [loadEarlierChannel]);
+
+  const ensureDmMessage = useCallback(async (messageId) => {
+    if (!messageId) return false;
+    let guard = 0;
+    while (guard < 24) {
+      if (messageInList(dmMessagesRef.current, messageId)) return true;
+      if (!dmHasEarlierRef.current) break;
+      await loadEarlierDm();
+      guard += 1;
+    }
+    return messageInList(dmMessagesRef.current, messageId);
+  }, [loadEarlierDm]);
 
   useEffect(() => {
     if (!channels.length || deepLinkedChannel.current) return;
@@ -713,6 +747,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
                 : "No group messages yet — say hi when you’re ready."
             }
             onLoadEarlier={loadEarlierChannel}
+            onEnsureMessage={ensureChannelMessage}
             hasEarlier={!!channelHasEarlier[activeChannel.conversation.id]}
             focusMessageId={deepLink.channel === activeChannel.conversation.id ? (deepLink.message || "") : ""}
             showPushPrompt
@@ -742,6 +777,7 @@ export function MessagesPanel({ userId, onUnreadChange, onComposerFocusChange })
             onReact={reactDm}
             onMarkRead={markRead}
             onLoadEarlier={loadEarlierDm}
+            onEnsureMessage={ensureDmMessage}
             hasEarlier={dmHasEarlier}
             focusMessageId={!deepLink.channel ? (deepLink.message || "") : ""}
             enableReply

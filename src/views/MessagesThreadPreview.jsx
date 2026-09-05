@@ -42,11 +42,20 @@ function seedWindow() {
         attachment_path: `aug/photo-${n}.jpg`,
         attachment_name: `photo-${n}.jpg`,
         attachment_mime: "image/jpeg",
+        // Live rows have no stored size. 96 matches that so the preview
+        // cannot hide a crushed 80px strip.
+        ...(n === 96 ? {} : { attachment_width: 640, attachment_height: 400 }),
         attachmentUrl: photoDataUrl(`Photo ${n}`, 20 + n),
       }));
       continue;
     }
-    rows.push(makeMessage(n));
+    rows.push(n === 100
+      ? makeMessage(n, {
+        body: "Replying to week-one protein oatmeal",
+        reply_to_id: "m-8",
+        reply_to: { id: "m-8", body: "Group post 8 — how are we doing this week?", missing: true },
+      })
+      : makeMessage(n));
   }
   return rows;
 }
@@ -70,6 +79,25 @@ export function MessagesThreadPreview() {
     setMessages((list) => mergeMessagesById(older, list));
     setNextOlder(start - 1);
     setHasEarlier(start > 1);
+  };
+
+  const ensureMessage = async (messageId) => {
+    const id = String(messageId || "");
+    const has = (list) => (list || []).some((row) => String(row.id) === id || String(row.client_message_id) === id);
+    if (has(messages)) return true;
+    let older = nextOlder;
+    let list = messages;
+    while (older > 0 && !has(list)) {
+      const start = Math.max(1, older - MESSAGE_PAGE_SIZE + 1);
+      const page = [];
+      for (let n = start; n <= older; n += 1) page.push(makeMessage(n));
+      list = mergeMessagesById(page, list);
+      older = start - 1;
+    }
+    setMessages(list);
+    setNextOlder(older);
+    setHasEarlier(older > 0);
+    return has(list);
   };
 
   const someonePosted = () => {
@@ -224,9 +252,10 @@ export function MessagesThreadPreview() {
           showSenderNames
           onSend={send}
           onLoadEarlier={loadEarlier}
+          onEnsureMessage={ensureMessage}
           hasEarlier={hasEarlier}
           emptyState="No group messages yet."
-          enableReply={false}
+          enableReply
           showPushPrompt={false}
         />
       </div>

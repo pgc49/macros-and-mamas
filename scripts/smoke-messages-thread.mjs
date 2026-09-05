@@ -23,6 +23,13 @@ const pinSrc = readFileSync(new URL("../src/lib/stickToBottom.js", import.meta.u
 assert(pinSrc.includes("function bottomScrollTop"), "bottom pin must compute live-edge scrollTop");
 assert(pinSrc.includes("scroller.scrollTop = bottomScrollTop(scroller)"), "bottom pin should scroll the list to the tip");
 assert(pinSrc.includes("function pinChildToBottom"), "jump-to-latest must pin the tip bubble to the pane");
+const virtSrc = readFileSync(new URL("../src/lib/messageListWindow.js", import.meta.url), "utf8");
+assert(virtSrc.includes("function visibleMessageRange"), "thread must virtualize with a scroll-height-preserving window");
+assert(virtSrc.includes("function commitWindowRange"), "virtual window must hold the mounted slice while scrolling");
+assert(virtSrc.includes("function shouldVirtualizeMessages"), "short threads must stay fully mounted");
+assert(src.includes("expandOnly") && src.includes("userScrollingRef"), "must not remount or setState mid-fling");
+assert(src.includes("overflowAnchor") && src.includes("onListScroll"), "thread scroll must not remount on every tick or fight anchoring");
+assert(src.includes("data-virt-top") && src.includes("onEnsureMessage"), "thread must window bubbles and jump to quoted parents");
 assert(!/scrollTop\s*=\s*scroller\.scrollHeight/.test(pinSrc), "must not assign scrollHeight as scrollTop");
 assert(src.includes('height: "100%"'), "customer thread must fill the leftover Messages pane");
 assert(!src.includes("62vh"), "customer thread must not use a scrollable 62vh box");
@@ -128,6 +135,17 @@ try {
         created_at: "2026-08-10T10:06:00.000Z",
         reactions: [],
       },
+      {
+        id: "m-photo",
+        sender_id: "becca-1",
+        body: "",
+        attachment_path: "aug/plate.jpg",
+        attachment_mime: "image/jpeg",
+        attachment_name: "plate.jpg",
+        attachmentUrl: "https://example.com/plate.jpg",
+        created_at: "2026-08-10T10:07:00.000Z",
+        reactions: [],
+      },
     ],
     onSend: async () => {},
     onEdit: async () => {},
@@ -139,6 +157,8 @@ try {
   assert(html.includes("Hi Callie"), "renders mama text");
   assert(html.includes("Hey Becca"), "renders admin text");
   assert(html.includes("Voice memo") || html.includes("voice"), "renders voice memo player");
+  assert(html.includes('data-open-photo="m-photo"'), "photos should open an in-app viewer");
+  assert(!/<a[^>]+target="_blank"[^>]*>\s*<img/.test(html), "thread images should not open a new tab");
   assert(!html.includes("Messages couldn’t load"), "must not render error boundary copy");
 
   const adminMod = await vite.ssrLoadModule("/src/admin/AdminClientMessages.jsx");

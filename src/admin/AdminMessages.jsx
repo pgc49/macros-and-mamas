@@ -672,6 +672,40 @@ export function AdminMessages({
     }));
   }, []);
 
+  const dmHasEarlierRef = useRef(dmHasEarlier);
+  const channelHasEarlierRef = useRef(channelHasEarlier);
+  useEffect(() => { dmHasEarlierRef.current = dmHasEarlier; }, [dmHasEarlier]);
+  useEffect(() => { channelHasEarlierRef.current = channelHasEarlier; }, [channelHasEarlier]);
+
+  const ensureChannelMessage = useCallback(async (messageId) => {
+    const conversationId = activeRef.current?.type === "channel" ? activeRef.current.id : null;
+    if (!conversationId || !messageId) return false;
+    let guard = 0;
+    while (guard < 24) {
+      const list = channelMessagesRef.current[conversationId] || [];
+      if (list.some((row) => String(row?.id || "") === String(messageId))) return true;
+      if (!channelHasEarlierRef.current[conversationId]) break;
+      await loadEarlierChannel();
+      guard += 1;
+    }
+    return (channelMessagesRef.current[conversationId] || [])
+      .some((row) => String(row?.id || "") === String(messageId));
+  }, [loadEarlierChannel]);
+
+  const ensureDmMessage = useCallback(async (messageId) => {
+    if (!messageId) return false;
+    let guard = 0;
+    while (guard < 24) {
+      if ((dmMessagesRef.current || []).some((row) => String(row?.id || "") === String(messageId))) {
+        return true;
+      }
+      if (!dmHasEarlierRef.current) break;
+      await loadEarlierDm();
+      guard += 1;
+    }
+    return (dmMessagesRef.current || []).some((row) => String(row?.id || "") === String(messageId));
+  }, [loadEarlierDm]);
+
   const inboxIds = useMemo(() => new Set(inbox.map((i) => i.clientId)), [inbox]);
   const q = query.trim().toLowerCase();
 
@@ -972,6 +1006,7 @@ export function AdminMessages({
                   onReact={reactChannel}
                   onMarkRead={markChannelRead}
                   onLoadEarlier={loadEarlierChannel}
+                  onEnsureMessage={ensureChannelMessage}
                   hasEarlier={!!channelHasEarlier[active.id]}
                   focusMessageId={active.type === "channel" && startChannel === active.id ? focusId : ""}
                   canModerate
@@ -1026,6 +1061,7 @@ export function AdminMessages({
                   onReact={reactDm}
                   onMarkRead={dmLoadedClientId === active.id ? markDmRead : undefined}
                   onLoadEarlier={loadEarlierDm}
+                  onEnsureMessage={ensureDmMessage}
                   hasEarlier={dmLoadedClientId === active.id && dmHasEarlier}
                   focusMessageId={!startChannel && startClient === active.id ? focusId : ""}
                   showReadReceipts
