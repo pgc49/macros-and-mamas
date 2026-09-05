@@ -49,6 +49,7 @@ import { AppUpdateBanner } from "../components/AppUpdateBanner";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../auth/useAuth.jsx";
 import { syncAppBadge } from "../lib/push";
+import { parseMessageDeepLink } from "../lib/messageDeepLink";
 
 const STAGE_LABEL = {
   signed_up: "Signed up — unpaid",
@@ -78,6 +79,15 @@ export function AdminPortal({ roster, setRoster, stats: _stats, adminSel, setAdm
   const [overrides, setOverrides] = useState([]);
   const [composerOffscreen, setComposerOffscreen] = useState(false);
   const composerRef = useRef(null);
+  const deepLinkedClient = useRef(false);
+
+  useEffect(() => {
+    if (deepLinkedClient.current) return;
+    const { client } = parseMessageDeepLink(window.location.search);
+    if (!client) return;
+    deepLinkedClient.current = true;
+    setAdminSel(client);
+  }, [setAdminSel]);
   const [filter, setFilter] = useState(() => {
     if (typeof window === "undefined") return "needs_you";
     const q = new URLSearchParams(window.location.search).get("filter");

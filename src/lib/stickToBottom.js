@@ -49,6 +49,48 @@ export function isScrollable(metrics) {
  * page is prepended above it. Measured after the prepend commits, so it also
  * overrides whatever the browser's own scroll anchoring picked.
  */
+/**
+ * Scroll a nested row into a chat scroller. `offsetTop` is wrong here — the
+ * bubble's offsetParent is the flex row, not the pane — so we use the
+ * bounding-box delta against the live scroll port.
+ */
+/** Live-edge offset. `scrollTop = scrollHeight` is not clamped the same in every engine and can land at 0. */
+export function bottomScrollTop(scroller) {
+  return Math.max(0, num(scroller?.scrollHeight) - num(scroller?.clientHeight));
+}
+
+export function scrollToBottom(scroller) {
+  if (!scroller) return;
+  scroller.scrollTop = bottomScrollTop(scroller);
+}
+
+/**
+ * Put the last bubble's bottom on the pane's bottom. Survives a scroller
+ * whose `scrollHeight` has not caught up to the laid-out list yet.
+ */
+export function pinChildToBottom(scroller, child) {
+  if (!scroller || !child?.getBoundingClientRect || !scroller.getBoundingClientRect) {
+    return false;
+  }
+  const scrollerRect = scroller.getBoundingClientRect();
+  const childRect = child.getBoundingClientRect();
+  if (scrollerRect.height < 2) return false;
+  scroller.scrollTop = num(scroller.scrollTop) + (childRect.bottom - scrollerRect.bottom);
+  return true;
+}
+
+export function scrollChildIntoScroller(scroller, child, pad = 16) {
+  if (!scroller || !child?.getBoundingClientRect || !scroller.getBoundingClientRect) {
+    return false;
+  }
+  const scrollerRect = scroller.getBoundingClientRect();
+  const childRect = child.getBoundingClientRect();
+  if (scrollerRect.height < 2) return false;
+  const next = num(scroller.scrollTop) + (childRect.top - scrollerRect.top) - Math.max(0, num(pad));
+  scroller.scrollTop = Math.max(0, next);
+  return true;
+}
+
 export function preservedScrollTop({ scrollHeight, previousScrollHeight, previousScrollTop }) {
   const grew = num(scrollHeight) - num(previousScrollHeight);
   return Math.max(0, num(previousScrollTop) + grew);
@@ -80,8 +122,9 @@ export function createBottomPin(scroller, {
   content = null,
   slack = BOTTOM_SLACK_PX,
   onPinnedChange = null,
+  initialPinned = true,
 } = {}) {
-  let pinned = true;
+  let pinned = initialPinned !== false;
   let disposed = false;
   const teardown = [];
 
@@ -93,7 +136,7 @@ export function createBottomPin(scroller, {
 
   const toBottom = () => {
     if (disposed || !scroller) return;
-    scroller.scrollTop = scroller.scrollHeight;
+    scrollToBottom(scroller);
   };
 
   const repin = () => {

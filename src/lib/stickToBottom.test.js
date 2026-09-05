@@ -8,8 +8,12 @@ import {
   isNearBottom,
   isScrollable,
   preservedScrollTop,
+  bottomScrollTop,
+  pinChildToBottom,
+  scrollChildIntoScroller,
   scrollIntent,
   scrollMetrics,
+  scrollToBottom,
 } from "./stickToBottom";
 
 /**
@@ -250,6 +254,60 @@ describe("createBottomPin", () => {
     for (const fn of callbacks) fn();
 
     expect(el.scrollTop).toBe(900);
+    pin.dispose();
+  });
+
+  it("computes the live-edge scrollTop instead of assigning scrollHeight", () => {
+    const el = fakeScroller({ scrollHeight: 1000, clientHeight: 400, scrollTop: 80 });
+    expect(bottomScrollTop(el)).toBe(600);
+    scrollToBottom(el);
+    expect(el.scrollTop).toBe(600);
+  });
+
+  it("pins the last bubble to the pane bottom", () => {
+    const el = fakeScroller({ scrollTop: 100, clientHeight: 400, scrollHeight: 2000 });
+    el.getBoundingClientRect = () => ({ top: 0, bottom: 400, height: 400 });
+    const child = { getBoundingClientRect: () => ({ top: 280, bottom: 360, height: 80 }) };
+    expect(pinChildToBottom(el, child)).toBe(true);
+    expect(el.scrollTop).toBe(60);
+  });
+
+  it("scrolls a nested child by bounding-box delta, not offsetTop", () => {
+    const el = fakeScroller({ scrollTop: 40, clientHeight: 400, scrollHeight: 2000 });
+    el.getBoundingClientRect = () => ({ top: 100, height: 400 });
+    const child = {
+      offsetTop: 8,
+      getBoundingClientRect: () => ({ top: 520, height: 80 }),
+    };
+    expect(scrollChildIntoScroller(el, child, 16)).toBe(true);
+    expect(el.scrollTop).toBe(40 + (520 - 100) - 16);
+  });
+
+  it("waits when the pane has no height yet", () => {
+    const el = fakeScroller();
+    el.getBoundingClientRect = () => ({ top: 0, height: 0 });
+    const child = { getBoundingClientRect: () => ({ top: 200, height: 40 }) };
+    expect(scrollChildIntoScroller(el, child)).toBe(false);
+    expect(el.scrollTop).toBe(0);
+  });
+
+  it("does not snap to the tip when it starts unpinned for a deep-link", () => {
+    const callbacks = [];
+    globalThis.ResizeObserver = class {
+      constructor(fn) { callbacks.push(fn); }
+      observe() {}
+      disconnect() {}
+    };
+    const el = fakeScroller({ scrollTop: 80 });
+    const pin = createBottomPin(el, { initialPinned: false });
+    expect(pin.isPinned()).toBe(false);
+
+    el.grow(200);
+    for (const fn of callbacks) fn();
+    el.emit("load");
+
+    expect(el.scrollTop).toBe(80);
+    expect(pin.isPinned()).toBe(false);
     pin.dispose();
   });
 

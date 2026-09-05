@@ -40,6 +40,9 @@ describe("durable channel notification processing", () => {
     expect(channelNotificationUrl("channel-1", false)).toBe(
       "/dashboard?tab=messages&channel=channel-1",
     );
+    expect(channelNotificationUrl("channel-1", false, "m-9")).toBe(
+      "/dashboard?tab=messages&channel=channel-1&message=m-9",
+    );
   });
 
   it("retries malformed successful source responses", async () => {

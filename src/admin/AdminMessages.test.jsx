@@ -107,6 +107,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("AdminMessages thread switching", () => {
@@ -572,6 +573,37 @@ describe("AdminMessages group loading", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: /August Group/ }));
+    await waitFor(() => {
+      expect(dbMock.loadChannelMessages).toHaveBeenCalledWith("aug");
+    });
+    expect(await screen.findByText("group hello")).toBeTruthy();
+  });
+
+  it("opens a push deep-linked group without an inbox tap", async () => {
+    dbMock.listMyChannels.mockResolvedValue([
+      channelItem("aug", "August Group"),
+    ]);
+    dbMock.loadChannelMessages.mockResolvedValue([
+      {
+        id: "g-1",
+        conversation_id: "aug",
+        sender_id: "mama-a",
+        body: "group hello",
+        created_at: "2026-08-10T10:00:00Z",
+        reactions: [],
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        initialChannelId="aug"
+        focusMessageId="g-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
     await waitFor(() => {
       expect(dbMock.loadChannelMessages).toHaveBeenCalledWith("aug");
     });

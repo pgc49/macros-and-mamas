@@ -115,7 +115,7 @@ async function processClaimedDm({ env, messageId, msg, waitUntil }) {
       const push = await attemptPushToProfile(env, coachId, {
         title: firstName(client.name) || "Mama",
         body: preview || "Open Messages in admin",
-        url: `/admin?tab=messages&client=${encodeURIComponent(loaded.client_id)}`,
+        url: `/admin?tab=messages&client=${encodeURIComponent(loaded.client_id)}&message=${encodeURIComponent(loaded.id)}`,
         unreadCount: unreadCount || 1,
       });
       pushSent += push.sent;
@@ -131,7 +131,7 @@ async function processClaimedDm({ env, messageId, msg, waitUntil }) {
       const push = await attemptPushToProfile(env, loaded.client_id, {
         title: "Callie",
         body: preview || "Open Messages in the app",
-        url: "/dashboard?tab=messages",
+        url: `/dashboard?tab=messages&message=${encodeURIComponent(loaded.id)}`,
         unreadCount: unreadCount || 1,
       });
       pushSent = push.sent;
@@ -165,7 +165,7 @@ async function processClaimedDm({ env, messageId, msg, waitUntil }) {
       const push = await attemptPushToProfile(env, adminId, {
         title: firstName(sender.name) || "Admin",
         body: preview || "Open Messages in admin",
-        url: "/admin?tab=messages",
+        url: `/admin?tab=messages&message=${encodeURIComponent(loaded.id)}`,
         unreadCount: unreadCount || 1,
       });
       pushSent += push.sent;

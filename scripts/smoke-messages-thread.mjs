@@ -20,7 +20,10 @@ assert(!/\bbottomRef\b/.test(src), "MessagesThread must not reference bottomRef"
 assert(src.includes("createBottomPin"), "MessagesThread should pin the live edge while content settles");
 assert(!src.includes("setTimeout(jump"), "MessagesThread must not one-shot jump after a delay");
 const pinSrc = readFileSync(new URL("../src/lib/stickToBottom.js", import.meta.url), "utf8");
-assert(pinSrc.includes("scrollTop = scroller.scrollHeight") || pinSrc.includes("scroller.scrollTop = scroller.scrollHeight"), "bottom pin should scroll the list to the tip");
+assert(pinSrc.includes("function bottomScrollTop"), "bottom pin must compute live-edge scrollTop");
+assert(pinSrc.includes("scroller.scrollTop = bottomScrollTop(scroller)"), "bottom pin should scroll the list to the tip");
+assert(pinSrc.includes("function pinChildToBottom"), "jump-to-latest must pin the tip bubble to the pane");
+assert(!/scrollTop\s*=\s*scroller\.scrollHeight/.test(pinSrc), "must not assign scrollHeight as scrollTop");
 assert(src.includes('height: "100%"'), "customer thread must fill the leftover Messages pane");
 assert(!src.includes("62vh"), "customer thread must not use a scrollable 62vh box");
 assert(src.includes('minHeight: 0'), "message flex items must be allowed to shrink");
