@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("../auth/useAuth.jsx", () => ({
@@ -50,12 +50,12 @@ describe("AdminTodayBanners", () => {
     );
     const pin = document.querySelector("[data-banner-catalog='homescreen']");
     const pinGotIt = [...pin.querySelectorAll("button")].find((b) => b.textContent === "Got it");
-    pinGotIt.click();
+    fireEvent.click(pinGotIt);
     expect(localStorage.getItem("mm_homescreen_tip_dismissed")).toBeNull();
 
     const notes = document.querySelector("[data-banner-catalog='whatsNew']");
     const notesGotIt = [...notes.querySelectorAll("button")].find((b) => b.textContent === "Got it");
-    notesGotIt.click();
+    fireEvent.click(notesGotIt);
     expect(localStorage.getItem("mm_release_notes_seen")).toBeNull();
   });
 });

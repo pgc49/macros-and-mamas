@@ -72,7 +72,8 @@ export function AdminTodayBanners() {
       </p>
 
       {TODAY_BANNERS.map((row) => (
-        <Card key={row.id} style={{ marginBottom: 16 }} data-banner-catalog={row.id}>
+        <div key={row.id} data-banner-catalog={row.id}>
+        <Card style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", marginBottom: 8 }}>
             <div style={{ fontFamily: FD, fontSize: 20 }}>{row.title}</div>
             <span style={{
@@ -109,6 +110,7 @@ export function AdminTodayBanners() {
           ) : null}
           <BannerPreview id={row.id} />
         </Card>
+        </div>
       ))}
     </div>
   );

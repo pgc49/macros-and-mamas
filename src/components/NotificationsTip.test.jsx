@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 
 vi.mock("../lib/push", () => ({
   enablePushNotifications: vi.fn(),
@@ -37,7 +37,7 @@ describe("NotificationsTip", () => {
     localStorage.setItem("mm_notifications_tip_dismissed", "1");
     const view = render(<NotificationsTip cohortLabel="2026-07" forceVisible />);
     expect(view.getByRole("heading", { name: "Turn on notifications" })).toBeTruthy();
-    view.getByRole("button", { name: "Got it" }).click();
+    fireEvent.click(view.getByRole("button", { name: "Got it" }));
     expect(localStorage.getItem("mm_notifications_tip_dismissed")).toBe("1");
     expect(view.queryByRole("heading", { name: "Turn on notifications" })).toBeNull();
   });
