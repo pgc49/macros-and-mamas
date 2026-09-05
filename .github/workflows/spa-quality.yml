@@ -78,6 +78,10 @@ jobs:
             cp supabase/migrations/20260811022913_messaging_idempotency_outbox.sql \
               "$DB_ROOT/supabase/migrations/"
           fi
+          if [ -f supabase/migrations/20260905050000_messaging_scale_indexes.sql ]; then
+            cp supabase/migrations/20260905050000_messaging_scale_indexes.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           if [ -f supabase/migrations/20260811064316_push_subscription_origin.sql ]; then
             cp supabase/migrations/20260811064316_push_subscription_origin.sql \
               "$DB_ROOT/supabase/migrations/"
