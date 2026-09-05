@@ -55,6 +55,19 @@ const adminPortalSrc = readFileSync(new URL("../src/admin/AdminPortal.jsx", impo
 assert(adminPortalSrc.includes('name="AdminMessages"'), "admin inbox needs a local boundary");
 assert(adminPortalSrc.includes("client-messages-${sel.id}"), "client-message boundary must remount by client");
 assert(adminPortalSrc.includes("contentMaxWidth={tab === \"messages\" ? 1120 : 560}"), "admin Messages must use a wide desktop shell");
+assert(adminPortalSrc.includes("lockContentScroll={tab === \"messages\"}"), "admin Messages must lock page scroll so the composer stays put");
+assert(adminPortalSrc.includes("hideBottomBar={tab === \"messages\" && composerFocused}"), "admin Messages must hide the tab bar while the composer is focused");
+assert(adminPortalSrc.includes("onComposerFocusChange={setComposerFocused}"), "admin inbox must report composer focus to the shell");
+
+const adminInboxSrc = readFileSync(new URL("../src/admin/AdminMessages.jsx", import.meta.url), "utf8");
+assert(adminInboxSrc.includes("data-admin-thread-pane"), "admin thread pane must be marked for layout tests");
+assert(adminInboxSrc.includes('height: "100%"'), "admin thread must fill leftover Shell height");
+assert(!adminInboxSrc.includes("100dvh - 132px"), "admin thread must not guess viewport minus chrome");
+assert(!adminInboxSrc.includes("78vh"), "admin thread must not use a viewport-height card on desktop");
+
+const adminNavSrc = readFileSync(new URL("../src/admin/AdminBottomNav.jsx", import.meta.url), "utf8");
+assert(adminNavSrc.includes('padding: "12px 12px 4px"'), "admin tab bar must match mama compact padding");
+assert(!adminNavSrc.includes("safe-area-inset-bottom"), "admin tab bar must not double-count safe-area (that lives on .mam-tabbar)");
 
 const shellSrc = readFileSync(new URL("../src/components/ui.jsx", import.meta.url), "utf8");
 assert(shellSrc.includes("contentMaxWidth = 560"), "Shell must keep the phone-width default");
