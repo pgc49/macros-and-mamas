@@ -124,6 +124,6 @@ alter table public.conversation_members enable row level security;
 alter table public.conversation_members force row level security;
 
 grant select, insert, update on table public.conversation_members to authenticated;
-grant select, insert on table public.conversation_messages to authenticated, service_role;
+grant select, insert, update on table public.conversation_messages to authenticated, service_role;
 grant select, insert on table public.conversations to authenticated;
 
