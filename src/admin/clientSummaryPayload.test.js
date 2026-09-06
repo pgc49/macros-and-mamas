@@ -22,6 +22,23 @@ describe("buildClientSummaryPayload", () => {
     expect(JSON.stringify(payload)).not.toMatch(/attachment|image|photo/i);
     expect(payload.started).toBe(false);
     expect(payload.week).toBeNull();
+    expect(payload.breastfeeding).toBe(null);
+    expect(payload.monthsPP).toBe(null);
+  });
+
+  it("passes her season so the snapshot cannot invent postpartum", () => {
+    const dolly = buildClientSummaryPayload({
+      client: { name: "Dolly", pregnant: false, breastfeeding: false, monthsPP: "" },
+    });
+    expect(dolly.pregnant).toBe(false);
+    expect(dolly.breastfeeding).toBe(false);
+    expect(dolly.monthsPP).toBe(null);
+
+    const nursing = buildClientSummaryPayload({
+      client: { name: "Sarah", breastfeeding: true, monthsPP: 9, pregnant: false },
+    });
+    expect(nursing.breastfeeding).toBe(true);
+    expect(nursing.monthsPP).toBe(9);
   });
 
   it("marks her as not started when ranges are not approved", () => {

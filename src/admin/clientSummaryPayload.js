@@ -2,6 +2,7 @@
  * Build the OpenRouter payload for a per-client summary.
  * v1: no DM bodies, no photos, no group posts, no full profiles dump.
  */
+import { monthsPpNumber } from "../../functions/_shared/clientLifeStage.js";
 import { buildHabitRhythm, goalChipLabel } from "../lib/habitRhythm";
 import {
   assertNoMessageBodies,
@@ -53,6 +54,9 @@ export function buildClientSummaryPayload({
     week: client?.programWeek ?? null,
     started: client?.programStarted ?? (client?.programWeek != null && client.programWeek > 0),
     lastActive: client?.lastActiveDate || client?.lastMealDate || null,
+    pregnant: client?.pregnant === true ? true : client?.pregnant === false ? false : null,
+    breastfeeding: client?.breastfeeding === true ? true : client?.breastfeeding === false ? false : null,
+    monthsPP: monthsPpNumber(client),
     ranges: macros ? {
       cal: macros.cal,
       protein: macros.protein,
