@@ -115,6 +115,76 @@ describe("MealLogCard My plan list", () => {
   });
 });
 
+describe("pencilled coach meals on Today's log", () => {
+  it("shows an unmatched coach pencil under its slot with Ate it", async () => {
+    const onLogRecipe = vi.fn(async () => true);
+    render(
+      <MealLogCard
+        plannedMeals={[
+          {
+            id: "p-coach",
+            name: "Chicken bowl",
+            cal: 430,
+            p: 45,
+            c: 30,
+            f: 12,
+            slot: "dinner",
+            via: "coach",
+          },
+        ]}
+        todayLog={{ date: "2026-09-06", entries: [] }}
+        mealLogDate="2026-09-06"
+        onLogRecipe={onLogRecipe}
+      />,
+    );
+
+    expect(screen.getByText("Chicken bowl")).toBeTruthy();
+    expect(screen.getByText("Pencilled in · tap when you've eaten it")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Ate it" }));
+    await waitFor(() => expect(onLogRecipe).toHaveBeenCalledTimes(1));
+    expect(onLogRecipe.mock.calls[0][0]).toMatchObject({
+      name: "Chicken bowl",
+      slot: "dinner",
+      origin: "coach",
+    });
+  });
+
+  it("hides the pencil from Your plan so it is not listed twice", () => {
+    render(
+      <MealLogCard
+        initialMethod="recipes"
+        plannedMeals={[
+          {
+            id: "p-coach",
+            name: "Coach dinner",
+            cal: 500,
+            p: 40,
+            c: 40,
+            f: 15,
+            slot: "dinner",
+            via: "coach",
+          },
+          {
+            id: "p-plan",
+            name: "Plan lunch",
+            cal: 400,
+            p: 35,
+            c: 30,
+            f: 12,
+            slot: "lunch",
+            via: "recipe",
+          },
+        ]}
+        todayLog={{ date: "2026-09-06", entries: [] }}
+        mealLogDate="2026-09-06"
+      />,
+    );
+
+    expect(screen.getAllByText("Coach dinner").length).toBe(1);
+    expect(screen.getByText("Plan lunch")).toBeTruthy();
+  });
+});
+
 describe("MealLogCard Save to today", () => {
   it("does not call onConfirmEstimate twice while the first save is pending", async () => {
     let resolveConfirm;

@@ -36,6 +36,9 @@ import {
   isMyMealsFilter,
   MEAL_SLOT_FILTERS,
 } from "../utils/mealSearch";
+import { COACH_VIA, unmatchedCoachPencils } from "../utils/coachBudget";
+import { coachDisplayMacros } from "../utils/coachScale";
+import { COACH_COPY } from "../content/coachVoice";
 
 /** She pasted a link — the estimator only reads text, so say so plainly. */
 const URL_RE = /(https?:\/\/|www\.)\S+/i;
@@ -174,6 +177,7 @@ export function MealLogCard({
   // about the whole plate instead of throwing the first answer away.
   const [lastInput, setLastInput] = useState(null);
   const [rowRefineBusy, setRowRefineBusy] = useState(false);
+  const [ateBusyId, setAteBusyId] = useState(null);
   const [rowRefineError, setRowRefineError] = useState("");
   const camRef = useRef(null);
   const libRef = useRef(null);
@@ -195,8 +199,15 @@ export function MealLogCard({
   const plannedForSlot = useMemo(
     () => (mineOnly
       ? []
-      : filterMealsBySlot(filterMealsByQuery(plannedMeals || [], planSearch), slotFilter)),
+      : filterMealsBySlot(
+        filterMealsByQuery((plannedMeals || []).filter((m) => m.via !== COACH_VIA), planSearch),
+        slotFilter,
+      )),
     [mineOnly, plannedMeals, planSearch, slotFilter],
+  );
+  const pencilledOpen = useMemo(
+    () => unmatchedCoachPencils(plannedMeals, todayLog?.entries || []),
+    [plannedMeals, todayLog],
   );
   const customForSlot = useMemo(
     () => filterMealsBySlot(filterMealsByQuery(customTagged, planSearch), slotFilter),
@@ -737,6 +748,34 @@ export function MealLogCard({
 
   const slotBuckets = groupEntriesBySlot(entries, { logDate: date, todayIso: today });
   const hasAnyEntries = entries.length > 0;
+  const hasPencils = pencilledOpen.length > 0;
+
+  const atePencilled = async (meal) => {
+    if (ateBusyId || !onLogRecipe) return;
+    setAteBusyId(meal.id || meal.name);
+    try {
+      const macros = coachDisplayMacros(meal);
+      const via = meal.source === "my"
+        ? "custom"
+        : meal.source === "menu"
+          ? "menu"
+          : "recipe";
+      await onLogRecipe({
+        name: meal.name,
+        cal: macros.cal,
+        p: macros.p,
+        c: macros.c,
+        f: macros.f,
+        via,
+        slot: meal.slot,
+        origin: "coach",
+      });
+    } finally {
+      setAteBusyId(null);
+    }
+  };
+
+  const pencilsForSlot = (slotKey) => pencilledOpen.filter((m) => normalizeSlot(m.slot) === slotKey);
 
   return (
     <div style={{ marginTop: 4 }}>
@@ -1617,7 +1656,7 @@ export function MealLogCard({
           </div>
         )}
 
-        {!hasAnyEntries ? (
+        {!hasAnyEntries && !hasPencils ? (
           <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.6, padding: "6px 0 10px" }}>
             Nothing logged this day. Snap a plate or menu, describe, or tap a recipe.
           </div>
@@ -1625,7 +1664,8 @@ export function MealLogCard({
           <>
             {SLOT_SECTION_ORDER.map((slotKey) => {
               const list = slotBuckets[slotKey] || [];
-              if (!list.length) return null;
+              const pencils = pencilsForSlot(slotKey);
+              if (!list.length && !pencils.length) return null;
               return (
                 <div key={slotKey} style={{ marginBottom: 12 }}>
                   <div
@@ -1792,6 +1832,51 @@ export function MealLogCard({
                       </button>
                     ),
                   )}
+                  {pencils.map((meal) => {
+                    const macros = coachDisplayMacros(meal);
+                    const busyAte = ateBusyId === (meal.id || meal.name);
+                    return (
+                      <div
+                        key={meal.id || `${meal.slot}-${meal.name}`}
+                        data-pencilled-row
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "9px 2px",
+                          borderBottom: `1px dashed ${T.border}`,
+                          opacity: 0.78,
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{meal.name}</div>
+                          <div style={{ fontSize: 11.5, color: T.inkSoft }}>{COACH_COPY.pencilledHint}</div>
+                        </div>
+                        <div style={{ fontSize: 12.5, color: T.inkSoft, whiteSpace: "nowrap" }}>
+                          {macros.cal} cal · P {macros.p}g · C {macros.c}g · F {macros.f}g
+                        </div>
+                        <button
+                          type="button"
+                          disabled={busyAte}
+                          onClick={() => atePencilled(meal)}
+                          style={{
+                            flexShrink: 0,
+                            fontFamily: F,
+                            fontWeight: 800,
+                            fontSize: 12,
+                            padding: "6px 10px",
+                            borderRadius: 999,
+                            border: `1.5px solid ${T.accent}`,
+                            background: "#fff",
+                            color: T.accentDeep,
+                            cursor: busyAte ? "default" : "pointer",
+                          }}
+                        >
+                          {busyAte ? "…" : COACH_COPY.ateIt}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}

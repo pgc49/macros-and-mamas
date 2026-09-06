@@ -11,10 +11,27 @@ import { normalizeSlot } from "./mealSlots.js";
 import {
   addMealToDay,
   customMealToPlanMeal,
+  PLAN_DAYS,
   recipeToPlanMeal,
   removeMealById,
   replaceMealById,
 } from "./weekPlan.js";
+
+const WEEKDAY_KEY_TO_PLAN = {
+  M: "Mon",
+  T: "Tue",
+  W: "Wed",
+  T2: "Thu",
+  F: "Fri",
+  S: "Sat",
+  S2: "Sun",
+};
+
+/** Week plan days are Mon…Sun. Habit checkins use M/T/W/T2. */
+export function planDayFromAnyKey(dayKey) {
+  if (PLAN_DAYS.includes(dayKey)) return dayKey;
+  return WEEKDAY_KEY_TO_PLAN[dayKey] || dayKey;
+}
 
 /** Card-scaled macros with qty 1. `recipeToPlanMeal` must not pin qty or clobber cal. */
 export function buildCoachPlanMeal(card, slot, qtyOverride) {
@@ -32,6 +49,7 @@ export function buildCoachPlanMeal(card, slot, qtyOverride) {
   return {
     ...built,
     via: COACH_VIA,
+    source: card.source || built.source || null,
     qty: 1,
     servings: 1,
     cal: fields.cal,
@@ -43,14 +61,15 @@ export function buildCoachPlanMeal(card, slot, qtyOverride) {
 
 /** Add or replace today's coach pencil for a slot. Incoming macros win. */
 export function writeCoachPencil(days, dayKey, card, slot, qtyOverride) {
+  const day = planDayFromAnyKey(dayKey);
   const built = buildCoachPlanMeal(card, slot, qtyOverride);
   const existing = coachPencilForSlot(
-    (days || []).find((d) => d.day === dayKey)?.meals,
+    (days || []).find((d) => d.day === day)?.meals,
     slot,
   );
   const next = existing
     ? replaceMealById(days, existing.id, built)
-    : addMealToDay(days, dayKey, built);
+    : addMealToDay(days, day, built);
   return { days: next, meal: built, replaced: Boolean(existing) };
 }
 
@@ -58,8 +77,9 @@ export function writeCoachPencil(days, dayKey, card, slot, qtyOverride) {
 export function clearCoachPencil(days, dayKey, slotOrMeal) {
   const slot = normalizeSlot(typeof slotOrMeal === "string" ? slotOrMeal : slotOrMeal?.slot);
   if (!slot) return days;
+  const day = planDayFromAnyKey(dayKey);
   const existing = coachPencilForSlot(
-    (days || []).find((d) => d.day === dayKey)?.meals,
+    (days || []).find((d) => d.day === day)?.meals,
     slot,
   );
   if (!existing?.id) return days;
@@ -71,7 +91,8 @@ export function removeCoachPencilMatchingLog(days, dayKey, entry) {
   const slot = normalizeSlot(entry?.slot);
   const name = entry?.name;
   if (!slot || !name) return days;
-  const existing = (days || []).find((d) => d.day === dayKey)?.meals?.find((m) => (
+  const day = planDayFromAnyKey(dayKey);
+  const existing = (days || []).find((d) => d.day === day)?.meals?.find((m) => (
     m.via === COACH_VIA
     && normalizeSlot(m.slot) === slot
     && namesMatch(m.name, name)

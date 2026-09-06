@@ -10,7 +10,7 @@ import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from ".
 import { entriesForLogDate, hydrateTodayLog, sumLogTotals } from "./utils/mealLogState";
 import { resolveLogSlot } from "./utils/mealSlots";
 import { coachCardVia, coachLogFromCard, unscaleRankedCard } from "./utils/coachScale";
-import { writeCoachPencil } from "./utils/coachPencil";
+import { removeCoachPencilMatchingLog, writeCoachPencil } from "./utils/coachPencil";
 import { stripPortionSuffix } from "./utils/coachPrefs";
 import { ingredientsToText } from "./utils/planMealShape";
 import { COACH_ASK_CALLIE_PREFILL } from "./content/coachVoice";
@@ -1125,6 +1125,11 @@ export default function App() {
       if (date !== mealLogDate) {
         selectMealLogDate(date);
       }
+      const next = removeCoachPencilMatchingLog(weekPlanDays, planDayLabel(date), {
+        name: recipe.name,
+        slot: recipe.slot || recipe.cat || null,
+      });
+      if (next !== weekPlanDays) onWeekPlanChange(next, weekPlanSource);
       // Stay on Meals / Plan / Today so mamas can keep adding more than one meal.
       setLogFlash(`Added ${recipe.name} to Today`);
       window.setTimeout(() => setLogFlash(""), 3500);
@@ -1212,7 +1217,7 @@ export default function App() {
 
   /** Hold the slot's room without claiming she ate it. */
   const pencilCoachCard = async (card, slot) => {
-    const day = weekdayKey(mealLogDate || localDateIso());
+    const day = planDayLabel(mealLogDate || localDateIso());
     const target = card.slot || slot || "dinner";
     try {
       const { days } = writeCoachPencil(weekPlanDays, day, card, target);
