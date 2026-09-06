@@ -1,5 +1,7 @@
 # Meal coach — what shipped
 
+**Callie review (sentences, triggers, questions):** [`docs/CALLIE-COACH-REVIEW.md`](./CALLIE-COACH-REVIEW.md)
+
 **Companion to** `docs/COACH-PLAN-REVIEW.md`, which argued about what to build. This one records what
 was actually built, why each decision went the way it did, and the questions Callie still has to answer.
 
