@@ -4,6 +4,7 @@
  */
 
 import { CALLIE_RECIPES } from "./callieRecipes.js";
+import { buildClientLifeStageBlock } from "./clientLifeStage.js";
 import { buildCustomMealsBlock } from "./customMealsPrompt.js";
 import { buildDietSafetyBlock, dietPromptLabel } from "./foodPrefs.js";
 
@@ -33,6 +34,8 @@ function tastesBlock(profile, customMeals = []) {
 
 ${buildCustomMealsBlock(customMeals)}
 
+${buildClientLifeStageBlock(profile)}
+
 ## Tastes (soft — never overrides diet/allergens)
 - Breakfast loves: ${profile.prefB || "(not specified)"}
 - Lunch loves: ${profile.prefL || "(not specified)"}
@@ -57,8 +60,9 @@ const MEAL_SCHEMA = `{
 export function buildDescribeMealPrompt({ profile, macros, slot, description, customMeals = [] }) {
   const bands = rangeBands(macros);
   const slotLabel = slot || "meal";
-  return `You are Callie's meal assistant for Macros and Mamas (postpartum macro coaching).
+  return `You are Callie's meal assistant for Macros and Mamas.
 Build ONE ${slotLabel} the client described. Prefer her saved My meals when they match; else Callie's bank; originals only when needed with defensible macros.
+Read her season before any personal comment — never assume she is postpartum.
 
 ## Her daily bands (this meal should be a sensible piece of the day — not the whole day)
 - Calories day: ${bands.calLo}–${bands.calHi}
@@ -83,7 +87,8 @@ ${recipesBlock()}
 3. Healthy Callie style: high protein, whole foods, max 2 whole eggs per meal (egg whites ok), sweeten with honey/maple/applesauce when needed.
 4. ingredients = ONE serving on her plate. batch = full cook only if servings > 1; else null.
 5. steps = 4–7 practical cooking steps. Say "For the logged plate…" not "For her…".
-6. Return ONLY JSON: { "meal": ${MEAL_SCHEMA} }`;
+6. desc is a short food line. Do not call it a postpartum / new-mom meal unless her season block lists postpartum.
+7. Return ONLY JSON: { "meal": ${MEAL_SCHEMA} }`;
 }
 
 export function buildSlotOptionsPrompt({ profile, macros, slot, customMeals = [] }) {
@@ -168,7 +173,7 @@ ${caption}
     : `## Her note
 (none — pick solid ${slotLabel} options from the menu that fit her room left.)`;
 
-  return `You are Callie's postpartum meal assistant helping a mama eat out / travel.
+  return `You are Callie's meal assistant helping a client eat out / travel. Read her season — never assume she is postpartum.
 She attached restaurant MENU photo(s). Read the menu. Propose exactly 5 orderable dishes for ${slotLabel}.
 Return them in rank order best → okay for her remaining macros AND her note.
 Use distinct rankLabels so she can scan quickly:
