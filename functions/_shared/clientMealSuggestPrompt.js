@@ -5,6 +5,7 @@
  */
 
 import { CALLIE_RECIPES } from "./callieRecipes.js";
+import { buildClientLifeStageBlock } from "./clientLifeStage.js";
 import { buildCustomMealsBlock } from "./customMealsPrompt.js";
 import { buildDietSafetyBlock, dietPromptLabel, proteinGapHint } from "./foodPrefs.js";
 
@@ -33,17 +34,12 @@ export function buildClientSuggestPrompt({ profile, macros, customMeals = [] }) 
       `- [${r.cat}] ${r.name} (${r.cal} cal · ${r.p}P/${r.c}C/${r.f}F · serves ${r.serves}): ${r.desc}`,
   ).join("\n");
 
-  const bf =
-    profile.breastfeeding === true
-      ? `yes${profile.monthsPP != null && profile.monthsPP !== "" ? ` (${profile.monthsPP} mo postpartum)` : ""}`
-      : profile.breastfeeding === false
-        ? "no"
-        : "unknown";
   const dietSafety = buildDietSafetyBlock(profile);
   const gapProtein = proteinGapHint(profile.diet);
   const myMealsBlock = buildCustomMealsBlock(customMeals);
 
   return `You are building a personalized 7-day meal plan suggestion for a Macros and Mamas client to REVIEW and edit in her weekly planner.
+Read her season before any personal comment — never assume she is postpartum.
 
 ## #1 job — every day MUST land inside her ranges
 Her daily bands (hard walls — dayTotals must sit inside ALL four):
@@ -70,7 +66,8 @@ Build the week around what she said she loves AND her saved meals. Do not invent
 - Snack loves: ${profile.prefS || "(not specified)"}
 - Season note: ${profile.seasonNote || "(none)"}
 - Diet: ${dietPromptLabel(profile.diet)}
-- Breastfeeding: ${bf}
+
+${buildClientLifeStageBlock(profile)}
 
 ## Macro accuracy
 Meal cal/P/C/F must equal listed ingredients. Prefer My meals macros or bank macros; scale portions clearly.
