@@ -23,6 +23,7 @@ vi.mock("../_shared/supabaseEmail.js", () => ({
 }));
 
 import { runQuizLeadDrip } from "./email-cron.js";
+import { QUIZ_DRIP_2D_FREEZE_CUTOFF_MS } from "../_shared/quizDrip.mjs";
 
 const env = {
   CRON_SECRET: "cron",
@@ -50,7 +51,8 @@ afterEach(() => {
 
 describe("runQuizLeadDrip", () => {
   it("sends +2d to a quiz-only lead and skips paid, profile, and plant-based", async () => {
-    const due = new Date(NOW - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const now = QUIZ_DRIP_2D_FREEZE_CUTOFF_MS + 2 * 24 * 60 * 60 * 1000;
+    const due = new Date(QUIZ_DRIP_2D_FREEZE_CUTOFF_MS).toISOString();
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       const href = String(url);
       if (href.includes("/marketing_leads")) {
@@ -96,7 +98,7 @@ describe("runQuizLeadDrip", () => {
       env,
       base: env.SUPABASE_URL,
       key: env.SUPABASE_SERVICE_ROLE_KEY,
-      now: NOW,
+      now,
       profiles: [
         { id: "p-unpaid", email: "signedup@example.com", paid: false },
         { id: "p1", email: "paid@example.com", paid: true },
