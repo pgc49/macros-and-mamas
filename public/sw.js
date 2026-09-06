@@ -48,6 +48,8 @@ self.addEventListener("push", (event) => {
         body: data.body || "Open Messages",
         icon: "/icon-192-v6.png",
         badge: "/icon-192-v6.png",
+        tag: data.tag || undefined,
+        renotify: false,
         data: { url: data.url || "/dashboard?tab=messages" },
       }),
       applyAppBadge(unreadCount > 0 ? unreadCount : 1),

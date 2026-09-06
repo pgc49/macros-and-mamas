@@ -1,6 +1,6 @@
 begin;
 
-select plan(16);
+select plan(20);
 
 select has_column('public', 'messages', 'client_message_id', 'DM idempotency column exists');
 select has_column(
@@ -130,6 +130,20 @@ select ok(
   'authenticated clients cannot finish notification jobs'
 );
 
+select ok(
+  not has_table_privilege('authenticated', 'public.message_notification_deliveries', 'SELECT'),
+  'authenticated clients cannot read delivery receipts'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.expire_stale_message_notification_jobs()',
+    'EXECUTE'
+  ),
+  'authenticated clients cannot expire notification jobs'
+);
+
 set local role service_role;
 
 select is(
@@ -207,6 +221,34 @@ select is(
   ),
   'sent',
   'outbox stores terminal sent state'
+);
+
+update public.message_notification_outbox
+set created_at = now() - interval '3 hours'
+where message_type = 'channel'
+  and message_id = '10000000-0000-0000-0000-000000000012';
+
+select is(
+  (
+    select count(*)::integer
+    from public.claim_message_notification_job(
+      'channel',
+      '10000000-0000-0000-0000-000000000012'
+    )
+  ),
+  0,
+  'claim refuses jobs older than two hours'
+);
+
+select is(
+  (
+    select status
+    from public.message_notification_outbox
+    where message_type = 'channel'
+      and message_id = '10000000-0000-0000-0000-000000000012'
+  ),
+  'dead',
+  'stale channel jobs are expired instead of re-claimed'
 );
 
 reset role;

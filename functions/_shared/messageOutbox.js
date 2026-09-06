@@ -52,6 +52,46 @@ export async function finishNotificationJob(env, job, { success, error = "" }) {
   return rows[0];
 }
 
+export async function listDeliveredProfileIds(env, messageType, messageId) {
+  const { base, key } = config(env);
+  if (!base || !key || !messageType || !messageId) return new Set();
+  const resp = await fetch(
+    `${base}/rest/v1/message_notification_deliveries`
+      + `?message_type=eq.${encodeURIComponent(messageType)}`
+      + `&message_id=eq.${encodeURIComponent(messageId)}`
+      + "&select=profile_id",
+    { headers: headers(key) },
+  );
+  if (!resp.ok) {
+    console.warn("notification deliveries lookup failed", resp.status);
+    return new Set();
+  }
+  const rows = await resp.json().catch(() => []);
+  return new Set((Array.isArray(rows) ? rows : []).map((row) => row.profile_id).filter(Boolean));
+}
+
+export async function recordNotificationDelivery(env, messageType, messageId, profileId) {
+  const { base, key } = config(env);
+  if (!base || !key || !messageType || !messageId || !profileId) return false;
+  const resp = await fetch(
+    `${base}/rest/v1/message_notification_deliveries?on_conflict=message_type,message_id,profile_id`,
+    {
+      method: "POST",
+      headers: headers(key, { prefer: "resolution=ignore-duplicates,return=minimal" }),
+      body: JSON.stringify({
+        message_type: messageType,
+        message_id: messageId,
+        profile_id: profileId,
+      }),
+    },
+  );
+  if (!resp.ok) {
+    console.warn("notification delivery receipt failed", resp.status);
+    return false;
+  }
+  return true;
+}
+
 export async function listDueNotificationJobs(env, limit = 20) {
   const { base, key } = config(env);
   if (!base || !key) throw new Error("missing outbox configuration");

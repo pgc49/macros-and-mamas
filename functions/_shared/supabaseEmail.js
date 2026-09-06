@@ -10,12 +10,28 @@ import { buildUnsubscribeUrl, isUnsubscribed } from "./emailUnsubscribe.mjs";
 import { buildFinishJoiningPayload } from "./finishJoiningEmail.mjs";
 import { finishJoiningEmailType } from "./finishJoining.mjs";
 
-export async function invokeEdgeFunction(env, slug, payload) {
+export async function invokeEdgeFunction(env, slug, payload, options = {}) {
   const base = (env.SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key) {
     console.error("invokeEdgeFunction missing SUPABASE_URL or SERVICE_ROLE_KEY", slug);
     return { ok: false, error: "missing supabase config" };
+  }
+
+  const timeoutMs = Number(options.timeoutMs) || 0;
+  const parentSignal = options.signal;
+  const controller = new AbortController();
+  const timer = timeoutMs > 0
+    ? setTimeout(() => {
+      try { controller.abort(); } catch { /* already aborted */ }
+    }, timeoutMs)
+    : null;
+  const onParentAbort = () => {
+    try { controller.abort(); } catch { /* already aborted */ }
+  };
+  if (parentSignal) {
+    if (parentSignal.aborted) onParentAbort();
+    else parentSignal.addEventListener("abort", onParentAbort, { once: true });
   }
 
   try {
@@ -27,6 +43,7 @@ export async function invokeEdgeFunction(env, slug, payload) {
         "content-type": "application/json",
       },
       body: JSON.stringify(payload || {}),
+      signal: controller.signal,
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
@@ -35,8 +52,12 @@ export async function invokeEdgeFunction(env, slug, payload) {
     }
     return { ok: true, data };
   } catch (e) {
+    const aborted = controller.signal.aborted;
     console.error("edge function invoke error", slug, e);
-    return { ok: false, error: String(e?.message || e) };
+    return { ok: false, error: aborted ? "timeout" : String(e?.message || e) };
+  } finally {
+    if (timer) clearTimeout(timer);
+    parentSignal?.removeEventListener("abort", onParentAbort);
   }
 }
 

@@ -7,11 +7,19 @@
 import { isUuid } from "../_shared/credits.js";
 import { invokeEdgeFunction } from "../_shared/supabaseEmail.js";
 import {
+  isMessageTooOldToNotify,
+  notificationTag,
+} from "../_shared/notificationFreshness.js";
+import {
   authorizeCron,
   claimNotificationJob,
   finishNotificationJob,
+  listDeliveredProfileIds,
   raceDeadline,
+  recordNotificationDelivery,
 } from "../_shared/messageOutbox.js";
+
+const SEND_PUSH_TIMEOUT_MS = 5_000;
 
 const CHANNEL_PUSH_CONCURRENCY = 8;
 
@@ -50,6 +58,7 @@ export async function onRequestPost({ request, env, signal }) {
       env,
       messageId,
       msg,
+      signal,
     }));
     await finishNotificationJob(env, job, { success: true });
     return json({ ok: true, ...result });
@@ -69,7 +78,7 @@ export async function onRequestPost({ request, env, signal }) {
   }
 }
 
-async function processClaimedChannel({ env, messageId, msg }) {
+async function processClaimedChannel({ env, messageId, msg, signal }) {
   const loaded = msg || await loadChannelMessage(env, messageId);
   if (!loaded) {
     return { skipped: "source_missing", pushSent: 0 };
@@ -80,13 +89,17 @@ async function processClaimedChannel({ env, messageId, msg }) {
   if (loaded.notified_at) {
     return { skipped: "already_notified", pushSent: 0 };
   }
+  if (isMessageTooOldToNotify(loaded.created_at)) {
+    return { skipped: "too_old", pushSent: 0 };
+  }
 
-  const [conversation, sender, members, replyTo, adminIds] = await Promise.all([
+  const [conversation, sender, members, replyTo, adminIds, delivered] = await Promise.all([
     loadConversation(env, loaded.conversation_id),
     loaded.sender_id ? loadProfile(env, loaded.sender_id) : Promise.resolve(null),
     listConversationMembers(env, loaded.conversation_id),
     loaded.reply_to_id ? loadChannelMessage(env, loaded.reply_to_id) : Promise.resolve(null),
     listAdminIds(env),
+    listDeliveredProfileIds(env, "channel", messageId),
   ]);
   if (!conversation) throw new Error("channel missing");
 
@@ -95,26 +108,39 @@ async function processClaimedChannel({ env, messageId, msg }) {
   const senderLabel = loaded.kind === "system"
     ? "Macros and Mamas"
     : senderDisplayName(sender);
-  const recipients = members.filter((member) => shouldNotifyMember({
-    member,
-    senderId: loaded.sender_id,
-    senderIsAdmin,
-    messageKind: loaded.kind,
-    replyTo,
-  }));
+  const tag = notificationTag("channel", loaded.id);
+  const recipients = members.filter((member) => (
+    shouldNotifyMember({
+      member,
+      senderId: loaded.sender_id,
+      senderIsAdmin,
+      messageKind: loaded.kind,
+      replyTo,
+    }) && !delivered.has(member.user_id)
+  ));
   const adminSet = new Set(adminIds);
 
-  const pushSent = await sendChannelPushes(env, recipients, (member) => ({
-    title: conversation.label || "Group chat",
-    body: preview
-      ? (loaded.kind === "system" ? preview : `${senderLabel}: ${preview}`)
-      : `${senderLabel} posted in the group`,
-    url: channelNotificationUrl(
-      loaded.conversation_id,
-      adminSet.has(member.user_id),
-      loaded.id,
-    ),
-  }));
+  const { pushSent, remainingRetryable } = await sendChannelPushes(
+    env,
+    recipients,
+    (member) => ({
+      title: conversation.label || "Group chat",
+      body: preview
+        ? (loaded.kind === "system" ? preview : `${senderLabel}: ${preview}`)
+        : `${senderLabel} posted in the group`,
+      url: channelNotificationUrl(
+        loaded.conversation_id,
+        adminSet.has(member.user_id),
+        loaded.id,
+      ),
+      tag,
+    }),
+    { signal, messageId },
+  );
+
+  if (remainingRetryable) {
+    throw new Error(signal?.aborted ? "timeout" : "push fanout incomplete");
+  }
 
   await markChannelMessageNotified(env, messageId);
   return {
@@ -125,21 +151,36 @@ async function processClaimedChannel({ env, messageId, msg }) {
   };
 }
 
-async function sendChannelPushes(env, recipients, payloadFor) {
+async function sendChannelPushes(env, recipients, payloadFor, { signal, messageId } = {}) {
   const queue = [...recipients];
   let pushSent = 0;
+  let remainingRetryable = 0;
   const workers = Array.from(
     { length: Math.min(CHANNEL_PUSH_CONCURRENCY, queue.length || 0) },
     async () => {
       while (queue.length) {
+        if (signal?.aborted) {
+          remainingRetryable += queue.length;
+          queue.length = 0;
+          break;
+        }
         const member = queue.shift();
         if (!member) break;
-        pushSent += await sendPushToProfile(env, member.user_id, payloadFor(member));
+        const result = await sendPushToProfile(env, member.user_id, payloadFor(member), signal);
+        if (result.sent > 0 || !result.retryable) {
+          pushSent += result.sent;
+          await recordNotificationDelivery(env, "channel", messageId, member.user_id);
+        } else {
+          remainingRetryable += 1;
+        }
       }
     },
   );
   await Promise.all(workers);
-  return pushSent;
+  if (signal?.aborted && remainingRetryable === 0 && recipients.length) {
+    remainingRetryable = 1;
+  }
+  return { pushSent, remainingRetryable };
 }
 
 export function channelNotificationUrl(conversationId, isAdminRecipient, messageId) {
@@ -198,26 +239,27 @@ function senderDisplayName(profile) {
   return firstName(name) || (role === "admin" ? "Callie" : "Mama");
 }
 
-async function sendPushToProfile(env, profileId, payload) {
-  if (!profileId) return 0;
+async function sendPushToProfile(env, profileId, payload, signal) {
+  if (!profileId) return { sent: 0, retryable: false };
   const result = await invokeEdgeFunction(env, "send-push", {
     profileId,
     title: payload.title,
     body: payload.body,
     url: payload.url,
+    tag: payload.tag,
+  }, {
+    timeoutMs: SEND_PUSH_TIMEOUT_MS,
+    signal,
   });
   if (!result.ok) {
-    throw new Error(`send-push edge failed (${result.status || "unknown"})`);
+    return { sent: 0, retryable: true };
   }
   const sent = Number(result.data?.sent) || 0;
   const failures = Array.isArray(result.data?.failures) ? result.data.failures : [];
-  const retryableFailure = failures.some((failure) => (
+  const retryable = sent === 0 && failures.some((failure) => (
     ![404, 410].includes(Number(failure?.status))
   ));
-  if (sent === 0 && retryableFailure) {
-    throw new Error("push provider temporarily failed");
-  }
-  return sent;
+  return { sent, retryable };
 }
 
 async function loadChannelMessage(env, id) {

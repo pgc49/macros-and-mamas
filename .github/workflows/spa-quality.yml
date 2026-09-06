@@ -94,6 +94,10 @@ jobs:
             cp supabase/migrations/20260811064316_push_subscription_origin.sql \
               "$DB_ROOT/supabase/migrations/"
           fi
+          if [ -f supabase/migrations/20260906180000_expire_stale_notification_jobs.sql ]; then
+            cp supabase/migrations/20260906180000_expire_stale_notification_jobs.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           cp supabase/tests/bootstrap_voice_drops.sql \
             "$DB_ROOT/supabase/migrations/20260818000000_bootstrap_voice_drops.sql"
           cp supabase/migrations/*voice_drops_storage_select*.sql \

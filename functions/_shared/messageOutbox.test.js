@@ -5,8 +5,10 @@ import {
   createJobDeadline,
   enqueueBackground,
   finishNotificationJob,
+  listDeliveredProfileIds,
   listDueNotificationJobs,
   raceDeadline,
+  recordNotificationDelivery,
 } from "./messageOutbox.js";
 
 const env = {
@@ -107,6 +109,31 @@ describe("message notification outbox", () => {
       .rejects.toThrow("timeout");
     expect(Date.now() - started).toBeLessThan(200);
     deadline.cancel();
+  });
+
+  it("loads per-recipient delivery receipts", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify([
+      { profile_id: "00000000-0000-4000-8000-000000000041" },
+    ]), { status: 200 }));
+
+    const delivered = await listDeliveredProfileIds(env, "channel", "message-id");
+    expect(delivered.has("00000000-0000-4000-8000-000000000041")).toBe(true);
+  });
+
+  it("records a delivery receipt with ignore-duplicates", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 201 }),
+    );
+
+    await expect(recordNotificationDelivery(
+      env,
+      "channel",
+      "message-id",
+      "00000000-0000-4000-8000-000000000041",
+    )).resolves.toBe(true);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("on_conflict=message_type,message_id,profile_id");
+    expect(options.headers.prefer).toContain("ignore-duplicates");
   });
 
   it("runs work inline when waitUntil is missing", async () => {
