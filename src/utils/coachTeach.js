@@ -62,10 +62,6 @@ function normalize(raw) {
     .trim();
 }
 
-export function namedRestaurantInAsk(raw) {
-  return NAMED_RESTAURANT.test(normalize(raw));
-}
-
 /**
  * Which of Callie's teachings this message is, or null.
  *
