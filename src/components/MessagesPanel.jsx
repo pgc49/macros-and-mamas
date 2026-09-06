@@ -123,8 +123,12 @@ export function MessagesPanel({
 
   // A question handed over from the coach belongs to Callie, so a mama sitting
   // on a cohort channel is moved back to the DM before the draft lands.
+  // The draft prop is cleared once the composer has it, so also consume any
+  // leftover ?channel= here — otherwise that link would steal the 1:1 after.
   useEffect(() => {
-    if (String(initialDraft || "").trim()) setActivePill("callie");
+    if (!String(initialDraft || "").trim()) return;
+    setActivePill("callie");
+    deepLinkedChannel.current = true;
   }, [initialDraft]);
 
   useEffect(() => {

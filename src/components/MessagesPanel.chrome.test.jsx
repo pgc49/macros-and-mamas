@@ -160,4 +160,29 @@ describe("MessagesPanel chrome", () => {
     expect(pills.contains(screen.getByRole("button", { name: "Founding Members" }))).toBe(true);
     expect(document.querySelector("[data-messages-channel-actions]")).toBeTruthy();
   });
+
+  it("opens Callie's 1:1 with the coach draft even when a group link is in the URL", async () => {
+    const previous = `${window.location.pathname}${window.location.search}`;
+    window.history.replaceState({}, "", "/dashboard?channel=aug");
+    try {
+      render(
+        <MessagesPanel
+          userId="mama-1"
+          initialDraft="Hi Callie — can my calories go up"
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "August Group" })).toBeTruthy();
+      });
+
+      expect(document.querySelector("[data-messages-channel-actions]")).toBeNull();
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText("Write a message…").value)
+          .toBe("Hi Callie — can my calories go up");
+      });
+    } finally {
+      window.history.replaceState({}, "", previous);
+    }
+  });
 });

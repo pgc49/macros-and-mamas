@@ -171,8 +171,8 @@ describe("handing a question to Callie", () => {
   });
 
   it("puts the draft in the composer rather than sending it", () => {
-    renderApp({ tab: "messages", messagesDraft: "Hi Callie — a question from the coach: can my calories go up" });
+    renderApp({ tab: "messages", messagesDraft: "Hi Callie — can my calories go up" });
     expect(screen.getByTestId("messages-draft").textContent)
-      .toBe("Hi Callie — a question from the coach: can my calories go up");
+      .toBe("Hi Callie — can my calories go up");
   });
 });

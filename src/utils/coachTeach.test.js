@@ -66,7 +66,10 @@ describe("a pain point asked a third time", () => {
 });
 
 describe("the handoff closer", () => {
-  it("says she'll get back directly", () => {
-    expect(COACH_PASS).toBe("I'll pass that to Callie. She'll get back to you directly.");
+  it("asks her to message Callie instead of sounding like the bot already did", () => {
+    expect(COACH_PASS).toBe(
+      "That's something Callie might be better able to answer than me. Message her and she'll get back to you.",
+    );
+    expect(COACH_PASS).not.toMatch(/I'll pass/i);
   });
 });

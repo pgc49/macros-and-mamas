@@ -17,9 +17,11 @@
 
 export const COACH_NAME = "Coach Callie's Bot";
 
-/** The closer on every handoff. Callie: she'll get back to you directly. */
+/** She has to tap Message Callie. The bot does not send this for her. */
+export const COACH_MESSAGE_HER = "Message her and she'll get back to you.";
+
 export const COACH_PASS =
-  "I'll pass that to Callie. She'll get back to you directly.";
+  `That's something Callie might be better able to answer than me. ${COACH_MESSAGE_HER}`;
 
 export const COACH_SLOT_PHRASE = {
   breakfast: "this morning",
@@ -210,37 +212,38 @@ export const COACH_DEFLECT = {
     cta: "Message Callie",
   },
   care: {
-    line: `That's something Callie should hear. ${COACH_PASS}`,
+    line: `That's something Callie might be better able to sit with than me. ${COACH_MESSAGE_HER}`,
     cta: "Message Callie",
   },
   ranges: {
-    line: `Your ranges are Callie's call, not mine. ${COACH_PASS}`,
+    line: `Your ranges are Callie's call, not mine. ${COACH_MESSAGE_HER}`,
     cta: "Message Callie",
   },
   weight: {
-    line: `I'd rather not put a number on that one. ${COACH_PASS}`,
+    line: `I'd rather not put a number on that one. ${COACH_MESSAGE_HER}`,
     cta: "Message Callie",
   },
   admin: {
-    line: `Anything about your plan, your billing or your dates is Callie's. ${COACH_PASS}`,
+    line: `Anything about your plan, your billing or your dates is Callie's. ${COACH_MESSAGE_HER}`,
     cta: "Message Callie",
   },
   offTopic: {
-    line: `I only do food and your ranges. ${COACH_PASS}`,
+    line: `I only do food and your ranges. ${COACH_MESSAGE_HER}`,
     cta: "Message Callie",
   },
   supply: {
     line:
-      "We protect your supply first, always. Your ranges already use the gentler calorie math for that. If you think your supply is being affected, I'll pass that to Callie. She'll get back to you directly.",
+      `We protect your supply first, always. Your ranges already use the gentler calorie math for that. If you think your supply is being affected, that's something Callie might be better able to answer than me. ${COACH_MESSAGE_HER}`,
     cta: "Message Callie",
   },
   again: {
-    line: "You've come back to this a couple of times, so I'll pass that to Callie. She'll get back to you directly.",
+    line: `You've come back to this a couple of times. That's something Callie might be better able to sit with than me. ${COACH_MESSAGE_HER}`,
     cta: "Message Callie",
   },
 };
 
-export const COACH_ASK_CALLIE_PREFILL = "Hi Callie — a question from the coach:";
+/** Seed for her composer — first person, not a bot forwarding a ticket. */
+export const COACH_ASK_CALLIE_PREFILL = "Hi Callie —";
 
 export function snackReserveCopy(count) {
   return Number(count) === 1 ? COACH_COPY.snackReserveOne : COACH_COPY.snackReserveMany;
