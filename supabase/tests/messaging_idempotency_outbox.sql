@@ -1,6 +1,6 @@
 begin;
 
-select plan(20);
+select plan(27);
 
 select has_column('public', 'messages', 'client_message_id', 'DM idempotency column exists');
 select has_column(
@@ -144,6 +144,24 @@ select ok(
   'authenticated clients cannot expire notification jobs'
 );
 
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.reserve_message_notification_delivery(text,uuid,uuid)',
+    'EXECUTE'
+  ),
+  'authenticated clients cannot reserve notification receipts'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.release_message_notification_delivery(text,uuid,uuid)',
+    'EXECUTE'
+  ),
+  'authenticated clients cannot release notification receipts'
+);
+
 set local role service_role;
 
 select is(
@@ -249,6 +267,93 @@ select is(
   ),
   'dead',
   'stale channel jobs are expired instead of re-claimed'
+);
+
+insert into public.conversation_messages (
+  id, conversation_id, sender_id, body
+)
+values (
+  '10000000-0000-0000-0000-000000000013',
+  '30000000-0000-4000-8000-000000000012',
+  '00000000-0000-0000-0000-000000000011',
+  'already notified'
+);
+
+update public.conversation_messages
+set notified_at = now()
+where id = '10000000-0000-0000-0000-000000000013';
+
+select is(
+  public.reserve_message_notification_delivery(
+    'channel',
+    '10000000-0000-0000-0000-000000000013',
+    '00000000-0000-0000-0000-000000000012'
+  ),
+  true,
+  'first reserve wins the recipient slot'
+);
+
+select is(
+  public.reserve_message_notification_delivery(
+    'channel',
+    '10000000-0000-0000-0000-000000000013',
+    '00000000-0000-0000-0000-000000000012'
+  ),
+  false,
+  'second reserve treats the recipient as already notified'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.claim_message_notification_job(
+      'channel',
+      '10000000-0000-0000-0000-000000000013'
+    )
+  ),
+  0,
+  'claim refuses an already-notified channel message'
+);
+
+select is(
+  (
+    select status
+    from public.message_notification_outbox
+    where message_type = 'channel'
+      and message_id = '10000000-0000-0000-0000-000000000013'
+  ),
+  'sent',
+  'already-notified jobs close as sent instead of resending'
+);
+
+insert into public.conversation_messages (
+  id, conversation_id, sender_id, body
+)
+values (
+  '10000000-0000-0000-0000-000000000014',
+  '30000000-0000-4000-8000-000000000012',
+  '00000000-0000-0000-0000-000000000011',
+  'abandoned processing'
+);
+
+update public.message_notification_outbox
+set
+  status = 'processing',
+  attempts = 6,
+  locked_at = now() - interval '10 minutes'
+where message_type = 'channel'
+  and message_id = '10000000-0000-0000-0000-000000000014';
+
+select is(
+  (
+    select count(*)::integer
+    from public.claim_message_notification_job(
+      'channel',
+      '10000000-0000-0000-0000-000000000014'
+    )
+  ),
+  0,
+  'claim dead-letters abandoned processing after six attempts'
 );
 
 reset role;

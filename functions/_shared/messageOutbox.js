@@ -70,26 +70,43 @@ export async function listDeliveredProfileIds(env, messageType, messageId) {
   return new Set((Array.isArray(rows) ? rows : []).map((row) => row.profile_id).filter(Boolean));
 }
 
-export async function recordNotificationDelivery(env, messageType, messageId, profileId) {
+export async function reserveNotificationDelivery(env, messageType, messageId, profileId) {
+  const { base, key } = config(env);
+  if (!base || !key || !messageType || !messageId || !profileId) {
+    throw new Error("missing delivery reservation");
+  }
+  const resp = await fetch(`${base}/rest/v1/rpc/reserve_message_notification_delivery`, {
+    method: "POST",
+    headers: headers(key),
+    body: JSON.stringify({
+      p_message_type: messageType,
+      p_message_id: messageId,
+      p_profile_id: profileId,
+    }),
+  });
+  if (!resp.ok) {
+    throw new Error(`delivery reserve failed (${resp.status})`);
+  }
+  return (await resp.json()) === true;
+}
+
+export async function releaseNotificationDelivery(env, messageType, messageId, profileId) {
   const { base, key } = config(env);
   if (!base || !key || !messageType || !messageId || !profileId) return false;
-  const resp = await fetch(
-    `${base}/rest/v1/message_notification_deliveries?on_conflict=message_type,message_id,profile_id`,
-    {
-      method: "POST",
-      headers: headers(key, { prefer: "resolution=ignore-duplicates,return=minimal" }),
-      body: JSON.stringify({
-        message_type: messageType,
-        message_id: messageId,
-        profile_id: profileId,
-      }),
-    },
-  );
+  const resp = await fetch(`${base}/rest/v1/rpc/release_message_notification_delivery`, {
+    method: "POST",
+    headers: headers(key),
+    body: JSON.stringify({
+      p_message_type: messageType,
+      p_message_id: messageId,
+      p_profile_id: profileId,
+    }),
+  });
   if (!resp.ok) {
-    console.warn("notification delivery receipt failed", resp.status);
+    console.warn("notification delivery release failed", resp.status);
     return false;
   }
-  return true;
+  return (await resp.json()) === true;
 }
 
 export async function listDueNotificationJobs(env, limit = 20) {

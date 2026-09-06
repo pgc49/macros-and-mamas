@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   })),
   finish: vi.fn(async () => ({ status: "retry" })),
   delivered: vi.fn(async () => new Set()),
-  record: vi.fn(async () => true),
+  reserve: vi.fn(async () => true),
+  release: vi.fn(async () => true),
   invoke: vi.fn(),
 }));
 
@@ -20,7 +21,8 @@ vi.mock("../_shared/messageOutbox.js", async () => {
     claimNotificationJob: mocks.claim,
     finishNotificationJob: mocks.finish,
     listDeliveredProfileIds: mocks.delivered,
-    recordNotificationDelivery: mocks.record,
+    reserveNotificationDelivery: mocks.reserve,
+    releaseNotificationDelivery: mocks.release,
   };
 });
 
@@ -333,8 +335,148 @@ describe("durable channel notification processing", () => {
       }),
       expect.objectContaining({ timeoutMs: 5000 }),
     );
-    expect(mocks.record).toHaveBeenCalledWith(env, "channel", messageId, mamaFresh);
-    expect(mocks.record).not.toHaveBeenCalledWith(env, "channel", messageId, mamaDelivered);
+    expect(mocks.reserve).toHaveBeenCalledWith(env, "channel", messageId, mamaFresh);
+    expect(mocks.reserve).not.toHaveBeenCalledWith(env, "channel", messageId, mamaDelivered);
+    expect(mocks.release).not.toHaveBeenCalled();
+  });
+
+  it("does not send when the recipient receipt already exists", async () => {
+    const mamaId = "00000000-0000-4000-8000-000000000051";
+    const adminId = "00000000-0000-4000-8000-000000000052";
+    const messageId = "10000000-0000-4000-8000-000000000050";
+    mocks.finish.mockResolvedValue({ status: "sent" });
+    mocks.delivered.mockResolvedValue(new Set());
+    mocks.reserve.mockResolvedValue(false);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const value = String(url);
+      if (value.includes("/rest/v1/conversation_messages?id=eq.")) {
+        return new Response(JSON.stringify([{
+          id: messageId,
+          conversation_id: "conv-1",
+          sender_id: adminId,
+          body: "Big wins, mamas!!!!",
+          kind: "chat",
+          deleted_at: null,
+          notified_at: null,
+          created_at: new Date().toISOString(),
+        }]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/conversations?")) {
+        return new Response(JSON.stringify([{
+          id: "conv-1",
+          label: "Founding Members",
+        }]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/profiles?id=eq.")) {
+        return new Response(JSON.stringify([{
+          id: adminId,
+          name: "Callie",
+          role: "admin",
+        }]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/conversation_members?")) {
+        return new Response(JSON.stringify([
+          { user_id: adminId, notify_level: "highlights", removed_at: null },
+          { user_id: mamaId, notify_level: "highlights", removed_at: null },
+        ]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/profiles?role=eq.admin")) {
+        return new Response(JSON.stringify([{ id: adminId }]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/conversation_messages?")) {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unexpected fetch ${value}`);
+    });
+
+    const env = {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service",
+      CRON_SECRET: "cron",
+    };
+    const response = await onRequestPost({
+      request: new Request("https://example.com/api/channel-notify", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer cron",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ messageId }),
+      }),
+      env,
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.pushSent).toBe(0);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.reserve).toHaveBeenCalledWith(env, "channel", messageId, mamaId);
+  });
+
+  it("keeps the receipt after an ambiguous send-push timeout so it cannot resend", async () => {
+    const mamaId = "00000000-0000-4000-8000-000000000061";
+    const adminId = "00000000-0000-4000-8000-000000000062";
+    const messageId = "10000000-0000-4000-8000-000000000060";
+    mocks.finish.mockResolvedValue({ status: "sent" });
+    mocks.delivered.mockResolvedValue(new Set());
+    mocks.reserve.mockResolvedValue(true);
+    mocks.invoke.mockResolvedValue({ ok: false, error: "timeout" });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const value = String(url);
+      if (value.includes("/rest/v1/conversation_messages?id=eq.")) {
+        return new Response(JSON.stringify([{
+          id: messageId,
+          conversation_id: "conv-1",
+          sender_id: adminId,
+          body: "Big wins, mamas!!!!",
+          kind: "chat",
+          deleted_at: null,
+          notified_at: null,
+          created_at: new Date().toISOString(),
+        }]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/conversations?")) {
+        return new Response(JSON.stringify([{ id: "conv-1", label: "Founding Members" }]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/profiles?id=eq.")) {
+        return new Response(JSON.stringify([{ id: adminId, name: "Callie", role: "admin" }]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/conversation_members?")) {
+        return new Response(JSON.stringify([
+          { user_id: adminId, notify_level: "highlights", removed_at: null },
+          { user_id: mamaId, notify_level: "highlights", removed_at: null },
+        ]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/profiles?role=eq.admin")) {
+        return new Response(JSON.stringify([{ id: adminId }]), { status: 200 });
+      }
+      if (value.includes("/rest/v1/conversation_messages?")) {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unexpected fetch ${value}`);
+    });
+
+    const env = {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service",
+      CRON_SECRET: "cron",
+    };
+    const response = await onRequestPost({
+      request: new Request("https://example.com/api/channel-notify", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer cron",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ messageId }),
+      }),
+      env,
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.reserve).toHaveBeenCalledWith(env, "channel", messageId, mamaId);
+    expect(mocks.release).not.toHaveBeenCalled();
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -16,7 +16,8 @@ import {
   finishNotificationJob,
   listDeliveredProfileIds,
   raceDeadline,
-  recordNotificationDelivery,
+  releaseNotificationDelivery,
+  reserveNotificationDelivery,
 } from "../_shared/messageOutbox.js";
 
 const SEND_PUSH_TIMEOUT_MS = 5_000;
@@ -166,13 +167,29 @@ async function sendChannelPushes(env, recipients, payloadFor, { signal, messageI
         }
         const member = queue.shift();
         if (!member) break;
-        const result = await sendPushToProfile(env, member.user_id, payloadFor(member), signal);
-        if (result.sent > 0 || !result.retryable) {
-          pushSent += result.sent;
-          await recordNotificationDelivery(env, "channel", messageId, member.user_id);
-        } else {
+        const reserved = await reserveNotificationDelivery(
+          env,
+          "channel",
+          messageId,
+          member.user_id,
+        );
+        if (!reserved) continue;
+        if (signal?.aborted) {
+          await releaseNotificationDelivery(env, "channel", messageId, member.user_id);
           remainingRetryable += 1;
+          continue;
         }
+        const result = await sendPushToProfile(env, member.user_id, payloadFor(member), signal);
+        if (result.sent > 0) {
+          pushSent += result.sent;
+          continue;
+        }
+        if (result.knownNotSent && result.retryable) {
+          await releaseNotificationDelivery(env, "channel", messageId, member.user_id);
+          remainingRetryable += 1;
+          continue;
+        }
+        // Permanent miss, or send may already have left the server: keep the receipt.
       }
     },
   );
@@ -240,7 +257,7 @@ function senderDisplayName(profile) {
 }
 
 async function sendPushToProfile(env, profileId, payload, signal) {
-  if (!profileId) return { sent: 0, retryable: false };
+  if (!profileId) return { sent: 0, retryable: false, knownNotSent: true };
   const result = await invokeEdgeFunction(env, "send-push", {
     profileId,
     title: payload.title,
@@ -252,14 +269,14 @@ async function sendPushToProfile(env, profileId, payload, signal) {
     signal,
   });
   if (!result.ok) {
-    return { sent: 0, retryable: true };
+    return { sent: 0, retryable: true, knownNotSent: false };
   }
   const sent = Number(result.data?.sent) || 0;
   const failures = Array.isArray(result.data?.failures) ? result.data.failures : [];
   const retryable = sent === 0 && failures.some((failure) => (
     ![404, 410].includes(Number(failure?.status))
   ));
-  return { sent, retryable };
+  return { sent, retryable, knownNotSent: sent === 0 };
 }
 
 async function loadChannelMessage(env, id) {

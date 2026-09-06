@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   })),
   finish: vi.fn(async () => ({ status: "retry" })),
   delivered: vi.fn(async () => new Set()),
-  record: vi.fn(async () => true),
+  reserve: vi.fn(async () => true),
+  release: vi.fn(async () => true),
   invoke: vi.fn(),
   contact: vi.fn(),
 }));
@@ -21,7 +22,8 @@ vi.mock("../_shared/messageOutbox.js", async () => {
     claimNotificationJob: mocks.claim,
     finishNotificationJob: mocks.finish,
     listDeliveredProfileIds: mocks.delivered,
-    recordNotificationDelivery: mocks.record,
+    reserveNotificationDelivery: mocks.reserve,
+    releaseNotificationDelivery: mocks.release,
   };
 });
 
