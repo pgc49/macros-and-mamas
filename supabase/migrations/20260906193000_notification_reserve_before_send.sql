@@ -7,6 +7,11 @@ alter table public.messages
 alter table public.conversation_messages
   add column if not exists notified_at timestamptz;
 
+-- claim() is invoker-security and reads notified_at. CI's disposable
+-- schema only granted these tables to authenticated.
+grant select on table public.messages to service_role;
+grant select on table public.conversation_messages to service_role;
+
 create or replace function public.reserve_message_notification_delivery(
   p_message_type text,
   p_message_id uuid,
