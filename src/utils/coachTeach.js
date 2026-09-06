@@ -5,11 +5,15 @@
  * numbers, skipping a meal, "is this ok", coffee, alcohol, fasting,
  * sweeteners, and finishing the day under. They are not guesses. A message
  * that matches one of these gets her sentence, instantly, with no request.
+ *
+ * A named restaurant or cuisine is not one of these. "What should I get at
+ * In-N-Out" and "what can I eat for Italian" need the actual place, not the
+ * canned PS-method or Oreo line.
  */
 
 import { COACH_COPY, underDayCopy } from "../content/coachVoice.js";
 
-const TEACH = [
+const TEACH_FIRST = [
   // Never skip — before the restaurant patterns, so "skip dinner because I'm
   // out" is still a skip, not a PS-method question.
   ["neverSkip", /\b(skip|skipping|skipped)\b[^.?]{0,20}\b(dinner|lunch|breakfast|snack|this meal|a meal|eating)\b/],
@@ -27,14 +31,27 @@ const TEACH = [
 
   ["sweetener", /\b(artificial sweetener|aspartame|sucralose|stevia|splenda|diet coke|diet pepsi|zero sugar soda)\b/],
 
-  ["psMethod", /\b(eating out|eat out|restaurant|no nutrition|no (macro|calorie)s?\b|what (do i|should i) (order|get|pick)|im out|we're out)\b/],
-
   ["underDay", /\b(under (my )?(calories|cals)|calories left|hit( my)? protein|protein('?s| is) (in|covered|done)|should i eat more|eat more or (leave|stop)|done for (the )?day)\b/],
-
-  ["realFood", /\b(is|are) [^.?]{0,28}\b(ok|okay|fine|allowed|allowed)\b/],
-  ["realFood", /\bcan i (have|eat|do)\b/],
-  ["realFood", /\bwhat about (a |an |some )?(pizza|wine|beer|oreo|protein bar|bar|slice)\b/],
 ];
+
+const PS_METHOD = [
+  /\b(eating out|eat out|restaurant|no nutrition|no (macro|calorie)s?\b|im out|we're out)\b/,
+  /\bwhat (do i|should i) (order|get|pick)\b/,
+];
+
+const REAL_FOOD = [
+  /\b(is|are) [^.?]{0,28}\b(ok|okay|fine|allowed)\b/,
+  /\bcan i (have|eat) (a |an |some )?(pizza|slice|protein bar|bar|oreo|cookie|cookies|chips?|ice cream)\b/,
+  /\bwhat about (a |an |some )?(pizza|wine|beer|oreo|protein bar|bar|slice)\b/,
+];
+
+const NAMED_RESTAURANT =
+  /\b(in[- ]?n[- ]?out|inn n out|in and out|chipotle|sweetgreen|sweet green|cava|panera|starbucks|mcdonalds|mcdonald's|chick[- ]?fil[- ]?a|olive garden|cheesecake factory|applebee'?s|chili'?s|subway|wendy'?s|taco bell|panda express|five guys|shake shack|dunkin|ihop|denny'?s)\b/;
+
+const ITALIAN = /\bitalian\b(?! dressing)/;
+
+const OTHER_CUISINE =
+  /\b(mexican|chinese|thai|japanese|indian|greek|mediterranean|korean|vietnamese|sushi|steakhouse|bbq|barbecue)\b/;
 
 function normalize(raw) {
   return String(raw || "")
@@ -43,6 +60,10 @@ function normalize(raw) {
     .replace(/[^a-z0-9 :]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export function namedRestaurantInAsk(raw) {
+  return NAMED_RESTAURANT.test(normalize(raw));
 }
 
 /**
@@ -54,14 +75,25 @@ function normalize(raw) {
 export function localCoachTeach(raw) {
   const text = normalize(raw);
   if (!text || text.length > 180) return null;
-  for (const [topic, pattern] of TEACH) {
+  for (const [topic, pattern] of TEACH_FIRST) {
     if (pattern.test(text)) return { kind: "teach", topic };
+  }
+  // A named place needs that menu, not the canned eating-out sentence.
+  if (NAMED_RESTAURANT.test(text)) return null;
+  if (ITALIAN.test(text)) return { kind: "teach", topic: "italian" };
+  if (OTHER_CUISINE.test(text)) return null;
+  for (const pattern of PS_METHOD) {
+    if (pattern.test(text)) return { kind: "teach", topic: "psMethod" };
+  }
+  for (const pattern of REAL_FOOD) {
+    if (pattern.test(text)) return { kind: "teach", topic: "realFood" };
   }
   return null;
 }
 
 export function teachBody(topic, ctx = {}) {
   if (topic === "psMethod") return COACH_COPY.teachPs;
+  if (topic === "italian") return COACH_COPY.teachItalian;
   if (topic === "neverSkip") return COACH_COPY.teachNeverSkip;
   if (topic === "realFood") return COACH_COPY.teachRealFood;
   if (topic === "alcohol") return COACH_COPY.teachAlcohol;

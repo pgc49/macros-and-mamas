@@ -80,6 +80,16 @@ function normalize(raw) {
  * Returns `null` when the message needs the model, which is the default for
  * anything not recognised outright.
  */
+/** Slot she named in the question, or null. Beats the clock when she said tonight. */
+export function slotNamedInAsk(raw) {
+  const text = normalize(raw);
+  if (!text) return null;
+  for (const [pattern, name] of SLOT_WORDS) {
+    if (pattern.test(text)) return normalizeSlot(name);
+  }
+  return null;
+}
+
 export function localCoachIntent(raw) {
   const text = normalize(raw);
   if (!text || text.length > 60) return null;

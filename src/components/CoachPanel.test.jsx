@@ -210,6 +210,29 @@ describe("what isn't the coach's goes to Callie", () => {
     await screen.findByText(COACH_COPY.teachNeverSkip);
     expect(postCoach).not.toHaveBeenCalled();
   });
+
+  it("answers Italian in her words, and sends In-N-Out to the model", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Protein Style burger, spread on the side.",
+      meals: [],
+    }));
+    renderPanel({ postCoach });
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I am going out to eat tonight for Italian. What can I eat?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_COPY.teachItalian);
+    expect(postCoach).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm going out to eat at inn n out. What should I get?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText("Protein Style burger, spread on the side.");
+    expect(postCoach).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("coach card save contract", () => {

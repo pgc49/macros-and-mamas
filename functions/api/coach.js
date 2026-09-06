@@ -41,7 +41,7 @@ import {
   logAiFailure,
   messageForKind,
   parseJsonLoose,
-  resolveModels,
+  resolveCoachModels,
 } from "../_shared/openrouter.js";
 import {
   checkAiLimit,
@@ -53,6 +53,7 @@ import {
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 import { localCoachTeach, teachBody } from "../../src/utils/coachTeach.js";
+import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 
 const MAX_PER_DAY = 30;
 const MAX_IMAGES = 3;
@@ -85,9 +86,11 @@ export async function onRequestPost({ request, env }) {
     const body = await request.json().catch(() => ({}));
     const mode = MODES.has(body.mode) ? body.mode : "ask";
     const text = String(body.text || "").trim().slice(0, MAX_TEXT);
-    const slot = SLOTS.has(String(body.slot || "").toLowerCase())
-      ? String(body.slot).toLowerCase()
-      : "dinner";
+    const askedSlot = slotNamedInAsk(text);
+    const slot = askedSlot
+      || (SLOTS.has(String(body.slot || "").toLowerCase())
+        ? String(body.slot).toLowerCase()
+        : "dinner");
     const images = mode === "ask" ? [] : parseImages(body);
 
     if (mode === "ask" && text.length < 2) {
@@ -175,10 +178,11 @@ export async function onRequestPost({ request, env }) {
     const result = await callOpenRouter({
       env,
       label: "coach",
-      models: resolveModels(env),
+      models: resolveCoachModels(env),
       maxTokens: images.length ? 8000 : 4000,
       temperature: 0.3,
-      timeoutMs: images.length ? 55_000 : 35_000,
+      timeoutMs: images.length ? 55_000 : 45_000,
+      reasoning: { effort: "low", exclude: true },
       messages: [
         { role: "system", content: COACH_SYSTEM },
         { role: "user", content: userContent },

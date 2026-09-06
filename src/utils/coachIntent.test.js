@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { localCoachIntent } from "./coachIntent.js";
+import { localCoachIntent, slotNamedInAsk } from "./coachIntent.js";
 
 describe("asks the coach answers without a model", () => {
   it("routes the question she asks most", () => {
@@ -15,6 +15,11 @@ describe("asks the coach answers without a model", () => {
     ]) {
       expect(localCoachIntent(text)).toMatchObject({ kind: "cards" });
     }
+  });
+
+  it("reads a slot out of a longer question the clock would get wrong", () => {
+    expect(slotNamedInAsk("I am going out to eat tonight for Italian")).toBe("dinner");
+    expect(slotNamedInAsk("I have chicken and rice, what should I eat")).toBeNull();
   });
 
   it("carries the slot she named", () => {

@@ -82,9 +82,13 @@ const SLOT_WHEN = {
 function slotBlock(slot) {
   const when = SLOT_WHEN[slot] || "her next meal";
   return `## What she is deciding
-${when}. Every meal you suggest has to be something people actually eat then. A seared fish
-dinner is not breakfast however well the numbers land. If the only thing that fits is really
-another meal of the day, say so in the reply and suggest what does belong here.`;
+${when}. That is the budget for this meal in her day — not a reason to rename lunch food
+as breakfast. Breakfast is eggs, yogurt, oats, a shake, fruit, toast. Chicken and rice,
+steak, salmon, pasta, and dinner-protein bowls are lunch or dinner. Never put "breakfast"
+in the name of a lunch plate because the clock says morning. A seared fish dinner is not
+breakfast however well the numbers land. If she listed ingredients that are not breakfast
+food, feed the food she has and call it what it is. If she said tonight, dinner, lunch, or
+a cuisine, her words beat the clock.`;
 }
 
 function budgetBlock(budget, slot) {
@@ -110,8 +114,8 @@ const SHARED_RULES = `## Rules
 2. Prefer her saved My meals first, then Callie's bank, then something original.
    Set "basedOn" to the exact saved or bank name when you used one.
 3. Diet and allergens are absolute. Nothing she avoids, at any portion, for any reason.
-   The time of day is nearly as firm: match the slot named above, and lean on what she says she
-   likes at that slot rather than her preferences for the others.
+   Match the food to the meal she is actually eating. Lean on what she likes at that slot.
+   Do not force a lunch plate into a breakfast name.
 4. Callie's house style: whole foods, max 2 whole eggs per meal (whites are fine),
    sweeten with honey, maple or applesauce. Keep fat in range — that is the key for
    weight loss. Do not only talk about protein. Never suggest a half portion;
@@ -120,9 +124,18 @@ const SHARED_RULES = `## Rules
    usually 3 to 6 for something cooked, [] when there is nothing to do. Never pad to a count,
    and never end on filler like "enjoy" or "serve and eat".
 6. The reply is one or two sentences. Say why this food, not what her numbers are.
-7. If the question turns out not to be about food and her ranges, set scope to "callie", leave
+   Answer the question she asked. Do not drop a canned teaching (Oreos, "real food", a
+   generic restaurant spiel) unless she asked whether a specific food is allowed.
+7. If she named a restaurant, only that restaurant's real menu. Do not invent roasted
+   chicken, rice or steak unless they serve it. In-N-Out is a burger: Protein Style
+   (lettuce wrap), flying Dutchman, grilled onions, spread on the side or left off —
+   not a chicken-and-rice plate.
+8. If she named a cuisine, use the PS method for that cuisine. Italian: protein
+   (roasted chicken or fish) with pasta and tomato sauce as the SIDE, not the main.
+   Pasta is low protein, so it sits next to the protein rather than filling the plate.
+9. If the question turns out not to be about food and her ranges, set scope to "callie", leave
    meals empty, and let the app do the handoff — do not answer it yourself.
-8. Return ONLY JSON.`;
+10. Return ONLY JSON.`;
 
 export function buildCoachAskPrompt({ profile, budget, slot, question, customMeals = [], recentNames = [] }) {
   return `A mama in the program is asking you something. Answer it, or hand it back.
@@ -144,7 +157,7 @@ ${String(question || "").trim().slice(0, 600)}
 """
 
 ${SHARED_RULES}
-9. Suggest at most 3 meals, and only when food is actually what she asked for. A question you can
+11. Suggest at most 3 meals, and only when food is actually what she asked for. A question you can
    answer in a sentence gets a sentence and no cards.
 
 Return JSON: ${REPLY_SCHEMA}`;
@@ -167,17 +180,16 @@ ${String(note || "").trim().slice(0, 400) || "(none)"}
 """
 
 ${SHARED_RULES}
-9. Only dishes actually printed on that menu. Do not invent a dish, and do not suggest something
+11. Only dishes actually printed on that menu. Do not invent a dish, and do not suggest something
    from the bank as if the restaurant serves it. Use the dish name and its listed components as
    the menu spells them — if a word is unreadable, leave it out rather than guessing at it.
    If the photo is too blurry or cropped to read dish names, return no meals and say you can't
    read it.
-10. Restaurant macros are estimates from a typical preparation. Say so in "desc". "steps" is the
+12. Restaurant macros are estimates from a typical preparation. Say so in "desc". "steps" is the
     ordering ask and nothing else — what to leave off, what to get on the side, how to size it.
-    Fat is the one that blows out eating out, so prefer a protein and a side (the PS method):
-    roasted chicken, a burger, steak, then rice, salad or potatoes. Dressing on the side.
+    Fat is the one that blows out eating out, so prefer a protein and a side (the PS method).
     If there is nothing to ask for, return [].
-11. Give up to 3 orderable picks, best first.
+13. Give up to 3 orderable picks, best first.
 
 Return JSON: ${REPLY_SCHEMA}`;
 }
@@ -199,11 +211,12 @@ ${String(note || "").trim().slice(0, 400) || "(none)"}
 """
 
 ${SHARED_RULES}
-9. Only ingredients you can actually see in the photo, plus basic staples anyone has
+11. Only ingredients you can actually see in the photo, plus basic staples anyone has
    (salt, pepper, oil, common dried spices). Do not assume she has a protein that isn't there.
    If you can't make out enough to build a real meal, return no meals and say so.
-10. Say which visible ingredients you used in "desc".
-11. Give up to 3 options, best first.
+   Do not brand a chicken-and-rice plate as breakfast.
+12. Say which visible ingredients you used in "desc".
+13. Give up to 3 options, best first.
 
 Return JSON: ${REPLY_SCHEMA}`;
 }

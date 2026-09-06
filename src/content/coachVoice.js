@@ -177,6 +177,8 @@ export const COACH_COPY = {
   // Callie's teachings — the sentences she would actually say.
   teachPs:
     "Use the PS method: protein and a side. Roasted chicken, a burger, steak — then rice, salad or potatoes. Eating out makes it really hard not to blow through fat, so do your best. Dressing on the side, and dip your fork as you go.",
+  teachItalian:
+    "For Italian, protein and a side: roasted chicken or fish, and pasta with tomato sauce as the side — not the main. Pasta is low protein, so it sits next to the protein rather than filling the plate.",
   teachNeverSkip:
     "Absolutely not. You never skip a meal! The goal isn't to nail your macros every single time — it's to nourish yourself and learn how to fuel your body. Eat something simple and lower calorie: grilled chicken and rice, or even a protein shake. Follow your hunger, too. Some days you burned more, and those days need more.",
   teachRealFood:

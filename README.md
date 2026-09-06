@@ -62,6 +62,7 @@ The app also has project fallbacks for Supabase URL/publishable key in `src/conf
 | Name | Purpose | Where |
 |------|---------|--------|
 | `OPENROUTER_API_KEY` | Meal photo AI | Cloudflare secret |
+| `COACH_MODEL` | Optional OpenRouter model override for the meal coach (default `google/gemini-3.5-flash`) | Cloudflare env |
 | `STRIPE_SECRET_KEY` | Create Checkout Sessions | Cloudflare secret (`sk_test_…` first) |
 | `STRIPE_PRICE_ID_FOUNDING` | $149 founding Price ID (`price_…`) | Cloudflare env (legacy `STRIPE_PRICE_ID` still works as fallback) |
 | `STRIPE_PRICE_ID_WAITLIST` / `PRICE_QUIZ_RATE` | $249 early / quiz-unlock Price ID | Cloudflare env |

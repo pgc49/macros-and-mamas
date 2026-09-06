@@ -40,12 +40,24 @@ describe("the prompt says what meal she is deciding", () => {
 
   it("tells it not to answer breakfast with a fish dinner", () => {
     const prompt = buildCoachAskPrompt({ ...ARGS, slot: "breakfast", question: "something else" });
-    expect(prompt).toMatch(/seared fish\s+dinner is not breakfast/);
+    expect(prompt).toMatch(/seared fish dinner is not\s+breakfast/);
   });
 
-  it("points it at the preferences for this slot, not the others", () => {
+  it("does not brand lunch food as breakfast", () => {
     const prompt = buildCoachAskPrompt({ ...ARGS, slot: "breakfast", question: "ideas" });
-    expect(prompt).toMatch(/match the slot named above/);
+    expect(prompt).toMatch(/Never put "breakfast"/);
+    expect(prompt).toMatch(/Chicken and rice/);
+  });
+
+  it("tells it to answer the restaurant she named", () => {
+    const prompt = buildCoachAskPrompt({
+      ...ARGS,
+      slot: "lunch",
+      question: "I'm going out to eat at inn n out. What should I get?",
+    });
+    expect(prompt).toMatch(/only that restaurant's real menu/);
+    expect(prompt).toMatch(/In-N-Out is a burger/);
+    expect(prompt).toMatch(/Do not drop a canned teaching/);
   });
 
   it("still carries her question, her budget and her history", () => {

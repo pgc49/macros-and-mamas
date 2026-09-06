@@ -53,6 +53,10 @@ The model is never the source of truth for a number. It proposes meals; `buildSu
 them through the same fit check and portioning as a bank card, and one that no longer fits is dropped
 rather than shown with a caveat.
 
+Coach calls `google/gemini-3.5-flash` on OpenRouter (then `gemini-3-flash-preview`, then flash-lite)
+with `reasoning.effort: low`. Meal estimates and the planner stay on flash-lite. Override with
+`COACH_MODEL`. The clock slot is the budget, not a reason to name chicken-and-rice a breakfast bowl.
+
 ---
 
 ## Callie's principles, encoded
@@ -209,7 +213,10 @@ endpoint run the same matcher, so a crafted request cannot spend a model call on
 answered.
 
 1. **Eating out, no numbers.** The PS method: protein and a side. Dressing on the side. Fat is the one
-   that blows out. Encoded as `teachPs`.
+   that blows out. Encoded as `teachPs`. A named restaurant (In-N-Out, Chipotle) is not this — that
+   goes to the model so it can answer from that menu. **Italian** is her own line: protein + pasta as
+   the side, not the main (`teachItalian`). The Oreo / real-food sentence is only for "is X ok", never
+   for "what can I eat for Italian".
 2. **Skip dinner because she's over.** "You never skip a meal!" Encoded as `teachNeverSkip`.
 3. **"Is X ok?"** Real food can fit (pizza yes, Oreo no). If it blows macros, prepare next time — log
    ahead, keep breakfast and lunch lower fat or carb. Encoded as `teachRealFood`.
@@ -242,8 +249,9 @@ In rough order of what I think each is worth:
 1. **The Today entry point earning its place.** It's a card that says "not sure what to eat?" Once there's
    real usage, the interesting version knows *why* she's stuck — 40g of protein left at 8pm is a different
    card from an untouched day at 9am.
-2. **Chain-specific eating-out.** The PS method covers a restaurant with no numbers. "I'm going to
-   Chipotle" should still become a bowl she can order, from a small set of common chains.
+2. **More chains in her own words.** Italian is encoded. In-N-Out and Chipotle go to Gemini 3.5 Flash
+   (not flash-lite) with light reasoning so it reads the place. Other cuisines can get the same
+   treatment once she writes the sentence.
 3. **Counting the deflections.** See "Watching it". Guardrails that are too tight are the most likely way
    this feature quietly fails, and right now nothing would tell us.
 4. **A weekly read.** "You hit protein 5 of 7 days" is the kind of thing that makes a subscription feel

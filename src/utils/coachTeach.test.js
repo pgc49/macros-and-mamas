@@ -16,6 +16,21 @@ describe("Callie's own answers, before a model is called", () => {
     expect(teachBody("psMethod")).toMatch(/PS method/i);
   });
 
+  it("answers Italian in her words, not the Oreo line", () => {
+    expect(localCoachTeach(
+      "I am going out to eat tonight for Italian. I'm worried about carbs and fat. What can I eat that won't blow through both?",
+    )).toMatchObject({ topic: "italian" });
+    expect(teachBody("italian")).toMatch(/pasta/i);
+    expect(teachBody("italian")).toMatch(/side/i);
+    expect(teachBody("italian")).not.toMatch(/Oreo/i);
+  });
+
+  it("does not steal a named restaurant from the model", () => {
+    expect(localCoachTeach("I'm going out to eat at inn n out. What should I get?")).toBeNull();
+    expect(localCoachTeach("I'm going to Chipotle, what should I order")).toBeNull();
+    expect(localCoachTeach("what should I get at In-N-Out")).toBeNull();
+  });
+
   it("never tells her to skip a meal", () => {
     expect(localCoachTeach("should I skip dinner")).toMatchObject({ topic: "neverSkip" });
     expect(localCoachTeach("I'm 400 over, skip dinner?")).toMatchObject({ topic: "neverSkip" });
@@ -49,6 +64,7 @@ describe("Callie's own answers, before a model is called", () => {
 
   it("does not swallow a meal ask", () => {
     expect(localCoachTeach("what should I eat")).toBeNull();
+    expect(localCoachTeach("what can I eat that won't blow through both")).toBeNull();
     expect(localCoachTeach("how's my day looking")).toBeNull();
   });
 });

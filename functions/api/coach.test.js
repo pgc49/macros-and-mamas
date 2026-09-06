@@ -6,6 +6,7 @@ const openrouter = vi.hoisted(() => ({
   messageForKind: vi.fn(() => "Try again in a minute."),
   parseJsonLoose: vi.fn(),
   resolveModels: vi.fn(() => ["google/gemini-3.1-flash-lite"]),
+  resolveCoachModels: vi.fn(() => ["google/gemini-3.5-flash"]),
 }));
 
 vi.mock("../_shared/openrouter.js", () => openrouter);
@@ -154,6 +155,39 @@ describe("the guardrail runs before the model", () => {
     expect(data.deflect).toBe("supply");
     expect(data.meals).toEqual([]);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it("answers Italian in Callie's words, without a model call", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "I am going out to eat tonight for Italian. What can I eat that won't blow through carbs and fat?",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.teach).toBe("italian");
+    expect(data.reply).toMatch(/pasta/i);
+    expect(data.reply).toMatch(/side/i);
+    expect(data.reply).not.toMatch(/Oreo/i);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it("sends a named restaurant to the model instead of the canned PS line", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "I'm going out to eat at inn n out. What should I get?" }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    expect((await resp.json()).scope).toBe("food");
+    expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(1);
+    expect(openrouter.callOpenRouter.mock.calls[0][0].models[0]).toBe("google/gemini-3.5-flash");
+    expect(openrouter.callOpenRouter.mock.calls[0][0].reasoning).toEqual({
+      effort: "low",
+      exclude: true,
+    });
   });
 
   it("answers skip-dinner in Callie's words, without a model call", async () => {
