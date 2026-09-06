@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Macros and Mamas · Coach · full mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#F7F1EF;--ink:#2A2224;--ink-2:#6B5D61;--ink-3:#9A8C90;--plum:#8E2C4E;--plum-soft:#F3DDE5;--plum-line:#E5C7D3;--sage:#E4EBE1;--sage-ink:#4E6549;--line:#EBDCE1;--serif:"Cormorant Garamond",Georgia,serif;--sans:"Nunito Sans",-apple-system,system-ui,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:#E7DFDC;font-family:var(--sans);color:var(--ink);display:flex;justify-content:center;gap:24px;padding:24px 0;flex-wrap:wrap}
+  .phone{width:390px;height:844px;background:var(--bg);border-radius:44px;overflow:hidden;position:relative;box-shadow:0 30px 80px rgba(60,30,40,.25);display:flex;flex-direction:column}
+  .status{display:flex;justify-content:space-between;padding:14px 26px 0;font-size:15px;font-weight:700;flex:none}
+  .screen{display:none;flex:1;min-height:0;flex-direction:column}
+  .screen.on{display:flex}
+  .scroll{flex:1;overflow:auto;padding:10px 14px 16px}
+  .tabs{display:flex;justify-content:space-around;align-items:center;padding:10px 8px 24px;border-top:1px solid var(--line);flex:none;background:var(--bg)}
+  .tabs span{font-size:14.5px;font-weight:700;color:var(--ink-2);padding:8px 10px;border-radius:20px;cursor:pointer}
+  .tabs span.on{background:var(--plum-soft);color:var(--plum)}
+  .card{background:#fff;border-radius:22px;border:1px solid var(--line);padding:16px;margin-bottom:12px}
+  h2{font-family:var(--serif);font-weight:400;font-size:28px;margin:0}
+  .sub{color:var(--ink-2);font-size:14px;margin:3px 0 0}
+  .rangebar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .tot{background:var(--sage);border-radius:14px;padding:10px 6px;text-align:center}.tot.over{background:#F1E6D3}.tot.over .v,.tot.over .l{color:#9A6B12}
+  .tot .v{font-family:var(--serif);font-size:24px;color:var(--sage-ink)}.tot .l{font-size:10.5px;letter-spacing:.5px;color:var(--sage-ink);font-weight:700;margin-top:2px}
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+  .tile{border:1px solid var(--plum-line);border-radius:14px;padding:12px 4px 10px;text-align:center;background:#fff}
+  .tile .ic{font-size:22px}.tile b{display:block;font-size:13px;margin-top:5px}.tile s{display:block;text-decoration:none;font-size:11px;color:var(--ink-2)}
+  .bar{margin-top:12px;display:flex;align-items:center;justify-content:space-between;background:var(--plum-soft);border-radius:14px;padding:12px 14px;cursor:pointer}
+  .bar .t{font-size:15px;font-weight:700;color:var(--plum)}.bar .d{font-size:13px;color:#7A4C5E;margin-top:2px;line-height:1.4}.bar .arr{font-size:22px;color:var(--plum)}
+  .sect{font-size:11.5px;letter-spacing:1.6px;color:var(--plum);font-weight:700;margin:12px 0 4px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);gap:8px}
+  .row .n{font-size:15px;font-weight:600}.row .src{font-size:12.5px;color:var(--plum);margin-top:2px}.row .m{font-size:13px;color:var(--ink-2);white-space:nowrap}
+  .row.planned{opacity:.75}.row.planned .src{color:var(--ink-3)}
+  .ate{background:var(--plum);color:#fff;border:none;border-radius:16px;padding:7px 12px;font-size:13px;font-weight:700;font-family:var(--sans);cursor:pointer;white-space:nowrap}
+  .room{font-size:13.5px;color:var(--ink-2);margin-top:10px;line-height:1.5}.room a{color:var(--plum);font-weight:700;text-decoration:underline;cursor:pointer}
+  /* coach */
+  .ch{display:flex;align-items:center;gap:10px;padding:10px 14px 8px;border-bottom:1px solid var(--line);flex:none}
+  .av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+  .av.m{background:var(--sage);color:var(--sage-ink);font-family:var(--serif);font-size:20px}.av.c{background:var(--plum);color:#fff}.av.g{background:#DCEAF2;color:#3F6B84}
+  .ch .name{font-size:17px;font-weight:700}.ch .who{font-size:12px;color:var(--ink-3)}
+  .ch .mem{margin-left:auto;font-size:12px;color:var(--plum);font-weight:700;cursor:pointer}
+  .ctx{margin:10px 14px 0;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.5;flex:none}
+  .ctx b{color:var(--ink)}
+  .msgs{flex:1;overflow:auto;padding:12px 14px 6px;display:flex;flex-direction:column;gap:10px}
+  .b{max-width:86%;padding:11px 14px;border-radius:18px;font-size:15px;line-height:1.5}
+  .me{align-self:flex-end;background:var(--plum);color:#fff;border-bottom-right-radius:6px}
+  .co{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:6px}
+  .tool{align-self:flex-start;font-size:12px;color:var(--ink-3);padding:0 6px;display:flex;gap:6px;align-items:center}.tool:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--sage-ink)}
+  .set{align-self:stretch;display:flex;flex-direction:column;gap:8px;padding-left:6px}
+  .idea{border:1px solid var(--line);border-radius:16px;padding:12px;background:#FFFCFD;cursor:pointer}
+  .idea .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.idea .h b{font-size:15.5px}
+  .idea em{font-style:normal;font-size:11.5px;color:var(--ink-3);font-weight:700;white-space:nowrap}
+  .know{font-size:12px;color:var(--plum);font-weight:600;margin-top:4px;display:flex;gap:4px;align-items:center}.know:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--plum)}
+  .idea p{margin:4px 0 0;font-size:13.5px;color:var(--ink-2);line-height:1.45}
+  .idea .f{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:6px}.idea .mm{font-size:12px;color:var(--ink-3);font-weight:600;flex:1}
+  .btn{background:var(--plum);color:#fff;border:none;border-radius:16px;padding:7px 13px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer}
+  .btn.o{background:#fff;color:var(--plum);border:1px solid var(--plum)}.btn.s{background:var(--sage);color:var(--sage-ink)}
+  .fit{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:9px;white-space:nowrap}.fit.ok{background:var(--sage);color:var(--sage-ink)}.fit.over{background:var(--plum-soft);color:var(--plum)}
+  .plan{align-self:stretch;border:1px solid var(--line);border-radius:16px;background:#fff;padding:12px;margin-left:6px}
+  .plan .d{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:14px;gap:8px}.plan .d:first-of-type{border-top:none}
+  .plan .d small{display:block;font-size:12px;color:var(--ink-3)}
+  .hand{align-self:stretch;margin-left:6px;border:1px solid var(--plum-line);background:var(--plum-soft);border-radius:16px;padding:12px}
+  .hand .t{font-weight:700;font-size:14.5px}.hand p{margin:4px 0 8px;font-size:13.5px;color:#5A3040;line-height:1.5}
+  .chips{display:flex;gap:6px;overflow-x:auto;padding:8px 14px 2px;scrollbar-width:none;flex:none}
+  .chips span{flex:none;font-size:13px;padding:7px 12px;border-radius:16px;border:1px solid var(--plum-line);background:#fff;color:var(--plum);font-weight:600;cursor:pointer}
+  .inrow{display:flex;gap:8px;padding:8px 14px 10px;align-items:center;flex:none}
+  .inrow .cam{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer}
+  .inrow input{flex:1;border:1px solid var(--line);border-radius:20px;padding:11px 14px;font-family:var(--sans);font-size:15px;background:#fff}
+  .typing{align-self:flex-start;color:var(--ink-3);font-size:13px;padding:0 8px}
+  .gsa{margin:6px 0 0;font-size:13.5px;line-height:1.55;color:var(--ink-2)}.gsa b{color:var(--ink);display:inline-block;width:46px}
+  /* detail sheet */
+  .scrim{position:absolute;inset:0;background:rgba(42,34,36,.35);display:none}
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:26px 26px 0 0;padding:12px 18px 26px;display:none;max-height:80%;overflow:auto}
+  .phone.detail .scrim,.phone.detail .sheet{display:block}
+  .grab{width:40px;height:5px;border-radius:3px;background:#E3D3D9;margin:0 auto 12px}
+  .sheet h3{font-family:var(--serif);font-weight:400;font-size:26px;margin:0}
+  .sheet .rec{font-size:14.5px;line-height:1.6;color:var(--ink-2);margin-top:10px}.sheet .rec b{color:var(--ink)}
+  .step{display:flex;align-items:center;gap:8px;margin-top:12px}.step span{font-size:13px;padding:6px 12px;border-radius:14px;border:1px solid var(--line);cursor:pointer}.step span.on{border-color:var(--plum);color:var(--plum);font-weight:700;background:var(--plum-soft)}
+  .sheet .acts{display:flex;gap:8px;margin-top:14px}.sheet .acts .btn{flex:1;padding:11px}
+  /* messages */
+  .conv{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:18px;padding:13px;margin-bottom:10px}
+  .conv .t{font-size:15.5px;font-weight:700}.conv .p{font-size:13px;color:var(--ink-2);margin-top:2px;line-height:1.4}.conv .meta{margin-left:auto;font-size:12px;color:var(--ink-3);flex:none}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--plum-soft);color:var(--plum);margin-left:6px}
+  .stub{padding:40px 24px;color:var(--ink-3);text-align:center;font-size:14px;line-height:1.6}
+  .toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 16px;border-radius:18px;font-size:13.5px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}.toast.show{opacity:1}
+  .note{width:390px;font-size:13.5px;line-height:1.55;color:#4A3A40;background:#fff;border-radius:16px;padding:14px 16px;border:1px solid #E3D3D9;align-self:flex-start}
+  .note b{display:block;margin-bottom:4px}.note ol{margin:6px 0 0;padding-left:18px}
+  @media (max-width:440px){body{padding:0;background:var(--bg)}.phone{width:100%;height:100vh;border-radius:0;box-shadow:none}.note{display:none}}
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+  <div class="status"><span id="clock">12:41</span><span>▲ ▮▮ 20</span></div>
+
+  <!-- TODAY -->
+  <div class="screen on" id="s-today">
+    <div class="scroll">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:4px 4px 8px"><div><div style="font-family:var(--serif);font-size:30px">Thursday, Sep 3<span style="font-family:var(--sans);font-size:14px;color:var(--plum);font-weight:700;margin-left:6px">· Today</span></div><div style="font-size:13px;color:var(--ink-2)">Denver time</div></div></div>
+      <div class="card">
+        <div class="rangebar">
+          <div class="tot"><div class="v" id="tCal">905</div><div class="l">CAL · 1750–1900</div></div>
+          <div class="tot"><div class="v" id="tP">64g</div><div class="l">P · 140–150</div></div>
+          <div class="tot"><div class="v" id="tC">53g</div><div class="l">C · 180–190</div></div>
+          <div class="tot"><div class="v" id="tF">47g</div><div class="l">F · 60–70</div></div>
+        </div>
+        <p class="room" id="roomLine"></p>
+      </div>
+      <div class="card">
+        <h2>Log a meal</h2><p class="sub">Adding to today.</p>
+        <div class="tiles">
+          <div class="tile"><div class="ic">📸</div><b>Snap</b><s>plate or menu</s></div>
+          <div class="tile"><div class="ic">✏️</div><b>Describe</b><s>type it</s></div>
+          <div class="tile"><div class="ic">🍳</div><b>My plan</b><s>exact</s></div>
+          <div class="tile"><div class="ic" style="color:#2B7BD6;font-weight:700">#</div><b>Macros</b><s>I know them</s></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Today's log</h2><p class="sub">Grouped by meal.</p>
+        <div id="log"></div>
+        <div class="bar" onclick="openCoach('auto')"><div><div class="t">Meal coach</div><div class="d" id="barHint"></div></div><span class="arr">›</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEALS stub -->
+  <div class="screen" id="s-meals"><div class="scroll"><div class="stub">Meals tab, unchanged.<br>Callie's bank, My meals, Pantry, Weekly Planner with the <b>Fits remaining macros</b> chip from PR 330.<br><br>Pencils made in the Coach show up on the planner board and the grocery list.</div></div></div>
+
+  <!-- COACH -->
+  <div class="screen" id="s-coach">
+    <div class="ch"><div class="av m">m</div><div><div class="name">Coach</div><div class="who">Built on Callie's guide · knows your log · not Callie</div></div><span class="mem" onclick="ask('memory')">What you know</span></div>
+    <div class="ctx" id="ctx"></div>
+    <div class="msgs" id="msgs"></div>
+    <div class="chips" id="chips"></div>
+    <div class="inrow"><div class="cam" onclick="ask('fridge')">📸</div><input placeholder="Ask your coach…" onkeydown="if(event.key==='Enter'&&this.value.trim()){freeAsk(this.value);this.value=''}"></div>
+  </div>
+
+  <!-- PROGRESS stub -->
+  <div class="screen" id="s-progress"><div class="scroll"><div class="stub">Progress, unchanged.</div></div></div>
+
+  <!-- MESSAGES -->
+  <div class="screen" id="s-messages">
+    <div class="scroll">
+      <div style="font-family:var(--serif);font-size:30px;margin:6px 4px 2px">Messages</div>
+      <p class="sub" style="margin:0 4px 12px">Callie and the mamas. Your coach lives in its own tab.</p>
+      <div class="conv"><div class="av c">C</div><div><div class="t">Callie</div><div class="p" id="calliePreview">Loved your check-in. Let's talk protein at breakfast this week.</div></div><div class="meta" id="callieMeta">Tue</div></div>
+      <div class="conv"><div class="av g">M</div><div><div class="t">Founding mamas</div><div class="p">Jess: anyone have a 5 minute lunch that isn't yogurt lol</div></div><div class="meta">9:12</div></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <span class="on" onclick="tab('today')">Today</span><span onclick="tab('meals')">Meals</span><span onclick="tab('coach')">Coach</span><span onclick="tab('progress')">Progress</span><span onclick="tab('messages')">Messages</span>
+  </div>
+
+  <div class="scrim" onclick="closeDetail()"></div>
+  <div class="sheet" id="sheet"></div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<div class="note">
+  <b>The whole loop</b>
+  <ol>
+    <li><b>Today.</b> It's 12:41 in Denver, breakfast is logged. The <i>Meal coach</i> block under the log items shows what's left today to stay in range, all four numbers, and which one is tight.</li>
+    <li>Tap it. You land in the <b>Coach</b> tab and the answer is already there: three lunch-sized cards that leave room for dinner, no typing. The strip shows what's logged and what's left, nothing else.</li>
+    <li>Tap a card body → detail sheet with recipe and portion. <i>Log it</i> writes to Today and the strip updates. <i>Pencil in</i> puts it on the plan.</li>
+    <li>Try <i>Plan my day</i>, <i>Here's my fridge</i>, <i>Eating out</i>, <i>Why over on fat</i>, and <i>Nursing and dizzy</i>. The last one hands off: check <b>Messages</b>, it landed in her Callie thread as "from your coach."</li>
+    <li>Go back to <b>Today</b>: the pencilled dinner is waiting as a grey row with one tap.</li>
+  </ol>
+  Messages is people only. Coach is the app's brain, on its own stack.
+</div>
+
+<script>
+const R={cal:[1750,1900],p:[140,150],c:[180,190],f:[60,70]};
+const S={cal:905,p:64,c:53,f:47,logged:{breakfast:[{n:'French Toast',cal:385,p:12,c:52,f:14,src:'AI estimate from description · tap to adjust'},{n:'Steak and Eggs',cal:520,p:52,c:1,f:33,src:'AI estimate from description · tap to adjust'}],lunch:[],dinner:[],snack:[]},planned:{dinner:null},share:{lunch:.30,dinner:.38},kitchenConfirmed:false,greeted:false,detail:null};
+const $=id=>document.getElementById(id);
+const r5=n=>Math.round(n/5)*5,r25=n=>Math.round(n/25)*25;
+function nextSlot(){return ['breakfast','lunch','dinner'].find(s=>!S.logged[s].length)||'snack';}
+function remaining(){return {cal:R.cal[1]-S.cal,pLow:R.p[0]-S.p,c:R.c[1]-S.c,f:R.f[1]-S.f};}
+function leftRange(k,v){const [lo,hi]=R[k];const a=lo-v,b=hi-v;if(b<0)return `${-b}${k==='cal'?'':'g'} over`;if(a<=0)return 'in range';return `${a}–${b}${k==='cal'?'':'g'}`;}
+function leftLine(){const c=leftRange('cal',S.cal);const cal=c==='in range'?'cal in range':c.endsWith('over')?c.replace(' over',' cal over'):c+' cal';return `${cal} · P ${leftRange('p',S.p)} · C ${leftRange('c',S.c)} · F ${leftRange('f',S.f)}`;}
+function tightOne(){const d=remaining();const r={fat:d.f/R.f[1],carbs:d.c/R.c[1],calories:d.cal/R.cal[1]};const k=Object.keys(r).sort((a,b)=>r[a]-r[b])[0];return r[k]<.35?k:null;}
+function budget(slot){const r=remaining();const later=['breakfast','lunch','dinner'].filter(s=>!S.logged[s].length&&['breakfast','lunch','dinner'].indexOf(s)>['breakfast','lunch','dinner'].indexOf(slot));
+  let res={cal:0,p:0,c:0,f:0,src:'usual'};later.forEach(s=>{const pl=S.planned[s];if(pl){res.cal+=pl.cal;res.p+=pl.p;res.c+=pl.c;res.f+=pl.f;res.src='pencilled';}else{res.cal+=Math.round(R.cal[1]*S.share[s]);res.p+=Math.round(R.p[0]*S.share[s]);res.c+=Math.round(R.c[1]*S.share[s]);res.f+=Math.round(R.f[1]*S.share[s]);}});
+  return {slot,cal:Math.max(0,r.cal-res.cal),pNeed:Math.max(0,r.pLow-res.p),c:Math.max(0,r.c-res.c),f:Math.max(0,r.f-res.f),later,res,day:r};}
+function coachLine(b){const d=b.day;if(d.cal<=0||d.f<-8||d.c<-15)return "Over on something today? Happens. Tomorrow start fresh.";
+  const t=tightOne();return `Left today to stay in range: ${leftLine()}.${t?` ${t[0].toUpperCase()+t.slice(1)} is the tight one.`:''}`;}
+
+/* ---------- Today ---------- */
+function renderToday(){
+  $('tCal').textContent=S.cal;$('tP').textContent=S.p+'g';$('tC').textContent=S.c+'g';$('tF').textContent=S.f+'g';
+  [['tCal',S.cal>R.cal[1]],['tP',S.p>R.p[1]],['tC',S.c>R.c[1]],['tF',S.f>R.f[1]]].forEach(([id,o])=>$(id).parentElement.classList.toggle('over',o));
+  const b=budget(nextSlot());$('barHint').textContent=S.logged.lunch.length&&!S.logged.dinner.length&&!S.planned.dinner?"Know what dinner is yet? I'll size it to what's left.":coachLine(b);
+  const d=remaining();const over=S.cal>R.cal[1]||S.f>R.f[1]||S.c>R.c[1];
+  $('roomLine').innerHTML=over?`A touch over the top of your range — tomorrow's a clean slate, no making up for it.`:`Room left in your ranges — under is fine mid-day, and low days happen.`;
+  let h='';['breakfast','lunch','dinner','snack'].forEach(s=>{const rows=S.logged[s];const pl=S.planned[s];if(!rows.length&&!pl)return;h+=`<div class="sect">${s.toUpperCase()}</div>`;
+    rows.forEach(m=>h+=`<div class="row"><div><div class="n">${m.n}</div><div class="src">${m.src}</div></div><div class="m">${m.cal} cal · P ${m.p}g · C ${m.c}g · F ${m.f}g ›</div></div>`);
+    if(pl)h+=`<div class="row planned"><div><div class="n">${pl.n}</div><div class="src">Pencilled in · tap when you've eaten it</div></div><button class="ate" onclick="ateIt('${s}')">Ate it</button></div>`;});
+  $('log').innerHTML=h;}
+function logMeal(slot,m,via){S.cal+=m.cal;S.p+=m.p;S.c+=m.c;S.f+=m.f;S.logged[slot].push({...m,src:via});if(S.planned[slot]&&S.planned[slot].n===m.n)S.planned[slot]=null;renderToday();renderCtx();toast(`Logged to ${slot}`);}
+function ateIt(slot){const m=S.planned[slot];logMeal(slot,m,'From your coach · tap to adjust');}
+function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1800);}
+
+/* ---------- tabs ---------- */
+function tab(name){['today','meals','coach','progress','messages'].forEach(n=>$('s-'+n).classList.toggle('on',n===name));document.querySelectorAll('.tabs span').forEach(x=>x.classList.toggle('on',x.textContent.toLowerCase()===name));if(name==='coach')enterCoach();}
+function openCoach(mode){tab('coach');if(mode==='auto')ask('fits');}
+
+/* ---------- Coach ---------- */
+function renderCtx(){const ns=nextSlot();const b=budget(ns);const logged=Object.entries(S.logged).filter(([s,r])=>r.length).map(([s,r])=>`${s} ${r.reduce((a,m)=>a+m.cal,0)} cal · P ${r.reduce((a,m)=>a+m.p,0)} · C ${r.reduce((a,m)=>a+m.c,0)} · F ${r.reduce((a,m)=>a+m.f,0)}`).join(' | ');
+  let t=`<b>Thu Sep 3 · ${$('clock').textContent} Denver · ${ns[0].toUpperCase()+ns.slice(1)} next</b><br>${logged?'Logged: '+logged:'Nothing logged yet today'}<br>`;
+  t+=`<b>Left today to stay in range: ${leftLine()}</b>`;
+  const pl=Object.entries(S.planned).filter(([s,m])=>m);if(pl.length)t+=`<br>Pencilled: ${pl.map(([s,m])=>`${s} · ${m.n}`).join(', ')}`;
+  $('ctx').innerHTML=t;renderChips();}
+function renderChips(){const ns=nextSlot();$('chips').innerHTML=[['fits',`What fits for ${ns}?`],['plan','Plan my day'],['fridge',"Here's my fridge"],['out','Eating out'],['fat','Why over on fat?'],['nursing','Nursing and dizzy'],['callie','Ask Callie instead']].map(([k,l])=>`<span onclick="ask('${k}')">${l}</span>`).join('');}
+function enterCoach(){renderCtx();if(!S.greeted){S.greeted=true;co("Hi. I've got your log, your prefs, and Callie's guide. Ask me anything about what to eat, or tap a question below.");}}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function add(html,cls){const d=document.createElement('div');d.className=cls;d.innerHTML=html;$('msgs').appendChild(d);$('msgs').scrollTop=1e9;return d;}
+const me=t=>add(t,'b me'),co=t=>add(t,'b co'),tool=t=>add(t,'tool');
+async function typing(ms=700){const d=add('thinking…','typing');await sleep(ms);d.remove();}
+const CARDS={
+  lunch:[{n:'Greek yogurt, berries, granola',s:'My meals',k:'One of your usuals at lunch',w:'27g protein, 6g fat. Leaves dinner where you like it.',cal:290,p:27,c:38,f:6,ing:'1 cup Greek yogurt · half cup berries · 2 tbsp granola',steps:'Layer it. That is the recipe.'},
+         {n:'Turkey roll-ups and an apple',s:"Callie's bank",k:'No cilantro, no mushrooms, as always',w:'Quick. 25g protein, almost no fat.',cal:260,p:25,c:30,f:5,ing:'4 oz deli turkey · 1 apple · mustard',steps:'Roll the turkey, slice the apple.'},
+         {n:'Cottage cheese and pineapple',s:"Callie's bank",k:'Close to what you usually eat',w:'Light. Protein moves, fat stays put.',cal:240,p:24,c:28,f:4,ing:'1 cup low-fat cottage cheese · half cup pineapple',steps:'Bowl. Spoon.'}],
+  dinner:[{n:'Chicken and rice bowl · 1.5 servings',s:'My meals',k:'One of your usuals',w:'1.5 servings fills your protein and leaves 4g fat.',cal:720,p:78,c:92,f:11,ing:'9 oz chicken · 1.5 cups rice · veg · salsa',steps:'The way you always make it, half again as much chicken.'},
+          {n:'Shrimp tacos, no sour cream',s:"Callie's bank",k:'Mexican, like you like it',w:'Swap sour cream for salsa and it stays in every range.',cal:640,p:62,c:84,f:12,ing:'8 oz shrimp · 3 corn tortillas · cabbage · salsa · lime',steps:'Sear shrimp 3 min. Warm tortillas. Build.'},
+          {n:'Salmon, rice, green beans',s:"Callie's bank",k:'You like salmon',w:'Salmon fat fits tonight because breakfast carried the day\'s fat.',cal:640,p:62,c:70,f:16,ing:'6 oz salmon · 1 cup rice · green beans',steps:'Bake salmon 12 min at 400. Steam beans.'}],
+  kitchen:[{n:'Your chicken and rice bowl, turkey version',s:'Your saved meal, adjusted',k:'One of your usuals, with what you have',w:'Turkey for chicken, half portion. Rest of the turkey is dinner.',cal:300,p:26,c:34,f:7,ing:'3 oz ground turkey · half cup rice · spinach · salsa',steps:'Brown turkey, no oil. Stir in rice and spinach until warm.'},
+           {n:'Spinach and egg white scramble',s:'Your saved meal, adjusted',k:'Your weekday morning go-to',w:'Egg whites only today to hold fat for dinner.',cal:220,p:24,c:10,f:6,ing:'5 egg whites · spinach · salsa',steps:'Wilt spinach dry, add whites, scramble.'},
+           {n:'Turkey lettuce cups',s:'New, from your fridge',k:'Mexican, like you like it',w:'4 oz turkey, salsa, no tortilla. Light and fast.',cal:260,p:28,c:14,f:8,ing:'4 oz ground turkey · lettuce · salsa · lime',steps:'Brown turkey with taco seasoning. Spoon into lettuce.'}]};
+function cardHtml(m,slot,i,src){return `<div class="idea" onclick="openDetail('${src}',${i},'${slot}')"><div class="h"><b>${m.n}</b><em>${m.s}</em></div><div class="know">${m.k}</div><p>${m.w}</p><div class="f"><span class="mm">${m.cal} cal · P ${m.p} · C ${m.c} · F ${m.f}</span><button class="btn o" onclick="event.stopPropagation();pencil('${slot}','${src}',${i})">Pencil in</button><button class="btn" onclick="event.stopPropagation();logFrom('${slot}','${src}',${i})">Log it</button></div></div>`;}
+function cards(src,slot){add(CARDS[src].map((m,i)=>cardHtml(m,slot,i,src)).join(''),'set');}
+function logFrom(slot,src,i){const m=CARDS[src][i];logMeal(slot,m,src==='kitchen'?'Made from your fridge · tap to adjust':'From your coach · tap to adjust');tool(`Logged to ${slot} · ${m.cal} cal · ${m.p}g protein`);const b=budget(nextSlot());if(b.later.length||nextSlot()!=='snack')co(`Logged. Left today: ${leftLine()}. Know what ${nextSlot()} is yet? I can pencil something in.`);else co("Logged. That's your day. Nice work.");}
+function pencil(slot,src,i){const m=CARDS[src][i];if(slot==='lunch'&&!S.logged.lunch.length){slot='lunch';}S.planned[slot]={n:m.n,cal:m.cal,p:m.p,c:m.c,f:m.f};renderToday();renderCtx();tool(`Pencilled ${m.n} for ${slot} · on your plan and grocery`);co(`Pencilled. It'll be waiting in Today with one tap when you've eaten it.`);}
+
+async function ask(k){
+  const ns=nextSlot();const b=budget(ns);
+  if(k==='fits'){me(`What fits for ${ns}?`);await typing();tool(`Checked today's log and your ranges${b.later.length?` · left room for ${b.later[0]}${b.res.src==='pencilled'?' (pencilled)':''}`:''}`);
+    const t1=tightOne();co(`You've got ${leftLine()} left today. These are ${ns}-sized so dinner still fits${t1?`, and they go easy on ${t1} since that's the tight one`:''}. Any of them logs in one tap.`);cards(ns==='dinner'?'dinner':'lunch',ns);
+    co("Want something different? Say lighter, more protein, a cuisine, or tell me what's in the fridge.");}
+  if(k==='plan'){me("Plan my day");await typing(900);tool('Checked what\'s logged · split what\'s left across the rest of the day');
+    co(`Here's how I'd split what's left (${leftLine()}) across the rest of today. Breakfast used most of your fat, so lunch stays light and dinner carries more of the protein and carbs. Pencil any row, or all of it.`);
+    add(`<div class="plan"><div style="font-weight:700;margin-bottom:4px">Today, the rest of it</div>
+      ${!S.logged.lunch.length?`<div class="d"><div>Greek yogurt, berries, granola<small>Lunch · 290 cal · 27g protein</small></div><button class="btn o" onclick="pencil('lunch','lunch',0)">Pencil</button></div>`:''}
+      <div class="d"><div>Chicken and rice bowl · 1.5 servings<small>Dinner · 720 cal · 78g protein</small></div><button class="btn o" onclick="pencil('dinner','dinner',0)">Pencil</button></div>
+      <div class="d"><div>Cottage cheese, small<small>Snack · 120 cal · 14g protein · only if you're hungry</small></div><span style="font-size:12px;color:var(--ink-3)">optional</span></div>
+      <div class="d" style="justify-content:flex-end"><button class="btn" onclick="pencil('dinner','dinner',0);${!S.logged.lunch.length?"pencil('lunch','lunch',0);":''}">Pencil all</button></div></div>`,'set');
+    co("Day lands at about 1860 cal · P 150g · C 185g · F 66g. Inside every range.");}
+  if(k==='fridge'){me("📷 Here's my fridge");await typing(900);tool('Read the photo · 7 items');co("Here's what I see. Tap × on anything I got wrong.");
+    add(`<div class="idea" style="cursor:default"><div class="h"><b>In your fridge</b><em>from your photo</em></div><p style="margin-top:8px"><span style="display:inline-flex;flex-wrap:wrap;gap:6px">${['ground turkey','spinach','tortillas','eggs','shredded cheese','salsa','Greek yogurt'].map(x=>`<span style="border:1px dashed var(--plum-line);border-radius:12px;padding:4px 9px;font-size:13px">${x} <span style="color:var(--ink-3)">×</span></span>`).join('')}</span></p><div class="f"><span class="mm">Rice and salsa are in your staples</span><button class="btn s" onclick="fridgeGo()">Looks right</button></div></div>`,'set');}
+  if(k==='out'){me("I'm getting Chipotle for lunch, what do I order?");await typing(800);tool("Chain nutrition · sized for lunch, dinner reserved");co("Good spot for this. Lunch has about 275 cal, so it's a salad bowl or two tacos, not the full bowl. Protein first, cheese and guac are what push fat.");
+    add(`<div class="set">${[{n:'Chicken salad bowl',fit:'ok',ft:'Fits',k:'Sized to leave dinner room',g:'Single chicken, lettuce base, black beans, salsa.',s:'Rice, cheese, dressing.',a:'Extra salsa instead of vinaigrette.',m:'~330 cal · P 36 · C 26 · F 7'},{n:'Two chicken tacos',fit:'ok',ft:'Fits',k:'No cilantro, we\'ll ask',g:'Corn tortillas, chicken, lettuce, salsa.',s:'Cheese, the third taco.',a:'No cilantro.',m:'~390 cal · P 40 · C 46 · F 6'},{n:'Chicken bowl, full',fit:'over',ft:'Over for lunch by ~300 cal',k:"You've had this here before",g:'If you want it: chicken, rice, beans, salsa.',s:'Cheese, guac, sour cream.',a:'Eat half now, the rest is dinner and it fits.',m:'~715 cal · P 79 · C 88 · F 13'}].map(o=>`<div class="idea" style="cursor:default"><div class="h"><b>${o.n}</b><span class="fit ${o.fit}">${o.ft}</span></div><div class="know">${o.k}</div><p class="gsa"><b>Get</b>${o.g}<br><b>Skip</b>${o.s}<br><b>Ask</b>${o.a}</p><div class="f"><span class="mm">${o.m}</span><button class="btn" onclick="logMeal('lunch',{n:'${o.n} (Chipotle)',cal:${parseInt(o.m.slice(1))},p:${parseInt(o.m.split('P ')[1])},c:${parseInt(o.m.split('C ')[1])},f:${parseInt(o.m.split('F ')[1])}},'Estimate from menu · tap to adjust after you eat');tool('Logged to lunch as an estimate')">Log it</button></div></div>`).join('')}</div>`,'set');}
+  if(k==='fat'){me("Why am I always over on fat?");await typing(1000);tool('Looked at 28 days of your log · fat over range on 11 days');
+    co("It's mostly one thing. On the 11 days you went over, 9 had a breakfast over 25g fat. Steak and eggs, avocado toast, or this morning's French toast. Your lunches and dinners are fine.");
+    co("Callie's take: don't cut breakfast, change the fat in it. Same meals, egg whites or half the steak, and you'd have been in range 8 of those 11 days. Want me to pencil tomorrow's breakfast that way?");}
+  if(k==='nursing'){me("I'm nursing and I've been feeling dizzy in the afternoons. Should I eat fewer carbs or more?");await typing(600);
+    co("I'm going to stop here, because this one's for Callie, not me. Dizziness while nursing is something she'll want to hear about directly, and she may adjust your ranges.");
+    add(`<div class="hand"><div class="t">Sent to Callie</div><p>I've shared this message with her, with your last three days of logs. She usually replies within a few hours. In the meantime, don't cut anything. Eat to your ranges and drink water.</p><button class="btn" onclick="handoff()">Okay</button></div>`,'set');}
+  if(k==='callie'){me("Ask Callie instead");await typing(400);co("Sure. I'll send her what we've been talking about so you don't have to repeat it.");add(`<div class="hand"><div class="t">Sent to Callie</div><p>Your last few messages and today's log, so she has the picture.</p><button class="btn" onclick="handoff()">Okay</button></div>`,'set');}
+  if(k==='memory'){me("What do you know about me?");await typing(500);tool('Your memory · 5 things you\'ve told me');
+    add(`<div class="idea" style="cursor:default"><div class="h"><b>What I remember</b><em>tap × to forget</em></div><p style="margin-top:8px;line-height:2">Nursing, since July <span style="color:var(--ink-3)">×</span><br>No cilantro, no mushrooms <span style="color:var(--ink-3)">×</span><br>Loves salmon and anything Mexican <span style="color:var(--ink-3)">×</span><br>Travels Tue to Thu most weeks <span style="color:var(--ink-3)">×</span><br>Wedding Saturday Sep 5 <span style="color:var(--ink-3)">× · expires Sep 6</span></p><div class="f"><span class="mm">I never read your messages with Callie.</span></div></div>`,'set');}
+}
+function fridgeGo(){tool('Matched your bank and staples · sized for lunch, dinner reserved');co("Two of these start from meals you already eat. Turkey's the protein, cheese is what would push fat over, so it stays out today.");cards('kitchen','lunch');}
+function handoff(){$('calliePreview').innerHTML='<span style="color:var(--plum);font-weight:700">Your coach:</span> Handoff about dizziness while nursing, with 3 days of logs attached.';$('callieMeta').textContent='now';tool('Handed to Callie · she\'ll see it in your thread');co("Callie has it. I'll stay out of this one until she weighs in. Anything else about food, I'm here.");}
+async function freeAsk(t){me(t);await typing(800);tool("Checked today's log and your prefs");co("In the real thing I'd answer this from your state and Callie's guide. In the mockup, the chips above run the scripted flows.");}
+
+/* ---------- detail sheet ---------- */
+function openDetail(src,i,slot){const m=CARDS[src][i];S.detail={src,i,slot,scale:1};renderDetail();$('phone').classList.add('detail');}
+function renderDetail(){const {src,i,slot,scale}=S.detail;const m=CARDS[src][i];const b=budget(slot);const sc=v=>Math.round(v*scale);const fits=sc(m.cal)<=b.cal+40&&sc(m.f)<=b.f+8;
+  $('sheet').innerHTML=`<div class="grab"></div><h3>${m.n.replace(/ · .*$/,'')}</h3><div class="know" style="margin-top:6px">${m.k}</div>
+  <div class="rec"><b>You need</b> ${m.ing}<br><b>Make it</b> ${m.steps}</div>
+  <div class="step">${[0.5,0.75,1,1.5,2].map(v=>`<span class="${v===scale?'on':''}" onclick="S.detail.scale=${v};renderDetail()">${v}×</span>`).join('')}</div>
+  <div style="margin-top:10px;font-size:13.5px;color:var(--ink-2)">${sc(m.cal)} cal · P ${sc(m.p)} · C ${sc(m.c)} · F ${sc(m.f)} <span class="fit ${fits?'ok':'over'}" style="margin-left:6px">${fits?`Fits ${slot}`:`Over for ${slot}`}</span></div>
+  <div class="acts"><button class="btn o" onclick="closeDetail();pencil('${slot}','${src}',${i})">Pencil in</button><button class="btn" onclick="closeDetail();logFrom('${slot}','${src}',${i})">Log it</button></div>
+  <div style="text-align:center;margin-top:10px;font-size:13px;color:var(--plum);font-weight:700">Save to My meals</div>`;}
+function closeDetail(){$('phone').classList.remove('detail');}
+
+renderToday();
+</script>
+</body>
+</html>
