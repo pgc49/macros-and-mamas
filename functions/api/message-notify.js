@@ -15,12 +15,21 @@
 import { invokeEdgeFunction, logEmailEvent, loadUserContact } from "../_shared/supabaseEmail.js";
 import { isUuid } from "../_shared/credits.js";
 import {
+  isMessageTooOldToNotify,
+  notificationTag,
+} from "../_shared/notificationFreshness.js";
+import {
   authorizeCron,
   claimNotificationJob,
   enqueueBackground,
   finishNotificationJob,
+  listDeliveredProfileIds,
   raceDeadline,
+  releaseNotificationDelivery,
+  reserveNotificationDelivery,
 } from "../_shared/messageOutbox.js";
+
+const SEND_PUSH_TIMEOUT_MS = 5_000;
 
 const DEFAULT_CALLIE_EMAIL = "calista@nourishwithcalista.com";
 
@@ -59,6 +68,7 @@ export async function onRequestPost({ request, env, waitUntil, signal }) {
       messageId,
       msg,
       waitUntil,
+      signal,
     }));
     await finishNotificationJob(env, job, { success: true });
     return json({ ok: true, ...result });
@@ -78,7 +88,7 @@ export async function onRequestPost({ request, env, waitUntil, signal }) {
   }
 }
 
-async function processClaimedDm({ env, messageId, msg, waitUntil }) {
+async function processClaimedDm({ env, messageId, msg, waitUntil, signal }) {
   const loaded = msg || await loadMessage(env, messageId);
   if (!loaded) {
     return { skipped: "source_missing", pushSent: 0, emailSent: false };
@@ -91,6 +101,9 @@ async function processClaimedDm({ env, messageId, msg, waitUntil }) {
   if (loaded.notified_at) {
     return { skipped: "already_notified", pushSent: 0, emailSent: false };
   }
+  if (isMessageTooOldToNotify(loaded.created_at)) {
+    return { skipped: "too_old", pushSent: 0, emailSent: false };
+  }
 
   const sender = await loadProfile(env, loaded.sender_id);
   const client = await loadProfile(env, loaded.client_id);
@@ -99,6 +112,8 @@ async function processClaimedDm({ env, messageId, msg, waitUntil }) {
   const senderIsAdmin = String(sender.role || "").toLowerCase() === "admin";
   const clientIsAdmin = String(client.role || "").toLowerCase() === "admin";
   const preview = messagePreview(loaded);
+  const tag = notificationTag("dm", loaded.id);
+  const delivered = await listDeliveredProfileIds(env, "dm", messageId);
 
   let pushSent = 0;
   let emailSent = false;
@@ -111,47 +126,59 @@ async function processClaimedDm({ env, messageId, msg, waitUntil }) {
     if (!coachIds.length) throw new Error("no Callie notification recipient configured");
     for (const coachId of coachIds) {
       if (coachId === loaded.sender_id) continue;
+      if (delivered.has(coachId)) continue;
+      const reserved = await reserveNotificationDelivery(env, "dm", messageId, coachId);
+      if (!reserved) continue;
       const unreadCount = await countUnreadForProfile(env, coachId, { asAdmin: true });
       const push = await attemptPushToProfile(env, coachId, {
         title: firstName(client.name) || "Mama",
         body: preview || "Open Messages in admin",
         url: `/admin?tab=messages&client=${encodeURIComponent(loaded.client_id)}&message=${encodeURIComponent(loaded.id)}`,
         unreadCount: unreadCount || 1,
-      });
+        tag,
+      }, signal);
       pushSent += push.sent;
-      if (push.sent === 0 && push.retryable) {
+      if (push.sent > 0 || !push.retryable) continue;
+      if (push.knownNotSent) {
+        await releaseNotificationDelivery(env, "dm", messageId, coachId);
         throw new Error("push provider temporarily failed");
       }
     }
   } else if (senderIsAdmin && !clientIsAdmin) {
     // Coach/admin → that mama only (never other admins, never other mamas).
     route = "admin_to_mama";
-    if (loaded.client_id !== loaded.sender_id) {
-      const unreadCount = await countUnreadForProfile(env, loaded.client_id, { asAdmin: false });
-      const push = await attemptPushToProfile(env, loaded.client_id, {
-        title: "Callie",
-        body: preview || "Open Messages in the app",
-        url: `/dashboard?tab=messages&message=${encodeURIComponent(loaded.id)}`,
-        unreadCount: unreadCount || 1,
-      });
-      pushSent = push.sent;
-      if (pushSent === 0) {
-        const mail = await deliverAdminMessageEmail({
-          env,
-          waitUntil,
-          profileId: loaded.client_id,
-          fallbackEmail: client.email || "",
-          fallbackName: client.name || "Mama",
-          preview,
-          messageId,
-          route,
-        });
-        emailSent = mail.sent;
-        if (!mail.queued && !mail.sent && !mail.skipped) {
-          throw new Error("mama email delivery failed");
-        }
-        if (mail.skipped && push.retryable) {
-          throw new Error("push provider temporarily failed");
+    if (loaded.client_id !== loaded.sender_id && !delivered.has(loaded.client_id)) {
+      const reserved = await reserveNotificationDelivery(env, "dm", messageId, loaded.client_id);
+      if (reserved) {
+        const unreadCount = await countUnreadForProfile(env, loaded.client_id, { asAdmin: false });
+        const push = await attemptPushToProfile(env, loaded.client_id, {
+          title: "Callie",
+          body: preview || "Open Messages in the app",
+          url: `/dashboard?tab=messages&message=${encodeURIComponent(loaded.id)}`,
+          unreadCount: unreadCount || 1,
+          tag,
+        }, signal);
+        pushSent = push.sent;
+        if (pushSent === 0 && push.knownNotSent) {
+          const mail = await deliverAdminMessageEmail({
+            env,
+            waitUntil,
+            profileId: loaded.client_id,
+            fallbackEmail: client.email || "",
+            fallbackName: client.name || "Mama",
+            preview,
+            messageId,
+            route,
+          });
+          emailSent = mail.sent;
+          if (!mail.queued && !mail.sent && !mail.skipped) {
+            await releaseNotificationDelivery(env, "dm", messageId, loaded.client_id);
+            throw new Error("mama email delivery failed");
+          }
+          if (mail.skipped && push.retryable) {
+            await releaseNotificationDelivery(env, "dm", messageId, loaded.client_id);
+            throw new Error("push provider temporarily failed");
+          }
         }
       }
     }
@@ -161,15 +188,19 @@ async function processClaimedDm({ env, messageId, msg, waitUntil }) {
     const recipients = await adminDmRecipients(env, loaded);
     if (!recipients.length) throw new Error("admin DM recipient missing");
     for (const adminId of recipients) {
+      if (delivered.has(adminId)) continue;
+      const reserved = await reserveNotificationDelivery(env, "dm", messageId, adminId);
+      if (!reserved) continue;
       const unreadCount = await countUnreadForProfile(env, adminId, { asAdmin: true });
       const push = await attemptPushToProfile(env, adminId, {
         title: firstName(sender.name) || "Admin",
         body: preview || "Open Messages in admin",
         url: `/admin?tab=messages&message=${encodeURIComponent(loaded.id)}`,
         unreadCount: unreadCount || 1,
-      });
+        tag,
+      }, signal);
       pushSent += push.sent;
-      if (push.sent > 0) continue;
+      if (push.sent > 0 || !push.knownNotSent) continue;
       const mail = await deliverAdminMessageEmail({
         env,
         waitUntil,
@@ -182,9 +213,11 @@ async function processClaimedDm({ env, messageId, msg, waitUntil }) {
       });
       if (mail.sent) emailSent = true;
       if (!mail.queued && !mail.sent && !mail.skipped) {
+        await releaseNotificationDelivery(env, "dm", messageId, adminId);
         throw new Error("admin email delivery failed");
       }
       if (mail.skipped && push.retryable) {
+        await releaseNotificationDelivery(env, "dm", messageId, adminId);
         throw new Error("push provider temporarily failed");
       }
     }
@@ -296,24 +329,28 @@ async function listCallieAdminIds(env) {
   return [];
 }
 
-async function attemptPushToProfile(env, profileId, payload) {
-  if (!profileId) return { sent: 0, retryable: false };
+async function attemptPushToProfile(env, profileId, payload, signal) {
+  if (!profileId) return { sent: 0, retryable: false, knownNotSent: true };
   const result = await invokeEdgeFunction(env, "send-push", {
     profileId,
     title: payload.title,
     body: payload.body,
     url: payload.url,
     unreadCount: payload.unreadCount,
+    tag: payload.tag,
+  }, {
+    timeoutMs: SEND_PUSH_TIMEOUT_MS,
+    signal,
   });
   if (!result.ok) {
-    throw new Error(`send-push edge failed (${result.status || "unknown"})`);
+    return { sent: 0, retryable: true, knownNotSent: false };
   }
   const sent = Number(result.data?.sent) || 0;
   const failures = Array.isArray(result.data?.failures) ? result.data.failures : [];
   const retryable = sent === 0 && failures.some((failure) => (
     ![404, 410].includes(Number(failure?.status))
   ));
-  return { sent, retryable };
+  return { sent, retryable, knownNotSent: sent === 0 };
 }
 
 /**

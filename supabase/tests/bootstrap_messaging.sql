@@ -52,7 +52,9 @@ create policy messages_select_thread
   using (public.is_admin() or auth.uid() = client_id);
 
 grant select, insert, update, delete on public.messages to authenticated;
+grant select on public.messages to service_role;
 grant select on public.profiles to authenticated;
+grant select on public.profiles to service_role;
 
 create table public.push_subscriptions (
   id uuid primary key default gen_random_uuid(),
@@ -122,6 +124,6 @@ alter table public.conversation_members enable row level security;
 alter table public.conversation_members force row level security;
 
 grant select, insert, update on table public.conversation_members to authenticated;
-grant select, insert on table public.conversation_messages to authenticated;
+grant select, insert, update on table public.conversation_messages to authenticated, service_role;
 grant select, insert on table public.conversations to authenticated;
 

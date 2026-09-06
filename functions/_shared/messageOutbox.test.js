@@ -5,8 +5,11 @@ import {
   createJobDeadline,
   enqueueBackground,
   finishNotificationJob,
+  listDeliveredProfileIds,
   listDueNotificationJobs,
   raceDeadline,
+  releaseNotificationDelivery,
+  reserveNotificationDelivery,
 } from "./messageOutbox.js";
 
 const env = {
@@ -107,6 +110,63 @@ describe("message notification outbox", () => {
       .rejects.toThrow("timeout");
     expect(Date.now() - started).toBeLessThan(200);
     deadline.cancel();
+  });
+
+  it("loads per-recipient delivery receipts", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify([
+      { profile_id: "00000000-0000-4000-8000-000000000041" },
+    ]), { status: 200 }));
+
+    const delivered = await listDeliveredProfileIds(env, "channel", "message-id");
+    expect(delivered.has("00000000-0000-4000-8000-000000000041")).toBe(true);
+  });
+
+  it("reserves a recipient atomically and treats a conflict as already sent", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("true", { status: 200 }))
+      .mockResolvedValueOnce(new Response("false", { status: 200 }));
+
+    await expect(reserveNotificationDelivery(
+      env,
+      "channel",
+      "message-id",
+      "00000000-0000-4000-8000-000000000041",
+    )).resolves.toBe(true);
+    await expect(reserveNotificationDelivery(
+      env,
+      "channel",
+      "message-id",
+      "00000000-0000-4000-8000-000000000041",
+    )).resolves.toBe(false);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("reserve_message_notification_delivery");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      p_message_type: "channel",
+      p_message_id: "message-id",
+      p_profile_id: "00000000-0000-4000-8000-000000000041",
+    });
+  });
+
+  it("fails closed when a delivery reservation cannot be written", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 503 }));
+    await expect(reserveNotificationDelivery(
+      env,
+      "channel",
+      "message-id",
+      "00000000-0000-4000-8000-000000000041",
+    )).rejects.toThrow("delivery reserve failed");
+  });
+
+  it("releases a reservation only through the dedicated RPC", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("true", { status: 200 }),
+    );
+    await expect(releaseNotificationDelivery(
+      env,
+      "channel",
+      "message-id",
+      "00000000-0000-4000-8000-000000000041",
+    )).resolves.toBe(true);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("release_message_notification_delivery");
   });
 
   it("runs work inline when waitUntil is missing", async () => {

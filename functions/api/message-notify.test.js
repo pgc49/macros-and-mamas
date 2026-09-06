@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
     claim_token: "10000000-0000-4000-8000-000000000001",
   })),
   finish: vi.fn(async () => ({ status: "retry" })),
+  delivered: vi.fn(async () => new Set()),
+  reserve: vi.fn(async () => true),
+  release: vi.fn(async () => true),
   invoke: vi.fn(),
   contact: vi.fn(),
 }));
@@ -18,6 +21,9 @@ vi.mock("../_shared/messageOutbox.js", async () => {
     authorizeCron: () => true,
     claimNotificationJob: mocks.claim,
     finishNotificationJob: mocks.finish,
+    listDeliveredProfileIds: mocks.delivered,
+    reserveNotificationDelivery: mocks.reserve,
+    releaseNotificationDelivery: mocks.release,
   };
 });
 
@@ -333,6 +339,37 @@ describe("durable DM notification processing", () => {
     expect(background).toHaveLength(1);
     resolveEmail();
     await Promise.all(background);
+  });
+
+  it("does not push an old DM after the freshness window", async () => {
+    mocks.finish.mockResolvedValue({ status: "sent" });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([{
+        id: "10000000-0000-4000-8000-000000000033",
+        client_id: "00000000-0000-4000-8000-000000000022",
+        sender_id: "00000000-0000-4000-8000-000000000021",
+        body: "Old note",
+        kind: "chat",
+        deleted_at: null,
+        notified_at: null,
+        created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+      }]), { status: 200 }),
+    );
+
+    const response = await onRequestPost({
+      request: request("10000000-0000-4000-8000-000000000033"),
+      env,
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.skipped).toBe("too_old");
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.finish).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: 1 }),
+      { success: true },
+    );
   });
 });
 
