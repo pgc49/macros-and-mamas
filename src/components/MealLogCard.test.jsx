@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MealLogCard } from "./MealLogCard";
+import { COACH_COPY } from "../content/coachVoice";
 
 afterEach(() => {
   cleanup();
@@ -182,6 +183,34 @@ describe("pencilled coach meals on Today's log", () => {
 
     expect(screen.getAllByText("Coach dinner").length).toBe(1);
     expect(screen.getByText("Plan lunch")).toBeTruthy();
+  });
+
+  it("uses the shared range totals when she includes pencilled meals", () => {
+    render(
+      <MealLogCard
+        macros={{ cal: 1750, protein: 140, carbs: 160, fat: 55 }}
+        plannedMeals={[
+          {
+            id: "p-coach",
+            name: "Chicken bowl",
+            cal: 430,
+            p: 45,
+            c: 30,
+            f: 12,
+            slot: "dinner",
+            via: "coach",
+          },
+        ]}
+        todayLog={{ date: "2026-09-06", entries: [] }}
+        mealLogDate="2026-09-06"
+        rangeDisplayTotals={{ cal: 430, p: 45, c: 30, f: 12 }}
+        rangeTotalsIncludePencils
+      />,
+    );
+
+    expect(screen.getByText("430")).toBeTruthy();
+    expect(screen.getByText("45g")).toBeTruthy();
+    expect(screen.getByText(COACH_COPY.totalsWithPencilsUnder)).toBeTruthy();
   });
 });
 

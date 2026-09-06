@@ -6,7 +6,8 @@
 
 import { COACH_VIA, coachPencilForSlot } from "./coachBudget.js";
 import { namesMatch } from "./coachPrefs.js";
-import { coachPlanFieldsFromCard } from "./coachScale.js";
+import { coachDisplayMacros, coachPlanFieldsFromCard } from "./coachScale.js";
+import { addMacros } from "./recipeMacros.js";
 import { normalizeSlot } from "./mealSlots.js";
 import {
   addMealToDay,
@@ -99,4 +100,27 @@ export function removeCoachPencilMatchingLog(days, dayKey, entry) {
   ));
   if (!existing?.id) return days;
   return removeMealById(days, existing.id);
+}
+
+/** Macros of unmatched pencils — preview only, not the day's log. */
+export function pencilPreviewMacros(pencils) {
+  return (pencils || []).reduce(
+    (acc, meal) => addMacros(acc, coachDisplayMacros(meal)),
+    { cal: 0, p: 0, c: 0, f: 0 },
+  );
+}
+
+/**
+ * Range-band totals. Default is the log. Flip `include` only when she asks
+ * to see pencilled meals against the ranges — dinner at 9am is not eaten.
+ */
+export function rangeTotalsWithPencils(logged, pencils, include) {
+  const base = {
+    cal: Number(logged?.cal) || 0,
+    p: Number(logged?.p) || 0,
+    c: Number(logged?.c) || 0,
+    f: Number(logged?.f) || 0,
+  };
+  if (!include) return base;
+  return addMacros(base, pencilPreviewMacros(pencils));
 }

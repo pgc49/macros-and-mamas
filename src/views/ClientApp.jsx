@@ -43,7 +43,10 @@ import {
   uniqueMealsByName,
 } from "../utils/mealSearch";
 import { db } from "../db/db";
-import { useMemo, useState } from "react";
+import { unmatchedCoachPencils } from "../utils/coachBudget";
+import { rangeTotalsWithPencils } from "../utils/coachPencil";
+import { COACH_COPY } from "../content/coachVoice";
+import { useEffect, useMemo, useState } from "react";
 
 /** Meals-tab section pill. Text and padding scale so all four hold one phone row. */
 function MealsSectionChip({ active, onClick, children }) {
@@ -182,12 +185,6 @@ export function ClientApp({
   const fHi = hi(fLo);
   const calLo = macros?.cal ?? 0;
   const calHi = calLo + 150;
-  const pSt = rangeState(totals?.p, pLo, pHi);
-  const cSt = rangeState(totals?.c, cLo, cHi);
-  const fSt = rangeState(totals?.f, fLo, fHi);
-  const calSt = rangeState(totals?.cal, calLo, calHi);
-  const calProgress = formatRangeProgress(totals?.cal, calLo, calHi, " cal");
-  const anyOver = [pSt, cSt, fSt, calSt].includes("over");
   const daysWithEntries = Object.fromEntries(
     Object.entries(mealLogsByDate || {}).map(([d, list]) => [d, (list || []).length > 0]),
   );
@@ -197,6 +194,26 @@ export function ClientApp({
     return fromChecks < floor ? fromChecks : floor;
   })();
   const todayEntries = entriesForLogDate(mealLogDate || todayLog?.date, mealLogsByDate, todayLog);
+  const unmatchedPencils = useMemo(
+    () => unmatchedCoachPencils(planMealsForLogDate, todayEntries),
+    [planMealsForLogDate, todayEntries],
+  );
+  const hasPencilled = unmatchedPencils.length > 0;
+  const [countPencilled, setCountPencilled] = useState(false);
+  useEffect(() => {
+    if (!hasPencilled) setCountPencilled(false);
+  }, [hasPencilled]);
+  const rangeTotals = useMemo(
+    () => rangeTotalsWithPencils(totals, unmatchedPencils, countPencilled && hasPencilled),
+    [totals, unmatchedPencils, countPencilled, hasPencilled],
+  );
+  const rangeEatenWord = countPencilled && hasPencilled ? "" : "logged";
+  const pSt = rangeState(rangeTotals?.p, pLo, pHi);
+  const cSt = rangeState(rangeTotals?.c, cLo, cHi);
+  const fSt = rangeState(rangeTotals?.f, fLo, fHi);
+  const calSt = rangeState(rangeTotals?.cal, calLo, calHi);
+  const calProgress = formatRangeProgress(rangeTotals?.cal, calLo, calHi, " cal", rangeEatenWord);
+  const anyOver = [pSt, cSt, fSt, calSt].includes("over");
   const coachReady = coachIsAvailable({ macros, mealLogDate: mealLogDate || todayLog?.date });
   const coachAnswer = useMemo(
     () => (coachReady
@@ -325,9 +342,9 @@ export function ClientApp({
           ) : null}
 
           <Card style={{ marginBottom: 4 }}>
-            <RangeBand label="Protein" lo={pLo} hi={pHi} eaten={totals.p} />
-            <RangeBand label="Carbs" lo={cLo} hi={cHi} eaten={totals.c} />
-            <RangeBand label="Fat" lo={fLo} hi={fHi} eaten={totals.f} />
+            <RangeBand label="Protein" lo={pLo} hi={pHi} eaten={rangeTotals.p} eatenWord={rangeEatenWord} />
+            <RangeBand label="Carbs" lo={cLo} hi={cHi} eaten={rangeTotals.c} eatenWord={rangeEatenWord} />
+            <RangeBand label="Fat" lo={fLo} hi={fHi} eaten={rangeTotals.f} eatenWord={rangeEatenWord} />
             <div style={{ borderTop: `1px dashed ${T.border}`, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
               <span style={{
                 fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4,
@@ -335,9 +352,9 @@ export function ClientApp({
                 lineHeight: 1.35,
               }}>
                 {!calProgress && "Calories land around"}
-                {calProgress?.state === "under" && <>Calories · {Math.round(totals.cal)} · {calProgress.detail}</>}
-                {calProgress?.state === "in" && <>Calories · {Math.round(totals.cal)} · ✓ · {calProgress.detail}</>}
-                {calProgress?.state === "over" && <>Calories · {Math.round(totals.cal)} · {calProgress.detail}</>}
+                {calProgress?.state === "under" && <>Calories · {Math.round(rangeTotals.cal)} · {calProgress.detail}</>}
+                {calProgress?.state === "in" && <>Calories · {Math.round(rangeTotals.cal)} · ✓ · {calProgress.detail}</>}
+                {calProgress?.state === "over" && <>Calories · {Math.round(rangeTotals.cal)} · {calProgress.detail}</>}
               </span>
               <span style={{ fontFamily: FD, fontSize: 22, color: calSt === "in" ? "#3E5A46" : T.ink, flexShrink: 0 }}>
                 {calLo}–{calHi}
@@ -347,6 +364,36 @@ export function ClientApp({
               <div style={{ marginTop: 10, fontSize: 12, color: T.amber, lineHeight: 1.5 }}>
                 Over on something today? Happens. Tomorrow start fresh.
               </div>
+            )}
+            {hasPencilled && (
+              <label
+                htmlFor="count-pencilled-ranges"
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  marginTop: 12,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  id="count-pencilled-ranges"
+                  type="checkbox"
+                  checked={countPencilled}
+                  onChange={(e) => setCountPencilled(e.target.checked)}
+                  style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
+                />
+                <span>
+                  <span style={{ fontSize: 13, fontWeight: 650, color: T.ink, lineHeight: 1.35 }}>
+                    {COACH_COPY.countPencilled}
+                  </span>
+                  {countPencilled && (
+                    <span style={{ display: "block", fontSize: 11.5, color: T.inkSoft, marginTop: 2, lineHeight: 1.45 }}>
+                      {COACH_COPY.countPencilledHint}
+                    </span>
+                  )}
+                </span>
+              </label>
             )}
           </Card>
 
@@ -397,6 +444,8 @@ export function ClientApp({
             onSelectMealDate={selectMealLogDate}
             onChangeMealWeek={(ws) => changeMealWeek(ws)}
             earliestWeekStart={mealEarliestWeek}
+            rangeDisplayTotals={rangeTotals}
+            rangeTotalsIncludePencils={countPencilled && hasPencilled}
           />
 
           <WaterLogCard

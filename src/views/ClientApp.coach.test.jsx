@@ -153,6 +153,43 @@ describe("where the coach shows up", () => {
   });
 });
 
+describe("pencilled meals against the range bands", () => {
+  const pencil = {
+    id: "p-coach",
+    name: "Chicken bowl",
+    cal: 430,
+    p: 45,
+    c: 30,
+    f: 12,
+    qty: 1,
+    slot: "dinner",
+    via: "coach",
+  };
+
+  it("hides the include toggle until something is still pencilled", () => {
+    renderApp();
+    expect(screen.queryByLabelText(COACH_COPY.countPencilled)).toBeNull();
+    expect(screen.getByText("42g logged")).toBeTruthy();
+  });
+
+  it("lets her add pencilled macros to the bands and the log footer", () => {
+    renderApp({ planMealsForLogDate: [pencil] });
+
+    const toggle = screen.getByLabelText(COACH_COPY.countPencilled);
+    expect(toggle.checked).toBe(false);
+    expect(screen.getByText("42g logged")).toBeTruthy();
+    expect(screen.queryByText(COACH_COPY.countPencilledHint)).toBeNull();
+
+    fireEvent.click(toggle);
+
+    expect(toggle.checked).toBe(true);
+    expect(screen.getByText(COACH_COPY.countPencilledHint)).toBeTruthy();
+    expect(screen.getAllByText("87g").length).toBeGreaterThan(0);
+    expect(screen.getByText(COACH_COPY.totalsWithPencilsUnder)).toBeTruthy();
+    expect(screen.queryByText("42g logged")).toBeNull();
+  });
+});
+
 describe("handing a question to Callie", () => {
   it("moves her to Messages with the question waiting in the composer", async () => {
     const postCoach = vi.fn(async () => ({ ok: true, deflect: "ranges", meals: [] }));

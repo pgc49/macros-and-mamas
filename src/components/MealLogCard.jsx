@@ -110,7 +110,12 @@ function totCell(label, val, lo, hi, unit) {
   );
 }
 
-function totalsCaption(totals, ranges) {
+function totalsCaption(totals, ranges, includePencils) {
+  if (includePencils) {
+    if (totals.cal < ranges.cal[0]) return COACH_COPY.totalsWithPencilsUnder;
+    if (totals.cal > ranges.cal[1]) return COACH_COPY.totalsWithPencilsOver;
+    return COACH_COPY.totalsWithPencilsIn;
+  }
   if (totals.cal < ranges.cal[0]) {
     return "Room left in your ranges — under is fine mid-day, and low days happen.";
   }
@@ -146,6 +151,8 @@ export function MealLogCard({
   onChangeMealWeek,
   earliestWeekStart,
   initialMethod = null,
+  rangeDisplayTotals = null,
+  rangeTotalsIncludePencils = false,
 }) {
   const [method, setMethod] = useState(initialMethod); // snap | describe | recipes | manual
   const [desc, setDesc] = useState("");
@@ -324,7 +331,7 @@ export function MealLogCard({
       }
     : { cal: [0, 0], p: [0, 0], c: [0, 0], f: [0, 0] };
 
-  const totals = entries.reduce(
+  const loggedTotals = entries.reduce(
     (a, e) => ({
       cal: a.cal + (Number(e.cal) || 0),
       p: a.p + (Number(e.p) || 0),
@@ -333,11 +340,12 @@ export function MealLogCard({
     }),
     { cal: 0, p: 0, c: 0, f: 0 },
   );
+  const totals = rangeDisplayTotals || loggedTotals;
 
   const logRoom = useMemo(() => {
     const bands = targetBands(macros);
-    return roomLeftFromTotals(totals, bands);
-  }, [macros, totals.cal, totals.p, totals.c, totals.f]);
+    return roomLeftFromTotals(loggedTotals, bands);
+  }, [macros, loggedTotals]);
   const remainingRoom = logRoom.remaining;
   const canFilterFits = Boolean(macros && remainingRoom);
   const applyFits = (list) => (
@@ -1890,7 +1898,7 @@ export function MealLogCard({
                   {totCell("F", totals.f, ranges.f[0], ranges.f[1], "g")}
                 </div>
                 <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.5 }}>
-                  {totalsCaption(totals, ranges)}
+                  {totalsCaption(totals, ranges, rangeTotalsIncludePencils)}
                 </div>
               </>
             )}

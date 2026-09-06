@@ -99,6 +99,11 @@ export const COACH_COPY = {
 
   // Card chrome
   pencilledHint: "Pencilled in · tap when you've eaten it",
+  countPencilled: "Include pencilled meals",
+  countPencilledHint: "Includes what you pencilled in — not logged yet.",
+  totalsWithPencilsUnder: "With pencilled meals you'd still have room in your ranges.",
+  totalsWithPencilsIn: "With pencilled meals you'd land inside your ranges.",
+  totalsWithPencilsOver: "With pencilled meals you'd be a touch over — you can still change it.",
   estimateNote: "Rough estimate — adjust after if the plate looked different",
   // 10–20g over the day's protein high is fine. Past that it is just extra.
   proteinOver: "A bit over on protein, which is fine",
