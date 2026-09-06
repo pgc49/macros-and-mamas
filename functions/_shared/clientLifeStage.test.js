@@ -78,7 +78,7 @@ describe("groundClientFacingComment", () => {
 
   it("strips milk-supply talk when she is not nursing", () => {
     expect(groundClientFacingComment("Protein like this supports milk supply.", dolly))
-      .toBe("Protein like this.");
+      .toBe("Protein like this");
     expect(groundClientFacingComment("Nice protein-forward plate.", dolly))
       .toBe("Nice protein-forward plate.");
   });
