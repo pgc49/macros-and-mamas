@@ -60,13 +60,11 @@ rather than shown with a caveat.
 These are the ones I could read off the existing app and content. Everything in "Questions for Callie"
 below is a place where I had to make the call myself.
 
-**Protein is a floor, not a ceiling.** This is the single most consequential decision in the build. The
-existing `mealFitsRemaining` treats every macro as a ceiling, which is right for a day-level "will this
-fit" check and wrong for a coach. Under it, a 45g-protein chicken bowl is rejected for a mama who has
-120g of a 140–150g range logged — the exact meal she should be shown. `budgetAsRemaining` sets protein
-to `POSITIVE_INFINITY` for the coach's fit check; calories, carbs and fat stay real ceilings and they
-already bound how much protein a plate can carry. Where a card does run past the top of her range, the
-card says so (`Puts you over the top of protein, which is fine`) rather than hiding it.
+**Fat is the constraint. Protein is a floor.** Callie, after using it: the bot was only talking about
+protein, and all three macros matter. You can go over in protein *and* carbs if fat stays in its band —
+fat is over double the caloric density, so it is the one that decides weight loss. `budgetAsRemaining`
+unbounds protein and carbs; calories and fat stay real ceilings. 10–20g over the day's protein high is
+fine; more than that is unnecessary, and the card says so. We never eat less than 50g of fat in a day.
 
 **One day doesn't change anything.** Over her ranges, the coach doesn't scold and doesn't show her a
 budget of zero. It switches to light, protein-forward cards and says why.
@@ -75,9 +73,10 @@ budget of zero. It switches to light, protein-forward cards and says why.
 before they can become a card, and anything built from a photo is labelled a rough estimate on the card
 face, permanently — not in a tooltip. If the photo can't be read, the coach says so instead of guessing.
 
-**The words are Callie's.** Every string lives in `src/content/coachVoice.js` with the house rules at
-the top: no guilt, no exclamation points, no emojis, never "cheat", never "just", never call the coach
-an AI. She can edit that one file without touching a component.
+**The words are Callie's.** Every string lives in `src/content/coachVoice.js`. She said exclamation
+points are fine when something is worth saying firmly (`You never skip a meal!`). No emojis, never
+"cheat", never "bad", never "simply". It is **Coach Callie's Bot**, and a handoff always ends
+*I'll pass that to Callie. She'll get back to you directly.*
 
 **Food for the time of day it actually is.** The deterministic engine ranks by slot affinity, and the
 model is told in its own paragraph which meal it is answering for (`slotBlock` in `coachPrompt.js`).
@@ -106,7 +105,7 @@ request.
 | `weight` | the scale, plateaus, "how fast will I lose" | Refused. |
 | `admin` | billing, refunds, cohort dates, approval, login | Refused. |
 | `off_topic` | workouts, sleep, the baby, "write me a…", general knowledge | Refused. |
-| `supply` | milk supply, specifically | Cards still come; one honest line and an Ask Callie button ride along. |
+| `supply` | milk supply, specifically | Always Callie's. Protect supply first; ranges already use ×13. |
 | `food` | a food word is present | Answered. |
 | `unclear` | no refusal matched and no food word either | Goes to the model, which is told to hand back anything that isn't food. |
 
@@ -203,60 +202,36 @@ Two migrations, both applied.
 
 ---
 
-## Questions for Callie
+## Callie answered. This is what changed.
 
-Answers to these change copy and thresholds, not architecture — the build doesn't wait on them. Grouped
-by what each one moves.
+Her sentences live in `src/utils/coachTeach.js` and `src/content/coachVoice.js`. The client and the
+endpoint run the same matcher, so a crafted request cannot spend a model call on a question she already
+answered.
 
-### How she'd actually answer these
-
-1. A mama has 600 calories and 55g of protein left, it's 8pm, and she's out at a restaurant with no
-   nutrition info. What do you tell her? (This is the single most common coach question and I want your
-   sentence, not mine.)
-2. She's 400 calories over and asks if she should skip dinner. What do you say, word for word?
-3. She asks "is X ok?" about a specific food — pizza, wine, a protein bar. What's your actual answer
-   shape? Right now the coach fits it into what's left rather than judging the food, and never says a
-   food is good or bad.
-4. She's under her calories at the end of the day but hit her protein. Eat more, or leave it?
-
-### Thresholds I picked and would rather you set
-
-5. **Protein over the top.** The coach flags a meal that would take her past the high end of her protein
-   range with "puts you over the top of protein, which is fine". Is that the right posture, and is there
-   a point where it stops being fine?
-6. **Portion scaling.** The coach will offer 1.5× or 2× of a bank meal when a single serving leaves her
-   short on protein. Is doubling a recipe something you'd suggest, or does that read wrong?
-7. **Half portions.** Same question downward: is "half portion" a thing you'd say, or would you rather it
-   suggested a different meal entirely?
-8. **Meal splits.** With no history, the coach reserves 24% breakfast / 30% lunch / 38% dinner / 8% snack
-   of her day. After ~5 slotted days it uses her own median split instead. Do those starting numbers
-   match how you'd have a mama spread her day?
-9. **Snacks.** It assumes one snack a day when reserving room. Right?
-10. **A skipped meal.** If she never logs breakfast and asks about lunch at 1pm, the coach currently
-    treats breakfast as skipped and gives lunch the room. Or should it hold breakfast's share in case
-    she eats late?
-
-### Where the line is
-
-11. Which of these do you want the coach to answer, and which are yours? Alcohol. Coffee/caffeine.
-    Intermittent fasting. Artificial sweeteners. Eating back exercise calories. Right now it answers
-    the first four as food questions and refuses the last one as fitness.
-12. Anything about milk supply currently gets her cards **plus** a line saying supply is your area. Too
-    cautious, or right?
-13. A mama says "I feel awful about what I ate today". That's not a food question and not a medical one.
-    Right now it hands her to you. Agreed?
-14. Is there any question you would rather the coach **always** hand to you, even when it could answer it?
-
-### Voice
-
-15. Read `src/content/coachVoice.js` top to bottom — it's every word the coach can say, in one file.
-    Mark anything that doesn't sound like you. The house rules at the top (no exclamation points, no
-    emojis, never "cheat", never "just") are my read of your existing copy; correct them if I'm wrong.
-16. Should the coach have a name, or stay "Coach"? A name invites a relationship with something that
-    isn't a person, which is the thing we're trying not to do — but "Coach" is a little cold.
-17. When it hands off, it says things like *"That one's Callie's. She knows your history and I'd only be
-    guessing."* Does referring to you in the third person read right, or would you rather it said "I'll
-    pass that to Callie"?
+1. **Eating out, no numbers.** The PS method: protein and a side. Dressing on the side. Fat is the one
+   that blows out. Encoded as `teachPs`.
+2. **Skip dinner because she's over.** "You never skip a meal!" Encoded as `teachNeverSkip`.
+3. **"Is X ok?"** Real food can fit (pizza yes, Oreo no). If it blows macros, prepare next time — log
+   ahead, keep breakfast and lunch lower fat or carb. Encoded as `teachRealFood`.
+4. **Under calories, protein hit.** If she's eaten three meals she can leave it. Follow hunger. Never
+   under 50g fat. Ask about carbs. Encoded as `teachUnder*`.
+5. **Protein over.** 10–20g over the day's high is fine. More than that is unnecessary.
+6. **Upscaling.** 1.5× / 2× is fine when fat still fits. Not protein-only.
+7. **Half portions.** Out. Suggest a different meal. Diet culture.
+8. **Meal splits.** 24 / 30 / 38 / 8 confirmed.
+9. **Snacks.** One a day confirmed. Some women do two; one is fine.
+10. **Skipped meal.** Lunch still gets the room, but the coach *says it noticed*: cortisol, hormones,
+    then a real lunch + larger snack + larger dinner. Protein shake if mornings are hard.
+11. **Alcohol** — up to her, not encouraged, not forbidden. **Coffee** — allowed, never empty stomach,
+    7-hour half-life. **Intermittent fasting** — no, cortisol. **Sweeteners** — discourage once, offer
+    Olipop, don't lecture. **Exercise calories** — still out of scope.
+12. **Supply.** Always Callie's. Protect first. Ranges already use ×13. If she thinks it's affected,
+    message Callie.
+13. **Guilt / "I feel awful about what I ate".** Always Callie.
+14. **Always hers:** supply, guilt, and a pain point asked a third time in one day (`again`).
+15. **Exclamation points** are fine when something is worth saying firmly.
+16. **Name:** Coach Callie's Bot. The tab stays Coach so five labels still fit.
+17. **Handoff:** *I'll pass that to Callie. She'll get back to you directly.*
 
 ---
 
@@ -267,8 +242,8 @@ In rough order of what I think each is worth:
 1. **The Today entry point earning its place.** It's a card that says "not sure what to eat?" Once there's
    real usage, the interesting version knows *why* she's stuck — 40g of protein left at 8pm is a different
    card from an untouched day at 9am.
-2. **Eating-out without a photo.** "I'm going to Chipotle" should be answerable from a small set of
-   common chains without asking for a menu photo. Today it needs the photo.
+2. **Chain-specific eating-out.** The PS method covers a restaurant with no numbers. "I'm going to
+   Chipotle" should still become a bowl she can order, from a small set of common chains.
 3. **Counting the deflections.** See "Watching it". Guardrails that are too tight are the most likely way
    this feature quietly fails, and right now nothing would tell us.
 4. **A weekly read.** "You hit protein 5 of 7 days" is the kind of thing that makes a subscription feel

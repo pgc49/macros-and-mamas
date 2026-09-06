@@ -8,6 +8,7 @@ import {
   deriveMealShares,
   isOverDay,
   laterSlotsAfter,
+  skippedSlotsBefore,
   loggedSlotsFromEntries,
   nextCoachSlot,
   attachDayHighs,
@@ -83,14 +84,16 @@ describe("protein is a floor, not a wall", () => {
     expect(budgetAsRemaining(budget).p).toBe(Number.POSITIVE_INFINITY);
   });
 
-  it("still rejects on calories, carbs and fat", () => {
+  it("still rejects on calories and fat, and lets carbs go over", () => {
     const budget = budgetFor({ cal: 900, p: 120, c: 80, f: 25 }, {
       slot: "dinner",
       loggedSlots: new Set(["breakfast", "lunch"]),
     });
+    expect(budgetAsRemaining(budget).c).toBe(Number.POSITIVE_INFINITY);
     expect(pickScale({ name: "Huge", cal: 2000, p: 40, c: 40, f: 20 }, budget)).toBe(null);
     expect(pickScale({ name: "Fatty", cal: 400, p: 40, c: 10, f: 90 }, budget)).toBe(null);
-    expect(pickScale({ name: "Carby", cal: 400, p: 10, c: 200, f: 5 }, budget)).toBe(null);
+    // High carb, fat in range: Callie said carbs can go over when fat does not.
+    expect(pickScale({ name: "Carby", cal: 400, p: 10, c: 200, f: 5 }, budget)).toBe(1);
   });
 
   it("does not double the portion once the protein need is covered", () => {
@@ -113,12 +116,14 @@ describe("protein is a floor, not a wall", () => {
     expect(pickScale({ name: "Small plate", cal: 300, p: 22, c: 20, f: 8 }, budget)).toBeGreaterThan(1);
   });
 
-  it("flags a card that runs past the top of protein instead of hiding it", () => {
+  it("flags a card that runs past the top of protein, and says when it's too much", () => {
     const budget = budgetFor({ cal: 900, p: 120, c: 80, f: 25 }, {
       slot: "dinner",
       loggedSlots: new Set(["breakfast", "lunch"]),
     });
-    expect(proteinOverNote({ p: 60 }, budget)).toBeTruthy();
+    // Day high leftover is ~30g (150 - 120). 12g over is fine; 25g over is not.
+    expect(proteinOverNote({ p: 42 }, budget)).toBe(COACH_COPY.proteinOver);
+    expect(proteinOverNote({ p: 56 }, budget)).toBe(COACH_COPY.proteinOverMuch);
     expect(proteinOverNote({ p: 10 }, budget)).toBe(null);
   });
 
@@ -238,6 +243,15 @@ describe("slot order", () => {
   it("treats a meal the clock went past and she never logged as skipped", () => {
     expect(laterSlotsAfter("dinner", new Set(), EVENING)).toEqual([]);
     expect(laterSlotsAfter("lunch", new Set(), new Date(2026, 8, 4, 13, 0))).toEqual(["dinner"]);
+  });
+
+  it("names the skipped meal so the copy can say so, instead of folding it in quietly", () => {
+    const onePm = new Date(2026, 8, 4, 13, 0);
+    expect(skippedSlotsBefore("lunch", new Set(), onePm)).toEqual(["breakfast"]);
+    expect(skippedSlotsBefore("dinner", new Set(), EVENING)).toEqual(["breakfast", "lunch"]);
+    expect(skippedSlotsBefore("lunch", new Set(["breakfast"]), onePm)).toEqual([]);
+    // 8am, asking about lunch: breakfast has not been skipped yet.
+    expect(skippedSlotsBefore("lunch", new Set(), MORNING)).toEqual([]);
   });
 
   it("keeps a meal she hasn't eaten out of a snack's budget", () => {
@@ -388,19 +402,14 @@ describe("ranking", () => {
     expect(meals).toHaveLength(0);
   });
 
-  /**
-   * The card already says "· half portion" in its title. Saying "0.5
-   * servings." underneath is the same fact twice, in two different words.
-   */
-  it("does not restate the portion under a title that already carries it", () => {
+  it("drops a meal that only fits as a half portion, rather than offering one", () => {
     const snackRoom = { cal: 220, pNeed: 12, pHigh: 20, c: 18, f: 8, remaining: { pHigh: 120 } };
     const half = buildCoachCard(
       { name: "Big scramble", cal: 420, p: 36, c: 29, f: 14 },
       snackRoom,
       { slot: "snack" },
     );
-    expect(half.title).toContain("half portion");
-    expect(half.reason).not.toMatch(/servings/i);
+    expect(half).toBe(null);
   });
 
   it("never tells her a meal leaves 0g of fat", () => {
@@ -576,7 +585,7 @@ describe("copy matches the rest of the app", () => {
     const strip = slotLeftRead(budget);
     expect(strip.over).toBe(true);
     expect(strip.macros).not.toMatch(/0g carbs/);
-    expect(strip.macros).toContain("protein");
+    expect(strip.macros).toMatch(/still eat/i);
   });
 });
 

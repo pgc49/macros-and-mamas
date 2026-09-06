@@ -20,6 +20,7 @@ import {
   loggedSlotsFromEntries,
   nextCoachSlot,
   remainingForCoach,
+  skippedSlotsBefore,
 } from "./coachBudget.js";
 import { buildCoachCard, rankBankCards } from "./coachRank.js";
 import { coachPrefsFromProfile } from "./coachPrefs.js";
@@ -104,6 +105,7 @@ export function buildCoachAnswer({
   );
   const remaining = remainingForCoach(totals, bands);
   const over = isOverDay(remaining);
+  const skipped = budget?.skipped || skippedSlotsBefore(slot, loggedSlots, now);
   const prefs = coachPrefsFromProfile(profile, slot);
   const pencilled = coachPencilForSlot(plannedMeals, slot);
 
@@ -135,6 +137,7 @@ export function buildCoachAnswer({
     budget,
     remaining,
     over,
+    skipped,
     prefs,
     pencilled,
     cards,

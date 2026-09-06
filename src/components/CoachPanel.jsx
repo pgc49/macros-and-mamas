@@ -7,12 +7,14 @@ import {
   COACH_DEFLECT,
   COACH_SLOT_TITLE,
   askForSlotCopy,
+  skipMealCopy,
 } from "../content/coachVoice";
 import { buildCoachAnswer, buildSuggestedCards, recentNamesForPrompt } from "../utils/coachSession";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries } from "../utils/coachBudget";
 import { localCoachIntent } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
+import { countTeachInThread, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
 import { downscaleImage } from "../utils/imageDownscale";
 
 const QUICK_ASKS = [
@@ -211,7 +213,8 @@ export function CoachPanel({
     }
 
     skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
-    lead += [next.read.line1, next.read.line2].filter(Boolean).join(" ");
+    const skipLine = skipMealCopy(next.skipped);
+    lead += [skipLine, next.read.line1, next.read.line2].filter(Boolean).join(" ");
     push({ role: "coach", body: lead.trim(), kind: "cards", cards });
   };
 
@@ -306,6 +309,26 @@ export function CoachPanel({
     push({ role: "mama", body: text });
     if (verdict.scope === "urgent") {
       push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
+      return;
+    }
+
+    // Callie's own sentences, before the meal router and before a model.
+    // Asked a third time in a day, a pain point goes to her instead.
+    const teach = localCoachTeach(text);
+    if (teach) {
+      if (PAIN_TOPICS.has(teach.topic) && countTeachInThread(thread, teach.topic) >= 2) {
+        push({ role: "coach", body: "", kind: "deflect", deflect: "again" });
+        return;
+      }
+      const carbsShort = answer?.bands
+        ? (totals?.c || 0) < (answer.bands.cLo || 0)
+        : false;
+      push({
+        role: "coach",
+        body: teachBody(teach.topic, { totals, carbsShort }),
+        kind: "teach",
+        teach: teach.topic,
+      });
       return;
     }
 
@@ -472,7 +495,7 @@ export function CoachPanel({
 
               {m.aside === "supply" && (
                 <div style={{ ...bubble(false), background: T.amberSoft, border: "none", marginTop: 8 }}>
-                  <div style={{ marginBottom: 10 }}>{COACH_DEFLECT.care.line}</div>
+                  <div style={{ marginBottom: 10 }}>{COACH_DEFLECT.supply.line}</div>
                   <button
                     type="button"
                     onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}
@@ -489,7 +512,7 @@ export function CoachPanel({
                       cursor: "pointer",
                     }}
                   >
-                    {COACH_DEFLECT.care.cta}
+                    {COACH_DEFLECT.supply.cta}
                   </button>
                 </div>
               )}

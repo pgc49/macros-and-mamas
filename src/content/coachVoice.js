@@ -1,13 +1,25 @@
 /**
  * Every string the meal coach says. Callie edits here.
  *
- * House rules: a friend who happens to be a coach. Plain words, contractions,
- * no guilt, no exclamation points, no emojis. Protein is the win; fat and carbs
- * are ceilings, not enemies. Never the words "cheat", "bad", "just", "simply",
- * and never call the coach an AI.
+ * House rules, from Callie:
+ * - A friend who happens to be a coach. Plain words, contractions, no guilt.
+ * - Exclamation points are fine when something is worth saying firmly
+ *   (never skip a meal!). Don't sprinkle them.
+ * - No emojis. Never "cheat", never "bad", never "simply".
+ * - Never call the coach an AI. It is Coach Callie's Bot, and it says so.
+ * - All three macros matter. Fat is the one that decides weight loss — more
+ *   than double the calories of protein or carbs — so it stays in its band.
+ *   Protein and carbs can go over when fat does not.
+ * - Protein is a floor: 10–20g over the top is fine, more than that is
+ *   unnecessary. We never eat less than 50g of fat in a day.
+ * - Never skip a meal.
  */
 
-export const COACH_NAME = "Coach";
+export const COACH_NAME = "Coach Callie's Bot";
+
+/** The closer on every handoff. Callie: she'll get back to you directly. */
+export const COACH_PASS =
+  "I'll pass that to Callie. She'll get back to you directly.";
 
 export const COACH_SLOT_PHRASE = {
   breakfast: "this morning",
@@ -31,10 +43,10 @@ export const COACH_SLOT_TITLE = {
 };
 
 export const COACH_COPY = {
-  title: "Coach",
+  title: "Coach Callie's Bot",
   tagline: "Knows your ranges, your log, and what you like",
   entryTitle: "Not sure what to eat?",
-  entryCta: "Ask your coach",
+  entryCta: "Ask the coach",
 
   // Composer
   placeholder: "Ask about a meal…",
@@ -86,7 +98,9 @@ export const COACH_COPY = {
   // Card chrome
   pencilledHint: "Pencilled in · tap when you've eaten it",
   estimateNote: "Rough estimate — adjust after if the plate looked different",
-  proteinOver: "Puts you over the top of protein, which is fine",
+  // 10–20g over the day's protein high is fine. Past that it is just extra.
+  proteinOver: "A bit over on protein, which is fine",
+  proteinOverMuch: "That's more protein than you need. Keep fat in range and you're good.",
 
   // Budget reads
   proteinCovered: "Protein's covered",
@@ -95,13 +109,13 @@ export const COACH_COPY = {
   proteinShy: "You're",
   proteinShyTail: "shy on protein",
   easyClose: "Easy to close.",
-  fatSpent: "Fat's nearly spent, so lean protein and carbs. Go light on oil and cheese.",
-  carbsClose: "Carbs are close to done. Protein and veg.",
+  fatSpent: "Fat's nearly spent, so keep oil, cheese and dressings light. Protein and carbs can still go over.",
+  carbsClose: "Carbs are close to the top. Fine if fat stays in range.",
   calTightLead: "About",
-  calTightTail: "cal to work with. Protein first.",
-  plenty: "Plenty of room. Protein first, then whatever sounds good.",
+  calTightTail: "cal to work with. Watch the fat — that's the one that adds up.",
+  plenty: "Plenty of room. Hit your protein, and keep fat in its band.",
   over:
-    "You're past your ranges for today. That's fine, one day doesn't change anything. If you're hungry, these stay light and protein forward.",
+    "You're past your ranges for today. One day doesn't change anything, and you still eat. If you're hungry, these stay lighter and keep fat in check.",
 
   // Budget sentence
   savingRoom: "Saving room for",
@@ -115,17 +129,17 @@ export const COACH_COPY = {
   snackReserveMany: "snacks",
   leftFor: "Left for",
   holdingLead: "Holding",
-  overStrip: "Everything but protein is spent for today. Protein's still worth getting.",
-  overStripDone: "You're past your ranges for today, protein included.",
+  overStrip: "Fat and calories are spent for today. You still eat — keep the next plate simple.",
+  overStripDone: "You're past your ranges for today. You still eat.",
 
-  // Why a card is here
-  reasonFills: "Fills your protein, leaves",
+  // Why a card is here. Fat is the one she is watching; protein is a floor.
+  reasonFills: "Hits protein and leaves",
   reasonFillsTail: "g fat.",
-  reasonGets: "Gets protein into range. Fits everything else.",
+  reasonGets: "Hits protein and keeps fat in range.",
   reasonMost: "Most of your protein —",
   reasonMostTail: "short, easy to pick up later.",
-  reasonFits: "Fits what's left. Protein is still open.",
-  reasonOver: "Light and protein forward.",
+  reasonFits: "Fits what's left. Fat stays in range.",
+  reasonOver: "Simple and lighter. Fat stays in check.",
 
   // What the coach knows about her
   knowsPencilled: "Pencilled in earlier",
@@ -157,6 +171,33 @@ export const COACH_COPY = {
   estimateLead: "That's an estimate, not a label read.",
   cantSeeIt: "I can't read that photo well enough to put numbers on it.",
   noNumbers: "I'm not going to make up numbers for that one.",
+
+  // Callie's teachings — the sentences she would actually say.
+  teachPs:
+    "Use the PS method: protein and a side. Roasted chicken, a burger, steak — then rice, salad or potatoes. Eating out makes it really hard not to blow through fat, so do your best. Dressing on the side, and dip your fork as you go.",
+  teachNeverSkip:
+    "Absolutely not. You never skip a meal! The goal isn't to nail your macros every single time — it's to nourish yourself and learn how to fuel your body. Eat something simple and lower calorie: grilled chicken and rice, or even a protein shake. Follow your hunger, too. Some days you burned more, and those days need more.",
+  teachRealFood:
+    "Any real food can fit your macros. A slice of pizza is real food — water, yeast, flour, tomatoes, cheese. An Oreo is not; it's full of stuff made in a lab. We can make macros work for real food. If this one blows through fat, calories or carbs, next time log it ahead and keep breakfast and lunch lower fat or lower carb so it fits.",
+  teachAlcohol:
+    "Alcohol is up to you. We don't encourage it and we don't say absolutely not. If you have a drink, keep fat in range — that's the one that adds up — and drink it with food, not on an empty stomach.",
+  teachCoffee:
+    "Coffee is allowed — Callie has a cup or two a day — but never on an empty stomach. Have it with breakfast. And after about 7 hours, half the caffeine is still in your blood, so if falling asleep is hard, it may be the afternoon cup.",
+  teachFasting:
+    "No intermittent fasting. When we skip meals the body leans on cortisol, a stress hormone, to stay energized, and that pulls from the same nutrients your sex hormones need. We eat consistently and we fill up at our meals.",
+  teachSweetener:
+    "I'd encourage skipping artificial sweeteners — they're not something we want daily. If a Diet Coke is a real thing for you, try an Olipop vintage cola instead. One swap, no lecture.",
+  teachUnderLead:
+    "If you've eaten three square meals, you can leave the rest. Follow your hunger. We never want to eat less than 50g of fat in a day — hormones really do need it.",
+  teachUnderFat: "You're under 50g of fat so far, so get some in if you can.",
+  teachUnderCarbs: "Have you eaten your carbs too?",
+
+  // She skipped a meal the clock already went past. Don't silently spend
+  // that room — say what skipping does, then feed the rest of the day.
+  skipNotice:
+    "I noticed you skipped a meal. We really want to eat consistently for hormonal health. When we skip, the body can use cortisol — a stress hormone — to keep going, and that takes the same nutrients from our sex hormones. Eat a real lunch, a larger snack, and a larger dinner so you still reach your goals.",
+  skipBreakfastHint:
+    "Mornings can be busy, and a small appetite is often a blunted metabolism talking. Try starting with a protein shake if a full breakfast isn't easy yet.",
 };
 
 /**
@@ -165,31 +206,37 @@ export const COACH_COPY = {
  */
 export const COACH_DEFLECT = {
   callie: {
-    line: "That one's Callie's. She knows your history and I'd only be guessing.",
-    cta: "Ask Callie",
+    line: COACH_PASS,
+    cta: "Message Callie",
   },
   care: {
-    line:
-      "I'm not the one for that — I only know food and your ranges. Callie's better placed to help, and if it's not letting up, your doctor is.",
-    cta: "Ask Callie",
+    line: `That's something Callie should hear. ${COACH_PASS}`,
+    cta: "Message Callie",
   },
   ranges: {
-    line:
-      "Your ranges are Callie's call, not mine. I'll work with whatever she has you on. Want to ask her about changing them?",
-    cta: "Ask Callie",
+    line: `Your ranges are Callie's call, not mine. ${COACH_PASS}`,
+    cta: "Message Callie",
   },
   weight: {
-    line:
-      "I'd rather not put a number on that one. Callie's the person for it — that's the part of this she does with you.",
-    cta: "Ask Callie",
+    line: `I'd rather not put a number on that one. ${COACH_PASS}`,
+    cta: "Message Callie",
   },
   admin: {
-    line: "Anything about your plan, your billing or your dates is Callie's, not mine.",
-    cta: "Ask Callie",
+    line: `Anything about your plan, your billing or your dates is Callie's. ${COACH_PASS}`,
+    cta: "Message Callie",
   },
   offTopic: {
-    line: "I only do food and your ranges. That one's outside what I'm good for.",
-    cta: "Ask Callie",
+    line: `I only do food and your ranges. ${COACH_PASS}`,
+    cta: "Message Callie",
+  },
+  supply: {
+    line:
+      "We protect your supply first, always. Your ranges already use the gentler calorie math for that. If you think your supply is being affected, I'll pass that to Callie. She'll get back to you directly.",
+    cta: "Message Callie",
+  },
+  again: {
+    line: "You've come back to this a couple of times, so I'll pass that to Callie. She'll get back to you directly.",
+    cta: "Message Callie",
   },
 };
 
@@ -204,6 +251,26 @@ export function capitalizeLine(text) {
   const i = s.search(/\S/);
   if (i < 0) return s;
   return s.slice(0, i) + s.charAt(i).toUpperCase() + s.slice(i + 1);
+}
+
+/** Hormonal-health note when a meal the clock passed was never logged. */
+export function skipMealCopy(skipped = []) {
+  const slots = (skipped || []).filter(Boolean);
+  if (!slots.length) return "";
+  return slots.includes("breakfast")
+    ? `${COACH_COPY.skipNotice} ${COACH_COPY.skipBreakfastHint}`
+    : COACH_COPY.skipNotice;
+}
+
+/**
+ * End of day, protein in, calories left. Callie wants the fat floor asked
+ * about, and carbs too, rather than a blanket "eat more" or "you're done".
+ */
+export function underDayCopy({ fatEaten = 0, carbsShort = false } = {}) {
+  const bits = [COACH_COPY.teachUnderLead];
+  if (Number(fatEaten) < 50) bits.push(COACH_COPY.teachUnderFat);
+  if (carbsShort) bits.push(COACH_COPY.teachUnderCarbs);
+  return bits.join(" ");
 }
 
 /** Ask copy for the next unlogged slot. */

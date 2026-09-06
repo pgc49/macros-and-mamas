@@ -58,6 +58,7 @@ describe("what the coach hands to Callie", () => {
       "how few calories can I eat and still be ok",
       "I binged last night and feel disgusting",
       "I want to skip meals tomorrow to make up for it",
+      "I feel awful about what I ate today",
       "I've been starving myself all week",
       "I hate my body right now",
     ];
@@ -116,7 +117,7 @@ describe("what the coach hands to Callie", () => {
   it("refuses every scope that is Callie's, and only those", () => {
     expect(scopeIsRefused("food")).toBe(false);
     expect(scopeIsRefused("unclear")).toBe(false);
-    for (const scope of ["urgent", "ranges", "weight", "admin", "off_topic"]) {
+    for (const scope of ["urgent", "ranges", "weight", "admin", "off_topic", "supply"]) {
       expect(scopeIsRefused(scope), scope).toBe(true);
     }
   });
@@ -152,14 +153,9 @@ describe("a food question with no food word in it", () => {
 });
 
 describe("milk supply", () => {
-  it("still answers the meal, and says the supply part is not its call", () => {
-    const result = classifyAsk("what should I eat for lunch, will it affect my milk supply");
-    expect(result.scope).toBe("food");
-    expect(result.aside).toBe("supply");
-  });
-
-  it("hands over a pure supply question", () => {
-    expect(scopeOf("is my milk supply going to drop on these ranges")).toBe("urgent");
+  it("always hands supply to Callie, even when a meal is in the same sentence", () => {
+    expect(scopeOf("what should I eat for lunch, will it affect my milk supply")).toBe("supply");
+    expect(scopeOf("is my milk supply going to drop on these ranges")).toBe("supply");
   });
 
   it("does not fire on someone just mentioning that she nurses", () => {

@@ -66,5 +66,13 @@ describe("what it is allowed to write down", () => {
   it("keeps a menu plate to ordering asks", () => {
     const prompt = buildCoachMenuPrompt({ ...ARGS, slot: "dinner", note: "" });
     expect(prompt).toMatch(/"steps" is the\s+ordering ask and nothing else/);
+    expect(prompt).toMatch(/PS method/);
+  });
+
+  it("tells the model fat is the constraint, and never to offer a half portion", () => {
+    const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "ideas" });
+    expect(prompt).toMatch(/the one that must stay in its band/);
+    expect(prompt).toMatch(/Never suggest a half portion/);
+    expect(prompt).toMatch(/Never tell her to skip a meal/);
   });
 });

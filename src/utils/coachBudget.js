@@ -60,6 +60,25 @@ export function laterSlotsAfter(selected, loggedSlots = new Set(), now = new Dat
     && (i > selectedIdx || i >= nowIdx));
 }
 
+/**
+ * Meals the clock has already gone past that she never logged.
+ *
+ * Callie does not want those calories quietly folded into lunch. Lunch can
+ * have the room — she still has to eat — but the coach has to say it noticed
+ * the skip, and then feed the rest of the day as a real lunch, a larger
+ * snack, and a larger dinner.
+ */
+export function skippedSlotsBefore(selected, loggedSlots = new Set(), now = new Date()) {
+  const clock = guessSlotFromTime(now);
+  const nowIdx = Math.max(0, MAIN_SLOTS.indexOf(clock === "snack" ? "lunch" : clock));
+  const selectedIdx = selected === "snack" ? nowIdx : MAIN_SLOTS.indexOf(selected);
+  if (selectedIdx < 0) return [];
+  return MAIN_SLOTS.filter((s, i) => s !== selected
+    && !loggedSlots.has(s)
+    && i < selectedIdx
+    && i < nowIdx);
+}
+
 export function defaultCoachSlot({ now = new Date(), loggedSlots = new Set(), ignoreTime = false } = {}) {
   if (ignoreTime) {
     for (const s of SLOT_ORDER) {
@@ -389,19 +408,18 @@ export function laterSlotAsBudget(slot, shares, bands) {
 /**
  * The budget as a `remaining`-shaped object for `mealFitsRemaining`.
  *
- * Protein is deliberately unbounded. Callie's rule is that protein is the win
- * and the range high is a target, not a wall; calories, carbs and fat are the
- * real ceilings and they already bound how much protein a meal can carry. A
- * meal that is high protein and still inside cal/carb/fat is exactly the meal
- * she should be shown, so it must not be filtered out for being "too much
- * protein". `pHigh` survives on the budget for the copy layer to mention.
+ * Protein and carbs are unbounded. Callie's rule, in her words: you can go
+ * over in protein and carbs if fat stays within its bands. Fat is over
+ * double the caloric density, so it is the one that decides weight loss.
+ * Calories stay a ceiling so a plate cannot be unbounded in both directions.
+ * `pHigh` survives on the budget for the copy layer to mention.
  */
 export function budgetAsRemaining(budget) {
   if (!budget) return undefined;
   return {
     cal: budget.cal,
     p: Number.POSITIVE_INFINITY,
-    c: budget.c,
+    c: Number.POSITIVE_INFINITY,
     f: budget.f,
   };
 }
@@ -422,6 +440,7 @@ export function computeSlotBudget({
   const logged = loggedSlots || loggedSlotsFromEntries([]);
   const snacks = clampSnackCount(snackCount);
   const later = laterSlotsAfter(slot, logged, now);
+  const skipped = skippedSlotsBefore(slot, logged, now);
   const resolvedShares = resolveCoachShares(shares, later);
   const reserveSlots = reserveSlotsAfter(slot, logged, snacks, now);
   const rawReserve = capReserveToRemaining(
@@ -443,13 +462,13 @@ export function computeSlotBudget({
     const reserve = packReserve(
       Object.fromEntries(Object.entries(rawReserve.bySlot).map(([s, piece]) => [s, zeroPiece(piece)])),
     );
-    return { slot, laterSlots: later, remaining, reserve, snackCount: snacks, ...leftoverFrom(remaining, reserve) };
+    return { slot, laterSlots: later, skipped, remaining, reserve, snackCount: snacks, ...leftoverFrom(remaining, reserve) };
   }
 
   if (remaining.cal - rawReserve.cal >= 0) {
     return {
       slot,
-      laterSlots: later,
+      laterSlots: later, skipped,
       remaining,
       reserve: rawReserve,
       snackCount: snacks,
@@ -474,7 +493,7 @@ export function computeSlotBudget({
         Object.entries(rawReserve.bySlot).map(([s, piece]) => [s, scalePiece(piece, factor)]),
       );
       const reserve = packReserve(bySlot);
-      return { slot, laterSlots: later, remaining, reserve, snackCount: snacks, ...leftoverFrom(remaining, reserve) };
+      return { slot, laterSlots: later, skipped, remaining, reserve, snackCount: snacks, ...leftoverFrom(remaining, reserve) };
     }
   }
 
@@ -508,7 +527,7 @@ export function computeSlotBudget({
   const leftover = sliceRemaining(rest, currentShare / denom);
   return {
     slot,
-    laterSlots: later,
+    laterSlots: later, skipped,
     remaining,
     reserve: packReserve(bySlot),
     snackCount: snacks,

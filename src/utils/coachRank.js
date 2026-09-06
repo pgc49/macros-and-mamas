@@ -2,9 +2,10 @@
  * Turns her meal bank, My meals and pantry into three cards that actually fit
  * the slot budget, at a portion she'd really eat.
  *
- * The only rejection axes are calories, carbs and fat. Protein is a floor she
- * is trying to reach, so a card is never dropped for carrying too much of it —
- * see `budgetAsRemaining`. Ported from the Help me decide ranker (PR 332).
+ * The only rejection axes are calories and fat. Protein and carbs may go
+ * over when fat stays in its band — Callie's rule, not a guess. Protein is a
+ * floor she is trying to reach, so a card is never dropped for carrying too
+ * much of it. See `budgetAsRemaining`.
  */
 
 import { COACH_COPY, COACH_SLOT_LABEL } from "../content/coachVoice.js";
@@ -20,7 +21,10 @@ import {
 import { budgetAsRemaining } from "./coachBudget.js";
 import { mealMatchesQuery, mealSlotFilterKey } from "./mealSearch.js";
 
-export const SCALE_CANDIDATES = [1, 1.5, 2, 0.75, 0.5];
+export const SCALE_CANDIDATES = [1, 1.5, 2];
+/** 10–20g over the day's protein high is fine. Past that is unnecessary. */
+export const PROTEIN_OVER_OK = 10;
+export const PROTEIN_OVER_MUCH = 20;
 
 function hasMacros(meal) {
   const m = mealMacros(meal);
@@ -45,41 +49,33 @@ export function coachMealFits(meal, budget) {
 }
 
 /**
- * 1× if it fits; halves only if 1× doesn't.
- *
- * A bigger portion is offered only when the single serving leaves her short on
- * protein, closes at least 15g more of it, and doesn't overshoot what she
- * actually needs. Calories used to hold that line indirectly through the
- * protein ceiling; now that protein is a floor, the need itself has to.
+ * 1× if it fits. A bigger portion only when a single serving leaves her
+ * short on protein, the upscale still keeps fat in range, and it doesn't
+ * pile on more than 20g past what she needs. Half portions are out —
+ * Callie would rather suggest a different meal than have anyone under-eat.
  */
 export function pickScale(meal, budget) {
   if (!budget) return null;
   const fits = (s) => coachMealFits(scaleMeal(meal, s), budget);
   const p1 = mealMacros(meal).p;
   const pNeed = budget?.pNeed || 0;
-  if (fits(1)) {
-    let best = 1;
-    if (p1 < pNeed) {
-      for (const s of [1.5, 2]) {
-        if (!fits(s)) continue;
-        if (p1 * s < p1 + 15) continue;
-        if (p1 * s > pNeed + 10) continue;
-        best = s;
-      }
+  if (!fits(1)) return null;
+  let best = 1;
+  if (p1 < pNeed) {
+    for (const s of [1.5, 2]) {
+      if (!fits(s)) continue;
+      if (p1 * s < p1 + 15) continue;
+      if (p1 * s > pNeed + PROTEIN_OVER_MUCH) continue;
+      best = s;
     }
-    return best;
   }
-  if (fits(0.75)) return 0.75;
-  if (fits(0.5)) return 0.5;
-  return null;
+  return best;
 }
 
 export function portionTitle(name, servings) {
   const base = String(name || "Meal");
   const s = snapServings(servings || 1);
   if (s === 1) return base;
-  if (s === 0.5) return `${base} · half portion`;
-  if (s === 0.75) return `${base} · 0.75 servings`;
   return `${base} · ${s} servings`;
 }
 
@@ -139,16 +135,22 @@ export function slotAffinity(meal, slot, { slotHistoryNames = [] } = {}) {
 const AFFINITY_RANK = { belongs: 2, neutral: 1, elsewhere: 0 };
 
 export function scoreScaledMeal(meal, budget, ctx = {}) {
-  const { p } = mealMacros(meal);
+  const { p, f } = mealMacros(meal);
   const pNeed = budget?.pNeed || 0;
-  const protein = pNeed <= 0 ? 1 : 3.0 * Math.min(1, p / pNeed);
+  // Protein is a floor, not the whole score. Fat staying in its band is the
+  // one Callie would actually watch — a plate that hits protein by spending
+  // every gram of fat is not the better plate.
+  const protein = pNeed <= 0 ? 0.5 : 1.8 * Math.min(1, p / pNeed);
+  const fatRoom = budget?.f ?? 0;
+  const fatLeft = fatRoom > 0 ? Math.max(0, fatRoom - f) / fatRoom : 1;
+  const fatFit = 1.2 * fatLeft;
   const myBonus = meal.source === "my" ? 0.3 : 0;
   const likeBonus = likeMatch(meal, ctx.likes) ? 0.4 : 0;
   const scaleBonus = (meal.servings || 1) === 1 ? 0.2 : 0;
   const slotUsual = usualCount(meal.name, ctx.slotHistoryNames) >= 3 ? 0.3 : 0;
   const todayPen = (ctx.loggedTodayNames || []).some((n) => namesMatch(n, meal.name)) ? -0.5 : 0;
   const recentPen = (ctx.loggedRecentNames || []).some((n) => namesMatch(n, meal.name)) ? -0.2 : 0;
-  return protein + myBonus + likeBonus + scaleBonus + slotUsual + todayPen + recentPen;
+  return protein + fatFit + myBonus + likeBonus + scaleBonus + slotUsual + todayPen + recentPen;
 }
 
 function proteinClosesNeed(p, pNeed) {
@@ -177,13 +179,16 @@ export function proteinOverNote(meal, budget) {
   const p = mealMacros(meal).p;
   const headroom = budget?.remaining?.pHigh;
   if (!Number.isFinite(headroom)) return null;
-  return p > headroom + 5 ? COACH_COPY.proteinOver : null;
+  const over = p - headroom;
+  if (over > PROTEIN_OVER_MUCH) return COACH_COPY.proteinOverMuch;
+  if (over > PROTEIN_OVER_OK) return COACH_COPY.proteinOver;
+  return null;
 }
 
 /**
- * The reason is not the place to restate the portion. The title above it
- * already says "half portion", and "0.5 servings." underneath said the same
- * fact in different words — two sentences for one number.
+ * The reason is not the place to restate the portion. The title already
+ * carries "1.5 servings" when we scale up; saying it again underneath is
+ * the same fact twice.
  */
 export function coachReason(meal, budget, { over = false } = {}) {
   if (over) return COACH_COPY.reasonOver;
@@ -273,9 +278,18 @@ function diversify(ranked) {
  * Where it belongs first, then how good it is. "Lighter" means the lightest
  * breakfast, not the lightest thing in the bank, so the tier holds there too.
  */
+function isSnackish(meal) {
+  const key = mealSlotFilterKey(meal);
+  return key === "Snack" || key === "Treats" || meal.source === "pantry";
+}
+
 function compareMeals(a, b, prefer) {
   const tier = AFFINITY_RANK[b.affinity] - AFFINITY_RANK[a.affinity];
   if (tier !== 0) return tier;
+  // A yogurt is a fine snack and a poor breakfast. When nothing belongs,
+  // another meal of the day still beats a snack.
+  const snackDiff = Number(isSnackish(a)) - Number(isSnackish(b));
+  if (snackDiff !== 0) return snackDiff;
   if (prefer === "lighter") return (a.cal || 0) - (b.cal || 0);
   if (prefer === "protein") return (b.p || 0) - (a.p || 0);
   if (b.score !== a.score) return b.score - a.score;

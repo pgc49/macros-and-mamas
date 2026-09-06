@@ -19,7 +19,7 @@
  * admin    — plan, billing, dates, approval.
  * off_topic— plainly not food: fitness, sleep, the baby, or being asked to be
  *            a general assistant.
- * supply   — breastfeeding output. Cards are still fine; the supply part isn't.
+ * supply   — breastfeeding output. Always Callie's. We protect supply first.
  * unclear  — none of the above and no food word either. "Is Chipotle ok
  *            tonight?" is a food question with no food word in it, and
  *            refusing it would fail the mama at exactly the moment she needs
@@ -29,7 +29,7 @@
  * The four refusal lists are what carry the guarantee, and they run first.
  * Nothing that is Callie's reaches a model regardless of how the rest reads.
  */
-export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "admin", "off_topic"];
+export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "admin", "off_topic", "supply"];
 
 const URGENT = [
   // Symptoms
@@ -63,6 +63,8 @@ const URGENT = [
   /\bnot eating\b(?![^.?!]{0,24}\b(protein|carbs?|fats?|fibre|fiber|veg|vegetables|breakfast|lunch|dinner|meat|dairy|gluten)\b)/,
   /\bstop eating\b/, /\bskip(ping)? meals\b/, /\bfast(ing)? all day\b/,
   /\bhate my body\b/, /\bfeel guilty\b/, /\bpunish/,
+  /\bfeel(ing)? (awful|bad|terrible|so bad) about\b/,
+  /\bguilty (about|for)\b/,
   /\b(i (feel|look|am)|feeling|felt)\b[^.?!]{0,18}\bdisgusting\b/,
   /\bhow (few|little) calories can i\b/, /\beat as little as\b/,
 ];
@@ -164,9 +166,11 @@ export function classifyAsk(raw) {
 
   const foodAsk = FOOD_ASK.test(text);
 
-  if (hits(SUPPLY, text)) {
-    return foodAsk ? { scope: "food", aside: "supply" } : { scope: "urgent", aside: null };
-  }
+  // Supply is always Callie's. Cards plus a footnote was too cute — she
+  // said protect it first, and if a mama thinks it's being affected, write
+  // her directly. Mentioning that she nurses, without asking about output,
+  // is still a food question.
+  if (hits(SUPPLY, text)) return { scope: "supply", aside: null };
   if (hits(RANGES, text)) return { scope: "ranges", aside: null };
   if (hits(WEIGHT, text)) return { scope: "weight", aside: null };
   if (hits(ADMIN, text)) return { scope: "admin", aside: null };
@@ -189,6 +193,7 @@ const DEFLECT_FOR_SCOPE = {
   weight: "weight",
   admin: "admin",
   off_topic: "offTopic",
+  supply: "supply",
 };
 
 export function deflectForScope(scope) {

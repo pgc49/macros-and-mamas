@@ -143,15 +143,30 @@ describe("the guardrail runs before the model", () => {
     expect(data.meals).toEqual([]);
   });
 
-  it("answers the meal but flags the supply question", async () => {
+  it("hands a supply question to Callie instead of answering around it", async () => {
     mockSupabase();
     const resp = await onRequestPost({
       request: request({ mode: "ask", text: "lunch ideas, will this affect my milk supply" }),
       env,
     });
     const data = await resp.json();
-    expect(data.scope).toBe("food");
-    expect(data.aside).toBe("supply");
+    expect(data.scope).toBe("supply");
+    expect(data.deflect).toBe("supply");
+    expect(data.meals).toEqual([]);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it("answers skip-dinner in Callie's words, without a model call", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "should I skip dinner" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.teach).toBe("neverSkip");
+    expect(data.reply).toMatch(/never skip a meal/i);
+    expect(data.meals).toEqual([]);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
 });
 

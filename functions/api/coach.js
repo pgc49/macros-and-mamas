@@ -52,6 +52,7 @@ import {
 } from "../_shared/clientAiAccess.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
+import { localCoachTeach, teachBody } from "../../src/utils/coachTeach.js";
 
 const MAX_PER_DAY = 30;
 const MAX_IMAGES = 3;
@@ -106,6 +107,19 @@ export async function onRequestPost({ request, env }) {
         ok: true,
         scope: verdict.scope,
         deflect: deflectForScope(verdict.scope),
+        meals: [],
+      });
+    }
+
+    // Callie's own sentences. Same matcher the client runs, so a crafted
+    // request cannot spend a model call on a question she already answered.
+    const teach = mode === "ask" ? localCoachTeach(text) : null;
+    if (teach) {
+      return json({
+        ok: true,
+        scope: "food",
+        teach: teach.topic,
+        reply: teachBody(teach.topic),
         meals: [],
       });
     }

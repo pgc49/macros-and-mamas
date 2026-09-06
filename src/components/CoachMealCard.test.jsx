@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
+import { COACH_COPY } from "../content/coachVoice";
 
 afterEach(cleanup);
 
@@ -60,11 +61,11 @@ describe("coach card honesty", () => {
   it("shows the note when a portion runs protein past the top", () => {
     render(
       <CoachMealCard
-        card={{ ...bankCard, proteinNote: "Puts you over the top of protein, which is fine" }}
+        card={{ ...bankCard, proteinNote: COACH_COPY.proteinOver }}
         onLog={vi.fn()}
       />,
     );
-    expect(screen.getByText("Puts you over the top of protein, which is fine")).toBeTruthy();
+    expect(screen.getByText(COACH_COPY.proteinOver)).toBeTruthy();
   });
 
   it("shows the macros it was ranked on, not the unportioned meal", () => {

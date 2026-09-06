@@ -115,12 +115,15 @@ describe("the coach answers on the device", () => {
     renderPanel({ postCoach });
 
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
-      target: { value: "is Chipotle ok tonight" },
+      target: { value: "I only have chicken and rice, what can I make" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(1));
-    expect(postCoach.mock.calls[0][0]).toMatchObject({ mode: "ask", text: "is Chipotle ok tonight" });
+    expect(postCoach.mock.calls[0][0]).toMatchObject({
+      mode: "ask",
+      text: "I only have chicken and rice, what can I make",
+    });
     await screen.findByText("Grilled, not fried, and ask for the sauce on the side.");
   });
 
@@ -182,13 +185,8 @@ describe("what isn't the coach's goes to Callie", () => {
     }
   });
 
-  it("still answers the food part when the question also touched supply", async () => {
-    const postCoach = vi.fn(async () => ({
-      ok: true,
-      reply: "Eggs and toast with a yogurt on the side.",
-      meals: [],
-      aside: "supply",
-    }));
+  it("hands a supply question to Callie instead of answering around it", async () => {
+    const postCoach = vi.fn();
     renderPanel({ postCoach });
 
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
@@ -196,8 +194,21 @@ describe("what isn't the coach's goes to Callie", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
-    await screen.findByText("Eggs and toast with a yogurt on the side.");
-    expect(screen.getByText(COACH_DEFLECT.care.line)).toBeTruthy();
+    await screen.findByText(COACH_DEFLECT.supply.line);
+    expect(postCoach).not.toHaveBeenCalled();
+  });
+
+  it("answers eating-out and skip-dinner in Callie's words, without a request", async () => {
+    const postCoach = vi.fn();
+    renderPanel({ postCoach });
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "should I skip dinner, I'm way over" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+    await screen.findByText(COACH_COPY.teachNeverSkip);
+    expect(postCoach).not.toHaveBeenCalled();
   });
 });
 
