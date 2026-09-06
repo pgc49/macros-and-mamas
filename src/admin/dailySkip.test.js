@@ -1,12 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { filterRoster } from "./clientRoster.js";
 import {
   boardReason,
   canPassToday,
+  clearLocalSkip,
   endOfLocalDay,
   isPassedQuietToday,
   listPassedToday,
+  loadLocalSkips,
+  mergeOverrideRows,
   skipIsBroken,
   stampRosterOverrides,
+  writeLocalSkip,
 } from "./dailySkip.js";
 
 const TODAY = "2026-08-30";
@@ -72,6 +77,78 @@ describe("isPassedQuietToday + canPassToday", () => {
 
   it("expires after snoozed_until", () => {
     expect(isPassedQuietToday(quiet({ snoozedUntil: "2026-08-30T12:00:00.000Z" }), NOW)).toBe(false);
+  });
+});
+
+describe("mergeOverrideRows", () => {
+  it("keeps a just-pressed skip when the server reload is empty", () => {
+    const merged = mergeOverrideRows(
+      [],
+      [{ email_lower: "bea@example.com", snoozed_until: UNTIL_TONIGHT }],
+      NOW,
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0].email_lower).toBe("bea@example.com");
+    expect(merged[0].snoozed_until).toBe(UNTIL_TONIGHT);
+  });
+
+  it("does not let an expired local skip overwrite the server", () => {
+    const merged = mergeOverrideRows(
+      [{ email_lower: "bea@example.com", snoozed_until: null, last_touch_at: "2026-08-30T12:00:00.000Z" }],
+      [{ email_lower: "bea@example.com", snoozed_until: "2026-08-30T12:00:00.000Z" }],
+      NOW,
+    );
+    expect(merged[0].snoozed_until).toBeNull();
+  });
+
+  it("prefers a local active skip over a server row that lost it", () => {
+    const merged = mergeOverrideRows(
+      [{ email_lower: "bea@example.com", snoozed_until: null, last_touch_at: "2026-08-30T17:00:00.000Z" }],
+      [{ email_lower: "bea@example.com", snoozed_until: UNTIL_TONIGHT, last_touch_at: "2026-08-30T17:00:01.000Z" }],
+      NOW,
+    );
+    expect(merged[0].snoozed_until).toBe(UNTIL_TONIGHT);
+  });
+
+  it("keeps her off Needs help after an empty server reload", () => {
+    const merged = mergeOverrideRows(
+      [],
+      [{ email_lower: "bea@example.com", snoozed_until: UNTIL_TONIGHT }],
+      NOW,
+    );
+    const [row] = stampRosterOverrides([quiet()], merged);
+    expect(filterRoster([row], "needs_help", { todayIso: TODAY, nowMs: NOW })).toEqual([]);
+    expect(listPassedToday([row], { nowMs: NOW }).map((c) => c.id)).toEqual(["q"]);
+  });
+});
+
+describe("local skip store", () => {
+  function memoryStorage() {
+    const map = new Map();
+    return {
+      getItem: (key) => (map.has(key) ? map.get(key) : null),
+      setItem: (key, value) => { map.set(key, String(value)); },
+      removeItem: (key) => { map.delete(key); },
+      clear: () => { map.clear(); },
+    };
+  }
+
+  beforeEach(() => {
+    globalThis.localStorage = memoryStorage();
+  });
+
+  it("round-trips an active skip and drops it after undo", () => {
+    writeLocalSkip("Bea@example.com", { snoozed_until: UNTIL_TONIGHT }, NOW);
+    expect(loadLocalSkips(NOW)).toEqual([
+      { email_lower: "bea@example.com", snoozed_until: UNTIL_TONIGHT },
+    ]);
+    clearLocalSkip("bea@example.com", NOW);
+    expect(loadLocalSkips(NOW)).toEqual([]);
+  });
+
+  it("prunes skips that already expired", () => {
+    writeLocalSkip("bea@example.com", { snoozed_until: UNTIL_TONIGHT }, NOW);
+    expect(loadLocalSkips(Date.parse("2026-08-31T07:00:00.000Z"))).toEqual([]);
   });
 });
 
