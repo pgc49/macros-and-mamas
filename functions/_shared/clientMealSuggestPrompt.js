@@ -87,7 +87,7 @@ ${recipesBlock}
 
 ## JSON schema
 {
-  "summaryForClient": "1-2 warm sentences about how this week matches her tastes (no coach jargon)",
+  "summaryForClient": "1-2 warm sentences about how this week matches her tastes (no coach jargon; do not mention postpartum or nursing unless her profile lists them)",
   "dailyTarget": { "calLo": ${calLo}, "calHi": ${calHi}, "pLo": ${pLo}, "pHi": ${pHi}, "cLo": ${cLo}, "cHi": ${cHi}, "fLo": ${fLo}, "fHi": ${fHi} },
   "days": [
     {
