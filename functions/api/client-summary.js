@@ -11,6 +11,7 @@ import {
   parseJsonLoose,
   resolveModels,
 } from "../_shared/openrouter.js";
+import { groundClientFacingComment } from "../_shared/clientLifeStage.js";
 import {
   assertNoMessageBodies,
   CLIENT_SUMMARY_HINT,
@@ -50,7 +51,7 @@ export async function onRequestPost({ request, env }) {
         {
           role: "system",
           content:
-            "You write a short coaching snapshot for Callie about one postpartum client. Descriptive only. Never invent facts. Never diagnose. Never quote private messages — none are in the payload.",
+            "You write a short coaching snapshot for Callie about one client. Descriptive only. Never invent facts. Never diagnose. Never assume she is postpartum, nursing, or a new mom unless the payload says so. Never quote private messages — none are in the payload.",
         },
         {
           role: "user",
@@ -82,11 +83,16 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "summary unavailable", message: "Summary unavailable" }, 502);
     }
 
+    const season = {
+      breastfeeding: payload.breastfeeding,
+      monthsPP: payload.monthsPP,
+      pregnant: payload.pregnant,
+    };
     return json({
       ok: true,
-      summary: String(parsed.value.summary).slice(0, 2000),
+      summary: groundClientFacingComment(String(parsed.value.summary || ""), season).slice(0, 2000),
       suggested_touch: parsed.value.suggested_touch
-        ? String(parsed.value.suggested_touch).slice(0, 500)
+        ? groundClientFacingComment(String(parsed.value.suggested_touch), season).slice(0, 500)
         : "",
       model: result.model,
     });

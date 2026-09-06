@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildClientLifeStageBlock,
   groundClientFacingComment,
+  groundPlanClientCopy,
   hasPostpartumSeason,
   lifeStageCommentRules,
   monthsPpNumber,
@@ -93,5 +94,23 @@ describe("groundClientFacingComment", () => {
   it("strips postpartum talk when profile is missing — safer default", () => {
     expect(groundClientFacingComment("Excellent postpartum meal.", null))
       .toBe("Excellent meal.");
+  });
+});
+
+describe("groundPlanClientCopy", () => {
+  it("grounds the week summary and meal blurbs a mama will read", () => {
+    const plan = {
+      summaryForClient: "A solid postpartum week built around salmon.",
+      days: [
+        {
+          theme: "New-mom recovery",
+          meals: [{ name: "Salmon", desc: "Excellent postpartum dinner." }],
+        },
+      ],
+    };
+    groundPlanClientCopy(plan, dolly);
+    expect(plan.summaryForClient).toBe("A solid week built around salmon.");
+    expect(plan.days[0].theme).toBe("Recovery");
+    expect(plan.days[0].meals[0].desc).toBe("Excellent dinner.");
   });
 });

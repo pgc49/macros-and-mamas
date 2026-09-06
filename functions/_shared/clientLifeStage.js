@@ -131,6 +131,24 @@ export function groundClientFacingComment(raw, profile = null) {
   return text;
 }
 
+/** Strip ungrounded season talk from week-plan copy a mama (or Callie) will read. */
+export function groundPlanClientCopy(plan, profile = null) {
+  if (!plan || typeof plan !== "object") return plan;
+  if (plan.summaryForClient) {
+    plan.summaryForClient = groundClientFacingComment(plan.summaryForClient, profile);
+  }
+  if (plan.summaryForCallie) {
+    plan.summaryForCallie = groundClientFacingComment(plan.summaryForCallie, profile);
+  }
+  for (const day of plan.days || []) {
+    if (day?.theme) day.theme = groundClientFacingComment(String(day.theme), profile);
+    for (const meal of day.meals || []) {
+      if (meal?.desc) meal.desc = groundClientFacingComment(String(meal.desc), profile);
+    }
+  }
+  return plan;
+}
+
 export function profileFromRow(row) {
   if (!row || typeof row !== "object") return {};
   return {
