@@ -1,14 +1,17 @@
 import { T, F, FD } from "../theme/tokens";
 import { COACH_COPY, askForSlotCopy } from "../content/coachVoice";
 import { coachEntryHint } from "../utils/coachLines";
-import { loggedSlotsFromEntries } from "../utils/coachBudget";
+import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 
 /**
  * The way into the coach from Today. Says something true about her day rather
  * than advertising itself, so it reads as the next step and not as a banner.
+ * When every slot is logged or pencilled, stay quiet — the Coach tab is enough.
  */
 export function CoachEntry({ answer, entries = [], plannedMeals = [], onOpen }) {
   if (!answer?.budget) return null;
+  const next = nextCoachSlot({ entries, plannedMeals });
+  if (!next) return null;
   const logged = loggedSlotsFromEntries(entries);
   const hint = coachEntryHint({ loggedSlots: logged, plannedMeals, read: answer.read });
 
@@ -31,7 +34,7 @@ export function CoachEntry({ answer, entries = [], plannedMeals = [], onOpen }) 
       }}
     >
       <div style={{ fontFamily: FD, fontSize: 17, color: T.ink, marginBottom: 3 }}>
-        {logged.size === 0 ? COACH_COPY.entryTitle : askForSlotCopy(answer.slot)}
+        {logged.size === 0 ? COACH_COPY.entryTitle : askForSlotCopy(next)}
       </div>
       <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>{hint}</div>
       <div style={{ fontSize: 13, fontWeight: 700, color: T.accentDeep, marginTop: 8 }}>

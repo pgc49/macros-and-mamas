@@ -174,6 +174,25 @@ describe("where the coach shows up", () => {
     expect(screen.getByText(/Looking for a (breakfast|lunch|dinner|snack) idea\?/)).toBeTruthy();
     expect(screen.queryByText(/Know what .+ is yet\?/)).toBeNull();
   });
+
+  it("hides the Today card once breakfast, lunch, dinner and a snack are logged", () => {
+    renderApp({
+      todayLog: {
+        date: TODAY,
+        entries: [
+          { id: "b", name: "Eggs", slot: "breakfast", cal: 300, p: 25, c: 10, f: 15 },
+          { id: "l", name: "Salad", slot: "lunch", cal: 500, p: 40, c: 30, f: 18 },
+          { id: "d", name: "Steak", slot: "dinner", cal: 700, p: 50, c: 40, f: 28 },
+          { id: "s", name: "Yogurt", slot: "snack", cal: 150, p: 15, c: 12, f: 5 },
+        ],
+      },
+      totals: { p: 130, c: 92, f: 66, cal: 1650 },
+    });
+    expect(screen.getByRole("button", { name: "Coach" })).toBeTruthy();
+    expect(screen.queryByText(COACH_COPY.entryTitle)).toBeNull();
+    expect(screen.queryByText(/Looking for a .+ idea\?/)).toBeNull();
+    expect(screen.queryByText(COACH_COPY.entryCta)).toBeNull();
+  });
 });
 
 describe("pencilled meals against the range bands", () => {

@@ -82,6 +82,22 @@ describe("the coach answers on the device", () => {
     expect(cardTitles()).toHaveLength(0);
   });
 
+  it("does not ask for another meal when the day is already logged", async () => {
+    renderPanel({
+      onLoadThread: async () => [],
+      entries: [
+        { slot: "breakfast", name: "Eggs" },
+        { slot: "lunch", name: "Salad" },
+        { slot: "dinner", name: "Steak" },
+        { slot: "snack", name: "Yogurt" },
+      ],
+      totals: { cal: 1650, p: 130, c: 92, f: 66 },
+    });
+    await screen.findByText(COACH_COPY.title);
+    expect(document.body.textContent).toContain(COACH_COPY.openerDone);
+    expect(screen.queryByText(/Looking for a .+ idea\?/)).toBeNull();
+  });
+
   it("gives her cards for What should I eat? without calling the model", async () => {
     const postCoach = vi.fn();
     renderPanel({ postCoach, onLoadThread: async () => [] });

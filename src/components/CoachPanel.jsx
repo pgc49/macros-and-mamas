@@ -11,7 +11,7 @@ import {
 } from "../content/coachVoice";
 import { buildCoachAnswer, buildSuggestedCards, recentNamesForPrompt } from "../utils/coachSession";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
-import { loggedSlotsFromEntries } from "../utils/coachBudget";
+import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
 import { countTeachInThread, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
@@ -396,7 +396,10 @@ export function CoachPanel({
   }
 
   const logged = loggedSlotsFromEntries(entries);
-  const opener = logged.size === 0 ? COACH_COPY.openerFresh : askForSlotCopy(answer.slot);
+  const next = nextCoachSlot({ entries, plannedMeals });
+  const opener = logged.size === 0
+    ? COACH_COPY.openerFresh
+    : (next ? askForSlotCopy(next) : COACH_COPY.openerDone);
   const shownCards = thread.some((m) => (m.cards || []).length > 0);
 
   return (
