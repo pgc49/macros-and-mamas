@@ -118,6 +118,7 @@ export function ClientApp({
   mealHistoryByDate = {},
   onLogCoachCard,
   onPencilCoachCard,
+  onClearCoachPencil,
   onSaveCoachCard,
   onAskCallie,
   onLoadCoachThread,
@@ -446,6 +447,7 @@ export function ClientApp({
             earliestWeekStart={mealEarliestWeek}
             rangeDisplayTotals={rangeTotals}
             rangeTotalsIncludePencils={countPencilled && hasPencilled}
+            onClearPencil={onClearCoachPencil}
           />
 
           <WaterLogCard

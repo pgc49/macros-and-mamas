@@ -10,7 +10,7 @@ import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from ".
 import { entriesForLogDate, hydrateTodayLog, sumLogTotals } from "./utils/mealLogState";
 import { resolveLogSlot } from "./utils/mealSlots";
 import { coachCardVia, coachLogFromCard, unscaleRankedCard } from "./utils/coachScale";
-import { removeCoachPencilMatchingLog, writeCoachPencil } from "./utils/coachPencil";
+import { clearCoachPencil, removeCoachPencilMatchingLog, writeCoachPencil } from "./utils/coachPencil";
 import { stripPortionSuffix } from "./utils/coachPrefs";
 import { ingredientsToText } from "./utils/planMealShape";
 import { COACH_ASK_CALLIE_PREFILL } from "./content/coachVoice";
@@ -1231,6 +1231,22 @@ export default function App() {
     }
   };
 
+  /** Wipe a wrong pencil without logging it. */
+  const clearCoachPencilCard = async (meal) => {
+    const day = planDayLabel(mealLogDate || localDateIso());
+    try {
+      const next = clearCoachPencil(weekPlanDays, day, meal);
+      if (next === weekPlanDays) return false;
+      onWeekPlanChange(next, weekPlanSource);
+      setLogFlash(`Cleared ${meal?.name || "pencilled meal"}`);
+      window.setTimeout(() => setLogFlash(""), 3500);
+      return true;
+    } catch (e) {
+      console.error("clearCoachPencil failed", e);
+      return false;
+    }
+  };
+
   /** Keep a coach-built meal, method and all, so she can make it again. */
   const saveCoachCard = async (card, slot) => {
     const base = unscaleRankedCard(card);
@@ -1755,6 +1771,7 @@ export default function App() {
       mealHistoryByDate={mealHistoryByDate}
       onLogCoachCard={logCoachCard}
       onPencilCoachCard={pencilCoachCard}
+      onClearCoachPencil={clearCoachPencilCard}
       onSaveCoachCard={saveCoachCard}
       onAskCallie={askCallie}
       onLoadCoachThread={loadCoachThread}

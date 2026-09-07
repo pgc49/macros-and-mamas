@@ -82,6 +82,7 @@ export const COACH_COPY = {
   logIt: "Log it",
   pencilIn: "Pencil in",
   ateIt: "Ate it",
+  clearPencil: "Clear",
   seeRecipe: "See recipe",
   seeOrder: "How to order",
   saveToMine: "Save to My meals",
@@ -285,9 +286,9 @@ export function underDayCopy({ fatEaten = 0, carbsShort = false } = {}) {
 
 /** Ask copy for the next unlogged slot. */
 export function askForSlotCopy(slot) {
-  if (slot === "lunch") return "Know what lunch is yet?";
-  if (slot === "dinner") return "Know what dinner is yet?";
-  if (slot === "snack") return "Know what snack is yet?";
-  if (slot === "breakfast") return "Know what breakfast is yet?";
+  if (slot === "lunch") return "Looking for a lunch idea?";
+  if (slot === "dinner") return "Looking for a dinner idea?";
+  if (slot === "snack") return "Looking for a snack idea?";
+  if (slot === "breakfast") return "Looking for a breakfast idea?";
   return COACH_COPY.entryTitle;
 }

@@ -10,6 +10,7 @@ import {
   COACH_COPY,
   COACH_SLOT_LABEL,
   COACH_SLOT_PHRASE,
+  askForSlotCopy,
   capitalizeLine,
   snackReserveCopy,
 } from "../content/coachVoice.js";
@@ -231,7 +232,7 @@ export function coachEntryHint({ loggedSlots = new Set(), plannedMeals = [], rea
   const dinnerLogged = loggedSlots.has("dinner");
   const lunchLogged = loggedSlots.has("lunch");
   if (lunchLogged && !dinnerLogged && !planMealForSlot(plannedMeals, "dinner")) {
-    return "Know what dinner is yet? I'll size it to what's left.";
+    return `${askForSlotCopy("dinner")} I'll size it to what's left.`;
   }
   return read?.line1 || COACH_COPY.plenty;
 }

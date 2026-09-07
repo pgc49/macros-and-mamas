@@ -22,7 +22,8 @@ vi.mock("../components/MessagesPanel", () => ({
 }));
 
 import { ClientApp } from "./ClientApp";
-import { COACH_COPY, COACH_DEFLECT } from "../content/coachVoice";
+import { COACH_COPY, COACH_DEFLECT, askForSlotCopy } from "../content/coachVoice";
+import { coachEntryHint } from "../utils/coachLines";
 import { localDateIso, wkStartOf } from "../utils/dates";
 
 afterEach(() => {
@@ -151,6 +152,28 @@ describe("where the coach shows up", () => {
     fireEvent.click(screen.getByText(COACH_COPY.entryTitle).closest("button"));
     expect(setTab).toHaveBeenCalledWith("coach");
   });
+
+  it("keeps the empty-day title and uses Patrick's slot ask once something is logged", () => {
+    expect(COACH_COPY.entryTitle).toBe("Not sure what to eat?");
+    expect(askForSlotCopy("breakfast")).toBe("Looking for a breakfast idea?");
+    expect(askForSlotCopy("lunch")).toBe("Looking for a lunch idea?");
+    expect(askForSlotCopy("dinner")).toBe("Looking for a dinner idea?");
+    expect(askForSlotCopy("snack")).toBe("Looking for a snack idea?");
+    expect(coachEntryHint({
+      loggedSlots: new Set(["lunch"]),
+      plannedMeals: [],
+    })).toBe("Looking for a dinner idea? I'll size it to what's left.");
+
+    renderApp({
+      todayLog: {
+        date: TODAY,
+        entries: [{ id: "e1", name: "Eggs", slot: "breakfast", cal: 300, p: 25, c: 10, f: 15 }],
+      },
+      totals: { p: 25, c: 10, f: 15, cal: 300 },
+    });
+    expect(screen.getByText(/Looking for a (breakfast|lunch|dinner|snack) idea\?/)).toBeTruthy();
+    expect(screen.queryByText(/Know what .+ is yet\?/)).toBeNull();
+  });
 });
 
 describe("pencilled meals against the range bands", () => {
@@ -170,6 +193,25 @@ describe("pencilled meals against the range bands", () => {
     renderApp();
     expect(screen.queryByLabelText(COACH_COPY.countPencilled)).toBeNull();
     expect(screen.getByText("42g logged")).toBeTruthy();
+  });
+
+  it("offers Clear on a grey pencil without logging it", async () => {
+    const onClearCoachPencil = vi.fn(async () => true);
+    const logRecipe = vi.fn(async () => true);
+    renderApp({
+      planMealsForLogDate: [pencil],
+      onClearCoachPencil,
+      logRecipe,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.clearPencil }));
+    await screen.findByRole("button", { name: COACH_COPY.clearPencil });
+    expect(onClearCoachPencil).toHaveBeenCalledTimes(1);
+    expect(onClearCoachPencil.mock.calls[0][0]).toMatchObject({
+      name: "Chicken bowl",
+      slot: "dinner",
+    });
+    expect(logRecipe).not.toHaveBeenCalled();
   });
 
   it("lets her add pencilled macros to the bands and the log footer", () => {

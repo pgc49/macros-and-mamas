@@ -153,6 +153,7 @@ export function MealLogCard({
   initialMethod = null,
   rangeDisplayTotals = null,
   rangeTotalsIncludePencils = false,
+  onClearPencil,
 }) {
   const [method, setMethod] = useState(initialMethod); // snap | describe | recipes | manual
   const [desc, setDesc] = useState("");
@@ -184,7 +185,7 @@ export function MealLogCard({
   // about the whole plate instead of throwing the first answer away.
   const [lastInput, setLastInput] = useState(null);
   const [rowRefineBusy, setRowRefineBusy] = useState(false);
-  const [ateBusyId, setAteBusyId] = useState(null);
+  const [pencilBusyId, setPencilBusyId] = useState(null);
   const [rowRefineError, setRowRefineError] = useState("");
   const camRef = useRef(null);
   const libRef = useRef(null);
@@ -759,8 +760,8 @@ export function MealLogCard({
   const hasPencils = pencilledOpen.length > 0;
 
   const atePencilled = async (meal) => {
-    if (ateBusyId || !onLogRecipe) return;
-    setAteBusyId(meal.id || meal.name);
+    if (pencilBusyId || !onLogRecipe) return;
+    setPencilBusyId(meal.id || meal.name);
     try {
       const macros = coachDisplayMacros(meal);
       const via = meal.source === "my"
@@ -779,7 +780,17 @@ export function MealLogCard({
         origin: "coach",
       });
     } finally {
-      setAteBusyId(null);
+      setPencilBusyId(null);
+    }
+  };
+
+  const clearPencilled = async (meal) => {
+    if (pencilBusyId || !onClearPencil) return;
+    setPencilBusyId(meal.id || meal.name);
+    try {
+      await onClearPencil(meal);
+    } finally {
+      setPencilBusyId(null);
     }
   };
 
@@ -1842,7 +1853,7 @@ export function MealLogCard({
                   )}
                   {pencils.map((meal) => {
                     const macros = coachDisplayMacros(meal);
-                    const busyAte = ateBusyId === (meal.id || meal.name);
+                    const busyPencil = pencilBusyId === (meal.id || meal.name);
                     return (
                       <div
                         key={meal.id || `${meal.slot}-${meal.name}`}
@@ -1863,9 +1874,29 @@ export function MealLogCard({
                         <div style={{ fontSize: 12.5, color: T.inkSoft, whiteSpace: "nowrap" }}>
                           {macros.cal} cal · P {macros.p}g · C {macros.c}g · F {macros.f}g
                         </div>
+                        {onClearPencil && (
+                          <button
+                            type="button"
+                            disabled={busyPencil}
+                            onClick={() => clearPencilled(meal)}
+                            style={{
+                              flexShrink: 0,
+                              fontFamily: F,
+                              fontWeight: 600,
+                              fontSize: 12,
+                              padding: "6px 4px",
+                              border: "none",
+                              background: "none",
+                              color: T.inkSoft,
+                              cursor: busyPencil ? "default" : "pointer",
+                            }}
+                          >
+                            {busyPencil ? "…" : COACH_COPY.clearPencil}
+                          </button>
+                        )}
                         <button
                           type="button"
-                          disabled={busyAte}
+                          disabled={busyPencil}
                           onClick={() => atePencilled(meal)}
                           style={{
                             flexShrink: 0,
@@ -1877,10 +1908,10 @@ export function MealLogCard({
                             border: `1.5px solid ${T.accent}`,
                             background: "#fff",
                             color: T.accentDeep,
-                            cursor: busyAte ? "default" : "pointer",
+                            cursor: busyPencil ? "default" : "pointer",
                           }}
                         >
-                          {busyAte ? "…" : COACH_COPY.ateIt}
+                          {busyPencil ? "…" : COACH_COPY.ateIt}
                         </button>
                       </div>
                     );

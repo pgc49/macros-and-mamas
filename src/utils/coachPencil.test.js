@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { emptyWeekPlan } from "./weekPlan.js";
 import { planDayLabel } from "./dates.js";
-import { pencilPreviewMacros, rangeTotalsWithPencils, writeCoachPencil } from "./coachPencil.js";
+import {
+  clearCoachPencil,
+  pencilPreviewMacros,
+  rangeTotalsWithPencils,
+  writeCoachPencil,
+} from "./coachPencil.js";
 
 const CARD = {
   name: "Chicken bowl",
@@ -24,6 +29,14 @@ describe("pencilling a coach card into the week plan", () => {
     expect(sun.meals.some((m) => m.name === "Chicken bowl" && m.via === "coach")).toBe(true);
     expect(meal.via).toBe("coach");
     expect(days.find((d) => d.day === "Sat")?.meals || []).toHaveLength(0);
+  });
+
+  it("clears the slot's pencil without leaving a log or a leftover row", () => {
+    const { days } = writeCoachPencil(emptyWeekPlan(), "Mon", CARD, "dinner");
+    const cleared = clearCoachPencil(days, "Mon", "dinner");
+    expect(cleared.find((d) => d.day === "Mon")?.meals || []).toHaveLength(0);
+    expect(clearCoachPencil(days, "Mon", { slot: "dinner" }).find((d) => d.day === "Mon")?.meals || [])
+      .toHaveLength(0);
   });
 
   it("maps the habit-check weekday key so a leftover S2 still lands on Sunday", () => {

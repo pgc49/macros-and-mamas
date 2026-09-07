@@ -150,6 +150,39 @@ describe("pencilled coach meals on Today's log", () => {
     });
   });
 
+  it("clears a pencil without logging it", async () => {
+    const onLogRecipe = vi.fn(async () => true);
+    const onClearPencil = vi.fn(async () => true);
+    render(
+      <MealLogCard
+        plannedMeals={[
+          {
+            id: "p-coach",
+            name: "Chicken bowl",
+            cal: 430,
+            p: 45,
+            c: 30,
+            f: 12,
+            slot: "dinner",
+            via: "coach",
+          },
+        ]}
+        todayLog={{ date: "2026-09-06", entries: [] }}
+        mealLogDate="2026-09-06"
+        onLogRecipe={onLogRecipe}
+        onClearPencil={onClearPencil}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.clearPencil }));
+    await waitFor(() => expect(onClearPencil).toHaveBeenCalledTimes(1));
+    expect(onClearPencil.mock.calls[0][0]).toMatchObject({
+      name: "Chicken bowl",
+      slot: "dinner",
+    });
+    expect(onLogRecipe).not.toHaveBeenCalled();
+  });
+
   it("hides the pencil from Your plan so it is not listed twice", () => {
     render(
       <MealLogCard
