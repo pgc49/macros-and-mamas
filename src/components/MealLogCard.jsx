@@ -788,7 +788,7 @@ export function MealLogCard({
     if (pencilBusyId || !onClearPencil) return;
     setPencilBusyId(meal.id || meal.name);
     try {
-      await onClearPencil(meal);
+      await onClearPencil(meal, date);
     } finally {
       setPencilBusyId(null);
     }

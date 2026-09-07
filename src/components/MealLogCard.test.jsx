@@ -180,6 +180,7 @@ describe("pencilled coach meals on Today's log", () => {
       name: "Chicken bowl",
       slot: "dinner",
     });
+    expect(onClearPencil.mock.calls[0][1]).toBe("2026-09-06");
     expect(onLogRecipe).not.toHaveBeenCalled();
   });
 

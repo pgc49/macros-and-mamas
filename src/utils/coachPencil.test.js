@@ -31,6 +31,14 @@ describe("pencilling a coach card into the week plan", () => {
     expect(days.find((d) => d.day === "Sat")?.meals || []).toHaveLength(0);
   });
 
+  it("clears Sunday without touching Monday on the same week plan", () => {
+    const afterSun = writeCoachPencil(emptyWeekPlan(), "Sun", CARD, "breakfast").days;
+    const afterBoth = writeCoachPencil(afterSun, "Mon", { ...CARD, name: "Eggs" }, "breakfast").days;
+    const cleared = clearCoachPencil(afterBoth, "Sun", "breakfast");
+    expect(cleared.find((d) => d.day === "Sun")?.meals || []).toHaveLength(0);
+    expect(cleared.find((d) => d.day === "Mon")?.meals.some((m) => m.name === "Eggs")).toBe(true);
+  });
+
   it("clears the slot's pencil without leaving a log or a leftover row", () => {
     const { days } = writeCoachPencil(emptyWeekPlan(), "Mon", CARD, "dinner");
     const cleared = clearCoachPencil(days, "Mon", "dinner");

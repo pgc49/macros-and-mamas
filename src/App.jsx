@@ -1125,11 +1125,23 @@ export default function App() {
       if (date !== mealLogDate) {
         selectMealLogDate(date);
       }
-      const next = removeCoachPencilMatchingLog(weekPlanDays, planDayLabel(date), {
+      const pencilWs = wkStartOf(date);
+      const pencilLive = pencilWs === weekPlanWeekStart;
+      let pencilDays = weekPlanDays;
+      let pencilSource = weekPlanSource;
+      if (!pencilLive) {
+        const wp = await db.loadWeekPlan(pencilWs);
+        pencilDays = Array.isArray(wp?.days) ? wp.days : [];
+        pencilSource = wp?.source || "manual";
+      }
+      const next = removeCoachPencilMatchingLog(pencilDays, planDayLabel(date), {
         name: recipe.name,
         slot: recipe.slot || recipe.cat || null,
       });
-      if (next !== weekPlanDays) onWeekPlanChange(next, weekPlanSource);
+      if (next !== pencilDays) {
+        if (pencilLive) onWeekPlanChange(next, pencilSource);
+        else await persistWeekPlan(next, pencilSource, pencilWs);
+      }
       // Stay on Meals / Plan / Today so mamas can keep adding more than one meal.
       setLogFlash(`Added ${recipe.name} to Today`);
       window.setTimeout(() => setLogFlash(""), 3500);
@@ -1232,12 +1244,30 @@ export default function App() {
   };
 
   /** Wipe a wrong pencil without logging it. */
-  const clearCoachPencilCard = async (meal) => {
-    const day = planDayLabel(mealLogDate || localDateIso());
+  const clearCoachPencilCard = async (meal, dateOverride) => {
+    const logDate = dateOverride || mealLogDate || localDateIso();
+    const day = planDayLabel(logDate);
+    const ws = wkStartOf(logDate);
     try {
-      const next = clearCoachPencil(weekPlanDays, day, meal);
-      if (next === weekPlanDays) return false;
-      onWeekPlanChange(next, weekPlanSource);
+      // Today's week plan state is this week. A grey row on last Sunday
+      // lives on last week's plan — mutating this week is a no-op.
+      const live = ws === weekPlanWeekStart;
+      let days = weekPlanDays;
+      let source = weekPlanSource;
+      if (!live) {
+        const wp = await db.loadWeekPlan(ws);
+        days = Array.isArray(wp?.days) ? wp.days : [];
+        source = wp?.source || "manual";
+      }
+      const next = clearCoachPencil(days, day, meal);
+      if (next === days) return false;
+      if (live) {
+        onWeekPlanChange(next, source);
+      } else {
+        await persistWeekPlan(next, source, ws);
+        const row = (next || []).find((d) => d.day === day);
+        setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
+      }
       setLogFlash(`Cleared ${meal?.name || "pencilled meal"}`);
       window.setTimeout(() => setLogFlash(""), 3500);
       return true;
