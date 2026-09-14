@@ -25,6 +25,11 @@ import {
 import { formatServings, ServingStepper, snapServings } from "../utils/servings";
 import { recipeNoteFromMeal } from "../utils/planMealShape";
 import { logSaveSucceeded } from "../utils/logSave";
+import {
+  MEAL_LOG_ROUNDED_NOTE,
+  mealLogMacrosWereRounded,
+  roundMealLogMacros,
+} from "../utils/mealLogMacros";
 import { targetBands } from "../utils/weekPlan";
 import { filterMealsByRemaining, formatRoomLeft, roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
@@ -175,6 +180,8 @@ export function MealLogCard({
   const [lastInput, setLastInput] = useState(null);
   const [rowRefineBusy, setRowRefineBusy] = useState(false);
   const [rowRefineError, setRowRefineError] = useState("");
+  const [roundNote, setRoundNote] = useState("");
+  const roundNoteTimer = useRef(null);
   const camRef = useRef(null);
   const libRef = useRef(null);
   // Read at estimate-arrival time only — putting lastInput in the effect
@@ -182,6 +189,20 @@ export function MealLogCard({
   // she taps Update estimate, before the new result lands.
   const lastInputRef = useRef(lastInput);
   lastInputRef.current = lastInput;
+
+  useEffect(() => () => {
+    if (roundNoteTimer.current) window.clearTimeout(roundNoteTimer.current);
+  }, []);
+
+  const flashRoundNote = (rawMacros) => {
+    if (roundNoteTimer.current) window.clearTimeout(roundNoteTimer.current);
+    if (!mealLogMacrosWereRounded(rawMacros)) {
+      setRoundNote("");
+      return;
+    }
+    setRoundNote(MEAL_LOG_ROUNDED_NOTE);
+    roundNoteTimer.current = window.setTimeout(() => setRoundNote(""), 4000);
+  };
   const pantryVisible = pantryGroup === "all"
     ? PANTRY_ITEMS
     : PANTRY_ITEMS.filter((item) => item.group === pantryGroup);
@@ -441,12 +462,15 @@ export function MealLogCard({
     setSavingManual(true);
     setManualError("");
     try {
-      const ok = await onManualLog?.({
-        name: manual.name.trim(),
+      const rawMacros = {
         cal: Number(manual.cal) || 0,
         p: Number(manual.p) || 0,
         c: Number(manual.c) || 0,
         f: Number(manual.f) || 0,
+      };
+      const ok = await onManualLog?.({
+        name: manual.name.trim(),
+        ...roundMealLogMacros(rawMacros),
         via: "manual",
         slot: resolveLogSlot(logSlot),
         logged_date: date,
@@ -456,6 +480,7 @@ export function MealLogCard({
         setManualError("Couldn't save that meal — try again.");
         return;
       }
+      flashRoundNote(rawMacros);
       setManual({ name: "", cal: "", p: "", c: "", f: "" });
       setMethod(null);
     } catch {
@@ -520,12 +545,15 @@ export function MealLogCard({
       const nextVia = draft.handTweaked && AI_VIA.has(prevVia)
         ? "adjusted"
         : (prevVia || "manual");
-      const ok = await onUpdateEntry?.(editingId, {
-        name: draft.name,
+      const rawMacros = {
         cal: Number(draft.cal) || 0,
         p: Number(draft.p) || 0,
         c: Number(draft.c) || 0,
         f: Number(draft.f) || 0,
+      };
+      const ok = await onUpdateEntry?.(editingId, {
+        name: draft.name,
+        ...roundMealLogMacros(rawMacros),
         via: nextVia,
         slot: resolveLogSlot(draft.slot),
       });
@@ -533,6 +561,7 @@ export function MealLogCard({
         setEditError("Couldn't save that meal — try again.");
         return;
       }
+      flashRoundNote(rawMacros);
       if (draft.saveCustom) {
         await onSaveCustomMeal?.({
           name: draft.baseName || stripServingSuffix(draft.name),
@@ -705,12 +734,15 @@ export function MealLogCard({
     savingEstimateRef.current = true;
     setSavingEstimate(true);
     try {
-      const payload = {
-        name: String(estimateDraft.name || "").trim() || "Meal",
+      const rawMacros = {
         cal: Number(estimateDraft.cal) || 0,
         p: Number(estimateDraft.p) || 0,
         c: Number(estimateDraft.c) || 0,
         f: Number(estimateDraft.f) || 0,
+      };
+      const payload = {
+        name: String(estimateDraft.name || "").trim() || "Meal",
+        ...roundMealLogMacros(rawMacros),
       };
       const b = estimateDraft.baseline || {};
       const changed =
@@ -725,6 +757,7 @@ export function MealLogCard({
         slot: resolveLogSlot(logSlot),
       });
       if (!logSaveSucceeded(ok)) return;
+      flashRoundNote(rawMacros);
       setEstimateDraft(null);
       setSaveEstimateCustom(false);
       clearEstimateInputs();
@@ -1604,6 +1637,20 @@ export function MealLogCard({
             </label>
           </div>
         )}
+        {roundNote ? (
+          <div
+            role="status"
+            style={{
+              marginTop: 10,
+              fontSize: 12.5,
+              color: T.inkSoft,
+              fontFamily: F,
+              lineHeight: 1.4,
+            }}
+          >
+            {roundNote}
+          </div>
+        ) : null}
       </div>
 
       {/* Day's log */}
