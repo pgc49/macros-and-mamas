@@ -81,6 +81,7 @@ function renderMeals(filter = "All meals", extras = {}) {
 }
 
 describe("Meals tab search filter", () => {
+  // First full ClientApp meals-bank render is heavy; CI flakes at the default 5s.
   it("defaults to All meals with an All meals chip", () => {
     renderMeals();
 
@@ -95,7 +96,7 @@ describe("Meals tab search filter", () => {
     expect(screen.queryByRole("option", { name: "Breakfast" })).toBeNull();
     expect(screen.queryByRole("option", { name: "Pantry" })).toBeNull();
     expect(screen.getByText("Protein oatmeal")).toBeTruthy();
-  });
+  }, 20_000);
 
   it("opens slot filters next to search and keeps Food prefs as its own chip", () => {
     const { setMealFilter } = renderMeals();
