@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MealLogCard } from "./MealLogCard";
+import { MEAL_LOG_ROUNDED_NOTE } from "../utils/mealLogMacros";
 
 afterEach(() => {
   cleanup();
@@ -240,6 +241,30 @@ describe("MealLogCard I know the Macros", () => {
         f: 4,
       }));
     });
+    expect(screen.getByText(MEAL_LOG_ROUNDED_NOTE)).toBeTruthy();
+  });
+
+  it("does not show a rounding note when she already typed whole numbers", async () => {
+    const onManualLog = vi.fn(async () => true);
+
+    render(
+      <MealLogCard
+        initialMethod="manual"
+        onManualLog={onManualLog}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("What was it?"), {
+      target: { value: "Rosemary crackers" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("CAL"), { target: { value: "156" } });
+    fireEvent.change(screen.getByPlaceholderText("P"), { target: { value: "1" } });
+    fireEvent.change(screen.getByPlaceholderText("C"), { target: { value: "28" } });
+    fireEvent.change(screen.getByPlaceholderText("F"), { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => expect(onManualLog).toHaveBeenCalled());
+    expect(screen.queryByText(MEAL_LOG_ROUNDED_NOTE)).toBeNull();
   });
 });
 
@@ -318,6 +343,7 @@ describe("MealLogCard edit Save", () => {
         f: 4,
       }));
     });
+    expect(screen.getByText(MEAL_LOG_ROUNDED_NOTE)).toBeTruthy();
   });
 });
 
@@ -354,5 +380,6 @@ describe("MealLogCard estimate Save to today", () => {
         expect.any(Object),
       );
     });
+    expect(screen.getByText(MEAL_LOG_ROUNDED_NOTE)).toBeTruthy();
   });
 });
