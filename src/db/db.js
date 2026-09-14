@@ -20,6 +20,7 @@ import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { ageFromDateOfBirth } from "../utils/dateOfBirth";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
+import { roundMealLogMacros } from "../utils/mealLogMacros";
 
 export { ageFromDateOfBirth };
 
@@ -1459,14 +1460,17 @@ export const db = {
     const uid = await requireUserId();
     const via = entry.via || normalizeVia({ source: entry.source, via: entry.via });
     const slot = normalizeMealSlot(entry.slot);
-    const base = {
-      profile_id: uid,
-      date,
-      name: entry.name,
+    const macros = roundMealLogMacros({
       cal: entry.cal,
       p: entry.p,
       c: entry.c,
       f: entry.f,
+    });
+    const base = {
+      profile_id: uid,
+      date,
+      name: entry.name,
+      ...macros,
     };
     // Prefer slot + via + source; degrade gracefully if columns aren't migrated yet.
     let { data, error } = await supabase
@@ -1505,10 +1509,7 @@ export const db = {
     const via = patch.via != null ? patch.via : undefined;
     const fields = {
       name: patch.name,
-      cal: patch.cal,
-      p: patch.p,
-      c: patch.c,
-      f: patch.f,
+      ...roundMealLogMacros(patch),
     };
     if (via != null) {
       fields.via = via;

@@ -211,6 +211,36 @@ describe("MealLogCard I know the Macros", () => {
     expect(screen.getByPlaceholderText("What was it?").value).toBe("Chocolate rice crackers");
     expect(screen.getByRole("button", { name: "Add" }).disabled).toBe(false);
   });
+
+  it("rounds label decimals before the meal_logs write (1.2 / 27.7 / 4.2)", async () => {
+    const onManualLog = vi.fn(async () => true);
+
+    render(
+      <MealLogCard
+        initialMethod="manual"
+        onManualLog={onManualLog}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("What was it?"), {
+      target: { value: "Rosemary crackers" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("CAL"), { target: { value: "156" } });
+    fireEvent.change(screen.getByPlaceholderText("P"), { target: { value: "1.2" } });
+    fireEvent.change(screen.getByPlaceholderText("C"), { target: { value: "27.7" } });
+    fireEvent.change(screen.getByPlaceholderText("F"), { target: { value: "4.2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => {
+      expect(onManualLog).toHaveBeenCalledWith(expect.objectContaining({
+        name: "Rosemary crackers",
+        cal: 156,
+        p: 1,
+        c: 28,
+        f: 4,
+      }));
+    });
+  });
 });
 
 describe("MealLogCard edit Save", () => {
@@ -245,5 +275,84 @@ describe("MealLogCard edit Save", () => {
     });
     expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
     expect(onUpdateEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("rounds edited decimals before the meal_logs update", async () => {
+    const onUpdateEntry = vi.fn(async () => true);
+
+    render(
+      <MealLogCard
+        todayLog={{
+          date: "2026-09-03",
+          entries: [{
+            id: "m1",
+            name: "Rosemary crackers",
+            cal: 156,
+            p: 1,
+            c: 28,
+            f: 4,
+            via: "manual",
+            slot: "snack",
+          }],
+        }}
+        mealLogDate="2026-09-03"
+        onUpdateEntry={onUpdateEntry}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Rosemary crackers"));
+    const inputs = document.querySelectorAll("input");
+    const macroInputs = [...inputs].filter((el) => el.getAttribute("inputMode") === "numeric");
+    expect(macroInputs.length).toBeGreaterThanOrEqual(4);
+    fireEvent.change(macroInputs[0], { target: { value: "156" } });
+    fireEvent.change(macroInputs[1], { target: { value: "1.2" } });
+    fireEvent.change(macroInputs[2], { target: { value: "27.7" } });
+    fireEvent.change(macroInputs[3], { target: { value: "4.2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(onUpdateEntry).toHaveBeenCalledWith("m1", expect.objectContaining({
+        cal: 156,
+        p: 1,
+        c: 28,
+        f: 4,
+      }));
+    });
+  });
+});
+
+describe("MealLogCard estimate Save to today", () => {
+  it("rounds decimal estimate overrides before the meal_logs write", async () => {
+    const onConfirmEstimate = vi.fn(async () => true);
+
+    render(
+      <MealLogCard
+        estimate={{
+          meal: "Rosemary crackers",
+          calories: 156,
+          protein_g: 1.2,
+          carbs_g: 27.7,
+          fat_g: 4.2,
+          items: ["crackers"],
+          confidence: "medium",
+        }}
+        onConfirmEstimate={onConfirmEstimate}
+      />,
+    );
+
+    fireEvent.click(await waitFor(() => screen.getByRole("button", { name: "Save to today" })));
+
+    await waitFor(() => {
+      expect(onConfirmEstimate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Rosemary crackers",
+          cal: 156,
+          p: 1,
+          c: 28,
+          f: 4,
+        }),
+        expect.any(Object),
+      );
+    });
   });
 });

@@ -25,6 +25,7 @@ import {
 import { formatServings, ServingStepper, snapServings } from "../utils/servings";
 import { recipeNoteFromMeal } from "../utils/planMealShape";
 import { logSaveSucceeded } from "../utils/logSave";
+import { roundMealLogMacros } from "../utils/mealLogMacros";
 import { targetBands } from "../utils/weekPlan";
 import { filterMealsByRemaining, formatRoomLeft, roomLeftFromTotals } from "../utils/eatingOutImpact";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
@@ -443,10 +444,12 @@ export function MealLogCard({
     try {
       const ok = await onManualLog?.({
         name: manual.name.trim(),
-        cal: Number(manual.cal) || 0,
-        p: Number(manual.p) || 0,
-        c: Number(manual.c) || 0,
-        f: Number(manual.f) || 0,
+        ...roundMealLogMacros({
+          cal: Number(manual.cal) || 0,
+          p: Number(manual.p) || 0,
+          c: Number(manual.c) || 0,
+          f: Number(manual.f) || 0,
+        }),
         via: "manual",
         slot: resolveLogSlot(logSlot),
         logged_date: date,
@@ -522,10 +525,12 @@ export function MealLogCard({
         : (prevVia || "manual");
       const ok = await onUpdateEntry?.(editingId, {
         name: draft.name,
-        cal: Number(draft.cal) || 0,
-        p: Number(draft.p) || 0,
-        c: Number(draft.c) || 0,
-        f: Number(draft.f) || 0,
+        ...roundMealLogMacros({
+          cal: Number(draft.cal) || 0,
+          p: Number(draft.p) || 0,
+          c: Number(draft.c) || 0,
+          f: Number(draft.f) || 0,
+        }),
         via: nextVia,
         slot: resolveLogSlot(draft.slot),
       });
@@ -707,10 +712,12 @@ export function MealLogCard({
     try {
       const payload = {
         name: String(estimateDraft.name || "").trim() || "Meal",
-        cal: Number(estimateDraft.cal) || 0,
-        p: Number(estimateDraft.p) || 0,
-        c: Number(estimateDraft.c) || 0,
-        f: Number(estimateDraft.f) || 0,
+        ...roundMealLogMacros({
+          cal: Number(estimateDraft.cal) || 0,
+          p: Number(estimateDraft.p) || 0,
+          c: Number(estimateDraft.c) || 0,
+          f: Number(estimateDraft.f) || 0,
+        }),
       };
       const b = estimateDraft.baseline || {};
       const changed =

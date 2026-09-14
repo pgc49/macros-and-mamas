@@ -8,6 +8,7 @@ import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
 import { entriesForLogDate, hydrateTodayLog, sumLogTotals } from "./utils/mealLogState";
+import { roundMealLogMacros } from "./utils/mealLogMacros";
 import { resolveLogSlot } from "./utils/mealSlots";
 import {
   adherenceForWeek,
@@ -1055,7 +1056,7 @@ export default function App() {
     const via = entry.via || (entry.source === "text" ? "describe" : entry.source) || "manual";
     const slot = resolveLogSlot(entry.slot);
     try {
-      const row = await db.addMealLog({ ...entry, via, slot }, date);
+      const row = await db.addMealLog({ ...entry, ...roundMealLogMacros(entry), via, slot }, date);
       syncEntryIntoWeek(date, (list) => [...list, row]);
       return true;
     } catch (e) {
@@ -1376,7 +1377,7 @@ export default function App() {
   const updateMealEntry = async (id, patch) => {
     if (!id) return false;
     try {
-      const row = await db.updateMealLog(id, patch);
+      const row = await db.updateMealLog(id, { ...patch, ...roundMealLogMacros(patch) });
       const date = mealLogDate;
       syncEntryIntoWeek(date, (list) => list.map((e) => (e.id === id ? { ...e, ...row } : e)));
       return true;
