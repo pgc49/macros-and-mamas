@@ -12,6 +12,34 @@ vi.mock("../auth/useAuth.jsx", () => ({
   }),
 }));
 
+vi.mock("../db/db", () => ({
+  db: {
+    loadCurrentVoiceDrop: vi.fn(async () => null),
+    dismissHomescreenTip: vi.fn(async () => ({})),
+    savePushSubscription: vi.fn(),
+  },
+}));
+
+vi.mock("../components/MessagesPanel", () => ({
+  MessagesPanel: () => <div data-messages-panel>messages</div>,
+}));
+
+vi.mock("../components/MealLogCard", () => ({
+  MealLogCard: () => null,
+}));
+
+vi.mock("../components/WeekPlanner", () => ({
+  WeekPlanner: () => <div>Weekly planner stub</div>,
+}));
+
+vi.mock("../components/MealRecipeCard", () => ({
+  MealRecipeCard: ({ meal }) => <div>{meal?.name}</div>,
+}));
+
+vi.mock("../components/LoggableMealRow", () => ({
+  LoggableMealRow: ({ meal }) => <div>{meal?.name}</div>,
+}));
+
 import { ClientApp } from "./ClientApp";
 
 afterEach(() => {
