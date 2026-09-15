@@ -2,11 +2,13 @@
    /functions/api/admin-comp.js — mark / clear complimentary + welcome
    ==================================================================
    Admin-only. Body: { clientId, comp, name? }
-   Marking sets paid=true for dashboard access and sends welcome (#2)
-   once. Never writes Stripe ids or emails Callie a payment ping.
-   Clearing complimentary does not send mail.
+   Marking sets paid=true for dashboard access, stamps the current
+   enrollment cohort (Cohort 2), and sends welcome (#2) once.
+   Never writes Stripe ids or emails Callie a payment ping.
+   Clearing complimentary does not send mail or change her group.
    ================================================================== */
 
+import { handlePaidEnrollmentChannel } from "../_shared/channels.js";
 import { loadUserContact, sendWelcomeMamaEmail } from "../_shared/supabaseEmail.js";
 
 export async function onRequestPost({ request, env }) {
@@ -29,9 +31,17 @@ export async function onRequestPost({ request, env }) {
       comp: !!row.comp,
       paid: !!row.paid,
       welcome: "skipped",
+      cohort_label: row.cohort_label || null,
     };
 
     if (!next) return json(result, 200);
+
+    try {
+      const cohort = await handlePaidEnrollmentChannel(env, clientId);
+      if (cohort?.label) result.cohort_label = cohort.label;
+    } catch (e) {
+      console.error("admin-comp cohort assign failed", clientId, e);
+    }
 
     const contact = await loadUserContact(env, clientId);
     const email = contact.email;
