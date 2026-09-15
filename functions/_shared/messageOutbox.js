@@ -32,20 +32,31 @@ export async function claimNotificationJob(env, messageType, messageId) {
   return rows[0] || null;
 }
 
+async function postOutboxRpc(url, key, body) {
+  const options = {
+    method: "POST",
+    headers: headers(key),
+    body: JSON.stringify(body),
+  };
+  const first = await fetch(url, options);
+  if (first.ok) return first;
+  return fetch(url, options);
+}
+
 export async function finishNotificationJob(env, job, { success, error = "" }) {
   if (!job?.id || !job?.claim_token) throw new Error("missing outbox claim token");
   const { base, key } = config(env);
   if (!base || !key) throw new Error("missing outbox configuration");
-  const resp = await fetch(`${base}/rest/v1/rpc/finish_message_notification_job`, {
-    method: "POST",
-    headers: headers(key),
-    body: JSON.stringify({
+  const resp = await postOutboxRpc(
+    `${base}/rest/v1/rpc/finish_message_notification_job`,
+    key,
+    {
       p_job_id: job.id,
       p_claim_token: job.claim_token,
       p_success: success === true,
       p_error: String(error || "").slice(0, 500) || null,
-    }),
-  });
+    },
+  );
   if (!resp.ok) throw new Error(`outbox finish failed (${resp.status})`);
   const rows = await resp.json().catch(() => []);
   if (!rows.length) throw new Error("outbox claim expired before completion");
