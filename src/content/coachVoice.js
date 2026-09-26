@@ -6,7 +6,8 @@
  * - Exclamation points are fine when something is worth saying firmly
  *   (never skip a meal!). Don't sprinkle them.
  * - No emojis. Never "cheat", never "bad", never "simply".
- * - Never call the coach an AI. It is Coach Callie's Bot, and it says so.
+ * - Never call the coach an AI or a bot. The screen says Meal Coach.
+ *   Marketing already says Callie is not a bot.
  * - All three macros matter. Fat is the one that decides weight loss — more
  *   than double the calories of protein or carbs — so it stays in its band.
  *   Protein and carbs can go over when fat does not.
@@ -18,7 +19,7 @@
  *   usually has two, and ask when there isn't a pattern yet.
  */
 
-export const COACH_NAME = "Coach Callie's Bot";
+export const COACH_NAME = "Meal Coach";
 
 /** She has to tap Message Callie. The bot does not send this for her. */
 export const COACH_MESSAGE_HER = "Message her and she'll get back to you.";
@@ -48,11 +49,10 @@ export const COACH_SLOT_TITLE = {
 };
 
 export const COACH_COPY = {
-  title: "Coach Callie's Bot",
-  tagline: "Knows your ranges, your log, and what you like",
+  title: "Meal Coach",
   betaLabel: "Beta",
   betaNote:
-    "Use it to pick the next meal, order out, or work from a photo of the menu or your fridge. Ranges, the scale, supply, and workouts stay with Callie.",
+    "Next meal, eating out, or a photo of the menu or fridge. Ranges, the scale, supply, and workouts stay with Callie.",
   entryTitle: "Not sure what to eat?",
   entryCta: "Ask the coach",
 

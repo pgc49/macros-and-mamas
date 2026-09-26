@@ -81,7 +81,7 @@ face, permanently — not in a tooltip. If the photo can't be read, the coach sa
 
 **The words are Callie's.** Every string lives in `src/content/coachVoice.js`. She said exclamation
 points are fine when something is worth saying firmly (`You never skip a meal!`). No emojis, never
-"cheat", never "bad", never "simply". It is **Coach Callie's Bot**, and a handoff always ends
+"cheat", never "bad", never "simply". The screen says **Meal Coach**, and a handoff always ends
 *That's something Callie might be better able to answer than me. Message her and she'll get back to you.*
 
 **Food for the time of day it actually is.** The deterministic engine ranks by slot affinity, and the
@@ -247,7 +247,7 @@ answered.
 14. **Always hers:** a supply problem, guilt with no next meal, and a pain point asked a third time
     in one day (`again`).
 15. **Exclamation points** are fine when something is worth saying firmly.
-16. **Name:** Coach Callie's Bot. The tab stays Coach so five labels still fit.
+16. **Name:** Meal Coach. The tab stays Coach so five labels still fit. Marketing says Callie is not a bot, so the screen does not call this one.
 17. **Handoff:** *That's something Callie might be better able to answer than me. Message her and she'll get back to you.* The bot does not send this for her — **Message Callie** opens her 1:1 thread with the question waiting in the composer.
 
 ---

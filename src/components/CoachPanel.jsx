@@ -451,8 +451,7 @@ export function CoachPanel({
               {COACH_COPY.betaLabel}
             </span>
           </div>
-          <p style={{ fontSize: 13.5, color: T.inkSoft, margin: 0 }}>{COACH_COPY.tagline}</p>
-          <p style={{ fontSize: 13.5, color: T.ink, margin: "8px 0 0", lineHeight: 1.45 }}>{COACH_COPY.betaNote}</p>
+          <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "6px 0 0", lineHeight: 1.45 }}>{COACH_COPY.betaNote}</p>
         </div>
 
         <div

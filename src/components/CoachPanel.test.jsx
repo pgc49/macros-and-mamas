@@ -132,7 +132,7 @@ describe("the coach answers on the device", () => {
     await screen.findByText(COACH_COPY.title);
     expect(screen.getByText(COACH_COPY.betaLabel)).toBeTruthy();
     expect(screen.getByText(COACH_COPY.betaNote)).toBeTruthy();
-    expect(COACH_COPY.betaNote).toMatch(/next meal/);
+    expect(COACH_COPY.betaNote).toMatch(/next meal/i);
     expect(COACH_COPY.betaNote).toMatch(/Callie/);
     expect(COACH_COPY.betaNote).not.toMatch(/\bAI\b|model|prompt/i);
   });
