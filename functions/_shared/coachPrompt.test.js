@@ -47,6 +47,8 @@ describe("the prompt says what meal she is deciding", () => {
     const prompt = buildCoachAskPrompt({ ...ARGS, slot: "breakfast", question: "ideas" });
     expect(prompt).toMatch(/Never put "breakfast"/);
     expect(prompt).toMatch(/Chicken and rice/);
+    expect(prompt).toMatch(/chicken sausage/);
+    expect(prompt).toMatch(/Ezekiel/);
   });
 
   it("tells it to answer the restaurant she named", () => {
@@ -56,7 +58,10 @@ describe("the prompt says what meal she is deciding", () => {
       question: "I'm going out to eat at inn n out. What should I get?",
     });
     expect(prompt).toMatch(/only that restaurant's real menu/);
-    expect(prompt).toMatch(/In-N-Out is a burger/);
+    expect(prompt).toMatch(/Protein Style/);
+    expect(prompt).toMatch(/half the little basket/);
+    expect(prompt).toMatch(/fish with some potatoes and broccoli/);
+    expect(prompt).toMatch(/do not make it up/i);
     expect(prompt).toMatch(/Do not drop a canned teaching/);
   });
 
@@ -81,10 +86,11 @@ describe("what it is allowed to write down", () => {
     expect(prompt).toMatch(/PS method/);
   });
 
-  it("tells the model fat is the constraint, and never to offer a half portion", () => {
+  it("tells the model fat is the constraint, and that a half portion can sit beside a full one", () => {
     const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "ideas" });
     expect(prompt).toMatch(/the one that must stay in its band/);
-    expect(prompt).toMatch(/Never suggest a half portion/);
+    expect(prompt).toMatch(/half portion is fine/);
+    expect(prompt).not.toMatch(/Never suggest a half portion/);
     expect(prompt).toMatch(/Never tell her to skip a meal/);
   });
 });

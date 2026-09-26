@@ -183,7 +183,7 @@ export function CoachPanel({
    * Cards for a slot, worked out here rather than asked for. `slot` is only
    * passed when she named one, so the usual case still follows the clock.
    */
-  const answerWithCards = ({ prefer = null, slot = null, askLabel = COACH_COPY.askEat, echo = true } = {}) => {
+  const answerWithCards = ({ prefer = null, slot = null, askLabel = COACH_COPY.askEat, echo = true, aside = null } = {}) => {
     const build = (skipNames) => buildCoachAnswer({
       ...inputs,
       slot: slot || slotOverride,
@@ -208,21 +208,21 @@ export function CoachPanel({
     }
 
     if (!cards.length) {
-      push({ role: "coach", body: COACH_COPY.noneFit, kind: "text" });
+      push({ role: "coach", body: COACH_COPY.noneFit, kind: "text", aside });
       return;
     }
 
     skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
     const skipLine = skipMealCopy(next.skipped);
     lead += [skipLine, next.read.line1, next.read.line2].filter(Boolean).join(" ");
-    push({ role: "coach", body: lead.trim(), kind: "cards", cards });
+    push({ role: "coach", body: lead.trim(), kind: "cards", cards, aside });
   };
 
-  const answerWithRead = ({ askLabel = COACH_COPY.askDay, echo = true } = {}) => {
+  const answerWithRead = ({ askLabel = COACH_COPY.askDay, echo = true, aside = null } = {}) => {
     if (!answer) return;
     if (echo) push({ role: "mama", body: askLabel });
     const lines = [answer.left, answer.why].filter(Boolean).join("\n\n");
-    push({ role: "coach", body: lines, kind: "read" });
+    push({ role: "coach", body: lines, kind: "read", aside });
   };
 
   /**
@@ -328,6 +328,7 @@ export function CoachPanel({
         body: teachBody(teach.topic, { totals, carbsShort }),
         kind: "teach",
         teach: teach.topic,
+        aside: verdict.aside,
       });
       return;
     }
@@ -336,9 +337,9 @@ export function CoachPanel({
     // pressed send, and the model call is saved for a question that needs one.
     const intent = localCoachIntent(text);
     if (intent) {
-      if (intent.kind === "read") answerWithRead({ echo: false });
+      if (intent.kind === "read") answerWithRead({ echo: false, aside: verdict.aside });
       else if (intent.kind === "more") showMore({ echo: false });
-      else answerWithCards({ prefer: intent.prefer, slot: intent.slot, echo: false });
+      else answerWithCards({ prefer: intent.prefer, slot: intent.slot, echo: false, aside: verdict.aside });
       return;
     }
 
@@ -456,9 +457,16 @@ export function CoachPanel({
           <div style={bubble(false)}>
             {COACH_COPY.openerLead} {opener}
           </div>
+          {next && answer.snackAsk ? (
+            <div style={bubble(false)}>{COACH_COPY.snackAsk}</div>
+          ) : null}
 
           {thread.map((m) => (
             <div key={m.id} style={{ display: "flex", flexDirection: "column" }}>
+              {(m.aside === "nursing" || m.aside === "both") && (
+                <div style={bubble(false)}>{COACH_COPY.nursingPreface}</div>
+              )}
+
               {m.body && <div style={bubble(m.role === "mama")}>{m.body}</div>}
 
               {m.kind === "deflect" && (
@@ -495,6 +503,30 @@ export function CoachPanel({
                   onOpen={setSheetCard}
                 />
               ))}
+
+              {(m.aside === "care" || m.aside === "both") && (
+                <div style={{ ...bubble(false), background: T.amberSoft, border: "none", marginTop: 8 }}>
+                  <div style={{ marginBottom: 10 }}>{COACH_DEFLECT.care.line}</div>
+                  <button
+                    type="button"
+                    onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}
+                    style={{
+                      fontFamily: F,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      padding: "9px 14px",
+                      minHeight: 40,
+                      borderRadius: 999,
+                      border: "none",
+                      background: T.accent,
+                      color: "#fff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {COACH_DEFLECT.care.cta}
+                  </button>
+                </div>
+              )}
 
               {m.aside === "supply" && (
                 <div style={{ ...bubble(false), background: T.amberSoft, border: "none", marginTop: 8 }}>

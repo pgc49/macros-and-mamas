@@ -170,6 +170,26 @@ export function deriveMealShares(mealHistoryByDate) {
   };
 }
 
+/**
+ * How many snacks to plan for. Under five slotted days there is no habit yet,
+ * so ask. A clear one-snack or two-snack pattern is used without asking.
+ */
+export function snackHabitFromHistory(mealHistoryByDate) {
+  const counts = [];
+  for (const entries of Object.values(mealHistoryByDate || {})) {
+    const slotted = (entries || []).filter((e) => normalizeSlot(e?.slot));
+    if (!slotted.length) continue;
+    counts.push(slotted.filter((e) => normalizeSlot(e.slot) === "snack").length);
+  }
+  if (counts.length < 5) return { count: 1, ask: true };
+  const twoOrMore = counts.filter((n) => n >= 2).length / counts.length;
+  const oneOrFewer = counts.filter((n) => n <= 1).length / counts.length;
+  if (twoOrMore >= 0.6) return { count: 2, ask: false };
+  if (oneOrFewer >= 0.6) return { count: 1, ask: false };
+  const mid = median(counts);
+  return { count: mid >= 1.5 ? 2 : 1, ask: true };
+}
+
 /** Later unlogged slots cannot collapse below the default share. */
 export function effectiveSlotShare(slot, shares = DEFAULT_MEAL_SHARES) {
   const floor = DEFAULT_MEAL_SHARES[slot] ?? 0;

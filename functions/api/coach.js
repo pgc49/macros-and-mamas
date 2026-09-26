@@ -124,6 +124,7 @@ export async function onRequestPost({ request, env }) {
         teach: teach.topic,
         reply: teachBody(teach.topic),
         meals: [],
+        aside: verdict.aside || null,
       });
     }
 

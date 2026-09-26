@@ -16,6 +16,7 @@ import {
   computeSlotBudget,
   defaultCoachSlot,
   deriveMealShares,
+  snackHabitFromHistory,
   isOverDay,
   loggedSlotsFromEntries,
   nextCoachSlot,
@@ -86,7 +87,7 @@ export function buildCoachAnswer({
   recipes = RECIPES,
   pantryItems = PANTRY_ITEMS,
   slot: requestedSlot = null,
-  snackCount = 1,
+  snackCount,
   prefer = null,
   skipNames = [],
   matchQuery = "",
@@ -99,8 +100,10 @@ export function buildCoachAnswer({
   const slot = resolveCoachSlot({ entries, plannedMeals, now, requested: requestedSlot });
   const loggedSlots = loggedSlotsFromEntries(entries);
   const shares = deriveMealShares(mealHistoryByDate);
+  const habit = snackCount == null ? snackHabitFromHistory(mealHistoryByDate) : null;
+  const resolvedSnackCount = habit ? habit.count : snackCount;
   const budget = attachDayHighs(
-    computeSlotBudget({ totals, bands, slot, plannedMeals, shares, loggedSlots, snackCount, now }),
+    computeSlotBudget({ totals, bands, slot, plannedMeals, shares, loggedSlots, snackCount: resolvedSnackCount, now }),
     bands,
   );
   const remaining = remainingForCoach(totals, bands);
@@ -147,6 +150,7 @@ export function buildCoachAnswer({
     strip: slotLeftRead(budget),
     why: budgetSentence(budget),
     shares,
+    snackAsk: Boolean(habit?.ask),
   };
 }
 

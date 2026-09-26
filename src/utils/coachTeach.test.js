@@ -20,15 +20,35 @@ describe("Callie's own answers, before a model is called", () => {
     expect(localCoachTeach(
       "I am going out to eat tonight for Italian. I'm worried about carbs and fat. What can I eat that won't blow through both?",
     )).toMatchObject({ topic: "italian" });
-    expect(teachBody("italian")).toMatch(/pasta/i);
-    expect(teachBody("italian")).toMatch(/side/i);
+    expect(teachBody("italian")).toMatch(/fish/i);
+    expect(teachBody("italian")).toMatch(/potatoes/i);
+    expect(teachBody("italian")).toMatch(/meatballs/i);
     expect(teachBody("italian")).not.toMatch(/Oreo/i);
+    expect(teachBody("italian")).not.toMatch(/pasta/i);
+  });
+
+  it("locks In-N-Out and leaves Chipotle to the model", () => {
+    expect(localCoachTeach("I'm going out to eat at inn n out. What should I get?")).toMatchObject({ topic: "inNOut" });
+    expect(localCoachTeach("what should I get at In-N-Out")).toMatchObject({ topic: "inNOut" });
+    expect(teachBody("inNOut")).toMatch(/Protein Style/);
+    expect(teachBody("inNOut")).toMatch(/half the little basket/);
+    expect(localCoachTeach("I'm going to Chipotle, what should I order")).toBeNull();
+    expect(localCoachTeach("Sweetgreen or Cava for lunch")).toBeNull();
+  });
+
+  it("locks Chinese, sushi, and pizza-as-a-meal, and leaves Mexican to the model", () => {
+    expect(localCoachTeach("what should I get for Chinese")).toMatchObject({ topic: "chinese" });
+    expect(localCoachTeach("sushi tonight")).toMatchObject({ topic: "sushi" });
+    expect(localCoachTeach("we're having pizza for dinner")).toMatchObject({ topic: "pizzaMeal" });
+    expect(teachBody("chinese")).toMatch(/stir-fry/i);
+    expect(teachBody("sushi")).toMatch(/nigiri/i);
+    expect(teachBody("pizzaMeal")).toMatch(/Pizza is the meal/);
+    expect(localCoachTeach("Mexican tonight, what should I order")).toBeNull();
+    expect(localCoachTeach("is pizza ok")).toMatchObject({ topic: "realFood" });
   });
 
   it("does not steal a named restaurant from the model", () => {
-    expect(localCoachTeach("I'm going out to eat at inn n out. What should I get?")).toBeNull();
-    expect(localCoachTeach("I'm going to Chipotle, what should I order")).toBeNull();
-    expect(localCoachTeach("what should I get at In-N-Out")).toBeNull();
+    expect(localCoachTeach("what should I get at Olive Garden")).toBeNull();
   });
 
   it("never tells her to skip a meal", () => {
@@ -50,7 +70,11 @@ describe("Callie's own answers, before a model is called", () => {
     expect(localCoachTeach("should I try intermittent fasting")).toMatchObject({ topic: "fasting" });
     expect(localCoachTeach("is Diet Coke ok")).toMatchObject({ topic: "sweetener" });
     expect(teachBody("coffee")).toMatch(/empty stomach/);
-    expect(teachBody("alcohol")).toMatch(/up to you/);
+    expect(teachBody("alcohol")).toMatch(/no judgment/);
+    expect(teachBody("alcohol")).not.toMatch(/don't encourage/i);
+    expect(localCoachTeach("cheers, I hit my protein")).toMatchObject({ topic: "underDay" });
+    expect(localCoachTeach("should I get my steps in")).toMatchObject({ topic: "steps" });
+    expect(localCoachTeach("what should I eat after I get my steps in")).toBeNull();
     expect(teachBody("fasting")).toMatch(/cortisol/);
     expect(teachBody("sweetener")).toMatch(/Olipop/);
   });

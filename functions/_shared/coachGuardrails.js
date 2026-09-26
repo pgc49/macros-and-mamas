@@ -62,9 +62,7 @@ const URGENT = [
   /\bstarv(e|es|ed|ing)\s+(myself|my ?self|my body)\b/, /\bstarvation\b/,
   /\bnot eating\b(?![^.?!]{0,24}\b(protein|carbs?|fats?|fibre|fiber|veg|vegetables|breakfast|lunch|dinner|meat|dairy|gluten)\b)/,
   /\bstop eating\b/, /\bskip(ping)? meals\b/, /\bfast(ing)? all day\b/,
-  /\bhate my body\b/, /\bfeel guilty\b/, /\bpunish/,
-  /\bfeel(ing)? (awful|bad|terrible|so bad) about\b/,
-  /\bguilty (about|for)\b/,
+  /\bhate my body\b/, /\bpunish/,
   /\b(i (feel|look|am)|feeling|felt)\b[^.?!]{0,18}\bdisgusting\b/,
   /\bhow (few|little) calories can i\b/, /\beat as little as\b/,
 ];
@@ -94,6 +92,28 @@ const ADMIN = [
   /\bweek \d+\b[^.?!]{0,20}\bstart/, /\bwhen does\b[^.?!]{0,25}\b(program|course|cohort)\b/,
   /\bcallie hasn'?t\b/, /\bhear back from callie\b/,
 ];
+
+/**
+ * Shame about what she ate. On its own this is Callie's. If she also asks
+ * what to eat next, the food gets answered and this rides along after.
+ */
+const GUILT = [
+  /\bfeel guilty\b/,
+  /\bfeel(ing)? (awful|bad|terrible|so bad) about\b/,
+  /\bguilty (about|for)\b/,
+];
+
+const NEXT_MEAL = /\b(what should i eat|what (do|can|should) i (eat|have|get|order)|what to eat next|eat next|for (breakfast|lunch|dinner)|what'?s for (breakfast|lunch|dinner))\b/;
+
+/** Eating the workout back is Callie's. A walk or steps is not this. */
+const EXERCISE_CAL = [
+  /\b(exercise|workout) calories\b/,
+  /\beat(ing)? (my |the )?(workout|exercise) calories\b/,
+  /\bcalories back\b/,
+];
+
+/** She mentioned nursing without asking whether supply is in trouble. */
+const NURSING_MENTION = /\b(breast ?feed|breastfeeding|nurs(e|es|ed|ing)|pumping|pumped)\b/;
 
 /** Asking about milk output specifically — not just mentioning that she nurses. */
 const SUPPLY = [
@@ -164,21 +184,37 @@ export function classifyAsk(raw) {
   // Never answered, never softened into an aside.
   if (hits(URGENT, text)) return { scope: "urgent", aside: null };
 
+  // Guilt with no next-meal question is still hers. Guilt plus "what do I
+  // eat next" gets the food, then the handoff.
+  const guilt = hits(GUILT, text);
+  const nextMeal = NEXT_MEAL.test(text);
+  if (guilt && !nextMeal) return { scope: "urgent", aside: null };
+
   const foodAsk = FOOD_ASK.test(text);
 
   // Supply is always Callie's. Cards plus a footnote was too cute — she
   // said protect it first, and if a mama thinks it's being affected, write
   // her directly. Mentioning that she nurses, without asking about output,
-  // is still a food question.
+  // is still a food question, and the answer begins with the supply line.
   if (hits(SUPPLY, text)) return { scope: "supply", aside: null };
   if (hits(RANGES, text)) return { scope: "ranges", aside: null };
   if (hits(WEIGHT, text)) return { scope: "weight", aside: null };
   if (hits(ADMIN, text)) return { scope: "admin", aside: null };
-  if (foodAsk) return { scope: "food", aside: null };
+  if (hits(EXERCISE_CAL, text)) return { scope: "off_topic", aside: null };
+  if (foodAsk || (guilt && nextMeal)) return foodWithAside(text, guilt, nextMeal);
   if (hits(OFF_TOPIC, text)) return { scope: "off_topic", aside: null };
 
   // No refusal matched and no food word either. The model looks at it.
   return { scope: "unclear", aside: null };
+}
+
+function foodWithAside(text, guilt, nextMeal) {
+  const nursing = NURSING_MENTION.test(text) && !hits(SUPPLY, text);
+  const care = guilt && nextMeal;
+  if (care && nursing) return { scope: "food", aside: "both" };
+  if (care) return { scope: "food", aside: "care" };
+  if (nursing) return { scope: "food", aside: "nursing" };
+  return { scope: "food", aside: null };
 }
 
 /** True when the ask is Callie's and the coach must not put it to a model. */

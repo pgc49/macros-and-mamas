@@ -161,6 +161,19 @@ describe("milk supply", () => {
   it("does not fire on someone just mentioning that she nurses", () => {
     expect(scopeOf("quick breakfast ideas, I'm nursing so I'm always starving")).toBe("food");
     expect(scopeOf("quick breakfast ideas, I'm nursing and short on time")).toBe("food");
+    expect(classifyAsk("quick breakfast ideas, I'm nursing so I'm always starving").aside).toBe("nursing");
+  });
+
+  it("answers the next meal when she also feels awful, and keeps shame on its own", () => {
+    expect(scopeOf("I feel awful about what I ate today")).toBe("urgent");
+    const next = classifyAsk("what should I eat for dinner, I feel awful about what I ate");
+    expect(next.scope).toBe("food");
+    expect(next.aside).toBe("care");
+  });
+
+  it("leaves workout calories to Callie and still answers food after the gym", () => {
+    expect(scopeOf("do I eat my workout calories back")).toBe("off_topic");
+    expect(scopeOf("what should I eat after the gym")).toBe("food");
   });
 });
 

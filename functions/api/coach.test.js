@@ -168,16 +168,29 @@ describe("the guardrail runs before the model", () => {
     });
     const data = await resp.json();
     expect(data.teach).toBe("italian");
-    expect(data.reply).toMatch(/pasta/i);
-    expect(data.reply).toMatch(/side/i);
+    expect(data.reply).toMatch(/fish/i);
+    expect(data.reply).toMatch(/potatoes/i);
     expect(data.reply).not.toMatch(/Oreo/i);
+    expect(data.reply).not.toMatch(/pasta/i);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it("answers In-N-Out in Callie's words, without a model call", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "what should I get at In-N-Out" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.teach).toBe("inNOut");
+    expect(data.reply).toMatch(/Protein Style/);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
 
   it("sends a named restaurant to the model instead of the canned PS line", async () => {
     mockSupabase();
     const resp = await onRequestPost({
-      request: request({ mode: "ask", text: "I'm going out to eat at inn n out. What should I get?" }),
+      request: request({ mode: "ask", text: "I'm going to Chipotle, what should I order" }),
       env,
     });
     expect(resp.status).toBe(200);

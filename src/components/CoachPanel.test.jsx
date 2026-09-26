@@ -96,6 +96,7 @@ describe("the coach answers on the device", () => {
     await screen.findByText(COACH_COPY.title);
     expect(document.body.textContent).toContain(COACH_COPY.openerDone);
     expect(screen.queryByText(/Looking for a .+ idea\?/)).toBeNull();
+    expect(screen.queryByText(COACH_COPY.snackAsk)).toBeNull();
   });
 
   it("gives her cards for What should I eat? without calling the model", async () => {
@@ -201,6 +202,44 @@ describe("what isn't the coach's goes to Callie", () => {
     }
   });
 
+  it("begins a nursing mention with the supply line, then still answers the food", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Eggs and toast.",
+      meals: [],
+      aside: "nursing",
+    }));
+    renderPanel({ postCoach });
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "what should I eat, I'm nursing" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+    await screen.findByText(COACH_COPY.nursingPreface);
+    await screen.findByText("Eggs and toast.");
+    expect(screen.queryByText(COACH_DEFLECT.supply.line)).toBeNull();
+  });
+
+  it("answers the next meal, then hands the guilt to Callie", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Chicken and rice.",
+      meals: [],
+      aside: "care",
+    }));
+    renderPanel({ postCoach });
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "what should I eat for dinner, I feel awful about what I ate" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+    await screen.findByText("Chicken and rice.");
+    await screen.findByText(COACH_DEFLECT.care.line);
+    expect(screen.getByRole("button", { name: COACH_DEFLECT.care.cta })).toBeTruthy();
+  });
+
   it("hands a supply question to Callie instead of answering around it", async () => {
     const postCoach = vi.fn();
     renderPanel({ postCoach });
@@ -227,10 +266,10 @@ describe("what isn't the coach's goes to Callie", () => {
     expect(postCoach).not.toHaveBeenCalled();
   });
 
-  it("answers Italian in her words, and sends In-N-Out to the model", async () => {
+  it("answers Italian and In-N-Out in her words, and sends Chipotle to the model", async () => {
     const postCoach = vi.fn(async () => ({
       ok: true,
-      reply: "Protein Style burger, spread on the side.",
+      reply: "Chicken, fajita veggies, and a little rice.",
       meals: [],
     }));
     renderPanel({ postCoach });
@@ -246,7 +285,14 @@ describe("what isn't the coach's goes to Callie", () => {
       target: { value: "I'm going out to eat at inn n out. What should I get?" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    await screen.findByText("Protein Style burger, spread on the side.");
+    await screen.findByText(COACH_COPY.teachInNOut);
+    expect(postCoach).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm going to Chipotle, what should I order" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText("Chicken, fajita veggies, and a little rice.");
     expect(postCoach).toHaveBeenCalledTimes(1);
   });
 });

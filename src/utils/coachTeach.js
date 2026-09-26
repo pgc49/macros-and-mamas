@@ -6,9 +6,9 @@
  * sweeteners, and finishing the day under. They are not guesses. A message
  * that matches one of these gets her sentence, instantly, with no request.
  *
- * A named restaurant or cuisine is not one of these. "What should I get at
- * In-N-Out" and "what can I eat for Italian" need the actual place, not the
- * canned PS-method or Oreo line.
+ * A named restaurant we have not scripted, and a cuisine she has not locked,
+ * is not one of these. Chipotle, Cava, Sweetgreen, and Mexican go to the
+ * model. Italian, Chinese, sushi, pizza-as-a-meal, and In-N-Out are hers.
  */
 
 import { COACH_COPY, underDayCopy } from "../content/coachVoice.js";
@@ -25,7 +25,9 @@ const TEACH_FIRST = [
   ["fasting", /\b(time[- ]restricted|one meal a day|fasting window)\b/],
   ["fasting", /\bshould i (try |start )?fast(ing)?\b/],
 
-  ["alcohol", /\b(alcohol|wine|cocktail|tequila|vodka|margarita|beer|cheers|drinks?)\b/],
+  // "cheers" and "drinks" are not alcohol. "Cheers, I hit my protein" is a day check.
+  ["alcohol", /\b(alcohol|wine|cocktail|tequila|vodka|margarita|beer|whiskey|whisky|booze)\b/],
+  ["alcohol", /\b(have|having|grab|order) (a |an )?(drink|cocktail)\b/],
 
   ["coffee", /\b(coffee|caffeine|espresso|latte|cold brew|americano)\b/],
 
@@ -45,13 +47,28 @@ const REAL_FOOD = [
   /\bwhat about (a |an |some )?(pizza|wine|beer|oreo|protein bar|bar|slice)\b/,
 ];
 
+const IN_N_OUT = /\b(in[- ]?n[- ]?out|inn n out|in and out)\b/;
+
 const NAMED_RESTAURANT =
-  /\b(in[- ]?n[- ]?out|inn n out|in and out|chipotle|sweetgreen|sweet green|cava|panera|starbucks|mcdonalds|mcdonald's|chick[- ]?fil[- ]?a|olive garden|cheesecake factory|applebee'?s|chili'?s|subway|wendy'?s|taco bell|panda express|five guys|shake shack|dunkin|ihop|denny'?s)\b/;
+  /\b(chipotle|sweetgreen|sweet green|cava|panera|starbucks|mcdonalds|mcdonald's|chick[- ]?fil[- ]?a|olive garden|cheesecake factory|applebee'?s|chili'?s|subway|wendy'?s|taco bell|panda express|five guys|shake shack|dunkin|ihop|denny'?s)\b/;
 
 const ITALIAN = /\bitalian\b(?! dressing)/;
+const CHINESE = /\bchinese\b/;
+const SUSHI = /\bsushi\b/;
+
+// Pizza as the plate. "Is pizza ok" stays the real-food line, not this one.
+const PIZZA_MEAL = [
+  /\bpizza (for|as|tonight|today)\b/,
+  /\b(having|ordering|getting|eating) pizza\b/,
+  /\bpizza (dinner|lunch|night)\b/,
+];
 
 const OTHER_CUISINE =
-  /\b(mexican|chinese|thai|japanese|indian|greek|mediterranean|korean|vietnamese|sushi|steakhouse|bbq|barbecue)\b/;
+  /\b(mexican|thai|japanese|indian|greek|mediterranean|korean|vietnamese|steakhouse|bbq|barbecue)\b/;
+
+// Basics she said the bot can say. A meal question in the same sentence wins.
+const STEPS = /\b(steps|step count|walk after (meals|a meal|breakfast|lunch|dinner)|walking after (meals|a meal|breakfast|lunch|dinner))\b/;
+const MEAL_ASK = /\b(what should i eat|what (do|can|should) i (eat|have|get|order|make)|eat for|ideas for)\b/;
 
 function normalize(raw) {
   return String(raw || "")
@@ -74,10 +91,15 @@ export function localCoachTeach(raw) {
   for (const [topic, pattern] of TEACH_FIRST) {
     if (pattern.test(text)) return { kind: "teach", topic };
   }
-  // A named place needs that menu, not the canned eating-out sentence.
+  // In-N-Out is locked. Every other named place still needs that menu.
+  if (IN_N_OUT.test(text)) return { kind: "teach", topic: "inNOut" };
   if (NAMED_RESTAURANT.test(text)) return null;
   if (ITALIAN.test(text)) return { kind: "teach", topic: "italian" };
+  if (CHINESE.test(text)) return { kind: "teach", topic: "chinese" };
+  if (SUSHI.test(text)) return { kind: "teach", topic: "sushi" };
+  if (PIZZA_MEAL.some((pattern) => pattern.test(text))) return { kind: "teach", topic: "pizzaMeal" };
   if (OTHER_CUISINE.test(text)) return null;
+  if (STEPS.test(text) && !MEAL_ASK.test(text)) return { kind: "teach", topic: "steps" };
   for (const pattern of PS_METHOD) {
     if (pattern.test(text)) return { kind: "teach", topic: "psMethod" };
   }
@@ -90,6 +112,11 @@ export function localCoachTeach(raw) {
 export function teachBody(topic, ctx = {}) {
   if (topic === "psMethod") return COACH_COPY.teachPs;
   if (topic === "italian") return COACH_COPY.teachItalian;
+  if (topic === "chinese") return COACH_COPY.teachChinese;
+  if (topic === "sushi") return COACH_COPY.teachSushi;
+  if (topic === "pizzaMeal") return COACH_COPY.teachPizzaMeal;
+  if (topic === "inNOut") return COACH_COPY.teachInNOut;
+  if (topic === "steps") return COACH_COPY.teachSteps;
   if (topic === "neverSkip") return COACH_COPY.teachNeverSkip;
   if (topic === "realFood") return COACH_COPY.teachRealFood;
   if (topic === "alcohol") return COACH_COPY.teachAlcohol;

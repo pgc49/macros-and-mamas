@@ -6,6 +6,7 @@ import {
   computeSlotBudget,
   coachTakenSlots,
   deriveMealShares,
+  snackHabitFromHistory,
   isOverDay,
   laterSlotsAfter,
   skippedSlotsBefore,
@@ -285,6 +286,34 @@ describe("shares from history", () => {
     expect(shares.dinner).toBeGreaterThan(shares.lunch);
   });
 
+  it("asks how many snacks when there is no habit yet", () => {
+    expect(snackHabitFromHistory({
+      "2026-01-01": [{ slot: "lunch", cal: 500 }],
+    })).toEqual({ count: 1, ask: true });
+  });
+
+  it("offers two snacks when that is what she usually does", () => {
+    const day = [
+      { slot: "breakfast", cal: 300 },
+      { slot: "snack", cal: 100 },
+      { slot: "snack", cal: 100 },
+      { slot: "dinner", cal: 700 },
+    ];
+    const history = Object.fromEntries([1, 2, 3, 4, 5].map((n) => [`2026-01-0${n}`, day]));
+    expect(snackHabitFromHistory(history)).toEqual({ count: 2, ask: false });
+  });
+
+  it("offers one snack when that is the habit", () => {
+    const day = [
+      { slot: "breakfast", cal: 300 },
+      { slot: "lunch", cal: 500 },
+      { slot: "snack", cal: 150 },
+      { slot: "dinner", cal: 700 },
+    ];
+    const history = Object.fromEntries([1, 2, 3, 4, 5].map((n) => [`2026-01-0${n}`, day]));
+    expect(snackHabitFromHistory(history)).toEqual({ count: 1, ask: false });
+  });
+
   it("ignores history that would starve a later slot", () => {
     const shares = { breakfast: 0.7, lunch: 0.3, dinner: 0, snack: 0, fromHistory: true };
     expect(resolveCoachShares(shares, ["dinner"]).fromHistory).toBe(false);
@@ -361,10 +390,15 @@ describe("ranking", () => {
     loggedSlots: new Set(["breakfast", "lunch"]),
   });
 
-  it("returns three cards from different proteins", () => {
+  it("returns three cards, with a half portion beside the full one at dinner", () => {
     const { meals } = rankBankCards({ bankMeals: bank, budget: budget(), slot: "dinner" });
     expect(meals).toHaveLength(3);
-    expect(new Set(meals.map((m) => primaryProtein(m))).size).toBe(3);
+    expect(meals[0].servings).toBe(1);
+    expect(meals[1].servings).toBe(0.5);
+    expect(meals[1].name).toBe(meals[0].name);
+    expect(meals[1].title).toMatch(/half portion/);
+    const fulls = meals.filter((m) => (m.servings || 1) >= 1);
+    expect(new Set(fulls.map((m) => primaryProtein(m))).size).toBe(fulls.length);
   });
 
   it("drops anything her diet forbids", () => {
@@ -374,7 +408,8 @@ describe("ranking", () => {
 
   it("puts the lightest first when she asks for lighter", () => {
     const { meals } = rankBankCards({ bankMeals: bank, budget: budget(), prefer: "lighter", slot: "dinner" });
-    expect(meals[0].cal).toBeLessThanOrEqual(meals[1].cal);
+    const fulls = meals.filter((m) => (m.servings || 1) >= 1);
+    expect(fulls[0].cal).toBeLessThanOrEqual(fulls[1].cal);
   });
 
   it("leads with protein when she asks for more of it", () => {
@@ -402,14 +437,15 @@ describe("ranking", () => {
     expect(meals).toHaveLength(0);
   });
 
-  it("drops a meal that only fits as a half portion, rather than offering one", () => {
+  it("offers a half portion when that is the only size that fits", () => {
     const snackRoom = { cal: 220, pNeed: 12, pHigh: 20, c: 18, f: 8, remaining: { pHigh: 120 } };
     const half = buildCoachCard(
       { name: "Big scramble", cal: 420, p: 36, c: 29, f: 14 },
       snackRoom,
       { slot: "snack" },
     );
-    expect(half).toBe(null);
+    expect(half.servings).toBe(0.5);
+    expect(half.title).toMatch(/half portion/);
   });
 
   it("never tells her a meal leaves 0g of fat", () => {

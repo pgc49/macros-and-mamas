@@ -12,7 +12,10 @@
  *   Protein and carbs can go over when fat does not.
  * - Protein is a floor: 10–20g over the top is fine, more than that is
  *   unnecessary. We never eat less than 50g of fat in a day.
- * - Never skip a meal.
+ * - Never skip a meal. A half portion is fine when the full portion is
+ *   offered next to it, so she can choose.
+ * - Snack count follows her habit. One if she usually has one, two if she
+ *   usually has two, and ask when there isn't a pattern yet.
  */
 
 export const COACH_NAME = "Coach Callie's Bot";
@@ -184,13 +187,23 @@ export const COACH_COPY = {
   teachPs:
     "Use the PS method: protein and a side. Roasted chicken, a burger, steak — then rice, salad or potatoes. Eating out makes it really hard not to blow through fat, so do your best. Dressing on the side, and dip your fork as you go.",
   teachItalian:
-    "For Italian, protein and a side: roasted chicken or fish, and pasta with tomato sauce as the side — not the main. Pasta is low protein, so it sits next to the protein rather than filling the plate.",
+    "For Italian, protein and a side: fish with some potatoes and broccoli, or meatballs and a veggie.",
+  teachChinese:
+    "For Chinese, a stir-fry: animal protein, veggies, and rice, light on the sauce.",
+  teachSushi:
+    "For sushi, nigiri and some soup.",
+  teachPizzaMeal:
+    "Pizza is the meal. You don't need a protein and a side next to it.",
+  teachInNOut:
+    "Is this for pure enjoyment, or do you want it to fit your macros? If you want it to fit: a Protein Style burger, no spread, ketchup or mustard. If you get fries, have half the little basket, or a quarter.",
+  teachSteps:
+    "Getting your steps in, and a walk after meals, is a good basic.",
   teachNeverSkip:
     "Absolutely not. You never skip a meal! The goal isn't to nail your macros every single time — it's to nourish yourself and learn how to fuel your body. Eat something simple and lower calorie: grilled chicken and rice, or even a protein shake. Follow your hunger, too. Some days you burned more, and those days need more.",
   teachRealFood:
     "Any real food can fit your macros. A slice of pizza is real food — water, yeast, flour, tomatoes, cheese. An Oreo is not; it's full of stuff made in a lab. We can make macros work for real food. If this one blows through fat, calories or carbs, next time log it ahead and keep breakfast and lunch lower fat or lower carb so it fits.",
   teachAlcohol:
-    "Alcohol is up to you. We don't encourage it and we don't say absolutely not. If you have a drink, keep fat in range — that's the one that adds up — and drink it with food, not on an empty stomach.",
+    "Alcohol is up to you — no judgment either way. If you want a drink, we can fit it in your macros. Keep fat in range, that's the one that adds up, and have it with food, not on an empty stomach.",
   teachCoffee:
     "Coffee is allowed — Callie has a cup or two a day — but never on an empty stomach. Have it with breakfast. And after about 7 hours, half the caffeine is still in your blood, so if falling asleep is hard, it may be the afternoon cup.",
   teachFasting:
@@ -208,6 +221,13 @@ export const COACH_COPY = {
     "I noticed you skipped a meal. We really want to eat consistently for hormonal health. When we skip, the body can use cortisol — a stress hormone — to keep going, and that takes the same nutrients from our sex hormones. Eat a real lunch, a larger snack, and a larger dinner so you still reach your goals.",
   skipBreakfastHint:
     "Mornings can be busy, and a small appetite is often a blunted metabolism talking. Try starting with a protein shake if a full breakfast isn't easy yet.",
+
+  // A passing mention of nursing, before the food answer. A supply problem
+  // is still a full handoff — this line is not that.
+  nursingPreface:
+    "Callie builds your macros with your supply at the center and it is always protected. If you ever notice a negative shift in your supply, please reach out to Callie directly immediately.",
+  snackAsk:
+    "Do you want me to suggest three meals and one snack, or three meals and two snacks? I can make both work with your macros.",
 };
 
 /**

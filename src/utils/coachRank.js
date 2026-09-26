@@ -51,31 +51,35 @@ export function coachMealFits(meal, budget) {
 /**
  * 1× if it fits. A bigger portion only when a single serving leaves her
  * short on protein, the upscale still keeps fat in range, and it doesn't
- * pile on more than 20g past what she needs. Half portions are out —
- * Callie would rather suggest a different meal than have anyone under-eat.
+ * pile on more than 20g past what she needs. If 1× does not fit and a half
+ * does, offer the half — she can still be shown the full plate beside it.
  */
 export function pickScale(meal, budget) {
   if (!budget) return null;
   const fits = (s) => coachMealFits(scaleMeal(meal, s), budget);
   const p1 = mealMacros(meal).p;
   const pNeed = budget?.pNeed || 0;
-  if (!fits(1)) return null;
-  let best = 1;
-  if (p1 < pNeed) {
-    for (const s of [1.5, 2]) {
-      if (!fits(s)) continue;
-      if (p1 * s < p1 + 15) continue;
-      if (p1 * s > pNeed + PROTEIN_OVER_MUCH) continue;
-      best = s;
+  if (fits(1)) {
+    let best = 1;
+    if (p1 < pNeed) {
+      for (const s of [1.5, 2]) {
+        if (!fits(s)) continue;
+        if (p1 * s < p1 + 15) continue;
+        if (p1 * s > pNeed + PROTEIN_OVER_MUCH) continue;
+        best = s;
+      }
     }
+    return best;
   }
-  return best;
+  if (fits(0.5)) return 0.5;
+  return null;
 }
 
 export function portionTitle(name, servings) {
   const base = String(name || "Meal");
   const s = snapServings(servings || 1);
   if (s === 1) return base;
+  if (s === 0.5) return `${base} · half portion`;
   return `${base} · ${s} servings`;
 }
 
@@ -296,6 +300,33 @@ function compareMeals(a, b, prefer) {
   return (a.servings || 1) - (b.servings || 1);
 }
 
+function halfCardFrom(full, budget, ctx) {
+  const half = {
+    ...full,
+    servings: 0.5,
+    cal: (Number(full.cal) || 0) / 2,
+    p: (Number(full.p) || 0) / 2,
+    c: (Number(full.c) || 0) / 2,
+    f: (Number(full.f) || 0) / 2,
+  };
+  half.title = portionTitle(full.name, 0.5);
+  half.reason = coachReason(half, budget, { over: ctx.over });
+  half.proteinNote = proteinOverNote(half, budget);
+  half.score = scoreScaledMeal(half, budget, ctx);
+  return half;
+}
+
+/** Lunch and dinner: the full plate stays first, a half of it sits beside it. */
+function withHalfBeside(meals, budget, ctx, limit) {
+  const capped = meals.slice(0, limit);
+  if (ctx.slot !== "lunch" && ctx.slot !== "dinner") return capped;
+  const full = capped[0];
+  if (!full || snapServings(full.servings || 1) !== 1) return capped;
+  const half = halfCardFrom(full, budget, ctx);
+  if (!coachMealFits(half, budget)) return capped;
+  return [full, half, ...capped.slice(1)].slice(0, limit);
+}
+
 function skipKey(name) {
   return String(name || "")
     .toLowerCase()
@@ -416,6 +447,8 @@ export function rankBankCards({
       meals = [card, ...meals.filter((m) => !namesMatch(m.name, card.name))].slice(0, limit);
     }
   }
+
+  meals = withHalfBeside(meals, budget, ctx, limit);
 
   return {
     cards: meals.map((m) => ({ kind: "meal", ...m })),

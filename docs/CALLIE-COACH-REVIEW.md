@@ -279,3 +279,29 @@ If a question is “I don’t know yet”, say that. We will leave the current b
 - We will not invent a teaching from a voice note without you seeing the final one-or-two sentences first.
 
 Patrick: when she replies, put it on this file or forward it and we will encode it.
+
+---
+
+## Encoded from Callie's reply
+
+These are the lines now in the product. A Slack paragraph was compressed into one or two sentences. Anything she did not script is not here.
+
+**Italian** (replaces the pasta-as-side line): "For Italian, protein and a side: fish with some potatoes and broccoli, or meatballs and a veggie."
+
+**Chinese:** "For Chinese, a stir-fry: animal protein, veggies, and rice, light on the sauce."
+
+**Sushi:** "For sushi, nigiri and some soup."
+
+**Pizza is the meal** (not "is pizza ok", which stays the real-food line): "Pizza is the meal. You don't need a protein and a side next to it."
+
+**In-N-Out:** "Is this for pure enjoyment, or do you want it to fit your macros? If you want it to fit: a Protein Style burger, no spread, ketchup or mustard. If you get fries, have half the little basket, or a quarter."
+
+**Alcohol** ("cheers" and "drinks" no longer fire this): "Alcohol is up to you — no judgment either way. If you want a drink, we can fit it in your macros. Keep fat in range, that's the one that adds up, and have it with food, not on an empty stomach."
+
+**Steps** (workouts and eating exercise calories back stay Callie's): "Getting your steps in, and a walk after meals, is a good basic."
+
+**Nursing mention** (a supply problem is still a full handoff): "Callie builds your macros with your supply at the center and it is always protected. If you ever notice a negative shift in your supply, please reach out to Callie directly immediately."
+
+**Snack habit, when there isn't one yet:** "Do you want me to suggest three meals and one snack, or three meals and two snacks? I can make both work with your macros."
+
+Left with the model: Mexican, and Chipotle, Cava, Sweetgreen. Half portions are offered beside a full portion at lunch and dinner. Guilt plus "what should I eat next" gets the food answer, then Message Callie. The same hard question a third time still goes to Callie. 30 model asks a day is unchanged. Handoff lines are unchanged — Q12 was not answered.

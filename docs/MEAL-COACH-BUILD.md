@@ -215,10 +215,12 @@ endpoint run the same matcher, so a crafted request cannot spend a model call on
 answered.
 
 1. **Eating out, no numbers.** The PS method: protein and a side. Dressing on the side. Fat is the one
-   that blows out. Encoded as `teachPs`. A named restaurant (In-N-Out, Chipotle) is not this — that
-   goes to the model so it can answer from that menu. **Italian** is her own line: protein + pasta as
-   the side, not the main (`teachItalian`). The Oreo / real-food sentence is only for "is X ok", never
-   for "what can I eat for Italian".
+   that blows out. Encoded as `teachPs`. A named restaurant we have not scripted (Chipotle, Cava,
+   Sweetgreen) goes to the model. **In-N-Out** is locked (`teachInNOut`): enjoyment or fit, Protein
+   Style, no spread, fries as half or a quarter of the basket. **Italian** is fish with potatoes and
+   broccoli, or meatballs and a veggie (`teachItalian`). **Chinese** is a light-sauce stir-fry.
+   **Sushi** is nigiri and soup. **Pizza as the meal** is not the PS method and not the Oreo line.
+   Mexican stays with the model. The Oreo / real-food sentence is only for "is X ok".
 2. **Skip dinner because she's over.** "You never skip a meal!" Encoded as `teachNeverSkip`.
 3. **"Is X ok?"** Real food can fit (pizza yes, Oreo no). If it blows macros, prepare next time — log
    ahead, keep breakfast and lunch lower fat or carb. Encoded as `teachRealFood`.
@@ -226,18 +228,24 @@ answered.
    under 50g fat. Ask about carbs. Encoded as `teachUnder*`.
 5. **Protein over.** 10–20g over the day's high is fine. More than that is unnecessary.
 6. **Upscaling.** 1.5× / 2× is fine when fat still fits. Not protein-only.
-7. **Half portions.** Out. Suggest a different meal. Diet culture.
-8. **Meal splits.** 24 / 30 / 38 / 8 confirmed.
-9. **Snacks.** One a day confirmed. Some women do two; one is fine.
+7. **Half portions.** A half is fine beside the full portion at lunch and dinner, so she can choose.
+   A plate that only fits as a half is still offered.
+8. **Meal splits.** 24 / 30 / 38 / 8 is the default share.
+9. **Snacks.** Read her habit. Usually one → one. Usually two → two. Under five slotted days, or a
+   mixed pattern, ask which she wants.
 10. **Skipped meal.** Lunch still gets the room, but the coach *says it noticed*: cortisol, hormones,
     then a real lunch + larger snack + larger dinner. Protein shake if mornings are hard.
-11. **Alcohol** — up to her, not encouraged, not forbidden. **Coffee** — allowed, never empty stomach,
-    7-hour half-life. **Intermittent fasting** — no, cortisol. **Sweeteners** — discourage once, offer
-    Olipop, don't lecture. **Exercise calories** — still out of scope.
-12. **Supply.** Always Callie's. Protect first. Ranges already use ×13. If she thinks it's affected,
-    message Callie.
-13. **Guilt / "I feel awful about what I ate".** Always Callie.
-14. **Always hers:** supply, guilt, and a pain point asked a third time in one day (`again`).
+11. **Alcohol** — up to her, no judgment, fit it in her macros. "Cheers" and "drinks" do not fire this.
+    **Coffee** — allowed, never empty stomach, 7-hour half-life. **Intermittent fasting** — no, cortisol.
+    **Sweeteners** — discourage once, offer Olipop, don't lecture. **Steps and a walk after meals** —
+    a basic the bot can say. **Exercise calories and workout plans** — still Callie's.
+12. **Supply.** A supply problem is always Callie's, even with a meal in the sentence. Mentioning
+    nursing without a problem still gets the food answer, and it begins with: her macros are built
+    with supply at the center, and a negative shift goes straight to Callie.
+13. **Guilt / "I feel awful about what I ate".** On its own, Callie. If she also asks what to eat
+    next, answer the food, then Message Callie.
+14. **Always hers:** a supply problem, guilt with no next meal, and a pain point asked a third time
+    in one day (`again`).
 15. **Exclamation points** are fine when something is worth saying firmly.
 16. **Name:** Coach Callie's Bot. The tab stays Coach so five labels still fit.
 17. **Handoff:** *That's something Callie might be better able to answer than me. Message her and she'll get back to you.* The bot does not send this for her — **Message Callie** opens her 1:1 thread with the question waiting in the composer.
@@ -251,8 +259,9 @@ In rough order of what I think each is worth:
 1. **The Today entry point earning its place.** It's a card that says "not sure what to eat?" Once there's
    real usage, the interesting version knows *why* she's stuck — 40g of protein left at 8pm is a different
    card from an untouched day at 9am.
-2. **More chains in her own words.** Italian is encoded. In-N-Out and Chipotle go to Gemini 3.5 Flash
-   (not flash-lite) with light reasoning so it reads the place. Other cuisines can get the same
+2. **More chains in her own words.** Italian, Chinese, sushi, pizza-as-a-meal, and In-N-Out are
+   encoded. Chipotle, Cava, Sweetgreen, and Mexican still go to Gemini 3.5 Flash with light reasoning.
+   Other cuisines can get the same
    treatment once she writes the sentence.
 3. **Counting the deflections.** See "Watching it". Guardrails that are too tight are the most likely way
    this feature quietly fails, and right now nothing would tell us.
