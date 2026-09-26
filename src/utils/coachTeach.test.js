@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { COACH_COPY, COACH_PASS, underDayCopy } from "../content/coachVoice.js";
-import { countTeachInThread, localCoachTeach, teachBody } from "./coachTeach.js";
+import { COACH_COPY, COACH_PASS, menuFromPageCopy, underDayCopy } from "../content/coachVoice.js";
+import { countTeachInThread, hasMenuLink, localCoachTeach, teachBody } from "./coachTeach.js";
 
 describe("Callie's own answers, before a model is called", () => {
   it("gives the PS method when she is out with no numbers", () => {
@@ -47,13 +47,19 @@ describe("Callie's own answers, before a model is called", () => {
     expect(localCoachTeach("is pizza ok")).toMatchObject({ topic: "realFood" });
   });
 
-  it("does not invent a menu from a link", () => {
+  it("sends a pasted link to the server and still asks for a photo when there is no link", () => {
     const ask = "https://www.itsjane.com/location/jane-on-fillmore/ Can you tell me what to eat from this menu";
-    expect(localCoachTeach(ask)).toMatchObject({ topic: "menuLink" });
+    expect(hasMenuLink(ask)).toBe(true);
+    expect(localCoachTeach(ask)).toBeNull();
+    expect(localCoachTeach("what can I eat from this menu")).toMatchObject({ topic: "menuLink" });
     expect(teachBody("menuLink")).toMatch(/won't guess a menu/i);
     expect(teachBody("menuLink")).toMatch(/photo/i);
     expect(teachBody("menuLink")).not.toMatch(/salad/i);
-    expect(localCoachTeach("what can I eat from this menu")).toMatchObject({ topic: "menuLink" });
+    expect(teachBody("menuClosed")).toMatch(/couldn't open that link/i);
+    expect(teachBody("menuMiss")).toMatch(/couldn't find on the page/i);
+    expect(menuFromPageCopy(["Chicken Taco Salad"])).toMatch(/From the page: Chicken Taco Salad/);
+    expect(menuFromPageCopy(["Chicken Taco Salad"])).not.toMatch(/Jane Salad/i);
+    expect(menuFromPageCopy([])).toBe(COACH_COPY.teachMenuMiss);
     expect(localCoachTeach("what should I get at Chipotle")).toBeNull();
   });
 

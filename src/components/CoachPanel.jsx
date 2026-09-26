@@ -14,7 +14,7 @@ import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
-import { countTeachInThread, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
+import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
 import { downscaleImage } from "../utils/imageDownscale";
 
 const QUICK_ASKS = [
@@ -344,7 +344,9 @@ export function CoachPanel({
 
     // Answered here when it can be. She gets the cards in the same frame she
     // pressed send, and the model call is saved for a question that needs one.
-    const intent = localCoachIntent(text);
+    // A pasted link is read on the server. The phone must not answer it
+    // from the recipe bank before that fetch happens.
+    const intent = hasMenuLink(text) ? null : localCoachIntent(text);
     if (intent) {
       if (intent.kind === "read") answerWithRead({ echo: false, aside: verdict.aside });
       else if (intent.kind === "more") showMore({ echo: false });

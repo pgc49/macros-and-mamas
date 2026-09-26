@@ -58,6 +58,11 @@ rather than shown with a caveat.
 Coach calls `google/gemini-3.5-flash` on OpenRouter (then `gemini-3-flash-preview`, then flash-lite)
 with `reasoning.effort: low`. Meal estimates and the planner stay on flash-lite. Override with
 `COACH_MODEL`. The clock slot is the budget, not a reason to name chicken-and-rice a breakfast bowl.
+That call does not browse. A pasted menu link is fetched on the server (`functions/_shared/menuPage.js`),
+the page text is put in the prompt, and any dish whose name is not on the page is dropped. A failed
+fetch, a script-only page, or a private address asks for a photo and does not spend one of the 30
+calls. "From this menu" with no link still asks for a photo. Chipotle, Cava, and Sweetgreen without
+a link stay on the model.
 
 ---
 

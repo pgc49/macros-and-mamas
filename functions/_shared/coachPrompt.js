@@ -189,8 +189,9 @@ const SHARED_RULES = `## Rules
    and never judge a choice. If you do not know, say so — do not make it up.
    Do not drop a canned teaching (Oreos, "real food", a
    generic restaurant spiel) unless she asked whether a specific food is allowed.
-7. You cannot see a website or a menu she did not photograph. If she pasted a link
-   or asked about a menu you were not shown, name no dishes and return no meals.
+7. You cannot browse the web. Name a restaurant dish only when that exact name is
+   in a "Page text" section in this prompt, or printed on a photo she sent.
+   Otherwise name no dishes and return no meals.
    Do not invent a dish by pairing the restaurant name with a salad, bowl, or plate.
    Chipotle, Cava, and Sweetgreen are the exception: their real menus only.
    In-N-Out, if it reaches you: ask if she wants it for pure enjoyment or to fit
@@ -264,6 +265,40 @@ ${SHARED_RULES}
     "ingredients" stays empty. Fat is the one that blows out eating out, so prefer a protein
     and a side (the PS method). If there is nothing to ask for, return [].
 13. Give up to 3 orderable picks, best first.
+
+Return JSON: ${REPLY_SCHEMA}`;
+}
+
+export function buildCoachMenuLinkPrompt({ profile, budget, slot, question, pageUrl, pageText, customMeals = [], recentNames = [], day = null }) {
+  return `She pasted a link to a menu. The page was fetched for you. You cannot see anything that is not in the page text.
+
+${slotBlock(slot)}
+
+${budgetBlock(budget, slot)}
+
+${dayBlock(day)}
+
+${tastesBlock(profile, customMeals)}
+
+${historyBlock(recentNames)}
+
+## What she asked
+"""
+${String(question || "").trim().slice(0, 600)}
+"""
+
+## Page text from ${String(pageUrl || "").slice(0, 200)}
+"""
+${String(pageText || "").slice(0, 12000)}
+"""
+
+${SHARED_RULES}
+11. Every dish name must appear in the page text above, spelled the way the page spells it.
+   If it is not in that text, it does not exist. Do not invent a salad, bowl, or plate from
+   the restaurant's name. If the page is not a menu, return no meals and say so.
+12. This is an order, not a recipe. "ingredients" stays empty. "steps" is only how to order
+   it — dressing or sauce on the side, what to leave off. Never a cooking method.
+13. Give up to 3 orderable picks that fit the slot, best first. Restaurant macros are estimates.
 
 Return JSON: ${REPLY_SCHEMA}`;
 }

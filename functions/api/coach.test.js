@@ -30,7 +30,7 @@ function request(body) {
   });
 }
 
-function mockSupabase({ paid = true, role = "client", macros = true, callsUsed = 0 } = {}) {
+function mockSupabase({ paid = true, role = "client", macros = true, callsUsed = 0, pages = null } = {}) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     const value = String(url);
     if (value.includes("/auth/v1/user")) {
@@ -59,8 +59,35 @@ function mockSupabase({ paid = true, role = "client", macros = true, callsUsed =
       );
     }
     if (value.includes("custom_meals")) return new Response("[]", { status: 200 });
+    if (pages) {
+      for (const [host, page] of Object.entries(pages)) {
+        if (!value.includes(host)) continue;
+        return new Response(page.body, {
+          status: page.status || 200,
+          headers: page.headers || { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+    }
     return new Response("[]", { status: 200 });
   });
+}
+
+const JANE_HTML = `<html><body>
+<h1>Jane on Fillmore</h1>
+<ul>
+<li>Scrambled Egg Sandwich</li>
+<li>Chicken Taco Salad</li>
+<li>Caesar Salad</li>
+<li>Nicoise</li>
+<li>Mango Chicken Salad</li>
+</ul>
+<p>Order at the counter. Dressings and sauces are listed beside each plate on the printed menu.</p>
+</body></html>`;
+
+function postedCalls() {
+  return globalThis.fetch.mock.calls.filter(([url, init]) => (
+    String(url).includes("estimate_calls") && init?.method === "POST"
+  ));
 }
 
 function modelReturns(value) {
@@ -241,7 +268,7 @@ describe("what comes back", () => {
     expect((await resp.json()).reply).toBe("");
   });
 
-  it("does not invent a menu from a pasted link", async () => {
+  it("asks for a photo when a pasted link cannot be read, and does not spend a call", async () => {
     mockSupabase();
     const resp = await onRequestPost({
       request: request({
@@ -251,10 +278,108 @@ describe("what comes back", () => {
       env,
     });
     const data = await resp.json();
-    expect(data.teach).toBe("menuLink");
+    expect(data.teach).toBe("menuClosed");
     expect(data.meals).toEqual([]);
+    expect(data.reply).toMatch(/couldn't open that link/i);
     expect(data.reply).toMatch(/photo/i);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(postedCalls()).toHaveLength(0);
+  });
+
+  it("does not fetch a private address pasted as a menu", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "http://169.254.169.254/latest/meta-data what should I order",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.teach).toBe("menuClosed");
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(postedCalls()).toHaveLength(0);
+    const hosts = globalThis.fetch.mock.calls.map(([url]) => String(url));
+    expect(hosts.some((url) => url.includes("169.254"))).toBe(false);
+  });
+
+  it("keeps only dishes that are printed on the fetched page", async () => {
+    mockSupabase({ pages: { "itsjane.com": { body: JANE_HTML } } });
+    modelReturns({
+      scope: "food",
+      reply: "Get the Jane Salad with Chicken.",
+      meals: [
+        {
+          name: "Jane Salad with Chicken",
+          desc: "invented",
+          cal: 440,
+          p: 38,
+          c: 30,
+          f: 21,
+          ingredients: [{ item: "chicken", amount: "1 breast" }],
+          steps: ["Bake the chicken for 12 minutes."],
+        },
+        {
+          name: "Chicken Taco Salad",
+          desc: "as printed",
+          cal: 440,
+          p: 38,
+          c: 30,
+          f: 21,
+          ingredients: [{ item: "chicken", amount: "1 breast" }],
+          steps: ["Bake the chicken for 12 minutes.", "Ask for dressing on the side."],
+        },
+      ],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "https://www.itsjane.com/location/jane-on-fillmore/ Can you tell me what to eat from this menu",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.meals).toHaveLength(1);
+    expect(data.meals[0].name).toBe("Chicken Taco Salad");
+    expect(data.meals[0].ingredients).toEqual([]);
+    expect(data.meals[0].steps).toEqual(["Ask for dressing on the side."]);
+    expect(data.mealSource).toBe("menu");
+    expect(data.reply).toMatch(/From the page: Chicken Taco Salad/);
+    expect(data.reply).not.toMatch(/Jane Salad/i);
+    expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(1);
+    const prompt = openrouter.callOpenRouter.mock.calls[0][0].messages[1].content;
+    expect(prompt).toContain("Chicken Taco Salad");
+    expect(prompt).toMatch(/must appear in the page text/);
+    expect(postedCalls()).toHaveLength(1);
+  });
+
+  it("asks for a photo when the page has no dish the model named", async () => {
+    mockSupabase({ pages: { "itsjane.com": { body: JANE_HTML } } });
+    modelReturns({
+      scope: "food",
+      reply: "Try the Jane Salad with Chicken.",
+      meals: [{
+        name: "Jane Salad with Chicken",
+        cal: 440,
+        p: 38,
+        c: 30,
+        f: 21,
+        ingredients: [],
+        steps: [],
+      }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "https://www.itsjane.com/location/jane-on-fillmore/ what should I eat",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.teach).toBe("menuMiss");
+    expect(data.meals).toEqual([]);
+    expect(data.reply).toMatch(/couldn't find on the page/i);
+    expect(data.reply).not.toMatch(/Jane Salad/i);
   });
 
   it("keeps a menu photo as an order, not a recipe", async () => {

@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCoachAskPrompt,
   buildCoachKitchenPrompt,
+  buildCoachMenuLinkPrompt,
   buildCoachMenuPrompt,
   sanitizeCoachContext,
 } from "./coachPrompt.js";
@@ -58,7 +59,7 @@ describe("the prompt says what meal she is deciding", () => {
       slot: "lunch",
       question: "I'm going out to eat at inn n out. What should I get?",
     });
-    expect(prompt).toMatch(/cannot see a website or a menu/);
+    expect(prompt).toMatch(/cannot browse the web/);
     expect(prompt).toMatch(/name no dishes/);
     expect(prompt).toMatch(/Protein Style/);
     expect(prompt).toMatch(/half the little basket/);
@@ -111,6 +112,21 @@ describe("what it is allowed to write down", () => {
     const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "ideas" });
     expect(prompt).toMatch(/Never pad to a count/);
     expect(prompt).toMatch(/never end on filler/);
+  });
+
+  it("hands a fetched menu page to the model and forbids a dish that is not on it", () => {
+    const prompt = buildCoachMenuLinkPrompt({
+      ...ARGS,
+      slot: "lunch",
+      question: "https://www.itsjane.com/location/jane-on-fillmore/ what should I eat",
+      pageUrl: "https://www.itsjane.com/location/jane-on-fillmore/",
+      pageText: "Chicken Taco Salad. Caesar Salad. Nicoise.",
+    });
+    expect(prompt).toMatch(/page was fetched/i);
+    expect(prompt).toContain("Chicken Taco Salad");
+    expect(prompt).toContain("Page text");
+    expect(prompt).toMatch(/must appear in the page text/);
+    expect(prompt).toMatch(/"ingredients" stays empty/);
   });
 
   it("keeps a menu plate to ordering asks", () => {

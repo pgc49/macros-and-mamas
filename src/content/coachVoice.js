@@ -202,7 +202,11 @@ export const COACH_COPY = {
   teachSteps:
     "Getting your steps in, and a walk after meals, is a good basic.",
   teachMenuLink:
-    "I won't guess a menu I can't see. Send a photo of it and I'll tell you what to order from what's printed.",
+    "I won't guess a menu I can't see. Send a photo of it.",
+  teachMenuClosed:
+    "I couldn't open that link, so I won't guess the menu. Send a photo of it.",
+  teachMenuMiss:
+    "I opened the link, but I won't name a dish I couldn't find on the page. Send a photo of the menu.",
   teachNeverSkip:
     "Absolutely not. You never skip a meal! The goal isn't to nail your macros every single time — it's to nourish yourself and learn how to fuel your body. Eat something simple and lower calorie: grilled chicken and rice, or even a protein shake. Follow your hunger, too. Some days you burned more, and those days need more.",
   teachRealFood:
@@ -309,7 +313,13 @@ export function underDayCopy({ fatEaten = 0, carbsShort = false } = {}) {
   return bits.join(" ");
 }
 
-/** Ask copy for the next unlogged slot. */
+/** Names already checked against the fetched page. The model does not get to add one. */
+export function menuFromPageCopy(names = []) {
+  const list = names.map((name) => String(name || "").trim()).filter(Boolean).slice(0, 3);
+  if (!list.length) return COACH_COPY.teachMenuMiss;
+  return `From the page: ${list.join(", ")}. Order what's printed, and ask for dressing or sauce on the side if it's creamy.`;
+}
+
 export function askForSlotCopy(slot) {
   if (slot === "lunch") return "Looking for a lunch idea?";
   if (slot === "dinner") return "Looking for a dinner idea?";

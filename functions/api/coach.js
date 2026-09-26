@@ -26,6 +26,7 @@
 import {
   buildCoachAskPrompt,
   buildCoachKitchenPrompt,
+  buildCoachMenuLinkPrompt,
   buildCoachMenuPrompt,
   COACH_SYSTEM,
   sanitizeCoachContext,
@@ -53,7 +54,9 @@ import {
 } from "../_shared/clientAiAccess.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
-import { localCoachTeach, teachBody } from "../../src/utils/coachTeach.js";
+import { hasMenuLink, localCoachTeach, teachBody } from "../../src/utils/coachTeach.js";
+import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
+import { menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 
 const MAX_PER_DAY = 30;
@@ -117,7 +120,8 @@ export async function onRequestPost({ request, env }) {
 
     // Callie's own sentences. Same matcher the client runs, so a crafted
     // request cannot spend a model call on a question she already answered.
-    const teach = mode === "ask" ? localCoachTeach(text) : null;
+    // A pasted link is not one of those sentences. It is fetched below.
+    const teach = mode === "ask" && !hasMenuLink(text) ? localCoachTeach(text) : null;
     if (teach) {
       return json({
         ok: true,
@@ -127,6 +131,23 @@ export async function onRequestPost({ request, env }) {
         meals: [],
         aside: verdict.aside || null,
       });
+    }
+
+    // Fetch before the model, and before the daily cap. A link we cannot
+    // read must not become a guessed dish, and must not spend a call.
+    let menuPage = null;
+    if (mode === "ask" && hasMenuLink(text)) {
+      const link = firstMenuLink(text);
+      menuPage = link ? await fetchMenuPage(link) : { ok: false, reason: "bad-url" };
+      if (!menuPage.ok) {
+        return json({
+          ok: true,
+          scope: "food",
+          teach: "menuClosed",
+          reply: teachBody("menuClosed"),
+          meals: [],
+        });
+      }
     }
 
     const isAdmin = access.role === "admin";
@@ -164,7 +185,14 @@ export async function onRequestPost({ request, env }) {
     const args = { profile, budget, slot, customMeals, recentNames, day };
 
     let prompt;
-    if (mode === "menu") prompt = buildCoachMenuPrompt({ ...args, note: text });
+    if (menuPage?.ok) {
+      prompt = buildCoachMenuLinkPrompt({
+        ...args,
+        question: text,
+        pageUrl: menuPage.url,
+        pageText: menuPage.text,
+      });
+    } else if (mode === "menu") prompt = buildCoachMenuPrompt({ ...args, note: text });
     else if (mode === "kitchen") prompt = buildCoachKitchenPrompt({ ...args, note: text });
     else prompt = buildCoachAskPrompt({ ...args, question: text });
 
@@ -226,16 +254,31 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: true, scope: "off_topic", deflect: "offTopic", meals: [] });
     }
 
-    const reply = cleanReply(parsed.value?.reply);
-    const meals = normalizeMeals(parsed.value, slot, mode);
+    let reply = cleanReply(parsed.value?.reply);
+    const orderMode = menuPage?.ok ? "menu" : mode;
+    let meals = normalizeMeals(parsed.value, slot, orderMode);
+    let teachTopic = null;
+
+    if (menuPage?.ok) {
+      const kept = meals.filter((meal) => dishOnPage(meal.name, menuPage.text));
+      if (!kept.length) {
+        reply = teachBody("menuMiss");
+        meals = [];
+        teachTopic = "menuMiss";
+      } else {
+        reply = menuFromPageCopy(kept.map((meal) => meal.name));
+        meals = kept;
+      }
+    }
 
     return json({
       ok: true,
       scope: "food",
       mode,
+      ...(teachTopic ? { teach: teachTopic } : {}),
       reply,
       meals,
-      mealSource: mode === "menu" ? "menu" : mode === "kitchen" ? "kitchen" : "new",
+      mealSource: orderMode === "menu" ? "menu" : mode === "kitchen" ? "kitchen" : "new",
       aside: verdict.aside || null,
     });
   } catch (e) {

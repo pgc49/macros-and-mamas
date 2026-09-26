@@ -280,18 +280,40 @@ describe("what isn't the coach's goes to Callie", () => {
     expect(postCoach).not.toHaveBeenCalled();
   });
 
-  it("asks for a photo instead of inventing a menu from a link", async () => {
+  it("sends a pasted menu link to be read, and shows only what comes back", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "From the page: Chicken Taco Salad. Order what's printed, and ask for dressing or sauce on the side if it's creamy.",
+      meals: [],
+      mealSource: "menu",
+    }));
+    renderPanel({ postCoach });
+
+    const ask = "https://www.itsjane.com/location/jane-on-fillmore/ Can you tell me what to eat from this menu";
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: ask },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+    await screen.findByText(/From the page: Chicken Taco Salad/);
+    expect(postCoach).toHaveBeenCalledTimes(1);
+    expect(postCoach.mock.calls[0][0].mode).toBe("ask");
+    expect(postCoach.mock.calls[0][0].text).toContain("itsjane.com");
+    expect(screen.queryByText(COACH_COPY.teachMenuLink)).toBeNull();
+    expect(screen.queryByText(/Jane Salad/i)).toBeNull();
+  });
+
+  it("asks for a photo when she says from this menu and pastes no link", async () => {
     const postCoach = vi.fn();
     renderPanel({ postCoach });
 
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
-      target: { value: "https://www.itsjane.com/location/jane-on-fillmore/ Can you tell me what to eat from this menu" },
+      target: { value: "what can I eat from this menu" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await screen.findByText(COACH_COPY.teachMenuLink);
     expect(postCoach).not.toHaveBeenCalled();
-    expect(screen.queryByText(/Jane Salad/i)).toBeNull();
   });
 
   it("answers Italian and In-N-Out in her words, and sends Chipotle to the model", async () => {

@@ -70,11 +70,14 @@ const OTHER_CUISINE =
 const STEPS = /\b(steps|step count|walk after (meals|a meal|breakfast|lunch|dinner)|walking after (meals|a meal|breakfast|lunch|dinner))\b/;
 const MEAL_ASK = /\b(what should i eat|what (do|can|should) i (eat|have|get|order|make)|eat for|ideas for)\b/;
 
-/** A link, or "from this menu", is not a menu we can see. */
+/** A pasted link is fetched on the server. This only catches "the menu" with nothing to read. */
+export function hasMenuLink(raw) {
+  return /https?:\/\/|\bwww\./i.test(String(raw || ""));
+}
+
 export function menuUnseen(raw) {
-  const original = String(raw || "");
-  if (/https?:\/\/|www\./i.test(original)) return true;
-  const text = normalize(original);
+  if (hasMenuLink(raw)) return false;
+  const text = normalize(String(raw || ""));
   return /\b(from (this|the) menu|on (this|the) menu|look at (this|the) menu|read (this|the) menu)\b/.test(text);
 }
 
@@ -94,8 +97,9 @@ function normalize(raw) {
  * that isn't one of these still goes through the usual path.
  */
 export function localCoachTeach(raw) {
-  // Before the length cutoff. A long URL used to skip the lock and the model
-  // invented a dish from the restaurant's name.
+  // A link is fetched server-side. Saying "from this menu" with no link and
+  // no photo is still a guess, so that one stays here.
+  if (hasMenuLink(raw)) return null;
   if (menuUnseen(raw)) return { kind: "teach", topic: "menuLink" };
   const text = normalize(raw);
   if (!text || text.length > 180) return null;
@@ -129,6 +133,8 @@ export function teachBody(topic, ctx = {}) {
   if (topic === "inNOut") return COACH_COPY.teachInNOut;
   if (topic === "steps") return COACH_COPY.teachSteps;
   if (topic === "menuLink") return COACH_COPY.teachMenuLink;
+  if (topic === "menuClosed") return COACH_COPY.teachMenuClosed;
+  if (topic === "menuMiss") return COACH_COPY.teachMenuMiss;
   if (topic === "neverSkip") return COACH_COPY.teachNeverSkip;
   if (topic === "realFood") return COACH_COPY.teachRealFood;
   if (topic === "alcohol") return COACH_COPY.teachAlcohol;
