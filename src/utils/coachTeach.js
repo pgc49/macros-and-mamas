@@ -70,6 +70,14 @@ const OTHER_CUISINE =
 const STEPS = /\b(steps|step count|walk after (meals|a meal|breakfast|lunch|dinner)|walking after (meals|a meal|breakfast|lunch|dinner))\b/;
 const MEAL_ASK = /\b(what should i eat|what (do|can|should) i (eat|have|get|order|make)|eat for|ideas for)\b/;
 
+/** A link, or "from this menu", is not a menu we can see. */
+export function menuUnseen(raw) {
+  const original = String(raw || "");
+  if (/https?:\/\/|www\./i.test(original)) return true;
+  const text = normalize(original);
+  return /\b(from (this|the) menu|on (this|the) menu|look at (this|the) menu|read (this|the) menu)\b/.test(text);
+}
+
 function normalize(raw) {
   return String(raw || "")
     .toLowerCase()
@@ -86,6 +94,9 @@ function normalize(raw) {
  * that isn't one of these still goes through the usual path.
  */
 export function localCoachTeach(raw) {
+  // Before the length cutoff. A long URL used to skip the lock and the model
+  // invented a dish from the restaurant's name.
+  if (menuUnseen(raw)) return { kind: "teach", topic: "menuLink" };
   const text = normalize(raw);
   if (!text || text.length > 180) return null;
   for (const [topic, pattern] of TEACH_FIRST) {
@@ -117,6 +128,7 @@ export function teachBody(topic, ctx = {}) {
   if (topic === "pizzaMeal") return COACH_COPY.teachPizzaMeal;
   if (topic === "inNOut") return COACH_COPY.teachInNOut;
   if (topic === "steps") return COACH_COPY.teachSteps;
+  if (topic === "menuLink") return COACH_COPY.teachMenuLink;
   if (topic === "neverSkip") return COACH_COPY.teachNeverSkip;
   if (topic === "realFood") return COACH_COPY.teachRealFood;
   if (topic === "alcohol") return COACH_COPY.teachAlcohol;

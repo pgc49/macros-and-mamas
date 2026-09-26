@@ -285,6 +285,16 @@ function cleanReply(raw) {
   return replyIsClean(text) ? text : "";
 }
 
+/** Cooking steps are a recipe. A menu card only keeps an order. */
+function orderStepsOnly(steps) {
+  const cook = /\b(preheat|bake|simmer|saut[eé]|chop|dice|oven|skillet|boil|whisk|stir|minutes|recipe)\b/i;
+  if (!Array.isArray(steps)) return [];
+  return steps
+    .map((step) => String(step || "").trim())
+    .filter((step) => step && !cook.test(step))
+    .slice(0, 6);
+}
+
 function normalizeMeals(parsed, fallbackSlot, mode) {
   const raw = Array.isArray(parsed?.meals) ? parsed.meals : parsed?.meal ? [parsed.meal] : [];
   const out = [];
@@ -311,9 +321,11 @@ function normalizeMeals(parsed, fallbackSlot, mode) {
       desc,
       ...macros,
       servings: 1,
-      ingredients: m.ingredients,
+      // A menu photo is an order, not a recipe we wrote. Ingredients here were
+      // a made-up method for a dish we may not have read.
+      ingredients: mode === "menu" ? [] : m.ingredients,
       batch: null,
-      steps: m.steps,
+      steps: mode === "menu" ? orderStepsOnly(m.steps) : m.steps,
     }));
   }
   return out;

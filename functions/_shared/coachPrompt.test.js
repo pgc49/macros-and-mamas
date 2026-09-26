@@ -58,7 +58,8 @@ describe("the prompt says what meal she is deciding", () => {
       slot: "lunch",
       question: "I'm going out to eat at inn n out. What should I get?",
     });
-    expect(prompt).toMatch(/only that restaurant's real menu/);
+    expect(prompt).toMatch(/cannot see a website or a menu/);
+    expect(prompt).toMatch(/name no dishes/);
     expect(prompt).toMatch(/Protein Style/);
     expect(prompt).toMatch(/half the little basket/);
     expect(prompt).toMatch(/fish with some potatoes and broccoli/);

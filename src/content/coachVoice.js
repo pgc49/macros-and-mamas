@@ -201,6 +201,8 @@ export const COACH_COPY = {
     "Is this for pure enjoyment, or do you want it to fit your macros? If you want it to fit: a Protein Style burger, no spread, ketchup or mustard. If you get fries, have half the little basket, or a quarter.",
   teachSteps:
     "Getting your steps in, and a walk after meals, is a good basic.",
+  teachMenuLink:
+    "I won't guess a menu I can't see. Send a photo of it and I'll tell you what to order from what's printed.",
   teachNeverSkip:
     "Absolutely not. You never skip a meal! The goal isn't to nail your macros every single time — it's to nourish yourself and learn how to fuel your body. Eat something simple and lower calorie: grilled chicken and rice, or even a protein shake. Follow your hunger, too. Some days you burned more, and those days need more.",
   teachRealFood:

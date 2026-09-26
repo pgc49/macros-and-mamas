@@ -47,6 +47,16 @@ describe("Callie's own answers, before a model is called", () => {
     expect(localCoachTeach("is pizza ok")).toMatchObject({ topic: "realFood" });
   });
 
+  it("does not invent a menu from a link", () => {
+    const ask = "https://www.itsjane.com/location/jane-on-fillmore/ Can you tell me what to eat from this menu";
+    expect(localCoachTeach(ask)).toMatchObject({ topic: "menuLink" });
+    expect(teachBody("menuLink")).toMatch(/won't guess a menu/i);
+    expect(teachBody("menuLink")).toMatch(/photo/i);
+    expect(teachBody("menuLink")).not.toMatch(/salad/i);
+    expect(localCoachTeach("what can I eat from this menu")).toMatchObject({ topic: "menuLink" });
+    expect(localCoachTeach("what should I get at Chipotle")).toBeNull();
+  });
+
   it("does not steal a named restaurant from the model", () => {
     expect(localCoachTeach("what should I get at Olive Garden")).toBeNull();
   });

@@ -189,11 +189,14 @@ const SHARED_RULES = `## Rules
    and never judge a choice. If you do not know, say so — do not make it up.
    Do not drop a canned teaching (Oreos, "real food", a
    generic restaurant spiel) unless she asked whether a specific food is allowed.
-7. If she named a restaurant, only that restaurant's real menu. Do not invent roasted
-   chicken, rice or steak unless they serve it. In-N-Out: ask if she wants it for
-   pure enjoyment or to fit her macros. If it should fit, a Protein Style burger,
-   no spread, ketchup or mustard. Fries are half the little basket, or a quarter.
-   Never answer In-N-Out with chicken and rice.
+7. You cannot see a website or a menu she did not photograph. If she pasted a link
+   or asked about a menu you were not shown, name no dishes and return no meals.
+   Do not invent a dish by pairing the restaurant name with a salad, bowl, or plate.
+   Chipotle, Cava, and Sweetgreen are the exception: their real menus only.
+   In-N-Out, if it reaches you: ask if she wants it for pure enjoyment or to fit
+   her macros. If it should fit, a Protein Style burger, no spread, ketchup or
+   mustard. Fries are half the little basket, or a quarter. Never answer In-N-Out
+   with chicken and rice.
 8. Italian, Chinese, and sushi already have Callie's sentence — do not invent a
    different plate. Italian is fish with some potatoes and broccoli, or meatballs
    and a veggie. Chinese is a stir-fry: animal protein, veggies, and rice, light
@@ -251,15 +254,15 @@ ${String(note || "").trim().slice(0, 400) || "(none)"}
 """
 
 ${SHARED_RULES}
-11. Only dishes actually printed on that menu. Do not invent a dish, and do not suggest something
-   from the bank as if the restaurant serves it. Use the dish name and its listed components as
-   the menu spells them — if a word is unreadable, leave it out rather than guessing at it.
-   If the photo is too blurry or cropped to read dish names, return no meals and say you can't
-   read it.
+11. Only dishes actually printed on that photo. Do not invent a dish, and do not suggest something
+   from the bank as if the restaurant serves it. Use the dish name as the menu spells it.
+   If a word is unreadable, leave it out. Do not guess a name from the restaurant.
+   Never write a home recipe: no ingredients to cook, no method. If you cannot read
+   dish names, return no meals and say you can't read it.
 12. Restaurant macros are estimates from a typical preparation. Say so in "desc". "steps" is the
     ordering ask and nothing else — what to leave off, what to get on the side, how to size it.
-    Fat is the one that blows out eating out, so prefer a protein and a side (the PS method).
-    If there is nothing to ask for, return [].
+    "ingredients" stays empty. Fat is the one that blows out eating out, so prefer a protein
+    and a side (the PS method). If there is nothing to ask for, return [].
 13. Give up to 3 orderable picks, best first.
 
 Return JSON: ${REPLY_SCHEMA}`;

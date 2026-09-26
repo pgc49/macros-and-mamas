@@ -241,6 +241,51 @@ describe("what comes back", () => {
     expect((await resp.json()).reply).toBe("");
   });
 
+  it("does not invent a menu from a pasted link", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "https://www.itsjane.com/location/jane-on-fillmore/ Can you tell me what to eat from this menu",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.teach).toBe("menuLink");
+    expect(data.meals).toEqual([]);
+    expect(data.reply).toMatch(/photo/i);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it("keeps a menu photo as an order, not a recipe", async () => {
+    mockSupabase();
+    modelReturns({
+      scope: "food",
+      reply: "The printed salad, dressing on the side.",
+      meals: [{
+        name: "Market salad",
+        desc: "as printed",
+        cal: 440,
+        p: 38,
+        c: 30,
+        f: 21,
+        ingredients: [{ item: "chicken", amount: "1 breast" }, { item: "mixed greens", amount: "2 cups" }],
+        steps: ["Grill the chicken for 8 minutes.", "Ask for the dressing on the side."],
+      }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "menu",
+        slot: "lunch",
+        images: [{ image_b64: "abc", media_type: "image/jpeg" }],
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.meals[0].ingredients).toEqual([]);
+    expect(data.meals[0].steps).toEqual(["Ask for the dressing on the side."]);
+  });
+
   it("marks menu picks as estimates", async () => {
     mockSupabase();
     modelReturns({
