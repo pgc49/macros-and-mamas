@@ -2,7 +2,7 @@
 
 Read-only pass over 1:1 Messages. No message is copied here. Names, emails, phone numbers, and family details were stripped before anything was counted. Owner and QA threads (`pgchammas…`) are not in these numbers. Announcements and deleted rows are not in them either.
 
-Nothing in this file is a locked sentence. The coach was not changed from it. If a line below should be in the product, it still has to go through the template in `docs/CALLIE-COACH-REVIEW.md` and come back in Callie's words.
+Nothing in this file is a locked sentence. The coach was not changed from it. How the coach would answer each question, and the draft prompt for Callie to mark, is in `docs/CALLIE-FAQ-ANSWERS.md`.
 
 Window: 28 Jul 2026 through 26 Sep 2026. 74 threads.
 
