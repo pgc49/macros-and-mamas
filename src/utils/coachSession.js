@@ -173,6 +173,78 @@ export function buildSuggestedCards(meals, answer, { source = "new" } = {}) {
   return out;
 }
 
+function clipPromptText(value, max = 80) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+/**
+ * The part of today the model cannot see unless we hand it over: what she
+ * already ate, what's sitting on the plan, what she usually has at this
+ * meal, and what she just turned down. Names only. The budget already
+ * carries the numbers.
+ */
+export function coachDayForPrompt({
+  entries = [],
+  plannedMeals = [],
+  mealHistoryByDate = {},
+  slot = null,
+  skipped = [],
+  snackCount = 1,
+  turnedDown = [],
+} = {}) {
+  const eaten = [];
+  for (const entry of entries) {
+    const name = clipPromptText(entry?.name);
+    if (!name) continue;
+    const slotName = normalizeSlot(entry?.slot);
+    eaten.push(slotName ? `${slotName}: ${name}` : name);
+    if (eaten.length === 8) break;
+  }
+
+  const planned = [];
+  for (const meal of plannedMeals || []) {
+    const name = clipPromptText(meal?.name);
+    if (!name) continue;
+    const slotName = normalizeSlot(meal?.slot);
+    planned.push(slotName ? `${slotName}: ${name}` : name);
+    if (planned.length === 6) break;
+  }
+
+  const usual = [];
+  for (const name of historyNames(mealHistoryByDate, { slot, days: 14 })) {
+    const clean = clipPromptText(name);
+    if (!clean || usual.includes(clean)) continue;
+    usual.push(clean);
+    if (usual.length === 6) break;
+  }
+
+  const skippedSlots = [];
+  for (const raw of skipped || []) {
+    const slotName = normalizeSlot(raw);
+    if (!slotName || skippedSlots.includes(slotName)) continue;
+    skippedSlots.push(slotName);
+    if (skippedSlots.length === 4) break;
+  }
+
+  const declined = [];
+  for (const name of turnedDown || []) {
+    const clean = clipPromptText(name);
+    if (!clean || declined.includes(clean)) continue;
+    declined.push(clean);
+    if (declined.length === 8) break;
+  }
+
+  const snacks = Math.round(Number(snackCount));
+  return {
+    eaten,
+    planned,
+    usual,
+    skipped: skippedSlots,
+    turnedDown: declined,
+    snackCount: Number.isFinite(snacks) ? Math.max(0, Math.min(4, snacks)) : 1,
+  };
+}
+
 /** What she's been eating, for the model to lean on. Names only. */
 export function recentNamesForPrompt(mealHistoryByDate, entries = []) {
   const today = entries.map((e) => e.name).filter(Boolean);

@@ -11,6 +11,7 @@ import {
   buildCoachAskPrompt,
   buildCoachKitchenPrompt,
   buildCoachMenuPrompt,
+  sanitizeCoachContext,
 } from "./coachPrompt.js";
 
 const ARGS = {
@@ -63,6 +64,37 @@ describe("the prompt says what meal she is deciding", () => {
     expect(prompt).toMatch(/fish with some potatoes and broccoli/);
     expect(prompt).toMatch(/do not make it up/i);
     expect(prompt).toMatch(/Do not drop a canned teaching/);
+  });
+
+  it("reads today from the app, and only mentions nursing when she is", () => {
+    const day = sanitizeCoachContext({
+      eaten: ["breakfast: Eggs", "x".repeat(200)],
+      planned: ["dinner: Salmon"],
+      usual: ["Chicken bowl"],
+      skipped: ["breakfast", "not-a-slot"],
+      turnedDown: ["Tofu stir fry"],
+      snackCount: 2,
+    });
+    expect(day.eaten).toHaveLength(2);
+    expect(day.eaten[1].length).toBe(80);
+    expect(day.skipped).toEqual(["breakfast"]);
+    const prompt = buildCoachAskPrompt({
+      ...ARGS,
+      slot: "dinner",
+      question: "what can I do with this",
+      day,
+      profile: { ...ARGS.profile, breastfeeding: true },
+    });
+    expect(prompt).toContain("breakfast: Eggs");
+    expect(prompt).toContain("dinner: Salmon");
+    expect(prompt).toContain("Chicken bowl");
+    expect(prompt).toContain("Tofu stir fry");
+    expect(prompt).toContain("2 snacks");
+    expect(prompt).toMatch(/She is nursing/);
+    expect(prompt).toMatch(/Do not discuss milk supply/);
+    const quiet = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "ideas" });
+    expect(quiet).not.toMatch(/She is nursing/);
+    expect(quiet).not.toMatch(/## Today/);
   });
 
   it("still carries her question, her budget and her history", () => {

@@ -9,7 +9,7 @@ import {
   askForSlotCopy,
   skipMealCopy,
 } from "../content/coachVoice";
-import { buildCoachAnswer, buildSuggestedCards, recentNamesForPrompt } from "../utils/coachSession";
+import { buildCoachAnswer, buildSuggestedCards, coachDayForPrompt, recentNamesForPrompt } from "../utils/coachSession";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent } from "../utils/coachIntent";
@@ -256,6 +256,15 @@ export function CoachPanel({
           }
           : null,
         recent: recentNamesForPrompt(mealHistoryByDate, entries),
+        context: coachDayForPrompt({
+          entries,
+          plannedMeals,
+          mealHistoryByDate,
+          slot: answer?.slot,
+          skipped: answer?.skipped,
+          snackCount: answer?.budget?.snackCount,
+          turnedDown: skipRef.current,
+        }),
         images,
       });
 
@@ -429,8 +438,21 @@ export function CoachPanel({
         }}
       >
         <div style={{ padding: "4px 0 10px" }}>
-          <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>{COACH_COPY.title}</h2>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>{COACH_COPY.title}</h2>
+            <span style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+              color: T.accentDeep,
+            }}
+            >
+              {COACH_COPY.betaLabel}
+            </span>
+          </div>
           <p style={{ fontSize: 13.5, color: T.inkSoft, margin: 0 }}>{COACH_COPY.tagline}</p>
+          <p style={{ fontSize: 13.5, color: T.ink, margin: "8px 0 0", lineHeight: 1.45 }}>{COACH_COPY.betaNote}</p>
         </div>
 
         <div

@@ -127,6 +127,16 @@ describe("the coach answers on the device", () => {
     expect(postCoach).not.toHaveBeenCalled();
   });
 
+  it("says this is a beta and what it is for", async () => {
+    renderPanel({ onLoadThread: async () => [] });
+    await screen.findByText(COACH_COPY.title);
+    expect(screen.getByText(COACH_COPY.betaLabel)).toBeTruthy();
+    expect(screen.getByText(COACH_COPY.betaNote)).toBeTruthy();
+    expect(COACH_COPY.betaNote).toMatch(/next meal/);
+    expect(COACH_COPY.betaNote).toMatch(/Callie/);
+    expect(COACH_COPY.betaNote).not.toMatch(/\bAI\b|model|prompt/i);
+  });
+
   it("sends a question it can't answer itself to the model", async () => {
     const postCoach = vi.fn(async () => ({ ok: true, reply: "Grilled, not fried, and ask for the sauce on the side.", meals: [] }));
     renderPanel({ postCoach });
@@ -140,6 +150,10 @@ describe("the coach answers on the device", () => {
     expect(postCoach.mock.calls[0][0]).toMatchObject({
       mode: "ask",
       text: "I only have chicken and rice, what can I make",
+    });
+    expect(postCoach.mock.calls[0][0].context).toMatchObject({
+      eaten: [],
+      snackCount: 1,
     });
     await screen.findByText("Grilled, not fried, and ask for the sauce on the side.");
   });

@@ -55,8 +55,66 @@ function recipesBlock() {
   ).join("\n");
 }
 
+const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
+
+function cleanList(raw, max, itemMax) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    const text = String(item || "").replace(/\s+/g, " ").trim().slice(0, itemMax);
+    if (!text || out.includes(text)) continue;
+    out.push(text);
+    if (out.length === max) break;
+  }
+  return out;
+}
+
+/** Client-supplied day context. Capped here so a long log cannot blow the prompt. */
+export function sanitizeCoachContext(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const snacks = Math.round(Number(raw.snackCount));
+  return {
+    eaten: cleanList(raw.eaten, 8, 80),
+    planned: cleanList(raw.planned, 6, 80),
+    usual: cleanList(raw.usual, 6, 80),
+    skipped: cleanList(raw.skipped, 4, 20).filter((slot) => SLOTS.has(slot)),
+    turnedDown: cleanList(raw.turnedDown, 8, 80),
+    snackCount: Number.isFinite(snacks) ? Math.max(0, Math.min(4, snacks)) : 1,
+  };
+}
+
+function listOr(items, empty) {
+  return items.length ? items.map((item) => `- ${item}`).join("\n") : `- ${empty}`;
+}
+
+function dayBlock(day) {
+  if (!day) return "";
+  const snacks = day.snackCount === 1 ? "one snack" : `${day.snackCount} snacks`;
+  return `## Today — food, not numbers. Do not quote her ranges or what's left
+Already eaten:
+${listOr(day.eaten, "(nothing logged yet)")}
+On today's plan or pencilled in:
+${listOr(day.planned, "(nothing planned)")}
+Passed without being logged:
+${listOr(day.skipped, "(none)")}
+What she usually eats at this meal:
+${listOr(day.usual, "(no habit yet)")}
+She already turned these down:
+${listOr(day.turnedDown, "(none)")}
+Plan around ${snacks} today.
+Do not suggest something she already ate or already turned down, unless she asks for it again.
+If a meal was skipped, feed the rest of the day. Do not pretend she ate it.`;
+}
+
+function nursingBlock(profile) {
+  if (profile?.breastfeeding !== true) return "";
+  return `## Nursing
+She is nursing. Her ranges were already built with supply protected. Do not shrink the plate. Do not discuss milk supply. If she asks whether her supply is being affected, set scope to "callie" and leave meals empty.`;
+}
+
 function tastesBlock(profile, customMeals = []) {
   return `${buildDietSafetyBlock(profile)}
+${nursingBlock(profile)}
 
 ${buildCustomMealsBlock(customMeals)}
 
@@ -146,12 +204,14 @@ const SHARED_RULES = `## Rules
    meals empty, and let the app do the handoff — do not answer it yourself.
 10. Return ONLY JSON.`;
 
-export function buildCoachAskPrompt({ profile, budget, slot, question, customMeals = [], recentNames = [] }) {
+export function buildCoachAskPrompt({ profile, budget, slot, question, customMeals = [], recentNames = [], day = null }) {
   return `A mama in the program is asking you something. Answer it, or hand it back.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
+
+${dayBlock(day)}
 
 ${tastesBlock(profile, customMeals)}
 
@@ -172,12 +232,14 @@ ${SHARED_RULES}
 Return JSON: ${REPLY_SCHEMA}`;
 }
 
-export function buildCoachMenuPrompt({ profile, budget, slot, note, customMeals = [], recentNames = [] }) {
+export function buildCoachMenuPrompt({ profile, budget, slot, note, customMeals = [], recentNames = [], day = null }) {
   return `She is out and sent a photo of the menu. Tell her what to order.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
+
+${dayBlock(day)}
 
 ${tastesBlock(profile, customMeals)}
 
@@ -203,12 +265,14 @@ ${SHARED_RULES}
 Return JSON: ${REPLY_SCHEMA}`;
 }
 
-export function buildCoachKitchenPrompt({ profile, budget, slot, note, customMeals = [], recentNames = [] }) {
+export function buildCoachKitchenPrompt({ profile, budget, slot, note, customMeals = [], recentNames = [], day = null }) {
   return `She sent a photo of what she has in. Build her something from it.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
+
+${dayBlock(day)}
 
 ${tastesBlock(profile, customMeals)}
 

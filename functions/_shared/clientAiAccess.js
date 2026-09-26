@@ -71,6 +71,7 @@ export async function loadSelf(env, userId, authHeader) {
       allergens: Array.isArray(row.allergens) ? row.allergens : [],
       allergenNote: row.allergen_note || "",
       foodAvoids: row.food_avoids || "",
+      breastfeeding: row.breastfeeding === true,
     },
     macros: m
       ? { cal: Number(m.cal), protein: Number(m.protein), carbs: Number(m.carbs), fat: Number(m.fat) }

@@ -50,6 +50,9 @@ export const COACH_SLOT_TITLE = {
 export const COACH_COPY = {
   title: "Coach Callie's Bot",
   tagline: "Knows your ranges, your log, and what you like",
+  betaLabel: "Beta",
+  betaNote:
+    "Use it to pick the next meal, order out, or work from a photo of the menu or your fridge. Ranges, the scale, supply, and workouts stay with Callie.",
   entryTitle: "Not sure what to eat?",
   entryCta: "Ask the coach",
 

@@ -28,6 +28,7 @@ import {
   buildCoachKitchenPrompt,
   buildCoachMenuPrompt,
   COACH_SYSTEM,
+  sanitizeCoachContext,
 } from "../_shared/coachPrompt.js";
 import {
   classifyAsk,
@@ -159,7 +160,8 @@ export async function onRequestPost({ request, env }) {
     const customMeals = await fetchCustomMeals(env, user.id, { authHeader });
     const budget = sanitizeBudget(body.budget);
     const recentNames = parseRecent(body.recent);
-    const args = { profile, budget, slot, customMeals, recentNames };
+    const day = sanitizeCoachContext(body.context);
+    const args = { profile, budget, slot, customMeals, recentNames, day };
 
     let prompt;
     if (mode === "menu") prompt = buildCoachMenuPrompt({ ...args, note: text });
