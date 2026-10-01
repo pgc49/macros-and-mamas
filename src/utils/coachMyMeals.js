@@ -2,6 +2,19 @@ function normalizeMyMealName(name) {
   return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+/** Stored thread cards say this when they were filed from My meals. */
+const MY_MEAL_TAG = "my meals";
+
+/**
+ * A card that presents itself as one of her saved meals.
+ * `source` is the ranker. Older payloads only kept the chip text.
+ */
+export function cardClaimsMyMeal(card) {
+  if (!card) return false;
+  if (card.source === "my") return true;
+  return String(card.tag || "").trim().toLowerCase() === MY_MEAL_TAG;
+}
+
 export function buildLiveMyMealsLookup(customMeals = []) {
   const ids = new Set();
   const names = new Set();

@@ -44,19 +44,21 @@ const CARD = {
   reason: "Gets protein into range. Fits everything else.",
 };
 
+function panelProps(props = {}) {
+  return {
+    profile: PROFILE,
+    macros: MACROS,
+    totals: TOTALS,
+    entries: [],
+    plannedMeals: [],
+    mealHistoryByDate: {},
+    customMeals: [],
+    ...props,
+  };
+}
+
 function renderPanel(props = {}) {
-  return render(
-    <CoachPanel
-      profile={PROFILE}
-      macros={MACROS}
-      totals={TOTALS}
-      entries={[]}
-      plannedMeals={[]}
-      mealHistoryByDate={{}}
-      customMeals={[]}
-      {...props}
-    />,
-  );
+  return render(<CoachPanel {...panelProps(props)} />);
 }
 
 const cardTitles = () => screen.queryAllByTestId("coach-card-title").map((n) => n.textContent);
@@ -130,6 +132,71 @@ describe("the coach answers on the device", () => {
     });
 
     await screen.findByText("Earlier answer.");
+    expect(screen.queryByText("Rosemary crackers")).toBeNull();
+    expect(screen.getByText("Live custom meal")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.lighter }));
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    expect(screen.queryByText("Rosemary crackers")).toBeNull();
+    expect(screen.getByText("Live custom meal")).toBeTruthy();
+  });
+
+  it("drops a My meal from the open thread when she deletes it", async () => {
+    const onLoadThread = vi.fn(async () => [
+      {
+        id: "r2",
+        role: "coach",
+        body: "Earlier answer.",
+        kind: "cards",
+        payload: {
+          cards: [
+            {
+              kind: "meal",
+              id: "deleted-1",
+              name: "Rosemary crackers",
+              title: "Rosemary crackers",
+              source: "my",
+              tag: "My meals",
+              cal: 200,
+              p: 8,
+              c: 20,
+              f: 8,
+              servings: 1,
+              reason: "Fits.",
+            },
+            {
+              kind: "meal",
+              id: "live-1",
+              name: "Live custom meal",
+              title: "Live custom meal",
+              source: "my",
+              tag: "My meals",
+              cal: 210,
+              p: 22,
+              c: 12,
+              f: 9,
+              servings: 1,
+              reason: "Fits.",
+            },
+          ],
+        },
+      },
+    ]);
+    const saved = [
+      { id: "deleted-1", name: "Rosemary crackers", cal: 200, p: 8, c: 20, f: 8 },
+      { id: "live-1", name: "Live custom meal", cal: 210, p: 22, c: 12, f: 9 },
+    ];
+    const view = renderPanel({ onLoadThread, customMeals: saved });
+    await screen.findByText("Rosemary crackers");
+    expect(screen.getByText("Live custom meal")).toBeTruthy();
+
+    view.rerender(
+      <CoachPanel {...panelProps({
+        onLoadThread,
+        customMeals: [{ id: "live-1", name: "Live custom meal", cal: 210, p: 22, c: 12, f: 9 }],
+      })}
+      />,
+    );
     expect(screen.queryByText("Rosemary crackers")).toBeNull();
     expect(screen.getByText("Live custom meal")).toBeTruthy();
   });

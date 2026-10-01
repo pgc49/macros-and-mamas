@@ -13,7 +13,7 @@ import {
   buildCoachAnswer,
   buildSuggestedCards,
   coachDayForPrompt,
-  pruneStaleMyMealCards,
+  replayCoachMessages,
   recentNamesForPrompt,
 } from "../utils/coachSession";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
@@ -156,7 +156,7 @@ export function CoachPanel({
           role: r.role,
           body: r.body,
           kind: r.kind,
-          cards: pruneStaleMyMealCards(r.payload?.cards || [], customMeals),
+          cards: r.payload?.cards || [],
           deflect: r.payload?.deflect || null,
           aside: r.payload?.aside || null,
         })));
@@ -425,6 +425,13 @@ export function CoachPanel({
 
   const saveCard = (card) => onSaveCard?.(card, answer?.slot);
 
+  // Re-checked against the meals she still has saved. The open effect runs
+  // once, so a delete after that load has to drop the card here, not in state.
+  const shownThread = useMemo(
+    () => replayCoachMessages(thread, customMeals),
+    [thread, customMeals],
+  );
+
   if (!answer) {
     return (
       <div style={{ padding: "24px 0", fontSize: 14, color: T.inkSoft, lineHeight: 1.6 }}>
@@ -438,7 +445,7 @@ export function CoachPanel({
   const opener = logged.size === 0
     ? COACH_COPY.openerFresh
     : (next ? askForSlotCopy(next) : COACH_COPY.openerDone);
-  const shownCards = thread.some((m) => (m.cards || []).length > 0);
+  const shownCards = shownThread.some((m) => (m.cards || []).length > 0);
 
   return (
     // Same shape Messages uses under the shell's `lockContentScroll`: fill the
@@ -510,7 +517,7 @@ export function CoachPanel({
             <div style={bubble(false)}>{COACH_COPY.snackAsk}</div>
           ) : null}
 
-          {thread.map((m) => (
+          {shownThread.map((m) => (
             <div key={m.id} style={{ display: "flex", flexDirection: "column" }}>
               {(m.aside === "nursing" || m.aside === "both") && (
                 <div style={bubble(false)}>{COACH_COPY.nursingPreface}</div>

@@ -18,7 +18,7 @@ import {
   unmatchedCoachPencils,
 } from "./coachBudget.js";
 import { buildCoachCard, pickScale, rankBankCards, proteinOverNote } from "./coachRank.js";
-import { buildCoachAnswer, resolveCoachSlot } from "./coachSession.js";
+import { buildCoachAnswer, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
 import { coachSlotFromTime } from "./mealSlots.js";
 import { coachLogFromCard, coachPlanFieldsFromCard, unscaleRankedCard } from "./coachScale.js";
 import {
@@ -499,6 +499,29 @@ describe("ranking", () => {
     });
     expect(meals.some((m) => m.name === "Rosemary crackers" && m.source === "my")).toBe(false);
     expect(meals.some((m) => m.name === "Still saved meal" && m.source === "my")).toBe(true);
+  });
+
+  it("drops deleted customs from a replayed thread and keeps live and bank cards", () => {
+    const messages = [{
+      id: "m1",
+      body: "Earlier answer.",
+      cards: [
+        { id: "deleted-1", name: "Rosemary crackers", source: "my", tag: "My meals", slot: "breakfast" },
+        { id: "tag-only", name: "Old scramble", tag: "My meals", slot: "breakfast" },
+        { id: "live-1", name: "Still saved meal", source: "my", tag: "My meals", slot: "lunch" },
+        { name: "Greek yogurt bowl", source: "bank", tag: "Callie's bank", slot: "breakfast" },
+      ],
+    }];
+    const live = [{ id: "live-1", name: "Still saved meal" }];
+    const shown = replayCoachMessages(messages, live);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Still saved meal",
+      "Greek yogurt bowl",
+    ]);
+    expect(replayCoachMessages(messages, [])[0].cards.map((card) => card.name)).toEqual([
+      "Greek yogurt bowl",
+    ]);
+    expect(replayCoachMessages(messages, live)[0].body).toBe("Earlier answer.");
   });
 
   it("never promotes history-only meal names into My meals", () => {
