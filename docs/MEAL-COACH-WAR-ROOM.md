@@ -1,6 +1,6 @@
 # Meal Coach — war room brief
 
-**For:** CoS / $1M. **Branch:** `cursor/meal-coach-957a` (PR 343). **SHA:** `10af9a7`. **Sticky:** https://cursor-meal-coach-957a.macros-and-mamas.pages.dev
+**For:** CoS / $1M. **Branch:** `cursor/meal-coach-957a` (PR 343). **Read against:** `10af9a7`, plus `3ab1add` (stale deleted My meals dropped from cards). **Sticky:** https://cursor-meal-coach-957a.macros-and-mamas.pages.dev
 
 **Decision: do not merge tonight.** This is not the $1M focal. Slice B and Slice C stay frozen until the four gates below pass a lived test on that sticky preview.
 
@@ -157,7 +157,9 @@ Use them inside gate 2. Do not design a new memory product around them.
 
 ## Carve-out (the only extra in Slice A)
 
-**Filter junk My meals before they outrank the bank.** No new table. Drop untitled, zero-macro, and obvious test rows from the coach pool and from the model’s "proven favorites" block. A saved meal with a real name and real macros still wins. This is a filter, not a new library.
+**Deleted My meals are already handled** (`3ab1add`): a card whose id or name is no longer in `custom_meals` is dropped, including on a reloaded thread. Do not rebuild that.
+
+**Still open: junk that is still saved.** Untitled, test, and macro-incoherent rows that remain in `custom_meals` still enter the pool with a +0.3 score and the model’s "proven favorites" block (`fetchCustomMeals`, latest 40, no quality filter). Zero-macro rows already fail `hasMacros`. Drop the junk that is still saved. A saved meal with a real name and real macros still wins. No new table.
 
 ---
 
@@ -190,7 +192,7 @@ Unfreeze nothing else until this passes.
 | One breath on open | Decide, don’t study | She names a food, then one reason | Holding-line essay, second macro sentence, "Hey.", generic `reasonFits` when a real reason exists | Maya, gate 3, three seconds |
 | Model sees the fields we store | The plate respects notes Callie already wrote | A sidekick that ignores her file is a second opinion | Stage essays, new columns, new chips | Jordan, gate 2 |
 | Refusal writes `client_summaries` without clobbering | Callie hears the hard question even if the mama never hits Send | The handoff is hers, not a dead composer | A new inbox, a bot that sends, model-written briefs | QA, gate 4 |
-| Junk My meals filtered | The first card is food she would eat | Her saves should help, not bury the bank | Building a better saver, tags, ratings | QA: a junk row does not lead |
+| Junk still saved in My meals | The first card is food she would eat | Her saves should help, not bury the bank | A new saver, tags, ratings. Deleted-row filtering already landed. | QA: a still-saved junk row does not lead |
 | Snack question removed | She is not asked a question we won’t apply | — | The bubble | Open Coach on a short history. The question is absent. One snack is still reserved. |
 | Fridge chip removed | Menu photo stays for eating out | — | Fridge vision | Chip is gone. Menu photo still attaches. |
 
