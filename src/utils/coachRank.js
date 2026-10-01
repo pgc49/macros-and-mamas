@@ -272,22 +272,72 @@ function clauseFromKnows(knowsYou) {
   const like = knows.match(/^you like\s+(.+?)\.?$/i);
   if (like) return `You like ${like[1]}.`;
   if (/^quick one from your staples/i.test(knows)) return "From what you have.";
+  if (/^you've had this at\s+\S/i.test(knows)) return knows.endsWith(".") ? knows : `${knows}.`;
+  if (/^you like\s+\S/i.test(knows)) return knows.endsWith(".") ? knows : `${knows}.`;
+  if (/^from what you have\b/i.test(knows)) return "From what you have.";
   return "";
+}
+
+/** Skip-meal and hormone lectures are coach chat, never the line under a plate. */
+function isCoachingEssay(text) {
+  const s = normalizedReason(text).toLowerCase();
+  if (!s) return false;
+  return s.includes("i noticed you skipped")
+    || s.includes("hormonal health")
+    || s.includes("sex hormones")
+    || s.includes("blunted metabolism")
+    || s.includes("protein shake if a full breakfast")
+    || s.includes("we really want to eat consistently");
+}
+
+function dishNameClause(card) {
+  const raw = String(card?.name || card?.title || "")
+    .replace(/\s·\s.*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!raw || raw.length < 3 || isCoachingEssay(raw)) return "";
+  return `${raw.charAt(0).toUpperCase()}${raw.slice(1)}.`;
 }
 
 export function plateTiedReason(reason) {
   const text = normalizedReason(reason);
-  if (!text || isLeftoverMath(text)) return "";
+  if (!text || isLeftoverMath(text) || isCoachingEssay(text)) return "";
   return text;
 }
 
-/** The one clause under a card. Food on the plate, or silence. Never leftover math. */
+/**
+ * The one clause under a card. A stated like, food on the plate, or the dish
+ * name. Never leftover math, and never the skip-meal essay.
+ */
 export function shownCoachReason(card) {
-  const tied = plateTiedReason(card?.reason);
-  if (tied) return tied;
-  const fromKnows = clauseFromKnows(card?.knowsYou);
-  if (fromKnows) return fromKnows;
-  return plateFoodClause(card);
+  const pref = clauseFromKnows(card?.knowsYou) || clauseFromKnows(card?.reason);
+  if (pref) return pref;
+  return plateFoodClause(card) || dishNameClause(card);
+}
+
+function isHalfSwap(plate, other) {
+  const base = String(plate?.name || "").replace(/\s·\s.*$/, "").trim().toLowerCase();
+  const otherName = String(other?.name || "").replace(/\s·\s.*$/, "").trim().toLowerCase();
+  if (!base || base !== otherName) return false;
+  return Number(other?.servings) === 0.5 || /half portion/i.test(other?.title || "");
+}
+
+/**
+ * First paint is one plate. A second card is only the half portion of that
+ * same plate. A second full bank meal is not a swap. Plates with nothing to
+ * name are skipped.
+ */
+export function firstPaintPlates(cards = []) {
+  const named = [];
+  for (const card of cards || []) {
+    const reason = shownCoachReason(card);
+    if (!reason) continue;
+    named.push(reason === (card?.reason || "") ? card : { ...card, reason });
+  }
+  if (!named.length) return [];
+  const plate = named[0];
+  const swap = named.find((card, index) => index > 0 && isHalfSwap(plate, card));
+  return swap ? [plate, swap] : [plate];
 }
 
 /**

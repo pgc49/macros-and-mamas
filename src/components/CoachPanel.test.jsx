@@ -136,9 +136,8 @@ describe("the coach answers on the device", () => {
     expect(screen.getByText("Live custom meal")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.lighter }));
-    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    await waitFor(() => expect(cardTitles().length).toBe(1));
     expect(screen.queryByText("Rosemary crackers")).toBeNull();
-    expect(screen.getByText("Live custom meal")).toBeTruthy();
   });
 
   it("drops a My meal from the open thread when she deletes it", async () => {
@@ -233,11 +232,8 @@ describe("the coach answers on the device", () => {
     const stillSaved = saved.filter((meal) => meal.id !== "sheet" && meal.id !== "deleted-1");
     const view = renderPanel({ onLoadThread, customMeals: saved });
     await screen.findByText("Rosemary crackers");
-    expect(screen.getByText("Sheet Pan Chicken with Sweet Potato")).toBeTruthy();
-    expect(cardTitles()).toEqual([
-      "Rosemary crackers",
-      "Sheet Pan Chicken with Sweet Potato",
-    ]);
+    expect(cardTitles()).toEqual(["Rosemary crackers"]);
+    expect(screen.queryByText("Sheet Pan Chicken with Sweet Potato")).toBeNull();
 
     view.rerender(
       <CoachPanel {...panelProps({
@@ -248,10 +244,7 @@ describe("the coach answers on the device", () => {
     );
     expect(screen.queryByText("Rosemary crackers")).toBeNull();
     expect(screen.queryByText("Sheet Pan Chicken with Sweet Potato")).toBeNull();
-    expect(cardTitles().slice(0, 2)).toEqual([
-      "Sheet pan chicken",
-      "Live custom meal",
-    ]);
+    expect(cardTitles()).toEqual(["Sheet pan chicken"]);
     expect(stillSaved.map((meal) => meal.name)).toEqual([
       "Live custom meal",
       "Sausage, egg + whites scramble",
@@ -286,7 +279,8 @@ describe("the coach answers on the device", () => {
 
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askEat }));
 
-    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(opening));
+    await waitFor(() => expect(cardTitles().length).toBe(1));
+    expect(opening).toBeGreaterThan(0);
     expect(postCoach).not.toHaveBeenCalled();
   });
 
@@ -348,7 +342,7 @@ describe("the coach answers on the device", () => {
     });
 
     await screen.findByText("Sheet pan chicken");
-    expect(screen.getByText("Turkey meatballs")).toBeTruthy();
+    expect(screen.queryByText("Turkey meatballs")).toBeNull();
     expect(screen.queryByText("Turkey meatballs + rice")).toBeNull();
     expect(document.body.textContent).not.toContain(COACH_COPY.reasonGets);
     expect(document.body.textContent).not.toContain(COACH_COPY.reasonFits);
@@ -356,8 +350,8 @@ describe("the coach answers on the device", () => {
     expect(document.body.textContent).not.toContain("Hits protein and keeps fat in range");
     expect(document.body.textContent).not.toContain("more protein than you need");
     expect(document.body.textContent).not.toContain("Keep fat in range");
-    expect(document.body.textContent).toContain("You've had this at dinner.");
-    expect(document.body.textContent).toMatch(/chicken/i);
+    expect(screen.getByTestId("coach-card-why").textContent).toMatch(/chicken/i);
+    expect(screen.getByTestId("coach-card-why").textContent).not.toMatch(/skipped a meal|hormonal|cortisol/i);
     expect(document.body.textContent).not.toContain("One of your usuals at dinner");
   });
 
@@ -382,9 +376,18 @@ describe("the coach answers on the device", () => {
     expect(document.body.textContent).not.toMatch(/keep fat in its band/i);
     expect(document.body.textContent).not.toMatch(/plenty of room/i);
     expect(document.body.textContent).not.toMatch(/you need about \d+g of protein/i);
-    await waitFor(() => expect(cardTitles().length).toBe(2));
-    const why = document.body.textContent;
-    expect(why).toMatch(/chicken|halibut|turkey|salmon|eggs|rice|tortilla/i);
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    expect(cardTitles().length).toBeLessThanOrEqual(2);
+    if (cardTitles().length === 2) {
+      expect(cardTitles()[1]).toMatch(/half portion/i);
+    }
+    const whys = screen.getAllByTestId("coach-card-why").map((node) => node.textContent);
+    expect(whys).toHaveLength(cardTitles().length);
+    for (const why of whys) {
+      expect(why.length).toBeLessThan(180);
+      expect(why).not.toMatch(/skipped a meal|hormonal|cortisol|keep fat in its band|you need about/i);
+      expect(why).toMatch(/chicken|halibut|turkey|salmon|eggs|rice|tortilla|yogurt|oat/i);
+    }
   });
 
   it("replays a three-card bank dump as one plate, one swap, and a food why", async () => {
@@ -405,12 +408,14 @@ describe("the coach answers on the device", () => {
       }],
     });
     await screen.findByText("Pulled chicken tacos");
-    expect(cardTitles()).toEqual(["Pulled chicken tacos", "Halibut + rice"]);
+    expect(cardTitles()).toEqual(["Pulled chicken tacos"]);
+    expect(screen.queryByText("Halibut + rice")).toBeNull();
+    expect(screen.queryByText("Turkey meatballs + rice")).toBeNull();
     expect(document.body.textContent).toContain("I noticed you skipped a meal");
-    expect(document.body.textContent).not.toContain("Turkey meatballs + rice");
     expect(document.body.textContent).not.toMatch(/129g|keep fat in its band|plenty of room|you need about/i);
-    expect(document.body.textContent).toMatch(/tortilla|chicken/i);
-    expect(document.body.textContent).toMatch(/halibut|garlic/i);
+    const why = screen.getByTestId("coach-card-why").textContent;
+    expect(why).toMatch(/chicken|tortilla/i);
+    expect(why).not.toMatch(/skipped a meal|hormonal|cortisol|blunted metabolism/i);
     expect(screen.queryByRole("button", { name: "Photo of my fridge" })).toBeNull();
   });
 
@@ -428,7 +433,7 @@ describe("the coach answers on the device", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
-    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(1));
+    await waitFor(() => expect(cardTitles().length).toBe(1));
     const logs = screen.getAllByRole("button", { name: COACH_COPY.logIt });
     fireEvent.click(logs[logs.length - 1]);
     await waitFor(() => expect(onLogCard).toHaveBeenCalled());
@@ -520,11 +525,11 @@ describe("the coach answers on the device", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.notThese }));
-    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(first.length));
-
-    const second = cardTitles().slice(first.length);
-    expect(second.length).toBeGreaterThan(0);
-    for (const title of second) expect(first).not.toContain(title);
+    await waitFor(() => {
+      const titles = cardTitles();
+      expect(titles.length).toBeGreaterThan(0);
+      expect(titles.every((title) => !first.includes(title))).toBe(true);
+    });
   });
 });
 

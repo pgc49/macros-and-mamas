@@ -17,6 +17,7 @@ import {
   replayCoachMessages,
   recentNamesForPrompt,
 } from "../utils/coachSession";
+import { firstPaintPlates } from "../utils/coachRank";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
@@ -226,9 +227,8 @@ export function CoachPanel({
       return;
     }
 
-    // One plate and one swap. The half sits beside the full plate; otherwise
-    // the next card is the alternative. The rest stays off this paint.
-    cards = cards.slice(0, 2);
+    // One plate. A second card is only the half portion of that same plate.
+    cards = firstPaintPlates(cards);
     skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
     const skipLine = skipMealCopy(next.skipped);
     lead += skipLine || "";

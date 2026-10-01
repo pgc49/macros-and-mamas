@@ -120,7 +120,7 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{macroLine(card)}</div>
           {why && (
-            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>{why}</div>
+            <div data-testid="coach-card-why" style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>{why}</div>
           )}
         </>
       )}

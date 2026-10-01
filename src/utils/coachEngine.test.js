@@ -17,7 +17,7 @@ import {
   resolveCoachShares,
   unmatchedCoachPencils,
 } from "./coachBudget.js";
-import { buildCoachCard, coachReason, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason } from "./coachRank.js";
+import { buildCoachCard, coachReason, firstPaintPlates, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason } from "./coachRank.js";
 import { buildCoachAnswer, pruneStaleMyMealCards, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
 import { nextCustomMeals } from "./coachMyMeals.js";
 import { coachSlotFromTime } from "./mealSlots.js";
@@ -515,10 +515,7 @@ describe("ranking", () => {
     }];
     const live = [{ id: "live-1", name: "Still saved meal" }];
     const shown = replayCoachMessages(messages, live);
-    expect(shown[0].cards.map((card) => card.name)).toEqual([
-      "Still saved meal",
-      "Greek yogurt bowl",
-    ]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual(["Still saved meal"]);
     expect(replayCoachMessages(messages, [])[0].cards.map((card) => card.name)).toEqual([
       "Greek yogurt bowl",
     ]);
@@ -538,16 +535,11 @@ describe("ranking", () => {
       ],
     }];
     const shown = replayCoachMessages(messages, []);
-    expect(shown[0].cards.map((card) => card.name)).toEqual([
-      "Sheet pan chicken",
-      "Turkey meatballs",
-    ]);
-    const byName = Object.fromEntries(shown[0].cards.map((card) => [card.name, card.reason]));
-    expect(byName["Sheet pan chicken"]).toMatch(/chicken/i);
-    expect(byName["Sheet pan chicken"]).not.toMatch(/protein|fat in range|fits what's left/i);
-    expect(byName["Turkey meatballs"]).toBe("You've had this at dinner.");
-    expect(JSON.stringify(shown)).not.toContain(COACH_COPY.reasonGets);
-    expect(JSON.stringify(shown)).not.toContain(COACH_COPY.reasonFits);
+    expect(shown[0].cards.map((card) => card.name)).toEqual(["Sheet pan chicken"]);
+    expect(shown[0].cards[0].reason).toMatch(/chicken/i);
+    expect(shown[0].cards[0].reason).not.toMatch(/protein|fat in range|fits what's left|skipped a meal|hormonal/i);
+    expect(JSON.stringify(shown[0].cards)).not.toContain(COACH_COPY.reasonGets);
+    expect(JSON.stringify(shown[0].cards)).not.toContain(COACH_COPY.reasonFits);
   });
 
   it("opens a stored bank dump as one plate, one swap, and no leftover-math lead", () => {
@@ -568,16 +560,56 @@ describe("ranking", () => {
       ],
     }];
     const shown = replayCoachMessages(messages, []);
-    expect(shown[0].cards.map((card) => card.name)).toEqual([
-      "Pulled chicken tacos",
-      "Halibut + rice",
-    ]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual(["Pulled chicken tacos"]);
     expect(shown[0].body).toContain("I noticed you skipped a meal");
-    expect(shown[0].body).toContain("cortisol");
     expect(shown[0].body).not.toMatch(/129g|of protein tonight|plenty of room|keep fat in its band/i);
     expect(shown[0].cards[0].reason).toMatch(/chicken|tortilla/i);
-    expect(shown[0].cards[1].reason).toMatch(/halibut|garlic|rice/i);
-    expect(shown[0].cards[0].reason).not.toMatch(/protein|fat in range|fits what's left/i);
+    expect(shown[0].cards[0].reason).not.toMatch(/skipped a meal|hormonal|cortisol|protein tonight|keep fat/i);
+    expect(shownCoachReason({
+      name: "Pulled chicken tacos",
+      reason: COACH_COPY.skipNotice,
+    })).toMatch(/chicken|tortilla/i);
+    expect(shownCoachReason({
+      name: "Halibut + rice",
+      title: "Halibut + rice · 2 servings",
+      reason: `${COACH_COPY.skipNotice} ${COACH_COPY.skipBreakfastHint}`,
+    })).toMatch(/halibut|garlic|rice/i);
+    expect(firstPaintPlates([
+      { name: "Pulled chicken tacos", title: "Pulled chicken tacos · 2 servings", servings: 2, reason: COACH_COPY.reasonGets },
+      { name: "Halibut + rice", title: "Halibut + rice · 2 servings", servings: 2, reason: COACH_COPY.reasonFits },
+      { name: "Pulled chicken tacos", title: "Pulled chicken tacos · half portion", servings: 0.5, reason: "" },
+    ]).map((card) => card.title)).toEqual([
+      "Pulled chicken tacos · 2 servings",
+      "Pulled chicken tacos · half portion",
+    ]);
+  });
+
+  it("paints one plate when today's thread stored two suggestion sets", () => {
+    const messages = [
+      {
+        id: "m1",
+        role: "coach",
+        body: "Earlier.",
+        cards: [
+          { name: "Sheet pan chicken", source: "bank", reason: COACH_COPY.reasonGets },
+          { name: "Turkey meatballs + rice", source: "bank", reason: COACH_COPY.proteinOverMuch },
+        ],
+      },
+      {
+        id: "m2",
+        role: "coach",
+        body: "Later.",
+        cards: [
+          { name: "Pulled chicken tacos", source: "bank", servings: 2, reason: "" },
+          { name: "Halibut + rice", source: "bank", servings: 2, reason: "" },
+        ],
+      },
+    ];
+    const shown = replayCoachMessages(messages, []);
+    expect(shown[0].cards).toEqual([]);
+    expect(shown[1].cards.map((card) => card.name)).toEqual(["Pulled chicken tacos"]);
+    expect(shown[1].cards[0].reason).toMatch(/chicken|tortilla/i);
+    expect(shown[1].cards[0].reason).not.toMatch(/skipped a meal|hormonal/);
   });
 
   it("drops a deleted custom wearing any chip and keeps the live custom and the bank meal", () => {
@@ -612,17 +644,11 @@ describe("ranking", () => {
       "Leftover Pasta",
     ]);
     const shown = replayCoachMessages(messages, live);
-    expect(shown[0].cards.map((card) => card.name)).toEqual([
-      "Sausage, egg + whites scramble",
-      "Sheet pan chicken",
-    ]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual(["Sausage, egg + whites scramble"]);
     expect(live).toEqual(snapshot);
 
     const afterDelete = replayCoachMessages(messages, []);
-    expect(afterDelete[0].cards.map((card) => card.name)).toEqual([
-      "Sheet pan chicken",
-      "Leftover Pasta",
-    ]);
+    expect(afterDelete[0].cards.map((card) => card.name)).toEqual(["Sheet pan chicken"]);
   });
 
   it("keeps the saved list when a custom meals fetch fails", () => {
@@ -691,7 +717,7 @@ describe("ranking", () => {
     const tight = { ...budgetFor({ cal: 900, p: 90, c: 80, f: 25 }, { slot: "dinner" }), f: 4, pNeed: 20 };
     const card = buildCoachCard({ name: "Lean plate", cal: 300, p: 30, c: 20, f: 6 }, tight, { slot: "dinner" });
     expect(card.reason).not.toMatch(/leaves 0g/i);
-    expect(card.reason).toBe("");
+    expect(card.reason).toBe("Lean plate.");
     expect(card.reason).not.toBe(COACH_COPY.reasonGets);
   });
 
