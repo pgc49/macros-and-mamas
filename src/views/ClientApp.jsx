@@ -26,6 +26,7 @@ import { MessagesPanel } from "../components/MessagesPanel";
 import { CoachPanel } from "../components/CoachPanel";
 import { CoachEntry } from "../components/CoachEntry";
 import { buildCoachAnswer, coachIsAvailable } from "../utils/coachSession";
+import { coachNow } from "../utils/mealSlots";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals, targetBands } from "../utils/weekPlan";
 import {
@@ -216,6 +217,9 @@ export function ClientApp({
   const calProgress = formatRangeProgress(rangeTotals?.cal, calLo, calHi, " cal", rangeEatenWord);
   const anyOver = [pSt, cSt, fSt, calSt].includes("over");
   const coachReady = coachIsAvailable({ macros, mealLogDate: mealLogDate || todayLog?.date });
+  // One clock for the Today card and the Coach tab. On a UTC browser this is
+  // Pacific wall time, so 8:43pm PT is dinner. See `coachNow`.
+  const coachClock = useMemo(() => coachNow(), []);
   const coachAnswer = useMemo(
     () => (coachReady
       ? buildCoachAnswer({
@@ -226,10 +230,11 @@ export function ClientApp({
         plannedMeals: planMealsForLogDate,
         mealHistoryByDate,
         customMeals,
+        now: coachClock,
       })
       : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [coachReady, profile, macros, totals, mealLogsByDate, mealLogDate, planMealsForLogDate, mealHistoryByDate, customMeals],
+    [coachReady, profile, macros, totals, mealLogsByDate, mealLogDate, planMealsForLogDate, mealHistoryByDate, customMeals, coachClock],
   );
 
   const tabs = [["today", "Today"], ["meals", "Meals"]];
@@ -403,6 +408,7 @@ export function ClientApp({
               answer={coachAnswer}
               entries={todayEntries}
               plannedMeals={planMealsForLogDate}
+              now={coachClock}
               onOpen={() => setTab("coach")}
             />
           )}
@@ -792,6 +798,7 @@ export function ClientApp({
             plannedMeals={planMealsForLogDate}
             mealHistoryByDate={mealHistoryByDate}
             customMeals={customMeals}
+            now={coachClock}
             onLogCard={onLogCoachCard}
             onPencilCard={onPencilCoachCard}
             onSaveCard={onSaveCoachCard}

@@ -2,18 +2,20 @@ import { T, F, FD } from "../theme/tokens";
 import { COACH_COPY, askForSlotCopy } from "../content/coachVoice";
 import { coachEntryHint } from "../utils/coachLines";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
+import { coachNow } from "../utils/mealSlots";
 
 /**
  * The way into the coach from Today. Says something true about her day rather
  * than advertising itself, so it reads as the next step and not as a banner.
  * When every slot is logged or pencilled, stay quiet — the Coach tab is enough.
  */
-export function CoachEntry({ answer, entries = [], plannedMeals = [], onOpen }) {
+export function CoachEntry({ answer, entries = [], plannedMeals = [], onOpen, now = null }) {
   if (!answer?.budget) return null;
-  const next = nextCoachSlot({ entries, plannedMeals });
+  const clock = now || coachNow();
+  const next = nextCoachSlot({ entries, plannedMeals, now: clock });
   if (!next) return null;
   const logged = loggedSlotsFromEntries(entries);
-  const hint = coachEntryHint({ loggedSlots: logged, plannedMeals, read: answer.read });
+  const hint = coachEntryHint({ loggedSlots: logged, plannedMeals, read: answer.read, now: clock });
 
   return (
     <button

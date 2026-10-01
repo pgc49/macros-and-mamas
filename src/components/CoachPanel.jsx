@@ -18,6 +18,7 @@ import {
 } from "../utils/coachSession";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
+import { coachNow } from "../utils/mealSlots";
 import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
@@ -86,7 +87,13 @@ export function CoachPanel({
   onLoadThread,
   onAppendMessage,
   postCoach,
+  now = null,
 }) {
+  // Captured once, unless the caller hands a clock (tests, the Today card).
+  // A fresh `coachNow()` every render would rebuild the answer on each paint.
+  const clockRef = useRef(now || coachNow());
+  if (now) clockRef.current = now;
+  const clock = clockRef.current;
   const [thread, setThread] = useState([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -115,8 +122,9 @@ export function CoachPanel({
       mealHistoryByDate,
       customMeals,
       slot: slotOverride,
+      now: clock,
     }),
-    [profile, macros, totals, entries, plannedMeals, mealHistoryByDate, customMeals, slotOverride],
+    [profile, macros, totals, entries, plannedMeals, mealHistoryByDate, customMeals, slotOverride, clock],
   );
   const answerRef = useRef(answer);
   answerRef.current = answer;
@@ -195,6 +203,7 @@ export function CoachPanel({
       slot: slot || slotOverride,
       prefer,
       skipNames,
+      now: clock,
     });
 
     if (echo) push({ role: "mama", body: askLabel });
@@ -254,7 +263,7 @@ export function CoachPanel({
     const named = slotNamedInAsk(text);
     const slotForAsk = named || answer?.slot || "dinner";
     const fit = named && named !== answer?.slot
-      ? (buildCoachAnswer({ ...inputs, slot: named }) || answer)
+      ? (buildCoachAnswer({ ...inputs, slot: named, now: clock }) || answer)
       : answer;
     if (named && named !== answer?.slot) setSlotOverride(named);
     try {
@@ -426,7 +435,7 @@ export function CoachPanel({
   }
 
   const logged = loggedSlotsFromEntries(entries);
-  const next = nextCoachSlot({ entries, plannedMeals });
+  const next = nextCoachSlot({ entries, plannedMeals, now: clock });
   const opener = logged.size === 0
     ? COACH_COPY.openerFresh
     : (next ? askForSlotCopy(next) : COACH_COPY.openerDone);

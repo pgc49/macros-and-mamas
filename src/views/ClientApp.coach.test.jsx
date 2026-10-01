@@ -22,8 +22,10 @@ vi.mock("../components/MessagesPanel", () => ({
 }));
 
 import { ClientApp } from "./ClientApp";
+import { CoachEntry } from "../components/CoachEntry";
 import { COACH_COPY, COACH_DEFLECT, askForSlotCopy } from "../content/coachVoice";
 import { coachEntryHint } from "../utils/coachLines";
+import { buildCoachAnswer } from "../utils/coachSession";
 import { localDateIso, wkStartOf } from "../utils/dates";
 
 afterEach(() => {
@@ -159,10 +161,18 @@ describe("where the coach shows up", () => {
     expect(askForSlotCopy("lunch")).toBe("Looking for a lunch idea?");
     expect(askForSlotCopy("dinner")).toBe("Looking for a dinner idea?");
     expect(askForSlotCopy("snack")).toBe("Looking for a snack idea?");
+    const evening = new Date(2026, 8, 4, 18, 30);
+    const morning = new Date(2026, 8, 4, 8, 0);
     expect(coachEntryHint({
       loggedSlots: new Set(["lunch"]),
       plannedMeals: [],
+      now: evening,
     })).toBe("Looking for a dinner idea? I'll size it to what's left.");
+    expect(coachEntryHint({
+      loggedSlots: new Set(["lunch"]),
+      plannedMeals: [],
+      now: morning,
+    })).toBe("Looking for a breakfast idea? I'll size it to what's left.");
 
     renderApp({
       todayLog: {
@@ -173,6 +183,22 @@ describe("where the coach shows up", () => {
     });
     expect(screen.getByText(/Looking for a (breakfast|lunch|dinner|snack) idea\?/)).toBeTruthy();
     expect(screen.queryByText(/Know what .+ is yet\?/)).toBeNull();
+  });
+
+  it("after lunch at night the Today card asks for dinner", () => {
+    const evening = new Date(2026, 8, 4, 18, 30);
+    const entries = [{ slot: "lunch", name: "Salad" }];
+    const answer = buildCoachAnswer({
+      macros: { protein: 140, carbs: 160, fat: 55, cal: 1750 },
+      totals: { p: 42, c: 55, f: 16, cal: 520 },
+      entries,
+      now: evening,
+    });
+    render(<CoachEntry answer={answer} entries={entries} now={evening} onOpen={() => {}} />);
+    expect(screen.getByText("Looking for a dinner idea?")).toBeTruthy();
+    expect(screen.queryByText("Looking for a breakfast idea?")).toBeNull();
+    expect(screen.getByText("Looking for a dinner idea? I'll size it to what's left.")).toBeTruthy();
+    expect(answer.slot).toBe("dinner");
   });
 
   it("hides the Today card once breakfast, lunch, dinner and a snack are logged", () => {

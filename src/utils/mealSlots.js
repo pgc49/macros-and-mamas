@@ -47,6 +47,77 @@ export function guessSlotFromTime(date = new Date()) {
   return "dinner";
 }
 
+const UTC_ZONES = new Set(["UTC", "Etc/UTC", "Etc/GMT", "GMT"]);
+
+/** Callie's mamas and the sticky retest are on Pacific time. */
+export const COACH_FALLBACK_TZ = "America/Los_Angeles";
+
+export function deviceTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+export function isUtcTimeZone(zone) {
+  return UTC_ZONES.has(zone);
+}
+
+/** Wall-clock fields of `instant` in `timeZone`. Hour 24 (some engines at midnight) is 0. */
+export function wallClockParts(instant, timeZone) {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const bag = {};
+  for (const part of fmt.formatToParts(instant)) {
+    if (part.type !== "literal") bag[part.type] = part.value;
+  }
+  let hour = Number(bag.hour);
+  if (hour === 24) hour = 0;
+  return {
+    year: Number(bag.year),
+    month: Number(bag.month),
+    day: Number(bag.day),
+    hour,
+    minute: Number(bag.minute),
+  };
+}
+
+/**
+ * A Date whose local getHours() match `timeZone`.
+ * `guessSlotFromTime` reads local hours, so a UTC process has to be handed
+ * Pacific hours as if they were local or 8:43pm PT stays "breakfast".
+ */
+export function dateAtWallClock(instant, timeZone) {
+  const p = wallClockParts(instant, timeZone);
+  return new Date(p.year, p.month - 1, p.day, p.hour, p.minute, 0, 0);
+}
+
+/**
+ * Clock for the meal door.
+ *
+ * A phone uses its own zone. 8:43pm in that zone is dinner, and `getHours`
+ * already says so.
+ *
+ * Agent browsers and CI often leave the zone on UTC. 8:43pm Pacific is
+ * 03:43 UTC, still before 10:30, so `nextCoachSlot` starts at breakfast and
+ * an empty breakfast wins after lunch. When the zone is UTC, this returns
+ * the same instant as Pacific wall time. Every other zone is her clock and
+ * is not moved. An explicit `now` (a test, a named moment) is returned as-is.
+ */
+export function coachNow(explicit, { timeZone = deviceTimeZone(), instant = new Date() } = {}) {
+  if (explicit instanceof Date && !Number.isNaN(explicit.getTime())) return explicit;
+  if (!isUtcTimeZone(timeZone)) return instant;
+  return dateAtWallClock(instant, COACH_FALLBACK_TZ);
+}
+
 /** Slot for a new log: prefer explicit, else guess. */
 export function resolveLogSlot(raw, { when = new Date() } = {}) {
   return normalizeSlot(raw) || guessSlotFromTime(when);

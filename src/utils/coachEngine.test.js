@@ -18,7 +18,8 @@ import {
   unmatchedCoachPencils,
 } from "./coachBudget.js";
 import { buildCoachCard, pickScale, rankBankCards, proteinOverNote } from "./coachRank.js";
-import { buildCoachAnswer } from "./coachSession.js";
+import { buildCoachAnswer, resolveCoachSlot } from "./coachSession.js";
+import { coachNow, guessSlotFromTime } from "./mealSlots.js";
 import { coachLogFromCard, coachPlanFieldsFromCard, unscaleRankedCard } from "./coachScale.js";
 import {
   coachPrefsFromProfile,
@@ -240,7 +241,46 @@ describe("slot order", () => {
       now: EVENING,
       entries: [{ slot: "lunch", name: "Salad" }],
     })).toBe("dinner");
+    expect(resolveCoachSlot({
+      now: EVENING,
+      entries: [{ slot: "lunch", name: "Salad" }],
+    })).toBe("dinner");
     expect(nextCoachSlot({ now: EVENING, entries: [] })).toBe("dinner");
+  });
+
+  it("still offers breakfast in the morning, even if lunch is already logged", () => {
+    expect(nextCoachSlot({
+      now: MORNING,
+      entries: [{ slot: "lunch" }],
+    })).toBe("breakfast");
+    expect(resolveCoachSlot({
+      now: MORNING,
+      entries: [{ slot: "lunch" }],
+    })).toBe("breakfast");
+  });
+
+  it("after lunch in the afternoon the next plate is dinner, not a snack", () => {
+    const afternoon = new Date(2026, 8, 4, 15, 0);
+    expect(nextCoachSlot({
+      now: afternoon,
+      entries: [{ slot: "lunch" }],
+    })).toBe("dinner");
+  });
+
+  it("reads a UTC browser at 8:43pm Pacific as dinner", () => {
+    const instant = new Date("2026-10-01T03:43:00.000Z");
+    const clock = coachNow(undefined, { timeZone: "UTC", instant });
+    expect(guessSlotFromTime(clock)).toBe("dinner");
+    expect(nextCoachSlot({
+      now: clock,
+      entries: [{ slot: "lunch", name: "Salad" }],
+    })).toBe("dinner");
+    expect(resolveCoachSlot({
+      now: clock,
+      entries: [{ slot: "lunch", name: "Salad" }],
+    })).toBe("dinner");
+    expect(coachNow(EVENING, { timeZone: "UTC", instant })).toBe(EVENING);
+    expect(coachNow(undefined, { timeZone: "America/Los_Angeles", instant })).toBe(instant);
   });
 
   it("does not rewind to breakfast after dinner is already logged", () => {

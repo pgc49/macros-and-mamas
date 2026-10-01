@@ -15,7 +15,7 @@ import {
   snackReserveCopy,
 } from "../content/coachVoice.js";
 import { rangeProgress } from "./rangeProgress.js";
-import { isOverDay, planMealForSlot } from "./coachBudget.js";
+import { isOverDay, nextCoachSlot, planMealForSlot } from "./coachBudget.js";
 
 const MACRO_ROWS = [
   { key: "cal", label: "", lo: "calLo", hi: "calHi", unit: " cal" },
@@ -227,12 +227,17 @@ export function slotLeftRead(budget) {
   };
 }
 
-/** One-line prompt for the Today card entry point. */
-export function coachEntryHint({ loggedSlots = new Set(), plannedMeals = [], read } = {}) {
+/** One-line prompt for the Today card entry point. Same door as the title. */
+export function coachEntryHint({ loggedSlots = new Set(), plannedMeals = [], read, now = new Date() } = {}) {
   const dinnerLogged = loggedSlots.has("dinner");
   const lunchLogged = loggedSlots.has("lunch");
   if (lunchLogged && !dinnerLogged && !planMealForSlot(plannedMeals, "dinner")) {
-    return `${askForSlotCopy("dinner")} I'll size it to what's left.`;
+    const next = nextCoachSlot({
+      now,
+      entries: [...loggedSlots].map((slot) => ({ slot })),
+      plannedMeals,
+    });
+    return `${askForSlotCopy(next || "dinner")} I'll size it to what's left.`;
   }
   return read?.line1 || COACH_COPY.plenty;
 }

@@ -166,6 +166,20 @@ describe("the coach answers on the device", () => {
     expect(postCoach).not.toHaveBeenCalled();
   });
 
+  it("opens on dinner after lunch when the clock is evening", async () => {
+    const evening = new Date(2026, 8, 4, 18, 30);
+    renderPanel({
+      now: evening,
+      onLoadThread: async () => [],
+      entries: [{ slot: "lunch", name: "Salad" }],
+    });
+    await screen.findByText(COACH_COPY.title);
+    expect(document.body.textContent).toMatch(/Dinner · \d+ cal/);
+    expect(document.body.textContent).toContain(`${COACH_COPY.openerLead} Looking for a dinner idea?`);
+    expect(document.body.textContent).not.toContain("Looking for a breakfast idea?");
+    expect(document.body.textContent).not.toMatch(/Breakfast ·/);
+  });
+
   it("logs tonight as dinner, not the breakfast the clock already passed", async () => {
     const onLogCard = vi.fn(async () => true);
     renderPanel({

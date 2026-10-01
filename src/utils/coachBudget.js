@@ -131,7 +131,10 @@ export function coachTakenSlots({ entries = [], plannedMeals = [], extraSlots = 
 const SLOTS_FROM_CLOCK = {
   breakfast: ["breakfast", "lunch", "dinner", "snack"],
   lunch: ["lunch", "dinner", "snack"],
-  snack: ["snack", "dinner"],
+  // 2–5pm is the snack window on the clock, but the plate in front of her
+  // after lunch is still dinner unless dinner is already logged. A snack is
+  // what she gets when she asks for one, or once dinner is done.
+  snack: ["dinner", "snack"],
   dinner: ["dinner", "snack"],
 };
 
