@@ -17,7 +17,7 @@ import {
   resolveCoachShares,
   unmatchedCoachPencils,
 } from "./coachBudget.js";
-import { buildCoachCard, coachReason, pickScale, plateTiedReason, rankBankCards, proteinOverNote } from "./coachRank.js";
+import { buildCoachCard, coachReason, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason } from "./coachRank.js";
 import { buildCoachAnswer, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
 import { nextCustomMeals } from "./coachMyMeals.js";
 import { coachSlotFromTime } from "./mealSlots.js";
@@ -525,6 +525,29 @@ describe("ranking", () => {
     expect(replayCoachMessages(messages, live)[0].body).toBe("Earlier answer.");
   });
 
+  it("strips a stock fit line on open cards and keeps a plate-tied why", () => {
+    const messages = [{
+      id: "m1",
+      body: "Earlier answer.",
+      cards: [
+        { name: "Sheet pan chicken", source: "bank", reason: COACH_COPY.reasonGets },
+        { name: "Turkey meatballs", source: "bank", reason: COACH_COPY.reasonFits, knowsYou: "One of your usuals at dinner" },
+        { name: "Halibut + rice", source: "bank", reason: "Leaves 4g fat.", knowsYou: "One of your usuals at dinner" },
+        { name: "Pulled chicken tacos", source: "bank", reason: "33g of protein still open." },
+        { name: "Off-slot plate", source: "bank", reason: "Hits protein and keeps fat in range", knowsYou: "Usually breakfast" },
+      ],
+    }];
+    const shown = replayCoachMessages(messages, []);
+    const byName = Object.fromEntries(shown[0].cards.map((card) => [card.name, card.reason]));
+    expect(byName["Sheet pan chicken"]).toBe("");
+    expect(byName["Turkey meatballs"]).toBe("You've had this at dinner.");
+    expect(byName["Halibut + rice"]).toBe("Leaves 4g fat.");
+    expect(byName["Pulled chicken tacos"]).toBe("33g of protein still open.");
+    expect(byName["Off-slot plate"]).toBe("");
+    expect(JSON.stringify(shown)).not.toContain(COACH_COPY.reasonGets);
+    expect(JSON.stringify(shown)).not.toContain(COACH_COPY.reasonFits);
+  });
+
   it("drops a deleted custom wearing any chip and keeps the live custom and the bank meal", () => {
     const messages = [{
       id: "m1",
@@ -653,6 +676,19 @@ describe("ranking", () => {
     expect(plateTiedReason("Most of your protein — 12g short, easy to pick up later.")).toBe(
       `12g ${COACH_COPY.reasonProteinOpenTail}`,
     );
+    expect(plateTiedReason("Hits protein and keeps fat in range")).toBe("");
+    expect(shownCoachReason({
+      reason: COACH_COPY.reasonGets,
+      knowsYou: "One of your usuals at dinner",
+    })).toBe("You've had this at dinner.");
+    expect(shownCoachReason({
+      reason: "Leaves 4g fat.",
+      knowsYou: "One of your usuals at dinner",
+    })).toBe("Leaves 4g fat.");
+    expect(shownCoachReason({
+      reason: COACH_COPY.reasonFits,
+      knowsYou: "Usually breakfast",
+    })).toBe("");
   });
 
   it("dresses a built meal with the same fit check as a bank meal", () => {

@@ -287,6 +287,73 @@ describe("the coach answers on the device", () => {
     expect(postCoach).not.toHaveBeenCalled();
   });
 
+  it("silences a stock fit line on an open thread and keeps a plate-tied why", async () => {
+    renderPanel({
+      onLoadThread: async () => [
+        {
+          id: "r2",
+          role: "coach",
+          body: "Earlier plate.",
+          kind: "cards",
+          payload: {
+            cards: [
+              {
+                kind: "meal",
+                name: "Sheet pan chicken",
+                title: "Sheet pan chicken",
+                source: "bank",
+                tag: "Callie's bank",
+                cal: 440,
+                p: 45,
+                c: 35,
+                f: 14,
+                servings: 1,
+                reason: COACH_COPY.reasonGets,
+              },
+              {
+                kind: "meal",
+                name: "Turkey meatballs",
+                title: "Turkey meatballs",
+                source: "bank",
+                tag: "Callie's bank",
+                cal: 420,
+                p: 40,
+                c: 22,
+                f: 16,
+                servings: 1,
+                reason: COACH_COPY.reasonFits,
+                knowsYou: "One of your usuals at dinner",
+              },
+              {
+                kind: "meal",
+                name: "Halibut + rice",
+                title: "Halibut + rice",
+                source: "bank",
+                tag: "Callie's bank",
+                cal: 455,
+                p: 44,
+                c: 50,
+                f: 7,
+                servings: 1,
+                reason: `${COACH_COPY.reasonFatLeft} 4${COACH_COPY.reasonFatLeftTail}`,
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    await screen.findByText("Halibut + rice");
+    expect(screen.getByText("Sheet pan chicken")).toBeTruthy();
+    expect(screen.getByText("Turkey meatballs")).toBeTruthy();
+    expect(document.body.textContent).not.toContain(COACH_COPY.reasonGets);
+    expect(document.body.textContent).not.toContain(COACH_COPY.reasonFits);
+    expect(document.body.textContent).not.toContain("Hits protein and keeps fat in range");
+    expect(document.body.textContent).toContain(`${COACH_COPY.reasonFatLeft} 4${COACH_COPY.reasonFatLeftTail}`);
+    expect(document.body.textContent).toContain("You've had this at dinner.");
+    expect(document.body.textContent).not.toContain("One of your usuals at dinner");
+  });
+
   it("opens on dinner after lunch when the clock is evening", async () => {
     const evening = new Date("2026-10-01T04:07:00.000Z");
     renderPanel({

@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { T, F, FD } from "../theme/tokens";
 import { COACH_COPY } from "../content/coachVoice";
 import { logSaveSucceeded } from "../utils/logSave";
-import { plateTiedReason } from "../utils/coachRank";
+import { shownCoachReason } from "../utils/coachRank";
 
 const AI_SOURCES = new Set(["menu", "kitchen", "new"]);
 
@@ -89,7 +89,8 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
 
   const isEstimate = AI_SOURCES.has(card.source);
   const done = phase === "logged" || phase === "pencilled";
-  const why = plateTiedReason(card.reason);
+  const why = shownCoachReason(card);
+  const historyWhy = /^You've had this at /i.test(why);
 
   return (
     <div
@@ -109,7 +110,9 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
         <>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
             <span style={chip(T.track, T.inkSoft)}>{card.tag}</span>
-            {card.knowsYou && <span style={chip(T.accentSoft, T.accentDeep)}>{card.knowsYou}</span>}
+            {card.knowsYou && !historyWhy && (
+              <span style={chip(T.accentSoft, T.accentDeep)}>{card.knowsYou}</span>
+            )}
           </div>
 
           <div data-testid="coach-card-title" style={{ fontFamily: FD, fontSize: 18, lineHeight: 1.25, marginBottom: 2 }}>

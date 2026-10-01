@@ -22,7 +22,7 @@ import {
   remainingForCoach,
   skippedSlotsBefore,
 } from "./coachBudget.js";
-import { buildCoachCard, rankBankCards } from "./coachRank.js";
+import { buildCoachCard, rankBankCards, shownCoachReason } from "./coachRank.js";
 import { coachPrefsFromProfile } from "./coachPrefs.js";
 import { budgetSentence, coachRead, leftLine, slotLeftRead } from "./coachLines.js";
 import { bankMealNameSet, buildLiveMyMealsLookup, cardIsGoneCustom } from "./coachMyMeals.js";
@@ -166,8 +166,14 @@ export function pruneStaleMyMealCards(cards = [], customMeals = [], bankNames = 
 export function replayCoachMessages(messages = [], customMeals = []) {
   return (messages || []).map((message) => {
     if (!Array.isArray(message?.cards) || !message.cards.length) return message;
-    const cards = pruneStaleMyMealCards(message.cards, customMeals);
-    if (cards.length === message.cards.length) return message;
+    const cards = pruneStaleMyMealCards(message.cards, customMeals).map((card) => {
+      const reason = shownCoachReason(card);
+      if (reason === (card?.reason || "")) return card;
+      return { ...card, reason };
+    });
+    const same = cards.length === message.cards.length
+      && cards.every((card, i) => card === message.cards[i]);
+    if (same) return message;
     return { ...message, cards };
   });
 }

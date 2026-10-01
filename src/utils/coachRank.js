@@ -203,10 +203,24 @@ const STOCK_REASONS = [
  * "Fits what's left") is not a reason. Fat left and protein still open name
  * this plate's gap. Everything else stays blank.
  */
+function normalizedReason(reason) {
+  return String(reason || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isStockReason(text) {
+  const s = text.toLowerCase();
+  if (!s) return false;
+  if (STOCK_REASONS.includes(s)) return true;
+  if (s.includes("hits protein and keeps fat")) return true;
+  if (s.includes("fits what's left") || s.includes("fits what’s left")) return true;
+  if (s.includes("fat stays in range") && !/\d+\s*g/.test(s)) return true;
+  if (s.includes("fat stays in check") || s.includes("simple and lighter")) return true;
+  return false;
+}
+
 export function plateTiedReason(reason) {
-  const text = String(reason || "").trim();
-  if (!text) return "";
-  if (STOCK_REASONS.includes(text.toLowerCase())) return "";
+  const text = normalizedReason(reason);
+  if (!text || isStockReason(text)) return "";
   const leaves = text.match(/^(?:hits protein and )?leaves (\d+)g fat\.?$/i);
   if (leaves) {
     const n = Number(leaves[1]);
@@ -216,6 +230,16 @@ export function plateTiedReason(reason) {
   const gap = text.match(/^(?:most of your protein — )?(\d+)g (?:short, easy to pick up later\.|of protein still open\.)$/i);
   if (gap) return `${gap[1]}g ${COACH_COPY.reasonProteinOpenTail}`;
   return text;
+}
+
+/** The one clause under a card. History beats a blank line. A stock fit line never does. */
+export function shownCoachReason(card) {
+  const tied = plateTiedReason(card?.reason);
+  if (tied) return tied;
+  const knows = normalizedReason(card?.knowsYou);
+  const at = knows.match(/^one of your usuals at\s+(.+?)\.?$/i);
+  if (at) return `You've had this at ${at[1]}.`;
+  return "";
 }
 
 /**
@@ -389,7 +413,10 @@ export function buildCoachCard(meal, budget, ctx = {}) {
   next.slot = ctx.slot || next.slot || null;
   next.score = scoreScaledMeal(next, budget, ctx);
   next.knowsYou = ctx.knowsYou || coachKnowsYou(next, ctx);
-  next.reason = coachReason(next, budget, { over: ctx.over });
+  next.reason = shownCoachReason({
+    ...next,
+    reason: coachReason(next, budget, { over: ctx.over }),
+  });
   next.title = portionTitle(next.name, servings);
   next.tag = sourceTag(next.source);
   next.proteinNote = proteinOverNote(next, budget);
