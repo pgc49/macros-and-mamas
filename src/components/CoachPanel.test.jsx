@@ -499,7 +499,11 @@ describe("what isn't the coach's goes to Callie", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await screen.findByText(COACH_DEFLECT.weight.line);
-    expect(postCoach).not.toHaveBeenCalled();
+    expect(postCoach).toHaveBeenCalledWith({
+      mode: "ask",
+      text: "why has the scale not moved in two weeks",
+    });
+    expect(onAskCallie).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: COACH_DEFLECT.weight.cta }));
     expect(onAskCallie).toHaveBeenCalledWith("why has the scale not moved in two weeks");
@@ -521,7 +525,7 @@ describe("what isn't the coach's goes to Callie", () => {
       fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
       await screen.findByText(line);
-      expect(postCoach).not.toHaveBeenCalled();
+      expect(postCoach).toHaveBeenCalledWith({ mode: "ask", text: question });
       cleanup();
     }
   });
@@ -574,7 +578,11 @@ describe("what isn't the coach's goes to Callie", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await screen.findByText(COACH_DEFLECT.supply.line);
-    expect(postCoach).not.toHaveBeenCalled();
+    expect(postCoach).toHaveBeenCalledWith({
+      mode: "ask",
+      text: "what should I eat for breakfast if I'm nursing, will it affect my supply",
+    });
+    expect(screen.queryByRole("button", { name: COACH_COPY.send })).toBeTruthy();
   });
 
   it("answers eating-out and skip-dinner in Callie's words, without a request", async () => {
@@ -746,7 +754,8 @@ describe("the photo she attached", () => {
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
 
     expect(screen.getByRole("button", { name: "Photo of the menu" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Photo of my fridge" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Photo of my fridge" })).toBeNull();
+    expect(screen.queryByRole("button", { name: COACH_COPY.askKitchen })).toBeNull();
     expect(screen.queryByRole("button", { name: "What's in my kitchen" })).toBeNull();
   });
 

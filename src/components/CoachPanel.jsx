@@ -26,7 +26,6 @@ import { downscaleImage } from "../utils/imageDownscale";
 const QUICK_ASKS = [
   { id: "eat", label: COACH_COPY.askEat, kind: "cards" },
   { id: "out", label: COACH_COPY.askOut, kind: "photo", photo: "menu" },
-  { id: "kitchen", label: COACH_COPY.askKitchen, kind: "photo", photo: "kitchen" },
   { id: "day", label: COACH_COPY.askDay, kind: "read" },
 ];
 
@@ -327,6 +326,12 @@ export function CoachPanel({
     }
   };
 
+  // The deflect is already on screen. This post only asks the server to
+  // append the factual line. A failure here does not take Message Callie away.
+  const noteRefusal = (asked) => {
+    Promise.resolve(postCoach?.({ mode: "ask", text: asked })).catch(() => {});
+  };
+
   const submitText = async () => {
     const text = input.trim();
     if (!text && !photo) return;
@@ -339,13 +344,14 @@ export function CoachPanel({
       await send({ mode: kind, text, images });
       return;
     }
-    // The same guardrail the endpoint runs, run here as well. A question that
-    // isn't the coach's is handed to Callie in the frame she asked it, with no
-    // request made and nothing spent. The server keeps its copy as the
-    // authority, since this one is only as trustworthy as the browser.
+    // The same guardrail the endpoint runs, run here as well. She sees Message
+    // Callie in this frame, unsent. The post records the refusal on her card
+    // and does not spend a model call. The server classifies again; this copy
+    // is only as trustworthy as the browser.
     const verdict = classifyAsk(text);
     push({ role: "mama", body: text });
     if (verdict.scope === "urgent") {
+      noteRefusal(text);
       push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
       return;
     }
@@ -384,6 +390,7 @@ export function CoachPanel({
     }
 
     if (scopeIsRefused(verdict.scope)) {
+      noteRefusal(text);
       push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
       return;
     }

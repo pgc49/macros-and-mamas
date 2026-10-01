@@ -12,6 +12,7 @@ import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { ageFromDateOfBirth } from "../utils/dateOfBirth";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
+import { preserveRefusalLines } from "../../functions/_shared/coachRefusalSummary.js";
 
 export { ageFromDateOfBirth };
 
@@ -2010,12 +2011,14 @@ export const db = {
 
   async saveClientSummary(row) {
     if (!row?.profile_id || !row?.for_date || !row?.summary) return null;
+    const existing = await this.loadClientSummary(row.profile_id, row.for_date);
+    const summary = preserveRefusalLines(existing?.summary, String(row.summary).slice(0, 2000));
     const { data, error } = await supabase
       .from("client_summaries")
       .upsert({
         profile_id: row.profile_id,
         for_date: row.for_date,
-        summary: String(row.summary).slice(0, 2000),
+        summary,
         suggested_touch: row.suggested_touch ? String(row.suggested_touch).slice(0, 500) : null,
         model: row.model ? String(row.model).slice(0, 120) : null,
       }, { onConflict: "profile_id,for_date" })

@@ -588,6 +588,104 @@ describe("the model ask sees the file the ranker sees", () => {
   });
 });
 
+describe("a refusal lands on her card", () => {
+  it("appends the door and the question without replacing her summary", async () => {
+    let row = {
+      summary: "Callie already wrote this.",
+      suggested_touch: "Say hi.",
+      model: "admin-model",
+    };
+    const posts = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      const value = String(url);
+      if (value.includes("/auth/v1/user")) {
+        return new Response(JSON.stringify({ id: USER_ID }), { status: 200 });
+      }
+      if (value.includes("select=paid,refunded,role")) {
+        return new Response(JSON.stringify([{ paid: true, refunded: false, role: "client" }]), { status: 200 });
+      }
+      if (value.includes("client_summaries") && init?.method === "POST") {
+        const body = JSON.parse(init.body);
+        posts.push(body);
+        row = body;
+        return new Response(null, { status: 201 });
+      }
+      if (value.includes("client_summaries")) {
+        return new Response(JSON.stringify([row]), { status: 200 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+
+    const supply = await onRequestPost({
+      request: request({ mode: "ask", text: "will this affect my milk supply" }),
+      env,
+    });
+    expect((await supply.json()).deflect).toBe("supply");
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].summary.startsWith("Callie already wrote this.")).toBe(true);
+    expect(posts[0].summary).toContain("Coach refused (supply): will this affect my milk supply");
+    expect(posts[0].suggested_touch).toBe("Say hi.");
+    expect(posts[0].model).toBe("admin-model");
+
+    const repeat = await onRequestPost({
+      request: request({ mode: "ask", text: "will this affect my milk supply" }),
+      env,
+    });
+    expect((await repeat.json()).deflect).toBe("supply");
+    expect(posts).toHaveLength(1);
+
+    const dizzy = await onRequestPost({
+      request: request({ mode: "ask", text: "I've been dizzy since this morning" }),
+      env,
+    });
+    expect((await dizzy.json()).deflect).toBe("care");
+    expect(posts.at(-1).summary).toContain("Callie already wrote this.");
+    expect(posts.at(-1).summary).toContain("Coach refused (medical): I've been dizzy since this morning");
+
+    const scale = await onRequestPost({
+      request: request({ mode: "ask", text: "why has the scale not moved" }),
+      env,
+    });
+    expect((await scale.json()).deflect).toBe("weight");
+    expect(posts.at(-1).summary).toContain("Coach refused (scale): why has the scale not moved");
+    expect(posts.at(-1).suggested_touch).toBe("Say hi.");
+  });
+
+  it("records a model handoff without the model's sentence", async () => {
+    mockSupabase();
+    modelReturns({ scope: "callie", reply: "You should talk to someone about this feeling.", meals: [] });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "what should I eat before my run" }),
+      env,
+    });
+    expect((await resp.json()).deflect).toBe("offTopic");
+    const write = globalThis.fetch.mock.calls.find(([url, init]) => (
+      String(url).includes("client_summaries") && init?.method === "POST"
+    ));
+    const body = JSON.parse(write[1].body);
+    expect(body.summary).toContain("Coach refused (off topic): what should I eat before my run");
+    expect(body.summary).not.toContain("talk to someone");
+  });
+
+  it("does not write a summary for a logging refusal", async () => {
+    mockSupabase();
+    const skip = await onRequestPost({
+      request: request({ mode: "ask", text: "should I skip dinner" }),
+      env,
+    });
+    expect((await skip.json()).teach).toBe("neverSkip");
+    await onRequestPost({
+      request: request({ mode: "ask", text: "I won't log this" }),
+      env,
+    });
+    const writes = globalThis.fetch.mock.calls.filter(([url, init]) => (
+      String(url).includes("client_summaries") && init?.method === "POST"
+    ));
+    expect(writes).toHaveLength(0);
+  });
+});
+
 describe("cost", () => {
   it("stops her at the daily cap", async () => {
     mockSupabase({ callsUsed: 30 });

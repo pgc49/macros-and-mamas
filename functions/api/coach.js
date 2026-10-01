@@ -58,6 +58,7 @@ import { hasMenuLink, localCoachTeach, teachBody } from "../../src/utils/coachTe
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
 import { menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
+import { appendCoachRefusal, isLoggingRefusal } from "../_shared/coachRefusalSummary.js";
 
 const MAX_PER_DAY = 30;
 const MAX_IMAGES = 3;
@@ -104,12 +105,15 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "Add a photo first." }, 400);
     }
 
-    // The guardrail runs before anything is spent. The client runs the same
-    // classifier so most refusals never get here at all; this is the copy that
-    // can't be skipped by editing a request. A photo of a menu is a food
-    // question by construction, so only free text is classified.
+    // The guardrail runs before anything is spent. The client shows the same
+    // handoff immediately and also posts here, so the refusal can be written
+    // onto her card. A photo of a menu is a food question by construction, so
+    // only free text is classified. Skip-the-log stays a teach, not a card.
     const verdict = mode === "ask" ? classifyAsk(text) : { scope: "food", aside: null };
     if (scopeIsRefused(verdict.scope)) {
+      if (!isLoggingRefusal(text)) {
+        await appendCoachRefusal(env, user.id, { asked: text, scope: verdict.scope });
+      }
       return json({
         ok: true,
         scope: verdict.scope,
@@ -249,8 +253,12 @@ export async function onRequestPost({ request, env }) {
       );
     }
 
-    // Second layer: the model gets to hand a question back too.
+    // Second layer: the model gets to hand a question back too. The card
+    // records her question and the door, not the model's sentence.
     if (String(parsed.value?.scope || "").toLowerCase() === "callie") {
+      if (!isLoggingRefusal(text)) {
+        await appendCoachRefusal(env, user.id, { asked: text, scope: "off_topic" });
+      }
       return json({ ok: true, scope: "off_topic", deflect: "offTopic", meals: [] });
     }
 
