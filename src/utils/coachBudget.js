@@ -121,8 +121,24 @@ export function coachTakenSlots({ entries = [], plannedMeals = [], extraSlots = 
 }
 
 /**
+ * What she can still eat from here, in clock order.
+ *
+ * Breakfast is not "next" at dinner just because she never logged it. A slot
+ * the clock has passed was skipped. The plate in front of her is the meal
+ * the clock says, then whatever is still ahead of that — never a rewind to
+ * the first empty breakfast.
+ */
+const SLOTS_FROM_CLOCK = {
+  breakfast: ["breakfast", "lunch", "dinner", "snack"],
+  lunch: ["lunch", "dinner", "snack"],
+  snack: ["snack", "dinner"],
+  dinner: ["dinner", "snack"],
+};
+
+/**
  * Next slot after a log or pencil. Pencilled slots count as done, so she is
- * never handed back the slot she just answered.
+ * never handed back the slot she just answered. The clock picks where that
+ * walk starts: at night, dinner, even when breakfast and lunch are empty.
  */
 export function nextCoachSlot({
   now = new Date(),
@@ -131,9 +147,12 @@ export function nextCoachSlot({
   extraTaken = [],
 } = {}) {
   const taken = coachTakenSlots({ entries, plannedMeals, extraSlots: extraTaken });
-  const next = defaultCoachSlot({ now, loggedSlots: taken, ignoreTime: true });
-  if (!next || taken.has(next)) return null;
-  return next;
+  const clock = guessSlotFromTime(now);
+  const ahead = SLOTS_FROM_CLOCK[clock] || SLOTS_FROM_CLOCK.dinner;
+  for (const slot of ahead) {
+    if (!taken.has(slot)) return slot;
+  }
+  return null;
 }
 
 function median(values) {

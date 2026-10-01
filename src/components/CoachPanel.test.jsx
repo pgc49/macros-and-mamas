@@ -166,6 +166,57 @@ describe("the coach answers on the device", () => {
     expect(postCoach).not.toHaveBeenCalled();
   });
 
+  it("logs tonight as dinner, not the breakfast the clock already passed", async () => {
+    const onLogCard = vi.fn(async () => true);
+    renderPanel({
+      onLogCard,
+      onLoadThread: async () => [],
+      entries: [{ slot: "lunch", name: "Salad" }],
+    });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "what should I eat tonight" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(1));
+    const logs = screen.getAllByRole("button", { name: COACH_COPY.logIt });
+    fireEvent.click(logs[logs.length - 1]);
+    await waitFor(() => expect(onLogCard).toHaveBeenCalled());
+    expect(onLogCard.mock.calls.at(-1)[0].slot).toBe("dinner");
+  });
+
+  it("stamps a model dinner she named, even when the model called it breakfast", async () => {
+    const onLogCard = vi.fn(async () => true);
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Chicken and rice tonight.",
+      meals: [{ name: "Chicken and rice", cal: 380, p: 34, c: 28, f: 12, slot: "breakfast" }],
+    }));
+    renderPanel({
+      postCoach,
+      onLogCard,
+      onLoadThread: async () => [],
+      entries: [{ slot: "lunch", name: "Salad" }],
+    });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "what should I eat tonight if I only have chicken and rice" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+    await screen.findByText("Chicken and rice tonight.");
+    expect(postCoach.mock.calls[0][0].slot).toBe("dinner");
+    const logs = screen.getAllByRole("button", { name: COACH_COPY.logIt });
+    fireEvent.click(logs[logs.length - 1]);
+    await waitFor(() => expect(onLogCard).toHaveBeenCalled());
+    const card = onLogCard.mock.calls.at(-1)[0];
+    expect(card.name).toMatch(/Chicken and rice/);
+    expect(card.slot).toBe("dinner");
+  });
+
   it("answers the same question typed, still without the model", async () => {
     const postCoach = vi.fn();
     renderPanel({ postCoach });

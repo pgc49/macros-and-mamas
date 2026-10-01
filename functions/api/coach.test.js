@@ -431,6 +431,21 @@ describe("what comes back", () => {
     expect(data.meals[0].desc).toMatch(/estimate/i);
   });
 
+  it("keeps a named tonight as dinner when the model says breakfast", async () => {
+    mockSupabase();
+    modelReturns({
+      scope: "food",
+      reply: "Chicken and rice tonight.",
+      meals: [{ name: "Chicken and rice", cal: 440, p: 38, c: 30, f: 14, slot: "breakfast" }],
+    });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "what should I eat tonight", slot: "breakfast" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.meals[0].slot).toBe("dinner");
+  });
+
   it("needs a photo for a menu read", async () => {
     mockSupabase();
     const resp = await onRequestPost({ request: request({ mode: "menu", slot: "dinner" }), env });

@@ -18,7 +18,7 @@ import {
 } from "../utils/coachSession";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
-import { localCoachIntent } from "../utils/coachIntent";
+import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
 import { downscaleImage } from "../utils/imageDownscale";
@@ -248,17 +248,26 @@ export function CoachPanel({
     sentRef.current = true;
     setBusy(true);
     setError("");
+    // "Tonight" / "dinner" beats the clock. The panel may still be on
+    // breakfast from an earlier open; the cards and the log have to follow
+    // the meal she just named.
+    const named = slotNamedInAsk(text);
+    const slotForAsk = named || answer?.slot || "dinner";
+    const fit = named && named !== answer?.slot
+      ? (buildCoachAnswer({ ...inputs, slot: named }) || answer)
+      : answer;
+    if (named && named !== answer?.slot) setSlotOverride(named);
     try {
       const data = await postCoach?.({
         mode,
         text,
-        slot: answer?.slot || "dinner",
-        budget: answer?.budget
+        slot: slotForAsk,
+        budget: fit?.budget
           ? {
-            cal: answer.budget.cal,
-            pNeed: answer.budget.pNeed,
-            c: answer.budget.c,
-            f: answer.budget.f,
+            cal: fit.budget.cal,
+            pNeed: fit.budget.pNeed,
+            c: fit.budget.c,
+            f: fit.budget.f,
           }
           : null,
         recent: recentNamesForPrompt(mealHistoryByDate, entries),
@@ -266,9 +275,9 @@ export function CoachPanel({
           entries,
           plannedMeals,
           mealHistoryByDate,
-          slot: answer?.slot,
-          skipped: answer?.skipped,
-          snackCount: answer?.budget?.snackCount,
+          slot: slotForAsk,
+          skipped: fit?.skipped,
+          snackCount: fit?.budget?.snackCount,
           turnedDown: skipRef.current,
         }),
         images,
@@ -286,7 +295,10 @@ export function CoachPanel({
 
       // The model's meals are re-checked against the real budget here. One that
       // no longer fits is dropped rather than shown with a caveat.
-      const cards = buildSuggestedCards(data.meals, answer, { source: data.mealSource || "new" });
+      const cards = buildSuggestedCards(data.meals, fit, {
+        source: data.mealSource || "new",
+        slot: slotForAsk,
+      });
       const body = data.reply || (cards.length ? "" : COACH_COPY.cantSeeIt);
       push({
         role: "coach",

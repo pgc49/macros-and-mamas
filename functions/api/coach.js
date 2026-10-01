@@ -256,7 +256,7 @@ export async function onRequestPost({ request, env }) {
 
     let reply = cleanReply(parsed.value?.reply);
     const orderMode = menuPage?.ok ? "menu" : mode;
-    let meals = normalizeMeals(parsed.value, slot, orderMode);
+    let meals = normalizeMeals(parsed.value, slot, orderMode, { lockSlot: Boolean(askedSlot) });
     let teachTopic = null;
 
     if (menuPage?.ok) {
@@ -338,7 +338,7 @@ function orderStepsOnly(steps) {
     .slice(0, 6);
 }
 
-function normalizeMeals(parsed, fallbackSlot, mode) {
+function normalizeMeals(parsed, fallbackSlot, mode, { lockSlot = false } = {}) {
   const raw = Array.isArray(parsed?.meals) ? parsed.meals : parsed?.meal ? [parsed.meal] : [];
   const out = [];
   for (const m of raw.slice(0, 3)) {
@@ -358,7 +358,9 @@ function normalizeMeals(parsed, fallbackSlot, mode) {
     }
 
     out.push(sanitizePlanMeal({
-      slot: SLOTS.has(String(m.slot || "").toLowerCase()) ? String(m.slot).toLowerCase() : fallbackSlot,
+      slot: lockSlot
+        ? fallbackSlot
+        : (SLOTS.has(String(m.slot || "").toLowerCase()) ? String(m.slot).toLowerCase() : fallbackSlot),
       name: String(m.name).slice(0, 120),
       basedOn: mode === "menu" ? null : (m.basedOn ? String(m.basedOn).slice(0, 120) : null),
       desc,

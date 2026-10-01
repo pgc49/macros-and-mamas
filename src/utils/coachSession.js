@@ -14,7 +14,6 @@ import {
   attachDayHighs,
   coachPencilForSlot,
   computeSlotBudget,
-  defaultCoachSlot,
   deriveMealShares,
   snackHabitFromHistory,
   isOverDay,
@@ -65,9 +64,9 @@ function historyNames(mealHistoryByDate, { slot = null, days = HISTORY_DAYS } = 
 export function resolveCoachSlot({ entries = [], plannedMeals = [], now = new Date(), requested = null } = {}) {
   const asked = normalizeSlot(requested);
   if (asked) return asked;
-  const logged = loggedSlotsFromEntries(entries);
-  const next = nextCoachSlot({ now, entries, plannedMeals });
-  return next || defaultCoachSlot({ now, loggedSlots: logged }) || guessSlotFromTime(now);
+  // A passed breakfast is not the fallback once the clock has moved on.
+  // `nextCoachSlot` already walks only what is still ahead.
+  return nextCoachSlot({ now, entries, plannedMeals }) || guessSlotFromTime(now);
 }
 
 /**
@@ -168,13 +167,14 @@ export function pruneStaleMyMealCards(cards = [], customMeals = []) {
  * ask) as cards, using the same fit check and the same portioning as the bank.
  * A meal that doesn't fit is dropped here rather than shown with a caveat.
  */
-export function buildSuggestedCards(meals, answer, { source = "new" } = {}) {
+export function buildSuggestedCards(meals, answer, { source = "new", slot = null } = {}) {
   if (!answer?.budget) return [];
+  const cardSlot = slot || answer.slot;
   const out = [];
   for (const meal of meals || []) {
     const card = buildCoachCard({ ...meal, source }, answer.budget, {
       likes: answer.prefs?.likes,
-      slot: answer.slot,
+      slot: cardSlot,
       over: answer.over,
     });
     if (card) out.push({ kind: "meal", ...card });

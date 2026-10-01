@@ -18,6 +18,7 @@ import {
   unmatchedCoachPencils,
 } from "./coachBudget.js";
 import { buildCoachCard, pickScale, rankBankCards, proteinOverNote } from "./coachRank.js";
+import { buildCoachAnswer } from "./coachSession.js";
 import { coachLogFromCard, coachPlanFieldsFromCard, unscaleRankedCard } from "./coachScale.js";
 import {
   coachPrefsFromProfile,
@@ -211,6 +212,7 @@ describe("slot order", () => {
 
   it("ignores a plain week-plan meal when picking the next slot", () => {
     const next = nextCoachSlot({
+      now: MORNING,
       entries: [{ slot: "breakfast" }],
       plannedMeals: [{ slot: "lunch", via: "recipe" }],
     });
@@ -219,6 +221,7 @@ describe("slot order", () => {
 
   it("never hands back the slot she just answered", () => {
     const next = nextCoachSlot({
+      now: MORNING,
       entries: [{ slot: "breakfast" }],
       plannedMeals: [{ slot: "lunch", via: "coach" }],
     });
@@ -227,8 +230,24 @@ describe("slot order", () => {
 
   it("returns null when the day is answered", () => {
     expect(nextCoachSlot({
+      now: EVENING,
       entries: [{ slot: "breakfast" }, { slot: "lunch" }, { slot: "dinner" }, { slot: "snack" }],
     })).toBe(null);
+  });
+
+  it("at night, lunch logged and breakfast empty is dinner, not breakfast", () => {
+    expect(nextCoachSlot({
+      now: EVENING,
+      entries: [{ slot: "lunch", name: "Salad" }],
+    })).toBe("dinner");
+    expect(nextCoachSlot({ now: EVENING, entries: [] })).toBe("dinner");
+  });
+
+  it("does not rewind to breakfast after dinner is already logged", () => {
+    expect(nextCoachSlot({
+      now: EVENING,
+      entries: [{ slot: "lunch" }, { slot: "dinner" }],
+    })).toBe("snack");
   });
 
   /**
@@ -574,6 +593,19 @@ describe("a meal belongs at a meal", () => {
    * gone back to breakfast — the dinner she logged off the card still in front
    * of her was filed under breakfast. The card carries its own slot now.
    */
+  it("stamps a named dinner on the cards, even when breakfast was never logged", () => {
+    const answer = buildCoachAnswer({
+      macros: MACROS,
+      totals: { cal: 520, p: 42, c: 55, f: 16 },
+      entries: [{ slot: "lunch", name: "Salad" }],
+      slot: "dinner",
+      now: EVENING,
+    });
+    expect(answer.slot).toBe("dinner");
+    expect(answer.cards.length).toBeGreaterThan(0);
+    expect(answer.cards.every((card) => card.slot === "dinner")).toBe(true);
+  });
+
   it("stamps a card with the meal it was sized for", () => {
     const { meals } = rankBankCards({ bankMeals: mixed, budget: roomyBreakfast(), slot: "breakfast" });
     expect(meals.every((m) => m.slot === "breakfast")).toBe(true);
