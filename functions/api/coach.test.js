@@ -30,7 +30,16 @@ function request(body) {
   });
 }
 
-function mockSupabase({ paid = true, role = "client", macros = true, callsUsed = 0, pages = null } = {}) {
+function mockSupabase({
+  paid = true,
+  role = "client",
+  macros = true,
+  callsUsed = 0,
+  pages = null,
+  profile = null,
+  macrosRow = null,
+  customMeals = [],
+} = {}) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     const value = String(url);
     if (value.includes("/auth/v1/user")) {
@@ -48,17 +57,16 @@ function mockSupabase({ paid = true, role = "client", macros = true, callsUsed =
     if (value.includes("estimate_calls")) return new Response(null, { status: 201 });
     if (value.includes("/rest/v1/profiles?id=eq.")) {
       return new Response(
-        JSON.stringify([{ id: USER_ID, name: "Sam", diet: "none", allergens: [], pref_d: "chicken" }]),
+        JSON.stringify([profile || { id: USER_ID, name: "Sam", diet: "none", allergens: [], pref_d: "chicken" }]),
         { status: 200 },
       );
     }
     if (value.includes("/rest/v1/macros")) {
-      return new Response(
-        JSON.stringify(macros ? [{ cal: 1750, protein: 140, carbs: 160, fat: 55 }] : []),
-        { status: 200 },
-      );
+      if (!macros && !macrosRow) return new Response("[]", { status: 200 });
+      const row = macrosRow || { cal: 1750, protein: 140, carbs: 160, fat: 55 };
+      return new Response(JSON.stringify([row]), { status: 200 });
     }
-    if (value.includes("custom_meals")) return new Response("[]", { status: 200 });
+    if (value.includes("custom_meals")) return new Response(JSON.stringify(customMeals), { status: 200 });
     if (pages) {
       for (const [host, page] of Object.entries(pages)) {
         if (!value.includes(host)) continue;
@@ -88,6 +96,65 @@ function postedCalls() {
   return globalThis.fetch.mock.calls.filter(([url, init]) => (
     String(url).includes("estimate_calls") && init?.method === "POST"
   ));
+}
+
+function promptText(call = openrouter.callOpenRouter.mock.calls.at(-1)[0]) {
+  const content = call.messages[1].content;
+  if (typeof content === "string") return content;
+  return content.find((part) => part.type === "text")?.text || "";
+}
+
+const FILE = {
+  profile: {
+    id: USER_ID,
+    name: "Sam",
+    diet: "pescatarian",
+    pref_b: "eggs and oats",
+    pref_l: "salads",
+    pref_d: "salmon and rice",
+    pref_s: "yogurt",
+    season_note: "nursing a toddler",
+    allergens: ["dairy"],
+    allergen_note: "whey is fine",
+    food_avoids: "mushrooms",
+    breastfeeding: true,
+    months_pp: 2,
+    coach_note: "banner she dismissed",
+  },
+  macrosRow: {
+    cal: 1800,
+    protein: 140,
+    carbs: 160,
+    fat: 55,
+    notes: ["keep fat at the low end", "no oats"],
+  },
+  customMeals: [{ name: "Sausage scramble", cal: 380, p: 32, c: 12, f: 18 }],
+};
+
+function expectFileInPrompt(prompt, months) {
+  expect(prompt).toContain("Approved ranges");
+  expect(prompt).toContain("Calories: 1800");
+  expect(prompt).toContain("Protein: 140 g");
+  expect(prompt).toContain("Carbs: 160 g");
+  expect(prompt).toContain("Fat: 55 g");
+  expect(prompt).toContain("Do not recite them");
+  expect(prompt).toContain("keep fat at the low end");
+  expect(prompt).toContain("no oats");
+  expect(prompt).toContain("Do not quote them");
+  expect(prompt).toContain(`${months} months postpartum`);
+  expect(prompt).toContain("Choose the plate from that");
+  expect(prompt).toContain("Do not mention her stage");
+  expect(prompt).not.toMatch(/you are \d+ months/i);
+  expect(prompt).toContain("She is nursing");
+  expect(prompt).toContain("Do not shrink the plate");
+  expect(prompt).toContain("eggs and oats");
+  expect(prompt).toContain("salmon and rice");
+  expect(prompt).toContain("yogurt");
+  expect(prompt).toContain("nursing a toddler");
+  expect(prompt).toContain("mushrooms");
+  expect(prompt).toContain("dairy (milk");
+  expect(prompt).toContain("Sausage scramble");
+  expect(prompt).not.toContain("banner she dismissed");
 }
 
 function modelReturns(value) {
@@ -450,6 +517,74 @@ describe("what comes back", () => {
     mockSupabase();
     const resp = await onRequestPost({ request: request({ mode: "menu", slot: "dinner" }), env });
     expect(resp.status).toBe(400);
+  });
+});
+
+describe("the model ask sees the file the ranker sees", () => {
+  const askBody = {
+    mode: "ask",
+    text: "what should I have for dinner",
+    slot: "dinner",
+    context: {
+      eaten: ["lunch: Turkey wrap"],
+      planned: ["dinner: Pencilled salmon"],
+      usual: ["Sheet pan chicken"],
+      skipped: [],
+      turnedDown: [],
+      snackCount: 1,
+    },
+    recent: ["Greek yogurt bowl"],
+  };
+
+  it("puts ranges, stage, notes, nursing, prefs, today, and saved meals on the ask prompt", async () => {
+    mockSupabase(FILE);
+    const resp = await onRequestPost({ request: request(askBody), env });
+    expect(resp.status).toBe(200);
+    expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(1);
+    const prompt = promptText();
+    expectFileInPrompt(prompt, 2);
+    expect(prompt).toContain("lunch: Turkey wrap");
+    expect(prompt).toContain("dinner: Pencilled salmon");
+    expect(prompt).toContain("Sheet pan chicken");
+    expect(prompt).toContain("Greek yogurt bowl");
+  });
+
+  it("keeps the same file on a menu photo, a kitchen photo, and a menu link", async () => {
+    const photo = [{ image_b64: "abc", media_type: "image/jpeg" }];
+    mockSupabase({ ...FILE, profile: { ...FILE.profile, months_pp: 14 } });
+    let resp = await onRequestPost({
+      request: request({ mode: "menu", slot: "dinner", text: "tonight", images: photo }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    expectFileInPrompt(promptText(), 14);
+
+    mockSupabase({ ...FILE, profile: { ...FILE.profile, months_pp: 2 } });
+    resp = await onRequestPost({
+      request: request({ mode: "kitchen", slot: "dinner", text: "tonight", images: photo }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    expectFileInPrompt(promptText(), 2);
+
+    mockSupabase({
+      ...FILE,
+      pages: { "itsjane.com": { body: JANE_HTML } },
+    });
+    resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "https://www.itsjane.com/location/jane-on-fillmore/ what should I eat",
+        slot: "dinner",
+        context: askBody.context,
+      }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    const linked = promptText();
+    expectFileInPrompt(linked, 2);
+    expect(linked).toContain("Chicken Taco Salad");
+    expect(linked).toContain("lunch: Turkey wrap");
   });
 });
 
