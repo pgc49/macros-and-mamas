@@ -24,7 +24,7 @@ import {
 } from "./coachBudget.js";
 import { buildCoachCard, rankBankCards, shownCoachReason } from "./coachRank.js";
 import { coachPrefsFromProfile } from "./coachPrefs.js";
-import { budgetSentence, coachRead, leftLine, slotLeftRead } from "./coachLines.js";
+import { budgetSentence, coachRead, leftLine, shownCoachLead, slotLeftRead } from "./coachLines.js";
 import { bankMealNameSet, buildLiveMyMealsLookup, cardIsGoneCustom } from "./coachMyMeals.js";
 
 const HISTORY_DAYS = 28;
@@ -162,19 +162,30 @@ export function pruneStaleMyMealCards(cards = [], customMeals = [], bankNames = 
   return (cards || []).filter((card) => !cardIsGoneCustom(card, liveMyMeals, bankNames));
 }
 
+/** One plate and one swap. A stored bank dump does not come back as three. */
+const FIRST_PAINT_CARDS = 2;
+
 /** Thread rows as she should see them now. Raw history stays; deleted customs do not. */
 export function replayCoachMessages(messages = [], customMeals = []) {
   return (messages || []).map((message) => {
-    if (!Array.isArray(message?.cards) || !message.cards.length) return message;
-    const cards = pruneStaleMyMealCards(message.cards, customMeals).map((card) => {
+    const hasCards = Array.isArray(message?.cards) && message.cards.length > 0;
+    const body = hasCards && message.role !== "mama"
+      ? shownCoachLead(message.body)
+      : message.body;
+    if (!hasCards) {
+      return body === message.body ? message : { ...message, body };
+    }
+    const rewritten = pruneStaleMyMealCards(message.cards, customMeals).map((card) => {
       const reason = shownCoachReason(card);
       if (reason === (card?.reason || "")) return card;
       return { ...card, reason };
     });
-    const same = cards.length === message.cards.length
+    const cards = rewritten.slice(0, FIRST_PAINT_CARDS);
+    const same = body === (message.body || "")
+      && cards.length === message.cards.length
       && cards.every((card, i) => card === message.cards[i]);
     if (same) return message;
-    return { ...message, cards };
+    return { ...message, body, cards };
   });
 }
 

@@ -181,7 +181,9 @@ describe("where the coach shows up", () => {
       },
       totals: { p: 25, c: 10, f: 15, cal: 300 },
     });
-    expect(screen.getByText(/Looking for a (breakfast|lunch|dinner|snack) idea\?/)).toBeTruthy();
+    expect(screen.getAllByText(/Looking for a (breakfast|lunch|dinner|snack) idea\?/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/keep fat in its band/i)).toBeNull();
+    expect(screen.queryByText(/You need about/i)).toBeNull();
     expect(screen.queryByText(/Know what .+ is yet\?/)).toBeNull();
   });
 

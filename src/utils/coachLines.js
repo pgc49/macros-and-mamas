@@ -113,6 +113,46 @@ export function coachRead({ budget, slot, over } = {}) {
   return { over: false, line1, line2 };
 }
 
+/**
+ * Leftover-math sentences that used to ride along under the skip note.
+ * The hormonal skip copy stays. These do not.
+ */
+const LEAD_LEFTOVER = [
+  /you need about\s+\d+/i,
+  /\d+\s*g of protein/i,
+  /shy on protein/i,
+  /protein'?s covered/i,
+  /plenty of room/i,
+  /keep fat in its band/i,
+  /hit your protein/i,
+  /fat'?s nearly spent/i,
+  /carbs are close/i,
+  /watch the fat/i,
+  /keep fat in range/i,
+  /keep fat in check/i,
+  /hits protein/i,
+  /fits what['’]s left/i,
+  /fat stays in range/i,
+  /protein tonight/i,
+];
+
+function isLeadLeftoverMath(sentence) {
+  const s = String(sentence || "").replace(/\s+/g, " ").trim();
+  if (!s) return false;
+  return LEAD_LEFTOVER.some((pattern) => pattern.test(s));
+}
+
+/**
+ * First-paint lead. Skip-meal hormonal copy can stay. Gram targets, "plenty
+ * of room", and "keep fat in its band" cannot — that is not why this plate.
+ */
+export function shownCoachLead(body) {
+  const text = String(body || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const kept = text.split(/(?<=[.!?])\s+/).filter((sentence) => !isLeadLeftoverMath(sentence));
+  return kept.join(" ").trim();
+}
+
 function fmtCal(n) {
   return String(Math.round(n));
 }
@@ -227,17 +267,17 @@ export function slotLeftRead(budget) {
   };
 }
 
-/** One-line prompt for the Today card entry point. Same door as the title. */
-export function coachEntryHint({ loggedSlots = new Set(), plannedMeals = [], read, now = new Date() } = {}) {
+/** One-line prompt for the Today card entry point. The slot, not leftover math. */
+export function coachEntryHint({ loggedSlots = new Set(), plannedMeals = [], now = new Date() } = {}) {
   const dinnerLogged = loggedSlots.has("dinner");
   const lunchLogged = loggedSlots.has("lunch");
+  const next = nextCoachSlot({
+    now,
+    entries: [...loggedSlots].map((slot) => ({ slot })),
+    plannedMeals,
+  }) || "dinner";
   if (lunchLogged && !dinnerLogged && !planMealForSlot(plannedMeals, "dinner")) {
-    const next = nextCoachSlot({
-      now,
-      entries: [...loggedSlots].map((slot) => ({ slot })),
-      plannedMeals,
-    });
-    return `${askForSlotCopy(next || "dinner")} I'll size it to what's left.`;
+    return `${askForSlotCopy(next)} I'll size it to what's left.`;
   }
-  return read?.line1 || COACH_COPY.plenty;
+  return askForSlotCopy(next);
 }

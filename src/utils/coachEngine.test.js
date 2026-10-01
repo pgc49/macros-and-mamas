@@ -18,7 +18,7 @@ import {
   unmatchedCoachPencils,
 } from "./coachBudget.js";
 import { buildCoachCard, coachReason, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason } from "./coachRank.js";
-import { buildCoachAnswer, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
+import { buildCoachAnswer, pruneStaleMyMealCards, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
 import { nextCustomMeals } from "./coachMyMeals.js";
 import { coachSlotFromTime } from "./mealSlots.js";
 import { coachLogFromCard, coachPlanFieldsFromCard, unscaleRankedCard } from "./coachScale.js";
@@ -29,7 +29,7 @@ import {
   namesMatch,
   primaryProtein,
 } from "./coachPrefs.js";
-import { coachRead, leftLine, macroStanding, slotLeftRead, tightestMacro, budgetSentence } from "./coachLines.js";
+import { coachEntryHint, coachRead, leftLine, macroStanding, shownCoachLead, slotLeftRead, tightestMacro, budgetSentence } from "./coachLines.js";
 import { formatRangeProgress } from "./rangeProgress.js";
 import { mealFitsRemaining } from "./eatingOutImpact.js";
 import { targetBands } from "./weekPlan.js";
@@ -538,16 +538,46 @@ describe("ranking", () => {
       ],
     }];
     const shown = replayCoachMessages(messages, []);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Sheet pan chicken",
+      "Turkey meatballs",
+    ]);
     const byName = Object.fromEntries(shown[0].cards.map((card) => [card.name, card.reason]));
     expect(byName["Sheet pan chicken"]).toMatch(/chicken/i);
     expect(byName["Sheet pan chicken"]).not.toMatch(/protein|fat in range|fits what's left/i);
     expect(byName["Turkey meatballs"]).toBe("You've had this at dinner.");
-    expect(byName["Halibut + rice"]).toBe("You've had this at dinner.");
-    expect(byName["Pulled chicken tacos"]).toMatch(/chicken|tortilla/i);
-    expect(byName["Pulled chicken tacos"]).not.toMatch(/protein still open/);
-    expect(byName["Off-slot plate"]).toBe("");
     expect(JSON.stringify(shown)).not.toContain(COACH_COPY.reasonGets);
     expect(JSON.stringify(shown)).not.toContain(COACH_COPY.reasonFits);
+  });
+
+  it("opens a stored bank dump as one plate, one swap, and no leftover-math lead", () => {
+    const lead = [
+      COACH_COPY.skipNotice,
+      "You need about 129g of protein tonight.",
+      COACH_COPY.plenty,
+    ].join(" ");
+    const messages = [{
+      id: "m1",
+      role: "coach",
+      kind: "cards",
+      body: lead,
+      cards: [
+        { name: "Pulled chicken tacos", source: "bank", reason: COACH_COPY.reasonGets },
+        { name: "Halibut + rice", source: "bank", reason: COACH_COPY.reasonFits },
+        { name: "Turkey meatballs + rice", source: "bank", reason: COACH_COPY.proteinOverMuch },
+      ],
+    }];
+    const shown = replayCoachMessages(messages, []);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Pulled chicken tacos",
+      "Halibut + rice",
+    ]);
+    expect(shown[0].body).toContain("I noticed you skipped a meal");
+    expect(shown[0].body).toContain("cortisol");
+    expect(shown[0].body).not.toMatch(/129g|of protein tonight|plenty of room|keep fat in its band/i);
+    expect(shown[0].cards[0].reason).toMatch(/chicken|tortilla/i);
+    expect(shown[0].cards[1].reason).toMatch(/halibut|garlic|rice/i);
+    expect(shown[0].cards[0].reason).not.toMatch(/protein|fat in range|fits what's left/i);
   });
 
   it("drops a deleted custom wearing any chip and keeps the live custom and the bank meal", () => {
@@ -576,11 +606,15 @@ describe("ranking", () => {
     }];
     const live = [{ id: "sausage", name: "Sausage, egg + whites scramble" }];
     const snapshot = live.map((meal) => ({ ...meal }));
+    expect(pruneStaleMyMealCards(messages[0].cards, live).map((card) => card.name)).toEqual([
+      "Sausage, egg + whites scramble",
+      "Sheet pan chicken",
+      "Leftover Pasta",
+    ]);
     const shown = replayCoachMessages(messages, live);
     expect(shown[0].cards.map((card) => card.name)).toEqual([
       "Sausage, egg + whites scramble",
       "Sheet pan chicken",
-      "Leftover Pasta",
     ]);
     expect(live).toEqual(snapshot);
 
@@ -857,6 +891,40 @@ describe("copy matches the rest of the app", () => {
     const held = slotLeftRead(budget).held;
     expect(held).toMatch(/^Holding \d+ cal for lunch · \d+ for dinner/);
     expect(held).not.toMatch(/cal a snack/);
+  });
+
+  it("keeps the skip note and drops the leftover-math lead", () => {
+    const lead = `${COACH_COPY.skipNotice} You need about 129g of protein tonight. ${COACH_COPY.plenty}`;
+    const shown = shownCoachLead(lead);
+    expect(shown).toContain("I noticed you skipped a meal");
+    expect(shown).toContain("sex hormones");
+    expect(shown).not.toMatch(/129g|keep fat in its band|plenty of room|hit your protein/i);
+    expect(shownCoachLead(COACH_COPY.plenty)).toBe("");
+    expect(shownCoachLead("You need about 40g of protein this morning.")).toBe("");
+  });
+
+  it("does not put leftover math on the Today door", () => {
+    const evening = new Date("2026-10-01T04:07:00.000Z");
+    const morning = new Date("2026-09-04T15:00:00.000Z");
+    const read = { line1: "You need about 129g of protein tonight.", line2: COACH_COPY.plenty };
+    expect(coachEntryHint({
+      loggedSlots: new Set(),
+      plannedMeals: [],
+      read,
+      now: evening,
+    })).toBe("Looking for a dinner idea?");
+    expect(coachEntryHint({
+      loggedSlots: new Set(),
+      plannedMeals: [],
+      read,
+      now: morning,
+    })).toBe("Looking for a breakfast idea?");
+    expect(coachEntryHint({
+      loggedSlots: new Set(["lunch"]),
+      plannedMeals: [],
+      read,
+      now: evening,
+    })).toBe("Looking for a dinner idea? I'll size it to what's left.");
   });
 
   it("gives one protein number, not the strip's and a rounder one below it", () => {

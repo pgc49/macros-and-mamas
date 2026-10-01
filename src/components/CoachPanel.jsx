@@ -9,6 +9,7 @@ import {
   askForSlotCopy,
   skipMealCopy,
 } from "../content/coachVoice";
+import { shownCoachLead } from "../utils/coachLines";
 import {
   buildCoachAnswer,
   buildSuggestedCards,
@@ -231,7 +232,7 @@ export function CoachPanel({
     skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
     const skipLine = skipMealCopy(next.skipped);
     lead += skipLine || "";
-    push({ role: "coach", body: lead.trim(), kind: "cards", cards, aside });
+    push({ role: "coach", body: shownCoachLead(lead.trim()), kind: "cards", cards, aside });
   };
 
   const answerWithRead = ({ askLabel = COACH_COPY.askDay, echo = true, aside = null } = {}) => {

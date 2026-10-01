@@ -166,20 +166,6 @@ describe("the coach answers on the device", () => {
             },
             {
               kind: "meal",
-              id: "live-1",
-              name: "Live custom meal",
-              title: "Live custom meal",
-              source: "my",
-              tag: "My meals",
-              cal: 210,
-              p: 22,
-              c: 12,
-              f: 9,
-              servings: 1,
-              reason: "Fits.",
-            },
-            {
-              kind: "meal",
               name: "Sheet Pan Chicken with Sweet Potato",
               title: "Sheet Pan Chicken with Sweet Potato",
               source: "new",
@@ -203,6 +189,20 @@ describe("the coach answers on the device", () => {
               p: 45,
               c: 35,
               f: 14,
+              servings: 1,
+              reason: "Fits.",
+            },
+            {
+              kind: "meal",
+              id: "live-1",
+              name: "Live custom meal",
+              title: "Live custom meal",
+              source: "my",
+              tag: "My meals",
+              cal: 210,
+              p: 22,
+              c: 12,
+              f: 9,
               servings: 1,
               reason: "Fits.",
             },
@@ -234,8 +234,10 @@ describe("the coach answers on the device", () => {
     const view = renderPanel({ onLoadThread, customMeals: saved });
     await screen.findByText("Rosemary crackers");
     expect(screen.getByText("Sheet Pan Chicken with Sweet Potato")).toBeTruthy();
-    expect(screen.getByText("Sheet pan chicken")).toBeTruthy();
-    expect(screen.getByText("Sausage, egg + whites scramble")).toBeTruthy();
+    expect(cardTitles()).toEqual([
+      "Rosemary crackers",
+      "Sheet Pan Chicken with Sweet Potato",
+    ]);
 
     view.rerender(
       <CoachPanel {...panelProps({
@@ -246,9 +248,10 @@ describe("the coach answers on the device", () => {
     );
     expect(screen.queryByText("Rosemary crackers")).toBeNull();
     expect(screen.queryByText("Sheet Pan Chicken with Sweet Potato")).toBeNull();
-    expect(screen.getByText("Sheet pan chicken")).toBeTruthy();
-    expect(screen.getByText("Live custom meal")).toBeTruthy();
-    expect(screen.getByText("Sausage, egg + whites scramble")).toBeTruthy();
+    expect(cardTitles().slice(0, 2)).toEqual([
+      "Sheet pan chicken",
+      "Live custom meal",
+    ]);
     expect(stillSaved.map((meal) => meal.name)).toEqual([
       "Live custom meal",
       "Sausage, egg + whites scramble",
@@ -344,9 +347,9 @@ describe("the coach answers on the device", () => {
       ],
     });
 
-    await screen.findByText("Turkey meatballs + rice");
-    expect(screen.getByText("Sheet pan chicken")).toBeTruthy();
+    await screen.findByText("Sheet pan chicken");
     expect(screen.getByText("Turkey meatballs")).toBeTruthy();
+    expect(screen.queryByText("Turkey meatballs + rice")).toBeNull();
     expect(document.body.textContent).not.toContain(COACH_COPY.reasonGets);
     expect(document.body.textContent).not.toContain(COACH_COPY.reasonFits);
     expect(document.body.textContent).not.toContain(COACH_COPY.proteinOverMuch);
@@ -354,7 +357,7 @@ describe("the coach answers on the device", () => {
     expect(document.body.textContent).not.toContain("more protein than you need");
     expect(document.body.textContent).not.toContain("Keep fat in range");
     expect(document.body.textContent).toContain("You've had this at dinner.");
-    expect(document.body.textContent).toContain("marinara");
+    expect(document.body.textContent).toMatch(/chicken/i);
     expect(document.body.textContent).not.toContain("One of your usuals at dinner");
   });
 
@@ -376,7 +379,39 @@ describe("the coach answers on the device", () => {
     expect(document.body.textContent).not.toMatch(/Holding /);
     expect(document.body.textContent).not.toContain("Looking for a breakfast idea?");
     expect(document.body.textContent).not.toMatch(/Breakfast ·/);
+    expect(document.body.textContent).not.toMatch(/keep fat in its band/i);
+    expect(document.body.textContent).not.toMatch(/plenty of room/i);
+    expect(document.body.textContent).not.toMatch(/you need about \d+g of protein/i);
     await waitFor(() => expect(cardTitles().length).toBe(2));
+    const why = document.body.textContent;
+    expect(why).toMatch(/chicken|halibut|turkey|salmon|eggs|rice|tortilla/i);
+  });
+
+  it("replays a three-card bank dump as one plate, one swap, and a food why", async () => {
+    const lead = `${COACH_COPY.skipNotice} You need about 129g of protein tonight. ${COACH_COPY.plenty}`;
+    renderPanel({
+      onLoadThread: async () => [{
+        id: "r2",
+        role: "coach",
+        body: lead,
+        kind: "cards",
+        payload: {
+          cards: [
+            { kind: "meal", name: "Pulled chicken tacos", title: "Pulled chicken tacos", source: "bank", tag: "Callie's bank", cal: 450, p: 35, c: 40, f: 14, servings: 1, reason: COACH_COPY.reasonGets },
+            { kind: "meal", name: "Halibut + rice", title: "Halibut + rice", source: "bank", tag: "Callie's bank", cal: 455, p: 44, c: 50, f: 7, servings: 1, reason: COACH_COPY.reasonFits },
+            { kind: "meal", name: "Turkey meatballs + rice", title: "Turkey meatballs + rice", source: "bank", tag: "Callie's bank", cal: 470, p: 36, c: 67, f: 6, servings: 1, reason: COACH_COPY.proteinOverMuch },
+          ],
+        },
+      }],
+    });
+    await screen.findByText("Pulled chicken tacos");
+    expect(cardTitles()).toEqual(["Pulled chicken tacos", "Halibut + rice"]);
+    expect(document.body.textContent).toContain("I noticed you skipped a meal");
+    expect(document.body.textContent).not.toContain("Turkey meatballs + rice");
+    expect(document.body.textContent).not.toMatch(/129g|keep fat in its band|plenty of room|you need about/i);
+    expect(document.body.textContent).toMatch(/tortilla|chicken/i);
+    expect(document.body.textContent).toMatch(/halibut|garlic/i);
+    expect(screen.queryByRole("button", { name: "Photo of my fridge" })).toBeNull();
   });
 
   it("logs tonight as dinner, not the breakfast the clock already passed", async () => {
