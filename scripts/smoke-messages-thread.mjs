@@ -48,7 +48,10 @@ assert(boundarySrc.includes("Try again"), "ErrorBoundary must offer local recove
 
 const clientAppSrc = readFileSync(new URL("../src/views/ClientApp.jsx", import.meta.url), "utf8");
 assert(clientAppSrc.includes('name="CustomerMessages"'), "customer Messages needs a local boundary");
-assert(clientAppSrc.includes("lockContentScroll={tab === \"messages\"}"), "Messages must lock page scroll so the composer stays put");
+assert(
+  clientAppSrc.includes('lockContentScroll={tab === "messages" || tab === "coach"}'),
+  "Messages must lock page scroll so the composer stays put",
+);
 assert(!/tab === "messages"[\s\S]{0,400}TechHelpFooter/.test(clientAppSrc), "Messages must not show App help under the composer");
 
 const adminPortalSrc = readFileSync(new URL("../src/admin/AdminPortal.jsx", import.meta.url), "utf8");
