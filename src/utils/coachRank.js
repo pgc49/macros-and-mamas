@@ -9,6 +9,7 @@
  */
 
 import { COACH_COPY, COACH_SLOT_LABEL } from "../content/coachVoice.js";
+import { withRecipeDetail } from "../content/recipeDetails.js";
 import { mealFitsRemaining, mealMacros } from "./eatingOutImpact.js";
 import { snapServings } from "./servings.jsx";
 import {
@@ -158,10 +159,6 @@ export function scoreScaledMeal(meal, budget, ctx = {}) {
   return protein + fatFit + myBonus + likeBonus + scaleBonus + slotUsual + todayPen + recentPen;
 }
 
-function proteinClosesNeed(p, pNeed) {
-  return pNeed > 0 && p >= pNeed;
-}
-
 function meaningfulProtein(meal, budget) {
   const p = mealMacros(meal).p;
   const need = budget?.pNeed || 0;
@@ -199,9 +196,9 @@ const STOCK_REASONS = [
 /**
  * One clause about this plate, or silence.
  *
- * A line that could sit under any card ("Hits protein and keeps fat in range",
- * "Fits what's left") is not a reason. Fat left and protein still open name
- * this plate's gap. Everything else stays blank.
+ * Leftover math ("more protein than you need", "keep fat in range", "leaves
+ * Ng fat") can sit under any card. A why has to name food on this plate, a
+ * pref she already stated, or a meal she has actually had. Otherwise blank.
  */
 function normalizedReason(reason) {
   return String(reason || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -213,33 +210,84 @@ function isStockReason(text) {
   if (STOCK_REASONS.includes(s)) return true;
   if (s.includes("hits protein and keeps fat")) return true;
   if (s.includes("fits what's left") || s.includes("fits what’s left")) return true;
-  if (s.includes("fat stays in range") && !/\d+\s*g/.test(s)) return true;
+  if (s.includes("fat stays in range") || s.includes("keep fat in range")) return true;
   if (s.includes("fat stays in check") || s.includes("simple and lighter")) return true;
+  if (s.includes("more protein than you need") || s.includes("a bit over on protein")) return true;
   return false;
+}
+
+function isLeftoverMath(text) {
+  const s = normalizedReason(text).toLowerCase();
+  if (!s || isStockReason(s)) return !s ? false : true;
+  if (s.includes("protein still open") || s.includes("short, easy to pick up")) return true;
+  if (/\bleaves\b/.test(s) && /\bfat\b/.test(s)) return true;
+  if (/\d+\s*g\b/.test(s) && /\b(protein|fat|carb)/.test(s)) return true;
+  return false;
+}
+
+const SKIP_FOOD = /\b(salt|pepper|water|oil|spray|herb|seasoning|cinnamon|garlic powder|vanilla|baking|paprika|rosemary)\b/i;
+
+function cleanFood(item) {
+  let s = String(item || "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  s = s.replace(/^(dry|fresh or frozen|cooked|raw|cubed|boneless skinless)\s+/i, "");
+  s = s.split(",")[0].trim();
+  if (!s || s.length < 3 || SKIP_FOOD.test(s)) return "";
+  if (/^(yield|to taste|pinch)$/i.test(s)) return "";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function foodClause(items) {
+  const list = [];
+  for (const item of items) {
+    const clean = cleanFood(item);
+    if (!clean || list.some((food) => food.toLowerCase() === clean.toLowerCase())) continue;
+    list.push(clean);
+    if (list.length === 3) break;
+  }
+  if (!list.length) return "";
+  const rest = (food) => food.charAt(0).toLowerCase() + food.slice(1);
+  if (list.length === 1) return `${list[0]}.`;
+  if (list.length === 2) return `${list[0]} and ${rest(list[1])}.`;
+  return `${list[0]}, ${rest(list[1])}, and ${rest(list[2])}.`;
+}
+
+function plateFoodClause(card) {
+  const detailed = withRecipeDetail({
+    name: card?.name,
+    basedOn: card?.basedOn,
+    serving: card?.serving,
+    ingredients: card?.ingredients,
+  });
+  const lines = detailed?.serving || detailed?.ingredients || [];
+  return foodClause(lines.map((line) => (typeof line === "string" ? line : line?.item)));
+}
+
+function clauseFromKnows(knowsYou) {
+  const knows = normalizedReason(knowsYou);
+  const at = knows.match(/^one of your usuals at\s+(.+?)\.?$/i);
+  if (at) return `You've had this at ${at[1]}.`;
+  const like = knows.match(/^you like\s+(.+?)\.?$/i);
+  if (like) return `You like ${like[1]}.`;
+  if (/^quick one from your staples/i.test(knows)) return "From what you have.";
+  return "";
 }
 
 export function plateTiedReason(reason) {
   const text = normalizedReason(reason);
-  if (!text || isStockReason(text)) return "";
-  const leaves = text.match(/^(?:hits protein and )?leaves (\d+)g fat\.?$/i);
-  if (leaves) {
-    const n = Number(leaves[1]);
-    if (!(n > 0)) return "";
-    return `${COACH_COPY.reasonFatLeft} ${n}${COACH_COPY.reasonFatLeftTail}`;
-  }
-  const gap = text.match(/^(?:most of your protein — )?(\d+)g (?:short, easy to pick up later\.|of protein still open\.)$/i);
-  if (gap) return `${gap[1]}g ${COACH_COPY.reasonProteinOpenTail}`;
+  if (!text || isLeftoverMath(text)) return "";
   return text;
 }
 
-/** The one clause under a card. History beats a blank line. A stock fit line never does. */
+/** The one clause under a card. Food on the plate, or silence. Never leftover math. */
 export function shownCoachReason(card) {
   const tied = plateTiedReason(card?.reason);
   if (tied) return tied;
-  const knows = normalizedReason(card?.knowsYou);
-  const at = knows.match(/^one of your usuals at\s+(.+?)\.?$/i);
-  if (at) return `You've had this at ${at[1]}.`;
-  return "";
+  const fromKnows = clauseFromKnows(card?.knowsYou);
+  if (fromKnows) return fromKnows;
+  return plateFoodClause(card);
 }
 
 /**
@@ -247,20 +295,7 @@ export function shownCoachReason(card) {
  * carries "1.5 servings" when we scale up; saying it again underneath is
  * the same fact twice. A stock macro line is worse: say nothing.
  */
-export function coachReason(meal, budget, { over = false } = {}) {
-  if (over) return "";
-  const { p, f } = mealMacros(meal);
-  const pNeed = budget?.pNeed || 0;
-  const fatRoom = Number(budget?.f);
-  if (proteinClosesNeed(p, pNeed) && Number.isFinite(fatRoom) && fatRoom < 6) {
-    const fatLeft = Math.round(Math.max(0, fatRoom - f));
-    if (fatLeft > 0) return `${COACH_COPY.reasonFatLeft} ${fatLeft}${COACH_COPY.reasonFatLeftTail}`;
-    return "";
-  }
-  if (pNeed > 0 && !proteinClosesNeed(p, pNeed) && p / pNeed >= 0.7) {
-    const gap = Math.max(1, Math.round(pNeed - p));
-    return `${gap}g ${COACH_COPY.reasonProteinOpenTail}`;
-  }
+export function coachReason() {
   return "";
 }
 

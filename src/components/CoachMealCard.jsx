@@ -122,9 +122,6 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
           {why && (
             <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>{why}</div>
           )}
-          {card.proteinNote && (
-            <div style={{ fontSize: 12.5, color: T.sage, marginTop: 4 }}>{card.proteinNote}</div>
-          )}
         </>
       )}
       {isEstimate && (

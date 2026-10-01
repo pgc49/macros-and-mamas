@@ -58,14 +58,23 @@ describe("coach card honesty", () => {
     expect(screen.getByRole("button", { name: "Save to My meals" })).toBeTruthy();
   });
 
-  it("shows the note when a portion runs protein past the top", () => {
+  it("does not put leftover protein math under the plate", () => {
     render(
       <CoachMealCard
-        card={{ ...bankCard, proteinNote: COACH_COPY.proteinOver }}
+        card={{
+          ...bankCard,
+          name: "Turkey meatballs + rice",
+          title: "Turkey meatballs + rice",
+          reason: COACH_COPY.proteinOverMuch,
+          proteinNote: COACH_COPY.proteinOverMuch,
+        }}
         onLog={vi.fn()}
       />,
     );
-    expect(screen.getByText(COACH_COPY.proteinOver)).toBeTruthy();
+    expect(screen.queryByText(COACH_COPY.proteinOver)).toBeNull();
+    expect(screen.queryByText(COACH_COPY.proteinOverMuch)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/more protein than you need|keep fat in range/i);
+    expect(document.body.textContent).toContain("Turkey meatballs, marinara, and rice.");
   });
 
   it("shows the macros it was ranked on, not the unportioned meal", () => {

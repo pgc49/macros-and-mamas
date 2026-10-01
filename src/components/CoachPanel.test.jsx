@@ -326,16 +326,17 @@ describe("the coach answers on the device", () => {
               },
               {
                 kind: "meal",
-                name: "Halibut + rice",
-                title: "Halibut + rice",
+                name: "Turkey meatballs + rice",
+                title: "Turkey meatballs + rice",
                 source: "bank",
                 tag: "Callie's bank",
-                cal: 455,
-                p: 44,
-                c: 50,
-                f: 7,
+                cal: 470,
+                p: 36,
+                c: 67,
+                f: 6,
                 servings: 1,
-                reason: `${COACH_COPY.reasonFatLeft} 4${COACH_COPY.reasonFatLeftTail}`,
+                reason: COACH_COPY.proteinOverMuch,
+                proteinNote: COACH_COPY.proteinOverMuch,
               },
             ],
           },
@@ -343,14 +344,17 @@ describe("the coach answers on the device", () => {
       ],
     });
 
-    await screen.findByText("Halibut + rice");
+    await screen.findByText("Turkey meatballs + rice");
     expect(screen.getByText("Sheet pan chicken")).toBeTruthy();
     expect(screen.getByText("Turkey meatballs")).toBeTruthy();
     expect(document.body.textContent).not.toContain(COACH_COPY.reasonGets);
     expect(document.body.textContent).not.toContain(COACH_COPY.reasonFits);
+    expect(document.body.textContent).not.toContain(COACH_COPY.proteinOverMuch);
     expect(document.body.textContent).not.toContain("Hits protein and keeps fat in range");
-    expect(document.body.textContent).toContain(`${COACH_COPY.reasonFatLeft} 4${COACH_COPY.reasonFatLeftTail}`);
+    expect(document.body.textContent).not.toContain("more protein than you need");
+    expect(document.body.textContent).not.toContain("Keep fat in range");
     expect(document.body.textContent).toContain("You've had this at dinner.");
+    expect(document.body.textContent).toContain("marinara");
     expect(document.body.textContent).not.toContain("One of your usuals at dinner");
   });
 
@@ -367,6 +371,8 @@ describe("the coach answers on the device", () => {
     expect(document.body.textContent).not.toContain("Looking for a dinner idea?");
     expect(document.body.textContent).not.toContain(COACH_COPY.reasonGets);
     expect(document.body.textContent).not.toContain(COACH_COPY.reasonFits);
+    expect(document.body.textContent).not.toContain(COACH_COPY.proteinOverMuch);
+    expect(document.body.textContent).not.toContain("more protein than you need");
     expect(document.body.textContent).not.toMatch(/Holding /);
     expect(document.body.textContent).not.toContain("Looking for a breakfast idea?");
     expect(document.body.textContent).not.toMatch(/Breakfast ·/);

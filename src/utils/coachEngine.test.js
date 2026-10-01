@@ -539,10 +539,12 @@ describe("ranking", () => {
     }];
     const shown = replayCoachMessages(messages, []);
     const byName = Object.fromEntries(shown[0].cards.map((card) => [card.name, card.reason]));
-    expect(byName["Sheet pan chicken"]).toBe("");
+    expect(byName["Sheet pan chicken"]).toMatch(/chicken/i);
+    expect(byName["Sheet pan chicken"]).not.toMatch(/protein|fat in range|fits what's left/i);
     expect(byName["Turkey meatballs"]).toBe("You've had this at dinner.");
-    expect(byName["Halibut + rice"]).toBe("Leaves 4g fat.");
-    expect(byName["Pulled chicken tacos"]).toBe("33g of protein still open.");
+    expect(byName["Halibut + rice"]).toBe("You've had this at dinner.");
+    expect(byName["Pulled chicken tacos"]).toMatch(/chicken|tortilla/i);
+    expect(byName["Pulled chicken tacos"]).not.toMatch(/protein still open/);
     expect(byName["Off-slot plate"]).toBe("");
     expect(JSON.stringify(shown)).not.toContain(COACH_COPY.reasonGets);
     expect(JSON.stringify(shown)).not.toContain(COACH_COPY.reasonFits);
@@ -659,32 +661,33 @@ describe("ranking", () => {
     expect(card.reason).not.toBe(COACH_COPY.reasonGets);
   });
 
-  it("says the fat or the protein still open, and stays quiet otherwise", () => {
-    const fatTight = { ...budgetFor({ cal: 900, p: 90, c: 80, f: 25 }, { slot: "dinner" }), f: 5, pNeed: 20 };
-    expect(coachReason({ cal: 300, p: 30, c: 10, f: 2 }, fatTight)).toBe(
-      `${COACH_COPY.reasonFatLeft} 3${COACH_COPY.reasonFatLeftTail}`,
-    );
-    const shy = { ...budgetFor({ cal: 900, p: 90, c: 80, f: 25 }, { slot: "dinner" }), f: 20, pNeed: 40 };
-    expect(coachReason({ cal: 300, p: 30, c: 20, f: 8 }, shy)).toBe(`10g ${COACH_COPY.reasonProteinOpenTail}`);
-    const roomy = budgetFor({ cal: 200, p: 20, c: 30, f: 8 }, { slot: "snack" });
-    expect(coachReason({ cal: 180, p: 8, c: 16, f: 4 }, roomy)).toBe("");
+  it("names food on the plate and stays silent on leftover math", () => {
+    expect(coachReason()).toBe("");
     expect(plateTiedReason(COACH_COPY.reasonGets)).toBe("");
     expect(plateTiedReason(COACH_COPY.reasonFits)).toBe("");
-    expect(plateTiedReason("Hits protein and leaves 8g fat.")).toBe(
-      `${COACH_COPY.reasonFatLeft} 8${COACH_COPY.reasonFatLeftTail}`,
-    );
-    expect(plateTiedReason("Most of your protein — 12g short, easy to pick up later.")).toBe(
-      `12g ${COACH_COPY.reasonProteinOpenTail}`,
-    );
+    expect(plateTiedReason(COACH_COPY.proteinOverMuch)).toBe("");
+    expect(plateTiedReason("Hits protein and leaves 8g fat.")).toBe("");
+    expect(plateTiedReason("Most of your protein — 12g short, easy to pick up later.")).toBe("");
     expect(plateTiedReason("Hits protein and keeps fat in range")).toBe("");
+    expect(plateTiedReason("Leaves 4g fat.")).toBe("");
+    expect(plateTiedReason("33g of protein still open.")).toBe("");
+    expect(shownCoachReason({
+      name: "Turkey meatballs + rice",
+      reason: COACH_COPY.proteinOverMuch,
+      proteinNote: COACH_COPY.proteinOverMuch,
+    })).toBe("Turkey meatballs, marinara, and rice.");
+    expect(shownCoachReason({
+      name: "Turkey meatballs + rice",
+      reason: COACH_COPY.proteinOverMuch,
+    })).not.toMatch(/more protein than you need|keep fat in range/i);
     expect(shownCoachReason({
       reason: COACH_COPY.reasonGets,
       knowsYou: "One of your usuals at dinner",
     })).toBe("You've had this at dinner.");
     expect(shownCoachReason({
       reason: "Leaves 4g fat.",
-      knowsYou: "One of your usuals at dinner",
-    })).toBe("Leaves 4g fat.");
+      knowsYou: "You like salmon",
+    })).toBe("You like salmon.");
     expect(shownCoachReason({
       reason: COACH_COPY.reasonFits,
       knowsYou: "Usually breakfast",
