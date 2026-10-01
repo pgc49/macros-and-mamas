@@ -417,6 +417,47 @@ describe("ranking", () => {
     expect(meals[0].p).toBeGreaterThanOrEqual(meals[1].p);
   });
 
+  it("only tags My meals from the current live custom meal list", () => {
+    const room = budgetFor({ cal: 400, p: 30, c: 40, f: 12 }, {
+      slot: "snack",
+      loggedSlots: new Set(["breakfast", "lunch", "dinner"]),
+    });
+    const myCandidates = [
+      { id: "live-1", name: "Still saved meal", cal: 220, p: 18, c: 20, f: 8, cat: "Snack" },
+      { id: "deleted-1", name: "Rosemary crackers", cal: 210, p: 7, c: 24, f: 9, cat: "Snack" },
+    ];
+    const { meals } = rankBankCards({
+      bankMeals: [],
+      myMeals: myCandidates,
+      liveMyMeals: [{ id: "live-1", name: "Still saved meal" }],
+      budget: room,
+      slot: "snack",
+    });
+    expect(meals.some((m) => m.name === "Rosemary crackers" && m.source === "my")).toBe(false);
+    expect(meals.some((m) => m.name === "Still saved meal" && m.source === "my")).toBe(true);
+  });
+
+  it("never promotes history-only meal names into My meals", () => {
+    const room = budgetFor({ cal: 400, p: 30, c: 40, f: 12 }, {
+      slot: "snack",
+      loggedSlots: new Set(["breakfast", "lunch", "dinner"]),
+    });
+    const rosemary = { name: "Rosemary crackers", cal: 180, p: 6, c: 22, f: 8, cat: "Snack" };
+    const { meals } = rankBankCards({
+      bankMeals: [rosemary],
+      myMeals: [],
+      liveMyMeals: [],
+      loggedRecentNames: ["Rosemary crackers"],
+      anyHistoryNames: ["Rosemary crackers"],
+      budget: room,
+      slot: "snack",
+    });
+    expect(meals.length).toBeGreaterThan(0);
+    expect(meals[0].name).toBe("Rosemary crackers");
+    expect(meals[0].source).toBe("bank");
+    expect(meals.some((m) => m.source === "my")).toBe(false);
+  });
+
   it("skips a card she already turned down", () => {
     const { meals } = rankBankCards({
       bankMeals: bank,

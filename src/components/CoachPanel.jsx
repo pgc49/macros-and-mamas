@@ -9,7 +9,13 @@ import {
   askForSlotCopy,
   skipMealCopy,
 } from "../content/coachVoice";
-import { buildCoachAnswer, buildSuggestedCards, coachDayForPrompt, recentNamesForPrompt } from "../utils/coachSession";
+import {
+  buildCoachAnswer,
+  buildSuggestedCards,
+  coachDayForPrompt,
+  pruneStaleMyMealCards,
+  recentNamesForPrompt,
+} from "../utils/coachSession";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent } from "../utils/coachIntent";
@@ -143,7 +149,7 @@ export function CoachPanel({
           role: r.role,
           body: r.body,
           kind: r.kind,
-          cards: r.payload?.cards || [],
+          cards: pruneStaleMyMealCards(r.payload?.cards || [], customMeals),
           deflect: r.payload?.deflect || null,
           aside: r.payload?.aside || null,
         })));

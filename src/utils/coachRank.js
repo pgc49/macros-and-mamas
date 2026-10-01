@@ -20,6 +20,7 @@ import {
 } from "./coachPrefs.js";
 import { budgetAsRemaining } from "./coachBudget.js";
 import { mealMatchesQuery, mealSlotFilterKey } from "./mealSearch.js";
+import { buildLiveMyMealsLookup, isLiveMyMeal } from "./coachMyMeals.js";
 
 export const SCALE_CANDIDATES = [1, 1.5, 2];
 /** 10–20g over the day's protein high is fine. Past that is unnecessary. */
@@ -374,6 +375,7 @@ export function buildCoachCard(meal, budget, ctx = {}) {
 export function rankBankCards({
   bankMeals = [],
   myMeals = [],
+  liveMyMeals = myMeals,
   pantryItems = [],
   budget,
   likes = [],
@@ -393,10 +395,12 @@ export function rankBankCards({
   limit = 3,
 } = {}) {
   if (!budget) return { cards: [], meals: [], scaledCount: 0 };
+  const liveMyLookup = buildLiveMyMealsLookup(liveMyMeals);
+  const liveMyPool = (myMeals || []).filter((meal) => isLiveMyMeal(meal, liveMyLookup));
 
   const pool = [
     ...bankMeals.map((m) => tagSource(m, "bank")),
-    ...myMeals.map((m) => tagSource(m, "my")),
+    ...liveMyPool.map((m) => tagSource(m, "my")),
     ...pantryItems.map((m) => tagSource({ ...m, servings: 1 }, "pantry")),
   ].filter((m) => hasMacros(m)
     && mealAllowedForDiet(m, diet)

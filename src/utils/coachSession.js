@@ -26,6 +26,7 @@ import {
 import { buildCoachCard, rankBankCards } from "./coachRank.js";
 import { coachPrefsFromProfile } from "./coachPrefs.js";
 import { budgetSentence, coachRead, leftLine, slotLeftRead } from "./coachLines.js";
+import { buildLiveMyMealsLookup, isLiveMyMeal } from "./coachMyMeals.js";
 
 const HISTORY_DAYS = 28;
 
@@ -112,9 +113,10 @@ export function buildCoachAnswer({
   const prefs = coachPrefsFromProfile(profile, slot);
   const pencilled = coachPencilForSlot(plannedMeals, slot);
 
-  const { cards, meals } = rankBankCards({
+  const { cards: rankedCards, meals: rankedMeals } = rankBankCards({
     bankMeals: bankMeals(recipes),
     myMeals: customMeals,
+    liveMyMeals: customMeals,
     pantryItems,
     budget,
     likes: prefs.likes,
@@ -132,6 +134,8 @@ export function buildCoachAnswer({
     over,
     slot,
   });
+  const cards = pruneStaleMyMealCards(rankedCards, customMeals);
+  const meals = pruneStaleMyMealCards(rankedMeals, customMeals);
 
   const read = coachRead({ budget, slot, over });
   return {
@@ -152,6 +156,11 @@ export function buildCoachAnswer({
     shares,
     snackAsk: Boolean(habit?.ask),
   };
+}
+
+export function pruneStaleMyMealCards(cards = [], customMeals = []) {
+  const liveMyMeals = buildLiveMyMealsLookup(customMeals);
+  return (cards || []).filter((card) => card?.source !== "my" || isLiveMyMeal(card, liveMyMeals));
 }
 
 /**

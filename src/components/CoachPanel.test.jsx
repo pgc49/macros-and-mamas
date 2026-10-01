@@ -82,6 +82,58 @@ describe("the coach answers on the device", () => {
     expect(cardTitles()).toHaveLength(0);
   });
 
+  it("drops replayed My meals cards that were deleted from live custom meals", async () => {
+    const onLoadThread = vi.fn(async () => [
+      {
+        id: "r2",
+        role: "coach",
+        body: "Earlier answer.",
+        kind: "cards",
+        payload: {
+          cards: [
+            {
+              kind: "meal",
+              id: "deleted-1",
+              name: "Rosemary crackers",
+              title: "Rosemary crackers",
+              source: "my",
+              tag: "My meals",
+              cal: 200,
+              p: 8,
+              c: 20,
+              f: 8,
+              servings: 1,
+              reason: "Fits.",
+            },
+            {
+              kind: "meal",
+              id: "live-1",
+              name: "Live custom meal",
+              title: "Live custom meal",
+              source: "my",
+              tag: "My meals",
+              cal: 210,
+              p: 22,
+              c: 12,
+              f: 9,
+              servings: 1,
+              reason: "Fits.",
+            },
+          ],
+        },
+      },
+    ]);
+    renderPanel({
+      postCoach: vi.fn(),
+      onLoadThread,
+      customMeals: [{ id: "live-1", name: "Live custom meal", cal: 210, p: 22, c: 12, f: 9 }],
+    });
+
+    await screen.findByText("Earlier answer.");
+    expect(screen.queryByText("Rosemary crackers")).toBeNull();
+    expect(screen.getByText("Live custom meal")).toBeTruthy();
+  });
+
   it("does not ask for another meal when the day is already logged", async () => {
     renderPanel({
       onLoadThread: async () => [],
