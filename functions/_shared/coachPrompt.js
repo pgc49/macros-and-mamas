@@ -152,6 +152,32 @@ food, feed the food she has and call it what it is. If she said tonight, dinner,
 a cuisine, her words beat the clock.`;
 }
 
+function fileBlock(profile, macros) {
+  const parts = [];
+  const n = (v) => Math.round(Number(v) || 0);
+  if (macros && [macros.cal, macros.protein, macros.carbs, macros.fat].some((v) => Number(v) > 0)) {
+    parts.push(`## Approved ranges — Callie's numbers for the day. Use them. Do not recite them.
+- Calories: ${n(macros.cal)}
+- Protein: ${n(macros.protein)} g
+- Carbs: ${n(macros.carbs)} g
+- Fat: ${n(macros.fat)} g`);
+  }
+  const notes = (Array.isArray(macros?.notes) ? macros.notes : [])
+    .map((note) => String(note || "").trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  if (notes.length) {
+    parts.push(`## Callie's notes — choose the food from these. Do not quote them.
+${notes.map((note) => `- ${note.slice(0, 240)}`).join("\n")}`);
+  }
+  const months = Number(profile?.monthsPP);
+  if (profile?.monthsPP != null && profile.monthsPP !== "" && Number.isFinite(months)) {
+    parts.push(`## Stage
+${months} months postpartum. Choose the plate from that. Do not mention her stage.`);
+  }
+  return parts.join("\n\n");
+}
+
 function budgetBlock(budget, slot) {
   if (!budget) return "## Room for this meal\n(not available — suggest a normal-sized meal for the slot)";
   const n = (v) => Math.round(Number(v) || 0);
@@ -208,12 +234,14 @@ const SHARED_RULES = `## Rules
    meals empty, and let the app do the handoff — do not answer it yourself.
 10. Return ONLY JSON.`;
 
-export function buildCoachAskPrompt({ profile, budget, slot, question, customMeals = [], recentNames = [], day = null }) {
+export function buildCoachAskPrompt({ profile, macros = null, budget, slot, question, customMeals = [], recentNames = [], day = null }) {
   return `A mama in the program is asking you something. Answer it, or hand it back.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
+
+${fileBlock(profile, macros)}
 
 ${dayBlock(day)}
 
@@ -236,12 +264,14 @@ ${SHARED_RULES}
 Return JSON: ${REPLY_SCHEMA}`;
 }
 
-export function buildCoachMenuPrompt({ profile, budget, slot, note, customMeals = [], recentNames = [], day = null }) {
+export function buildCoachMenuPrompt({ profile, macros = null, budget, slot, note, customMeals = [], recentNames = [], day = null }) {
   return `She is out and sent a photo of the menu. Tell her what to order.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
+
+${fileBlock(profile, macros)}
 
 ${dayBlock(day)}
 
@@ -269,12 +299,14 @@ ${SHARED_RULES}
 Return JSON: ${REPLY_SCHEMA}`;
 }
 
-export function buildCoachMenuLinkPrompt({ profile, budget, slot, question, pageUrl, pageText, customMeals = [], recentNames = [], day = null }) {
+export function buildCoachMenuLinkPrompt({ profile, macros = null, budget, slot, question, pageUrl, pageText, customMeals = [], recentNames = [], day = null }) {
   return `She pasted a link to a menu. The page was fetched for you. You cannot see anything that is not in the page text.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
+
+${fileBlock(profile, macros)}
 
 ${dayBlock(day)}
 
@@ -303,12 +335,14 @@ ${SHARED_RULES}
 Return JSON: ${REPLY_SCHEMA}`;
 }
 
-export function buildCoachKitchenPrompt({ profile, budget, slot, note, customMeals = [], recentNames = [], day = null }) {
+export function buildCoachKitchenPrompt({ profile, macros = null, budget, slot, note, customMeals = [], recentNames = [], day = null }) {
   return `She sent a photo of what she has in. Build her something from it.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
+
+${fileBlock(profile, macros)}
 
 ${dayBlock(day)}
 

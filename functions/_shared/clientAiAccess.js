@@ -38,6 +38,51 @@ export async function fetchEnrollment(env, userId, authHeader) {
   return rows[0] || null;
 }
 
+function monthsPostpartum(row) {
+  if (row?.months_pp == null || row.months_pp === "") return null;
+  const n = Number(row.months_pp);
+  return Number.isFinite(n) ? n : null;
+}
+
+function macroNotes(row) {
+  if (!row) return [];
+  if (Array.isArray(row.notes)) {
+    return row.notes.map((note) => String(note || "").trim()).filter(Boolean);
+  }
+  if (typeof row.notes === "string" && row.notes.trim()) return [row.notes.trim()];
+  return [];
+}
+
+/** Profile + approved ranges for a prompt. Does not drop stage or Callie's notes. */
+export function selfFromRows(row, macrosRow) {
+  if (!row) return { profile: null, macros: null };
+  return {
+    profile: {
+      name: row.name,
+      diet: row.diet,
+      prefB: row.pref_b,
+      prefL: row.pref_l,
+      prefD: row.pref_d,
+      prefS: row.pref_s,
+      seasonNote: row.season_note,
+      allergens: Array.isArray(row.allergens) ? row.allergens : [],
+      allergenNote: row.allergen_note || "",
+      foodAvoids: row.food_avoids || "",
+      breastfeeding: row.breastfeeding === true,
+      monthsPP: monthsPostpartum(row),
+    },
+    macros: macrosRow
+      ? {
+        cal: Number(macrosRow.cal),
+        protein: Number(macrosRow.protein),
+        carbs: Number(macrosRow.carbs),
+        fat: Number(macrosRow.fat),
+        notes: macroNotes(macrosRow),
+      }
+      : null,
+  };
+}
+
 /** Everything the prompt needs about her, and the ranges Callie approved. */
 export async function loadSelf(env, userId, authHeader) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
@@ -55,28 +100,7 @@ export async function loadSelf(env, userId, authHeader) {
 
   const profiles = await pResp.json().catch(() => []);
   const macrosRows = await mResp.json().catch(() => []);
-  const row = profiles[0];
-  if (!row) return { profile: null, macros: null };
-
-  const m = macrosRows[0];
-  return {
-    profile: {
-      name: row.name,
-      diet: row.diet,
-      prefB: row.pref_b,
-      prefL: row.pref_l,
-      prefD: row.pref_d,
-      prefS: row.pref_s,
-      seasonNote: row.season_note,
-      allergens: Array.isArray(row.allergens) ? row.allergens : [],
-      allergenNote: row.allergen_note || "",
-      foodAvoids: row.food_avoids || "",
-      breastfeeding: row.breastfeeding === true,
-    },
-    macros: m
-      ? { cal: Number(m.cal), protein: Number(m.protein), carbs: Number(m.carbs), fat: Number(m.fat) }
-      : null,
-  };
+  return selfFromRows(profiles[0], macrosRows[0]);
 }
 
 /**

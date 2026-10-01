@@ -105,6 +105,39 @@ describe("the prompt says what meal she is deciding", () => {
     expect(prompt).toContain("Calories: about 500");
     expect(prompt).toContain("Greek yogurt + berries");
   });
+
+  it("puts her ranges, her stage, and Callie's notes on every model prompt", () => {
+    const file = {
+      ...ARGS,
+      slot: "dinner",
+      profile: { ...ARGS.profile, breastfeeding: true, monthsPP: 4 },
+      macros: {
+        cal: 1800,
+        protein: 140,
+        carbs: 160,
+        fat: 55,
+        notes: ["keep fat at the low end"],
+      },
+    };
+    const prompts = [
+      buildCoachAskPrompt({ ...file, question: "ideas" }),
+      buildCoachMenuPrompt({ ...file, note: "" }),
+      buildCoachKitchenPrompt({ ...file, note: "" }),
+      buildCoachMenuLinkPrompt({ ...file, question: "this menu", pageUrl: "https://example.com", pageText: "Salmon" }),
+    ];
+    for (const prompt of prompts) {
+      expect(prompt).toContain("Approved ranges");
+      expect(prompt).toContain("Calories: 1800");
+      expect(prompt).toContain("Protein: 140 g");
+      expect(prompt).toContain("Carbs: 160 g");
+      expect(prompt).toContain("Fat: 55 g");
+      expect(prompt).toContain("4 months postpartum");
+      expect(prompt).toContain("Do not mention her stage");
+      expect(prompt).toContain("keep fat at the low end");
+      expect(prompt).toContain("Do not quote them");
+      expect(prompt).toContain("She is nursing");
+    }
+  });
 });
 
 describe("what it is allowed to write down", () => {

@@ -182,7 +182,7 @@ export async function onRequestPost({ request, env }) {
     const budget = sanitizeBudget(body.budget);
     const recentNames = parseRecent(body.recent);
     const day = sanitizeCoachContext(body.context);
-    const args = { profile, budget, slot, customMeals, recentNames, day };
+    const args = { profile, macros, budget, slot, customMeals, recentNames, day };
 
     let prompt;
     if (menuPage?.ok) {
