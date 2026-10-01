@@ -22,7 +22,7 @@ import {
   remainingForCoach,
   skippedSlotsBefore,
 } from "./coachBudget.js";
-import { buildCoachCard, firstPaintPlates, rankBankCards } from "./coachRank.js";
+import { buildCoachCard, cardsWithShownReason, firstPaintPlates, rankBankCards } from "./coachRank.js";
 import { coachPrefsFromProfile } from "./coachPrefs.js";
 import { budgetSentence, coachRead, leftLine, shownCoachLead, slotLeftRead } from "./coachLines.js";
 import { bankMealNameSet, buildLiveMyMealsLookup, cardIsGoneCustom } from "./coachMyMeals.js";
@@ -207,7 +207,7 @@ export function buildSuggestedCards(meals, answer, { source = "new", slot = null
     });
     if (card) out.push({ kind: "meal", ...card });
   }
-  return out;
+  return cardsWithShownReason(out);
 }
 
 function clipPromptText(value, max = 80) {

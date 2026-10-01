@@ -17,7 +17,7 @@ import {
   resolveCoachShares,
   unmatchedCoachPencils,
 } from "./coachBudget.js";
-import { buildCoachCard, coachReason, firstPaintPlates, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason } from "./coachRank.js";
+import { buildCoachCard, cardsWithShownReason, coachReason, firstPaintPlates, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason } from "./coachRank.js";
 import { buildCoachAnswer, pruneStaleMyMealCards, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
 import { nextCustomMeals } from "./coachMyMeals.js";
 import { coachSlotFromTime } from "./mealSlots.js";
@@ -610,6 +610,40 @@ describe("ranking", () => {
     expect(shown[1].cards.map((card) => card.name)).toEqual(["Pulled chicken tacos"]);
     expect(shown[1].cards[0].reason).toMatch(/chicken|tortilla/i);
     expect(shown[1].cards[0].reason).not.toMatch(/skipped a meal|hormonal/);
+  });
+
+  it("stamps a food why on a Berry smoothie whose stored reason is blank", () => {
+    const card = {
+      kind: "meal",
+      name: "Berry protein smoothie",
+      title: "Berry protein smoothie",
+      source: "bank",
+      tag: "Callie's bank",
+      cal: 270,
+      p: 28,
+      c: 34,
+      f: 4,
+      servings: 1,
+      reason: "",
+      knowsYou: "Usually breakfast",
+      ingredients: ["salt", "oil"],
+    };
+    const essay = `${COACH_COPY.skipNotice} ${COACH_COPY.skipBreakfastHint}`;
+    expect(shownCoachReason(card)).toBe("Protein powder, frozen berries, and medium banana.");
+    expect(shownCoachReason(card)).not.toBe("");
+    const painted = firstPaintPlates([card]);
+    expect(painted).toHaveLength(1);
+    expect(painted[0]).not.toBe(card);
+    expect(painted[0].reason).toBe("Protein powder, frozen berries, and medium banana.");
+    const replayed = replayCoachMessages([{
+      role: "coach",
+      body: essay,
+      cards: [card],
+    }], []);
+    expect(replayed[0].body).toContain("I noticed you skipped a meal");
+    expect(replayed[0].cards).toHaveLength(1);
+    expect(replayed[0].cards[0].reason).toBe("Protein powder, frozen berries, and medium banana.");
+    expect(cardsWithShownReason([card])[0].reason).not.toBe("");
   });
 
   it("drops a deleted custom wearing any chip and keeps the live custom and the bank meal", () => {

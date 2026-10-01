@@ -91,6 +91,8 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
   const done = phase === "logged" || phase === "pencilled";
   const why = shownCoachReason(card);
   const historyWhy = /^You've had this at /i.test(why);
+  // A plate with nothing under it reads as a blank why. Don't paint it.
+  if (!actionsOnly && !why) return null;
 
   return (
     <div

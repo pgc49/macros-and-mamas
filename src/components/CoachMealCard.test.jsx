@@ -58,6 +58,30 @@ describe("coach card honesty", () => {
     expect(screen.getByRole("button", { name: "Save to My meals" })).toBeTruthy();
   });
 
+  it("does not paint a Berry smoothie with a blank under-plate why", () => {
+    render(
+      <CoachMealCard
+        card={{
+          name: "Berry protein smoothie",
+          title: "Berry protein smoothie",
+          cal: 270,
+          p: 28,
+          c: 34,
+          f: 4,
+          tag: "Callie's bank",
+          source: "bank",
+          reason: "",
+          knowsYou: "Usually breakfast",
+          ingredients: ["salt", "oil"],
+        }}
+        onLog={vi.fn()}
+      />,
+    );
+    const why = screen.getByTestId("coach-card-why").textContent;
+    expect(why).toBe("Protein powder, frozen berries, and medium banana.");
+    expect(why.trim()).not.toBe("");
+  });
+
   it("does not put leftover protein math under the plate", () => {
     render(
       <CoachMealCard

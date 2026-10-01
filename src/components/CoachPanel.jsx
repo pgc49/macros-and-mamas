@@ -17,7 +17,7 @@ import {
   replayCoachMessages,
   recentNamesForPrompt,
 } from "../utils/coachSession";
-import { firstPaintPlates } from "../utils/coachRank";
+import { cardsWithShownReason, firstPaintPlates } from "../utils/coachRank";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
@@ -306,10 +306,10 @@ export function CoachPanel({
 
       // The model's meals are re-checked against the real budget here. One that
       // no longer fits is dropped rather than shown with a caveat.
-      const cards = buildSuggestedCards(data.meals, fit, {
+      const cards = cardsWithShownReason(buildSuggestedCards(data.meals, fit, {
         source: data.mealSource || "new",
         slot: slotForAsk,
-      });
+      }));
       const body = data.reply || (cards.length ? "" : COACH_COPY.cantSeeIt);
       push({
         role: "coach",

@@ -254,15 +254,34 @@ function foodClause(items) {
   return `${list[0]}, ${rest(list[1])}, and ${rest(list[2])}.`;
 }
 
+function recipeLookupName(card) {
+  return String(card?.name || card?.title || "")
+    .replace(/\s·\s.*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function foodLinesFromDetail(detailed) {
+  const lines = detailed?.serving || detailed?.ingredients || [];
+  return foodClause(lines.map((line) => (typeof line === "string" ? line : line?.item)));
+}
+
 function plateFoodClause(card) {
-  const detailed = withRecipeDetail({
+  const own = foodLinesFromDetail(withRecipeDetail({
     name: card?.name,
     basedOn: card?.basedOn,
     serving: card?.serving,
     ingredients: card?.ingredients,
-  });
-  const lines = detailed?.serving || detailed?.ingredients || [];
-  return foodClause(lines.map((line) => (typeof line === "string" ? line : line?.item)));
+  }));
+  if (own) return own;
+  // A stored card can carry ingredient lines that name nothing (salt, a
+  // label, an empty item). Those must not hide the bank plate.
+  const lookup = recipeLookupName(card);
+  if (!lookup) return "";
+  return foodLinesFromDetail(withRecipeDetail({
+    name: lookup,
+    basedOn: card?.basedOn,
+  }));
 }
 
 function clauseFromKnows(knowsYou) {
@@ -323,17 +342,27 @@ function isHalfSwap(plate, other) {
 }
 
 /**
+ * Stamp the line under the plate onto every card that can name food or the
+ * dish. Cards with nothing to say are dropped. Always a new object, so a
+ * stored `reason: ""` cannot be the one that paints.
+ */
+export function cardsWithShownReason(cards = []) {
+  const named = [];
+  for (const card of cards || []) {
+    const reason = shownCoachReason(card);
+    if (!reason) continue;
+    named.push({ ...card, reason });
+  }
+  return named;
+}
+
+/**
  * First paint is one plate. A second card is only the half portion of that
  * same plate. A second full bank meal is not a swap. Plates with nothing to
  * name are skipped.
  */
 export function firstPaintPlates(cards = []) {
-  const named = [];
-  for (const card of cards || []) {
-    const reason = shownCoachReason(card);
-    if (!reason) continue;
-    named.push(reason === (card?.reason || "") ? card : { ...card, reason });
-  }
+  const named = cardsWithShownReason(cards);
   if (!named.length) return [];
   const plate = named[0];
   const swap = named.find((card, index) => index > 0 && isHalfSwap(plate, card));
@@ -444,7 +473,7 @@ function halfCardFrom(full, budget, ctx) {
     f: (Number(full.f) || 0) / 2,
   };
   half.title = portionTitle(full.name, 0.5);
-  half.reason = coachReason(half, budget, { over: ctx.over });
+  half.reason = shownCoachReason(half);
   half.proteinNote = proteinOverNote(half, budget);
   half.score = scoreScaledMeal(half, budget, ctx);
   return half;

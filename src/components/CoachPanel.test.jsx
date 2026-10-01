@@ -419,6 +419,39 @@ describe("the coach answers on the device", () => {
     expect(screen.queryByRole("button", { name: "Photo of my fridge" })).toBeNull();
   });
 
+  it("paints a stored Berry smoothie whose reason was blank", async () => {
+    renderPanel({
+      onLoadThread: async () => [{
+        id: "r2",
+        role: "coach",
+        body: `${COACH_COPY.skipNotice} ${COACH_COPY.skipBreakfastHint}`,
+        kind: "cards",
+        payload: {
+          cards: [{
+            kind: "meal",
+            name: "Berry protein smoothie",
+            title: "Berry protein smoothie",
+            source: "bank",
+            tag: "Callie's bank",
+            cal: 270,
+            p: 28,
+            c: 34,
+            f: 4,
+            servings: 1,
+            reason: "",
+            knowsYou: "Usually breakfast",
+            ingredients: ["salt", "oil"],
+          }],
+        },
+      }],
+    });
+    await screen.findByText("Berry protein smoothie");
+    expect(screen.getByTestId("coach-card-why").textContent).toBe(
+      "Protein powder, frozen berries, and medium banana.",
+    );
+    expect(document.body.textContent).toContain("I noticed you skipped a meal");
+  });
+
   it("logs tonight as dinner, not the breakfast the clock already passed", async () => {
     const onLogCard = vi.fn(async () => true);
     renderPanel({
