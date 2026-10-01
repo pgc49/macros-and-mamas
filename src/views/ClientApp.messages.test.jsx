@@ -91,7 +91,7 @@ describe("ClientApp Messages chrome", () => {
     const view = renderMessages();
     const content = view.container.querySelector("[data-shell-content]");
     expect(content.getAttribute("data-lock-scroll")).toBe("true");
-    expect(content.style.overflowY).toBe("hidden");
+    expect(content.style.overflowY).toBe("auto");
     expect(view.container.querySelector("[data-shell-fill]")).toBeTruthy();
     expect(screen.getByPlaceholderText("Write a message…")).toBeTruthy();
     expect(screen.queryByText("App help & feedback")).toBeNull();

@@ -111,5 +111,30 @@ describe("POST /api/client-summary", () => {
     expect(data.suggested_touch).toBe("Check in.");
     expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(1);
     expect(openrouter.callOpenRouter.mock.calls[0][0].label).toBe("client_summary");
+    const system = openrouter.callOpenRouter.mock.calls[0][0].messages[0].content;
+    expect(system).toMatch(/one client/);
+    expect(system).not.toMatch(/one postpartum client/);
+  });
+
+  it("strips an invented postpartum line when her payload is not postpartum", async () => {
+    mockAuth();
+    openrouter.parseJsonLoose.mockReturnValue({
+      ok: true,
+      value: {
+        summary: "This postpartum mama is logging well.",
+        suggested_touch: "Ask how new-mom life is going.",
+      },
+    });
+    const res = await onRequestPost({
+      request: request({
+        clientId: CLIENT_ID,
+        payload: { firstName: "Dolly", breastfeeding: false, monthsPP: null, pregnant: false },
+      }),
+      env,
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.summary).not.toMatch(/postpartum/i);
+    expect(data.suggested_touch).not.toMatch(/new-mom/i);
   });
 });

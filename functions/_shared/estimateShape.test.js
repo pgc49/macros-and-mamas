@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeEstimate } from "./estimateShape.js";
+import { sanitizeEstimate, sanitizeTip } from "./estimateShape.js";
 
 describe("sanitizeEstimate", () => {
   it("refuses explicit parsed.error", () => {
@@ -40,5 +40,29 @@ describe("sanitizeEstimate", () => {
     expect(ok.error).toBeUndefined();
     expect(ok.meal).toBe("Turkey chili");
     expect(ok.calories).toBe(3600);
+  });
+
+  it("grounds the coaching tip in her profile, not a generic postpartum line", () => {
+    const dolly = { name: "Dolly", breastfeeding: false, monthsPP: "", pregnant: false };
+    const out = sanitizeEstimate(
+      {
+        meal: "Salmon and rice",
+        calories: 520,
+        protein_g: 42,
+        carbs_g: 48,
+        fat_g: 16,
+        tip: "This is an excellent postpartum meal.",
+      },
+      "meal",
+      { profile: dolly },
+    );
+    expect(out.tip).toBe("This is an excellent meal.");
+    expect(out.tip).not.toMatch(/postpartum/i);
+  });
+});
+
+describe("sanitizeTip", () => {
+  it("still strips Callie self-intros", () => {
+    expect(sanitizeTip("Callie here — nice protein on this plate.")).toBe("Nice protein on this plate.");
   });
 });

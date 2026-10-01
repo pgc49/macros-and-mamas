@@ -17,7 +17,20 @@ function assert(cond, msg) {
 
 const src = readFileSync(new URL("../src/components/MessagesThread.jsx", import.meta.url), "utf8");
 assert(!/\bbottomRef\b/.test(src), "MessagesThread must not reference bottomRef");
-assert(src.includes("scrollTop = el.scrollHeight"), "MessagesThread should scroll list to tip");
+assert(src.includes("createBottomPin"), "MessagesThread should pin the live edge while content settles");
+assert(!src.includes("setTimeout(jump"), "MessagesThread must not one-shot jump after a delay");
+const pinSrc = readFileSync(new URL("../src/lib/stickToBottom.js", import.meta.url), "utf8");
+assert(pinSrc.includes("function bottomScrollTop"), "bottom pin must compute live-edge scrollTop");
+assert(pinSrc.includes("scroller.scrollTop = bottomScrollTop(scroller)"), "bottom pin should scroll the list to the tip");
+assert(pinSrc.includes("function pinChildToBottom"), "jump-to-latest must pin the tip bubble to the pane");
+const virtSrc = readFileSync(new URL("../src/lib/messageListWindow.js", import.meta.url), "utf8");
+assert(virtSrc.includes("function visibleMessageRange"), "thread must virtualize with a scroll-height-preserving window");
+assert(virtSrc.includes("function commitWindowRange"), "virtual window must hold the mounted slice while scrolling");
+assert(virtSrc.includes("function shouldVirtualizeMessages"), "short threads must stay fully mounted");
+assert(src.includes("expandOnly") && src.includes("userScrollingRef"), "must not remount or setState mid-fling");
+assert(src.includes("overflowAnchor") && src.includes("onListScroll"), "thread scroll must not remount on every tick or fight anchoring");
+assert(src.includes("data-virt-top") && src.includes("onEnsureMessage"), "thread must window bubbles and jump to quoted parents");
+assert(!/scrollTop\s*=\s*scroller\.scrollHeight/.test(pinSrc), "must not assign scrollHeight as scrollTop");
 assert(src.includes('height: "100%"'), "customer thread must fill the leftover Messages pane");
 assert(!src.includes("62vh"), "customer thread must not use a scrollable 62vh box");
 assert(src.includes('minHeight: 0'), "message flex items must be allowed to shrink");
@@ -42,6 +55,19 @@ const adminPortalSrc = readFileSync(new URL("../src/admin/AdminPortal.jsx", impo
 assert(adminPortalSrc.includes('name="AdminMessages"'), "admin inbox needs a local boundary");
 assert(adminPortalSrc.includes("client-messages-${sel.id}"), "client-message boundary must remount by client");
 assert(adminPortalSrc.includes("contentMaxWidth={tab === \"messages\" ? 1120 : 560}"), "admin Messages must use a wide desktop shell");
+assert(adminPortalSrc.includes("lockContentScroll={tab === \"messages\"}"), "admin Messages must lock page scroll so the composer stays put");
+assert(adminPortalSrc.includes("hideBottomBar={tab === \"messages\" && composerFocused}"), "admin Messages must hide the tab bar while the composer is focused");
+assert(adminPortalSrc.includes("onComposerFocusChange={setComposerFocused}"), "admin inbox must report composer focus to the shell");
+
+const adminInboxSrc = readFileSync(new URL("../src/admin/AdminMessages.jsx", import.meta.url), "utf8");
+assert(adminInboxSrc.includes("data-admin-thread-pane"), "admin thread pane must be marked for layout tests");
+assert(adminInboxSrc.includes('height: "100%"'), "admin thread must fill leftover Shell height");
+assert(!adminInboxSrc.includes("100dvh - 132px"), "admin thread must not guess viewport minus chrome");
+assert(!adminInboxSrc.includes("78vh"), "admin thread must not use a viewport-height card on desktop");
+
+const adminNavSrc = readFileSync(new URL("../src/admin/AdminBottomNav.jsx", import.meta.url), "utf8");
+assert(adminNavSrc.includes('padding: "12px 12px 4px"'), "admin tab bar must match mama compact padding");
+assert(!adminNavSrc.includes("safe-area-inset-bottom"), "admin tab bar must not double-count safe-area (that lives on .mam-tabbar)");
 
 const shellSrc = readFileSync(new URL("../src/components/ui.jsx", import.meta.url), "utf8");
 assert(shellSrc.includes("contentMaxWidth = 560"), "Shell must keep the phone-width default");
@@ -109,6 +135,17 @@ try {
         created_at: "2026-08-10T10:06:00.000Z",
         reactions: [],
       },
+      {
+        id: "m-photo",
+        sender_id: "becca-1",
+        body: "",
+        attachment_path: "aug/plate.jpg",
+        attachment_mime: "image/jpeg",
+        attachment_name: "plate.jpg",
+        attachmentUrl: "https://example.com/plate.jpg",
+        created_at: "2026-08-10T10:07:00.000Z",
+        reactions: [],
+      },
     ],
     onSend: async () => {},
     onEdit: async () => {},
@@ -120,6 +157,8 @@ try {
   assert(html.includes("Hi Callie"), "renders mama text");
   assert(html.includes("Hey Becca"), "renders admin text");
   assert(html.includes("Voice memo") || html.includes("voice"), "renders voice memo player");
+  assert(html.includes('data-open-photo="m-photo"'), "photos should open an in-app viewer");
+  assert(!/<a[^>]+target="_blank"[^>]*>\s*<img/.test(html), "thread images should not open a new tab");
   assert(!html.includes("Messages couldn’t load"), "must not render error boundary copy");
 
   const adminMod = await vite.ssrLoadModule("/src/admin/AdminClientMessages.jsx");

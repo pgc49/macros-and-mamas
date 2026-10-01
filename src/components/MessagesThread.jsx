@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { MESSAGE_FACE_FONT } from "../lib/messageFace";
 import { Btn } from "./ui";
@@ -20,6 +20,19 @@ import {
 import { VoiceMemoPlayer } from "./VoiceMemoPlayer";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { splitLinkedMessageText } from "../lib/messageLinks";
+import { createBottomPin, pinChildToBottom, scrollChildIntoScroller } from "../lib/stickToBottom";
+import { mergeMessagesById } from "../lib/messageOrdering";
+import {
+  buildPendingRow,
+  createClientMessageId,
+  findPendingByFingerprint,
+  getPendingAttempt,
+  listPendingRows,
+  markPendingStatus,
+  reconcilePendingWithMessages,
+  sendPayloadFingerprint,
+  upsertPendingAttempt,
+} from "../lib/pendingSends";
 import {
   BUBBLE_HOLD_SELECT_CSS,
   MESSAGE_HOLD_MOVE_PX,
@@ -28,9 +41,41 @@ import {
   copyableMessageBody,
   holdOpensMenu,
 } from "../lib/messageSelect";
+import {
+  jumpLatestLabel,
+  nextUnseenCount,
+  shouldMarkThreadRead,
+} from "../lib/threadReadState";
+import {
+  MESSAGE_WINDOW_OVERSCAN,
+  bubbleContentWidth,
+  commitWindowRange,
+  fullMessageRange,
+  heightsForMessages,
+  indexOfMessage,
+  initialLatestRange,
+  offsetToIndex,
+  scrollTopAfterHeightChange,
+  shouldRemeasure,
+  shouldVirtualizeMessages,
+  visibleMessageRange,
+} from "../lib/messageListWindow";
+import { imageBoxStyle, isImageAttachmentMime, readImageDimensions } from "../lib/messageMedia";
+import { findLoadedMatchIndexes, nextMatchIndex } from "../lib/messageReplyParent";
+import { MessagePhotoViewer } from "./MessagePhotoViewer";
 
 const ACCEPT_ATTACH = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf,.pdf";
-const pendingSendAttempts = new Map();
+
+function cssAttrValue(value) {
+  return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
+}
+
+function findMessageElement(root, messageId) {
+  const id = String(messageId || "");
+  if (!root || !id) return null;
+  const attr = cssAttrValue(id);
+  return root.querySelector(`[data-msg-id="${attr}"], [data-server-id="${attr}"]`);
+}
 
 /**
  * Shared chat thread UI (mama Messages tab + admin per-client thread).
@@ -86,11 +131,34 @@ export function MessagesThread({
    */
   initialDraft = "",
   onInitialDraftUsed,
+  /**
+   * Prepend the page of history before the oldest loaded message. Threads open
+   * on a window, so a long-running cohort group needs a way back through it.
+   */
+  onLoadEarlier = null,
+  /** False once the thread has reached its first message. */
+  hasEarlier = false,
+  /**
+   * Push / `?message=` target. Scroll that row into view and hold unread
+   * until the live tip (or this target, if it is the tip) is on screen.
+   */
+  focusMessageId = "",
+  /**
+   * Load older pages until `messageId` is in the thread (quote jump).
+   * Resolves true when the row is present.
+   */
+  onEnsureMessage = null,
 }) {
-  const safeMessages = Array.isArray(messages)
-    ? messages.map(normalizeMessageRow)
-    : [];
-  const latestMessageId = safeMessages[safeMessages.length - 1]?.id || "";
+  const [outboxTick, setOutboxTick] = useState(0);
+  const attemptScope = threadKey || `thread:${selfId || "unknown"}`;
+  const safeMessages = mergeMessagesById(
+    Array.isArray(messages) ? messages : [],
+    listPendingRows(attemptScope),
+  ).map(normalizeMessageRow);
+  const latestMessageId = safeMessages[safeMessages.length - 1]?.client_message_id
+    || safeMessages[safeMessages.length - 1]?.id
+    || "";
+  void outboxTick;
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -106,15 +174,48 @@ export function MessagesThread({
   const [recording, setRecording] = useState(false);
   const [recordMs, setRecordMs] = useState(0);
   const [voicePreview, setVoicePreview] = useState(null); // { file, url, durationMs }
+  const [atLatest, setAtLatest] = useState(() => !focusMessageId);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const [focusPending, setFocusPending] = useState(() => !!focusMessageId);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [jumpTargetId, setJumpTargetId] = useState("");
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findIndex, setFindIndex] = useState(-1);
+  const [photoViewer, setPhotoViewer] = useState(null);
   const listRef = useRef(null);
+  const listContentRef = useRef(null);
+  const bottomPinRef = useRef(null);
+  const measuredHeightsRef = useRef(new Map());
+  const messagesRef = useRef(safeMessages);
+  const listWidthRef = useRef(0);
+  const scrollRafRef = useRef(0);
+  const userScrollingRef = useRef(false);
+  const scrollIdleTimerRef = useRef(0);
+  const pendingMeasureRef = useRef(false);
+  const [listWidth, setListWidth] = useState(0);
+  const [windowRange, setWindowRange] = useState(() => (
+    shouldVirtualizeMessages(safeMessages.length)
+      ? initialLatestRange(safeMessages)
+      : fullMessageRange(safeMessages.length)
+  ));
+  messagesRef.current = safeMessages;
+  /** Metrics captured before an older page is prepended, so we can hold the row. */
+  const restoreRef = useRef(null);
   const fileRef = useRef(null);
   const draftRef = useRef(null);
   const holdTimer = useRef(null);
   const holdStart = useRef(null);
   const recorderRef = useRef(null);
   const markReadRef = useRef(onMarkRead);
-  const sendInFlightRef = useRef(false);
+  const sendInFlightIds = useRef(new Set());
+  const latestIdRef = useRef(latestMessageId);
+  const atLatestRef = useRef(atLatest);
+  const focusPendingRef = useRef(focusPending);
+  const initialFocusRef = useRef(focusMessageId);
   const draftSeededRef = useRef("");
+
+  const bumpOutbox = () => setOutboxTick((n) => n + 1);
 
   useEffect(() => {
     const seed = String(initialDraft || "").trim();
@@ -136,31 +237,306 @@ export function MessagesThread({
     markReadRef.current = onMarkRead;
   }, [onMarkRead]);
 
-  // Keep the latest message in view inside the list pane (iMessage-style).
-  // Do NOT use scrollIntoView — it scrolls the page and fights flex height.
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return undefined;
-    const jump = () => {
-      el.scrollTop = el.scrollHeight;
-    };
-    jump();
-    const t1 = window.setTimeout(jump, 50);
-    const t2 = window.setTimeout(jump, 250);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-    // Last id: new tip message; length: empty → first load.
-  }, [safeMessages.length, latestMessageId]);
+  useEffect(() => { atLatestRef.current = atLatest; }, [atLatest]);
+  useEffect(() => { focusPendingRef.current = focusPending; }, [focusPending]);
 
   useEffect(() => {
+    reconcilePendingWithMessages(attemptScope, messages);
+  }, [attemptScope, messages]);
+
+  // Keep the latest message in view inside the list pane (iMessage-style).
+  // Do NOT use scrollIntoView — it scrolls the page and fights flex height.
+  //
+  // The pin has to survive content settling after the first paint: images
+  // decode, voice players mount, reaction chips arrive. A one-shot jump landed
+  // on a list that was still growing and left the reader above the newest
+  // message, which read as the pane bouncing back up while it loaded.
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return undefined;
+    const pin = createBottomPin(el, {
+      content: listContentRef.current,
+      onPinnedChange: setAtLatest,
+      initialPinned: !initialFocusRef.current,
+    });
+    bottomPinRef.current = pin;
+    if (initialFocusRef.current) {
+      pin.sync();
+      return () => {
+        pin.dispose();
+        bottomPinRef.current = null;
+      };
+    }
+    pin.toBottom();
+    // One frame later the flex pane often first receives a real clientHeight.
+    // Pin again then so the reader never sees the oldest row flash in.
+    const raf = window.requestAnimationFrame(() => pin.toBottom());
+    return () => {
+      window.cancelAnimationFrame(raf);
+      pin.dispose();
+      bottomPinRef.current = null;
+    };
+  }, []);
+
+  // A new tip message: follow it when the reader is at the live edge, hold
+  // position when they are reading back. Message count deliberately does not
+  // trigger this — prepending an older page must not yank them to the bottom.
+  useEffect(() => {
+    if (!latestMessageId) return;
+    const tipChanged = latestMessageId !== latestIdRef.current;
+    if (tipChanged) {
+      setUnseenCount((n) => nextUnseenCount({
+        unseenCount: n,
+        atLatest: atLatestRef.current,
+        tipChanged: true,
+      }));
+      latestIdRef.current = latestMessageId;
+    }
+    bottomPinRef.current?.repin();
+  }, [latestMessageId]);
+
+  useLayoutEffect(() => {
+    if (!focusMessageId || !focusPending) return undefined;
+    const el = listRef.current;
+    if (!el) return undefined;
+    let cancelled = false;
+    const tryScroll = () => {
+      if (cancelled) return;
+      const target = findMessageElement(el, focusMessageId);
+      if (!target) return;
+      if (!scrollChildIntoScroller(el, target)) return;
+      bottomPinRef.current?.sync();
+      setFocusPending(false);
+    };
+    tryScroll();
+    const raf = window.requestAnimationFrame(tryScroll);
+    const later = window.setTimeout(tryScroll, 80);
+    const settle = window.setTimeout(tryScroll, 240);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(later);
+      window.clearTimeout(settle);
+    };
+  }, [focusMessageId, focusPending, safeMessages]);
+
+  // Hold the anchor row once the prepended page has laid out. Runs before paint
+  // so the reader never sees the intermediate offset.
+  useLayoutEffect(() => {
+    const previous = restoreRef.current;
+    if (!previous) return;
+    restoreRef.current = null;
+    bottomPinRef.current?.restore(previous);
+  }, [safeMessages.length]);
+
+  const loadEarlier = useCallback(async () => {
+    const el = listRef.current;
+    if (!el || !onLoadEarlier || loadingEarlier) return;
+    setLoadingEarlier(true);
+    // Captured before the fetch so the restore uses the pre-prepend offset.
+    restoreRef.current = {
+      previousScrollHeight: el.scrollHeight,
+      previousScrollTop: el.scrollTop,
+    };
+    try {
+      await onLoadEarlier();
+    } catch (e) {
+      console.warn("load earlier messages failed", e);
+      restoreRef.current = null;
+    } finally {
+      setLoadingEarlier(false);
+    }
+  }, [onLoadEarlier, loadingEarlier]);
+
+  const markReadIfTipVisible = useCallback(() => {
+    if (!shouldMarkThreadRead({
+      latestMessageId,
+      atLatest: atLatestRef.current,
+      focusPending: focusPendingRef.current,
+    })) return;
+    setUnseenCount(0);
     Promise.resolve()
       .then(() => markReadRef.current?.())
       .catch((e) => {
-      console.warn("mark messages read failed", e);
+        console.warn("mark messages read failed", e);
       });
   }, [latestMessageId]);
+
+  useEffect(() => {
+    markReadIfTipVisible();
+  }, [latestMessageId, atLatest, focusPending, markReadIfTipVisible]);
+
+  const jumpToLatest = useCallback(() => {
+    setFocusPending(false);
+    setUnseenCount(0);
+    const el = listRef.current;
+    const tip = safeMessages[safeMessages.length - 1];
+    bottomPinRef.current?.toBottom();
+    pinChildToBottom(
+      el,
+      findMessageElement(el, tip?.client_message_id || tip?.id),
+    );
+  }, [safeMessages]);
+
+  const measureOptions = useCallback((el = listRef.current) => {
+    const width = el?.clientWidth || listWidthRef.current;
+    if (width > 0 && Math.abs(width - listWidthRef.current) > 2) {
+      listWidthRef.current = width;
+      setListWidth((prev) => (Math.abs(prev - width) > 2 ? width : prev));
+    }
+    return { maxBubbleWidth: bubbleContentWidth(listWidthRef.current) };
+  }, []);
+
+  const refreshWindow = useCallback((el = listRef.current, {
+    force = false,
+    expandOnly = false,
+  } = {}) => {
+    if (!el) return;
+    const rows = messagesRef.current;
+    if (!shouldVirtualizeMessages(rows.length)) {
+      setWindowRange((prev) => {
+        const next = fullMessageRange(rows.length);
+        return prev.start === next.start
+          && prev.end === next.end
+          && prev.topSpacer === 0
+          && prev.bottomSpacer === 0
+          ? prev
+          : next;
+      });
+      return;
+    }
+    const heights = heightsForMessages(rows, measuredHeightsRef.current, measureOptions(el));
+    const pinIndexes = [];
+    const tip = rows[rows.length - 1];
+    const tipIdx = indexOfMessage(rows, tip?.client_message_id || tip?.id);
+    if (tipIdx >= 0) pinIndexes.push(tipIdx);
+    if (focusMessageId) {
+      const idx = indexOfMessage(rows, focusMessageId);
+      if (idx >= 0) pinIndexes.push(idx);
+    }
+    if (jumpTargetId) {
+      const idx = indexOfMessage(rows, jumpTargetId);
+      if (idx >= 0) pinIndexes.push(idx);
+    }
+    const proposed = visibleMessageRange({
+      heights,
+      scrollTop: el.scrollTop,
+      clientHeight: el.clientHeight || 480,
+      overscan: MESSAGE_WINDOW_OVERSCAN,
+      pinIndexes,
+    });
+    setWindowRange((prev) => commitWindowRange(prev, proposed, heights, { force, expandOnly }));
+  }, [focusMessageId, jumpTargetId, measureOptions]);
+
+  useLayoutEffect(() => {
+    refreshWindow(listRef.current, { force: true });
+  }, [refreshWindow, safeMessages.length]);
+
+  const measureBubble = useCallback((key, node) => {
+    if (!node || !key) return;
+    const next = node.getBoundingClientRect().height + 10;
+    const previous = measuredHeightsRef.current.get(key);
+    if (!shouldRemeasure(previous || 0, next)) return;
+    measuredHeightsRef.current.set(key, next);
+    // Assigning scrollTop or setState mid-fling cancels iOS momentum and
+    // reads as the thread freezing. Record the height; apply after idle.
+    if (userScrollingRef.current) {
+      pendingMeasureRef.current = true;
+      return;
+    }
+    const rows = messagesRef.current;
+    const idx = indexOfMessage(rows, key);
+    const heights = heightsForMessages(rows, measuredHeightsRef.current, measureOptions());
+    const previousHeight = Number.isFinite(previous) ? previous : (idx >= 0 ? heights[idx] : next);
+    const el = listRef.current;
+    if (el && idx >= 0) {
+      el.scrollTop = scrollTopAfterHeightChange({
+        itemOffset: offsetToIndex(heights, idx, 0),
+        previousHeight,
+        nextHeight: next,
+        scrollTop: el.scrollTop,
+      });
+    }
+    refreshWindow();
+  }, [measureOptions, refreshWindow]);
+
+  const endUserScroll = useCallback(() => {
+    userScrollingRef.current = false;
+    if (scrollIdleTimerRef.current) {
+      window.clearTimeout(scrollIdleTimerRef.current);
+      scrollIdleTimerRef.current = 0;
+    }
+    if (!pendingMeasureRef.current) return;
+    pendingMeasureRef.current = false;
+    refreshWindow(listRef.current, { force: true });
+  }, [refreshWindow]);
+
+  const onListScroll = useCallback((event) => {
+    const el = event.currentTarget;
+    userScrollingRef.current = true;
+    if (scrollIdleTimerRef.current) window.clearTimeout(scrollIdleTimerRef.current);
+    scrollIdleTimerRef.current = window.setTimeout(endUserScroll, 160);
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      refreshWindow(el, { expandOnly: true });
+    });
+  }, [endUserScroll, refreshWindow]);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return undefined;
+    el.addEventListener("scrollend", endUserScroll);
+    return () => {
+      el.removeEventListener("scrollend", endUserScroll);
+      if (scrollRafRef.current) window.cancelAnimationFrame(scrollRafRef.current);
+      if (scrollIdleTimerRef.current) window.clearTimeout(scrollIdleTimerRef.current);
+    };
+  }, [endUserScroll]);
+
+  const scrollToLoadedMessage = useCallback((messageId) => {
+    const idx = indexOfMessage(messagesRef.current, messageId);
+    if (idx < 0) return false;
+    setJumpTargetId(messageId);
+    const el = listRef.current;
+    const heights = heightsForMessages(
+      messagesRef.current,
+      measuredHeightsRef.current,
+      measureOptions(el),
+    );
+    if (el) {
+      el.scrollTop = offsetToIndex(heights, idx, 16);
+      refreshWindow(el, { force: true });
+      window.requestAnimationFrame(() => {
+        const target = findMessageElement(el, messageId);
+        if (target) scrollChildIntoScroller(el, target);
+        bottomPinRef.current?.sync();
+      });
+    }
+    return true;
+  }, [measureOptions, refreshWindow]);
+
+  const jumpToQuoted = useCallback(async (parentId) => {
+    const id = String(parentId || "");
+    if (!id) return;
+    if (scrollToLoadedMessage(id)) return;
+    if (!onEnsureMessage) return;
+    try {
+      const found = await onEnsureMessage(id);
+      if (found) scrollToLoadedMessage(id);
+    } catch (e) {
+      console.warn("jump to quoted message failed", e);
+    }
+  }, [onEnsureMessage, scrollToLoadedMessage]);
+
+  const findMatches = findLoadedMatchIndexes(safeMessages, findQuery);
+  const jumpFind = useCallback((direction) => {
+    const next = nextMatchIndex(findMatches, findIndex, direction);
+    if (next < 0) return;
+    setFindIndex(next);
+    const row = safeMessages[next];
+    scrollToLoadedMessage(row?.client_message_id || row?.id);
+  }, [findIndex, findMatches, safeMessages, scrollToLoadedMessage]);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -286,27 +662,69 @@ export function MessagesThread({
     setRecordMs(0);
   };
 
+  const flushSend = async ({
+    text,
+    attach,
+    reply,
+    previewUrl: pendingPreview,
+    clientMessageId,
+    fingerprint,
+  }) => {
+    if (!onSend || sendInFlightIds.current.has(clientMessageId)) return;
+    sendInFlightIds.current.add(clientMessageId);
+    bottomPinRef.current?.toBottom();
+    const generation = createClientMessageId();
+    const media = attach && isImageAttachmentMime(attach.type)
+      ? await readImageDimensions(attach)
+      : null;
+    const row = buildPendingRow({
+      clientMessageId,
+      selfId,
+      body: text,
+      file: attach,
+      previewUrl: pendingPreview,
+      replyTo: reply,
+      width: media?.width,
+      height: media?.height,
+    });
+    const sendPromise = Promise.resolve().then(() => onSend(text, attach, {
+      ...(reply?.id ? { replyToId: reply.id } : {}),
+      clientMessageId,
+    }));
+    upsertPendingAttempt(attemptScope, {
+      id: clientMessageId,
+      fingerprint,
+      generation,
+      promise: sendPromise,
+      status: "pending",
+      row: { ...row, send_status: "pending" },
+      payload: { text, file: attach, replyTo: reply },
+    });
+    bumpOutbox();
+    try {
+      await sendPromise;
+      markPendingStatus(attemptScope, clientMessageId, "sent");
+      bumpOutbox();
+    } catch (e) {
+      console.error(e);
+      markPendingStatus(attemptScope, clientMessageId, "failed", {
+        promise: null,
+        row: { ...row, send_status: "failed" },
+      });
+      bumpOutbox();
+    } finally {
+      sendInFlightIds.current.delete(clientMessageId);
+    }
+  };
+
   const send = async () => {
     const text = draft.trim();
     const attach = voicePreview?.file || file;
-    if ((!text && !attach) || busy || !onSend || recording || sendInFlightRef.current) return;
-    sendInFlightRef.current = true;
-    const keptText = text;
-    const keptFile = file;
-    const keptVoice = voicePreview;
+    if ((!text && !attach) || !onSend || recording) return;
     const keptReply = replyTo;
-    const attemptScope = threadKey || `thread:${selfId || "unknown"}`;
-    const fingerprint = sendPayloadFingerprint(keptText, attach, keptReply?.id);
-    const previousAttempt = pendingSendAttempts.get(attemptScope);
-    const matchingAttempt = previousAttempt?.fingerprint === fingerprint
-      ? previousAttempt
-      : null;
-    const clientMessageId = matchingAttempt
-      ? previousAttempt.id
-      : createClientMessageId();
+    const fingerprint = sendPayloadFingerprint(text, attach, keptReply?.id);
+    const matchingAttempt = findPendingByFingerprint(attemptScope, fingerprint);
 
-    // A remounted instance may retry while the original request is still
-    // settling. Await that shared operation rather than creating a duplicate.
     if (matchingAttempt?.promise) {
       try {
         await matchingAttempt.promise;
@@ -314,60 +732,59 @@ export function MessagesThread({
         clearFile();
         clearVoicePreview();
         setReplyTo(null);
-        if (pendingSendAttempts.get(attemptScope)?.generation === matchingAttempt.generation) {
-          pendingSendAttempts.delete(attemptScope);
-        }
-        sendInFlightRef.current = false;
         return;
       } catch {
-        // The original attempt failed; continue below with the same ID.
+        // Same payload, same id — retry below.
       }
     }
 
-    const generation = createClientMessageId();
-    const sendPromise = Promise.resolve().then(() => onSend(keptText, attach, {
-      ...(keptReply?.id ? { replyToId: keptReply.id } : {}),
-      clientMessageId,
-    }));
-    pendingSendAttempts.set(attemptScope, {
-      id: clientMessageId,
-      fingerprint,
-      generation,
-      promise: sendPromise,
-    });
+    const clientMessageId = matchingAttempt?.id || createClientMessageId();
+    const transferredPreview = voicePreview?.url
+      || previewUrl
+      || (attach && String(attach.type || "").startsWith("image/")
+        ? URL.createObjectURL(attach)
+        : null);
     setDraft("");
-    clearFile();
-    clearVoicePreview();
     setReplyTo(null);
-    try {
-      await sendPromise;
-      if (pendingSendAttempts.get(attemptScope)?.generation === generation) {
-        pendingSendAttempts.delete(attemptScope);
-      }
-    } catch (e) {
-      if (pendingSendAttempts.get(attemptScope)?.generation === generation) {
-        pendingSendAttempts.set(attemptScope, {
-          id: clientMessageId,
-          fingerprint,
-          generation,
-          promise: null,
-        });
-      }
-      console.error(e);
-      setDraft(keptText);
-      if (keptReply) setReplyTo(keptReply);
-      if (keptVoice) {
-        setVoicePreview(keptVoice);
-      } else if (keptFile) {
-        setFile(keptFile);
-        if (String(keptFile.type || "").startsWith("image/")) {
-          setPreviewUrl(URL.createObjectURL(keptFile));
-        }
-      }
-      setAttachError(e.message || "Couldn’t send.");
-    } finally {
-      sendInFlightRef.current = false;
+    setAttachError("");
+    if (voicePreview) {
+      setVoicePreview(null);
+    } else {
+      setFile(null);
+      setPreviewUrl(null);
+      if (fileRef.current) fileRef.current.value = "";
     }
+    await flushSend({
+      text,
+      attach,
+      reply: keptReply,
+      previewUrl: transferredPreview,
+      clientMessageId,
+      fingerprint,
+    });
+  };
+
+  const retryFailed = async (message) => {
+    const clientMessageId = String(message?.client_message_id || message?.id || "").trim();
+    const attempt = getPendingAttempt(attemptScope, clientMessageId);
+    if (!attempt || attempt.status === "pending") return;
+    const payload = attempt.payload || {};
+    markPendingStatus(attemptScope, clientMessageId, "pending", {
+      row: { ...(attempt.row || message), send_status: "pending" },
+    });
+    bumpOutbox();
+    await flushSend({
+      text: payload.text || message.body || "",
+      attach: payload.file || null,
+      reply: payload.replyTo || null,
+      previewUrl: attempt.row?.attachmentUrl || message.attachmentUrl || null,
+      clientMessageId,
+      fingerprint: attempt.fingerprint || sendPayloadFingerprint(
+        payload.text || message.body || "",
+        payload.file,
+        payload.replyTo?.id,
+      ),
+    });
   };
 
   const enablePush = async () => {
@@ -397,7 +814,7 @@ export function MessagesThread({
     && pushSupported()
     && notificationPermission() !== "granted";
 
-  const canSend = !hideComposer && !busy && !recording && (!!draft.trim() || !!file || !!voicePreview);
+  const canSend = !hideComposer && !recording && (!!draft.trim() || !!file || !!voicePreview);
 
   const startEdit = (m) => {
     if (!onEdit || m.deleted_at) return;
@@ -477,14 +894,18 @@ export function MessagesThread({
     return Math.hypot(x - start.x, y - start.y) >= MESSAGE_HOLD_MOVE_PX;
   };
 
+  const isLocalSend = (m) => m.send_status === "pending" || m.send_status === "failed";
+
   const canEditMsg = (m) => (
     !m.deleted_at
+    && !isLocalSend(m)
     && !!onEdit
     && m.sender_id === selfId
   );
 
   const canDeleteMsg = (m) => (
     !m.deleted_at
+    && !isLocalSend(m)
     && !!onDelete
     && (m.sender_id === selfId || canModerate)
   );
@@ -493,6 +914,7 @@ export function MessagesThread({
     enableReply
     && !hideComposer
     && !m.deleted_at
+    && !isLocalSend(m)
     && m.kind !== "system"
   );
 
@@ -500,6 +922,7 @@ export function MessagesThread({
     enableReactions
     && typeof onReact === "function"
     && !m.deleted_at
+    && !isLocalSend(m)
     && m.kind !== "system"
     && !!m.id
   );
@@ -597,7 +1020,7 @@ export function MessagesThread({
   const openMenu = (m) => {
     if (!canManage(m) || editingId === m.id) return;
     window.getSelection?.()?.removeAllRanges?.();
-    setMenuId(m.id);
+    setMenuId(m.client_message_id || m.id);
   };
 
   const pressHandlers = (m) => {
@@ -686,7 +1109,14 @@ export function MessagesThread({
       boxSizing: "border-box",
     }}
     >
-      <style>{BUBBLE_HOLD_SELECT_CSS}</style>
+      <MessagePhotoViewer
+        src={photoViewer?.src || ""}
+        alt={photoViewer?.alt || "Photo"}
+        onClose={() => setPhotoViewer(null)}
+      />
+      <style>{`${BUBBLE_HOLD_SELECT_CSS}
+        @keyframes mm-upload-pulse { 0% { transform: translateX(-80%); } 100% { transform: translateX(280%); } }
+      `}</style>
       {(title || subtitle) && (
         <div style={{ marginBottom: 10 }}>
           {title ? (
@@ -726,9 +1156,11 @@ export function MessagesThread({
       {headerExtra}
       {banner}
 
+      <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex", minWidth: 0 }}>
       <div
         data-message-list
         ref={listRef}
+        onScroll={onListScroll}
         style={{
           flex: 1,
           overflowY: "auto",
@@ -743,11 +1175,88 @@ export function MessagesThread({
           maxHeight: "none",
           WebkitOverflowScrolling: "touch",
           overscrollBehavior: "contain",
+          // Browser scroll-anchoring fights spacer remounts and reads as shake.
+          overflowAnchor: "none",
         }}
       >
+        {/* Wrapper exists so a ResizeObserver can watch the content grow — one
+            on the scroll port never fires when the list inside it gets taller. */}
+        <div data-message-list-content ref={listContentRef}>
         {!safeMessages.length && (
           <div style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, padding: "20px 8px", textAlign: "center" }}>
             {emptyState}
+          </div>
+        )}
+        {!!safeMessages.length && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <button
+              type="button"
+              data-find-in-thread
+              onClick={() => setFindOpen((open) => !open)}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: T.accentDeep,
+                fontFamily: F,
+                fontWeight: 700,
+                fontSize: 12.5,
+                cursor: "pointer",
+                padding: "2px 0",
+              }}
+            >
+              {findOpen ? "Close find" : "Find in thread"}
+            </button>
+          </div>
+        )}
+        {findOpen && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+            <input
+              type="search"
+              value={findQuery}
+              onChange={(e) => {
+                setFindQuery(e.target.value);
+                setFindIndex(-1);
+              }}
+              placeholder="Search loaded messages"
+              aria-label="Search loaded messages"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                border: `1.5px solid ${T.border}`,
+                borderRadius: 10,
+                padding: "8px 10px",
+                fontFamily: F,
+                fontSize: 13.5,
+              }}
+            />
+            <span style={{ fontSize: 12, color: T.inkSoft, flexShrink: 0 }}>
+              {findQuery.trim() ? `${findMatches.length} in view` : ""}
+            </span>
+            <button type="button" onClick={() => jumpFind(-1)} disabled={!findMatches.length}>Prev</button>
+            <button type="button" onClick={() => jumpFind(1)} disabled={!findMatches.length}>Next</button>
+          </div>
+        )}
+        {onLoadEarlier && hasEarlier && !!safeMessages.length && (
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+            <button
+              type="button"
+              data-load-earlier
+              onClick={loadEarlier}
+              disabled={loadingEarlier}
+              style={{
+                border: `1.5px solid ${T.border}`,
+                background: "#fff",
+                color: T.accentDeep,
+                borderRadius: 999,
+                padding: "6px 14px",
+                fontFamily: F,
+                fontWeight: 800,
+                fontSize: 12.5,
+                cursor: loadingEarlier ? "default" : "pointer",
+              }}
+            >
+              {loadingEarlier ? "Loading…" : "Load earlier messages"}
+            </button>
           </div>
         )}
         {(() => {
@@ -772,28 +1281,40 @@ export function MessagesThread({
               if (readIdx > delIdx) lastDeliveredId = null;
             }
           }
-          return safeMessages.map((m) => {
+          const visible = safeMessages.slice(windowRange.start, windowRange.end);
+          return (
+          <>
+          {windowRange.topSpacer > 0 ? (
+            <div data-virt-top style={{ height: windowRange.topSpacer }} aria-hidden />
+          ) : null}
+          {visible.map((m) => {
+          const bubbleKey = m.client_message_id || m.id;
           const mine = m.sender_id === selfId;
           const deleted = !!m.deleted_at;
           const isImage = String(m.attachment_mime || "").startsWith("image/");
           const isAudio = isAudioAttachmentMime(m.attachment_mime);
-          const hasAttach = !!m.attachment_path && !deleted;
+          const hasAttach = !!(!deleted && (m.attachment_path || m.attachmentUrl));
           const isEditing = editingId === m.id;
-          const showMenu = menuId === m.id && canManage(m) && !isEditing;
-          const receiptLabel = m.id === lastReadId
-            ? "Read"
-            : m.id === lastDeliveredId
-              ? "Sent"
-              : null;
+          const showMenu = menuId === bubbleKey && canManage(m) && !isEditing;
+          const receiptLabel = m.send_status === "pending"
+            ? "Sending…"
+            : m.send_status === "failed"
+              ? null
+              : m.id === lastReadId
+                ? "Read"
+                : m.id === lastDeliveredId
+                  ? "Sent"
+                  : null;
           const showReceipt = !!receiptLabel;
           return (
             <ErrorBoundary
-              key={m.id}
+              key={bubbleKey}
               name="MessageBubble"
-              resetKeys={[m.id, messageRenderVersion(m)]}
+              resetKeys={[bubbleKey, messageRenderVersion(m)]}
               fallback={<MessageBubbleFallback message={m} mine={mine} />}
             >
             <div
+              ref={(node) => measureBubble(bubbleKey, node)}
               style={{
                 display: "flex",
                 justifyContent: mine ? "flex-end" : "flex-start",
@@ -802,7 +1323,9 @@ export function MessagesThread({
               }}
             >
               <div
-                data-msg-id={m.id}
+                data-msg-id={bubbleKey}
+                data-server-id={m.id && m.id !== bubbleKey ? m.id : undefined}
+                data-send-status={m.send_status || undefined}
                 {...pressHandlers(m)}
                 style={{
                   maxWidth: "85%",
@@ -829,6 +1352,16 @@ export function MessagesThread({
                 )}
                 {!deleted && m.reply_to && (
                   <div
+                    role="button"
+                    tabIndex={0}
+                    data-reply-quote
+                    onClick={() => jumpToQuoted(m.reply_to.id || m.reply_to_id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        jumpToQuoted(m.reply_to.id || m.reply_to_id);
+                      }
+                    }}
                     style={{
                       marginBottom: 8,
                       padding: "6px 8px",
@@ -838,6 +1371,7 @@ export function MessagesThread({
                       fontSize: 12.5,
                       lineHeight: 1.35,
                       color: T.inkSoft,
+                      cursor: "pointer",
                     }}
                   >
                     <div style={{ fontWeight: 700, color: T.accentDeep, marginBottom: 2 }}>
@@ -886,20 +1420,67 @@ export function MessagesThread({
                 ) : (
                   <>
                     {hasAttach && isImage && m.attachmentUrl && (
-                      <a href={m.attachmentUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: m.body ? 8 : 0 }}>
+                      <button
+                        type="button"
+                        className="msg-photo-open"
+                        data-open-photo={m.id}
+                        aria-label="View photo"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (m.send_status === "pending") return;
+                          // A still-hold already opened the bubble menu — don't
+                          // also jump into the enlarge overlay on the same tap.
+                          if (menuId === bubbleKey) return;
+                          setMenuId(null);
+                          setPhotoViewer({
+                            src: m.attachmentUrl,
+                            alt: m.attachment_name || "Photo",
+                          });
+                        }}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          marginBottom: m.body ? 8 : 0,
+                          padding: 0,
+                          border: 0,
+                          background: "none",
+                          position: "relative",
+                          cursor: m.send_status === "pending" ? "default" : "zoom-in",
+                        }}
+                      >
                         <img
                           src={m.attachmentUrl}
                           alt={m.attachment_name || "Attachment"}
                           draggable={false}
-                          style={{
-                            display: "block",
-                            maxWidth: "100%",
-                            maxHeight: 240,
-                            borderRadius: 10,
-                            objectFit: "cover",
-                          }}
+                          loading="eager"
+                          decoding="async"
+                          style={imageBoxStyle(m, { maxBubbleWidth: bubbleContentWidth(listWidth) })}
                         />
-                      </a>
+                        {m.send_status === "pending" && (
+                          <div
+                            data-upload-progress
+                            style={{
+                              position: "absolute",
+                              left: 8,
+                              right: 8,
+                              bottom: 8,
+                              height: 4,
+                              borderRadius: 999,
+                              background: "rgba(255,255,255,0.55)",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div style={{
+                              width: "40%",
+                              height: "100%",
+                              borderRadius: 999,
+                              background: T.accent,
+                              animation: "mm-upload-pulse 1s ease-in-out infinite",
+                            }}
+                            />
+                          </div>
+                        )}
+                      </button>
                     )}
                     {hasAttach && isAudio && (
                       <div style={{ marginBottom: m.body ? 8 : 0 }}>
@@ -945,7 +1526,29 @@ export function MessagesThread({
                     {formatMsgTime(m.created_at)}
                     {!deleted && m.edited_at ? " · edited" : ""}
                   </span>
-                  {showReceipt ? (
+                  {m.send_status === "failed" ? (
+                    <button
+                      type="button"
+                      data-retry-send
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        retryFailed(m);
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "#B4416B",
+                        fontWeight: 700,
+                        fontSize: 11,
+                        fontFamily: F,
+                        cursor: "pointer",
+                        padding: 0,
+                        flexShrink: 0,
+                      }}
+                    >
+                      Not sent — tap to retry
+                    </button>
+                  ) : showReceipt ? (
                     <span style={{
                       fontWeight: receiptLabel === "Read" ? 700 : 600,
                       color: receiptLabel === "Read" ? T.accentDeep : T.inkSoft,
@@ -1151,8 +1754,41 @@ export function MessagesThread({
             </div>
             </ErrorBoundary>
           );
-          });
+          })}
+          {windowRange.bottomSpacer > 0 ? (
+            <div data-virt-bottom style={{ height: windowRange.bottomSpacer }} aria-hidden />
+          ) : null}
+          </>
+          );
         })()}
+        </div>
+      </div>
+      {!atLatest && !!safeMessages.length && (
+        <button
+          type="button"
+          data-jump-latest
+          aria-label={unseenCount > 0 ? `${unseenCount} new messages` : "Jump to latest message"}
+          onClick={jumpToLatest}
+          style={{
+            position: "absolute",
+            bottom: 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            border: `1.5px solid ${T.border}`,
+            background: "#fff",
+            color: T.accentDeep,
+            borderRadius: 999,
+            padding: "7px 14px",
+            fontFamily: F,
+            fontWeight: 800,
+            fontSize: 12.5,
+            cursor: "pointer",
+            boxShadow: "0 4px 14px rgba(51,39,46,0.16)",
+          }}
+        >
+          {jumpLatestLabel(unseenCount)}
+        </button>
+      )}
       </div>
 
       {!hideComposer && replyTo && !recording && (
@@ -1540,29 +2176,6 @@ function MessageBodyLinks({ text }) {
   });
 }
 
-function createClientMessageId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  // RFC 4122 v4 fallback for older embedded browsers.
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
-    const random = Math.floor(Math.random() * 16);
-    const value = char === "x" ? random : ((random & 0x3) | 0x8);
-    return value.toString(16);
-  });
-}
-
-function sendPayloadFingerprint(body, file, replyToId) {
-  return [
-    safeString(body),
-    safeString(replyToId),
-    safeString(file?.name),
-    safeString(file?.type),
-    Number(file?.size) || 0,
-    Number(file?.lastModified) || 0,
-  ].join("\u001f");
-}
-
 function normalizeMessageRow(row, index) {
   const source = row && typeof row === "object" && !Array.isArray(row) ? row : {};
   const id = safeString(source.id).trim() || `invalid-message-${index}`;
@@ -1579,6 +2192,8 @@ function normalizeMessageRow(row, index) {
   return {
     ...source,
     id,
+    client_message_id: safeString(source.client_message_id).trim(),
+    send_status: safeString(source.send_status).trim(),
     body: safeString(source.body),
     sender_id: safeString(source.sender_id),
     attachment_path: safeString(source.attachment_path),
@@ -1642,6 +2257,7 @@ function messageRenderVersion(message) {
     safeString(message?.attachment_name),
     safeString(message?.attachment_mime),
     safeString(message?.attachmentUrl),
+    safeString(message?.send_status),
     safeString(message?.reply_to_id),
     safeString(message?.reply_to?.id),
     safeString(message?.reply_to?.body),

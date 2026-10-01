@@ -5,6 +5,7 @@ import { AdminAnnouncements } from "./AdminAnnouncements";
 import { AdminCredits } from "./AdminCredits";
 import { AdminEmails } from "./AdminEmails";
 import { AdminQuizFunnelCard } from "./AdminQuizFunnelCard";
+import { AdminTodayBanners } from "./AdminTodayBanners";
 
 const AI_LABELS = {
   estimate_photo: "Snap photo",
@@ -41,6 +42,7 @@ function formatWhen(iso) {
 function Menu({ setView }) {
   const items = [
     ["announcements", "Announcements"],
+    ["banners", "Today banners"],
     ["emails", "Emails"],
     ["credits", "Credits"],
     ["funnel", "Funnel"],
@@ -147,6 +149,11 @@ export function AdminMore({
       {back}
       {view === "announcements" && (
         <AdminAnnouncements roster={roster} cohortFilter={cohortFilter} />
+      )}
+      {view === "banners" && (
+        <ErrorBoundary message="Today banners preview hit an error. Other admin tabs still work.">
+          <AdminTodayBanners />
+        </ErrorBoundary>
       )}
       {view === "emails" && (
         <ErrorBoundary message="Emails admin hit an error. Other admin tabs still work — refresh or switch tabs.">

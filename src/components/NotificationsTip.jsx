@@ -36,27 +36,35 @@ function persistDismissedLocally() {
 export function NotificationsTip({
   cohortLabel = null,
   onSavePushSubscription,
+  /** Admin / local preview — ignore cohort and do not persist Got it. */
+  forceVisible = false,
 }) {
-  const [dismissed, setDismissed] = useState(() => wasDismissedLocally());
+  const [dismissed, setDismissed] = useState(() => (forceVisible ? false : wasDismissedLocally()));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [permission, setPermission] = useState(() => notificationPermission());
 
-  const visible = shouldShowNotificationsTip({
-    cohortLabel,
-    permission,
-    dismissedLocally: dismissed,
-    demo: queryFlag("demoNotificationsTip"),
-  });
+  const visible = forceVisible
+    ? !dismissed
+    : shouldShowNotificationsTip({
+      cohortLabel,
+      permission,
+      dismissedLocally: dismissed,
+      demo: queryFlag("demoNotificationsTip"),
+    });
 
   if (!visible) return null;
 
   const dismiss = () => {
-    persistDismissedLocally();
+    if (!forceVisible) persistDismissedLocally();
     setDismissed(true);
   };
 
   const enable = async () => {
+    if (forceVisible) {
+      setMsg("Preview — on a mama’s phone this requests notifications.");
+      return;
+    }
     setBusy(true);
     setMsg("");
     try {

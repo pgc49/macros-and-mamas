@@ -21,7 +21,7 @@ export function MealsTabPreview() {
     <ClientApp
       tab={tab}
       setTab={setTab}
-      profile={{ name: "Pat" }}
+      profile={{ name: "Pat", homescreenTipDismissedAt: "2026-08-01T00:00:00Z", cohort_label: "2026-07" }}
       macros={{ protein: 120, carbs: 150, fat: 50, cal: 1700 }}
       totals={{ cal: 1400, p: 90, c: 120, f: 45 }}
       waterOz={80}
@@ -47,15 +47,16 @@ export function MealsTabPreview() {
       onAddWater={noopAsync}
       onUndoWater={noopAsync}
       onChangeBottleOz={noop}
-      viewWk={1}
+      viewWk="2026-08-24"
       setViewWk={noop}
-      curWk={1}
+      curWk="2026-08-24"
       editPast={false}
       setEditPast={noop}
       checksByWeek={{}}
       toggleCheck={noop}
-      adherenceFor={() => ({})}
-      progWeekNum={1}
+      goalItems={[]}
+      adherenceFor={() => 0}
+      progWeekNum={() => 1}
       earliestWk="2026-08-24"
       weighins={[]}
       logWeighin={noopAsync}

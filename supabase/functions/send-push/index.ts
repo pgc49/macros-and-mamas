@@ -73,7 +73,7 @@ serve(async (req) => {
       return jsonResponse({ ok: false, error: "missing VAPID keys", sent: 0 }, 503);
     }
 
-    const { profileId, title, body, url, unreadCount } = await req.json();
+    const { profileId, title, body, url, unreadCount, tag } = await req.json();
     if (!profileId) return jsonResponse({ error: "profileId required" }, 400);
 
     webpush.setVapidDetails(vapid.subject, vapid.pub, vapid.priv);
@@ -92,6 +92,7 @@ serve(async (req) => {
       body: body || "Open Messages",
       url: url || "/dashboard?tab=messages",
       ...(unreadCount != null ? { unreadCount: Number(unreadCount) || 0 } : {}),
+      ...(tag ? { tag: String(tag).slice(0, 64) } : {}),
     });
 
     let sent = 0;

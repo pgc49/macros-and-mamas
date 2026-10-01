@@ -20,6 +20,7 @@ import {
   parseJsonLoose,
   resolveModels,
 } from "../_shared/openrouter.js";
+import { groundPlanClientCopy } from "../_shared/clientLifeStage.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { joinPersonName } from "../_shared/personName.js";
 
@@ -68,7 +69,7 @@ export async function onRequestPost({ request, env }) {
         {
           role: "system",
           content:
-            "You are a careful postpartum nutrition meal planner for Callie. #1 job: every day's totals MUST land inside her approved cal/P/C/F bands by adjusting real food quantities — never invent macros and never return out-of-range days. Prefer her saved My meals when they fit, then Callie's recipe bank. Honor her revision notes when provided. Output JSON only.",
+            "You are a careful nutrition meal planner for Callie. #1 job: every day's totals MUST land inside her approved cal/P/C/F bands by adjusting real food quantities — never invent macros and never return out-of-range days. Prefer her saved My meals when they fit, then Callie's recipe bank. Honor her revision notes when provided. Never assume she is postpartum. Output JSON only.",
         },
         { role: "user", content: `${prompt}\n\n${MEAL_PLAN_JSON_HINT}` },
       ],
@@ -158,6 +159,7 @@ export async function onRequestPost({ request, env }) {
       };
     });
     plan.dailyTarget = target;
+    groundPlanClientCopy(plan, profile);
 
     const outOfRangeDays = plan.days.filter(
       (d) => d.inRange && Object.values(d.inRange).some((v) => v === false),

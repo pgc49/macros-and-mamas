@@ -115,9 +115,12 @@ function Step({ icon, children }) {
 export function HomeScreenTip({
   profileDismissedAt = null,
   onDismissPersist,
+  /** Admin / local preview — skip hide rules and do not persist dismiss. */
+  forceVisible = false,
 }) {
   const alreadyStandalone = isStandaloneDisplay();
   const [visible, setVisible] = useState(() => {
+    if (forceVisible) return true;
     if (alreadyStandalone) return false;
     if (profileDismissedAt) return false;
     if (wasDismissedLocally()) return false;
@@ -126,28 +129,32 @@ export function HomeScreenTip({
 
   // If she opens from the Home Screen icon, never show — and remember it.
   useEffect(() => {
+    if (forceVisible) return;
     if (!alreadyStandalone) return;
     setVisible(false);
     persistDismissedLocally();
     if (!profileDismissedAt) {
       onDismissPersist?.().catch((e) => console.warn("homescreen tip persist failed", e));
     }
-  }, [alreadyStandalone, profileDismissedAt, onDismissPersist]);
+  }, [alreadyStandalone, profileDismissedAt, onDismissPersist, forceVisible]);
 
   // Profile loaded after first paint with a dismiss timestamp.
   useEffect(() => {
+    if (forceVisible) return;
     if (profileDismissedAt) {
       persistDismissedLocally();
       setVisible(false);
     }
-  }, [profileDismissedAt]);
+  }, [profileDismissedAt, forceVisible]);
 
   if (!visible) return null;
 
   const dismiss = () => {
-    persistDismissedLocally();
+    if (!forceVisible) persistDismissedLocally();
     setVisible(false);
-    onDismissPersist?.().catch((e) => console.warn("homescreen tip persist failed", e));
+    if (!forceVisible) {
+      onDismissPersist?.().catch((e) => console.warn("homescreen tip persist failed", e));
+    }
   };
 
   return (

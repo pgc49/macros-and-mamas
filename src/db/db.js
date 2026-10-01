@@ -7,12 +7,21 @@ import {
   isAllowedReactionEmoji,
 } from "../lib/messageReactions";
 import { chronologicalMessages } from "../lib/messageOrdering";
+import { attachmentUrlCache } from "../lib/attachmentUrls";
+import { MESSAGE_PAGE_MAX, MESSAGE_PAGE_SIZE, membershipHasUnread } from "../lib/messageChannels";
+import {
+  attachmentMediaFields,
+  isMissingAttachmentMediaColumn,
+  readImageDimensions,
+} from "../lib/messageMedia";
+import { applyFetchedReplyParents, missingReplyIds } from "../lib/messageReplyParent";
 import { referredByByUserId } from "../lib/referredBy";
 import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { ageFromDateOfBirth } from "../utils/dateOfBirth";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
 import { preserveRefusalLines } from "../../functions/_shared/coachRefusalSummary.js";
+import { roundMealLogMacros } from "../utils/mealLogMacros";
 
 export { ageFromDateOfBirth };
 
@@ -475,32 +484,53 @@ async function uploadMessageAttachment({ clientId, file, allowAudio = false }) {
     console.error("message attachment upload failed", error);
     throw new Error("Couldn’t upload that attachment — try again.");
   }
+  const size = await readImageDimensions(file);
   return {
     path,
     name: String(file.name || "attachment").slice(0, 120),
     mime,
     bytes: Number(file.size) || null,
+    ...attachmentMediaFields(size),
   };
 }
 
-async function hydrateMessageAttachments(rows) {
+async function signAttachmentBatch(bucket, paths, ttlSeconds) {
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrls(paths, ttlSeconds);
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Resolve every attachment in a window against the shared URL cache.
+ *
+ * Signing per row meant a thread with twenty photos made twenty round trips on
+ * every load, and each load handed React a different URL for an unchanged
+ * image — the browser dropped the decoded frame, the bubble collapsed to zero
+ * height, and the list jumped under whoever was reading it.
+ */
+async function hydrateAttachmentUrls(bucket, rows) {
   const list = rows || [];
-  return Promise.all(list.map(async (m) => {
+  const paths = list.map((m) => m?.attachment_path).filter(Boolean);
+  if (!paths.length) return list;
+  let urls = new Map();
+  try {
+    urls = await attachmentUrlCache.resolve(bucket, paths, signAttachmentBatch);
+  } catch (e) {
+    console.warn("message attachment signed url failed", bucket, e);
+  }
+  return list.map((m) => {
     if (!m?.attachment_path) return m;
-    try {
-      const { data, error } = await supabase.storage
-        .from(MESSAGE_ATTACHMENT_BUCKET)
-        .createSignedUrl(m.attachment_path, 60 * 60);
-      if (error) {
-        console.warn("message attachment signed url failed", error);
-        return m;
-      }
-      return { ...m, attachmentUrl: data?.signedUrl || null };
-    } catch (e) {
-      console.warn("message attachment signed url failed", e);
-      return m;
-    }
-  }));
+    // Falling back to the URL already on the row keeps a transient signing
+    // failure from blanking an attachment that is rendering fine.
+    const url = urls.get(m.attachment_path) || m.attachmentUrl || null;
+    return { ...m, attachmentUrl: url };
+  });
+}
+
+async function hydrateMessageAttachments(rows) {
+  return hydrateAttachmentUrls(MESSAGE_ATTACHMENT_BUCKET, rows);
 }
 
 async function uploadChannelAttachment({ conversationId, file, allowAudio = false }) {
@@ -540,32 +570,18 @@ async function uploadChannelAttachment({ conversationId, file, allowAudio = fals
     console.error("channel attachment upload failed", error);
     throw new Error("Couldn’t upload that attachment — try again.");
   }
+  const size = await readImageDimensions(file);
   return {
     path,
     name: String(file.name || "attachment").slice(0, 120),
     mime,
     bytes: Number(file.size) || null,
+    ...attachmentMediaFields(size),
   };
 }
 
 async function hydrateChannelAttachments(rows) {
-  const list = rows || [];
-  return Promise.all(list.map(async (m) => {
-    if (!m?.attachment_path) return m;
-    try {
-      const { data, error } = await supabase.storage
-        .from(CHANNEL_ATTACHMENT_BUCKET)
-        .createSignedUrl(m.attachment_path, 60 * 60);
-      if (error) {
-        console.warn("channel attachment signed url failed", error);
-        return m;
-      }
-      return { ...m, attachmentUrl: data?.signedUrl || null };
-    } catch (e) {
-      console.warn("channel attachment signed url failed", e);
-      return m;
-    }
-  }));
+  return hydrateAttachmentUrls(CHANNEL_ATTACHMENT_BUCKET, rows);
 }
 
 async function removeUploadedAttachment(bucket, path) {
@@ -690,6 +706,56 @@ async function hydrateChannelSenders(rows, conversationId = null) {
 
 const CHANNEL_MESSAGE_SELECT = "id, conversation_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, edited_at, deleted_at, notified_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
 const DM_MESSAGE_SELECT = "id, client_id, sender_id, client_message_id, body, kind, reply_to_id, created_at, read_at, edited_at, deleted_at, attachment_path, attachment_name, attachment_mime, attachment_bytes";
+let includeAttachmentMedia = true;
+
+function liveChannelSelect() {
+  return includeAttachmentMedia
+    ? `${CHANNEL_MESSAGE_SELECT}, attachment_width, attachment_height`
+    : CHANNEL_MESSAGE_SELECT;
+}
+
+function liveDmSelect() {
+  return includeAttachmentMedia
+    ? `${DM_MESSAGE_SELECT}, attachment_width, attachment_height`
+    : DM_MESSAGE_SELECT;
+}
+
+function noteMissingAttachmentMedia(error) {
+  if (!isMissingAttachmentMediaColumn(error)) return false;
+  includeAttachmentMedia = false;
+  return true;
+}
+
+async function runMessageQuery(factory) {
+  let result = await factory();
+  if (result?.error && noteMissingAttachmentMedia(result.error)) {
+    result = await factory();
+  }
+  return result;
+}
+
+function pageLimit(limit) {
+  return Math.min(MESSAGE_PAGE_MAX, Math.max(1, Number(limit) || MESSAGE_PAGE_SIZE));
+}
+
+/**
+ * Filter the next page back, keyed on the row the reader can already see.
+ *
+ * Keyset rather than offset: a group forum gains messages while someone is
+ * scrolling, and an offset would shift under them and repeat or skip rows. The
+ * (thread, created_at desc, id desc) index serves this directly.
+ */
+function olderThan(query, before) {
+  const createdAt = before?.created_at;
+  const id = before?.id;
+  if (!createdAt) return query;
+  if (!id) return query.lt("created_at", createdAt);
+  // Quoted so a fractional-second timestamp cannot be mistaken for PostgREST
+  // filter syntax.
+  return query.or(
+    `created_at.lt."${createdAt}",and(created_at.eq."${createdAt}",id.lt."${id}")`,
+  );
+}
 
 /** Attach in-thread reply preview objects from the loaded window (DMs + channels). */
 function attachReplyPreviews(rows) {
@@ -727,7 +793,47 @@ function attachReplyPreviews(rows) {
 
 const attachChannelReplyPreviews = attachReplyPreviews;
 
+async function hydrateMissingReplyParents(rows, fetchByIds) {
+  const ids = missingReplyIds(rows);
+  if (!ids.length) return rows || [];
+  try {
+    const parents = await fetchByIds(ids);
+    return applyFetchedReplyParents(rows, parents);
+  } catch (e) {
+    console.warn("reply parent lookup failed", e);
+    return rows || [];
+  }
+}
+
+async function loadChannelMessagesByIds(conversationId, ids) {
+  const list = [...new Set((ids || []).map((id) => String(id || "")).filter(Boolean))];
+  if (!conversationId || !list.length) return [];
+  const { data, error } = await runMessageQuery(() => supabase
+    .from("conversation_messages")
+    .select(liveChannelSelect())
+    .eq("conversation_id", conversationId)
+    .in("id", list));
+  if (error) throw error;
+  const withAttachments = await hydrateChannelAttachments(data || []);
+  return hydrateChannelSenders(withAttachments, conversationId);
+}
+
+async function loadDmMessagesByIds(clientId, ids) {
+  const list = [...new Set((ids || []).map((id) => String(id || "")).filter(Boolean))];
+  if (!clientId || !list.length) return [];
+  const { data, error } = await runMessageQuery(() => supabase
+    .from("messages")
+    .select(liveDmSelect())
+    .eq("client_id", clientId)
+    .in("id", list));
+  if (error) throw error;
+  return hydrateMessageAttachments(data || []);
+}
+
 export function channelHasUnread(_conversation, membership, messages = []) {
+  if (membership && Object.hasOwn(membership, "last_inbound_at")) {
+    return membershipHasUnread(membership);
+  }
   const userId = membership?.user_id;
   if (!userId) return false;
   const lastReadMs = membership?.last_read_at
@@ -738,6 +844,27 @@ export function channelHasUnread(_conversation, membership, messages = []) {
     const createdMs = m.created_at ? new Date(m.created_at).getTime() : 0;
     return createdMs > (Number.isFinite(lastReadMs) ? lastReadMs : 0);
   });
+}
+
+async function hydrateChannelMessageRow(row) {
+  if (!row) return row;
+  const [hydrated] = await hydrateChannelReactions(
+    attachChannelReplyPreviews(
+      await hydrateChannelSenders(
+        await hydrateChannelAttachments([row]),
+        row.conversation_id,
+      ),
+    ),
+  );
+  return hydrated || row;
+}
+
+async function hydrateDmMessageRow(row) {
+  if (!row) return row;
+  const [hydrated] = await hydrateDmReactions(
+    attachReplyPreviews(await hydrateMessageAttachments([row])),
+  );
+  return hydrated || row;
 }
 
 async function loadReactionRows(table, messageIds) {
@@ -852,6 +979,36 @@ async function toggleMessageReaction(scope, messageId, emoji) {
     .insert({ message_id: messageId, user_id: uid, emoji });
   if (insErr) throw insErr;
   return { messageId, emoji, cleared: false };
+}
+
+function shapeMyChannels(profile, rows) {
+  const tier = String(profile?.tier || "none");
+  const isAdmin = String(profile?.role || "").toLowerCase() === "admin";
+  const myCohort = String(profile?.cohort_label || "");
+  const liveAdminCohorts = parseLiveChannelCohorts(
+    import.meta.env.VITE_LIVE_CHANNEL_COHORTS,
+  );
+  return (rows || [])
+    .map((row) => {
+      const { conversations, ...membership } = row;
+      return {
+        conversation: conversations || null,
+        membership,
+      };
+    })
+    .filter(({ conversation }) => {
+      if (!conversation) return false;
+      if (conversation.type === "alumni") return tier === "alumni_49";
+      if (conversation.type !== "cohort") return false;
+      if (!isAdmin) return !!myCohort && conversation.cohort_label === myCohort;
+      return liveAdminCohorts.has(String(conversation.cohort_label || ""))
+        || (!!myCohort && conversation.cohort_label === myCohort);
+    })
+    .sort((a, b) => String(a.conversation?.label || "").localeCompare(
+      String(b.conversation?.label || ""),
+      undefined,
+      { sensitivity: "base" },
+    ));
 }
 
 export const db = {
@@ -1306,14 +1463,17 @@ export const db = {
     const uid = await requireUserId();
     const via = entry.via || normalizeVia({ source: entry.source, via: entry.via });
     const slot = normalizeMealSlot(entry.slot);
-    const base = {
-      profile_id: uid,
-      date,
-      name: entry.name,
+    const macros = roundMealLogMacros({
       cal: entry.cal,
       p: entry.p,
       c: entry.c,
       f: entry.f,
+    });
+    const base = {
+      profile_id: uid,
+      date,
+      name: entry.name,
+      ...macros,
     };
     const origin = entry.origin === "coach" ? "coach" : null;
     // Prefer origin + slot + via + source; degrade gracefully if columns aren't migrated yet.
@@ -1360,10 +1520,7 @@ export const db = {
     const via = patch.via != null ? patch.via : undefined;
     const fields = {
       name: patch.name,
-      cal: patch.cal,
-      p: patch.p,
-      c: patch.c,
-      f: patch.f,
+      ...roundMealLogMacros(patch),
     };
     if (via != null) {
       fields.via = via;
@@ -2217,6 +2374,7 @@ export const db = {
           removed_at,
           notify_level,
           last_read_at,
+          last_inbound_at,
           conversations (
             id,
             type,
@@ -2231,53 +2389,102 @@ export const db = {
         .is("removed_at", null),
     ]);
     if (profileErr) throw profileErr;
-    if (error) throw error;
-    const tier = String(profile?.tier || "none");
-    const isAdmin = String(profile?.role || "").toLowerCase() === "admin";
-    const myCohort = String(profile?.cohort_label || "");
-    // Live cohort pills for admins/Callie. Mamas always see only their own cohort.
-    const liveAdminCohorts = parseLiveChannelCohorts(
-      import.meta.env.VITE_LIVE_CHANNEL_COHORTS,
-    );
-    return (data || [])
-      .map((row) => {
-        const { conversations, ...membership } = row;
-        return {
-          conversation: conversations || null,
-          membership,
-        };
-      })
-      .filter(({ conversation }) => {
-        if (!conversation) return false;
-        // Alumni pill only when the mama is actually alumni (stage 4) — not for admin empty rooms.
-        if (conversation.type === "alumni") return tier === "alumni_49";
-        if (conversation.type !== "cohort") return false;
-        if (!isAdmin) return !!myCohort && conversation.cohort_label === myCohort;
-        // Admins: live cohorts + any cohort stamped on this admin profile (test accounts).
-        return liveAdminCohorts.has(String(conversation.cohort_label || ""))
-          || (!!myCohort && conversation.cohort_label === myCohort);
-      })
-      .sort((a, b) => String(a.conversation?.label || "").localeCompare(
-        String(b.conversation?.label || ""),
-        undefined,
-        { sensitivity: "base" },
-      ));
+    if (error) {
+      // Preview / local can load before the last_inbound_at migration lands.
+      if (/last_inbound_at/i.test(String(error.message || error.code || ""))) {
+        const retry = await supabase
+          .from("conversation_members")
+          .select(`
+            conversation_id,
+            user_id,
+            joined_at,
+            removed_at,
+            notify_level,
+            last_read_at,
+            conversations (
+              id,
+              type,
+              cohort_label,
+              label,
+              read_only,
+              guidelines,
+              created_at
+            )
+          `)
+          .eq("user_id", uid)
+          .is("removed_at", null);
+        if (retry.error) throw retry.error;
+        return shapeMyChannels(profile, retry.data);
+      }
+      throw error;
+    }
+    return shapeMyChannels(profile, data);
   },
 
-  async loadChannelMessages(conversationId, { limit = 150 } = {}) {
+  /**
+   * Newest window of a group channel, or the page before `before` when paging
+   * back through history.
+   * @param {{ limit?: number, before?: { created_at: string, id: string } }} options
+   */
+  async loadChannelMessages(conversationId, { limit = MESSAGE_PAGE_SIZE, before = null } = {}) {
     if (!conversationId) return [];
-    const { data, error } = await supabase
-      .from("conversation_messages")
-      .select(CHANNEL_MESSAGE_SELECT)
-      .eq("conversation_id", conversationId)
+    const { data, error } = await runMessageQuery(() => olderThan(
+      supabase
+        .from("conversation_messages")
+        .select(liveChannelSelect())
+        .eq("conversation_id", conversationId),
+      before,
+    )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .limit(Math.min(300, Math.max(1, limit)));
+      .limit(pageLimit(limit)));
     if (error) throw error;
     const withAttachments = await hydrateChannelAttachments(chronologicalMessages(data));
     const withSenders = await hydrateChannelSenders(withAttachments, conversationId);
     const withReplies = attachChannelReplyPreviews(withSenders);
-    return hydrateChannelReactions(withReplies);
+    const withParents = await hydrateMissingReplyParents(withReplies, (ids) => (
+      loadChannelMessagesByIds(conversationId, ids)
+    ));
+    return hydrateChannelReactions(withParents);
+  },
+
+  async loadChannelMessagesByIds(conversationId, ids) {
+    return loadChannelMessagesByIds(conversationId, ids);
+  },
+
+  async hydrateChannelMessageRow(row) {
+    return hydrateChannelMessageRow(row);
+  },
+
+  async hydrateDmMessageRow(row) {
+    return hydrateDmMessageRow(row);
+  },
+
+  /**
+   * Unread dot for a channel the reader is not looking at. One indexed row
+   * lookup, instead of loading and hydrating that channel's whole window just
+   * to compare timestamps client-side.
+   */
+  async channelHasUnreadMessages(conversationId, membership) {
+    const userId = membership?.user_id;
+    if (!conversationId || !userId) return false;
+    if (membership && Object.hasOwn(membership, "last_inbound_at")) {
+      return membershipHasUnread(membership);
+    }
+    let query = supabase
+      .from("conversation_messages")
+      .select("id")
+      .eq("conversation_id", conversationId)
+      .is("deleted_at", null)
+      .neq("sender_id", userId)
+      .limit(1);
+    if (membership?.last_read_at) query = query.gt("created_at", membership.last_read_at);
+    const { data, error } = await query;
+    if (error) {
+      console.warn("channel unread check failed", error);
+      return false;
+    }
+    return (data || []).length > 0;
   },
 
   async toggleChannelReaction(messageId, emoji) {
@@ -2297,7 +2504,7 @@ export const db = {
     const text = String(body || "").trim().slice(0, 2000);
     const prior = await supabase
       .from("conversation_messages")
-      .select(CHANNEL_MESSAGE_SELECT)
+      .select(liveChannelSelect())
       .eq("sender_id", uid)
       .eq("client_message_id", idempotencyKey)
       .maybeSingle();
@@ -2327,7 +2534,7 @@ export const db = {
     }
     if (!data) {
       if (text.length < 1 && !attachment) throw new Error("Message is empty");
-      const inserted = await supabase
+      const inserted = await runMessageQuery(() => supabase
         .from("conversation_messages")
         .insert({
           conversation_id: conversationId,
@@ -2342,11 +2549,12 @@ export const db = {
               attachment_name: attachment.name,
               attachment_mime: attachment.mime,
               attachment_bytes: attachment.bytes,
+              ...(includeAttachmentMedia ? attachmentMediaFields(attachment) : {}),
             }
             : {}),
         })
-        .select(CHANNEL_MESSAGE_SELECT)
-        .single();
+        .select(liveChannelSelect())
+        .single());
       if (!inserted.error) {
         data = inserted.data;
       } else {
@@ -2354,7 +2562,7 @@ export const db = {
         // before removing anything and only delete an object proven unreferenced.
         const existing = await supabase
           .from("conversation_messages")
-          .select(CHANNEL_MESSAGE_SELECT)
+          .select(liveChannelSelect())
           .eq("sender_id", uid)
           .eq("client_message_id", idempotencyKey)
           .maybeSingle();
@@ -2425,7 +2633,7 @@ export const db = {
       .eq("id", messageId)
       .eq("sender_id", uid)
       .is("deleted_at", null)
-      .select(CHANNEL_MESSAGE_SELECT)
+      .select(liveChannelSelect())
       .single();
     if (error) throw error;
     const [hydrated] = await hydrateChannelSenders(
@@ -2461,7 +2669,7 @@ export const db = {
       .eq("id", messageId)
       .is("deleted_at", null);
     if (!isAdmin) delQuery = delQuery.eq("sender_id", uid);
-    const { data, error } = await delQuery.select(CHANNEL_MESSAGE_SELECT).single();
+    const { data, error } = await delQuery.select(liveChannelSelect()).single();
     if (error) throw error;
 
     // Only remove storage if we own the file folder (or admin).
@@ -2483,14 +2691,26 @@ export const db = {
     const uid = await requireUserId();
     if (!conversationId) return null;
     const at = new Date().toISOString();
-    const { data, error } = await supabase
+    const memberSelect = "conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at, last_inbound_at";
+    const memberSelectFallback = "conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at";
+    let { data, error } = await supabase
       .from("conversation_members")
       .update({ last_read_at: at })
       .eq("conversation_id", conversationId)
       .eq("user_id", uid)
       .is("removed_at", null)
-      .select("conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at")
+      .select(memberSelect)
       .maybeSingle();
+    if (error && /last_inbound_at/i.test(String(error.message || error.code || ""))) {
+      ({ data, error } = await supabase
+        .from("conversation_members")
+        .update({ last_read_at: at })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", uid)
+        .is("removed_at", null)
+        .select(memberSelectFallback)
+        .maybeSingle());
+    }
     if (error) throw error;
     return data || { conversation_id: conversationId, user_id: uid, last_read_at: at };
   },
@@ -2502,14 +2722,26 @@ export const db = {
     if (!["all", "highlights", "mute"].includes(normalized)) {
       throw new Error("Invalid notification setting");
     }
-    const { data, error } = await supabase
+    const memberSelect = "conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at, last_inbound_at";
+    const memberSelectFallback = "conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at";
+    let { data, error } = await supabase
       .from("conversation_members")
       .update({ notify_level: normalized })
       .eq("conversation_id", conversationId)
       .eq("user_id", uid)
       .is("removed_at", null)
-      .select("conversation_id, user_id, joined_at, removed_at, notify_level, last_read_at")
+      .select(memberSelect)
       .maybeSingle();
+    if (error && /last_inbound_at/i.test(String(error.message || error.code || ""))) {
+      ({ data, error } = await supabase
+        .from("conversation_members")
+        .update({ notify_level: normalized })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", uid)
+        .is("removed_at", null)
+        .select(memberSelectFallback)
+        .maybeSingle());
+    }
     if (error) throw error;
     return data;
   },
@@ -2517,19 +2749,33 @@ export const db = {
   channelHasUnread,
 
   /** Load 1:1 thread for a mama (self or admin viewing client). */
-  async loadMessages(clientId, { limit = 100 } = {}) {
+  /**
+   * Newest window of a DM thread, or the page before `before` when paging back.
+   * @param {{ limit?: number, before?: { created_at: string, id: string } }} options
+   */
+  async loadMessages(clientId, { limit = MESSAGE_PAGE_SIZE, before = null } = {}) {
     if (!clientId) return [];
-    const { data, error } = await supabase
-      .from("messages")
-      .select(DM_MESSAGE_SELECT)
-      .eq("client_id", clientId)
+    const { data, error } = await runMessageQuery(() => olderThan(
+      supabase
+        .from("messages")
+        .select(liveDmSelect())
+        .eq("client_id", clientId),
+      before,
+    )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .limit(Math.min(200, Math.max(1, limit)));
+      .limit(pageLimit(limit)));
     if (error) throw error;
     const withAttachments = await hydrateMessageAttachments(chronologicalMessages(data));
     const withReplies = attachReplyPreviews(withAttachments);
-    return hydrateDmReactions(withReplies);
+    const withParents = await hydrateMissingReplyParents(withReplies, (ids) => (
+      loadDmMessagesByIds(clientId, ids)
+    ));
+    return hydrateDmReactions(withParents);
+  },
+
+  async loadMessagesByIds(clientId, ids) {
+    return loadDmMessagesByIds(clientId, ids);
   },
 
   async toggleDmReaction(messageId, emoji) {
@@ -2549,7 +2795,7 @@ export const db = {
     const text = String(body || "").trim().slice(0, 2000);
     const prior = await supabase
       .from("messages")
-      .select(DM_MESSAGE_SELECT)
+      .select(liveDmSelect())
       .eq("sender_id", uid)
       .eq("client_message_id", idempotencyKey)
       .maybeSingle();
@@ -2579,7 +2825,7 @@ export const db = {
     }
     if (!data) {
       if (text.length < 1 && !attachment) throw new Error("Message is empty");
-      const inserted = await supabase
+      const inserted = await runMessageQuery(() => supabase
         .from("messages")
         .insert({
           client_id: clientId,
@@ -2594,17 +2840,18 @@ export const db = {
               attachment_name: attachment.name,
               attachment_mime: attachment.mime,
               attachment_bytes: attachment.bytes,
+              ...(includeAttachmentMedia ? attachmentMediaFields(attachment) : {}),
             }
             : {}),
         })
-        .select(DM_MESSAGE_SELECT)
-        .single();
+        .select(liveDmSelect())
+        .single());
       if (!inserted.error) {
         data = inserted.data;
       } else {
         const existing = await supabase
           .from("messages")
-          .select(DM_MESSAGE_SELECT)
+          .select(liveDmSelect())
           .eq("sender_id", uid)
           .eq("client_message_id", idempotencyKey)
           .maybeSingle();
@@ -2866,7 +3113,7 @@ export const db = {
       .eq("id", messageId)
       .eq("sender_id", uid)
       .is("deleted_at", null)
-      .select(DM_MESSAGE_SELECT)
+      .select(liveDmSelect())
       .single();
     if (error) throw error;
     const [hydrated] = await hydrateMessageAttachments([data]);
@@ -2894,7 +3141,7 @@ export const db = {
       .eq("id", messageId)
       .eq("sender_id", uid)
       .is("deleted_at", null)
-      .select(DM_MESSAGE_SELECT)
+      .select(liveDmSelect())
       .single();
     if (error) throw error;
 

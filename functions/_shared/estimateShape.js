@@ -14,6 +14,8 @@
    chili for a bowl of it.
    ================================================================== */
 
+import { groundClientFacingComment } from "./clientLifeStage.js";
+
 /** Sane ceilings for a single plate. Batch mode scales these by yield. */
 export const PLATE_CAPS = { calories: 5000, protein_g: 400, carbs_g: 600, fat_g: 300 };
 
@@ -38,9 +40,10 @@ export function normalizeServings(value) {
 }
 
 /**
- * Tips already read as Callie in the UI — strip self-intros the model adds.
+ * Tips already read as Callie in the UI — strip self-intros the model adds,
+ * then drop life-stage claims her profile does not support.
  */
-export function sanitizeTip(raw) {
+export function sanitizeTip(raw, profile = null) {
   let tip = String(raw || "").replace(/\s+/g, " ").trim();
   if (!tip) return "";
 
@@ -53,6 +56,8 @@ export function sanitizeTip(raw) {
     .replace(/\s+/g, " ")
     .trim();
 
+  tip = groundClientFacingComment(tip, profile);
+
   if (tip && /^[a-z]/.test(tip)) {
     tip = tip[0].toUpperCase() + tip.slice(1);
   }
@@ -64,8 +69,9 @@ export function sanitizeTip(raw) {
  *
  * @param {object} parsed  raw parsed model output
  * @param {"meal"|"recipe"} mode
+ * @param {{ profile?: object|null }} [opts]
  */
-export function sanitizeEstimate(parsed, mode = "meal") {
+export function sanitizeEstimate(parsed, mode = "meal", opts = {}) {
   if (!parsed || typeof parsed !== "object") return { error: "not food" };
   if (parsed.error) return { error: "not food" };
   // Models sometimes return meal:"error" + 0 macros instead of {error}.
@@ -96,6 +102,6 @@ export function sanitizeEstimate(parsed, mode = "meal") {
     carbs_g: capped("carbs_g", parsed.carbs_g),
     fat_g: capped("fat_g", parsed.fat_g),
     confidence,
-    tip: sanitizeTip(parsed.tip),
+    tip: sanitizeTip(parsed.tip, opts.profile ?? null),
   };
 }

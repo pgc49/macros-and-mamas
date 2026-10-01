@@ -19,6 +19,7 @@ import {
   parseJsonLoose,
   resolveModels,
 } from "../_shared/openrouter.js";
+import { groundPlanClientCopy } from "../_shared/clientLifeStage.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 
@@ -89,7 +90,7 @@ export async function onRequestPost({ request, env }) {
         {
           role: "system",
           content:
-            "You are Callie's meal-planning assistant helping a postpartum client plan her week. Honor her food loves and reuse her saved My meals when they fit. Keep every day inside her approved macro bands. Prefer My meals, then Callie's recipe bank. Output JSON only.",
+            "You are Callie's meal-planning assistant helping a client plan her week. Honor her food loves and reuse her saved My meals when they fit. Keep every day inside her approved macro bands. Prefer My meals, then Callie's recipe bank. Never assume she is postpartum. Output JSON only.",
         },
         { role: "user", content: `${prompt}\n\n${CLIENT_SUGGEST_JSON_HINT}` },
       ],
@@ -164,6 +165,7 @@ export async function onRequestPost({ request, env }) {
       return { ...day, meals, dayTotals };
     });
     plan.dailyTarget = target;
+    groundPlanClientCopy(plan, profile);
     plan.meta = {
       model,
       generatedAt: new Date().toISOString(),

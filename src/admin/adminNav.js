@@ -11,6 +11,7 @@ const LEGACY_TO_PRIMARY = {
   messages: "messages",
   more: "more",
   announcements: "more",
+  banners: "more",
   emails: "more",
   credits: "more",
   funnel: "more",
@@ -35,6 +36,7 @@ export function moreViewFromQuery(raw) {
   if (q === "announcements") return "announcements";
   if (q === "funnel") return "funnel";
   if (q === "ai") return "ai";
+  if (q === "banners") return "banners";
   return "menu";
 }
 

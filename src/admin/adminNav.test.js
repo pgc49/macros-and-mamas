@@ -12,6 +12,7 @@ describe("adminNav", () => {
     expect(primaryTabFromQuery("clients")).toBe("people");
     expect(primaryTabFromQuery("leads")).toBe("people");
     expect(primaryTabFromQuery("emails")).toBe("more");
+    expect(primaryTabFromQuery("banners")).toBe("more");
     expect(primaryTabFromQuery("messages")).toBe("messages");
   });
 
@@ -25,11 +26,13 @@ describe("adminNav", () => {
   it("writes a legacy-compatible query tab", () => {
     expect(queryTabFor("people", { peopleSegment: "leads" })).toBe("leads");
     expect(queryTabFor("more", { moreView: "emails" })).toBe("emails");
+    expect(queryTabFor("more", { moreView: "banners" })).toBe("banners");
     expect(queryTabFor("home")).toBe("home");
   });
 
   it("opens More subviews from the old tab names", () => {
     expect(moreViewFromQuery("announcements")).toBe("announcements");
+    expect(moreViewFromQuery("banners")).toBe("banners");
     expect(moreViewFromQuery("credits")).toBe("credits");
     expect(moreViewFromQuery("more")).toBe("menu");
   });

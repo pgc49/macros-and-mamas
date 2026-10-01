@@ -40,7 +40,9 @@ create table public.messages (
   attachment_path text,
   attachment_name text,
   attachment_mime text,
-  attachment_bytes integer
+  attachment_bytes integer,
+  attachment_width integer,
+  attachment_height integer
 );
 
 alter table public.messages enable row level security;
@@ -50,7 +52,9 @@ create policy messages_select_thread
   using (public.is_admin() or auth.uid() = client_id);
 
 grant select, insert, update, delete on public.messages to authenticated;
+grant select on public.messages to service_role;
 grant select on public.profiles to authenticated;
+grant select on public.profiles to service_role;
 
 create table public.push_subscriptions (
   id uuid primary key default gen_random_uuid(),
@@ -93,8 +97,33 @@ create table public.conversation_messages (
   attachment_path text,
   attachment_name text,
   attachment_mime text,
-  attachment_bytes integer
+  attachment_bytes integer,
+  attachment_width integer,
+  attachment_height integer
 );
 
 alter table public.conversation_messages enable row level security;
+
+create table if not exists public.conversations (
+  id uuid primary key default gen_random_uuid(),
+  type text,
+  label text
+);
+
+create table if not exists public.conversation_members (
+  conversation_id uuid not null,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  removed_at timestamptz,
+  notify_level text,
+  last_read_at timestamptz,
+  primary key (conversation_id, user_id)
+);
+
+alter table public.conversation_members enable row level security;
+alter table public.conversation_members force row level security;
+
+grant select, insert, update on table public.conversation_members to authenticated;
+grant select, insert, update on table public.conversation_messages to authenticated, service_role;
+grant select, insert on table public.conversations to authenticated;
 

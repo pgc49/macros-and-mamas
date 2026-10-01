@@ -25,6 +25,7 @@ import {
   parseJsonLoose,
   resolveModels,
 } from "../_shared/openrouter.js";
+import { groundClientFacingComment, profileFromRow } from "../_shared/clientLifeStage.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 
@@ -114,7 +115,7 @@ export async function onRequestPost({ request, env }) {
     let jsonHint = MEAL_IDEA_JSON_HINT;
     let maxTokens = 4000;
     let system =
-      "You are Callie's postpartum meal assistant. Prefer her saved My meals when they fit, then the recipe bank. Honest macros from ingredients. Honor food loves and diet/allergens. JSON only.";
+      "You are Callie's meal assistant. Prefer her saved My meals when they fit, then the recipe bank. Honest macros from ingredients. Honor food loves, diet/allergens, and her profile season — never assume postpartum. JSON only.";
 
     if (mode === "describe") {
       prompt = buildDescribeMealPrompt({ profile, macros, slot, description, customMeals });
@@ -136,7 +137,7 @@ export async function onRequestPost({ request, env }) {
       jsonHint = EATING_OUT_JSON_HINT;
       maxTokens = 10000;
       system =
-        "You are Callie's postpartum meal assistant helping with restaurant menus. Read menu photos carefully. Suggest exactly 5 orderable dishes ranked best→okay for remaining macros / her note. Include rankLabel on each. Restaurant macros are rough estimates. Honor diet/allergens. JSON only.";
+        "You are Callie's meal assistant helping with restaurant menus. Read menu photos carefully. Suggest exactly 5 orderable dishes ranked best→okay for remaining macros / her note. Include rankLabel on each. Restaurant macros are rough estimates. Honor diet/allergens and her profile season — never assume postpartum. JSON only.";
       userContent = [
         { type: "text", text: `${prompt}\n\n${jsonHint}` },
         ...images.map((img) => ({
@@ -189,7 +190,7 @@ export async function onRequestPost({ request, env }) {
       );
     }
 
-    const meals = normalizeMeals(parsedJson.value, slot, { eatingOut: mode === "eating_out" });
+    const meals = normalizeMeals(parsedJson.value, slot, { eatingOut: mode === "eating_out", profile });
     if (!meals.length) {
       await logAiFailure(env, {
         userId: user.id,
@@ -245,7 +246,7 @@ function sanitizeMacroBag(value) {
   return { cal: n("cal"), p: n("p"), c: n("c"), f: n("f") };
 }
 
-function normalizeMeals(parsed, fallbackSlot, { eatingOut = false } = {}) {
+function normalizeMeals(parsed, fallbackSlot, { eatingOut = false, profile = null } = {}) {
   const raw = Array.isArray(parsed?.meals)
     ? parsed.meals
     : parsed?.meal
@@ -254,10 +255,11 @@ function normalizeMeals(parsed, fallbackSlot, { eatingOut = false } = {}) {
   return raw
     .filter((m) => m && m.name)
     .map((m) => {
-      let desc = String(m.desc || "").slice(0, 280);
+      let desc = groundClientFacingComment(String(m.desc || ""), profile);
       if (eatingOut && desc && !/rough|estimate|restaurant/i.test(desc)) {
-        desc = `Rough restaurant estimate — ${desc}`.slice(0, 280);
+        desc = `Rough restaurant estimate — ${desc}`;
       }
+      desc = desc.slice(0, 280);
       const rankLabel = eatingOut && m.rankLabel
         ? String(m.rankLabel).trim().slice(0, 40)
         : null;
@@ -332,7 +334,7 @@ async function loadSelf(env, userId, authHeader) {
   if (!row) return { profile: null, macros: null };
 
   const profile = {
-    name: row.name,
+    ...profileFromRow(row),
     diet: row.diet,
     prefB: row.pref_b,
     prefL: row.pref_l,

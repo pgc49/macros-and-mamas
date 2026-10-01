@@ -8,6 +8,7 @@ import { supabase } from "./lib/supabase";
 import { computeMacros } from "./engine/computeMacros";
 import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from "./utils/dates";
 import { entriesForLogDate, hydrateTodayLog, sumLogTotals } from "./utils/mealLogState";
+import { roundMealLogMacros } from "./utils/mealLogMacros";
 import { resolveLogSlot } from "./utils/mealSlots";
 import { coachCardVia, coachLogFromCard, unscaleRankedCard } from "./utils/coachScale";
 import { nextCustomMeals } from "./utils/coachMyMeals";
@@ -43,6 +44,7 @@ import { OnboardingBannersPreview } from "./views/OnboardingBannersPreview";
 import { MealLogPreview } from "./views/MealLogPreview";
 import { MealsTabPreview } from "./views/MealsTabPreview";
 import { RecipeBankPreview } from "./views/RecipeBankPreview";
+import { MessagesThreadPreview } from "./views/MessagesThreadPreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
@@ -247,6 +249,18 @@ const ADMIN_SURFACE_ENABLED = APP_SURFACE !== "customer";
 /* Customer builds compile this import away; admin/combined builds keep it lazy. */
 const AdminPortal = ADMIN_SURFACE_ENABLED
   ? lazy(() => import("./admin/AdminPortal").then((m) => ({ default: m.AdminPortal })))
+  : null;
+
+const AdminMessagesPreview = import.meta.env.DEV && ADMIN_SURFACE_ENABLED
+  ? lazy(() => import("./admin/AdminMessagesPreview").then((m) => ({ default: m.AdminMessagesPreview })))
+  : null;
+
+const AdminTodayBannersPreview = import.meta.env.DEV && ADMIN_SURFACE_ENABLED
+  ? lazy(() => import("./admin/AdminTodayBannersPreview").then((m) => ({ default: m.AdminTodayBannersPreview })))
+  : null;
+
+const AdminInboxPreview = import.meta.env.DEV && ADMIN_SURFACE_ENABLED
+  ? lazy(() => import("./admin/AdminInboxPreview").then((m) => ({ default: m.AdminInboxPreview })))
   : null;
 
 function AdminSurfaceRedirect() {
@@ -1051,7 +1065,7 @@ export default function App() {
     const via = entry.via || (entry.source === "text" ? "describe" : entry.source) || "manual";
     const slot = resolveLogSlot(entry.slot);
     try {
-      const row = await db.addMealLog({ ...entry, via, slot }, date);
+      const row = await db.addMealLog({ ...entry, ...roundMealLogMacros(entry), via, slot }, date);
       syncEntryIntoWeek(date, (list) => [...list, row]);
       return true;
     } catch (e) {
@@ -1529,7 +1543,7 @@ export default function App() {
   const updateMealEntry = async (id, patch) => {
     if (!id) return false;
     try {
-      const row = await db.updateMealLog(id, patch);
+      const row = await db.updateMealLog(id, { ...patch, ...roundMealLogMacros(patch) });
       const date = mealLogDate;
       syncEntryIntoWeek(date, (list) => list.map((e) => (e.id === id ? { ...e, ...row } : e)));
       return true;
@@ -1836,6 +1850,37 @@ export default function App() {
           <Route path="/dev/meal-log" element={<MealLogPreview />} />
           <Route path="/dev/meals-tab" element={<MealsTabPreview />} />
           <Route path="/dev/recipe-bank" element={<RecipeBankPreview />} />
+          <Route path="/dev/messages-thread" element={<MessagesThreadPreview />} />
+          {AdminMessagesPreview ? (
+            <Route
+              path="/dev/admin-messages"
+              element={(
+                <Suspense fallback={null}>
+                  <AdminMessagesPreview />
+                </Suspense>
+              )}
+            />
+          ) : null}
+          {AdminTodayBannersPreview ? (
+            <Route
+              path="/dev/today-banners"
+              element={(
+                <Suspense fallback={null}>
+                  <AdminTodayBannersPreview />
+                </Suspense>
+              )}
+            />
+          ) : null}
+          {AdminInboxPreview ? (
+            <Route
+              path="/dev/admin-inbox"
+              element={(
+                <Suspense fallback={null}>
+                  <AdminInboxPreview />
+                </Suspense>
+              )}
+            />
+          ) : null}
         </>
       ) : null}
 

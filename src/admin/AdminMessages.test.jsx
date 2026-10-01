@@ -8,6 +8,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { formatInboxTimestamp } from "../lib/inboxTimestamp";
 
 function deferred() {
   let resolve;
@@ -52,6 +53,12 @@ const { deferredByClient, dbMock, realtimeChannel } = vi.hoisted(() => {
       ]),
       listMyChannels: vi.fn(async () => []),
       loadChannelMessages: vi.fn(async () => []),
+      channelHasUnreadMessages: vi.fn(async () => false),
+      markChannelRead: vi.fn(async () => ({ last_read_at: "2026-09-04T12:00:00Z" })),
+      sendChannelMessage: vi.fn(),
+      editChannelMessage: vi.fn(),
+      deleteChannelMessage: vi.fn(),
+      toggleChannelReaction: vi.fn(),
       loadMessages: vi.fn((clientId) => {
         const pending = pendingByClient.get(clientId);
         return pending ? pending.promise : Promise.resolve([]);
@@ -59,6 +66,8 @@ const { deferredByClient, dbMock, realtimeChannel } = vi.hoisted(() => {
       markMessagesRead: vi.fn(async () => {}),
       countUnreadMessages: vi.fn(async () => 0),
       sendMessage: vi.fn(),
+      hydrateChannelMessageRow: vi.fn(async (row) => row),
+      hydrateDmMessageRow: vi.fn(async (row) => row),
       editMessage: vi.fn(),
       deleteMessage: vi.fn(),
       toggleDmReaction: vi.fn(),
@@ -99,6 +108,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("AdminMessages thread switching", () => {
@@ -284,8 +294,50 @@ describe("AdminMessages inbox titles", () => {
     expect(screen.getByRole("button", { name: /Chelsea Park/ })).toBeTruthy();
     expect(screen.getByText("Lee preview")).toBeTruthy();
     expect(screen.getByText("Park preview")).toBeTruthy();
+    const leeStamp = formatInboxTimestamp("2026-08-10T10:00:00Z");
+    expect(leeStamp).toBeTruthy();
+    expect(screen.getAllByText(leeStamp).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /^Mama$/ })).toBeNull();
     expect(screen.queryAllByText("Mama")).toHaveLength(0);
+  });
+
+  it("stamps each inbox row like iMessage from the last message time", async () => {
+    const now = new Date();
+    const today = new Date(now);
+    today.setHours(10, 51, 0, 0);
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(9, 0, 0, 0);
+
+    dbMock.loadMessageInbox.mockResolvedValueOnce([
+      {
+        clientId: "c-today",
+        unread: 0,
+        participantIds: ["c-today"],
+        lastMessage: { id: "t1", body: "today preview", created_at: today.toISOString() },
+      },
+      {
+        clientId: "c-yday",
+        unread: 0,
+        participantIds: ["c-yday"],
+        lastMessage: { id: "y1", body: "yesterday preview", created_at: yesterday.toISOString() },
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[
+          { id: "c-today", name: "Today Mama", email: "today@example.com" },
+          { id: "c-yday", name: "Yesterday Mama", email: "yday@example.com" },
+        ]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText("today preview")).toBeTruthy();
+    expect(screen.getByText(formatInboxTimestamp(today.toISOString()))).toBeTruthy();
+    expect(screen.getByText("Yesterday")).toBeTruthy();
   });
 
   it("does not title a missing peer Mama when the inbox row has a profile", async () => {
@@ -459,11 +511,172 @@ describe("AdminMessages thread switching", () => {
     });
     expect(grid.style.minWidth).toBe("0px");
     expect(grid.style.width).toBe("100%");
+    expect(grid.style.minHeight).toBe("0px");
+    expect(grid.style.flexGrow).toBe("1");
     expect(grid.style.gridTemplateColumns).toBe("minmax(220px, 280px) minmax(0, 1fr)");
+
+    const pane = document.querySelector("[data-admin-thread-pane]");
+    expect(pane).toBeTruthy();
+    expect(pane.style.height).toBe("100%");
+    expect(pane.style.maxHeight).toBe("none");
+    expect(pane.style.minHeight).toBe("0px");
 
     const input = await screen.findByPlaceholderText("Write a message…");
     expect(input.style.minWidth).toBe("0px");
     expect(input.style.flex).toContain("180px");
+  });
+
+  it("fills leftover height on a phone instead of guessing 100dvh minus chrome", async () => {
+    window.matchMedia = vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+
+    render(
+      <AdminMessages
+        roster={[{ id: "mama-a", name: "Mama A", email: "a@example.com" }]}
+        adminUserId="admin-1"
+        initialClientId="mama-a"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    const root = await waitFor(() => {
+      const el = document.querySelector("[data-admin-messages]");
+      expect(el).toBeTruthy();
+      return el;
+    });
+    expect(root.style.flexGrow).toBe("1");
+    expect(root.style.minHeight).toBe("0px");
+    expect(root.style.height).toBe("100%");
+    expect(root.style.overflow).toBe("hidden");
+
+    const pane = document.querySelector("[data-admin-thread-pane]");
+    expect(pane).toBeTruthy();
+    expect(pane.style.height).toBe("100%");
+    expect(pane.style.maxHeight).toBe("none");
+    expect(pane.getAttribute("style") || "").not.toMatch(/100dvh/);
+
+    expect(await screen.findByPlaceholderText("Write a message…")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Messages" })).toBeNull();
+  });
+});
+
+describe("AdminMessages group loading", () => {
+  function channelItem(id, label, extraMembership = {}) {
+    return {
+      conversation: { id, label, guidelines: "", read_only: false },
+      membership: {
+        user_id: "admin-1",
+        notify_level: "highlights",
+        last_read_at: "2026-09-01T00:00:00Z",
+        ...extraMembership,
+      },
+    };
+  }
+
+  it("does not load any group history until a row is opened", async () => {
+    dbMock.listMyChannels.mockResolvedValue([
+      channelItem("aug", "August Group"),
+    ]);
+    dbMock.channelHasUnreadMessages.mockResolvedValue(true);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /August Group/ })).toBeTruthy();
+    });
+    expect(dbMock.channelHasUnreadMessages).toHaveBeenCalledWith("aug", expect.any(Object));
+    expect(dbMock.loadChannelMessages).not.toHaveBeenCalled();
+  });
+
+  it("stamps a group from last_inbound_at without loading history", async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(10, 48, 0, 0);
+    dbMock.listMyChannels.mockResolvedValue([
+      channelItem("aug", "August Group", { last_inbound_at: yesterday.toISOString() }),
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /August Group/ })).toBeTruthy();
+    expect(screen.getByText("Yesterday")).toBeTruthy();
+    expect(dbMock.loadChannelMessages).not.toHaveBeenCalled();
+  });
+
+  it("loads a group once when its inbox row is opened", async () => {
+    dbMock.listMyChannels.mockResolvedValue([
+      channelItem("aug", "August Group"),
+    ]);
+    dbMock.loadChannelMessages.mockResolvedValue([
+      {
+        id: "g-1",
+        conversation_id: "aug",
+        sender_id: "mama-a",
+        body: "group hello",
+        created_at: "2026-08-10T10:00:00Z",
+        reactions: [],
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /August Group/ }));
+    await waitFor(() => {
+      expect(dbMock.loadChannelMessages).toHaveBeenCalledWith("aug");
+    });
+    expect(await screen.findByText("group hello")).toBeTruthy();
+  });
+
+  it("opens a push deep-linked group without an inbox tap", async () => {
+    dbMock.listMyChannels.mockResolvedValue([
+      channelItem("aug", "August Group"),
+    ]);
+    dbMock.loadChannelMessages.mockResolvedValue([
+      {
+        id: "g-1",
+        conversation_id: "aug",
+        sender_id: "mama-a",
+        body: "group hello",
+        created_at: "2026-08-10T10:00:00Z",
+        reactions: [],
+      },
+    ]);
+
+    render(
+      <AdminMessages
+        roster={[]}
+        adminUserId="admin-1"
+        initialChannelId="aug"
+        focusMessageId="g-1"
+        onUnreadTotalChange={() => {}}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(dbMock.loadChannelMessages).toHaveBeenCalledWith("aug");
+    });
+    expect(await screen.findByText("group hello")).toBeTruthy();
   });
 });
 

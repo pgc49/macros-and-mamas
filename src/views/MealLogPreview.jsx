@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Fonts } from "../theme/Fonts";
 import { T, F, FD } from "../theme/tokens";
 import { MealLogCard } from "../components/MealLogCard";
+import { roundMealLogMacros } from "../utils/mealLogMacros";
 import { RecipeCreator } from "../components/RecipeCreator";
 import { WaterLogCard } from "../components/WaterLogCard";
 import { WeighInCard } from "../components/WeighInCard";
@@ -35,10 +36,12 @@ export function MealLogPreview() {
     const row = {
       id: `local-${Date.now()}`,
       name: entry.name,
-      cal: Number(entry.cal) || 0,
-      p: Number(entry.p) || 0,
-      c: Number(entry.c) || 0,
-      f: Number(entry.f) || 0,
+      ...roundMealLogMacros({
+        cal: Number(entry.cal) || 0,
+        p: Number(entry.p) || 0,
+        c: Number(entry.c) || 0,
+        f: Number(entry.f) || 0,
+      }),
       via: entry.via || "manual",
       slot: entry.slot || "snack",
     };

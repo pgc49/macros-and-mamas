@@ -3,10 +3,32 @@ import { T, F, FD } from "../theme/tokens";
 import { Btn, inputStyle } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { db, channelHasUnread } from "../db/db";
+import { db } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { mergeMessagesById } from "../lib/messageOrdering";
+import {
+  applyReactionToMessages,
+  earlierCursor,
+  membershipHasUnread,
+  mergeChannelList,
+  MESSAGE_PAGE_SIZE,
+  pageHasMore,
+} from "../lib/messageChannels";
+import { createCoalescedRefresh } from "../lib/realtimeCoalesce";
+import {
+  applyMessageChange,
+  applyReactionEvent,
+  clientIdFromPayload,
+  conversationIdFromPayload,
+  inboundUnreadFromPayload,
+} from "../lib/realtimeMessageApply";
 import { adminPersonTitle as displayName, inboxThreadTitle } from "./clientRoster";
+import { parseMessageDeepLink } from "../lib/messageDeepLink";
+import {
+  restoreAndResignMessageWindow,
+  writeMessageWindow,
+} from "../lib/messageWindowCache";
+import { formatInboxTimestamp, latestInboxIso } from "../lib/inboxTimestamp";
 
 function isAdminProfile(c) {
   return String(c?.role || "").toLowerCase() === "admin";
@@ -15,6 +37,12 @@ function isAdminProfile(c) {
 /** One shared Patrick↔Callie thread (whichever uuid sorts first). */
 function canonicalAdminThreadId(a, b) {
   return String(a) < String(b) ? a : b;
+}
+
+function channelLastAt(item, loadedMessages) {
+  const msgs = loadedMessages?.[item?.conversation?.id] || [];
+  const lastLoaded = msgs.length ? msgs[msgs.length - 1]?.created_at : null;
+  return latestInboxIso(lastLoaded, item?.membership?.last_inbound_at);
 }
 
 function previewText(m) {
@@ -59,24 +87,45 @@ export function AdminMessages({
   roster = [],
   adminUserId,
   initialClientId = null,
+  initialChannelId = null,
+  focusMessageId = "",
   onUnreadTotalChange,
+  onComposerFocusChange,
 }) {
   const isWide = useIsWide();
+  const deepLink = useMemo(
+    () => parseMessageDeepLink(typeof window !== "undefined" ? window.location.search : ""),
+    [],
+  );
+  const startChannel = initialChannelId || deepLink.channel;
+  const startClient = initialClientId || deepLink.client;
+  const focusId = focusMessageId || deepLink.message || "";
   const [inbox, setInbox] = useState([]);
   const [channels, setChannels] = useState([]);
   const [channelMessages, setChannelMessages] = useState({});
   /** @type {[{ type: 'dm'|'channel', id: string }|null, Function]} */
-  const [active, setActive] = useState(
-    initialClientId ? { type: "dm", id: initialClientId } : null,
-  );
+  const [active, setActive] = useState(() => {
+    if (startChannel) return { type: "channel", id: startChannel };
+    if (startClient) return { type: "dm", id: startClient };
+    return null;
+  });
   const [dmMessages, setDmMessages] = useState([]);
   const [dmLoadedClientId, setDmLoadedClientId] = useState(null);
   const [dmLoadErrorClientId, setDmLoadErrorClientId] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [busy] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [dmHasEarlier, setDmHasEarlier] = useState(false);
+  const [channelHasEarlier, setChannelHasEarlier] = useState({});
   const activeRef = useRef(active);
   const dmLoadSequence = useRef(new Map());
+  const channelLoadSequence = useRef(new Map());
+  const fetchedChannels = useRef(new Set());
+  const dmMessagesRef = useRef(dmMessages);
+  const channelMessagesRef = useRef(channelMessages);
+
+  useEffect(() => { dmMessagesRef.current = dmMessages; }, [dmMessages]);
+  useEffect(() => { channelMessagesRef.current = channelMessages; }, [channelMessages]);
 
   const rosterMap = useMemo(() => {
     const m = new Map();
@@ -107,39 +156,65 @@ export function AdminMessages({
     }
   }, [adminUserId, onUnreadTotalChange]);
 
-  const refreshChannels = useCallback(async () => {
+  /**
+   * Group rows and their unread dots — never every group's history.
+   *
+   * Loading each channel's window here meant Callie paid for every cohort's
+   * backlog to open her inbox, and paid again on every group message.
+   */
+  const refreshChannelList = useCallback(async () => {
     if (!adminUserId) return;
     try {
       const list = await db.listMyChannels();
-      const withPreview = await Promise.all(list.map(async (item) => {
-        const messages = await db.loadChannelMessages(item.conversation.id, { limit: 80 });
-        return {
-          ...item,
-          messages,
-          hasUnread: channelHasUnread(item.conversation, item.membership, messages),
-        };
-      }));
-      setChannels(withPreview);
-      setChannelMessages(Object.fromEntries(
-        withPreview.map((item) => [item.conversation.id, item.messages]),
-      ));
+      setChannels((prev) => mergeChannelList(prev, list));
+      const withUnread = await Promise.all(list.map(async (item) => ({
+        ...item,
+        hasUnread: Object.hasOwn(item.membership || {}, "last_inbound_at")
+          ? membershipHasUnread(item.membership)
+          : await db.channelHasUnreadMessages(item.conversation.id, item.membership),
+      })));
+      setChannels(withUnread);
     } catch (e) {
       console.error(e);
       setError(e.message || "Couldn’t load group chats.");
     }
   }, [adminUserId]);
 
+  const refreshChannelThread = useCallback(async (conversationId) => {
+    if (!conversationId) return;
+    const sequence = (channelLoadSequence.current.get(conversationId) || 0) + 1;
+    channelLoadSequence.current.set(conversationId, sequence);
+    try {
+      const messages = await db.loadChannelMessages(conversationId);
+      if (channelLoadSequence.current.get(conversationId) !== sequence) return;
+      setChannelMessages((all) => ({
+        ...all,
+        [conversationId]: mergeMessagesById(all[conversationId] || [], messages),
+      }));
+      setChannelHasEarlier((all) => ({
+        ...all,
+        [conversationId]: pageHasMore(messages, MESSAGE_PAGE_SIZE),
+      }));
+    } catch (e) {
+      if (channelLoadSequence.current.get(conversationId) !== sequence) return;
+      console.error(e);
+      setError(e.message || "Couldn’t load group chats.");
+    }
+  }, []);
+
   const refreshDmThread = useCallback(async (clientId, { clear = false } = {}) => {
     const sequence = (dmLoadSequence.current.get(clientId) || 0) + 1;
     dmLoadSequence.current.set(clientId, sequence);
     if (!clientId) {
       setDmMessages([]);
+      setDmHasEarlier(false);
       setDmLoadedClientId(null);
       setDmLoadErrorClientId(null);
       return;
     }
     if (clear) {
       setDmMessages([]);
+      setDmHasEarlier(false);
       setDmLoadedClientId(null);
       setDmLoadErrorClientId(null);
       setError("");
@@ -149,7 +224,8 @@ export function AdminMessages({
       const stillCurrent = activeRef.current?.type === "dm"
         && activeRef.current.id === clientId;
       if (sequence !== dmLoadSequence.current.get(clientId) || !stillCurrent) return;
-      setDmMessages(list);
+      setDmMessages((current) => mergeMessagesById(current, list));
+      setDmHasEarlier(pageHasMore(list, MESSAGE_PAGE_SIZE));
       setDmLoadedClientId(clientId);
       setDmLoadErrorClientId(null);
     } catch (e) {
@@ -162,18 +238,29 @@ export function AdminMessages({
     }
   }, []);
 
-  useEffect(() => {
-    refreshInbox();
-    refreshChannels();
-  }, [refreshInbox, refreshChannels]);
+  const refreshInboxRef = useRef(refreshInbox);
+  const refreshChannelListRef = useRef(refreshChannelList);
+  useEffect(() => { refreshInboxRef.current = refreshInbox; }, [refreshInbox]);
+  useEffect(() => { refreshChannelListRef.current = refreshChannelList; }, [refreshChannelList]);
 
   useEffect(() => {
-    if (initialClientId) {
-      const next = { type: "dm", id: initialClientId };
+    refreshInbox();
+    refreshChannelList();
+  }, [refreshInbox, refreshChannelList]);
+
+  useEffect(() => {
+    if (startChannel) {
+      const next = { type: "channel", id: startChannel };
+      activeRef.current = next;
+      setActive(next);
+      return;
+    }
+    if (startClient) {
+      const next = { type: "dm", id: startClient };
       activeRef.current = next;
       setActive(next);
     }
-  }, [initialClientId]);
+  }, [startChannel, startClient]);
 
   useEffect(() => {
     activeRef.current = active;
@@ -184,49 +271,190 @@ export function AdminMessages({
   }, [active, refreshDmThread]);
 
   useEffect(() => {
+    if (active?.type !== "dm" || !active.id || !adminUserId) return undefined;
+    let cancelled = false;
+    restoreAndResignMessageWindow(
+      `dm:${active.id}:${adminUserId}`,
+      (row) => db.hydrateDmMessageRow(row),
+    ).then((cached) => {
+      if (cancelled || !cached.length) return;
+      setDmMessages((current) => mergeMessagesById(cached, current));
+    });
+    return () => { cancelled = true; };
+  }, [active, adminUserId]);
+
+  useEffect(() => {
+    if (active?.type !== "dm" || !active.id || !dmMessages.length) return undefined;
+    const timer = window.setTimeout(() => {
+      writeMessageWindow(`dm:${active.id}:${adminUserId}`, dmMessages);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [active, dmMessages]);
+
+  // A group's history loads when Callie opens it — not when the inbox mounts.
+  // Cache paints the last window; the first open in this session still fetches.
+  useEffect(() => {
+    if (active?.type !== "channel") return undefined;
+    const conversationId = active.id;
+    let cancelled = false;
+    restoreAndResignMessageWindow(
+      `channel:${conversationId}:${adminUserId}`,
+      (row) => db.hydrateChannelMessageRow(row),
+    ).then((cached) => {
+      if (cancelled || !cached.length) return;
+      setChannelMessages((all) => ({
+        ...all,
+        [conversationId]: mergeMessagesById(cached, all[conversationId] || []),
+      }));
+    });
+    if (!fetchedChannels.current.has(conversationId)) {
+      fetchedChannels.current.add(conversationId);
+      refreshChannelThread(conversationId);
+    }
+    return () => { cancelled = true; };
+  }, [active, adminUserId, refreshChannelThread]);
+
+  useEffect(() => {
+    if (active?.type !== "channel" || !active.id) return undefined;
+    const rows = channelMessages[active.id];
+    if (!rows?.length) return undefined;
+    const timer = window.setTimeout(() => {
+      writeMessageWindow(`channel:${active.id}:${adminUserId}`, rows);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [active, adminUserId, channelMessages]);
+
+  /**
+   * One subscription for the inbox. Open threads patch in place; other
+   * groups only flip an unread dot. Switching threads must not rebuild this
+   * socket.
+   */
+  useEffect(() => {
+    const inboxRefresh = createCoalescedRefresh(() => refreshInboxRef.current?.());
+    const listRefresh = createCoalescedRefresh(() => refreshChannelListRef.current?.());
+
+    const applyOpenDm = (payload) => {
+      const clientId = clientIdFromPayload(payload);
+      if (activeRef.current?.type !== "dm" || activeRef.current.id !== clientId) return;
+      setDmMessages((list) => applyMessageChange(list, payload));
+      const row = payload?.new;
+      if (row && (payload.eventType === "INSERT" || payload.eventType === "UPDATE") && !row.deleted_at) {
+        db.hydrateDmMessageRow(row).then((hydrated) => {
+          if (!hydrated) return;
+          if (activeRef.current?.type !== "dm" || activeRef.current.id !== clientId) return;
+          setDmMessages((list) => mergeMessagesById(list, [hydrated]));
+        }).catch(() => {});
+      }
+    };
+
+    const applyOpenChannel = (payload) => {
+      const conversationId = conversationIdFromPayload(payload);
+      if (!conversationId) return;
+      setChannelMessages((all) => ({
+        ...all,
+        [conversationId]: applyMessageChange(all[conversationId] || [], payload),
+      }));
+      const row = payload?.new;
+      if (row && (payload.eventType === "INSERT" || payload.eventType === "UPDATE") && !row.deleted_at) {
+        db.hydrateChannelMessageRow(row).then((hydrated) => {
+          if (!hydrated) return;
+          setChannelMessages((all) => ({
+            ...all,
+            [conversationId]: mergeMessagesById(all[conversationId] || [], [hydrated]),
+          }));
+        }).catch(() => {});
+      }
+    };
+
     const channel = supabase
       .channel("messages-admin-inbox")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages" },
-        () => {
-          refreshInbox();
-          if (active?.type === "dm") refreshDmThread(active.id);
+        (payload) => {
+          inboxRefresh.request();
+          applyOpenDm(payload);
         },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "message_reactions" },
-        () => {
-          if (active?.type === "dm") refreshDmThread(active.id);
+        (payload) => {
+          if (activeRef.current?.type !== "dm") return;
+          setDmMessages((list) => applyReactionEvent(list, payload, adminUserId));
         },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversation_messages" },
-        () => {
-          refreshChannels();
+        (payload) => {
+          const conversationId = conversationIdFromPayload(payload);
+          const open = activeRef.current?.type === "channel"
+            && conversationId === activeRef.current.id;
+          if (open) {
+            applyOpenChannel(payload);
+            return;
+          }
+          if (inboundUnreadFromPayload(payload, adminUserId) && conversationId) {
+            setChannels((list) => list.map((item) => (
+              item.conversation.id === conversationId
+                ? {
+                  ...item,
+                  hasUnread: true,
+                  membership: {
+                    ...item.membership,
+                    last_inbound_at: payload.new?.created_at || item.membership?.last_inbound_at,
+                  },
+                }
+                : item
+            )));
+          }
         },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversation_message_reactions" },
-        () => {
-          refreshChannels();
+        (payload) => {
+          const current = activeRef.current;
+          if (current?.type !== "channel") return;
+          setChannelMessages((all) => ({
+            ...all,
+            [current.id]: applyReactionEvent(all[current.id] || [], payload, adminUserId),
+          }));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "conversation_members", filter: `user_id=eq.${adminUserId}` },
+        (payload) => {
+          const row = payload?.new;
+          if (!row?.conversation_id || payload.eventType === "INSERT") {
+            listRefresh.request();
+            return;
+          }
+          setChannels((list) => list.map((item) => {
+            if (item.conversation.id !== row.conversation_id) return item;
+            const membership = { ...item.membership, ...row };
+            return { ...item, membership, hasUnread: membershipHasUnread(membership) };
+          }));
         },
       )
       .subscribe();
     return () => {
+      inboxRefresh.dispose();
+      listRefresh.dispose();
       supabase.removeChannel(channel);
     };
-  }, [active, refreshInbox, refreshDmThread, refreshChannels]);
+  }, [adminUserId]);
 
   const activeChannel = active?.type === "channel"
     ? channels.find((c) => c.conversation.id === active.id) || null
     : null;
-  const activeChannelMessages = active?.type === "channel"
-    ? (channelMessages[active.id] || activeChannel?.messages || [])
-    : [];
+  const activeChannelMessages = useMemo(() => (
+    active?.type === "channel"
+      ? (channelMessages[active.id] || [])
+      : []
+  ), [active, channelMessages]);
 
   const activePeerId = useMemo(() => {
     if (active?.type !== "dm" || !adminUserId) return active?.id || null;
@@ -299,7 +527,6 @@ export function AdminMessages({
   const sendDm = async (body, file = null, opts = {}) => {
     const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
     if (!clientId) return;
-    setBusy(true);
     setError("");
     try {
       const row = await db.sendMessage({
@@ -317,15 +544,12 @@ export function AdminMessages({
       console.error(e);
       setError(e.message || "Couldn’t send.");
       throw e;
-    } finally {
-      setBusy(false);
     }
   };
 
   const sendChannel = async (body, file = null, opts = {}) => {
     if (active?.type !== "channel") return;
     const conversationId = active.id;
-    setBusy(true);
     setError("");
     try {
       const row = await db.sendChannelMessage({
@@ -339,13 +563,10 @@ export function AdminMessages({
         ...all,
         [conversationId]: mergeMessagesById(all[conversationId] || [], [row]),
       }));
-      refreshChannels();
     } catch (e) {
       console.error(e);
       setError(e.message || "Couldn’t send.");
       throw e;
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -391,16 +612,23 @@ export function AdminMessages({
     }));
   };
 
+  // Tapbacks patch the loaded window instead of re-fetching the thread. A
+  // reload would replace every message object on screen to render one emoji.
   const reactDm = async (messageId, emoji) => {
     const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
     if (!clientId) return;
+    setDmMessages((list) => applyReactionToMessages(list, messageId, emoji, adminUserId));
     await db.toggleDmReaction(messageId, emoji);
-    await refreshDmThread(clientId);
   };
 
   const reactChannel = async (messageId, emoji) => {
+    const conversationId = activeRef.current?.type === "channel" ? activeRef.current.id : null;
+    if (!conversationId) return;
+    setChannelMessages((all) => ({
+      ...all,
+      [conversationId]: applyReactionToMessages(all[conversationId], messageId, emoji, adminUserId),
+    }));
     await db.toggleChannelReaction(messageId, emoji);
-    await refreshChannels();
   };
 
   const markDmRead = async () => {
@@ -411,22 +639,79 @@ export function AdminMessages({
   };
 
   const markChannelRead = async () => {
-    if (active?.type !== "channel") return;
-    const membership = await db.markChannelRead(active.id);
+    const conversationId = activeRef.current?.type === "channel" ? activeRef.current.id : null;
+    if (!conversationId) return;
+    const membership = await db.markChannelRead(conversationId);
     if (!membership) return;
     setChannels((list) => list.map((item) => {
-      if (item.conversation.id !== active.id) return item;
-      const next = { ...item, membership: { ...item.membership, ...membership } };
+      if (item.conversation.id !== conversationId) return item;
       return {
-        ...next,
-        hasUnread: channelHasUnread(
-          next.conversation,
-          next.membership,
-          channelMessages[active.id] || next.messages || [],
-        ),
+        ...item,
+        membership: { ...item.membership, ...membership },
+        hasUnread: false,
       };
     }));
   };
+
+  const loadEarlierDm = useCallback(async () => {
+    const clientId = activeRef.current?.type === "dm" ? activeRef.current.id : null;
+    const before = earlierCursor(dmMessagesRef.current);
+    if (!clientId || !before) return;
+    const older = await db.loadMessages(clientId, { before });
+    if (activeRef.current?.type !== "dm" || activeRef.current.id !== clientId) return;
+    setDmMessages((list) => mergeMessagesById(older, list));
+    setDmHasEarlier(pageHasMore(older, MESSAGE_PAGE_SIZE));
+  }, []);
+
+  const loadEarlierChannel = useCallback(async () => {
+    const conversationId = activeRef.current?.type === "channel" ? activeRef.current.id : null;
+    const before = earlierCursor(channelMessagesRef.current[conversationId]);
+    if (!conversationId || !before) return;
+    const older = await db.loadChannelMessages(conversationId, { before });
+    if (activeRef.current?.type !== "channel" || activeRef.current.id !== conversationId) return;
+    setChannelMessages((all) => ({
+      ...all,
+      [conversationId]: mergeMessagesById(older, all[conversationId] || []),
+    }));
+    setChannelHasEarlier((all) => ({
+      ...all,
+      [conversationId]: pageHasMore(older, MESSAGE_PAGE_SIZE),
+    }));
+  }, []);
+
+  const dmHasEarlierRef = useRef(dmHasEarlier);
+  const channelHasEarlierRef = useRef(channelHasEarlier);
+  useEffect(() => { dmHasEarlierRef.current = dmHasEarlier; }, [dmHasEarlier]);
+  useEffect(() => { channelHasEarlierRef.current = channelHasEarlier; }, [channelHasEarlier]);
+
+  const ensureChannelMessage = useCallback(async (messageId) => {
+    const conversationId = activeRef.current?.type === "channel" ? activeRef.current.id : null;
+    if (!conversationId || !messageId) return false;
+    let guard = 0;
+    while (guard < 24) {
+      const list = channelMessagesRef.current[conversationId] || [];
+      if (list.some((row) => String(row?.id || "") === String(messageId))) return true;
+      if (!channelHasEarlierRef.current[conversationId]) break;
+      await loadEarlierChannel();
+      guard += 1;
+    }
+    return (channelMessagesRef.current[conversationId] || [])
+      .some((row) => String(row?.id || "") === String(messageId));
+  }, [loadEarlierChannel]);
+
+  const ensureDmMessage = useCallback(async (messageId) => {
+    if (!messageId) return false;
+    let guard = 0;
+    while (guard < 24) {
+      if ((dmMessagesRef.current || []).some((row) => String(row?.id || "") === String(messageId))) {
+        return true;
+      }
+      if (!dmHasEarlierRef.current) break;
+      await loadEarlierDm();
+      guard += 1;
+    }
+    return (dmMessagesRef.current || []).some((row) => String(row?.id || "") === String(messageId));
+  }, [loadEarlierDm]);
 
   const inboxIds = useMemo(() => new Set(inbox.map((i) => i.clientId)), [inbox]);
   const q = query.trim().toLowerCase();
@@ -475,12 +760,14 @@ export function AdminMessages({
   const showThread = isWide || !!active;
 
   const inboxPane = (
-    <div style={{
+    <div
+      data-admin-inbox-pane
+      style={{
       display: "flex",
       flexDirection: "column",
       minWidth: 0,
       minHeight: 0,
-      height: isWide ? "min(78vh, 820px)" : "auto",
+      height: "100%",
       background: "#fff",
       border: `1.5px solid ${T.border}`,
       borderRadius: 16,
@@ -525,6 +812,7 @@ export function AdminMessages({
                   key={`ch-${id}`}
                   title={item.conversation.label || "Group"}
                   subtitle={item.hasUnread ? "New activity" : "Group chat"}
+                  timestamp={channelLastAt(item, channelMessages)}
                   unread={item.hasUnread ? 1 : 0}
                   unreadAsDot
                   active={selected}
@@ -557,6 +845,7 @@ export function AdminMessages({
               key={row.clientId}
               title={`${name}${isAdminRow ? " · admin" : ""}`}
               subtitle={previewText(row.lastMessage) || "No messages yet"}
+              timestamp={row.lastMessage?.created_at || ""}
               unread={row.unread || 0}
               active={selected}
               onClick={() => openDm(row.clientId)}
@@ -600,15 +889,18 @@ export function AdminMessages({
   );
 
   const threadPane = (
-    <div style={{
+    <div
+      data-admin-thread-pane
+      style={{
       display: "flex",
       flexDirection: "column",
       minWidth: 0,
       minHeight: 0,
-      // Mobile: fill the screen under admin chrome for an iMessage-like thread.
-      // Fixed height + overflow hidden so long histories scroll inside, not the page.
-      height: isWide ? "min(78vh, 820px)" : "calc(100dvh - 132px)",
-      maxHeight: isWide ? "min(78vh, 820px)" : "calc(100dvh - 132px)",
+      // Fill leftover Shell height so the composer stays pinned. History
+      // scrolls inside; do not guess 100dvh minus chrome.
+      flex: 1,
+      height: "100%",
+      maxHeight: "none",
       background: "#fff",
       border: `1.5px solid ${T.border}`,
       borderRadius: 16,
@@ -694,7 +986,7 @@ export function AdminMessages({
             flex: 1,
             minHeight: 0,
             overflow: "hidden",
-            padding: "10px 12px 12px",
+            padding: "10px 12px 4px",
             display: "flex",
             flexDirection: "column",
           }}
@@ -722,6 +1014,10 @@ export function AdminMessages({
                   onDelete={removeChannel}
                   onReact={reactChannel}
                   onMarkRead={markChannelRead}
+                  onLoadEarlier={loadEarlierChannel}
+                  onEnsureMessage={ensureChannelMessage}
+                  hasEarlier={!!channelHasEarlier[active.id]}
+                  focusMessageId={active.type === "channel" && startChannel === active.id ? focusId : ""}
                   canModerate
                   allowVoiceMemo
                   enableReply
@@ -738,9 +1034,14 @@ export function AdminMessages({
                     </div>
                   ) : null}
                   hideComposer={!!activeChannel?.conversation?.read_only}
-                  emptyState="No group messages yet."
+                  emptyState={
+                    channelMessages[active.id]
+                      ? "No group messages yet."
+                      : "Loading the group…"
+                  }
                   showPushPrompt
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+                  onComposerFocusChange={onComposerFocusChange}
                   compact
                 />
               </ErrorBoundary>
@@ -768,6 +1069,10 @@ export function AdminMessages({
                   onDelete={removeDm}
                   onReact={reactDm}
                   onMarkRead={dmLoadedClientId === active.id ? markDmRead : undefined}
+                  onLoadEarlier={loadEarlierDm}
+                  onEnsureMessage={ensureDmMessage}
+                  hasEarlier={dmLoadedClientId === active.id && dmHasEarlier}
+                  focusMessageId={!startChannel && startClient === active.id ? focusId : ""}
                   showReadReceipts
                   allowVoiceMemo
                   enableReply
@@ -813,6 +1118,7 @@ export function AdminMessages({
                     </div>
                   ) : null}
                   onSavePushSubscription={(sub) => db.savePushSubscription(sub)}
+                  onComposerFocusChange={onComposerFocusChange}
                   compact
                 />
               </ErrorBoundary>
@@ -824,16 +1130,26 @@ export function AdminMessages({
   );
 
   return (
-    <div>
+    <div
+      data-admin-messages
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       {(!active || isWide) && (
-        <>
+        <div style={{ flexShrink: 0 }}>
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 28, margin: "4px 0 6px" }}>Messages</h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px", lineHeight: 1.5 }}>
             Reply to one mama, or open a group chat. To text many mamas the same note at once, use Announcements.
           </p>
-        </>
+        </div>
       )}
-      {error && <div style={{ fontSize: 13, color: T.amber, marginBottom: 10 }}>{error}</div>}
+      {error && <div style={{ fontSize: 13, color: T.amber, marginBottom: 10, flexShrink: 0 }}>{error}</div>}
 
       <div
         data-admin-messages-grid
@@ -841,6 +1157,8 @@ export function AdminMessages({
         display: "grid",
         width: "100%",
         minWidth: 0,
+        flex: 1,
+        minHeight: 0,
         gridTemplateColumns: isWide && showInbox && showThread
           ? "minmax(220px, 280px) minmax(0, 1fr)"
           : "minmax(0, 1fr)",
@@ -871,14 +1189,16 @@ function SectionLabel({ children }) {
   );
 }
 
-function InboxRow({
+export function InboxRow({
   title,
   subtitle,
+  timestamp = "",
   unread = 0,
   unreadAsDot = false,
   active = false,
   onClick,
 }) {
+  const stamp = formatInboxTimestamp(timestamp);
   return (
     <button
       type="button"
@@ -898,36 +1218,51 @@ function InboxRow({
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-        <span style={{ fontWeight: 700, fontSize: 15, minWidth: 0 }}>
+        <span style={{
+          fontWeight: 700,
+          fontSize: 15,
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+        >
           {title}
         </span>
-        {unread > 0 && (
-          unreadAsDot ? (
-            <span style={{
-              width: 9,
-              height: 9,
-              borderRadius: 99,
-              background: T.accent,
-              flexShrink: 0,
-            }}
-            />
-          ) : (
-            <span style={{
-              background: T.accent,
-              color: "#fff",
-              fontSize: 11,
-              fontWeight: 700,
-              borderRadius: 99,
-              padding: "2px 7px",
-              minWidth: 18,
-              textAlign: "center",
-              flexShrink: 0,
-            }}
-            >
-              {unread > 9 ? "9+" : unread}
-            </span>
-          )
-        )}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {stamp ? (
+            <time dateTime={timestamp} style={{ fontSize: 12.5, color: T.inkSoft, fontWeight: 500 }}>
+              {stamp}
+            </time>
+          ) : null}
+          {unread > 0 && (
+            unreadAsDot ? (
+              <span style={{
+                width: 9,
+                height: 9,
+                borderRadius: 99,
+                background: T.accent,
+                flexShrink: 0,
+              }}
+              />
+            ) : (
+              <span style={{
+                background: T.accent,
+                color: "#fff",
+                fontSize: 11,
+                fontWeight: 700,
+                borderRadius: 99,
+                padding: "2px 7px",
+                minWidth: 18,
+                textAlign: "center",
+                flexShrink: 0,
+              }}
+              >
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )
+          )}
+        </span>
       </div>
       <div style={{
         fontSize: 13,

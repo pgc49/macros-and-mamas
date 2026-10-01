@@ -1,10 +1,25 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card } from "../components/ui";
 import { MessagesThread } from "../components/MessagesThread";
 import { db, fullName } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { mergeMessagesById } from "../lib/messageOrdering";
+import {
+  applyReactionToMessages,
+  earlierCursor,
+  MESSAGE_PAGE_SIZE,
+  pageHasMore,
+} from "../lib/messageChannels";
+import {
+  applyMessageChange,
+  applyReactionEvent,
+} from "../lib/realtimeMessageApply";
+import {
+  restoreAndResignMessageWindow,
+  writeMessageWindow,
+} from "../lib/messageWindowCache";
+
 
 /**
  * Per-client Messages on the admin client detail page.
@@ -13,8 +28,12 @@ import { mergeMessagesById } from "../lib/messageOrdering";
 export function AdminClientMessages({ client, adminUserId, onActivity }) {
   const clientId = client?.id;
   const [messages, setMessages] = useState([]);
-  const [busy, setBusy] = useState(false);
+  const [hasEarlier, setHasEarlier] = useState(false);
   const [error, setError] = useState("");
+  const messagesRef = useRef(messages);
+  const hasEarlierRef = useRef(hasEarlier);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { hasEarlierRef.current = hasEarlier; }, [hasEarlier]);
 
   const name = fullName(client) || client?.name || "her";
   const first = String(name).trim().split(/\s+/)[0] || "her";
@@ -23,7 +42,8 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
     if (!clientId) return;
     try {
       const list = await db.loadMessages(clientId);
-      setMessages(list);
+      setMessages((current) => mergeMessagesById(current, list));
+      setHasEarlier(pageHasMore(list, MESSAGE_PAGE_SIZE));
     } catch (e) {
       console.error(e);
       setError(e.message || "Couldn’t load messages.");
@@ -33,6 +53,27 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!clientId || !adminUserId) return undefined;
+    let cancelled = false;
+    restoreAndResignMessageWindow(
+      `dm:${clientId}:${adminUserId}`,
+      (row) => db.hydrateDmMessageRow(row),
+    ).then((cached) => {
+      if (cancelled || !cached.length) return;
+      setMessages((current) => mergeMessagesById(cached, current));
+    });
+    return () => { cancelled = true; };
+  }, [adminUserId, clientId]);
+
+  useEffect(() => {
+    if (!clientId || !adminUserId || !messages.length) return undefined;
+    const timer = window.setTimeout(() => {
+      writeMessageWindow(`dm:${clientId}:${adminUserId}`, messages);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [adminUserId, clientId, messages]);
 
   useEffect(() => {
     if (!clientId) return undefined;
@@ -46,7 +87,16 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           table: "messages",
           filter: `client_id=eq.${clientId}`,
         },
-        () => { refresh(); },
+        (payload) => {
+          setMessages((list) => applyMessageChange(list, payload));
+          const row = payload?.new;
+          if (row && (payload.eventType === "INSERT" || payload.eventType === "UPDATE") && !row.deleted_at) {
+            db.hydrateDmMessageRow(row).then((hydrated) => {
+              if (!hydrated) return;
+              setMessages((list) => mergeMessagesById(list, [hydrated]));
+            }).catch(() => {});
+          }
+        },
       )
       .on(
         "postgres_changes",
@@ -55,17 +105,39 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           schema: "public",
           table: "message_reactions",
         },
-        () => { refresh(); },
+        (payload) => {
+          setMessages((list) => applyReactionEvent(list, payload, adminUserId));
+        },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [clientId, refresh]);
+  }, [clientId, adminUserId]);
+
+  const loadEarlier = useCallback(async () => {
+    const before = earlierCursor(messagesRef.current);
+    if (!clientId || !before) return;
+    const older = await db.loadMessages(clientId, { before });
+    setMessages((list) => mergeMessagesById(older, list));
+    setHasEarlier(pageHasMore(older, MESSAGE_PAGE_SIZE));
+  }, [clientId]);
+
+  const ensureMessage = useCallback(async (messageId) => {
+    let guard = 0;
+    while (guard < 24) {
+      if ((messagesRef.current || []).some((row) => String(row?.id || "") === String(messageId || ""))) {
+        return true;
+      }
+      if (!hasEarlierRef.current) break;
+      await loadEarlier();
+      guard += 1;
+    }
+    return (messagesRef.current || []).some((row) => String(row?.id || "") === String(messageId || ""));
+  }, [loadEarlier]);
 
   const send = async (body, file = null, opts = {}) => {
     if (!clientId) return;
-    setBusy(true);
     setError("");
     try {
       const row = await db.sendMessage({
@@ -81,8 +153,6 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
       console.error(e);
       setError(e.message || "Couldn’t send.");
       throw e;
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -99,8 +169,8 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
   };
 
   const react = async (messageId, emoji) => {
+    setMessages((list) => applyReactionToMessages(list, messageId, emoji, adminUserId));
     await db.toggleDmReaction(messageId, emoji);
-    await refresh();
   };
 
   const markRead = async () => {
@@ -139,12 +209,14 @@ export function AdminClientMessages({ client, adminUserId, onActivity }) {
           senderNameById={client?.id ? { [client.id]: first } : null}
           threadClientId={clientId}
           showSenderNames
-          busy={busy}
           onSend={send}
           onEdit={edit}
           onDelete={remove}
           onReact={react}
           onMarkRead={markRead}
+          onLoadEarlier={loadEarlier}
+          onEnsureMessage={ensureMessage}
+          hasEarlier={hasEarlier}
           showReadReceipts
           allowVoiceMemo
           enableReply

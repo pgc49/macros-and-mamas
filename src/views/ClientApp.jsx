@@ -46,7 +46,14 @@ import { db } from "../db/db";
 import { unmatchedCoachPencils } from "../utils/coachBudget";
 import { rangeTotalsWithPencils } from "../utils/coachPencil";
 import { COACH_COPY } from "../content/coachVoice";
+import { useAfterPaint } from "../lib/useAfterPaint";
 import { useEffect, useMemo, useState } from "react";
+
+/** Mount children after the first paint so Today can scroll immediately. */
+function AfterFirstPaint({ children }) {
+  const ready = useAfterPaint();
+  return ready ? children : null;
+}
 
 /** Meals-tab section pill. Text and padding scale so all four hold one phone row. */
 function MealsSectionChip({ active, onClick, children }) {
@@ -133,6 +140,10 @@ export function ClientApp({
   const [fitsRemainingOnly, setFitsRemainingOnly] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [myMealsAddOpen, setMyMealsAddOpen] = useState(false);
+  const [keepToday, setKeepToday] = useState(tab === "today");
+  useEffect(() => {
+    if (tab === "today") setKeepToday(true);
+  }, [tab]);
   const personalized = mealPlanMode === "personalized" && publishedPlan?.days?.length;
   const flatPersonalized = personalized
     ? publishedPlan.days.flatMap((d) => (d.meals || []).map((m) => mealToCard(m)))
@@ -315,8 +326,12 @@ export function ClientApp({
       // above the tab bar instead of scrolling with the conversation.
       lockContentScroll={tab === "messages" || tab === "coach"}
     >
-      {tab === "today" && macros && (
-        <>
+      {(tab === "today" || keepToday) && macros && (
+        <div
+          data-tab-panel="today"
+          hidden={tab !== "today"}
+          inert={tab !== "today"}
+        >
           <h2 style={{ fontFamily: FD, fontWeight: 400, fontSize: 26, margin: "6px 0 2px" }}>
             {profile.name ? `Hi ${profile.name}.` : "Your ranges."}
           </h2>
@@ -455,6 +470,7 @@ export function ClientApp({
             onClearPencil={onClearCoachPencil}
           />
 
+          <AfterFirstPaint>
           <WaterLogCard
             date={mealLogDate || todayLog?.date}
             goalOz={waterOz}
@@ -533,7 +549,8 @@ export function ClientApp({
             </div>
           </Card>
           <TechHelpFooter />
-        </>
+          </AfterFirstPaint>
+        </div>
       )}
 
       {tab === "meals" && (

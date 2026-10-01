@@ -1,6 +1,6 @@
 begin;
 
-select plan(11);
+select plan(13);
 
 select has_function(
   'public',
@@ -21,6 +21,20 @@ select has_index(
   'conversation_messages',
   'conversation_messages_conversation_created_id_idx',
   'channel ordering index exists'
+);
+
+select has_index(
+  'public',
+  'conversation_messages',
+  'conversation_messages_live_created_id_idx',
+  'live channel paging / unread-dot index exists'
+);
+
+select has_index(
+  'public',
+  'messages',
+  'messages_client_unread_live_idx',
+  'live DM unread index exists'
 );
 
 select ok(

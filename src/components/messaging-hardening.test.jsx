@@ -12,6 +12,7 @@ import {
 import { ErrorBoundary } from "./ErrorBoundary";
 import { MessagesThread } from "./MessagesThread";
 import { MESSAGE_HOLD_MS } from "../lib/messageSelect";
+import { clearAllPendingSends } from "../lib/pendingSends";
 
 vi.mock("@sentry/react", () => ({
   captureException: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@sentry/react", () => ({
 
 afterEach(() => {
   cleanup();
+  clearAllPendingSends();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -126,7 +128,10 @@ describe("messaging crash containment", () => {
     );
     await waitFor(() => expect(onMarkRead).toHaveBeenCalledTimes(1));
 
-    const nextWindow = [...firstWindow.slice(1), message("m-100", 59)];
+    const nextWindow = [...firstWindow.slice(1), {
+      ...message("m-100", 59),
+      created_at: "2026-08-10T11:00:00.000Z",
+    }];
     view.rerender(
       <MessagesThread {...threadProps({ messages: nextWindow, onMarkRead })} />,
     );
@@ -170,6 +175,42 @@ describe("messaging crash containment", () => {
     expect(view.container.querySelector("[data-message-composer]").style.flexShrink).toBe("0");
   });
 
+  it("does not mark read after the reader scrolls away until Jump to latest", async () => {
+    const onMarkRead = vi.fn();
+    const first = [message("m-1", 1)];
+    const view = render(
+      <MessagesThread {...threadProps({ messages: first, onMarkRead })} />,
+    );
+    await waitFor(() => expect(onMarkRead).toHaveBeenCalledTimes(1));
+
+    const list = view.container.querySelector("[data-message-list]");
+    Object.defineProperty(list, "scrollHeight", { configurable: true, value: 2000 });
+    Object.defineProperty(list, "clientHeight", { configurable: true, value: 400 });
+    list.scrollTop = 0;
+    fireEvent.scroll(list);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Jump to latest message" })).toBeTruthy();
+    });
+
+    view.rerender(
+      <MessagesThread
+        {...threadProps({
+          messages: [...first, message("m-2", 2)],
+          onMarkRead,
+        })}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "1 new messages" })).toBeTruthy();
+    });
+    expect(onMarkRead).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "1 new messages" }));
+    await waitFor(() => expect(onMarkRead).toHaveBeenCalledTimes(2));
+  });
+
   it("contains synchronous mark-read failures", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     render(
@@ -199,9 +240,11 @@ describe("messaging crash containment", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
-    await screen.findByDisplayValue("Send once");
+    const retry = await screen.findByRole("button", { name: "Not sent — tap to retry" });
+    expect(screen.getByText("Send once")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Write a message…").value).toBe("");
 
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(retry);
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
 
     const firstKey = onSend.mock.calls[0][2].clientMessageId;
@@ -234,20 +277,57 @@ describe("messaging crash containment", () => {
         threadKey="dm:mama-ambiguous"
       />,
     );
-    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
-      target: { value: "Original payload" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Not sent — tap to retry" }));
     await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(1));
     expect(remountSend.mock.calls[0][2].clientMessageId).toBe(originalKey);
 
-    await screen.findByDisplayValue("Original payload");
     fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
       target: { value: "Changed payload" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(remountSend).toHaveBeenCalledTimes(2));
     expect(remountSend.mock.calls[1][2].clientMessageId).not.toBe(originalKey);
+  });
+
+  it("paints a pending bubble before the send resolves", async () => {
+    let settle;
+    const onSend = vi.fn(() => new Promise((resolve) => { settle = resolve; }));
+    render(<MessagesThread {...threadProps({ onSend, selfId: "admin-1" })} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Instant" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Instant")).toBeTruthy();
+    expect(screen.getByText("Sending…")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Write a message…").value).toBe("");
+    expect(onSend).toHaveBeenCalledTimes(1);
+
+    settle({});
+    await waitFor(() => expect(screen.getByText("Instant")).toBeTruthy());
+  });
+
+  it("lets a second send go out while the first is still in flight", async () => {
+    const holds = [];
+    const onSend = vi.fn(() => new Promise((resolve) => { holds.push(resolve); }));
+    render(<MessagesThread {...threadProps({ onSend, selfId: "admin-1" })} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "First" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.change(screen.getByPlaceholderText("Write a message…"), {
+      target: { value: "Second" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("First")).toBeTruthy();
+    expect(screen.getByText("Second")).toBeTruthy();
+    expect(onSend.mock.calls[0][2].clientMessageId).not.toBe(onSend.mock.calls[1][2].clientMessageId);
+
+    holds.forEach((resolve) => resolve({}));
   });
 
   it("shares an in-flight send across remounted thread instances", async () => {
@@ -498,6 +578,60 @@ describe("messaging crash containment", () => {
     fireEvent.mouseDown(bubble, { button: 0, clientX: 10, clientY: 20 });
     vi.advanceTimersByTime(MESSAGE_HOLD_MS + 50);
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
+  it("opens photos in an overlay instead of a new tab", () => {
+    render(
+      <MessagesThread
+        {...threadProps({
+          messages: [{
+            id: "photo-1",
+            sender_id: "mama-1",
+            body: "",
+            attachment_path: "aug/photo.jpg",
+            attachment_name: "plate.jpg",
+            attachment_mime: "image/jpeg",
+            attachmentUrl: "https://example.com/photo.jpg",
+            created_at: "2026-08-10T10:00:00.000Z",
+            reactions: [],
+          }, {
+            id: "pdf-1",
+            sender_id: "mama-1",
+            body: "",
+            attachment_path: "aug/labs.pdf",
+            attachment_name: "labs.pdf",
+            attachment_mime: "application/pdf",
+            attachmentUrl: "https://example.com/labs.pdf",
+            created_at: "2026-08-10T10:01:00.000Z",
+            reactions: [],
+          }],
+        })}
+      />,
+    );
+    expect(document.querySelector('a[target="_blank"] img')).toBeNull();
+    expect(screen.getByRole("link", { name: "labs.pdf" }).getAttribute("target")).toBe("_blank");
+    fireEvent.click(screen.getByRole("button", { name: "View photo" }));
+    expect(screen.getByRole("dialog", { name: "Photo" })).toBeTruthy();
+    expect(screen.getByTestId("photo-viewer-image").getAttribute("src")).toBe("https://example.com/photo.jpg");
+    fireEvent.click(screen.getByRole("button", { name: "Close photo" }));
+    expect(screen.queryByRole("dialog", { name: "Photo" })).toBeNull();
+  });
+
+  it("windows a 120-row thread instead of mounting every bubble", () => {
+    const messages = Array.from({ length: 120 }, (_, i) => message(`m-${i}`, i % 60));
+    render(<MessagesThread {...threadProps({ messages, selfId: "mama-1" })} />);
+    const bubbles = document.querySelectorAll("[data-msg-id]");
+    expect(bubbles.length).toBeGreaterThan(8);
+    expect(bubbles.length).toBeLessThan(80);
+    expect(bubbles.length).toBeLessThan(messages.length);
+    expect(document.querySelector("[data-virt-top], [data-virt-bottom]")).toBeTruthy();
+  });
+
+  it("keeps a one-page thread fully mounted so scroll does not remount photos", () => {
+    const messages = Array.from({ length: 40 }, (_, i) => message(`m-${i}`, i % 60));
+    render(<MessagesThread {...threadProps({ messages, selfId: "mama-1" })} />);
+    expect(document.querySelectorAll("[data-msg-id]").length).toBe(40);
+    expect(document.querySelector("[data-virt-top], [data-virt-bottom]")).toBeNull();
   });
 });
 

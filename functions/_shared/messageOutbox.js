@@ -52,6 +52,63 @@ export async function finishNotificationJob(env, job, { success, error = "" }) {
   return rows[0];
 }
 
+export async function listDeliveredProfileIds(env, messageType, messageId) {
+  const { base, key } = config(env);
+  if (!base || !key || !messageType || !messageId) return new Set();
+  const resp = await fetch(
+    `${base}/rest/v1/message_notification_deliveries`
+      + `?message_type=eq.${encodeURIComponent(messageType)}`
+      + `&message_id=eq.${encodeURIComponent(messageId)}`
+      + "&select=profile_id",
+    { headers: headers(key) },
+  );
+  if (!resp.ok) {
+    console.warn("notification deliveries lookup failed", resp.status);
+    return new Set();
+  }
+  const rows = await resp.json().catch(() => []);
+  return new Set((Array.isArray(rows) ? rows : []).map((row) => row.profile_id).filter(Boolean));
+}
+
+export async function reserveNotificationDelivery(env, messageType, messageId, profileId) {
+  const { base, key } = config(env);
+  if (!base || !key || !messageType || !messageId || !profileId) {
+    throw new Error("missing delivery reservation");
+  }
+  const resp = await fetch(`${base}/rest/v1/rpc/reserve_message_notification_delivery`, {
+    method: "POST",
+    headers: headers(key),
+    body: JSON.stringify({
+      p_message_type: messageType,
+      p_message_id: messageId,
+      p_profile_id: profileId,
+    }),
+  });
+  if (!resp.ok) {
+    throw new Error(`delivery reserve failed (${resp.status})`);
+  }
+  return (await resp.json()) === true;
+}
+
+export async function releaseNotificationDelivery(env, messageType, messageId, profileId) {
+  const { base, key } = config(env);
+  if (!base || !key || !messageType || !messageId || !profileId) return false;
+  const resp = await fetch(`${base}/rest/v1/rpc/release_message_notification_delivery`, {
+    method: "POST",
+    headers: headers(key),
+    body: JSON.stringify({
+      p_message_type: messageType,
+      p_message_id: messageId,
+      p_profile_id: profileId,
+    }),
+  });
+  if (!resp.ok) {
+    console.warn("notification delivery release failed", resp.status);
+    return false;
+  }
+  return (await resp.json()) === true;
+}
+
 export async function listDueNotificationJobs(env, limit = 20) {
   const { base, key } = config(env);
   if (!base || !key) throw new Error("missing outbox configuration");

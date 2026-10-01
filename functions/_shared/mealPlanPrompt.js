@@ -1,4 +1,5 @@
 import { CALLIE_RECIPES } from "./callieRecipes.js";
+import { buildClientLifeStageBlock } from "./clientLifeStage.js";
 import { buildCustomMealsBlock } from "./customMealsPrompt.js";
 import { buildDietSafetyBlock, dietPromptLabel, proteinGapHint } from "./foodPrefs.js";
 
@@ -77,8 +78,9 @@ ${previousDigest || "(no prior digest)"}
 `
       : "";
 
-  return `You are Callie's meal-planning assistant for Macros and Mamas — a postpartum macro coaching program.
+  return `You are Callie's meal-planning assistant for Macros and Mamas.
 Build ONE personalized 7-day meal plan for Callie to REVIEW (draft only — not client-facing yet).
+Read her season before any personal comment — never assume she is postpartum.
 
 ## #1 job — every day MUST land inside her ranges
 Showing a day outside her bands is a failed plan. Creativity is secondary.
@@ -107,6 +109,8 @@ Aim for mid-band on a typical day (not the floor). Example: if protein is ${pLo}
 A day like 1610 cal vs ${calLo}–${calHi}, or 34g fat vs ${fLo}–${fHi}, is unacceptable — keep adjusting portions until it fits.
 
 ${dietSafety}
+
+${buildClientLifeStageBlock(profile)}
 
 ## Macro accuracy — non-negotiable
 1. **No invented macros.** Meal cal/P/C/F = sum of listed ingredient amounts.
