@@ -19,7 +19,7 @@ import {
 } from "./coachBudget.js";
 import { buildCoachCard, pickScale, rankBankCards, proteinOverNote } from "./coachRank.js";
 import { buildCoachAnswer, resolveCoachSlot } from "./coachSession.js";
-import { coachNow, guessSlotFromTime } from "./mealSlots.js";
+import { coachSlotFromTime } from "./mealSlots.js";
 import { coachLogFromCard, coachPlanFieldsFromCard, unscaleRankedCard } from "./coachScale.js";
 import {
   coachPrefsFromProfile,
@@ -37,9 +37,15 @@ import { COACH_COPY } from "../content/coachVoice.js";
 const MACROS = { cal: 1750, protein: 140, carbs: 160, fat: 55 };
 const BANDS = targetBands(MACROS);
 
-/** Fixed clocks. Which meals are still ahead of her depends on the time. */
-const MORNING = new Date(2026, 8, 4, 8, 0);
-const EVENING = new Date(2026, 8, 4, 18, 30);
+/**
+ * Pacific wall clock as absolute instants. Host timezone must not matter:
+ * 8:00am PDT, 1:00pm PDT, 3:00pm PDT, 6:30pm PDT, and the lived 9:07pm PDT.
+ */
+const MORNING = new Date("2026-09-04T15:00:00.000Z");
+const ONE_PM = new Date("2026-09-04T20:00:00.000Z");
+const AFTERNOON = new Date("2026-09-04T22:00:00.000Z");
+const EVENING = new Date("2026-09-05T01:30:00.000Z");
+const LIVED_EVENING = new Date("2026-10-01T04:07:00.000Z");
 
 function budgetFor(totals, opts = {}) {
   return attachDayHighs(
@@ -260,27 +266,27 @@ describe("slot order", () => {
   });
 
   it("after lunch in the afternoon the next plate is dinner, not a snack", () => {
-    const afternoon = new Date(2026, 8, 4, 15, 0);
     expect(nextCoachSlot({
-      now: afternoon,
+      now: AFTERNOON,
       entries: [{ slot: "lunch" }],
     })).toBe("dinner");
   });
 
-  it("reads a UTC browser at 8:43pm Pacific as dinner", () => {
-    const instant = new Date("2026-10-01T03:43:00.000Z");
-    const clock = coachNow(undefined, { timeZone: "UTC", instant });
-    expect(guessSlotFromTime(clock)).toBe("dinner");
+  it("at 9:07pm PDT, lunch logged and breakfast empty is dinner on any host zone", () => {
+    expect(coachSlotFromTime(LIVED_EVENING)).toBe("dinner");
     expect(nextCoachSlot({
-      now: clock,
+      now: LIVED_EVENING,
       entries: [{ slot: "lunch", name: "Salad" }],
     })).toBe("dinner");
     expect(resolveCoachSlot({
-      now: clock,
+      now: LIVED_EVENING,
       entries: [{ slot: "lunch", name: "Salad" }],
     })).toBe("dinner");
-    expect(coachNow(EVENING, { timeZone: "UTC", instant })).toBe(EVENING);
-    expect(coachNow(undefined, { timeZone: "America/Los_Angeles", instant })).toBe(instant);
+    expect(coachSlotFromTime(MORNING)).toBe("breakfast");
+    expect(nextCoachSlot({
+      now: MORNING,
+      entries: [{ slot: "lunch", name: "Salad" }],
+    })).toBe("breakfast");
   });
 
   it("does not rewind to breakfast after dinner is already logged", () => {
@@ -302,11 +308,11 @@ describe("slot order", () => {
 
   it("treats a meal the clock went past and she never logged as skipped", () => {
     expect(laterSlotsAfter("dinner", new Set(), EVENING)).toEqual([]);
-    expect(laterSlotsAfter("lunch", new Set(), new Date(2026, 8, 4, 13, 0))).toEqual(["dinner"]);
+    expect(laterSlotsAfter("lunch", new Set(), ONE_PM)).toEqual(["dinner"]);
   });
 
   it("names the skipped meal so the copy can say so, instead of folding it in quietly", () => {
-    const onePm = new Date(2026, 8, 4, 13, 0);
+    const onePm = ONE_PM;
     expect(skippedSlotsBefore("lunch", new Set(), onePm)).toEqual(["breakfast"]);
     expect(skippedSlotsBefore("dinner", new Set(), EVENING)).toEqual(["breakfast", "lunch"]);
     expect(skippedSlotsBefore("lunch", new Set(["breakfast"]), onePm)).toEqual([]);
@@ -315,10 +321,9 @@ describe("slot order", () => {
   });
 
   it("keeps a meal she hasn't eaten out of a snack's budget", () => {
-    const afternoon = new Date(2026, 8, 4, 15, 0);
-    expect(laterSlotsAfter("snack", new Set(), afternoon)).toEqual(["lunch", "dinner"]);
-    expect(laterSlotsAfter("snack", new Set(["lunch"]), afternoon)).toEqual(["dinner"]);
-    expect(laterSlotsAfter("snack", new Set(["breakfast", "lunch", "dinner"]), afternoon)).toEqual([]);
+    expect(laterSlotsAfter("snack", new Set(), AFTERNOON)).toEqual(["lunch", "dinner"]);
+    expect(laterSlotsAfter("snack", new Set(["lunch"]), AFTERNOON)).toEqual(["dinner"]);
+    expect(laterSlotsAfter("snack", new Set(["breakfast", "lunch", "dinner"]), AFTERNOON)).toEqual([]);
   });
 });
 

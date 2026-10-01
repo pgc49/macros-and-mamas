@@ -9,7 +9,7 @@ import { PANTRY_ITEMS } from "../content/pantry.js";
 import { withRecipeDetail } from "../content/recipeDetails.js";
 import { targetBands } from "./weekPlan.js";
 import { localDateIso } from "./dates.js";
-import { guessSlotFromTime, normalizeSlot } from "./mealSlots.js";
+import { coachSlotFromTime, normalizeSlot } from "./mealSlots.js";
 import {
   attachDayHighs,
   coachPencilForSlot,
@@ -66,7 +66,7 @@ export function resolveCoachSlot({ entries = [], plannedMeals = [], now = new Da
   if (asked) return asked;
   // A passed breakfast is not the fallback once the clock has moved on.
   // `nextCoachSlot` already walks only what is still ahead.
-  return nextCoachSlot({ now, entries, plannedMeals }) || guessSlotFromTime(now);
+  return nextCoachSlot({ now, entries, plannedMeals }) || coachSlotFromTime(now);
 }
 
 /**

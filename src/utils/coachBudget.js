@@ -11,7 +11,7 @@
  */
 
 import { REMAINING_OVER_SLACK, mealMacros } from "./eatingOutImpact.js";
-import { MEAL_SLOTS, guessSlotFromTime, normalizeSlot } from "./mealSlots.js";
+import { MEAL_SLOTS, coachSlotFromTime, normalizeSlot } from "./mealSlots.js";
 import { namesMatch } from "./coachPrefs.js";
 import { scaledMealMacros } from "./weekPlan.js";
 
@@ -51,7 +51,7 @@ export function loggedSlotsFromEntries(entries) {
  * logged was skipped, and holding room for it would shrink every meal left.
  */
 export function laterSlotsAfter(selected, loggedSlots = new Set(), now = new Date()) {
-  const clock = guessSlotFromTime(now);
+  const clock = coachSlotFromTime(now);
   const nowIdx = Math.max(0, MAIN_SLOTS.indexOf(clock === "snack" ? "lunch" : clock));
   // A snack has no place of its own in the order; the clock is all it has.
   const selectedIdx = selected === "snack" ? nowIdx - 1 : MAIN_SLOTS.indexOf(selected);
@@ -69,7 +69,7 @@ export function laterSlotsAfter(selected, loggedSlots = new Set(), now = new Dat
  * snack, and a larger dinner.
  */
 export function skippedSlotsBefore(selected, loggedSlots = new Set(), now = new Date()) {
-  const clock = guessSlotFromTime(now);
+  const clock = coachSlotFromTime(now);
   const nowIdx = Math.max(0, MAIN_SLOTS.indexOf(clock === "snack" ? "lunch" : clock));
   const selectedIdx = selected === "snack" ? nowIdx : MAIN_SLOTS.indexOf(selected);
   if (selectedIdx < 0) return [];
@@ -86,7 +86,7 @@ export function defaultCoachSlot({ now = new Date(), loggedSlots = new Set(), ig
     }
     return null;
   }
-  const guess = guessSlotFromTime(now);
+  const guess = coachSlotFromTime(now);
   if (guess === "snack") return "snack";
   const start = MAIN_SLOTS.indexOf(guess);
   for (let i = Math.max(0, start); i < MAIN_SLOTS.length; i += 1) {
@@ -150,7 +150,7 @@ export function nextCoachSlot({
   extraTaken = [],
 } = {}) {
   const taken = coachTakenSlots({ entries, plannedMeals, extraSlots: extraTaken });
-  const clock = guessSlotFromTime(now);
+  const clock = coachSlotFromTime(now);
   const ahead = SLOTS_FROM_CLOCK[clock] || SLOTS_FROM_CLOCK.dinner;
   for (const slot of ahead) {
     if (!taken.has(slot)) return slot;

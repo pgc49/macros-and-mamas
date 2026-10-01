@@ -36,32 +36,24 @@ export function normalizeSlot(raw) {
 }
 
 /**
- * Soft time-of-day guess (local clock).
+ * Soft time-of-day guess for a new log row (device local hours).
  * before 10:30 breakfast · 10:30–14:00 lunch · 14:00–17:00 snack · after dinner
+ *
+ * The coach door does not use this. Agent Chromium can report
+ * America/Los_Angeles from Intl while `getHours()` is still UTC morning.
  */
 export function guessSlotFromTime(date = new Date()) {
-  const mins = date.getHours() * 60 + date.getMinutes();
+  return slotFromClockMinutes(date.getHours() * 60 + date.getMinutes());
+}
+
+/** Callie's meal door. Sticky QA and the program clock are Pacific. */
+export const COACH_CLOCK_TZ = "America/Los_Angeles";
+
+function slotFromClockMinutes(mins) {
   if (mins < 10 * 60 + 30) return "breakfast";
   if (mins < 14 * 60) return "lunch";
   if (mins < 17 * 60) return "snack";
   return "dinner";
-}
-
-const UTC_ZONES = new Set(["UTC", "Etc/UTC", "Etc/GMT", "GMT"]);
-
-/** Callie's mamas and the sticky retest are on Pacific time. */
-export const COACH_FALLBACK_TZ = "America/Los_Angeles";
-
-export function deviceTimeZone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
-
-export function isUtcTimeZone(zone) {
-  return UTC_ZONES.has(zone);
 }
 
 /** Wall-clock fields of `instant` in `timeZone`. Hour 24 (some engines at midnight) is 0. */
@@ -91,31 +83,16 @@ export function wallClockParts(instant, timeZone) {
 }
 
 /**
- * A Date whose local getHours() match `timeZone`.
- * `guessSlotFromTime` reads local hours, so a UTC process has to be handed
- * Pacific hours as if they were local or 8:43pm PT stays "breakfast".
- */
-export function dateAtWallClock(instant, timeZone) {
-  const p = wallClockParts(instant, timeZone);
-  return new Date(p.year, p.month - 1, p.day, p.hour, p.minute, 0, 0);
-}
-
-/**
- * Clock for the meal door.
+ * Which meal the coach is standing in front of.
  *
- * A phone uses its own zone. 8:43pm in that zone is dinner, and `getHours`
- * already says so.
- *
- * Agent browsers and CI often leave the zone on UTC. 8:43pm Pacific is
- * 03:43 UTC, still before 10:30, so `nextCoachSlot` starts at breakfast and
- * an empty breakfast wins after lunch. When the zone is UTC, this returns
- * the same instant as Pacific wall time. Every other zone is her clock and
- * is not moved. An explicit `now` (a test, a named moment) is returned as-is.
+ * Always Pacific wall time, from `wallClockParts`, never `Date#getHours`.
+ * `41d358a` rewrote the Date only when Intl said UTC, then read local hours.
+ * On the sticky retest Intl already said America/Los_Angeles, so the rewrite
+ * did not run, and the browser's local hour was still breakfast at 9:07pm PDT.
  */
-export function coachNow(explicit, { timeZone = deviceTimeZone(), instant = new Date() } = {}) {
-  if (explicit instanceof Date && !Number.isNaN(explicit.getTime())) return explicit;
-  if (!isUtcTimeZone(timeZone)) return instant;
-  return dateAtWallClock(instant, COACH_FALLBACK_TZ);
+export function coachSlotFromTime(instant = new Date(), timeZone = COACH_CLOCK_TZ) {
+  const { hour, minute } = wallClockParts(instant, timeZone);
+  return slotFromClockMinutes(hour * 60 + minute);
 }
 
 /** Slot for a new log: prefer explicit, else guess. */

@@ -18,7 +18,6 @@ import {
 } from "../utils/coachSession";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
-import { coachNow } from "../utils/mealSlots";
 import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
@@ -89,9 +88,9 @@ export function CoachPanel({
   postCoach,
   now = null,
 }) {
-  // Captured once, unless the caller hands a clock (tests, the Today card).
-  // A fresh `coachNow()` every render would rebuild the answer on each paint.
-  const clockRef = useRef(now || coachNow());
+  // Captured once, unless the caller hands an instant (tests, the Today card).
+  // The slot is Pacific wall time of this instant, not Date#getHours.
+  const clockRef = useRef(now || new Date());
   if (now) clockRef.current = now;
   const clock = clockRef.current;
   const [thread, setThread] = useState([]);

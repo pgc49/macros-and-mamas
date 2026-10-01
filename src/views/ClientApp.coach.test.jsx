@@ -161,8 +161,8 @@ describe("where the coach shows up", () => {
     expect(askForSlotCopy("lunch")).toBe("Looking for a lunch idea?");
     expect(askForSlotCopy("dinner")).toBe("Looking for a dinner idea?");
     expect(askForSlotCopy("snack")).toBe("Looking for a snack idea?");
-    const evening = new Date(2026, 8, 4, 18, 30);
-    const morning = new Date(2026, 8, 4, 8, 0);
+    const evening = new Date("2026-10-01T04:07:00.000Z");
+    const morning = new Date("2026-09-04T15:00:00.000Z");
     expect(coachEntryHint({
       loggedSlots: new Set(["lunch"]),
       plannedMeals: [],
@@ -186,7 +186,7 @@ describe("where the coach shows up", () => {
   });
 
   it("after lunch at night the Today card asks for dinner", () => {
-    const evening = new Date(2026, 8, 4, 18, 30);
+    const evening = new Date("2026-10-01T04:07:00.000Z");
     const entries = [{ slot: "lunch", name: "Salad" }];
     const answer = buildCoachAnswer({
       macros: { protein: 140, carbs: 160, fat: 55, cal: 1750 },

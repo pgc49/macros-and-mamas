@@ -26,7 +26,6 @@ import { MessagesPanel } from "../components/MessagesPanel";
 import { CoachPanel } from "../components/CoachPanel";
 import { CoachEntry } from "../components/CoachEntry";
 import { buildCoachAnswer, coachIsAvailable } from "../utils/coachSession";
-import { coachNow } from "../utils/mealSlots";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals, targetBands } from "../utils/weekPlan";
 import {
@@ -217,9 +216,9 @@ export function ClientApp({
   const calProgress = formatRangeProgress(rangeTotals?.cal, calLo, calHi, " cal", rangeEatenWord);
   const anyOver = [pSt, cSt, fSt, calSt].includes("over");
   const coachReady = coachIsAvailable({ macros, mealLogDate: mealLogDate || todayLog?.date });
-  // One clock for the Today card and the Coach tab. On a UTC browser this is
-  // Pacific wall time, so 8:43pm PT is dinner. See `coachNow`.
-  const coachClock = useMemo(() => coachNow(), []);
+  // One instant for the Today card and the Coach tab. The door reads it as
+  // Pacific wall time (`coachSlotFromTime`), not the browser's local hour.
+  const coachClock = useMemo(() => new Date(), []);
   const coachAnswer = useMemo(
     () => (coachReady
       ? buildCoachAnswer({

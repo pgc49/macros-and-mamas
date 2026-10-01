@@ -2,7 +2,6 @@ import { T, F, FD } from "../theme/tokens";
 import { COACH_COPY, askForSlotCopy } from "../content/coachVoice";
 import { coachEntryHint } from "../utils/coachLines";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
-import { coachNow } from "../utils/mealSlots";
 
 /**
  * The way into the coach from Today. Says something true about her day rather
@@ -11,7 +10,7 @@ import { coachNow } from "../utils/mealSlots";
  */
 export function CoachEntry({ answer, entries = [], plannedMeals = [], onOpen, now = null }) {
   if (!answer?.budget) return null;
-  const clock = now || coachNow();
+  const clock = now || new Date();
   const next = nextCoachSlot({ entries, plannedMeals, now: clock });
   if (!next) return null;
   const logged = loggedSlotsFromEntries(entries);

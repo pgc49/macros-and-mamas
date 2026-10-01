@@ -167,7 +167,7 @@ describe("the coach answers on the device", () => {
   });
 
   it("opens on dinner after lunch when the clock is evening", async () => {
-    const evening = new Date(2026, 8, 4, 18, 30);
+    const evening = new Date("2026-10-01T04:07:00.000Z");
     renderPanel({
       now: evening,
       onLoadThread: async () => [],
