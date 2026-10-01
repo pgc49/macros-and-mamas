@@ -25,7 +25,7 @@ import {
 import { buildCoachCard, rankBankCards } from "./coachRank.js";
 import { coachPrefsFromProfile } from "./coachPrefs.js";
 import { budgetSentence, coachRead, leftLine, slotLeftRead } from "./coachLines.js";
-import { buildLiveMyMealsLookup, cardClaimsMyMeal, isLiveMyMeal } from "./coachMyMeals.js";
+import { bankMealNameSet, buildLiveMyMealsLookup, cardIsGoneCustom } from "./coachMyMeals.js";
 
 const HISTORY_DAYS = 28;
 
@@ -157,9 +157,9 @@ export function buildCoachAnswer({
   };
 }
 
-export function pruneStaleMyMealCards(cards = [], customMeals = []) {
+export function pruneStaleMyMealCards(cards = [], customMeals = [], bankNames = bankMealNameSet()) {
   const liveMyMeals = buildLiveMyMealsLookup(customMeals);
-  return (cards || []).filter((card) => !cardClaimsMyMeal(card) || isLiveMyMeal(card, liveMyMeals));
+  return (cards || []).filter((card) => !cardIsGoneCustom(card, liveMyMeals, bankNames));
 }
 
 /** Thread rows as she should see them now. Raw history stays; deleted customs do not. */

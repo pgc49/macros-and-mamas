@@ -10,6 +10,7 @@ import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from ".
 import { entriesForLogDate, hydrateTodayLog, sumLogTotals } from "./utils/mealLogState";
 import { resolveLogSlot } from "./utils/mealSlots";
 import { coachCardVia, coachLogFromCard, unscaleRankedCard } from "./utils/coachScale";
+import { nextCustomMeals } from "./utils/coachMyMeals";
 import { clearCoachPencil, removeCoachPencilMatchingLog, writeCoachPencil } from "./utils/coachPencil";
 import { stripPortionSuffix } from "./utils/coachPrefs";
 import { ingredientsToText } from "./utils/planMealShape";
@@ -482,10 +483,11 @@ export default function App() {
             if (!cancelled) setCustomGoals(s.customGoals || []);
             try {
               const customs = await db.loadCustomMeals();
-              if (!cancelled) setCustomMeals(customs);
+              if (!cancelled) {
+                setCustomMeals((current) => nextCustomMeals(current, customs));
+              }
             } catch (cErr) {
               console.warn("loadCustomMeals failed", cErr);
-              if (!cancelled) setCustomMeals([]);
             }
             try {
               const unread = await db.countUnreadMessages(user.id, user.id);
@@ -1194,6 +1196,7 @@ export default function App() {
   };
 
   const deleteCustomMeal = async (id) => {
+    if (!id) return;
     try {
       await db.deleteCustomMeal(id);
       setCustomMeals((list) => list.filter((m) => m.id !== id));

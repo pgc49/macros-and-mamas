@@ -3224,7 +3224,7 @@ export const db = {
     }
     if (error) {
       console.warn("loadCustomMeals failed", error);
-      return [];
+      return null;
     }
     return (data || []).map(mapCustomMeal);
   },

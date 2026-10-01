@@ -178,27 +178,81 @@ describe("the coach answers on the device", () => {
               servings: 1,
               reason: "Fits.",
             },
+            {
+              kind: "meal",
+              name: "Sheet Pan Chicken with Sweet Potato",
+              title: "Sheet Pan Chicken with Sweet Potato",
+              source: "new",
+              tag: "Built for what's left",
+              knowsYou: "Usually breakfast",
+              basedOn: "Sheet Pan Chicken with Sweet Potato",
+              cal: 440,
+              p: 45,
+              c: 35,
+              f: 14,
+              servings: 1,
+              reason: "Fits.",
+            },
+            {
+              kind: "meal",
+              name: "Sheet pan chicken",
+              title: "Sheet pan chicken",
+              source: "bank",
+              tag: "Callie's bank",
+              cal: 440,
+              p: 45,
+              c: 35,
+              f: 14,
+              servings: 1,
+              reason: "Fits.",
+            },
+            {
+              kind: "meal",
+              id: "sausage",
+              name: "Sausage, egg + whites scramble",
+              title: "Sausage, egg + whites scramble",
+              source: "my",
+              tag: "My meals",
+              cal: 420,
+              p: 36,
+              c: 20,
+              f: 18,
+              servings: 1,
+              reason: "Fits.",
+            },
           ],
         },
       },
     ]);
     const saved = [
       { id: "deleted-1", name: "Rosemary crackers", cal: 200, p: 8, c: 20, f: 8 },
+      { id: "sheet", name: "Sheet Pan Chicken with Sweet Potato", cal: 440, p: 45, c: 35, f: 14 },
       { id: "live-1", name: "Live custom meal", cal: 210, p: 22, c: 12, f: 9 },
+      { id: "sausage", name: "Sausage, egg + whites scramble", cal: 420, p: 36, c: 20, f: 18 },
     ];
+    const stillSaved = saved.filter((meal) => meal.id !== "sheet" && meal.id !== "deleted-1");
     const view = renderPanel({ onLoadThread, customMeals: saved });
     await screen.findByText("Rosemary crackers");
-    expect(screen.getByText("Live custom meal")).toBeTruthy();
+    expect(screen.getByText("Sheet Pan Chicken with Sweet Potato")).toBeTruthy();
+    expect(screen.getByText("Sheet pan chicken")).toBeTruthy();
+    expect(screen.getByText("Sausage, egg + whites scramble")).toBeTruthy();
 
     view.rerender(
       <CoachPanel {...panelProps({
         onLoadThread,
-        customMeals: [{ id: "live-1", name: "Live custom meal", cal: 210, p: 22, c: 12, f: 9 }],
+        customMeals: stillSaved,
       })}
       />,
     );
     expect(screen.queryByText("Rosemary crackers")).toBeNull();
+    expect(screen.queryByText("Sheet Pan Chicken with Sweet Potato")).toBeNull();
+    expect(screen.getByText("Sheet pan chicken")).toBeTruthy();
     expect(screen.getByText("Live custom meal")).toBeTruthy();
+    expect(screen.getByText("Sausage, egg + whites scramble")).toBeTruthy();
+    expect(stillSaved.map((meal) => meal.name)).toEqual([
+      "Live custom meal",
+      "Sausage, egg + whites scramble",
+    ]);
   });
 
   it("does not ask for another meal when the day is already logged", async () => {

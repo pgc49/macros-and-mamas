@@ -19,6 +19,7 @@ import {
 } from "./coachBudget.js";
 import { buildCoachCard, pickScale, rankBankCards, proteinOverNote } from "./coachRank.js";
 import { buildCoachAnswer, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
+import { nextCustomMeals } from "./coachMyMeals.js";
 import { coachSlotFromTime } from "./mealSlots.js";
 import { coachLogFromCard, coachPlanFieldsFromCard, unscaleRankedCard } from "./coachScale.js";
 import {
@@ -522,6 +523,57 @@ describe("ranking", () => {
       "Greek yogurt bowl",
     ]);
     expect(replayCoachMessages(messages, live)[0].body).toBe("Earlier answer.");
+  });
+
+  it("drops a deleted custom wearing any chip and keeps the live custom and the bank meal", () => {
+    const messages = [{
+      id: "m1",
+      body: "Earlier answer.",
+      cards: [
+        {
+          name: "Sheet Pan Chicken with Sweet Potato",
+          source: "new",
+          tag: "Built for what's left",
+          knowsYou: "Usually breakfast",
+          basedOn: "Sheet Pan Chicken with Sweet Potato",
+          slot: "breakfast",
+        },
+        {
+          id: "sausage",
+          name: "Sausage, egg + whites scramble",
+          source: "my",
+          tag: "My meals",
+          slot: "breakfast",
+        },
+        { name: "Sheet pan chicken", source: "bank", tag: "Callie's bank", slot: "dinner" },
+        { name: "Leftover Pasta", source: "new", tag: "Built for what's left", basedOn: null, slot: "dinner" },
+      ],
+    }];
+    const live = [{ id: "sausage", name: "Sausage, egg + whites scramble" }];
+    const snapshot = live.map((meal) => ({ ...meal }));
+    const shown = replayCoachMessages(messages, live);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Sausage, egg + whites scramble",
+      "Sheet pan chicken",
+      "Leftover Pasta",
+    ]);
+    expect(live).toEqual(snapshot);
+
+    const afterDelete = replayCoachMessages(messages, []);
+    expect(afterDelete[0].cards.map((card) => card.name)).toEqual([
+      "Sheet pan chicken",
+      "Leftover Pasta",
+    ]);
+  });
+
+  it("keeps the saved list when a custom meals fetch fails", () => {
+    const saved = [{ id: "sausage", name: "Sausage, egg + whites scramble" }];
+    expect(nextCustomMeals(saved, null)).toEqual(saved);
+    expect(nextCustomMeals(saved, undefined)).toEqual(saved);
+    expect(nextCustomMeals(saved, [])).toEqual([]);
+    expect(nextCustomMeals([], [{ id: "sausage", name: "Sausage, egg + whites scramble" }])).toEqual([
+      { id: "sausage", name: "Sausage, egg + whites scramble" },
+    ]);
   });
 
   it("never promotes history-only meal names into My meals", () => {
