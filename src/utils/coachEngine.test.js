@@ -17,7 +17,7 @@ import {
   resolveCoachShares,
   unmatchedCoachPencils,
 } from "./coachBudget.js";
-import { buildCoachCard, pickScale, rankBankCards, proteinOverNote } from "./coachRank.js";
+import { buildCoachCard, coachReason, pickScale, plateTiedReason, rankBankCards, proteinOverNote } from "./coachRank.js";
 import { buildCoachAnswer, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
 import { nextCustomMeals } from "./coachMyMeals.js";
 import { coachSlotFromTime } from "./mealSlots.js";
@@ -632,14 +632,35 @@ describe("ranking", () => {
     const tight = { ...budgetFor({ cal: 900, p: 90, c: 80, f: 25 }, { slot: "dinner" }), f: 4, pNeed: 20 };
     const card = buildCoachCard({ name: "Lean plate", cal: 300, p: 30, c: 20, f: 6 }, tight, { slot: "dinner" });
     expect(card.reason).not.toMatch(/leaves 0g/i);
-    expect(card.reason).toBe(COACH_COPY.reasonGets);
+    expect(card.reason).toBe("");
+    expect(card.reason).not.toBe(COACH_COPY.reasonGets);
+  });
+
+  it("says the fat or the protein still open, and stays quiet otherwise", () => {
+    const fatTight = { ...budgetFor({ cal: 900, p: 90, c: 80, f: 25 }, { slot: "dinner" }), f: 5, pNeed: 20 };
+    expect(coachReason({ cal: 300, p: 30, c: 10, f: 2 }, fatTight)).toBe(
+      `${COACH_COPY.reasonFatLeft} 3${COACH_COPY.reasonFatLeftTail}`,
+    );
+    const shy = { ...budgetFor({ cal: 900, p: 90, c: 80, f: 25 }, { slot: "dinner" }), f: 20, pNeed: 40 };
+    expect(coachReason({ cal: 300, p: 30, c: 20, f: 8 }, shy)).toBe(`10g ${COACH_COPY.reasonProteinOpenTail}`);
+    const roomy = budgetFor({ cal: 200, p: 20, c: 30, f: 8 }, { slot: "snack" });
+    expect(coachReason({ cal: 180, p: 8, c: 16, f: 4 }, roomy)).toBe("");
+    expect(plateTiedReason(COACH_COPY.reasonGets)).toBe("");
+    expect(plateTiedReason(COACH_COPY.reasonFits)).toBe("");
+    expect(plateTiedReason("Hits protein and leaves 8g fat.")).toBe(
+      `${COACH_COPY.reasonFatLeft} 8${COACH_COPY.reasonFatLeftTail}`,
+    );
+    expect(plateTiedReason("Most of your protein — 12g short, easy to pick up later.")).toBe(
+      `12g ${COACH_COPY.reasonProteinOpenTail}`,
+    );
   });
 
   it("dresses a built meal with the same fit check as a bank meal", () => {
     const card = buildCoachCard({ name: "Fridge scramble", cal: 380, p: 34, c: 18, f: 16 }, budget(), { slot: "dinner" });
     expect(card.name).toBe("Fridge scramble");
     expect(card.title).toContain("Fridge scramble");
-    expect(card.reason).toBeTruthy();
+    expect(plateTiedReason(card.reason)).not.toMatch(/hits protein and keeps fat in range/i);
+    expect(plateTiedReason(card.reason)).not.toMatch(/fits what's left/i);
     expect(buildCoachCard({ name: "Whole cake", cal: 3000, p: 20, c: 400, f: 150 }, budget(), {})).toBe(null);
   });
 });

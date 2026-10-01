@@ -190,30 +190,54 @@ export function proteinOverNote(meal, budget) {
   return null;
 }
 
+const STOCK_REASONS = [
+  COACH_COPY.reasonGets,
+  COACH_COPY.reasonFits,
+  COACH_COPY.reasonOver,
+].map((line) => line.toLowerCase());
+
+/**
+ * One clause about this plate, or silence.
+ *
+ * A line that could sit under any card ("Hits protein and keeps fat in range",
+ * "Fits what's left") is not a reason. Fat left and protein still open name
+ * this plate's gap. Everything else stays blank.
+ */
+export function plateTiedReason(reason) {
+  const text = String(reason || "").trim();
+  if (!text) return "";
+  if (STOCK_REASONS.includes(text.toLowerCase())) return "";
+  const leaves = text.match(/^(?:hits protein and )?leaves (\d+)g fat\.?$/i);
+  if (leaves) {
+    const n = Number(leaves[1]);
+    if (!(n > 0)) return "";
+    return `${COACH_COPY.reasonFatLeft} ${n}${COACH_COPY.reasonFatLeftTail}`;
+  }
+  const gap = text.match(/^(?:most of your protein — )?(\d+)g (?:short, easy to pick up later\.|of protein still open\.)$/i);
+  if (gap) return `${gap[1]}g ${COACH_COPY.reasonProteinOpenTail}`;
+  return text;
+}
+
 /**
  * The reason is not the place to restate the portion. The title already
  * carries "1.5 servings" when we scale up; saying it again underneath is
- * the same fact twice.
+ * the same fact twice. A stock macro line is worse: say nothing.
  */
 export function coachReason(meal, budget, { over = false } = {}) {
-  if (over) return COACH_COPY.reasonOver;
+  if (over) return "";
   const { p, f } = mealMacros(meal);
   const pNeed = budget?.pNeed || 0;
-  if (proteinClosesNeed(p, pNeed) && (budget?.f ?? 99) < 6) {
-    // "Leaves 0g fat" is a sentence that tells her nothing and reads like the
-    // meal only just scraped in. Say the plain thing instead.
-    const fatLeft = Math.round(Math.max(0, (budget?.f || 0) - f));
-    if (fatLeft > 0) return `${COACH_COPY.reasonFills} ${fatLeft}${COACH_COPY.reasonFillsTail}`;
-    return COACH_COPY.reasonGets;
+  const fatRoom = Number(budget?.f);
+  if (proteinClosesNeed(p, pNeed) && Number.isFinite(fatRoom) && fatRoom < 6) {
+    const fatLeft = Math.round(Math.max(0, fatRoom - f));
+    if (fatLeft > 0) return `${COACH_COPY.reasonFatLeft} ${fatLeft}${COACH_COPY.reasonFatLeftTail}`;
+    return "";
   }
-  if (proteinClosesNeed(p, pNeed)) return COACH_COPY.reasonGets;
-  if (pNeed > 0 && p / pNeed >= 0.7) {
-    // The gap, not a stock line. Three cards in a row all saying "add a yogurt
-    // later" is the tell of something with one sentence and three slots.
+  if (pNeed > 0 && !proteinClosesNeed(p, pNeed) && p / pNeed >= 0.7) {
     const gap = Math.max(1, Math.round(pNeed - p));
-    return `${COACH_COPY.reasonMost} ${gap}g ${COACH_COPY.reasonMostTail}`;
+    return `${gap}g ${COACH_COPY.reasonProteinOpenTail}`;
   }
-  return COACH_COPY.reasonFits;
+  return "";
 }
 
 /**

@@ -146,7 +146,8 @@ export const COACH_COPY = {
   overStrip: "Fat and calories are spent for today. You still eat — keep the next plate simple.",
   overStripDone: "You're past your ranges for today. You still eat.",
 
-  // Why a card is here. Fat is the one she is watching; protein is a floor.
+  // Why this plate, or nothing. Stock lines stay here only so an old thread
+  // payload can be recognized and silenced. New cards never use them.
   reasonFills: "Hits protein and leaves",
   reasonFillsTail: "g fat.",
   reasonGets: "Hits protein and keeps fat in range.",
@@ -154,6 +155,9 @@ export const COACH_COPY = {
   reasonMostTail: "short, easy to pick up later.",
   reasonFits: "Fits what's left. Fat stays in range.",
   reasonOver: "Simple and lighter. Fat stays in check.",
+  reasonFatLeft: "Leaves",
+  reasonFatLeftTail: "g fat.",
+  reasonProteinOpenTail: "of protein still open.",
 
   // What the coach knows about her
   knowsPencilled: "Pencilled in earlier",

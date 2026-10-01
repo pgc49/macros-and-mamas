@@ -226,9 +226,12 @@ export function CoachPanel({
       return;
     }
 
+    // One plate and one swap. The half sits beside the full plate; otherwise
+    // the next card is the alternative. The rest stays off this paint.
+    cards = cards.slice(0, 2);
     skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
     const skipLine = skipMealCopy(next.skipped);
-    lead += [skipLine, next.read.line1, next.read.line2].filter(Boolean).join(" ");
+    lead += skipLine || "";
     push({ role: "coach", body: lead.trim(), kind: "cards", cards, aside });
   };
 
@@ -501,18 +504,12 @@ export function CoachPanel({
             {/* "0 cal to play with" is not a headline to give anyone. */}
             {answer.strip.over ? slotTitle : `${slotTitle} · ${Math.round(answer.budget.cal)} cal to play with`}
           </div>
-          {/* This slot's numbers, not the day's. The day's live on Today, and
-              two sets of totals stacked here only made her do arithmetic. */}
-          <div style={{ fontSize: 13, color: T.ink, marginTop: 3, lineHeight: 1.45 }}>{answer.strip.macros}</div>
-          {answer.strip.held && (
-            <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 3, lineHeight: 1.45 }}>{answer.strip.held}</div>
-          )}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: "1 1 auto" }}>
-          <div style={bubble(false)}>
-            {COACH_COPY.openerLead} {opener}
-          </div>
+          {!next && (
+            <div style={bubble(false)}>{opener}</div>
+          )}
           {next && answer.snackAsk ? (
             <div style={bubble(false)}>{COACH_COPY.snackAsk}</div>
           ) : null}

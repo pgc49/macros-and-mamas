@@ -296,9 +296,14 @@ describe("the coach answers on the device", () => {
     });
     await screen.findByText(COACH_COPY.title);
     expect(document.body.textContent).toMatch(/Dinner · \d+ cal/);
-    expect(document.body.textContent).toContain(`${COACH_COPY.openerLead} Looking for a dinner idea?`);
+    expect(document.body.textContent).not.toContain(COACH_COPY.openerLead);
+    expect(document.body.textContent).not.toContain("Looking for a dinner idea?");
+    expect(document.body.textContent).not.toContain(COACH_COPY.reasonGets);
+    expect(document.body.textContent).not.toContain(COACH_COPY.reasonFits);
+    expect(document.body.textContent).not.toMatch(/Holding /);
     expect(document.body.textContent).not.toContain("Looking for a breakfast idea?");
     expect(document.body.textContent).not.toMatch(/Breakfast ·/);
+    await waitFor(() => expect(cardTitles().length).toBe(2));
   });
 
   it("logs tonight as dinner, not the breakfast the clock already passed", async () => {

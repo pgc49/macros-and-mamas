@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { T, F, FD } from "../theme/tokens";
 import { COACH_COPY } from "../content/coachVoice";
 import { logSaveSucceeded } from "../utils/logSave";
+import { plateTiedReason } from "../utils/coachRank";
 
 const AI_SOURCES = new Set(["menu", "kitchen", "new"]);
 
@@ -88,6 +89,7 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
 
   const isEstimate = AI_SOURCES.has(card.source);
   const done = phase === "logged" || phase === "pencilled";
+  const why = plateTiedReason(card.reason);
 
   return (
     <div
@@ -114,8 +116,8 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
             {card.title}
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{macroLine(card)}</div>
-          {card.reason && (
-            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>{card.reason}</div>
+          {why && (
+            <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45 }}>{why}</div>
           )}
           {card.proteinNote && (
             <div style={{ fontSize: 12.5, color: T.sage, marginTop: 4 }}>{card.proteinNote}</div>
