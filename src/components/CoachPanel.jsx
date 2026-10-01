@@ -21,7 +21,7 @@ import { cardsWithShownReason, firstPaintPlates } from "../utils/coachRank";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
-import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
+import { classifyAsk, deflectForScope, isClinicalUrgent, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
 import { downscaleImage } from "../utils/imageDownscale";
 
@@ -328,9 +328,12 @@ export function CoachPanel({
   };
 
   // The deflect is already on screen. This post only asks the server to
-  // append the factual line. A failure here does not take Message Callie away.
-  const noteRefusal = (asked) => {
-    Promise.resolve(postCoach?.({ mode: "ask", text: asked })).catch(() => {});
+  // append a stuck or medical brief. A failure here does not take Message
+  // Callie away. Supply, care, and off-scope stay in the thread only.
+  const noteEscalation = (asked, escalate) => {
+    const payload = { mode: "ask", text: asked };
+    if (escalate) payload.escalate = escalate;
+    Promise.resolve(postCoach?.(payload)).catch(() => {});
   };
 
   const submitText = async () => {
@@ -352,7 +355,7 @@ export function CoachPanel({
     const verdict = classifyAsk(text);
     push({ role: "mama", body: text });
     if (verdict.scope === "urgent") {
-      noteRefusal(text);
+      if (isClinicalUrgent(text)) noteEscalation(text);
       push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
       return;
     }
@@ -362,6 +365,7 @@ export function CoachPanel({
     const teach = localCoachTeach(text);
     if (teach) {
       if (PAIN_TOPICS.has(teach.topic) && countTeachInThread(thread, teach.topic) >= 2) {
+        noteEscalation(text, "stuck");
         push({ role: "coach", body: "", kind: "deflect", deflect: "again" });
         return;
       }
@@ -391,7 +395,6 @@ export function CoachPanel({
     }
 
     if (scopeIsRefused(verdict.scope)) {
-      noteRefusal(text);
       push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
       return;
     }

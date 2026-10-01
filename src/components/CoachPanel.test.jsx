@@ -578,10 +578,7 @@ describe("what isn't the coach's goes to Callie", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await screen.findByText(COACH_DEFLECT.weight.line);
-    expect(postCoach).toHaveBeenCalledWith({
-      mode: "ask",
-      text: "why has the scale not moved in two weeks",
-    });
+    expect(postCoach).not.toHaveBeenCalled();
     expect(onAskCallie).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: COACH_DEFLECT.weight.cta }));
@@ -589,14 +586,14 @@ describe("what isn't the coach's goes to Callie", () => {
   });
 
   it("refuses the ones that matter without spending a request", async () => {
-    const cases = [
-      ["I've been dizzy since this morning", COACH_DEFLECT.care.line],
+    const ordinary = [
       ["can I lower my calories", COACH_DEFLECT.ranges.line],
       ["when does my plan end", COACH_DEFLECT.admin.line],
       ["what workout should I do today", COACH_DEFLECT.offTopic.line],
+      ["I feel awful about what I ate", COACH_DEFLECT.care.line],
     ];
 
-    for (const [question, line] of cases) {
+    for (const [question, line] of ordinary) {
       const postCoach = vi.fn();
       renderPanel({ postCoach });
 
@@ -604,9 +601,21 @@ describe("what isn't the coach's goes to Callie", () => {
       fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
       await screen.findByText(line);
-      expect(postCoach).toHaveBeenCalledWith({ mode: "ask", text: question });
+      expect(postCoach).not.toHaveBeenCalled();
       cleanup();
     }
+
+    const postCoach = vi.fn();
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I've been dizzy since this morning" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.care.line);
+    expect(postCoach).toHaveBeenCalledWith({
+      mode: "ask",
+      text: "I've been dizzy since this morning",
+    });
   });
 
   it("begins a nursing mention with the supply line, then still answers the food", async () => {
@@ -657,10 +666,7 @@ describe("what isn't the coach's goes to Callie", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await screen.findByText(COACH_DEFLECT.supply.line);
-    expect(postCoach).toHaveBeenCalledWith({
-      mode: "ask",
-      text: "what should I eat for breakfast if I'm nursing, will it affect my supply",
-    });
+    expect(postCoach).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: COACH_COPY.send })).toBeTruthy();
   });
 
@@ -675,6 +681,25 @@ describe("what isn't the coach's goes to Callie", () => {
 
     await screen.findByText(COACH_COPY.teachNeverSkip);
     expect(postCoach).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "should I skip dinner, I'm way over" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    expect(screen.getAllByText(COACH_COPY.teachNeverSkip)).toHaveLength(2);
+    expect(postCoach).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "should I skip dinner, I'm way over" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.again.line);
+    expect(postCoach).toHaveBeenCalledTimes(1);
+    expect(postCoach).toHaveBeenCalledWith({
+      mode: "ask",
+      text: "should I skip dinner, I'm way over",
+      escalate: "stuck",
+    });
   });
 
   it("sends a pasted menu link to be read, and shows only what comes back", async () => {

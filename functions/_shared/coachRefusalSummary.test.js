@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   coachRefusalLine,
+  escalateDoor,
   isLoggingRefusal,
   mergeRefusalSummary,
   preserveRefusalLines,
@@ -9,18 +10,27 @@ import {
 } from "./coachRefusalSummary.js";
 
 describe("a refusal line is factual", () => {
-  it("names the door and the question", () => {
-    expect(refusalDoor("weight")).toBe("scale");
+  it("names only a stuck or medical escalate", () => {
     expect(refusalDoor("urgent")).toBe("medical");
-    expect(refusalDoor("supply")).toBe("supply");
+    expect(refusalDoor("stuck")).toBe("stuck");
+    expect(refusalDoor("supply")).toBeNull();
     expect(refusalDoor("food")).toBeNull();
-    expect(coachRefusalLine("will this affect my supply", "supply")).toBe(
-      "Coach refused (supply): will this affect my supply",
+    expect(escalateDoor("I've been dizzy since this morning", { scope: "urgent" })).toBe("medical");
+    expect(escalateDoor("should I skip dinner", { escalate: "stuck" })).toBe("stuck");
+    expect(escalateDoor("will this affect my supply", { scope: "supply" })).toBeNull();
+    expect(escalateDoor("I feel awful about what I ate", { scope: "urgent" })).toBeNull();
+    expect(escalateDoor("what workout should I do", { scope: "off_topic" })).toBeNull();
+    expect(escalateDoor("what should I eat", { escalate: "stuck" })).toBeNull();
+    expect(coachRefusalLine("I've been dizzy since this morning", "medical")).toBe(
+      "Coach refused (medical): I've been dizzy since this morning",
+    );
+    expect(coachRefusalLine("should I skip dinner", "stuck")).toBe(
+      "Coach refused (stuck): should I skip dinner",
     );
   });
 
   it("appends onto Callie's summary and does not replace it", () => {
-    const line = coachRefusalLine("the scale went up", "scale");
+    const line = coachRefusalLine("I've been dizzy since this morning", "medical");
     const merged = mergeRefusalSummary("Quiet week. Protein is steady.", line);
     expect(merged.startsWith("Quiet week. Protein is steady.")).toBe(true);
     expect(merged).toContain(line);

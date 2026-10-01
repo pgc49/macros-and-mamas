@@ -1,18 +1,24 @@
 /* ==================================================================
-   A refused coach ask lands on Callie's card as one factual line.
+   An escalate lands on Callie's card as one factual line.
 
-   client_summaries is one row per mama per day. The refusal is appended
-   to whatever summary is already there. It never replaces that summary,
-   and a later refresh keeps the refusal lines.
+   Ordinary supply, care, and off-scope refusals stay in coach_messages.
+   Only a stuck repeat (the same pain point a third time) or a clinical
+   urgent ask is appended. client_summaries is one row per mama per day.
+   The line is added to whatever summary is already there. It never
+   replaces that summary, and a later refresh keeps the line.
    ================================================================== */
 
+import { isClinicalUrgent } from "./coachGuardrails.js";
+import { localCoachTeach } from "../../src/utils/coachTeach.js";
+
+/** Pain teaches that become a Callie brief the third time she asks. */
+const STUCK_TOPICS = new Set(["neverSkip", "fasting"]);
+
 const DOORS = {
-  supply: "supply",
-  weight: "scale",
   urgent: "medical",
-  ranges: "ranges",
-  admin: "admin",
-  off_topic: "off topic",
+  medical: "medical",
+  stuck: "stuck",
+  again: "stuck",
 };
 
 /** Skip-the-log / eat-and-move-on. That handoff is not a card for Callie. */
@@ -26,7 +32,25 @@ export function isLoggingRefusal(text) {
   return LOGGING_REFUSAL.test(String(text || "").toLowerCase());
 }
 
-/** One line. The question she asked, and which door refused it. No model prose. */
+/**
+ * Stuck or medical, or nothing. Supply, care, scale, ranges, admin, and
+ * off-scope are mama-facing refusals. They are not a Callie brief.
+ */
+export function escalateDoor(asked, { escalate = null, scope = null } = {}) {
+  const question = String(asked || "").trim();
+  if (!question) return null;
+  if (escalate === "stuck" || scope === "stuck" || scope === "again") {
+    const teach = localCoachTeach(question);
+    return teach && STUCK_TOPICS.has(teach.topic) ? "stuck" : null;
+  }
+  if (isLoggingRefusal(question)) return null;
+  if (scope === "urgent" || scope === "medical" || isClinicalUrgent(question)) {
+    return isClinicalUrgent(question) ? "medical" : null;
+  }
+  return null;
+}
+
+/** One line. The question she asked, and which escalate it was. No thread, no model prose. */
 export function coachRefusalLine(asked, door) {
   const question = String(asked || "").replace(/\s+/g, " ").trim().slice(0, 240);
   if (!question || !door) return "";
@@ -59,10 +83,10 @@ export function preserveRefusalLines(existing, fresh) {
  * Read today's row with the service role, append the line, write it back.
  * A failed read does not write: an unread row must not be replaced.
  */
-export async function appendCoachRefusal(env, userId, { asked, scope, now = new Date() } = {}) {
-  const door = refusalDoor(scope);
+export async function appendCoachRefusal(env, userId, { asked, scope, escalate = null, now = new Date() } = {}) {
+  const door = escalateDoor(asked, { escalate, scope });
   const line = coachRefusalLine(asked, door);
-  if (!userId || !line || isLoggingRefusal(asked)) return { ok: false, skipped: true };
+  if (!userId || !line) return { ok: false, skipped: true };
 
   const base = (env?.SUPABASE_URL || env?.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = env?.SUPABASE_SERVICE_ROLE_KEY;

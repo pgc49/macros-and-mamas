@@ -222,6 +222,12 @@ export function scopeIsRefused(scope) {
   return scope !== "food" && scope !== "unclear";
 }
 
+/** Symptoms, medication, and restriction. Guilt alone is a care handoff, not this. */
+export function isClinicalUrgent(raw) {
+  const text = String(raw || "").toLowerCase().trim();
+  return Boolean(text) && hits(URGENT, text);
+}
+
 /** Which of Callie's handoff lines a refused scope gets. */
 const DEFLECT_FOR_SCOPE = {
   urgent: "care",
