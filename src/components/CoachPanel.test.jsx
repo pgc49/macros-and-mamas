@@ -760,7 +760,8 @@ describe("the photo she attached", () => {
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
 
     expect(screen.getByRole("button", { name: "Photo of the menu" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Photo of my fridge" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Photo of my fridge" })).toBeNull();
+    expect(screen.queryByRole("button", { name: COACH_COPY.askKitchen })).toBeNull();
     expect(screen.queryByRole("button", { name: "What's in my kitchen" })).toBeNull();
   });
 

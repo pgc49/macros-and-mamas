@@ -26,7 +26,6 @@ import { downscaleImage } from "../utils/imageDownscale";
 const QUICK_ASKS = [
   { id: "eat", label: COACH_COPY.askEat, kind: "cards" },
   { id: "out", label: COACH_COPY.askOut, kind: "photo", photo: "menu" },
-  { id: "kitchen", label: COACH_COPY.askKitchen, kind: "photo", photo: "kitchen" },
   { id: "day", label: COACH_COPY.askDay, kind: "read" },
 ];
 
