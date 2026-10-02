@@ -618,6 +618,57 @@ describe("an escalate lands on her card", () => {
     return posts;
   }
 
+  it("writes a medical brief onto the Pacific day, not the UTC date", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-02T01:05:00.000Z"));
+    const posts = [];
+    const reads = [];
+    try {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+        const value = String(url);
+        if (value.includes("/auth/v1/user")) {
+          return new Response(JSON.stringify({ id: USER_ID }), { status: 200 });
+        }
+        if (value.includes("select=paid,refunded,role")) {
+          return new Response(JSON.stringify([{ paid: true, refunded: false, role: "client" }]), { status: 200 });
+        }
+        if (value.includes("client_summaries") && init?.method === "POST") {
+          posts.push(JSON.parse(init.body));
+          return new Response(null, { status: 201 });
+        }
+        if (value.includes("client_summaries")) {
+          reads.push(value);
+          return new Response(JSON.stringify([{
+            summary: "QA prior summary — keep this paragraph.",
+            suggested_touch: "Say hi.",
+            model: "admin-model",
+          }]), { status: 200 });
+        }
+        return new Response("[]", { status: 200 });
+      });
+
+      const dizzy = await onRequestPost({
+        request: request({ mode: "ask", text: "I've been dizzy since this morning" }),
+        env,
+      });
+      expect((await dizzy.json()).deflect).toBe("care");
+      expect(posts).toHaveLength(1);
+      expect(posts[0].for_date).toBe("2026-10-01");
+      expect(String(reads[0])).toContain("for_date=eq.2026-10-01");
+      expect(posts[0].summary.startsWith("QA prior summary — keep this paragraph.")).toBe(true);
+      expect(posts[0].summary).toContain("Coach refused (medical): I've been dizzy since this morning");
+
+      const supply = await onRequestPost({
+        request: request({ mode: "ask", text: "will this affect my milk supply" }),
+        env,
+      });
+      expect((await supply.json()).deflect).toBe("supply");
+      expect(posts).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("appends a medical brief without replacing her summary", async () => {
     const posts = summaryFetch();
     const dizzy = await onRequestPost({

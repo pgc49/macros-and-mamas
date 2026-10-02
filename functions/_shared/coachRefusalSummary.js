@@ -10,6 +10,7 @@
 
 import { isClinicalUrgent } from "./coachGuardrails.js";
 import { localCoachTeach } from "../../src/utils/coachTeach.js";
+import { COACH_CLOCK_TZ, wallClockParts } from "../../src/utils/mealSlots.js";
 
 /** Pain teaches that become a Callie brief the third time she asks. */
 const STUCK_TOPICS = new Set(["neverSkip", "fasting"]);
@@ -66,6 +67,17 @@ export function mergeRefusalSummary(existing, line) {
   return `${prior}\n${next}`.slice(0, 4000);
 }
 
+/**
+ * Calendar day for client_summaries.for_date.
+ * Pacific wall date, same clock as the coach door. UTC `toISOString`
+ * is already the next day at 6pm PT.
+ */
+export function coachSummaryDateIso(now = new Date(), timeZone = COACH_CLOCK_TZ) {
+  const instant = now instanceof Date ? now : new Date(now);
+  const { year, month, day } = wallClockParts(instant, timeZone);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 /** A generated summary replaces the prose. Refusal lines from that day stay. */
 export function preserveRefusalLines(existing, fresh) {
   const lines = String(existing || "")
@@ -95,7 +107,7 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
     return { ok: false, skipped: true };
   }
 
-  const day = now.toISOString().slice(0, 10);
+  const day = coachSummaryDateIso(now);
   const headers = { apikey: key, authorization: `Bearer ${key}` };
   const readUrl = `${base}/rest/v1/client_summaries?profile_id=eq.${encodeURIComponent(userId)}`
     + `&for_date=eq.${day}&select=summary,suggested_touch,model`;

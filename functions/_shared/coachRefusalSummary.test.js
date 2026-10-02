@@ -1,13 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  appendCoachRefusal,
   coachRefusalLine,
+  coachSummaryDateIso,
   escalateDoor,
   isLoggingRefusal,
   mergeRefusalSummary,
   preserveRefusalLines,
   refusalDoor,
 } from "./coachRefusalSummary.js";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("a refusal line is factual", () => {
   it("names only a stuck or medical escalate", () => {
@@ -42,6 +48,60 @@ describe("a refusal line is factual", () => {
     const fresh = preserveRefusalLines(existing, "New snapshot from her logs.");
     expect(fresh.startsWith("New snapshot from her logs.")).toBe(true);
     expect(fresh).toContain("Coach refused (supply): my supply dipped");
+  });
+
+  it("uses the Pacific calendar day when UTC has already rolled over", () => {
+    const eveningPt = new Date("2026-10-02T01:05:00.000Z");
+    expect(eveningPt.toISOString().slice(0, 10)).toBe("2026-10-02");
+    expect(coachSummaryDateIso(eveningPt)).toBe("2026-10-01");
+  });
+
+  it("merges a medical line onto the Pacific day's seed and skips a supply refuse", async () => {
+    const eveningPt = new Date("2026-10-02T01:05:00.000Z");
+    const posts = [];
+    const reads = [];
+    const env = {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service",
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      const value = String(url);
+      if (value.includes("client_summaries") && init?.method === "POST") {
+        posts.push(JSON.parse(init.body));
+        return new Response(null, { status: 201 });
+      }
+      if (value.includes("client_summaries")) {
+        reads.push(value);
+        return new Response(JSON.stringify([{
+          summary: "QA prior summary — keep this paragraph.",
+          suggested_touch: "Check in.",
+          model: "admin-model",
+        }]), { status: 200 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+
+    const medical = await appendCoachRefusal(env, "profile-1", {
+      asked: "I've been dizzy since this morning",
+      scope: "urgent",
+      now: eveningPt,
+    });
+    expect(medical.ok).toBe(true);
+    expect(reads[0]).toContain("for_date=eq.2026-10-01");
+    expect(reads[0]).not.toContain("for_date=eq.2026-10-02");
+    expect(posts).toHaveLength(1);
+    expect(posts[0].for_date).toBe("2026-10-01");
+    expect(posts[0].summary.startsWith("QA prior summary — keep this paragraph.")).toBe(true);
+    expect(posts[0].summary).toContain("Coach refused (medical): I've been dizzy since this morning");
+    expect(posts[0].suggested_touch).toBe("Check in.");
+
+    const supply = await appendCoachRefusal(env, "profile-1", {
+      asked: "will this affect my milk supply",
+      scope: "supply",
+      now: eveningPt,
+    });
+    expect(supply).toEqual({ ok: false, skipped: true });
+    expect(posts).toHaveLength(1);
   });
 
   it("does not treat a logging refusal as a card for Callie", () => {
