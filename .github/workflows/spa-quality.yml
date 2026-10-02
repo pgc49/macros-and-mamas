@@ -180,10 +180,14 @@ jobs:
           VITE_LIVE_CHANNEL_COHORTS: ${{ vars.VITE_LIVE_CHANNEL_COHORTS }}
       - name: Package and compile deployable Pages artifact
         run: |
-          mkdir -p deploy-artifact/marketing/src
+          mkdir -p deploy-artifact/marketing/src deploy-artifact/src/utils deploy-artifact/src/content
           cp -R dist deploy-artifact/dist
           cp -R functions deploy-artifact/functions
           cp -R marketing/src/lib deploy-artifact/marketing/src/lib
+          # /api/coach shares teach, intent, and voice with the client. The
+          # isolated surface artifact does not include the rest of src.
+          cp src/utils/coachTeach.js src/utils/coachIntent.js src/utils/mealSlots.js deploy-artifact/src/utils/
+          cp src/content/coachVoice.js deploy-artifact/src/content/
           cd deploy-artifact
           npx wrangler@4.120.1 pages functions build functions
       - uses: actions/upload-artifact@v4

@@ -26,6 +26,17 @@ export const MODEL_CHAIN = [
   "google/gemini-2.5-flash-lite",
 ];
 
+/**
+ * The meal coach has to read a restaurant name and answer from that menu.
+ * Flash-lite was skipping the place and reciting a canned plate. Real Flash
+ * first, lite only if it is down. Override with COACH_MODEL.
+ */
+export const COACH_MODEL_CHAIN = [
+  "google/gemini-3.5-flash",
+  "google/gemini-3-flash-preview",
+  "google/gemini-3.1-flash-lite",
+];
+
 const DEFAULT_TIMEOUT_MS = 24_000;
 const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 400;
@@ -39,6 +50,15 @@ export function resolveModels(env, override) {
   const chain = primary
     ? [primary, ...MODEL_CHAIN.filter((m) => m !== primary)]
     : [...MODEL_CHAIN];
+  return chain.slice(0, 4);
+}
+
+/** Coach-only chain. Does not inherit MEAL_PLAN_MODEL (that one is the lite planner). */
+export function resolveCoachModels(env) {
+  const primary = String(env?.COACH_MODEL || "").trim().slice(0, 120);
+  const chain = primary
+    ? [primary, ...COACH_MODEL_CHAIN.filter((m) => m !== primary)]
+    : [...COACH_MODEL_CHAIN];
   return chain.slice(0, 4);
 }
 
@@ -61,6 +81,7 @@ export async function callOpenRouter({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   attempts = MAX_ATTEMPTS,
   jsonObject = true,
+  reasoning = null,
 }) {
   if (!env?.OPENROUTER_API_KEY) {
     return { ok: false, kind: "config", status: null, detail: "missing OPENROUTER_API_KEY", attempts: 0 };
@@ -88,6 +109,7 @@ export async function callOpenRouter({
           temperature,
           messages,
           ...(jsonObject ? { response_format: { type: "json_object" } } : {}),
+          ...(reasoning ? { reasoning } : {}),
         }),
         signal: AbortSignal.timeout(timeoutMs),
       });

@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MealLogCard } from "./MealLogCard";
+import { COACH_COPY } from "../content/coachVoice";
 import { MEAL_LOG_ROUNDED_NOTE } from "../utils/mealLogMacros";
 
 afterEach(() => {
@@ -113,6 +114,138 @@ describe("MealLogCard My plan list", () => {
     expect(screen.getAllByText("Protein oatmeal").length).toBeGreaterThan(0);
     expect(screen.getByText("Yogurt bowl")).toBeTruthy();
     expect(screen.queryByText("Big pasta night")).toBeNull();
+  });
+});
+
+describe("pencilled coach meals on Today's log", () => {
+  it("shows an unmatched coach pencil under its slot with Ate it", async () => {
+    const onLogRecipe = vi.fn(async () => true);
+    render(
+      <MealLogCard
+        plannedMeals={[
+          {
+            id: "p-coach",
+            name: "Chicken bowl",
+            cal: 430,
+            p: 45,
+            c: 30,
+            f: 12,
+            slot: "dinner",
+            via: "coach",
+          },
+        ]}
+        todayLog={{ date: "2026-09-06", entries: [] }}
+        mealLogDate="2026-09-06"
+        onLogRecipe={onLogRecipe}
+      />,
+    );
+
+    expect(screen.getByText("Chicken bowl")).toBeTruthy();
+    expect(screen.getByText("Pencilled in · tap when you've eaten it")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Ate it" }));
+    await waitFor(() => expect(onLogRecipe).toHaveBeenCalledTimes(1));
+    expect(onLogRecipe.mock.calls[0][0]).toMatchObject({
+      name: "Chicken bowl",
+      slot: "dinner",
+      origin: "coach",
+    });
+  });
+
+  it("clears a pencil without logging it", async () => {
+    const onLogRecipe = vi.fn(async () => true);
+    const onClearPencil = vi.fn(async () => true);
+    render(
+      <MealLogCard
+        plannedMeals={[
+          {
+            id: "p-coach",
+            name: "Chicken bowl",
+            cal: 430,
+            p: 45,
+            c: 30,
+            f: 12,
+            slot: "dinner",
+            via: "coach",
+          },
+        ]}
+        todayLog={{ date: "2026-09-06", entries: [] }}
+        mealLogDate="2026-09-06"
+        onLogRecipe={onLogRecipe}
+        onClearPencil={onClearPencil}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.clearPencil }));
+    await waitFor(() => expect(onClearPencil).toHaveBeenCalledTimes(1));
+    expect(onClearPencil.mock.calls[0][0]).toMatchObject({
+      name: "Chicken bowl",
+      slot: "dinner",
+    });
+    expect(onClearPencil.mock.calls[0][1]).toBe("2026-09-06");
+    expect(onLogRecipe).not.toHaveBeenCalled();
+  });
+
+  it("hides the pencil from Your plan so it is not listed twice", () => {
+    render(
+      <MealLogCard
+        initialMethod="recipes"
+        plannedMeals={[
+          {
+            id: "p-coach",
+            name: "Coach dinner",
+            cal: 500,
+            p: 40,
+            c: 40,
+            f: 15,
+            slot: "dinner",
+            via: "coach",
+          },
+          {
+            id: "p-plan",
+            name: "Plan lunch",
+            cal: 400,
+            p: 35,
+            c: 30,
+            f: 12,
+            slot: "lunch",
+            via: "recipe",
+          },
+        ]}
+        todayLog={{ date: "2026-09-06", entries: [] }}
+        mealLogDate="2026-09-06"
+      />,
+    );
+
+    expect(screen.getAllByText("Coach dinner").length).toBe(1);
+    expect(screen.getByText("Plan lunch")).toBeTruthy();
+  });
+
+  it("uses the shared range totals when she includes pencilled meals", () => {
+    render(
+      <MealLogCard
+        macros={{ cal: 1750, protein: 140, carbs: 160, fat: 55 }}
+        plannedMeals={[
+          {
+            id: "p-coach",
+            name: "Chicken bowl",
+            cal: 430,
+            p: 45,
+            c: 30,
+            f: 12,
+            slot: "dinner",
+            via: "coach",
+          },
+        ]}
+        todayLog={{ date: "2026-09-06", entries: [] }}
+        mealLogDate="2026-09-06"
+        rangeDisplayTotals={{ cal: 430, p: 45, c: 30, f: 12 }}
+        rangeTotalsIncludePencils
+      />,
+    );
+
+    expect(screen.getByText("430")).toBeTruthy();
+    expect(screen.getByText("45g")).toBeTruthy();
+    expect(screen.getByText(COACH_COPY.totalsWithPencilsUnder)).toBeTruthy();
   });
 });
 

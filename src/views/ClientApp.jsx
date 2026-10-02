@@ -23,6 +23,9 @@ import { FoodPrefsEditor } from "../components/FoodPrefsEditor";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { TechHelpFooter } from "../components/TechHelpFooter";
 import { MessagesPanel } from "../components/MessagesPanel";
+import { CoachPanel } from "../components/CoachPanel";
+import { CoachEntry } from "../components/CoachEntry";
+import { buildCoachAnswer, coachIsAvailable } from "../utils/coachSession";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals, targetBands } from "../utils/weekPlan";
 import {
@@ -40,8 +43,11 @@ import {
   uniqueMealsByName,
 } from "../utils/mealSearch";
 import { db } from "../db/db";
+import { unmatchedCoachPencils } from "../utils/coachBudget";
+import { rangeTotalsWithPencils } from "../utils/coachPencil";
+import { COACH_COPY } from "../content/coachVoice";
 import { useAfterPaint } from "../lib/useAfterPaint";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /** Mount children after the first paint so Today can scroll immediately. */
 function AfterFirstPaint({ children }) {
@@ -116,6 +122,17 @@ export function ClientApp({
   userId = null,
   unreadMessages = 0,
   onUnreadMessagesChange,
+  mealHistoryByDate = {},
+  onLogCoachCard,
+  onPencilCoachCard,
+  onClearCoachPencil,
+  onSaveCoachCard,
+  onAskCallie,
+  onLoadCoachThread,
+  onAppendCoachMessage,
+  postCoach,
+  messagesDraft = "",
+  onMessagesDraftUsed,
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
   const [mealQuery, setMealQuery] = useState("");
@@ -180,12 +197,6 @@ export function ClientApp({
   const fHi = hi(fLo);
   const calLo = macros?.cal ?? 0;
   const calHi = calLo + 150;
-  const pSt = rangeState(totals?.p, pLo, pHi);
-  const cSt = rangeState(totals?.c, cLo, cHi);
-  const fSt = rangeState(totals?.f, fLo, fHi);
-  const calSt = rangeState(totals?.cal, calLo, calHi);
-  const calProgress = formatRangeProgress(totals?.cal, calLo, calHi, " cal");
-  const anyOver = [pSt, cSt, fSt, calSt].includes("over");
   const daysWithEntries = Object.fromEntries(
     Object.entries(mealLogsByDate || {}).map(([d, list]) => [d, (list || []).length > 0]),
   );
@@ -194,14 +205,65 @@ export function ClientApp({
     const floor = addDaysIso(wkStartOf(), -7 * 52);
     return fromChecks < floor ? fromChecks : floor;
   })();
+  const todayEntries = entriesForLogDate(mealLogDate || todayLog?.date, mealLogsByDate, todayLog);
+  const unmatchedPencils = useMemo(
+    () => unmatchedCoachPencils(planMealsForLogDate, todayEntries),
+    [planMealsForLogDate, todayEntries],
+  );
+  const hasPencilled = unmatchedPencils.length > 0;
+  const [countPencilled, setCountPencilled] = useState(false);
+  useEffect(() => {
+    if (!hasPencilled) setCountPencilled(false);
+  }, [hasPencilled]);
+  const rangeTotals = useMemo(
+    () => rangeTotalsWithPencils(totals, unmatchedPencils, countPencilled && hasPencilled),
+    [totals, unmatchedPencils, countPencilled, hasPencilled],
+  );
+  const rangeEatenWord = countPencilled && hasPencilled ? "" : "logged";
+  const pSt = rangeState(rangeTotals?.p, pLo, pHi);
+  const cSt = rangeState(rangeTotals?.c, cLo, cHi);
+  const fSt = rangeState(rangeTotals?.f, fLo, fHi);
+  const calSt = rangeState(rangeTotals?.cal, calLo, calHi);
+  const calProgress = formatRangeProgress(rangeTotals?.cal, calLo, calHi, " cal", rangeEatenWord);
+  const anyOver = [pSt, cSt, fSt, calSt].includes("over");
+  const coachReady = coachIsAvailable({ macros, mealLogDate: mealLogDate || todayLog?.date });
+  // One instant for the Today card and the Coach tab. The door reads it as
+  // Pacific wall time (`coachSlotFromTime`), not the browser's local hour.
+  const coachClock = useMemo(() => new Date(), []);
+  const coachAnswer = useMemo(
+    () => (coachReady
+      ? buildCoachAnswer({
+        profile,
+        macros,
+        totals,
+        entries: todayEntries,
+        plannedMeals: planMealsForLogDate,
+        mealHistoryByDate,
+        customMeals,
+        now: coachClock,
+      })
+      : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [coachReady, profile, macros, totals, mealLogsByDate, mealLogDate, planMealsForLogDate, mealHistoryByDate, customMeals, coachClock],
+  );
+
+  const tabs = [["today", "Today"], ["meals", "Meals"]];
+  if (coachReady) tabs.push(["coach", "Coach"]);
+  tabs.push(["progress", "Progress"], ["messages", "Messages"]);
+  // Five labels are 24px wider than a 320px screen at comfortable padding, so
+  // the padding is small and the buttons take the width back with flex-grow.
+  // That way a 430px phone spends its extra 110px on tap targets instead of
+  // leaving a huddle of small text in the middle, and 320px still fits.
+  const tight = tabs.length > 4;
+
   const tabBar = (
     <nav
       style={{
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        gap: 4,
-        padding: "12px 12px 4px",
+        gap: tight ? 2 : 4,
+        padding: tight ? "12px 6px 4px" : "12px 12px 4px",
         maxWidth: 560,
         margin: "0 auto",
         boxSizing: "border-box",
@@ -209,7 +271,7 @@ export function ClientApp({
       }}
       aria-label="Main"
     >
-      {[["today", "Today"], ["meals", "Meals"], ["progress", "Progress"], ["messages", "Messages"]].map(([k, l]) => (
+      {tabs.map(([k, l]) => (
         <button
           key={k}
           type="button"
@@ -218,8 +280,10 @@ export function ClientApp({
             fontFamily: F,
             fontSize: 13.5,
             fontWeight: 700,
-            padding: "14px 14px",
+            padding: tight ? "14px 4px" : "14px 14px",
             minHeight: 48,
+            flex: tight ? "1 1 auto" : "0 0 auto",
+            whiteSpace: "nowrap",
             borderRadius: 999,
             border: "none",
             cursor: "pointer",
@@ -258,7 +322,9 @@ export function ClientApp({
     <Shell
       bottomBar={tabBar}
       hideBottomBar={tab === "messages" && composerFocused}
-      lockContentScroll={tab === "messages"}
+      // Both chat tabs: fill the leftover height so the composer stays put
+      // above the tab bar instead of scrolling with the conversation.
+      lockContentScroll={tab === "messages" || tab === "coach"}
     >
       {(tab === "today" || keepToday) && macros && (
         <div
@@ -296,9 +362,9 @@ export function ClientApp({
           ) : null}
 
           <Card style={{ marginBottom: 4 }}>
-            <RangeBand label="Protein" lo={pLo} hi={pHi} eaten={totals.p} />
-            <RangeBand label="Carbs" lo={cLo} hi={cHi} eaten={totals.c} />
-            <RangeBand label="Fat" lo={fLo} hi={fHi} eaten={totals.f} />
+            <RangeBand label="Protein" lo={pLo} hi={pHi} eaten={rangeTotals.p} eatenWord={rangeEatenWord} />
+            <RangeBand label="Carbs" lo={cLo} hi={cHi} eaten={rangeTotals.c} eatenWord={rangeEatenWord} />
+            <RangeBand label="Fat" lo={fLo} hi={fHi} eaten={rangeTotals.f} eatenWord={rangeEatenWord} />
             <div style={{ borderTop: `1px dashed ${T.border}`, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
               <span style={{
                 fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4,
@@ -306,9 +372,9 @@ export function ClientApp({
                 lineHeight: 1.35,
               }}>
                 {!calProgress && "Calories land around"}
-                {calProgress?.state === "under" && <>Calories · {Math.round(totals.cal)} · {calProgress.detail}</>}
-                {calProgress?.state === "in" && <>Calories · {Math.round(totals.cal)} · ✓ · {calProgress.detail}</>}
-                {calProgress?.state === "over" && <>Calories · {Math.round(totals.cal)} · {calProgress.detail}</>}
+                {calProgress?.state === "under" && <>Calories · {Math.round(rangeTotals.cal)} · {calProgress.detail}</>}
+                {calProgress?.state === "in" && <>Calories · {Math.round(rangeTotals.cal)} · ✓ · {calProgress.detail}</>}
+                {calProgress?.state === "over" && <>Calories · {Math.round(rangeTotals.cal)} · {calProgress.detail}</>}
               </span>
               <span style={{ fontFamily: FD, fontSize: 22, color: calSt === "in" ? "#3E5A46" : T.ink, flexShrink: 0 }}>
                 {calLo}–{calHi}
@@ -319,7 +385,47 @@ export function ClientApp({
                 Over on something today? Happens. Tomorrow start fresh.
               </div>
             )}
+            {hasPencilled && (
+              <label
+                htmlFor="count-pencilled-ranges"
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  marginTop: 12,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  id="count-pencilled-ranges"
+                  type="checkbox"
+                  checked={countPencilled}
+                  onChange={(e) => setCountPencilled(e.target.checked)}
+                  style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
+                />
+                <span>
+                  <span style={{ fontSize: 13, fontWeight: 650, color: T.ink, lineHeight: 1.35 }}>
+                    {COACH_COPY.countPencilled}
+                  </span>
+                  {countPencilled && (
+                    <span style={{ display: "block", fontSize: 11.5, color: T.inkSoft, marginTop: 2, lineHeight: 1.45 }}>
+                      {COACH_COPY.countPencilledHint}
+                    </span>
+                  )}
+                </span>
+              </label>
+            )}
           </Card>
+
+          {coachAnswer && (
+            <CoachEntry
+              answer={coachAnswer}
+              entries={todayEntries}
+              plannedMeals={planMealsForLogDate}
+              now={coachClock}
+              onOpen={() => setTab("coach")}
+            />
+          )}
 
           <MealLogCard
             macros={macros}
@@ -359,6 +465,9 @@ export function ClientApp({
             onSelectMealDate={selectMealLogDate}
             onChangeMealWeek={(ws) => changeMealWeek(ws)}
             earliestWeekStart={mealEarliestWeek}
+            rangeDisplayTotals={rangeTotals}
+            rangeTotalsIncludePencils={countPencilled && hasPencilled}
+            onClearPencil={onClearCoachPencil}
           />
 
           <AfterFirstPaint>
@@ -690,6 +799,36 @@ export function ClientApp({
         </>
       )}
 
+      {tab === "coach" && (
+        <ErrorBoundary
+          name="CustomerCoach"
+          title="The coach hit a snag"
+          message="Nothing you logged is affected. Meals still has the full bank, and Today still works."
+          resetKeys={[userId, tab]}
+        >
+          <CoachPanel
+            profile={profile}
+            macros={macros}
+            totals={totals}
+            entries={todayEntries}
+            plannedMeals={planMealsForLogDate}
+            mealHistoryByDate={mealHistoryByDate}
+            customMeals={customMeals}
+            now={coachClock}
+            onLogCard={onLogCoachCard}
+            onPencilCard={onPencilCoachCard}
+            onSaveCard={onSaveCoachCard}
+            onAskCallie={(text) => {
+              onAskCallie?.(text);
+              setTab("messages");
+            }}
+            onLoadThread={onLoadCoachThread}
+            onAppendMessage={onAppendCoachMessage}
+            postCoach={postCoach}
+          />
+        </ErrorBoundary>
+      )}
+
       {tab === "messages" && (
         <ErrorBoundary
           name="CustomerMessages"
@@ -701,6 +840,8 @@ export function ClientApp({
             userId={userId}
             onUnreadChange={onUnreadMessagesChange}
             onComposerFocusChange={setComposerFocused}
+            initialDraft={messagesDraft}
+            onInitialDraftUsed={onMessagesDraftUsed}
           />
         </ErrorBoundary>
       )}

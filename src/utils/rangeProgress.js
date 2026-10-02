@@ -30,26 +30,31 @@ export function rangeProgress(eaten, lo, hi) {
   return { state: "over", eaten: e, over: Math.max(0, e - high) };
 }
 
+function amountLabel(eaten, unit, eatenWord) {
+  return eatenWord ? `${eaten}${unit} ${eatenWord}` : `${eaten}${unit}`;
+}
+
 /** Caption under a macro band / calories row — keeps mental math off her plate. */
-export function formatRangeProgress(eaten, lo, hi, unit = "g") {
+export function formatRangeProgress(eaten, lo, hi, unit = "g", eatenWord = "logged") {
   const r = rangeProgress(eaten, lo, hi);
   if (r.state === "empty") return null;
+  const logged = amountLabel(r.eaten, unit, eatenWord);
   if (r.state === "under") {
     const left = r.leftLo === r.leftHi
       ? `${r.leftLo}${unit} left`
       : `${r.leftLo}–${r.leftHi}${unit} left`;
-    return { state: "under", logged: `${r.eaten}${unit} logged`, detail: left };
+    return { state: "under", logged, detail: left };
   }
   if (r.state === "in") {
     return {
       state: "in",
-      logged: `${r.eaten}${unit} logged`,
+      logged,
       detail: r.room > 0 ? `${r.room}${unit} room` : "at the top",
     };
   }
   return {
     state: "over",
-    logged: `${r.eaten}${unit} logged`,
+    logged,
     detail: `${r.over}${unit} over`,
   };
 }

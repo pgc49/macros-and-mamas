@@ -16,6 +16,7 @@ import { WaterLogCard } from "./WaterLogCard";
 import { WeighInCard } from "./WeighInCard";
 import { WeekPlanner } from "./WeekPlanner";
 import { EatingOutMenuFlow } from "./EatingOutMenuFlow";
+import { CoachMealCard } from "./CoachMealCard";
 
 afterEach(() => {
   cleanup();
@@ -340,6 +341,90 @@ describe("log save contract — eating-out menu pick", () => {
     expect(screen.getByText("Grilled salmon")).toBeTruthy();
     URL.createObjectURL = createUrl;
     URL.revokeObjectURL = revokeUrl;
+  });
+});
+
+describe("log save contract — coach card Log it / Pencil in", () => {
+  const card = {
+    name: "Protein oatmeal",
+    title: "Protein oatmeal",
+    cal: 310,
+    p: 30,
+    c: 40,
+    f: 4,
+    tag: "Callie's bank",
+    source: "bank",
+    slot: "breakfast",
+  };
+
+  it("stays idle when onLog returns undefined", async () => {
+    const onLog = vi.fn(async () => undefined);
+    render(<CoachMealCard card={card} onLog={onLog} />);
+    fireEvent.click(screen.getByRole("button", { name: "Log it" }));
+    await waitFor(() => {
+      expect(screen.getByText("That didn't save. Try again in a second.")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Log it" })).toBeTruthy();
+    expect(screen.queryByText("Logged.")).toBeNull();
+  });
+
+  it("stays idle when onLog returns false", async () => {
+    const onLog = vi.fn(async () => false);
+    render(<CoachMealCard card={card} onLog={onLog} />);
+    fireEvent.click(screen.getByRole("button", { name: "Log it" }));
+    await waitFor(() => expect(onLog).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Log it" })).toBeTruthy();
+  });
+
+  it("stays idle when onLog throws", async () => {
+    const onLog = vi.fn(async () => { throw new Error("network"); });
+    render(<CoachMealCard card={card} onLog={onLog} />);
+    fireEvent.click(screen.getByRole("button", { name: "Log it" }));
+    await waitFor(() => {
+      expect(screen.getByText("That didn't save. Try again in a second.")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Log it" })).toBeTruthy();
+  });
+
+  it("does not log twice while the first write is pending", async () => {
+    let resolveLog;
+    const onLog = vi.fn(() => new Promise((resolve) => {
+      resolveLog = resolve;
+    }));
+    render(<CoachMealCard card={card} onLog={onLog} />);
+    const log = screen.getByRole("button", { name: "Log it" });
+    fireEvent.click(log);
+    fireEvent.click(log);
+    expect(onLog).toHaveBeenCalledTimes(1);
+    resolveLog(true);
+    await waitFor(() => expect(screen.getByText("Logged.")).toBeTruthy());
+  });
+
+  it("stays idle when onPencil returns undefined", async () => {
+    const onPencil = vi.fn(async () => undefined);
+    render(<CoachMealCard card={card} onLog={vi.fn()} onPencil={onPencil} />);
+    fireEvent.click(screen.getByRole("button", { name: "Pencil in" }));
+    await waitFor(() => {
+      expect(screen.getByText("That didn't save. Try again in a second.")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Pencil in" })).toBeTruthy();
+    expect(screen.queryByText("Pencilled in.")).toBeNull();
+  });
+
+  it("stays idle when Save to My meals returns undefined", async () => {
+    const onSave = vi.fn(async () => undefined);
+    render(
+      <CoachMealCard
+        card={{ ...card, source: "kitchen", tag: "From your kitchen" }}
+        onLog={vi.fn()}
+        onSave={onSave}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save to My meals" }));
+    await waitFor(() => {
+      expect(screen.getByText("That didn't save. Try again in a second.")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Save to My meals" })).toBeTruthy();
   });
 });
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { CONFIG } from "./config";
 import { useAuth } from "./auth/useAuth.jsx";
@@ -10,6 +10,12 @@ import { addDaysIso, localDateIso, planDayLabel, weekdayKey, wkStartOf } from ".
 import { entriesForLogDate, hydrateTodayLog, sumLogTotals } from "./utils/mealLogState";
 import { roundMealLogMacros } from "./utils/mealLogMacros";
 import { resolveLogSlot } from "./utils/mealSlots";
+import { coachCardVia, coachLogFromCard, unscaleRankedCard } from "./utils/coachScale";
+import { nextCustomMeals } from "./utils/coachMyMeals";
+import { clearCoachPencil, removeCoachPencilMatchingLog, writeCoachPencil } from "./utils/coachPencil";
+import { stripPortionSuffix } from "./utils/coachPrefs";
+import { ingredientsToText } from "./utils/planMealShape";
+import { COACH_ASK_CALLIE_PREFILL } from "./content/coachVoice";
 import {
   adherenceForWeek,
   buildMacroHistory,
@@ -329,7 +335,7 @@ export default function App() {
   const [tab, setTab] = useState(() => {
     if (typeof window === "undefined") return "today";
     const q = new URLSearchParams(window.location.search).get("tab");
-    return ["today", "meals", "messages", "progress"].includes(q) ? q : "today";
+    return ["today", "meals", "coach", "messages", "progress"].includes(q) ? q : "today";
   });
   const [unreadMessages, setUnreadMessages] = useState(0);
 
@@ -389,6 +395,8 @@ export default function App() {
   const [weekPlanSuggestBusy, setWeekPlanSuggestBusy] = useState(false);
   const [planMealsForLogDate, setPlanMealsForLogDate] = useState([]);
   const [logFlash, setLogFlash] = useState("");
+  // Set when the coach hands a question to Callie, so she doesn't retype it.
+  const [messagesDraft, setMessagesDraft] = useState("");
   const weekPlanSaveTimer = useRef(null);
   const weekPlanWeekRef = useRef(weekPlanWeekStart);
   weekPlanWeekRef.current = weekPlanWeekStart;
@@ -489,10 +497,11 @@ export default function App() {
             if (!cancelled) setCustomGoals(s.customGoals || []);
             try {
               const customs = await db.loadCustomMeals();
-              if (!cancelled) setCustomMeals(customs);
+              if (!cancelled) {
+                setCustomMeals((current) => nextCustomMeals(current, customs));
+              }
             } catch (cErr) {
               console.warn("loadCustomMeals failed", cErr);
-              if (!cancelled) setCustomMeals([]);
             }
             try {
               const unread = await db.countUnreadMessages(user.id, user.id);
@@ -1125,11 +1134,29 @@ export default function App() {
       f: recipe.f,
       via: recipe.via || "recipe",
       slot: recipe.slot || recipe.cat || null,
+      origin: recipe.origin || null,
       logged_date: date,
     });
     if (ok) {
       if (date !== mealLogDate) {
         selectMealLogDate(date);
+      }
+      const pencilWs = wkStartOf(date);
+      const pencilLive = pencilWs === weekPlanWeekStart;
+      let pencilDays = weekPlanDays;
+      let pencilSource = weekPlanSource;
+      if (!pencilLive) {
+        const wp = await db.loadWeekPlan(pencilWs);
+        pencilDays = Array.isArray(wp?.days) ? wp.days : [];
+        pencilSource = wp?.source || "manual";
+      }
+      const next = removeCoachPencilMatchingLog(pencilDays, planDayLabel(date), {
+        name: recipe.name,
+        slot: recipe.slot || recipe.cat || null,
+      });
+      if (next !== pencilDays) {
+        if (pencilLive) onWeekPlanChange(next, pencilSource);
+        else await persistWeekPlan(next, pencilSource, pencilWs);
       }
       // Stay on Meals / Plan / Today so mamas can keep adding more than one meal.
       setLogFlash(`Added ${recipe.name} to Today`);
@@ -1183,11 +1210,150 @@ export default function App() {
   };
 
   const deleteCustomMeal = async (id) => {
+    if (!id) return;
     try {
       await db.deleteCustomMeal(id);
       setCustomMeals((list) => list.filter((m) => m.id !== id));
     } catch (e) {
       console.error("deleteCustomMeal failed", e);
+    }
+  };
+
+  /* ---------------------------------------------------------------- */
+  /*  Meal coach                                                       */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * A coach card is a normal log with one extra fact recorded: that the coach
+   * is where it came from. `via` still says how the macros were arrived at, so
+   * a card taken from Callie's bank is logged exact and one the coach built
+   * from a menu is logged as an estimate — the row reads the same as it would
+   * have if she'd found it herself.
+   */
+  const logCoachCard = async (card, slot) => {
+    const logged = coachLogFromCard(card);
+    return logRecipe({
+      name: logged.name,
+      cal: logged.cal,
+      p: logged.p,
+      c: logged.c,
+      f: logged.f,
+      via: coachCardVia(card),
+      slot: card.slot || slot || null,
+      origin: "coach",
+    });
+  };
+
+  /** Hold the slot's room without claiming she ate it. */
+  const pencilCoachCard = async (card, slot) => {
+    const day = planDayLabel(mealLogDate || localDateIso());
+    const target = card.slot || slot || "dinner";
+    try {
+      const { days } = writeCoachPencil(weekPlanDays, day, card, target);
+      onWeekPlanChange(days, weekPlanSource);
+      setLogFlash(`Pencilled in ${card.name}`);
+      window.setTimeout(() => setLogFlash(""), 3500);
+      return true;
+    } catch (e) {
+      console.error("writeCoachPencil failed", e);
+      return false;
+    }
+  };
+
+  /** Wipe a wrong pencil without logging it. */
+  const clearCoachPencilCard = async (meal, dateOverride) => {
+    const logDate = dateOverride || mealLogDate || localDateIso();
+    const day = planDayLabel(logDate);
+    const ws = wkStartOf(logDate);
+    try {
+      // Today's week plan state is this week. A grey row on last Sunday
+      // lives on last week's plan — mutating this week is a no-op.
+      const live = ws === weekPlanWeekStart;
+      let days = weekPlanDays;
+      let source = weekPlanSource;
+      if (!live) {
+        const wp = await db.loadWeekPlan(ws);
+        days = Array.isArray(wp?.days) ? wp.days : [];
+        source = wp?.source || "manual";
+      }
+      const next = clearCoachPencil(days, day, meal);
+      if (next === days) return false;
+      if (live) {
+        onWeekPlanChange(next, source);
+      } else {
+        await persistWeekPlan(next, source, ws);
+        const row = (next || []).find((d) => d.day === day);
+        setPlanMealsForLogDate(Array.isArray(row?.meals) ? row.meals : []);
+      }
+      setLogFlash(`Cleared ${meal?.name || "pencilled meal"}`);
+      window.setTimeout(() => setLogFlash(""), 3500);
+      return true;
+    } catch (e) {
+      console.error("clearCoachPencil failed", e);
+      return false;
+    }
+  };
+
+  /** Keep a coach-built meal, method and all, so she can make it again. */
+  const saveCoachCard = async (card, slot) => {
+    const base = unscaleRankedCard(card);
+    const saved = await saveCustomMeal({
+      name: stripPortionSuffix(card.name),
+      cal: Math.round(base.cal),
+      p: Math.round(base.p),
+      c: Math.round(base.c),
+      f: Math.round(base.f),
+      serves: 1,
+      ingredients: ingredientsToText(base.ingredients),
+      steps: Array.isArray(base.steps) ? base.steps.filter(Boolean).join("\n") : "",
+      slot: card.slot || slot || null,
+    });
+    return saved ? true : false;
+  };
+
+  /**
+   * The handoff to Callie is a message she sends herself, from her own thread.
+   * No bot account, no message written on her behalf, and nothing new reading
+   * her DMs — the coach only walks her to the composer with the question in it.
+   */
+  const askCallie = (question) => {
+    const text = String(question || "").trim();
+    setMessagesDraft(text ? `${COACH_ASK_CALLIE_PREFILL} ${text}` : COACH_ASK_CALLIE_PREFILL);
+  };
+
+  const loadCoachThread = useCallback(() => db.loadCoachThread(), []);
+
+  /**
+   * One at a time. Her question and the answer to it are pushed in the same
+   * tick, and two inserts in flight together can land either way round — the
+   * thread came back on reload with the answer above the question. Nothing
+   * waits on this, so the queue costs her nothing.
+   */
+  const coachWriteRef = useRef(Promise.resolve());
+  const appendCoachMessage = useCallback((message) => {
+    coachWriteRef.current = coachWriteRef.current
+      .then(() => db.appendCoachMessage({ ...message, localDate: localDateIso() }))
+      .catch((e) => { console.warn("appendCoachMessage failed", e); });
+  }, []);
+
+  const postCoach = async (payload) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return { ok: false, message: "Sign in again and I'll pick this back up." };
+      const resp = await fetch("/api/coach", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        return { ok: false, message: data?.message || "I couldn't get to that. Try me again in a second." };
+      }
+      return data;
+    } catch (e) {
+      console.error("postCoach failed", e);
+      return { ok: false, message: "I couldn't get to that. Try me again in a second." };
     }
   };
 
@@ -1649,6 +1815,17 @@ export default function App() {
       userId={user?.id || null}
       unreadMessages={unreadMessages}
       onUnreadMessagesChange={setUnreadMessages}
+      mealHistoryByDate={mealHistoryByDate}
+      onLogCoachCard={logCoachCard}
+      onPencilCoachCard={pencilCoachCard}
+      onClearCoachPencil={clearCoachPencilCard}
+      onSaveCoachCard={saveCoachCard}
+      onAskCallie={askCallie}
+      onLoadCoachThread={loadCoachThread}
+      onAppendCoachMessage={appendCoachMessage}
+      postCoach={postCoach}
+      messagesDraft={messagesDraft}
+      onMessagesDraftUsed={() => setMessagesDraft("")}
     />
   );
 

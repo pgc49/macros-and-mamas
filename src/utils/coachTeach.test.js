@@ -1,0 +1,131 @@
+import { describe, expect, it } from "vitest";
+
+import { COACH_COPY, COACH_PASS, menuFromPageCopy, underDayCopy } from "../content/coachVoice.js";
+import { countTeachInThread, hasMenuLink, localCoachTeach, teachBody } from "./coachTeach.js";
+
+describe("Callie's own answers, before a model is called", () => {
+  it("gives the PS method when she is out with no numbers", () => {
+    for (const text of [
+      "I'm eating out, what should I do",
+      "I'm at a restaurant with no nutrition info",
+      "what should I order",
+    ]) {
+      expect(localCoachTeach(text)).toMatchObject({ topic: "psMethod" });
+    }
+    expect(teachBody("psMethod")).toBe(COACH_COPY.teachPs);
+    expect(teachBody("psMethod")).toMatch(/PS method/i);
+  });
+
+  it("answers Italian in her words, not the Oreo line", () => {
+    expect(localCoachTeach(
+      "I am going out to eat tonight for Italian. I'm worried about carbs and fat. What can I eat that won't blow through both?",
+    )).toMatchObject({ topic: "italian" });
+    expect(teachBody("italian")).toMatch(/fish/i);
+    expect(teachBody("italian")).toMatch(/potatoes/i);
+    expect(teachBody("italian")).toMatch(/meatballs/i);
+    expect(teachBody("italian")).not.toMatch(/Oreo/i);
+    expect(teachBody("italian")).not.toMatch(/pasta/i);
+  });
+
+  it("locks In-N-Out and leaves Chipotle to the model", () => {
+    expect(localCoachTeach("I'm going out to eat at inn n out. What should I get?")).toMatchObject({ topic: "inNOut" });
+    expect(localCoachTeach("what should I get at In-N-Out")).toMatchObject({ topic: "inNOut" });
+    expect(teachBody("inNOut")).toMatch(/Protein Style/);
+    expect(teachBody("inNOut")).toMatch(/half the little basket/);
+    expect(localCoachTeach("I'm going to Chipotle, what should I order")).toBeNull();
+    expect(localCoachTeach("Sweetgreen or Cava for lunch")).toBeNull();
+  });
+
+  it("locks Chinese, sushi, and pizza-as-a-meal, and leaves Mexican to the model", () => {
+    expect(localCoachTeach("what should I get for Chinese")).toMatchObject({ topic: "chinese" });
+    expect(localCoachTeach("sushi tonight")).toMatchObject({ topic: "sushi" });
+    expect(localCoachTeach("we're having pizza for dinner")).toMatchObject({ topic: "pizzaMeal" });
+    expect(teachBody("chinese")).toMatch(/stir-fry/i);
+    expect(teachBody("sushi")).toMatch(/nigiri/i);
+    expect(teachBody("pizzaMeal")).toMatch(/Pizza is the meal/);
+    expect(localCoachTeach("Mexican tonight, what should I order")).toBeNull();
+    expect(localCoachTeach("is pizza ok")).toMatchObject({ topic: "realFood" });
+  });
+
+  it("sends a pasted link to the server and still asks for a photo when there is no link", () => {
+    const ask = "https://www.itsjane.com/location/jane-on-fillmore/ Can you tell me what to eat from this menu";
+    expect(hasMenuLink(ask)).toBe(true);
+    expect(localCoachTeach(ask)).toBeNull();
+    expect(localCoachTeach("what can I eat from this menu")).toMatchObject({ topic: "menuLink" });
+    expect(teachBody("menuLink")).toMatch(/won't guess a menu/i);
+    expect(teachBody("menuLink")).toMatch(/photo/i);
+    expect(teachBody("menuLink")).not.toMatch(/salad/i);
+    expect(teachBody("menuClosed")).toMatch(/couldn't open that link/i);
+    expect(teachBody("menuMiss")).toMatch(/couldn't find on the page/i);
+    expect(menuFromPageCopy(["Chicken Taco Salad"])).toMatch(/From the page: Chicken Taco Salad/);
+    expect(menuFromPageCopy(["Chicken Taco Salad"])).not.toMatch(/Jane Salad/i);
+    expect(menuFromPageCopy([])).toBe(COACH_COPY.teachMenuMiss);
+    expect(localCoachTeach("what should I get at Chipotle")).toBeNull();
+  });
+
+  it("does not steal a named restaurant from the model", () => {
+    expect(localCoachTeach("what should I get at Olive Garden")).toBeNull();
+  });
+
+  it("never tells her to skip a meal", () => {
+    expect(localCoachTeach("should I skip dinner")).toMatchObject({ topic: "neverSkip" });
+    expect(localCoachTeach("I'm 400 over, skip dinner?")).toMatchObject({ topic: "neverSkip" });
+    expect(teachBody("neverSkip")).toMatch(/never skip a meal/i);
+  });
+
+  it("answers is-this-ok as real food, not a verdict", () => {
+    expect(localCoachTeach("is pizza ok")).toMatchObject({ topic: "realFood" });
+    expect(localCoachTeach("can I have a protein bar")).toMatchObject({ topic: "realFood" });
+    expect(teachBody("realFood")).toMatch(/real food/i);
+    expect(teachBody("realFood")).toMatch(/Oreo/);
+  });
+
+  it("answers coffee, alcohol, fasting and sweeteners in her words", () => {
+    expect(localCoachTeach("is coffee ok in the morning")).toMatchObject({ topic: "coffee" });
+    expect(localCoachTeach("can I have a glass of wine")).toMatchObject({ topic: "alcohol" });
+    expect(localCoachTeach("should I try intermittent fasting")).toMatchObject({ topic: "fasting" });
+    expect(localCoachTeach("is Diet Coke ok")).toMatchObject({ topic: "sweetener" });
+    expect(teachBody("coffee")).toMatch(/empty stomach/);
+    expect(teachBody("alcohol")).toMatch(/no judgment/);
+    expect(teachBody("alcohol")).not.toMatch(/don't encourage/i);
+    expect(localCoachTeach("cheers, I hit my protein")).toMatchObject({ topic: "underDay" });
+    expect(localCoachTeach("should I get my steps in")).toMatchObject({ topic: "steps" });
+    expect(localCoachTeach("what should I eat after I get my steps in")).toBeNull();
+    expect(teachBody("fasting")).toMatch(/cortisol/);
+    expect(teachBody("sweetener")).toMatch(/Olipop/);
+  });
+
+  it("asks about the 50g fat floor when the day is under", () => {
+    expect(localCoachTeach("I hit my protein but have calories left")).toMatchObject({ topic: "underDay" });
+    expect(underDayCopy({ fatEaten: 32, carbsShort: true })).toMatch(/50g of fat/);
+    expect(underDayCopy({ fatEaten: 32, carbsShort: true })).toMatch(/carbs/);
+    expect(underDayCopy({ fatEaten: 60, carbsShort: false })).not.toMatch(/You're under 50g/);
+  });
+
+  it("does not swallow a meal ask", () => {
+    expect(localCoachTeach("what should I eat")).toBeNull();
+    expect(localCoachTeach("what can I eat that won't blow through both")).toBeNull();
+    expect(localCoachTeach("how's my day looking")).toBeNull();
+  });
+});
+
+describe("a pain point asked a third time", () => {
+  it("counts the coach's own replies on that topic", () => {
+    const thread = [
+      { role: "coach", teach: "neverSkip" },
+      { role: "coach", teach: "neverSkip" },
+      { role: "coach", teach: "psMethod" },
+    ];
+    expect(countTeachInThread(thread, "neverSkip")).toBe(2);
+    expect(countTeachInThread(thread, "psMethod")).toBe(1);
+  });
+});
+
+describe("the handoff closer", () => {
+  it("asks her to message Callie instead of sounding like the bot already did", () => {
+    expect(COACH_PASS).toBe(
+      "That's something Callie might be better able to answer than me. Message her and she'll get back to you.",
+    );
+    expect(COACH_PASS).not.toMatch(/I'll pass/i);
+  });
+});
