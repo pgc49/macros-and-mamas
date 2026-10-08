@@ -1105,6 +1105,30 @@ describe("ask persists the server's own reply", () => {
     expect(posts[0].kind).toBe("cards");
     expect(posts[0].payload.cards[0].name).toBe("Chicken bowl");
   });
+
+  it("saves the plate sized as she would see it, not the raw model meal", async () => {
+    mockSupabase();
+    modelReturns({
+      scope: "food",
+      reply: "Two servings of the salmon.",
+      meals: [{ name: "Salmon bowl", cal: 280, p: 28, c: 18, f: 10, desc: "Fits." }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "what can I make with leftover salmon tonight",
+        budget: { cal: 700, pNeed: 50, c: 80, f: 30 },
+        localDate: "2026-10-08",
+      }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    const card = coachMessagePosts()[0].payload.cards[0];
+    expect(card.servings).toBe(2);
+    expect(card.title).toBe("Salmon bowl · 2 servings");
+    expect(card.cal).toBe(560);
+    expect(card.p).toBe(56);
+  });
 });
 
 describe("cost", () => {

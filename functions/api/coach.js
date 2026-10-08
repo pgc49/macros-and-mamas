@@ -63,9 +63,8 @@ import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 import { hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../../src/utils/coachTeach.js";
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
-import { menuFromPageCopy } from "../../src/content/coachVoice.js";
+import { COACH_COPY, menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
-import { buildCoachCard } from "../../src/utils/coachRank.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 import {
   buildLocalCoachRecord,
@@ -450,26 +449,66 @@ function parseRecent(value) {
  * Anything that reads like the model talking about itself, hedging like a
  * chatbot, or quoting her ranges back is dropped rather than shown.
  */
-function sizeMealsForPersist(meals, budget, slot, source) {
+function sourceTag(source) {
+  if (source === "my") return COACH_COPY.sourceMy;
+  if (source === "pantry") return COACH_COPY.sourcePantry;
+  if (source === "menu") return COACH_COPY.sourceMenu;
+  if (source === "kitchen") return COACH_COPY.sourceKitchen;
+  if (source === "new") return COACH_COPY.sourceNew;
+  return COACH_COPY.sourceBank;
+}
+
+function mealFitsBudget(macros, servings, budget) {
+  if (!budget?.cal) return true;
+  const cal = macros.cal * servings;
+  const fat = macros.f * servings;
+  return cal <= budget.cal * 1.05 && fat <= (budget.f || 1e9) * 1.05;
+}
+
+/** Size the plate the way she saw it. Kept here so /api/coach does not pull the ranker. */
+function sizeMealsForPersist(meals, budget, _slot, source) {
   const out = [];
   for (const meal of meals || []) {
-    const dressed = budget
-      ? buildCoachCard({ ...meal, source }, budget, { slot })
-      : null;
-    const card = dressed || meal;
+    const macros = {
+      cal: Number(meal.cal) || 0,
+      p: Number(meal.p) || 0,
+      c: Number(meal.c) || 0,
+      f: Number(meal.f) || 0,
+    };
+    let servings = Number(meal.servings);
+    if (!Number.isFinite(servings) || servings <= 0) servings = 1;
+    if (budget?.cal) {
+      if (mealFitsBudget(macros, 1, budget)) {
+        servings = 1;
+        if ((budget.pNeed || 0) > macros.p) {
+          for (const scale of [1.5, 2]) {
+            if (mealFitsBudget(macros, scale, budget)) servings = scale;
+          }
+        }
+      } else if (mealFitsBudget(macros, 0.5, budget)) {
+        servings = 0.5;
+      }
+    }
+    const name = String(meal.name || "").trim();
+    const title = servings === 1
+      ? (meal.title || name)
+      : servings === 0.5
+        ? `${name} · half portion`
+        : `${name} · ${servings} servings`;
+    const src = meal.source || source || "";
     out.push({
-      name: card.name,
-      title: card.title || card.name,
-      source: card.source || source || "",
-      tag: card.tag || "",
-      id: card.id || meal.id || "",
-      basedOn: card.basedOn || meal.basedOn || null,
-      servings: card.servings ?? meal.servings ?? 1,
-      cal: card.cal,
-      p: card.p,
-      c: card.c,
-      f: card.f,
-      reason: card.reason || meal.desc || "",
+      name,
+      title,
+      source: src,
+      tag: meal.tag || sourceTag(src),
+      id: meal.id || "",
+      basedOn: meal.basedOn || null,
+      servings,
+      cal: Math.round(macros.cal * servings),
+      p: Math.round(macros.p * servings),
+      c: Math.round(macros.c * servings),
+      f: Math.round(macros.f * servings),
+      reason: meal.reason || meal.desc || "",
     });
   }
   return out;
