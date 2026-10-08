@@ -1,8 +1,9 @@
 -- ==================================================================
 -- 20261008100000_coach_request_id_and_refusal.sql
--- request_id on coach_messages (mama payload stays empty).
+-- Add-only: request_id on coach_messages (mama payload stays empty).
 -- Atomic client_summaries append for crisis / medical / stuck lines.
 -- Do not apply live until Patrick says so.
+-- No drops. No rewrites or backfills of existing rows.
 -- ==================================================================
 
 alter table public.coach_messages
@@ -11,15 +12,23 @@ alter table public.coach_messages
 comment on column public.coach_messages.request_id is
   'Pairs a mama ask with its coach reply. uuid or 8-64 [A-Za-z0-9-].';
 
-alter table public.coach_messages
-  drop constraint if exists coach_messages_request_id_check;
-
-alter table public.coach_messages
-  add constraint coach_messages_request_id_check
-  check (
-    request_id is null
-    or request_id ~ '^[A-Za-z0-9-]{8,64}$'
-  );
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'coach_messages_request_id_check'
+      and conrelid = 'public.coach_messages'::regclass
+  ) then
+    alter table public.coach_messages
+      add constraint coach_messages_request_id_check
+      check (
+        request_id is null
+        or request_id ~ '^[A-Za-z0-9-]{8,64}$'
+      );
+  end if;
+end
+$$;
 
 create or replace function public.protect_coach_message_hide()
 returns trigger
@@ -27,7 +36,8 @@ language plpgsql
 set search_path = public
 as $$
 begin
-  if new.profile_id is distinct from old.profile_id
+  if new.id is distinct from old.id
+     or new.profile_id is distinct from old.profile_id
      or new.role is distinct from old.role
      or new.body is distinct from old.body
      or new.kind is distinct from old.kind
@@ -35,6 +45,7 @@ begin
      or new.local_date is distinct from old.local_date
      or new.created_at is distinct from old.created_at
      or new.seq is distinct from old.seq
+     or new.source is distinct from old.source
      or new.request_id is distinct from old.request_id
   then
     raise exception 'coach_messages are append-only except hidden_at';

@@ -10,7 +10,7 @@ import { resendIdempotencyKey, sendResendEmail } from "./resendSend.mjs";
 import { coachSummaryDateIso } from "./coachRefusalSummary.js";
 import { wallClockParts, COACH_CLOCK_TZ } from "../../src/utils/mealSlots.js";
 
-export const COACH_CRISIS_EMAIL = true;
+export const COACH_CRISIS_EMAIL = false;
 export const DEFAULT_CALLIE_NOTIFY_EMAIL = "calista@nourishwithcalista.com";
 
 export function callieOpsEmail(env) {
@@ -101,8 +101,9 @@ export async function notifyCrisisEmail(env, {
   first = "",
   now = new Date(),
   send = sendResendEmail,
+  enabled = COACH_CRISIS_EMAIL,
 } = {}) {
-  if (!COACH_CRISIS_EMAIL) return { ok: false, skipped: true };
+  if (!enabled) return { ok: false, skipped: true };
   const to = callieOpsEmail(env);
   if (!to || !userId) return { ok: false, skipped: true };
   const ticket = crisisEmailHourKey(userId, now);

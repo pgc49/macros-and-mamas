@@ -75,7 +75,7 @@ import {
   isStuckPainCount,
   persistServerCoach,
 } from "../_shared/coachMessages.js";
-import { sizeMealsForPersist } from "../../src/utils/coachPlateScale.js";
+import { sizeMealsForPersist } from "../_shared/coachPlateScale.js";
 import { notifyCrisisEmail } from "../_shared/coachCrisisEmail.js";
 
 const MAX_PER_DAY = 30;
