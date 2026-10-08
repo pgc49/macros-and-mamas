@@ -22,6 +22,7 @@ import {
   COACH_QUESTION_BANK_SETUPS,
   platesNamedInReply,
 } from "../functions/_shared/coachQuestionBank.js";
+import { evalTokenEmailAllowed, verifyCoachEvalToken } from "./coachEvalGuard.js";
 
 function arg(name, fallback = "") {
   const flag = `--${name}`;
@@ -57,8 +58,21 @@ if (!url || !token || !account) {
   process.exit(1);
 }
 
-if (!/^pgchammas\+qa[-+a-z0-9._]*@/i.test(account) && !/^pgchammas\+qa-/i.test(account)) {
-  console.error("Refusing: --account must be a pgchammas+qa-* preview account.");
+if (!evalTokenEmailAllowed(account)) {
+  console.error("Refusing: --account must match ^pgchammas+qa-[a-z0-9-]+@gmail.com$");
+  process.exit(1);
+}
+
+const verified = await verifyCoachEvalToken({
+  token,
+  supabaseUrl: process.env.SUPABASE_URL,
+});
+if (!verified.ok || !evalTokenEmailAllowed(verified.email)) {
+  console.error("Refusing: token email must match ^pgchammas+qa-[a-z0-9-]+@gmail.com$ (checked via /auth/v1/user).");
+  process.exit(1);
+}
+if (verified.email !== account.toLowerCase()) {
+  console.error("Refusing: --account does not match the token email.");
   process.exit(1);
 }
 
