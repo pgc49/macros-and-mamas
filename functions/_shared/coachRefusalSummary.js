@@ -21,7 +21,11 @@ const DOORS = {
   medical: "medical",
   stuck: "stuck",
   again: "stuck",
+  supply: "supply",
 };
+
+/** A supply drop is Callie's, not an ordinary "will this affect supply" aside. */
+const SUPPLY_DROP = /\b(supply|milk)\b.{0,28}\b(drop(?:ped|ping)?|dipped|low|down|dry(?:ing)? up)\b/;
 
 /** Skip-the-log. Eat-and-move-on ("skip dinner") is a teach, not this. */
 const WONT_LOG = /\b(?:won'?t|will not|not going to|don'?t|do not|cant|can't)\s+(?:want to\s+)?log\b|\bnot logging\b|\bhate tracking\b/;
@@ -65,6 +69,7 @@ export function escalateDoor(asked, { escalate = null, scope = null } = {}) {
   if (scope === "urgent" || scope === "medical") {
     return isClinicalUrgent(question) ? "medical" : null;
   }
+  if (scope === "supply" && SUPPLY_DROP.test(question.toLowerCase())) return "supply";
   return null;
 }
 

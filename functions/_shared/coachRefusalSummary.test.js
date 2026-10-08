@@ -31,6 +31,7 @@ describe("a refusal line is factual", () => {
     expect(escalateDoor("I've been dizzy since this morning", { scope: "urgent" })).toBe("medical");
     expect(escalateDoor("should I skip dinner", { escalate: "stuck" })).toBe("stuck");
     expect(escalateDoor("will this affect my supply", { scope: "supply" })).toBeNull();
+    expect(escalateDoor("I feel like my supply dropped, what should I eat", { scope: "supply" })).toBe("supply");
     expect(escalateDoor("I feel awful about what I ate", { scope: "urgent" })).toBeNull();
     expect(escalateDoor("what workout should I do", { scope: "off_topic" })).toBeNull();
     expect(escalateDoor("what should I eat", { escalate: "stuck" })).toBeNull();

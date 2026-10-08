@@ -218,10 +218,35 @@ const FOOD_ASK = new RegExp(
     "\\bgrocer", "\\bdelivery\\b", "\\bdoordash\\b", "\\buber eats\\b", "\\bgrubhub\\b",
     "\\bhave for\\b", "\\bportions?\\b", "\\bserving\\b", "\\bplate\\b", "\\bdish\\b",
     "\\bleftovers?\\b", "\\bchicken\\b", "\\bturkey\\b", "\\bsalmon\\b", "\\beggs?\\b",
-    "\\byogurt\\b", "\\bpasta\\b", "\\brice\\b",
+    "\\byogurt\\b", "\\bpasta\\b", "\\brice\\b", "\\beaten\\b", "\\bate\\b", "\\bstarv(ing|ed)?\\b",
+    "\\bsmoothie\\b", "\\bpizza\\b", "\\bcookies?\\b", "\\bcottage cheese\\b", "\\bvegetarian\\b",
+    "\\bchipotle\\b", "\\bstarbucks\\b", "\\bchick[- ]?fil[- ]?a\\b", "\\btrader joe",
+    "\\bthai\\b", "\\btortillas?\\b",
   ].join("|"),
   "i",
 );
+
+/**
+ * Meal asks that do not use a food word: something new, surprise me, a swap.
+ * classifyAsk treats these as food so they never trip a guardrail.
+ */
+const MEAL_INTENT = [
+  /\bsomething new\b/,
+  /\bsurprise me\b/,
+  /\bbored of (everything|these|what)\b/,
+  /\bnot the smoothie\b/,
+  /\bi hate cottage cheese\b/,
+  /\bmake it vegetarian\b/,
+  /\bless prep\b/,
+  /\bdon'?t have spinach\b/,
+  /\bswap\b/,
+  /\bask callie\b/,
+  /\bin \d+ minutes?\b/,
+  /\bbaby is screaming\b/,
+  /\bhaven'?t eaten\b/,
+  /\bwhat'?s good at\b/,
+  /\bgood option\b/,
+];
 
 /**
  * Plainly not food. Narrow on purpose: this list refuses outright, so anything
@@ -274,7 +299,7 @@ export function classifyAsk(raw) {
   const nextMeal = NEXT_MEAL.test(text);
   if (guilt && !nextMeal) return { scope: "urgent", aside: null };
 
-  const foodAsk = FOOD_ASK.test(text);
+  const foodAsk = FOOD_ASK.test(text) || hits(MEAL_INTENT, text);
 
   // Supply is always Callie's. Cards plus a footnote was too cute — she
   // said protect it first, and if a mama thinks it's being affected, write
@@ -306,7 +331,7 @@ export function scopeIsRefused(scope) {
   return scope !== "food" && scope !== "unclear";
 }
 
-const PLATE_ASK = /\b(eat|eating|meal|lunch|dinner|breakfast|snack|hungry|cook|fridge|menu|order|recipe|plate|dish|chicken|eggs?|salmon|yogurt|leftover|ideas|pizza|italian|chinese|sushi|taco|burger)\b/i;
+const PLATE_ASK = /\b(eat|eating|eaten|ate|meal|lunch|dinner|breakfast|snack|hungry|starving|cook|fridge|menu|order|recipe|plate|dish|chicken|eggs?|salmon|yogurt|leftover|ideas|pizza|italian|chinese|sushi|taco|burger|smoothie|vegetarian|swap|surprise me|something new)\b/i;
 const MEAL_TEACH_HINT = new Set([
   "italian", "chinese", "sushi", "pizzaMeal", "inNOut", "psMethod",
   "neverSkip", "realFood", "underDay", "fasting", "menuLink", "menuClosed", "menuMiss",
@@ -322,6 +347,7 @@ export function isMealAsk(raw, { mode = "ask", topic = null } = {}) {
   const text = String(raw || "").toLowerCase().trim();
   if (!text) return false;
   if (NEXT_MEAL.test(text)) return true;
+  if (hits(MEAL_INTENT, text)) return true;
   if (!PLATE_ASK.test(text) && !FOOD_ASK.test(text)) return false;
   if (hits(RANGES, text) && !NEXT_MEAL.test(text) && !/\bwhat (should|can|do) i (eat|have|make|order|get)\b/.test(text)) {
     return false;

@@ -27,8 +27,17 @@ export function isHalfAskMeal(plate, other) {
 }
 
 export function askedForMealOptions(text) {
-  return /\b(options|a few( ideas| things)?|give me \d|show me (a few|some|others|more)|couple of|two or three|2 or 3)\b/i
+  return /\b(options|ideas?|something new|surprise me|bored|a few( ideas| things)?|give me \d|show me (a few|some|others|more)|couple of|two or three|2 or 3)\b/i
     .test(String(text || ""));
+}
+
+/** How many plates she asked for. One is the default. */
+export function askedMealCount(text) {
+  const asked = String(text || "");
+  const numbered = asked.match(/\b(?:give me |show me )?(\d)\s+(options?|ideas?|dinners?|things|plates?)/i);
+  if (numbered) return Math.min(3, Math.max(1, Number(numbered[1])));
+  if (askedForMealOptions(asked)) return 3;
+  return 1;
 }
 
 export function limitAskMeals(meals, { askedForOptions = false } = {}) {

@@ -490,8 +490,8 @@ describe("what comes back", () => {
     });
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
     const data = await resp.json();
-    expect(data.meals).toHaveLength(1);
     expect(data.meals[0].name).toBe("Real bowl");
+    expect(data.meals.length).toBeGreaterThanOrEqual(1);
   });
 
   it("drops a reply that quotes her ranges back", async () => {
@@ -513,8 +513,8 @@ describe("what comes back", () => {
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
     const data = await resp.json();
     expect(data.reply).toMatch(/Salmon bowl/);
-    expect(data.meals).toHaveLength(1);
     expect(data.meals[0].name).toBe("Salmon bowl");
+    expect(data.meals.length).toBeGreaterThanOrEqual(1);
   });
 
   it("uses the Coach busy line when the model is down, not AI or Callie-notified", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { askedForMealOptions, isHalfAskMeal, limitAskMeals } from "./coachAskMeals.js";
+import { askedForMealOptions, askedMealCount, isHalfAskMeal, limitAskMeals } from "./coachAskMeals.js";
 
 const CHICKEN = { name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12, servings: 1 };
 const CHICKEN_HALF = { name: "Chicken bowl", cal: 215, p: 22, c: 15, f: 6, servings: 0.5, title: "Chicken bowl · half portion" };
@@ -23,8 +23,12 @@ describe("the ask parser caps plates", () => {
 
   it("gives up to three only when she asked for options", () => {
     expect(askedForMealOptions("give me a few options")).toBe(true);
+    expect(askedForMealOptions("something new please")).toBe(true);
+    expect(askedForMealOptions("I'm bored of everything you've given me")).toBe(true);
     expect(askedForMealOptions("what should I eat tonight")).toBe(false);
     expect(limitAskMeals([CHICKEN, SALMON, CHICKEN_HALF], { askedForOptions: true })).toHaveLength(3);
     expect(limitAskMeals([CHICKEN, SALMON], { askedForOptions: false })).toHaveLength(1);
+    expect(askedMealCount("give me 3 options for dinner")).toBe(3);
+    expect(askedMealCount("what should I eat tonight")).toBe(1);
   });
 });

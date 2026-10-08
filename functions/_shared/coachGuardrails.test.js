@@ -278,6 +278,9 @@ describe("isMealAsk", () => {
     expect(isMealAsk("what should I have for dinner")).toBe(true);
     expect(isMealAsk("what should I eat before my run")).toBe(true);
     expect(isMealAsk("is pizza ok")).toBe(true);
+    expect(isMealAsk("something new please")).toBe(true);
+    expect(isMealAsk("surprise me")).toBe(true);
+    expect(isMealAsk("why do you keep saying ask Callie")).toBe(true);
     expect(isMealAsk("", { mode: "kitchen" })).toBe(true);
     expect(isMealAsk("a short note", { mode: "menu" })).toBe(true);
   });

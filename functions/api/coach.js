@@ -45,7 +45,8 @@ import {
   replyIsClean,
   scopeIsRefused,
 } from "../_shared/coachGuardrails.js";
-import { askedForMealOptions, limitAskMeals } from "../_shared/coachAskMeals.js";
+import { askedForMealOptions, askedMealCount, limitAskMeals } from "../_shared/coachAskMeals.js";
+import { filterCoachMeals } from "../_shared/coachMealFilter.js";
 import { escalateDoor, isWontLogRefusal } from "../_shared/coachRefusalSummary.js";
 import {
   callOpenRouter,
@@ -79,7 +80,7 @@ import {
 } from "../_shared/coachMessages.js";
 import { sizeMealsForPersist } from "../_shared/coachPlateScale.js";
 import { notifyCrisisEmail } from "../_shared/coachCrisisEmail.js";
-import { ensureFoodMeals, fallbackMealReply, MEAL_TEACH_TOPICS } from "../_shared/coachFoodFallback.js";
+import { ensureFoodMeals, fallbackMealReply, MEAL_TEACH_TOPICS, padCoachMeals } from "../_shared/coachFoodFallback.js";
 
 const MAX_PER_DAY = 30;
 const MAX_RECORD_PER_DAY = 200;
@@ -90,6 +91,42 @@ const MAX_IMAGE_CHARS = 2_500_000;
 const MAX_TEXT = 600;
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
 const MODES = new Set(["ask", "menu", "kitchen", "record"]);
+const LOG_NAG = /\b(log it|pencil in|save to my meals|don't forget to log|log this|save this)\b/gi;
+
+function wantsFoodFill(text, { mode, scope, crisis = false, topic = null } = {}) {
+  if (crisis) return false;
+  if (isMealAsk(text, { mode, topic })) return true;
+  return scope === "urgent" || scope === "supply";
+}
+
+function coachFillArgs({ text, slot, mode, topic, profile, customMeals, day, reply, safe, iron }) {
+  const skipNames = [
+    ...((day && day.alreadySuggested) || []),
+    ...((day && day.turnedDown) || []),
+  ];
+  const want = askedMealCount(text);
+  return {
+    text,
+    slot,
+    mode,
+    topic,
+    profile,
+    customMeals,
+    reply,
+    safe,
+    iron: iron || /\biron\b/i.test(String(text || "")),
+    skipNames,
+    count: want >= 2 ? want : 3,
+  };
+}
+
+function stripLogNag(reply) {
+  return String(reply || "")
+    .replace(LOG_NAG, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.!?])/g, "$1")
+    .trim();
+}
 
 async function allowCoachNote(env, userId, { isAdmin, requestId }) {
   if (isAdmin) return true;
@@ -213,6 +250,10 @@ export async function onRequestPost({ request, env }) {
         ? String(body.slot).toLowerCase()
         : "dinner");
     const images = mode === "ask" ? [] : parseImages(body);
+    const earlyDay = sanitizeCoachContext({
+      ...(body.context || {}),
+      notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
+    });
 
     if (mode === "ask" && text.length < 2) {
       return json({ error: "Ask me something about your next meal." }, 400);
@@ -237,8 +278,8 @@ export async function onRequestPost({ request, env }) {
       ? await countPainTeachToday(env, user.id, teach.topic)
       : 0;
     if (teach && PAIN_TOPICS.has(teach.topic) && isStuckPainCount(painCount)) {
-      const filled = isMealAsk(text, { mode, topic: teach.topic })
-        ? ensureFoodMeals([], { text, slot, mode, topic: teach.topic, safe: true })
+      const filled = wantsFoodFill(text, { mode, topic: teach.topic, scope: "food" })
+        ? ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: teach.topic, safe: true, day: earlyDay }))
         : { meals: [] };
       await persistCannedCoach(env, user.id, body, {
         body: "",
@@ -261,13 +302,14 @@ export async function onRequestPost({ request, env }) {
     if (scopeIsRefused(verdict.scope)) {
       const deflect = deflectForScope(verdict.scope, text);
       const crisis = deflect === "emergency" || isCrisisUrgent(text);
-      const filled = (!crisis && isMealAsk(text, { mode }))
-        ? ensureFoodMeals([], {
+      const filled = wantsFoodFill(text, { mode, scope: verdict.scope, crisis })
+        ? ensureFoodMeals([], coachFillArgs({
           text,
           slot,
           mode,
           safe: verdict.scope === "urgent" || verdict.scope === "supply",
-        })
+          day: earlyDay,
+        }))
         : { meals: [] };
       await persistCannedCoach(env, user.id, body, {
         body: "",
@@ -294,10 +336,11 @@ export async function onRequestPost({ request, env }) {
         notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
       });
       const filled = MEAL_TEACH_TOPICS.has(teach.topic)
-        ? ensureFoodMeals([], { text, slot, mode, topic: teach.topic, reply })
+        ? ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: teach.topic, reply, day: earlyDay }))
         : { meals: [], reply };
+      const teachReply = earlyDay?.notLogging ? stripLogNag(filled.reply || reply) : (filled.reply || reply);
       await persistCannedCoach(env, user.id, body, {
-        body: filled.reply || reply,
+        body: teachReply,
         kind: filled.meals.length ? "cards" : "text",
         payload: {
           teach: teach.topic,
@@ -309,7 +352,7 @@ export async function onRequestPost({ request, env }) {
         ok: true,
         scope: "food",
         teach: teach.topic,
-        reply: filled.reply || reply,
+        reply: teachReply,
         meals: filled.meals,
         mealSource: filled.meals.length ? "new" : undefined,
         aside: verdict.aside || null,
@@ -324,7 +367,7 @@ export async function onRequestPost({ request, env }) {
       const noteOk = isAdmin || await allowCoachNote(env, user.id, { isAdmin, requestId });
       if (!noteOk) {
         const reply = teachBody("menuClosed");
-        const filled = ensureFoodMeals([], { text, slot, mode, topic: "menuClosed", reply });
+        const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: "menuClosed", reply, day: earlyDay }));
         return json({
           ok: true,
           scope: "food",
@@ -338,7 +381,7 @@ export async function onRequestPost({ request, env }) {
       menuPage = link ? await fetchMenuPage(link) : { ok: false, reason: "bad-url" };
       if (!menuPage.ok) {
         const reply = teachBody("menuClosed");
-        const filled = ensureFoodMeals([], { text, slot, mode, topic: "menuClosed", reply });
+        const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: "menuClosed", reply, day: earlyDay }));
         await persistServerCoach(env, user.id, body, {
           body: filled.reply,
           kind: filled.meals.length ? "cards" : "text",
@@ -468,9 +511,10 @@ export async function onRequestPost({ request, env }) {
         model: result.model,
         detail: result.text.slice(0, 300),
       });
-      if (isMealAsk(text, { mode })) {
-        const filled = ensureFoodMeals([], { text, slot, mode, profile, customMeals });
+      if (wantsFoodFill(text, { mode, scope: "food" })) {
+        const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, profile, customMeals, day }));
         let reply = filled.reply;
+        if (day?.notLogging) reply = stripLogNag(reply);
         if (workingNumbers) reply = leadFineTuningReply(reply);
         await persistServerCoach(env, user.id, body, {
           body: reply,
@@ -532,8 +576,8 @@ export async function onRequestPost({ request, env }) {
           await notifyCrisisEmail(env, { userId: user.id, asked: text });
         }
         const crisis = deflect === "emergency" || isCrisisUrgent(text);
-        const filled = (!crisis && isMealAsk(text, { mode }))
-          ? ensureFoodMeals([], { text, slot, mode, profile, customMeals, safe: true })
+        const filled = wantsFoodFill(text, { mode, scope: "food", crisis })
+          ? ensureFoodMeals([], coachFillArgs({ text, slot, mode, profile, customMeals, safe: true }))
           : { meals: [] };
         await persistServerCoach(env, user.id, body, {
           body: "",
@@ -567,21 +611,24 @@ export async function onRequestPost({ request, env }) {
       lockSlot: Boolean(askedSlot),
       estimate: workingNumbers,
     });
+    meals = filterCoachMeals(meals, {
+      text,
+      profile,
+      skipNames: [...(day?.alreadySuggested || []), ...(day?.turnedDown || [])],
+    });
     if (mode === "ask" && !menuPage?.ok) {
       meals = limitAskMeals(meals, { askedForOptions: askedForMealOptions(text) });
     }
     let teachTopic = null;
+    const fill = coachFillArgs({ text, slot, mode: orderMode, profile, customMeals, day, reply });
 
     if (menuPage?.ok) {
       const kept = meals.filter((meal) => dishOnPage(meal.name, menuPage.text));
       if (!kept.length) {
         const filled = ensureFoodMeals([], {
-          text,
-          slot,
+          ...fill,
           mode: "menu",
           topic: "menuMiss",
-          profile,
-          customMeals,
           reply: teachBody("menuMiss"),
         });
         reply = filled.reply;
@@ -593,21 +640,19 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    if (isMealAsk(text, { mode, topic: teachTopic }) && !meals.length) {
-      const filled = ensureFoodMeals([], {
-        text,
-        slot,
-        mode: orderMode,
-        topic: teachTopic,
-        profile,
-        customMeals,
-        reply,
-      });
+    const want = askedMealCount(text);
+    if (want >= 2 && meals.length && meals.length < want) {
+      meals = padCoachMeals(meals, { ...fill, count: want });
+    }
+
+    if (wantsFoodFill(text, { mode, topic: teachTopic, scope: "food" }) && !meals.length) {
+      const filled = ensureFoodMeals([], { ...fill, topic: teachTopic, reply });
       meals = filled.meals;
       reply = filled.reply;
     } else if (!reply && meals.length) {
       reply = fallbackMealReply(meals);
     }
+    if (day?.notLogging) reply = stripLogNag(reply);
     if (workingNumbers) reply = leadFineTuningReply(reply);
 
     const mealSource = orderMode === "menu" ? "menu" : mode === "kitchen" ? "kitchen" : "new";
