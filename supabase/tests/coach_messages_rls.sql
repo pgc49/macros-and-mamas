@@ -115,7 +115,7 @@ select ok(
 
 select lives_ok(
   $$update public.coach_messages
-      set hidden_at = now()
+      set hidden_at = '2026-10-08T12:00:00Z'::timestamptz
     where id = '00000000-0000-0000-0000-0000000000c1'$$,
   'mama can hide her own coach-role row'
 );
@@ -127,9 +127,14 @@ select is(
   'hidden row disappears from the mama select'
 );
 
-update public.coach_messages
-   set hidden_at = null
- where id = '00000000-0000-0000-0000-0000000000c1';
+select throws_ok(
+  $$update public.coach_messages
+      set hidden_at = null
+    where id = '00000000-0000-0000-0000-0000000000c1'$$,
+  '42501',
+  null,
+  'mama cannot un-hide: she can no longer select the row'
+);
 
 reset role;
 select ok(
