@@ -86,7 +86,8 @@ function normalize(raw) {
  */
 function stripPastSlotMentions(text) {
   return String(text || "")
-    .replace(/\b(?:already\s+)?(?:had|ate|eaten)\b[^.?]{0,48}\b(?:breakfast|lunch|dinner|supper|snack|morning|tonight|evening|midday)\b/g, " ")
+    .replace(/\b(?:already\s+)?(?:had|ate|eaten)\s+(?:(?:a|my|the)\s+)?(?:breakfast|lunch|dinner|supper|snack)\b/g, " ")
+    .replace(/\b(?:already\s+)?(?:had|ate|eaten)\b[^.?,]{0,40}?\b(?:at|for)\s+(?:breakfast|lunch|dinner|supper|snack|morning|tonight|evening|midday)\b/g, " ")
     .replace(/\bfor\s+(?:breakfast|lunch|dinner|supper|snack)\s+i\s+(?:had|ate)\b/g, " ")
     .replace(/\b(?:breakfast|lunch|dinner|supper|snack)\s+(?:was|already)\b/g, " ");
 }
