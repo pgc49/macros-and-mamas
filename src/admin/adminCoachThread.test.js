@@ -124,6 +124,33 @@ describe("pairedMamaBody", () => {
     expect(pairedMamaBody(old, 1)).toBe("old first");
     expect(priorMamaBody(old, 1)).toBe("old first");
   });
+
+  it("pairs a reply that landed first by request_id across the day's rows", () => {
+    const messages = [
+      coach("c1", {
+        seq: 1,
+        requestId: "ask-late01",
+        kind: "deflect",
+        payload: { deflect: "care" },
+      }),
+      mama("m1", "I've been dizzy since this morning", { seq: 2, requestId: "ask-late01" }),
+    ];
+    expect(pairedMamaBody(messages, 0)).toBe("I've been dizzy since this morning");
+    const view = buildAdminCoachView(messages);
+    expect(view.pinned[0].asked).toBe("I've been dizzy since this morning");
+    const other = [
+      mama("m-other", "wrong ask", { seq: 1, requestId: "ask-other1" }),
+      coach("c1", {
+        seq: 2,
+        requestId: "ask-late01",
+        kind: "deflect",
+        payload: { deflect: "care" },
+      }),
+      mama("m1", "I've been dizzy since this morning", { seq: 3, requestId: "ask-late01" }),
+    ];
+    expect(pairedMamaBody(other, 1)).toBe("I've been dizzy since this morning");
+    expect(pairedMamaBody(other, 1)).not.toBe("wrong ask");
+  });
 });
 
 describe("buildAdminCoachView", () => {

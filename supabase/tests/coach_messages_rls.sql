@@ -1,6 +1,6 @@
 begin;
 
-select plan(42);
+select plan(54);
 
 select ok(
   exists (
@@ -442,7 +442,265 @@ select ok(
     where profile_id = '00000000-0000-0000-0000-0000000000a3'
       and for_date = '2026-10-09'
   ),
-  'overflow drops the oldest lines and keeps the newest crisis'
+  'overflow drops prose first and keeps the newest crisis intact'
+);
+
+insert into public.client_summaries (profile_id, for_date, summary)
+values (
+  '00000000-0000-0000-0000-0000000000a1',
+  '2026-10-10',
+  repeat('p', 3969)
+);
+
+select is(
+  (
+    public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a1',
+      '2026-10-10',
+      'Coach refused (crisis): I want to die',
+      'crisis',
+      10
+    )->>'ok'
+  ),
+  'true',
+  'crisis at ~3969 chars still writes'
+);
+
+select ok(
+  (
+    select
+      char_length(summary) <= 4000
+      and (
+        select count(*)
+        from regexp_split_to_table(summary, E'\n') as line
+        where line = 'Coach refused (crisis): I want to die'
+      ) = 1
+    from public.client_summaries
+    where profile_id = '00000000-0000-0000-0000-0000000000a1'
+      and for_date = '2026-10-10'
+  ),
+  'crisis line at ~3969 chars survives intact'
+);
+
+select lives_ok(
+  $$
+  do $body$
+  declare
+    first_line jsonb;
+    second_line jsonb;
+  begin
+    first_line := public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a2',
+      '2026-10-11',
+      'Coach refused (crisis): I want to die tonight, I have a plan',
+      'crisis',
+      10
+    );
+    second_line := public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a2',
+      '2026-10-11',
+      'Coach refused (crisis): I want to die',
+      'crisis',
+      10
+    );
+    if first_line->>'ok' is distinct from 'true'
+       or second_line->>'ok' is distinct from 'true'
+    then
+      raise exception 'expected both crisis lines to write';
+    end if;
+  end
+  $body$;
+  $$,
+  'I want to die after a longer crisis line both write'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from regexp_split_to_table((
+      select summary
+      from public.client_summaries
+      where profile_id = '00000000-0000-0000-0000-0000000000a2'
+        and for_date = '2026-10-11'
+    ), E'\n') as line
+    where line in (
+      'Coach refused (crisis): I want to die tonight, I have a plan',
+      'Coach refused (crisis): I want to die'
+    )
+  ),
+  2,
+  'I want to die after a longer crisis line keeps both'
+);
+
+select lives_ok(
+  $$
+  do $body$
+  declare
+    first_line jsonb;
+    second_line jsonb;
+  begin
+    first_line := public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a2',
+      '2026-10-12',
+      'Coach refused (crisis): message 1',
+      'crisis',
+      10
+    );
+    second_line := public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a2',
+      '2026-10-12',
+      'Coach refused (crisis): message 10',
+      'crisis',
+      10
+    );
+    if first_line->>'ok' is distinct from 'true'
+       or second_line->>'ok' is distinct from 'true'
+    then
+      raise exception 'expected message 1 and message 10 to write';
+    end if;
+  end
+  $body$;
+  $$,
+  'message 1 and message 10 both write'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from regexp_split_to_table((
+      select summary
+      from public.client_summaries
+      where profile_id = '00000000-0000-0000-0000-0000000000a2'
+        and for_date = '2026-10-12'
+    ), E'\n') as line
+    where line in (
+      'Coach refused (crisis): message 1',
+      'Coach refused (crisis): message 10'
+    )
+  ),
+  2,
+  'message 1 and message 10 are distinct whole lines'
+);
+
+select lives_ok(
+  $$
+  do $body$
+  declare
+    i integer;
+    res jsonb;
+  begin
+    for i in 1..10 loop
+      res := public.append_coach_refusal_line(
+        '00000000-0000-0000-0000-0000000000a2',
+        '2026-10-13',
+        'Coach refused (crisis): crisis-cap-' || i,
+        'crisis',
+        10
+      );
+      if (res->>'ok') is distinct from 'true'
+         or coalesce((res->>'capped')::boolean, false)
+      then
+        raise exception 'expected write on crisis %', i;
+      end if;
+    end loop;
+  end
+  $body$;
+  $$,
+  'first 10 distinct crisis lines write'
+);
+
+select is(
+  (
+    public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a2',
+      '2026-10-13',
+      'Coach refused (crisis): crisis-cap-11',
+      'crisis',
+      10
+    )->>'capped'
+  ),
+  'true',
+  'crisis caps at 10 a day'
+);
+
+select lives_ok(
+  $$
+  do $body$
+  declare
+    i integer;
+    res jsonb;
+  begin
+    for i in 1..3 loop
+      res := public.append_coach_refusal_line(
+        '00000000-0000-0000-0000-0000000000a2',
+        '2026-10-14',
+        'Coach refused (medical): medical-cap-' || i,
+        'medical',
+        3
+      );
+      if (res->>'ok') is distinct from 'true'
+         or coalesce((res->>'capped')::boolean, false)
+      then
+        raise exception 'expected write on medical %', i;
+      end if;
+    end loop;
+  end
+  $body$;
+  $$,
+  'first 3 distinct medical lines write'
+);
+
+select is(
+  (
+    public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a2',
+      '2026-10-14',
+      'Coach refused (medical): medical-cap-4',
+      'medical',
+      3
+    )->>'capped'
+  ),
+  'true',
+  'a medical line respects its cap of 3 a day'
+);
+
+select lives_ok(
+  $$
+  do $body$
+  declare
+    i integer;
+    res jsonb;
+  begin
+    for i in 1..13 loop
+      res := public.append_coach_refusal_line(
+        '00000000-0000-0000-0000-0000000000a2',
+        '2026-10-15',
+        'Coach refused (crisis): ' || lpad(i::text, 276, 'x'),
+        'crisis',
+        20
+      );
+      if (res->>'ok') is distinct from 'true' then
+        raise exception 'expected write on long crisis %', i;
+      end if;
+    end loop;
+  end
+  $body$;
+  $$,
+  'fill the card with crisis lines that cannot be dropped'
+);
+
+select is(
+  (
+    public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a2',
+      '2026-10-15',
+      'Coach refused (crisis): ' || lpad('14', 276, 'x'),
+      'crisis',
+      20
+    )->>'reason'
+  ),
+  'full',
+  'returns ok false reason full when crisis cannot fit'
 );
 
 select * from finish();

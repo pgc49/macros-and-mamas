@@ -34,6 +34,14 @@ export function clampCoachRequestId(value) {
   return isCoachRequestId(ticket) ? ticket : crypto.randomUUID();
 }
 
+/** Note-bucket ticket. reserve_estimate_call refuses a seen id on any type. */
+export function noteReserveRequestId(requestId) {
+  const ticket = String(requestId || "").trim();
+  if (!isCoachRequestId(ticket)) return "";
+  const tagged = `${ticket}-note`;
+  return isCoachRequestId(tagged) ? tagged : `${ticket.slice(0, 59)}-note`;
+}
+
 /** Exact mama insert body. Live 080000 only accepts payload null or {}. */
 export function mamaCoachInsertRow({
   profileId,

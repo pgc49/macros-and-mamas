@@ -4,6 +4,7 @@ import { teachBody } from "../../src/utils/coachTeach.js";
 import {
   buildLocalCoachRecord,
   clampCoachRequestId,
+  noteReserveRequestId,
   countPainTeachToday,
   insertCoachReply,
   isCoachRequestId,
@@ -165,6 +166,13 @@ describe("clampCoachRequestId", () => {
     const minted = clampCoachRequestId("ask-1");
     expect(minted).not.toBe("ask-1");
     expect(isCoachRequestId(minted)).toBe(true);
+    expect(noteReserveRequestId("ask-0001")).toBe("ask-0001-note");
+    expect(noteReserveRequestId("11111111-1111-4111-8111-111111111111")).toBe(
+      "11111111-1111-4111-8111-111111111111-note",
+    );
+    expect(noteReserveRequestId("x".repeat(64))).toBe(`${"x".repeat(59)}-note`);
+    expect(isCoachRequestId(noteReserveRequestId("x".repeat(64)))).toBe(true);
+    expect(noteReserveRequestId("ask-1")).toBe("");
   });
 
   it("drops an invalid payload requestId instead of storing it", () => {

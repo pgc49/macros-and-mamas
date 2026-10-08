@@ -23,14 +23,14 @@ export function priorMamaBody(messages, index) {
   return "";
 }
 
-/** Pair by request_id. Old rows without one fall back to arrival order. */
+/** Pair by request_id across the day's rows. Order only when the id is null. */
 export function pairedMamaBody(messages, index) {
   const askId = messages[index]?.requestId;
   if (askId) {
-    for (let i = index - 1; i >= 0; i -= 1) {
-      const row = messages[i];
-      if (row?.role === "mama" && row.requestId === askId && row.body) return row.body;
-    }
+    const matched = (messages || []).find((row) => (
+      row?.role === "mama" && row.requestId === askId && row.body
+    ));
+    return matched?.body || "";
   }
   return priorMamaBody(messages, index);
 }

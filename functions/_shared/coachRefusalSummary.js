@@ -79,7 +79,54 @@ export function coachRefusalLine(asked, door) {
 export const MAX_SUMMARY_ESCALATES = 5;
 
 /** Ordinary medical lines over the note cap. Crisis has its own ceiling. */
-export const MAX_MEDICAL_ESCALATES_PER_DAY = 1;
+export const MAX_MEDICAL_ESCALATES_PER_DAY = 3;
+
+const MAX_SUMMARY_CHARS = 4000;
+const MAX_LINE_CHARS = 300;
+const REFUSAL_PREFIX = "Coach refused (";
+const CRISIS_PREFIX = "Coach refused (crisis):";
+
+export function clipRefusalLine(line) {
+  return String(line || "").trim().slice(0, MAX_LINE_CHARS);
+}
+
+function isRefusalLine(line) {
+  return String(line).startsWith(REFUSAL_PREFIX);
+}
+
+function isCrisisRefusalLine(line) {
+  return String(line).startsWith(CRISIS_PREFIX);
+}
+
+function joinedLength(lines) {
+  if (!lines.length) return 0;
+  return lines.reduce((n, line) => n + String(line).length, 0) + (lines.length - 1);
+}
+
+/**
+ * Fit under 4000 without cutting a Coach refused line.
+ * Drop prose from the front, then oldest non-crisis refused lines.
+ * Never drop a crisis line. null means it cannot fit.
+ */
+export function fitRefusalSummary(lines) {
+  const next = [...lines];
+  while (joinedLength(next) > MAX_SUMMARY_CHARS) {
+    const proseIdx = next.findIndex((line) => !isRefusalLine(line));
+    if (proseIdx !== -1) {
+      next.splice(proseIdx, 1);
+      continue;
+    }
+    const oldNonCrisis = next.findIndex((line) => (
+      isRefusalLine(line) && !isCrisisRefusalLine(line)
+    ));
+    if (oldNonCrisis !== -1) {
+      next.splice(oldNonCrisis, 1);
+      continue;
+    }
+    return null;
+  }
+  return next.join("\n");
+}
 
 /** Distinct crisis lines. Identical text the same Pacific day is a no-op. */
 export const MAX_CRISIS_ESCALATES_PER_DAY = 10;
@@ -98,12 +145,16 @@ export function countRefusalDoorLines(summary, door) {
 }
 
 export function mergeRefusalSummary(existing, line) {
-  const prior = String(existing || "").trim();
-  const next = String(line || "").trim();
-  if (!next) return prior;
-  if (prior.includes(next)) return prior;
-  if (!prior) return next;
-  return `${prior}\n${next}`.slice(0, 4000);
+  const next = clipRefusalLine(line);
+  const prior = String(existing || "");
+  if (!next) return { ok: true, summary: prior, unchanged: true };
+  const lines = prior.length ? prior.split("\n") : [];
+  if (lines.some((row) => row === next)) {
+    return { ok: true, summary: prior, unchanged: true };
+  }
+  const fitted = fitRefusalSummary([...lines, next]);
+  if (fitted == null) return { ok: false, reason: "full", summary: prior };
+  return { ok: true, summary: fitted };
 }
 
 /**
@@ -119,15 +170,18 @@ export function coachSummaryDateIso(now = new Date(), timeZone = COACH_CLOCK_TZ)
 
 /** A generated summary replaces the prose. Refusal lines from that day stay. */
 export function preserveRefusalLines(existing, fresh) {
-  const lines = String(existing || "")
+  const refused = String(existing || "")
     .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("Coach refused ("));
-  let out = String(fresh || "").trim();
-  for (const line of lines) {
-    if (!out.includes(line)) out = out ? `${out}\n${line}` : line;
+    .filter((line) => line.startsWith(REFUSAL_PREFIX));
+  const prose = String(fresh || "").trim();
+  const proseLines = prose ? prose.split("\n") : [];
+  const combined = [...proseLines];
+  for (const line of refused) {
+    if (!combined.some((row) => row === line)) combined.push(line);
   }
-  return out.slice(0, 4000);
+  const fitted = fitRefusalSummary(combined);
+  if (fitted == null) return { ok: false, reason: "full" };
+  return { ok: true, summary: fitted };
 }
 
 /**
@@ -178,13 +232,12 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
   const rows = await read.json().catch(() => null);
   if (!Array.isArray(rows)) return { ok: false };
   const existing = rows[0] || null;
+  const merged = mergeRefusalSummary(existing?.summary, line);
+  if (merged.unchanged) return { ok: true, unchanged: true };
   if (countRefusalDoorLines(existing?.summary, door) >= doorCap(door)) {
     return { ok: true, capped: true };
   }
-  const summary = mergeRefusalSummary(existing?.summary, line);
-  if (existing && summary === String(existing.summary || "").trim()) {
-    return { ok: true, unchanged: true };
-  }
+  if (!merged.ok) return { ok: false, reason: merged.reason || "full" };
 
   const write = await fetch(`${base}/rest/v1/client_summaries?on_conflict=profile_id,for_date`, {
     method: "POST",
@@ -196,7 +249,7 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
     body: JSON.stringify({
       profile_id: userId,
       for_date: day,
-      summary,
+      summary: merged.summary,
       suggested_touch: existing?.suggested_touch ?? null,
       model: existing?.model ?? null,
     }),

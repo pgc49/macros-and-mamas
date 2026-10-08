@@ -81,6 +81,9 @@ declare
   existing_model text;
   has_row boolean;
   n integer;
+  parts text[];
+  drop_idx integer;
+  i integer;
   next_summary text;
 begin
   p_line := left(btrim(p_line), 300);
@@ -99,7 +102,14 @@ begin
      and for_date = p_for_date
    for update;
 
-  if coalesce(has_row, false) and position(p_line in coalesce(existing_summary, '')) > 0 then
+  -- Whole-line equality. "message 1" must not match "message 10".
+  if coalesce(has_row, false)
+     and exists (
+       select 1
+         from regexp_split_to_table(coalesce(existing_summary, ''), E'\n') as line
+        where line = p_line
+     )
+  then
     return jsonb_build_object('ok', true, 'unchanged', true);
   end if;
 
@@ -113,17 +123,38 @@ begin
   end if;
 
   if nullif(btrim(coalesce(existing_summary, '')), '') is null then
-    next_summary := p_line;
+    parts := array[p_line];
   else
-    next_summary := existing_summary || E'\n' || p_line;
-    while length(next_summary) > 4000 loop
-      if position(E'\n' in next_summary) = 0 then
-        next_summary := p_line;
+    parts := string_to_array(existing_summary, E'\n') || p_line;
+  end if;
+
+  -- Never cut a Coach refused line. Drop prose from the front, then the
+  -- oldest non-crisis refused lines. Crisis stays. If it still cannot
+  -- fit, refuse the write.
+  while char_length(array_to_string(parts, E'\n')) > 4000 loop
+    drop_idx := null;
+    for i in 1 .. coalesce(array_length(parts, 1), 0) loop
+      if parts[i] not like 'Coach refused (%' then
+        drop_idx := i;
         exit;
       end if;
-      next_summary := substring(next_summary from position(E'\n' in next_summary) + 1);
     end loop;
-  end if;
+    if drop_idx is null then
+      for i in 1 .. coalesce(array_length(parts, 1), 0) loop
+        if parts[i] like 'Coach refused (%'
+           and parts[i] not like 'Coach refused (crisis):%' then
+          drop_idx := i;
+          exit;
+        end if;
+      end loop;
+    end if;
+    if drop_idx is null then
+      return jsonb_build_object('ok', false, 'reason', 'full');
+    end if;
+    parts := parts[1:drop_idx - 1] || parts[drop_idx + 1:array_length(parts, 1)];
+  end loop;
+
+  next_summary := array_to_string(parts, E'\n');
 
   insert into public.client_summaries as cs (profile_id, for_date, summary, suggested_touch, model)
   values (p_profile_id, p_for_date, next_summary, existing_touch, existing_model)
@@ -140,4 +171,4 @@ grant execute on function public.append_coach_refusal_line(uuid, date, text, tex
   to service_role;
 
 comment on function public.append_coach_refusal_line(uuid, date, text, text, integer) is
-  'Atomic append of one Coach refused line. Dedupes identical text. Caps by door.';
+  'Atomic append of one Coach refused line. Whole-line dedupe. Caps by door. Never cuts a refused line.';

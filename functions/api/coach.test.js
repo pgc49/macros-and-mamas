@@ -53,6 +53,7 @@ function mockSupabase({
   summary = null,
 } = {}) {
   let summaryRow = summary;
+  const claimedTickets = new Map();
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     const value = String(url);
     if (value.includes("/auth/v1/user")) {
@@ -63,8 +64,23 @@ function mockSupabase({
     }
     if (value.includes("rpc/reserve_estimate_call")) {
       const body = JSON.parse(init?.body || "{}");
+      const ticket = String(body.p_request_id || "").trim();
       const used = usedForType(body.p_type, { callsUsed, recordCallsUsed, noteCallsUsed });
-      return new Response(JSON.stringify(used < Number(body.p_max || 0)), { status: 200 });
+      if (ticket) {
+        const prior = claimedTickets.get(ticket);
+        if (prior) {
+          if (prior.type !== body.p_type || prior.retried) {
+            return new Response(JSON.stringify(false), { status: 200 });
+          }
+          prior.retried = true;
+          return new Response(JSON.stringify(true), { status: 200 });
+        }
+      }
+      if (used < Number(body.p_max || 0)) {
+        if (ticket) claimedTickets.set(ticket, { type: body.p_type, retried: false });
+        return new Response(JSON.stringify(true), { status: 200 });
+      }
+      return new Response(JSON.stringify(false), { status: 200 });
     }
     if (value.includes("estimate_calls") && init?.method !== "POST") {
       const type = decodeURIComponent((value.match(/type=eq\.([^&]+)/) || [])[1] || "coach");
@@ -545,6 +561,46 @@ describe("what comes back", () => {
     expect(prompt).toContain("Chicken Taco Salad");
     expect(prompt).toMatch(/must appear in the page text/);
     expect(reserveTypes()).toEqual(["coach_note", "coach"]);
+  });
+
+  it("gives the note bucket its own ticket so a pasted menu link still reaches the model", async () => {
+    mockSupabase({ pages: { "itsjane.com": { body: JANE_HTML } } });
+    modelReturns({
+      scope: "food",
+      reply: "Get the Chicken Taco Salad.",
+      meals: [{
+        name: "Chicken Taco Salad",
+        desc: "as printed",
+        cal: 440,
+        p: 38,
+        c: 30,
+        f: 21,
+        ingredients: [],
+        steps: [],
+      }],
+    });
+    const requestId = "11111111-1111-4111-8111-111111111111";
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "https://www.itsjane.com/location/jane-on-fillmore/ what should I eat",
+        requestId,
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.meals).toHaveLength(1);
+    expect(data.meals[0].name).toBe("Chicken Taco Salad");
+    expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(1);
+    const reserves = globalThis.fetch.mock.calls
+      .filter(([url]) => String(url).includes("rpc/reserve_estimate_call"))
+      .map(([, init]) => JSON.parse(init.body || "{}"));
+    expect(reserves).toEqual([
+      expect.objectContaining({ p_type: "coach_note", p_request_id: `${requestId}-note` }),
+      expect.objectContaining({ p_type: "coach", p_request_id: requestId }),
+    ]);
   });
 
   it("asks for a photo when the page has no dish the model named", async () => {

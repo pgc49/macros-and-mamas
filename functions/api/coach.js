@@ -72,6 +72,7 @@ import {
   insertCoachReply,
   isCoachRequestId,
   isStuckPainCount,
+  noteReserveRequestId,
   persistServerCoach,
 } from "../_shared/coachMessages.js";
 import { sizeMealsForPersist } from "../_shared/coachPlateScale.js";
@@ -92,7 +93,7 @@ async function allowCoachNote(env, userId, { isAdmin, requestId }) {
   const limit = await checkAiLimit(env, userId, {
     type: COACH_NOTE_TYPE,
     max: MAX_NOTES_PER_DAY,
-    requestId,
+    requestId: noteReserveRequestId(requestId),
     busyMessage: "I couldn't save that just now. Try again in a minute.",
     spentMessage: "That's enough saved notes for today. I'll still answer here.",
   });
@@ -117,7 +118,9 @@ async function persistCannedCoach(env, userId, body, message, {
         userId,
         label: "coach",
         kind: "note",
-        detail: "client_summaries append failed",
+        detail: noted.reason === "full"
+          ? "client_summaries append full"
+          : "client_summaries append failed",
       });
     }
     if (door === "crisis" && noted.ok && !noted.skipped && !noted.capped && !noted.unchanged) {
@@ -428,7 +431,9 @@ export async function onRequestPost({ request, env }) {
             userId: user.id,
             label: "coach",
             kind: "note",
-            detail: "client_summaries append failed",
+            detail: noted.reason === "full"
+              ? "client_summaries append full"
+              : "client_summaries append failed",
           });
         }
         if (noted.ok && !noted.skipped && !noted.capped && !noted.unchanged && deflect === "emergency") {

@@ -73,6 +73,14 @@ describe("reserve_estimate_call contract", () => {
     expect(rows).toHaveLength(1);
   });
 
+  it("refuses a seen requestId used with a different type", () => {
+    const rows = [];
+    expect(reserveEstimateCall(rows, { profileId: mama, type: "coach_note", max: 20, requestId: "ask-1", now })).toBe(true);
+    expect(reserveEstimateCall(rows, { profileId: mama, type: "coach", max: 30, requestId: "ask-1", now })).toBe(false);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].type).toBe("coach_note");
+  });
+
   it("still enforces the cap on a new request", () => {
     const rows = Array.from({ length: 30 }, (_, i) => ({
       profile_id: mama,

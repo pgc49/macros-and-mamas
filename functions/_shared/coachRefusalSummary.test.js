@@ -43,16 +43,58 @@ describe("a refusal line is factual", () => {
   it("appends onto Callie's summary and does not replace it", () => {
     const line = coachRefusalLine("I've been dizzy since this morning", "medical");
     const merged = mergeRefusalSummary("Quiet week. Protein is steady.", line);
-    expect(merged.startsWith("Quiet week. Protein is steady.")).toBe(true);
-    expect(merged).toContain(line);
-    expect(mergeRefusalSummary(merged, line)).toBe(merged);
+    expect(merged.ok).toBe(true);
+    expect(merged.summary.startsWith("Quiet week. Protein is steady.")).toBe(true);
+    expect(merged.summary).toContain(line);
+    expect(mergeRefusalSummary(merged.summary, line)).toEqual({
+      ok: true,
+      summary: merged.summary,
+      unchanged: true,
+    });
   });
 
   it("keeps the refusal line when a new summary is generated", () => {
     const existing = "Quiet week.\nCoach refused (supply): my supply dipped";
     const fresh = preserveRefusalLines(existing, "New snapshot from her logs.");
-    expect(fresh.startsWith("New snapshot from her logs.")).toBe(true);
-    expect(fresh).toContain("Coach refused (supply): my supply dipped");
+    expect(fresh.ok).toBe(true);
+    expect(fresh.summary.startsWith("New snapshot from her logs.")).toBe(true);
+    expect(fresh.summary).toContain("Coach refused (supply): my supply dipped");
+  });
+
+  it("dedupes whole lines so a substring does not swallow a later ask", () => {
+    const first = mergeRefusalSummary("", "Coach refused (crisis): I want to die tonight, I have a plan");
+    const both = mergeRefusalSummary(first.summary, "Coach refused (crisis): I want to die");
+    expect(both.ok).toBe(true);
+    expect(both.summary.split("\n")).toEqual([
+      "Coach refused (crisis): I want to die tonight, I have a plan",
+      "Coach refused (crisis): I want to die",
+    ]);
+    const msg1 = mergeRefusalSummary("", "Coach refused (medical): message 1");
+    const msg10 = mergeRefusalSummary(msg1.summary, "Coach refused (medical): message 10");
+    expect(msg10.summary.split("\n")).toEqual([
+      "Coach refused (medical): message 1",
+      "Coach refused (medical): message 10",
+    ]);
+  });
+
+  it("never cuts a Coach refused line and fails closed when crisis cannot fit", () => {
+    const crisis = "Coach refused (crisis): I want to die";
+    const padded = `${"p".repeat(3969)}\n${crisis}`;
+    const kept = mergeRefusalSummary("p".repeat(3969), crisis);
+    expect(kept.ok).toBe(true);
+    expect(kept.summary).toContain(crisis);
+    expect(kept.summary).not.toMatch(new RegExp(`${crisis.slice(0, -1)}$`));
+    expect(kept.summary.split("\n").includes(crisis)).toBe(true);
+    expect(padded.includes(crisis)).toBe(true);
+
+    const wall = Array.from({ length: 14 }, (_, i) => (
+      `Coach refused (crisis): ${String(i).padStart(276, "x")}`
+    ));
+    const overflow = mergeRefusalSummary(wall.join("\n"), "Coach refused (crisis): newest-must-not-cut");
+    expect(overflow).toEqual({ ok: false, reason: "full", summary: wall.join("\n") });
+
+    const refresh = preserveRefusalLines(wall.join("\n"), "Fresh snapshot from her logs.");
+    expect(refresh).toEqual({ ok: false, reason: "full" });
   });
 
   it("uses the Pacific calendar day when UTC has already rolled over", () => {
@@ -109,10 +151,14 @@ describe("a refusal line is factual", () => {
     expect(posts).toHaveLength(1);
   });
 
-  it("allows only one medical line per Pacific day so a repeat cannot spam", async () => {
-    expect(MAX_MEDICAL_ESCALATES_PER_DAY).toBe(1);
-    const existing = "Coach refused (medical): I've been dizzy since this morning";
-    expect(countRefusalDoorLines(existing, "medical")).toBe(1);
+  it("allows three distinct medical lines per Pacific day so a false-ish line cannot block a real one", async () => {
+    expect(MAX_MEDICAL_ESCALATES_PER_DAY).toBe(3);
+    const existing = [
+      "Coach refused (medical): I've been dizzy since this morning",
+      "Coach refused (medical): I have a fever",
+      "Coach refused (medical): I have a migraine",
+    ].join("\n");
+    expect(countRefusalDoorLines(existing, "medical")).toBe(3);
     const env = {
       SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service",
@@ -129,7 +175,7 @@ describe("a refusal line is factual", () => {
       return new Response("[]", { status: 200 });
     });
     const result = await appendCoachRefusal(env, "profile-1", {
-      asked: "I have a fever",
+      asked: "I have a rash",
       scope: "urgent",
     });
     expect(result).toEqual({ ok: true, capped: true });
@@ -149,14 +195,18 @@ describe("a refusal line is factual", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       if (String(url).includes("append_coach_refusal_line")) {
         const body = JSON.parse(init.body);
-        if (summary.includes(body.p_line)) {
+        if (summary.split("\n").some((row) => row === body.p_line)) {
           return new Response(JSON.stringify({ ok: true, unchanged: true }), { status: 200 });
         }
         const n = countRefusalDoorLines(summary, body.p_door);
         if (n >= body.p_max) {
           return new Response(JSON.stringify({ ok: true, capped: true }), { status: 200 });
         }
-        summary = mergeRefusalSummary(summary, body.p_line);
+        const merged = mergeRefusalSummary(summary, body.p_line);
+        if (!merged.ok) {
+          return new Response(JSON.stringify({ ok: false, reason: merged.reason }), { status: 200 });
+        }
+        summary = merged.summary;
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
       return new Response("[]", { status: 200 });
@@ -216,5 +266,29 @@ describe("a refusal line is factual", () => {
     expect(saidSheSkipped("I won't log this")).toBe(false);
     expect(isWontLogRefusal("will this affect my milk supply")).toBe(false);
     expect(isWontLogRefusal("I've been dizzy since this morning")).toBe(false);
+  });
+
+  it("treats a full refusal card as a failed write", async () => {
+    const env = {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service",
+    };
+    const posts = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (String(url).includes("append_coach_refusal_line")) {
+        return new Response(JSON.stringify({ ok: false, reason: "full" }), { status: 200 });
+      }
+      if (String(url).includes("client_summaries") && init?.method === "POST") {
+        posts.push(JSON.parse(init.body));
+        return new Response(null, { status: 201 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+    const result = await appendCoachRefusal(env, "profile-1", {
+      asked: "I want to die",
+      scope: "urgent",
+    });
+    expect(result).toEqual({ ok: false, reason: "full" });
+    expect(posts).toHaveLength(0);
   });
 });

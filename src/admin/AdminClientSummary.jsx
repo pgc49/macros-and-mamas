@@ -63,11 +63,8 @@ export function AdminClientSummary({ client, progress, progressLoading = false, 
         suggested_touch: data.suggested_touch,
         model: data.model,
       });
-      setRow(saved || {
-        summary: data.summary,
-        suggested_touch: data.suggested_touch,
-        created_at: new Date().toISOString(),
-      });
+      if (!saved) throw new Error("Could not save that summary without dropping a crisis line.");
+      setRow(saved);
     } catch (e) {
       setError(e.message || "Summary unavailable");
     } finally {

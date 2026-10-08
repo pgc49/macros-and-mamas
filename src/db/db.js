@@ -20,6 +20,7 @@ import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { ageFromDateOfBirth } from "../utils/dateOfBirth";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
+import * as Sentry from "@sentry/react";
 import { preserveRefusalLines } from "../../functions/_shared/coachRefusalSummary.js";
 import { mamaCoachInsertRow } from "../../functions/_shared/coachMessages.js";
 import { roundMealLogMacros } from "../utils/mealLogMacros";
@@ -2186,13 +2187,25 @@ export const db = {
   async saveClientSummary(row) {
     if (!row?.profile_id || !row?.for_date || !row?.summary) return null;
     const existing = await this.loadClientSummary(row.profile_id, row.for_date);
-    const summary = preserveRefusalLines(existing?.summary, String(row.summary).slice(0, 2000));
+    const kept = preserveRefusalLines(existing?.summary, String(row.summary).slice(0, 2000));
+    if (!kept.ok) {
+      try {
+        Sentry.captureMessage("coach_refusal_summary_full", {
+          level: "error",
+          tags: { surface: "admin", kind: "note" },
+        });
+      } catch {
+        /* Sentry must never take Refresh down */
+      }
+      console.warn("saveClientSummary refused lines would not fit");
+      return null;
+    }
     const { data, error } = await supabase
       .from("client_summaries")
       .upsert({
         profile_id: row.profile_id,
         for_date: row.for_date,
-        summary,
+        summary: kept.summary,
         suggested_touch: row.suggested_touch ? String(row.suggested_touch).slice(0, 500) : null,
         model: row.model ? String(row.model).slice(0, 120) : null,
       }, { onConflict: "profile_id,for_date" })
