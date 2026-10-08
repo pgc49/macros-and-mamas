@@ -228,6 +228,8 @@ export function coachDayForPrompt({
   skipped = [],
   snackCount = 1,
   turnedDown = [],
+  alreadySuggested = [],
+  notLogging = false,
 } = {}) {
   const eaten = [];
   for (const entry of entries) {
@@ -271,6 +273,14 @@ export function coachDayForPrompt({
     if (declined.length === 8) break;
   }
 
+  const suggested = [];
+  for (const name of alreadySuggested || []) {
+    const clean = clipPromptText(name);
+    if (!clean || suggested.includes(clean)) continue;
+    suggested.push(clean);
+    if (suggested.length === 12) break;
+  }
+
   const snacks = Math.round(Number(snackCount));
   return {
     eaten,
@@ -278,6 +288,8 @@ export function coachDayForPrompt({
     usual,
     skipped: skippedSlots,
     turnedDown: declined,
+    alreadySuggested: suggested,
+    notLogging: Boolean(notLogging),
     snackCount: Number.isFinite(snacks) ? Math.max(0, Math.min(4, snacks)) : 1,
   };
 }

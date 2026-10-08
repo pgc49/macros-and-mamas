@@ -290,8 +290,13 @@ describe("the coach answers on the device", () => {
 
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askEat }));
 
-    await waitFor(() => expect(cardTitles().length).toBe(1));
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
     expect(opening).toBeGreaterThan(0);
+    expect(opening).toBeLessThanOrEqual(2);
+    expect(cardTitles().length).toBeLessThanOrEqual(2);
+    if (cardTitles().length === 2) {
+      expect(cardTitles()[1]).toMatch(/half portion/i);
+    }
     expect(postCoach).not.toHaveBeenCalled();
   });
 
@@ -621,12 +626,16 @@ describe("what isn't the coach's goes to Callie", () => {
       target: { value: "I've been dizzy since this morning" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    await screen.findByText(COACH_DEFLECT.care.line);
+    await screen.findByText(COACH_DEFLECT.medical.line);
     expect(postCoach).toHaveBeenCalledWith({
       mode: "ask",
       text: "I've been dizzy since this morning",
       localDate: localDateIso(),
     });
+    expect(COACH_DEFLECT.medical.line).toBe(
+      "That's one for Callie, not me, and I don't want you waiting on it. Message her now.",
+    );
+    expect(COACH_DEFLECT.medical.line).not.toMatch(/call your doctor/i);
 
     cleanup();
     const guiltCoach = vi.fn();
@@ -712,7 +721,9 @@ describe("what isn't the coach's goes to Callie", () => {
       target: { value: "should I skip dinner, I'm way over" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    expect(screen.getAllByText(COACH_COPY.teachNeverSkip)).toHaveLength(2);
+    expect(screen.getByText(COACH_COPY.teachNeverSkipAgain)).toBeTruthy();
+    expect(screen.getAllByText(COACH_COPY.teachNeverSkip)).toHaveLength(1);
+    expect(COACH_COPY.teachNeverSkipAgain).not.toBe(COACH_COPY.teachNeverSkip);
     expect(postCoach).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
@@ -798,6 +809,44 @@ describe("what isn't the coach's goes to Callie", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
     await screen.findByText("Chicken, fajita veggies, and a little rice.");
     expect(postCoach).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not say she skipped a meal when nothing is logged tonight", async () => {
+    renderPanel({
+      now: new Date("2026-09-05T01:30:00.000Z"),
+      entries: [],
+      totals: { cal: 0, p: 0, c: 0, f: 0 },
+      onLoadThread: async () => [],
+    });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    expect(document.body.textContent).not.toContain("I noticed you skipped a meal");
+  });
+
+  it("sends already-suggested names, including the model's last plates", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Turkey skillet tonight.",
+      meals: [{ name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, servings: 1 }],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    const firstPlate = cardTitles()[0];
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm tired, something easy with chicken" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText("Turkey skillet tonight.");
+    expect(postCoach).toHaveBeenCalledTimes(1);
+    expect(postCoach.mock.calls[0][0].context.alreadySuggested).toContain(firstPlate);
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "something else easy, I'm still tired" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(2));
+    expect(postCoach.mock.calls[1][0].context.alreadySuggested).toContain("Turkey skillet");
+    expect(postCoach.mock.calls[1][0].context.alreadySuggested).toContain(firstPlate);
   });
 });
 

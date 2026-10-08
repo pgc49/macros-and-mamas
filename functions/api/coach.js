@@ -40,7 +40,10 @@ import {
   macrosPlausible,
   replyIsClean,
   scopeIsRefused,
+  scrubCoachReply,
 } from "../_shared/coachGuardrails.js";
+import { askedForMealOptions, limitAskMeals } from "../_shared/coachAskMeals.js";
+import { isWontLogRefusal } from "../_shared/coachRefusalSummary.js";
 import {
   callOpenRouter,
   logAiFailure,
@@ -184,7 +187,7 @@ export async function onRequestPost({ request, env }) {
     }
     if (scopeIsRefused(verdict.scope)) {
       await appendCoachRefusal(env, user.id, { asked: text, scope: verdict.scope });
-      const deflect = deflectForScope(verdict.scope);
+      const deflect = deflectForScope(verdict.scope, text);
       await persistServerCoach(env, user.id, body, {
         body: "",
         kind: "deflect",
@@ -199,7 +202,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (teach) {
-      const reply = teachBody(teach.topic);
+      const reply = teachBody(teach.topic, { again: teach.topic === "neverSkip" && painCount >= 1 });
       await persistServerCoach(env, user.id, body, {
         body: reply,
         kind: "text",
@@ -252,7 +255,10 @@ export async function onRequestPost({ request, env }) {
     const customMeals = await fetchCustomMeals(env, user.id, { authHeader });
     const budget = sanitizeBudget(body.budget);
     const recentNames = parseRecent(body.recent);
-    const day = sanitizeCoachContext(body.context);
+    const day = sanitizeCoachContext({
+      ...body.context,
+      notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
+    });
     const args = { profile, macros, budget, slot, customMeals, recentNames, day };
 
     let prompt;
@@ -282,7 +288,7 @@ export async function onRequestPost({ request, env }) {
       label: "coach",
       models: resolveCoachModels(env),
       maxTokens: images.length ? 8000 : 4000,
-      temperature: 0.3,
+      temperature: 0.5,
       timeoutMs: images.length ? 55_000 : 45_000,
       reasoning: { effort: "low", exclude: true },
       messages: [
@@ -334,6 +340,9 @@ export async function onRequestPost({ request, env }) {
     let reply = cleanReply(parsed.value?.reply);
     const orderMode = menuPage?.ok ? "menu" : mode;
     let meals = normalizeMeals(parsed.value, slot, orderMode, { lockSlot: Boolean(askedSlot) });
+    if (mode === "ask" && !menuPage?.ok) {
+      meals = limitAskMeals(meals, { askedForOptions: askedForMealOptions(text) });
+    }
     let teachTopic = null;
 
     if (menuPage?.ok) {
@@ -416,7 +425,7 @@ function parseRecent(value) {
  * chatbot, or quoting her ranges back is dropped rather than shown.
  */
 function cleanReply(raw) {
-  const text = String(raw || "").trim().slice(0, 400);
+  const text = scrubCoachReply(String(raw || "").trim().slice(0, 400));
   if (!text) return "";
   return replyIsClean(text) ? text : "";
 }
@@ -458,7 +467,9 @@ function normalizeMeals(parsed, fallbackSlot, mode, { lockSlot = false } = {}) {
       basedOn: mode === "menu" ? null : (m.basedOn ? String(m.basedOn).slice(0, 120) : null),
       desc,
       ...macros,
-      servings: 1,
+      servings: Number(m.servings) === 0.5 || /half portion|\(half\)/i.test(String(m.name || ""))
+        ? 0.5
+        : 1,
       // A menu photo is an order, not a recipe we wrote. Ingredients here were
       // a made-up method for a dish we may not have read.
       ingredients: mode === "menu" ? [] : m.ingredients,

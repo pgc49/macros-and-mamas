@@ -214,14 +214,14 @@ describe("the guardrail runs before the model", () => {
     });
     const data = await resp.json();
     expect(data.scope).toBe("urgent");
-    expect(data.deflect).toBe("care");
+    expect(data.deflect).toBe("medical");
     expect(data.meals).toEqual([]);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
     const posts = coachMessagePosts();
     expect(posts).toHaveLength(1);
     expect(posts[0].source).toBe("server");
     expect(posts[0].kind).toBe("deflect");
-    expect(posts[0].payload.deflect).toBe("care");
+    expect(posts[0].payload.deflect).toBe("medical");
   });
 
   it("hands range changes to Callie without spending a call", async () => {
@@ -302,6 +302,8 @@ describe("the guardrail runs before the model", () => {
     expect((await resp.json()).scope).toBe("food");
     expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(1);
     expect(openrouter.callOpenRouter.mock.calls[0][0].models[0]).toBe("google/gemini-3.5-flash");
+    expect(openrouter.callOpenRouter.mock.calls[0][0].temperature).toBe(0.5);
+    expect(openrouter.callOpenRouter.mock.calls[0][0].messages).toHaveLength(2);
     expect(openrouter.callOpenRouter.mock.calls[0][0].reasoning).toEqual({
       effort: "low",
       exclude: true,
@@ -317,8 +319,23 @@ describe("the guardrail runs before the model", () => {
     const data = await resp.json();
     expect(data.teach).toBe("neverSkip");
     expect(data.reply).toMatch(/never skip a meal/i);
+    expect(data.reply).not.toMatch(/Still eat something tonight/);
     expect(data.meals).toEqual([]);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it("uses the shorter never-skip line the second time today", async () => {
+    mockSupabase({
+      thread: [{ role: "coach", payload: { teach: "neverSkip" } }],
+    });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "should I skip dinner" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.teach).toBe("neverSkip");
+    expect(data.reply).toMatch(/Still eat something tonight/);
+    expect(data.reply).not.toMatch(/You never skip a meal/);
   });
 });
 
@@ -558,6 +575,61 @@ describe("the model ask sees the file the ranker sees", () => {
     expect(prompt).toContain("Greek yogurt bowl");
   });
 
+  it("puts already-suggested plates on the ask prompt", async () => {
+    mockSupabase(FILE);
+    const resp = await onRequestPost({
+      request: request({
+        ...askBody,
+        context: {
+          ...askBody.context,
+          alreadySuggested: ["Pulled chicken tacos", "Sheet pan chicken"],
+        },
+      }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    const prompt = promptText();
+    expect(prompt).toContain("Already suggested in this chat — don't offer again unless she asks:");
+    expect(prompt).toContain("Pulled chicken tacos");
+    expect(prompt).toContain("Sheet pan chicken");
+  });
+
+  it("caps an ask at one plate plus an optional half", async () => {
+    mockSupabase();
+    modelReturns({
+      scope: "food",
+      reply: "Chicken bowl tonight.",
+      meals: [
+        { name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12, servings: 1 },
+        { name: "Salmon and rice", cal: 440, p: 38, c: 30, f: 14, servings: 1 },
+        { name: "Turkey meatballs", cal: 420, p: 40, c: 28, f: 12, servings: 1 },
+      ],
+    });
+    const two = await onRequestPost({
+      request: request({ mode: "ask", text: "what should I have for dinner", slot: "dinner" }),
+      env,
+    });
+    expect((await two.json()).meals.map((m) => m.name)).toEqual(["Chicken bowl"]);
+
+    modelReturns({
+      scope: "food",
+      reply: "Chicken bowl, or a half.",
+      meals: [
+        { name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12, servings: 1 },
+        { name: "Chicken bowl", cal: 215, p: 22, c: 15, f: 6, servings: 0.5 },
+        { name: "Salmon and rice", cal: 440, p: 38, c: 30, f: 14, servings: 1 },
+      ],
+    });
+    const half = await onRequestPost({
+      request: request({ mode: "ask", text: "what should I have for dinner", slot: "dinner" }),
+      env,
+    });
+    const halfMeals = (await half.json()).meals;
+    expect(halfMeals).toHaveLength(2);
+    expect(halfMeals.every((m) => m.name === "Chicken bowl")).toBe(true);
+    expect(halfMeals[1].servings).toBe(0.5);
+  });
+
   it("keeps the same file on a menu photo, a kitchen photo, and a menu link", async () => {
     const photo = [{ image_b64: "abc", media_type: "image/jpeg" }];
     mockSupabase({ ...FILE, profile: { ...FILE.profile, months_pp: 14 } });
@@ -671,7 +743,7 @@ describe("an escalate lands on her card", () => {
         request: request({ mode: "ask", text: "I've been dizzy since this morning" }),
         env,
       });
-      expect((await dizzy.json()).deflect).toBe("care");
+      expect((await dizzy.json()).deflect).toBe("medical");
       expect(posts).toHaveLength(1);
       expect(posts[0].for_date).toBe("2026-10-01");
       expect(String(reads[0])).toContain("for_date=eq.2026-10-01");
@@ -695,7 +767,7 @@ describe("an escalate lands on her card", () => {
       request: request({ mode: "ask", text: "I've been dizzy since this morning" }),
       env,
     });
-    expect((await dizzy.json()).deflect).toBe("care");
+    expect((await dizzy.json()).deflect).toBe("medical");
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
     expect(posts).toHaveLength(1);
     expect(posts[0].summary.startsWith("Callie already wrote this.")).toBe(true);
@@ -708,7 +780,7 @@ describe("an escalate lands on her card", () => {
       request: request({ mode: "ask", text: "I've been dizzy since this morning" }),
       env,
     });
-    expect((await repeat.json()).deflect).toBe("care");
+    expect((await repeat.json()).deflect).toBe("medical");
     expect(posts).toHaveLength(1);
   });
 

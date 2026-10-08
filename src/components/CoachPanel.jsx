@@ -22,6 +22,8 @@ import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
+import { askedForMealOptions } from "../../functions/_shared/coachAskMeals";
+import { isWontLogRefusal } from "../../functions/_shared/coachRefusalSummary";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
 import { downscaleImage } from "../utils/imageDownscale";
 import { localDateIso } from "../utils/dates";
@@ -110,6 +112,7 @@ export function CoachPanel({
   // What she's already been shown. A ref, not state: it only ever feeds the
   // next answer she asks for, and as state it would be a render behind the tap.
   const skipRef = useRef([]);
+  const wontLogRef = useRef(false);
 
   const inputs = { profile, macros, totals, entries, plannedMeals, mealHistoryByDate, customMeals };
 
@@ -240,7 +243,8 @@ export function CoachPanel({
     // One plate. A second card is only the half portion of that same plate.
     cards = firstPaintPlates(cards);
     skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
-    const skipLine = skipMealCopy(next.skipped);
+    const loggedOther = loggedSlotsFromEntries(entries).size > 0;
+    const skipLine = skipMealCopy(next.skipped, { loggedOtherMeals: loggedOther });
     lead += skipLine || "";
     push({ role: "coach", body: shownCoachLead(lead.trim()), kind: "cards", cards, aside, template: "local.cards" });
   };
@@ -300,6 +304,8 @@ export function CoachPanel({
           skipped: fit?.skipped,
           snackCount: fit?.budget?.snackCount,
           turnedDown: skipRef.current,
+          alreadySuggested: skipRef.current,
+          notLogging: wontLogRef.current,
         }),
         localDate: localDateIso(clock),
         images,
@@ -317,10 +323,12 @@ export function CoachPanel({
 
       // The model's meals are re-checked against the real budget here. One that
       // no longer fits is dropped rather than shown with a caveat.
-      const cards = cardsWithShownReason(buildSuggestedCards(data.meals, fit, {
+      const suggested = cardsWithShownReason(buildSuggestedCards(data.meals, fit, {
         source: data.mealSource || "new",
         slot: slotForAsk,
       }));
+      const cards = askedForMealOptions(text) ? suggested.slice(0, 3) : firstPaintPlates(suggested);
+      skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
       const body = data.reply || (cards.length ? "" : COACH_COPY.cantSeeIt);
       push({
         role: "coach",
@@ -367,16 +375,20 @@ export function CoachPanel({
     push({ role: "mama", body: text });
     if (verdict.scope === "urgent") {
       noteEscalation(text);
-      push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) }, { persist: false });
+      push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope, text) }, { persist: false });
       return;
     }
+
+    if (isWontLogRefusal(text)) wontLogRef.current = true;
 
     // Callie's own sentences, before the meal router and before a model.
     // Asked a third time in a day, a pain point goes to her instead.
     const teach = localCoachTeach(text);
     if (teach) {
-      if (PAIN_TOPICS.has(teach.topic) && countTeachInThread(thread, teach.topic) >= 2) {
+      const teachCount = countTeachInThread(thread, teach.topic);
+      if (PAIN_TOPICS.has(teach.topic) && teachCount >= 2) {
         noteEscalation(text, "stuck");
+        // Server persists the stuck handoff. Do not record it again here.
         push({ role: "coach", body: "", kind: "deflect", deflect: "again" }, { persist: false });
         return;
       }
@@ -385,7 +397,7 @@ export function CoachPanel({
         : false;
       push({
         role: "coach",
-        body: teachBody(teach.topic, { totals, carbsShort }),
+        body: teachBody(teach.topic, { totals, carbsShort, again: teach.topic === "neverSkip" && teachCount >= 1 }),
         kind: "teach",
         teach: teach.topic,
         aside: verdict.aside,
@@ -407,7 +419,7 @@ export function CoachPanel({
     }
 
     if (scopeIsRefused(verdict.scope)) {
-      push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) }, { persist: false });
+      push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope, text) }, { persist: false });
       return;
     }
 
