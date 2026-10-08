@@ -30,18 +30,27 @@ function request(body) {
   });
 }
 
+function usedForType(type, { callsUsed, recordCallsUsed, noteCallsUsed }) {
+  if (type === "coach_record") return recordCallsUsed;
+  if (type === "coach_note") return noteCallsUsed;
+  return callsUsed;
+}
+
 function mockSupabase({
   paid = true,
   role = "client",
   macros = true,
   callsUsed = 0,
   recordCallsUsed = 0,
+  noteCallsUsed = 0,
   thread = [],
   pages = null,
   profile = null,
   macrosRow = null,
   customMeals = [],
+  summary = null,
 } = {}) {
+  let summaryRow = summary;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     const value = String(url);
     if (value.includes("/auth/v1/user")) {
@@ -52,11 +61,12 @@ function mockSupabase({
     }
     if (value.includes("rpc/reserve_estimate_call")) {
       const body = JSON.parse(init?.body || "{}");
-      const used = body.p_type === "coach_record" ? recordCallsUsed : callsUsed;
+      const used = usedForType(body.p_type, { callsUsed, recordCallsUsed, noteCallsUsed });
       return new Response(JSON.stringify(used < Number(body.p_max || 0)), { status: 200 });
     }
     if (value.includes("estimate_calls") && init?.method !== "POST") {
-      const used = value.includes("type=eq.coach_record") ? recordCallsUsed : callsUsed;
+      const type = decodeURIComponent((value.match(/type=eq\.([^&]+)/) || [])[1] || "coach");
+      const used = usedForType(type, { callsUsed, recordCallsUsed, noteCallsUsed });
       return new Response("[]", {
         status: 200,
         headers: { "content-range": `0-0/${used}` },
@@ -75,6 +85,13 @@ function mockSupabase({
       return new Response(JSON.stringify([row]), { status: 200 });
     }
     if (value.includes("custom_meals")) return new Response(JSON.stringify(customMeals), { status: 200 });
+    if (value.includes("client_summaries") && init?.method === "POST") {
+      summaryRow = JSON.parse(init.body);
+      return new Response(null, { status: 201 });
+    }
+    if (value.includes("client_summaries")) {
+      return new Response(JSON.stringify(summaryRow ? [summaryRow] : []), { status: 200 });
+    }
     if (value.includes("coach_messages") && init?.method !== "POST") {
       return new Response(JSON.stringify(thread), { status: 200 });
     }
@@ -108,6 +125,18 @@ function postedCalls() {
     init?.method === "POST"
     && (String(url).includes("/estimate_calls") || String(url).includes("reserve_estimate_call"))
   ));
+}
+
+function reserveTypes() {
+  return globalThis.fetch.mock.calls
+    .filter(([url]) => String(url).includes("rpc/reserve_estimate_call"))
+    .map(([, init]) => JSON.parse(init.body || "{}").p_type);
+}
+
+function summaryPosts() {
+  return globalThis.fetch.mock.calls
+    .filter(([url, init]) => String(url).includes("client_summaries") && init?.method === "POST")
+    .map(([, init]) => JSON.parse(init.body));
 }
 
 function promptText(call = openrouter.callOpenRouter.mock.calls.at(-1)[0]) {
@@ -339,7 +368,7 @@ describe("the guardrail runs before the model", () => {
 
   it("uses the shorter never-skip line the second time today", async () => {
     mockSupabase({
-      thread: [{ role: "coach", payload: { teach: "neverSkip" } }],
+      thread: [{ role: "coach", source: "server", payload: { teach: "neverSkip" } }],
     });
     const resp = await onRequestPost({
       request: request({ mode: "ask", text: "should I skip dinner" }),
@@ -800,8 +829,8 @@ describe("an escalate lands on her card", () => {
   it("appends a stuck brief on the third pain teach and does not wipe the seed", async () => {
     const posts = summaryFetch({
       thread: [
-        { role: "coach", payload: { teach: "neverSkip" } },
-        { role: "coach", payload: { teach: "neverSkip" } },
+        { role: "coach", source: "server", payload: { teach: "neverSkip" } },
+        { role: "coach", source: "server", payload: { teach: "neverSkip" } },
       ],
     });
     const stuck = await onRequestPost({
@@ -814,6 +843,108 @@ describe("an escalate lands on her card", () => {
     expect(posts[0].summary.startsWith("Callie already wrote this.")).toBe(true);
     expect(posts[0].summary).toContain("Coach refused (stuck): should I skip dinner");
     expect(posts[0].suggested_touch).toBe("Say hi.");
+  });
+
+  it("does not mint a Stuck pin from two recorded client teaches plus one real ask", async () => {
+    mockSupabase({
+      thread: [
+        { role: "coach", source: "client", payload: { teach: "neverSkip" } },
+        { role: "coach", source: "client", payload: { teach: "neverSkip" } },
+      ],
+    });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "should I skip dinner" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.teach).toBe("neverSkip");
+    expect(data.deflect).toBeUndefined();
+    expect(coachMessagePosts()[0].source).toBe("server");
+    expect(coachMessagePosts()[0].payload.teach).toBe("neverSkip");
+    expect(summaryPosts()).toHaveLength(0);
+  });
+
+  it("still shows a canned refuse over the note cap and does not save or append", async () => {
+    mockSupabase({ noteCallsUsed: 20 });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "will this affect my milk supply" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.deflect).toBe("supply");
+    expect(coachMessagePosts()).toHaveLength(0);
+    expect(summaryPosts()).toHaveLength(0);
+    expect(reserveTypes()).toEqual(["coach_note"]);
+  });
+
+  it("still closes an unreadable menu over the note cap without saving", async () => {
+    mockSupabase({ noteCallsUsed: 20 });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "https://www.itsjane.com/location/jane-on-fillmore/ what should I order",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.teach).toBe("menuClosed");
+    expect(coachMessagePosts()).toHaveLength(0);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it("still teaches over the note cap without saving the row", async () => {
+    mockSupabase({ noteCallsUsed: 20 });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "should I skip dinner" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.teach).toBe("neverSkip");
+    expect(data.reply).toMatch(/never skip a meal/i);
+    expect(coachMessagePosts()).toHaveLength(0);
+    expect(summaryPosts()).toHaveLength(0);
+  });
+
+  it("still returns a stuck line over the note cap without saving or appending", async () => {
+    mockSupabase({
+      noteCallsUsed: 20,
+      thread: [
+        { role: "coach", source: "server", payload: { teach: "neverSkip" } },
+        { role: "coach", source: "server", payload: { teach: "neverSkip" } },
+      ],
+    });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "should I skip dinner" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.deflect).toBe("again");
+    expect(coachMessagePosts()).toHaveLength(0);
+    expect(summaryPosts()).toHaveLength(0);
+  });
+
+  it("appends a crisis once over the note cap and does not save the pin", async () => {
+    mockSupabase({ noteCallsUsed: 20 });
+    const first = await onRequestPost({
+      request: request({ mode: "ask", text: "I've been dizzy since this morning" }),
+      env,
+    });
+    expect((await first.json()).deflect).toBe("medical");
+    expect(coachMessagePosts()).toHaveLength(0);
+    expect(summaryPosts()).toHaveLength(1);
+    expect(summaryPosts()[0].summary).toContain("Coach refused (medical): I've been dizzy since this morning");
+
+    const second = await onRequestPost({
+      request: request({ mode: "ask", text: "I fainted after lunch" }),
+      env,
+    });
+    expect((await second.json()).deflect).toBe("emergency");
+    expect(coachMessagePosts()).toHaveLength(0);
+    expect(summaryPosts()).toHaveLength(1);
   });
 
   it("ignores a client stuck flag when she has not asked three times", async () => {
@@ -959,7 +1090,7 @@ describe("record persists a coach reply with the service role", () => {
     const posts = coachMessagePosts();
     expect(posts).toHaveLength(1);
     expect(posts[0].role).toBe("coach");
-    expect(posts[0].source).toBe("server");
+    expect(posts[0].source).toBe("client");
     expect(posts[0].body).not.toBe("forged coach line");
     expect(posts[0].body).toMatch(/skip/i);
   });
@@ -1077,7 +1208,7 @@ describe("ask persists the server's own reply", () => {
     expect((await resp.json()).deflect).toBe("medical");
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
     expect(coachMessagePosts()).toHaveLength(1);
-    expect(postedCalls()).toHaveLength(0);
+    expect(reserveTypes()).toEqual(["coach_note"]);
   });
 
   it("writes a model reply from its own output", async () => {
@@ -1136,16 +1267,32 @@ describe("cost", () => {
     mockSupabase();
     modelReturns({ scope: "food", reply: "The chicken bowl fits.", meals: [] });
     const first = await onRequestPost({
-      request: request({ mode: "ask", text: "dinner ideas", requestId: "ask-1" }),
+      request: request({ mode: "ask", text: "dinner ideas", requestId: "ask-retry-1" }),
       env,
     });
     const second = await onRequestPost({
-      request: request({ mode: "ask", text: "dinner ideas", requestId: "ask-1" }),
+      request: request({ mode: "ask", text: "dinner ideas", requestId: "ask-retry-1" }),
       env,
     });
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
     expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(2);
+  });
+
+  it("mints a requestId when the client sends something other than a uuid or 8–64 ticket", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "dinner ideas", requestId: "ask-1<script>" }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    const stored = coachMessagePosts()[0].payload.requestId;
+    expect(stored).not.toBe("ask-1<script>");
+    expect(stored).toMatch(/^[A-Za-z0-9-]{8,64}$/);
+    const reserved = JSON.parse(postedCalls().find(([url]) => (
+      String(url).includes("rpc/reserve_estimate_call")
+    ))[1].body);
+    expect(reserved.p_request_id).toBe(stored);
   });
 
   it("stops her at the daily cap", async () => {

@@ -9,6 +9,8 @@
    this is where they should converge.
    ================================================================== */
 
+import { isCoachRequestId } from "./coachMessages.js";
+
 export async function requireSupabaseUser(request, env) {
   const auth = request.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
@@ -119,7 +121,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
     return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
   }
 
-  const ticket = requestId ? String(requestId).slice(0, 80) : "";
+  const ticket = isCoachRequestId(requestId) ? String(requestId).trim() : "";
   const rpc = await fetch(`${base}/rest/v1/rpc/reserve_estimate_call`, {
     method: "POST",
     headers: {

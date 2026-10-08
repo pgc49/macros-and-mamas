@@ -76,6 +76,9 @@ export function coachRefusalLine(asked, door) {
 /** One mama cannot flood Callie's card with the same door all day. */
 export const MAX_SUMMARY_ESCALATES = 5;
 
+/** Crisis / URGENT still append over the note cap, but only once a Pacific day. */
+export const MAX_MEDICAL_ESCALATES_PER_DAY = 1;
+
 export function countRefusalDoorLines(summary, door) {
   const prefix = `Coach refused (${door}):`;
   return String(summary || "")
@@ -144,7 +147,8 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
   const rows = await read.json().catch(() => null);
   if (!Array.isArray(rows)) return { ok: false };
   const existing = rows[0] || null;
-  if (countRefusalDoorLines(existing?.summary, door) >= MAX_SUMMARY_ESCALATES) {
+  const doorCap = door === "medical" ? MAX_MEDICAL_ESCALATES_PER_DAY : MAX_SUMMARY_ESCALATES;
+  if (countRefusalDoorLines(existing?.summary, door) >= doorCap) {
     return { ok: true, capped: true };
   }
   const summary = mergeRefusalSummary(existing?.summary, line);

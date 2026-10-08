@@ -22,6 +22,17 @@ const LOCAL_TEMPLATES = new Set([
 ]);
 const MAX_CARDS = 4;
 const CARD_SOURCES = new Set(["bank", "my", "pantry", "menu", "kitchen", "new"]);
+const COACH_REQUEST_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
+
+/** Client tickets: a uuid or 8–64 letters, digits, and hyphens. Anything else is minted here. */
+export function isCoachRequestId(value) {
+  return COACH_REQUEST_ID_RE.test(String(value || "").trim());
+}
+
+export function clampCoachRequestId(value) {
+  const ticket = String(value || "").trim();
+  return isCoachRequestId(ticket) ? ticket : crypto.randomUUID();
+}
 
 function clipCardText(value, max) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -88,7 +99,7 @@ export function sanitizeCoachReply({
       deflect,
       aside: payload.aside ? String(payload.aside).slice(0, 40) : null,
       teach: payload.teach ? String(payload.teach).slice(0, 40) : null,
-      requestId: payload.requestId ? String(payload.requestId).slice(0, 80) : null,
+      requestId: isCoachRequestId(payload.requestId) ? String(payload.requestId).trim() : null,
     };
     if (
       !nextPayload.cards.length
@@ -127,7 +138,9 @@ export function buildLocalCoachRecord(body = {}) {
       body: rebuilt,
       kind: "text",
       payload: { teach: topic },
-      source: "server",
+      // Client-chosen topic and day. Counting these as server writes
+      // would let Record mint a Stuck pin.
+      source: "client",
     };
   }
 
@@ -210,7 +223,7 @@ export async function countPainTeachToday(env, userId, topic, now = new Date()) 
   if (!base || !key) return 0;
   const day = coachSummaryDateIso(now);
   const url = `${base}/rest/v1/coach_messages?profile_id=eq.${encodeURIComponent(userId)}`
-    + `&local_date=eq.${encodeURIComponent(day)}&role=eq.coach&select=payload`;
+    + `&local_date=eq.${encodeURIComponent(day)}&role=eq.coach&source=eq.server&select=source,payload`;
   const read = await fetch(url, {
     headers: { apikey: key, authorization: `Bearer ${key}` },
   });
@@ -218,7 +231,8 @@ export async function countPainTeachToday(env, userId, topic, now = new Date()) 
   const rows = await read.json().catch(() => []);
   if (!Array.isArray(rows)) return 0;
   return rows.filter((row) => (
-    row?.payload?.teach === topic || row?.payload?.deflect === topic
+    row?.source === "server"
+    && (row?.payload?.teach === topic || row?.payload?.deflect === topic)
   )).length;
 }
 

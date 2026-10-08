@@ -3,7 +3,10 @@ import { COACH_COPY } from "../../src/content/coachVoice.js";
 import { teachBody } from "../../src/utils/coachTeach.js";
 import {
   buildLocalCoachRecord,
+  clampCoachRequestId,
+  countPainTeachToday,
   insertCoachReply,
+  isCoachRequestId,
   replyLocalDate,
   sanitizeCoachCards,
   sanitizeCoachReply,
@@ -112,7 +115,7 @@ describe("buildLocalCoachRecord", () => {
       body: teachBody("neverSkip"),
       kind: "text",
       payload: { teach: "neverSkip" },
-      source: "server",
+      source: "client",
     });
   });
 
@@ -132,6 +135,53 @@ describe("buildLocalCoachRecord", () => {
     expect(row.kind).toBe("cards");
     expect(row.payload.cards).toHaveLength(1);
     expect(row.payload.deflect).toBeUndefined();
+  });
+});
+
+describe("clampCoachRequestId", () => {
+  it("keeps a uuid or an 8–64 letter-digit-hyphen ticket and mints anything else", () => {
+    expect(isCoachRequestId("ask-0001")).toBe(true);
+    expect(isCoachRequestId("11111111-1111-4111-8111-111111111111")).toBe(true);
+    expect(isCoachRequestId("ask-1")).toBe(false);
+    expect(isCoachRequestId("too short")).toBe(false);
+    expect(isCoachRequestId("../etc/passwd")).toBe(false);
+    expect(isCoachRequestId("x".repeat(65))).toBe(false);
+    expect(clampCoachRequestId("ask-0001")).toBe("ask-0001");
+    const minted = clampCoachRequestId("ask-1");
+    expect(minted).not.toBe("ask-1");
+    expect(isCoachRequestId(minted)).toBe(true);
+  });
+
+  it("drops an invalid payload requestId instead of storing it", () => {
+    const row = sanitizeCoachReply({
+      body: "Tonight.",
+      payload: { requestId: "ask-1<script>", teach: "italian" },
+    });
+    expect(row.payload.requestId).toBeNull();
+    expect(row.payload.teach).toBe("italian");
+    const kept = sanitizeCoachReply({
+      body: "Tonight.",
+      payload: { requestId: "ask-retry-01" },
+    });
+    expect(kept.payload.requestId).toBe("ask-retry-01");
+  });
+});
+
+describe("countPainTeachToday", () => {
+  it("counts only server-written teach rows, not recorded client ones", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify([
+      { source: "client", payload: { teach: "neverSkip" } },
+      { source: "client", payload: { teach: "neverSkip" } },
+      { source: "server", payload: { teach: "neverSkip" } },
+    ]), { status: 200 }));
+    const env = {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service-key",
+    };
+    const count = await countPainTeachToday(env, "mama-1", "neverSkip", new Date("2026-10-08T18:00:00.000Z"));
+    expect(count).toBe(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("source=eq.server");
+    fetchMock.mockRestore();
   });
 });
 

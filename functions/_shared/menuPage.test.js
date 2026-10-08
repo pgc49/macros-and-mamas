@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { dishOnPage, fetchMenuPage, firstMenuLink, htmlToText } from "./menuPage.js";
+import {
+  dishOnPage,
+  fetchMenuPage,
+  firstMenuLink,
+  htmlToText,
+  isBlockedMenuHost,
+  MENU_FETCH_TIMEOUT_MS,
+  MENU_MAX_BYTES,
+} from "./menuPage.js";
 
 const MENU = `<html><head><script>Jane Salad with Chicken</script><style>.x{color:red}</style></head>
 <body><h1>Jane on Fillmore</h1>
@@ -29,22 +37,37 @@ describe("reading a menu page", () => {
     expect(firstMenuLink("www.itsjane.com/menu")).toBe("https://www.itsjane.com/menu");
   });
 
-  it("refuses private, metadata, and credentialed hosts", () => {
+  it("refuses http, private, loopback, link-local, metadata, and credentialed hosts", () => {
     for (const url of [
+      "http://www.itsjane.com/menu",
       "http://127.0.0.1/menu",
-      "http://10.0.0.8/menu",
-      "http://192.168.1.4/menu",
-      "http://172.16.0.4/menu",
-      "http://169.254.169.254/latest/meta-data",
-      "http://localhost/menu",
-      "http://metadata.google.internal/computeMetadata/v1/",
-      "http://[::1]/menu",
-      "http://2130706433/menu",
-      "http://user:pass@www.itsjane.com/menu",
+      "https://127.0.0.1/menu",
+      "https://10.0.0.8/menu",
+      "https://192.168.1.4/menu",
+      "https://172.16.0.4/menu",
+      "https://169.254.169.254/latest/meta-data",
+      "https://100.100.100.200/latest/meta-data",
+      "https://localhost/menu",
+      "https://metadata/computeMetadata/v1/",
+      "https://metadata.google.internal/computeMetadata/v1/",
+      "https://metadata.internal/latest",
+      "https://instance-data/latest/meta-data",
+      "https://[::1]/menu",
+      "https://[::]/menu",
+      "https://[fe80::1]/menu",
+      "https://[fc00::1]/menu",
+      "https://[fd00:ec2::254]/latest",
+      "https://[::ffff:127.0.0.1]/menu",
+      "https://[::ffff:169.254.169.254]/latest",
+      "https://2130706433/menu",
+      "https://user:pass@www.itsjane.com/menu",
       "file:///etc/passwd",
     ]) {
-      expect(firstMenuLink(url)).toBeNull();
+      expect(firstMenuLink(url), url).toBeNull();
     }
+    expect(isBlockedMenuHost("fe80::1")).toBe(true);
+    expect(isBlockedMenuHost("fd00:ec2::254")).toBe(true);
+    expect(isBlockedMenuHost("www.itsjane.com")).toBe(false);
   });
 
   it("returns the page text when the site serves html", async () => {
@@ -84,5 +107,29 @@ describe("reading a menu page", () => {
     }));
     const page = await fetchMenuPage("https://www.example.com/menu", fetchImpl);
     expect(page).toEqual({ ok: false, reason: "type" });
+  });
+
+  it("uses a short timeout and refuses a body over the byte cap", async () => {
+    expect(MENU_FETCH_TIMEOUT_MS).toBe(5_000);
+    expect(MENU_MAX_BYTES).toBe(1_500_000);
+    const fetchImpl = vi.fn(async (_url, init) => {
+      expect(init.signal).toBeDefined();
+      return htmlResponse(MENU, {
+        headers: { "content-type": "text/html", "content-length": String(MENU_MAX_BYTES + 1) },
+      });
+    });
+    const page = await fetchMenuPage("https://www.example.com/menu", fetchImpl);
+    expect(page).toEqual({ ok: false, reason: "too-big" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not follow an http redirect even onto a public host", async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, {
+      status: 302,
+      headers: { location: "http://www.itsjane.com/menu" },
+    }));
+    const page = await fetchMenuPage("https://www.itsjane.com/menu", fetchImpl);
+    expect(page).toEqual({ ok: false, reason: "redirect" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

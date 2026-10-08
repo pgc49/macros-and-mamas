@@ -44,7 +44,7 @@ import {
   scrubCoachReply,
 } from "../_shared/coachGuardrails.js";
 import { askedForMealOptions, limitAskMeals } from "../_shared/coachAskMeals.js";
-import { isWontLogRefusal } from "../_shared/coachRefusalSummary.js";
+import { escalateDoor, isWontLogRefusal } from "../_shared/coachRefusalSummary.js";
 import {
   callOpenRouter,
   logAiFailure,
@@ -68,6 +68,7 @@ import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 import {
   buildLocalCoachRecord,
+  clampCoachRequestId,
   countPainTeachToday,
   insertCoachReply,
   persistServerCoach,
@@ -75,6 +76,8 @@ import {
 
 const MAX_PER_DAY = 30;
 const MAX_RECORD_PER_DAY = 200;
+const MAX_NOTES_PER_DAY = 20;
+const COACH_NOTE_TYPE = "coach_note";
 const MAX_IMAGES = 3;
 const MAX_IMAGE_CHARS = 2_500_000;
 const MAX_TEXT = 600;
@@ -85,6 +88,49 @@ const COACH_FAILURE_COPY = {
   retryLabel: "ask me again",
   manualLabel: "pick something from Meals",
 };
+
+async function allowCoachNote(env, userId, { isAdmin, requestId }) {
+  if (isAdmin) return true;
+  const limit = await checkAiLimit(env, userId, {
+    type: COACH_NOTE_TYPE,
+    max: MAX_NOTES_PER_DAY,
+    requestId,
+    busyMessage: "I couldn't save that just now. Try again in a minute.",
+    spentMessage: "That's enough saved notes for today. I'll still answer here.",
+  });
+  return limit.ok;
+}
+
+async function persistCannedCoach(env, userId, body, message, {
+  isAdmin,
+  requestId,
+  asked = "",
+  scope = null,
+  escalate = null,
+}) {
+  const allowed = await allowCoachNote(env, userId, { isAdmin, requestId });
+  const door = escalateDoor(asked, { scope, escalate });
+  const crisis = door === "medical";
+  if (!allowed && !crisis) return false;
+  if (door && (allowed || crisis)) {
+    const noted = await appendCoachRefusal(env, userId, { asked, scope, escalate });
+    if (!noted.ok && !noted.skipped) {
+      await logAiFailure(env, {
+        userId,
+        label: "coach",
+        kind: "note",
+        detail: "client_summaries append failed",
+      });
+    }
+  }
+  if (allowed) {
+    await persistServerCoach(env, userId, body, {
+      ...message,
+      payload: { ...(message.payload || {}), requestId },
+    });
+  }
+  return allowed;
+}
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -100,6 +146,7 @@ export async function onRequestPost({ request, env }) {
     const body = await request.json().catch(() => ({}));
     const mode = MODES.has(body.mode) ? body.mode : "ask";
     const isAdmin = access.role === "admin";
+    const requestId = clampCoachRequestId(body.requestId);
 
     // Local cards/read/teach only. The client never sends a model reply
     // back. Arbitrary coach content is rejected; pins never come from here.
@@ -163,29 +210,29 @@ export async function onRequestPost({ request, env }) {
       ? await countPainTeachToday(env, user.id, teach.topic)
       : 0;
     if (teach && PAIN_TOPICS.has(teach.topic) && painCount >= 2) {
-      await appendCoachRefusal(env, user.id, { asked: text, escalate: "stuck" });
-      await persistServerCoach(env, user.id, body, {
+      await persistCannedCoach(env, user.id, body, {
         body: "",
         kind: "deflect",
         payload: { deflect: "again" },
+      }, {
+        isAdmin,
+        requestId,
+        asked: text,
+        escalate: "stuck",
       });
       return json({ ok: true, scope: "stuck", deflect: "again", meals: [] });
     }
     if (scopeIsRefused(verdict.scope)) {
-      const noted = await appendCoachRefusal(env, user.id, { asked: text, scope: verdict.scope });
-      if (!noted.ok && !noted.skipped) {
-        await logAiFailure(env, {
-          userId: user.id,
-          label: "coach",
-          kind: "note",
-          detail: "client_summaries append failed",
-        });
-      }
       const deflect = deflectForScope(verdict.scope, text);
-      await persistServerCoach(env, user.id, body, {
+      await persistCannedCoach(env, user.id, body, {
         body: "",
         kind: "deflect",
-        payload: { deflect, requestId: String(body.requestId || "").slice(0, 80) || null },
+        payload: { deflect },
+      }, {
+        isAdmin,
+        requestId,
+        asked: text,
+        scope: verdict.scope,
       });
       return json({
         ok: true,
@@ -197,11 +244,11 @@ export async function onRequestPost({ request, env }) {
 
     if (teach) {
       const reply = teachBody(teach.topic, { again: teach.topic === "neverSkip" && painCount >= 1 });
-      await persistServerCoach(env, user.id, body, {
+      await persistCannedCoach(env, user.id, body, {
         body: reply,
         kind: "text",
         payload: { teach: teach.topic, aside: verdict.aside || null },
-      });
+      }, { isAdmin, requestId, asked: text });
       return json({
         ok: true,
         scope: "food",
@@ -219,11 +266,11 @@ export async function onRequestPost({ request, env }) {
       menuPage = link ? await fetchMenuPage(link) : { ok: false, reason: "bad-url" };
       if (!menuPage.ok) {
         const reply = teachBody("menuClosed");
-        await persistServerCoach(env, user.id, body, {
+        await persistCannedCoach(env, user.id, body, {
           body: reply,
           kind: "text",
           payload: { teach: "menuClosed" },
-        });
+        }, { isAdmin, requestId, asked: text });
         return json({
           ok: true,
           scope: "food",
@@ -240,7 +287,7 @@ export async function onRequestPost({ request, env }) {
       const limit = await checkAiLimit(env, user.id, {
         type: "coach",
         max: MAX_PER_DAY,
-        requestId: String(body.requestId || "").slice(0, 80) || null,
+        requestId,
         busyMessage: "I can't think straight right now. Try again in a minute, or pick something from Meals.",
         spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
       });
@@ -356,7 +403,7 @@ export async function onRequestPost({ request, env }) {
         await persistServerCoach(env, user.id, body, {
           body: "",
           kind: "deflect",
-          payload: { deflect, requestId: String(body.requestId || "").slice(0, 80) || null },
+          payload: { deflect, requestId },
         });
         return json({ ok: true, scope: "urgent", deflect, meals: [] });
       }
@@ -397,7 +444,7 @@ export async function onRequestPost({ request, env }) {
         cards: shownMeals,
         aside: verdict.aside || null,
         teach: teachTopic,
-        requestId: String(body.requestId || "").slice(0, 80) || null,
+        requestId,
       },
     });
     return json({

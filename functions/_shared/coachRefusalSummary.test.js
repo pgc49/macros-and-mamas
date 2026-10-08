@@ -9,6 +9,7 @@ import {
   isLoggingRefusal,
   isWontLogRefusal,
   saidSheSkipped,
+  MAX_MEDICAL_ESCALATES_PER_DAY,
   MAX_SUMMARY_ESCALATES,
   mergeRefusalSummary,
   preserveRefusalLines,
@@ -108,11 +109,38 @@ describe("a refusal line is factual", () => {
     expect(posts).toHaveLength(1);
   });
 
-  it("caps stuck and medical lines so one mama cannot flood the card", async () => {
+  it("allows only one medical line per Pacific day so a repeat cannot spam", async () => {
+    expect(MAX_MEDICAL_ESCALATES_PER_DAY).toBe(1);
+    const existing = "Coach refused (medical): I've been dizzy since this morning";
+    expect(countRefusalDoorLines(existing, "medical")).toBe(1);
+    const env = {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service",
+    };
+    const posts = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (String(url).includes("client_summaries") && init?.method === "POST") {
+        posts.push(JSON.parse(init.body));
+        return new Response(null, { status: 201 });
+      }
+      if (String(url).includes("client_summaries")) {
+        return new Response(JSON.stringify([{ summary: existing }]), { status: 200 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+    const result = await appendCoachRefusal(env, "profile-1", {
+      asked: "I fainted after lunch",
+      scope: "urgent",
+    });
+    expect(result).toEqual({ ok: true, capped: true });
+    expect(posts).toHaveLength(0);
+  });
+
+  it("still caps stuck repeats so one mama cannot flood the card", async () => {
     const flooded = Array.from({ length: MAX_SUMMARY_ESCALATES }, (_, i) => (
-      `Coach refused (medical): ask ${i}`
+      `Coach refused (stuck): ask ${i}`
     )).join("\n");
-    expect(countRefusalDoorLines(flooded, "medical")).toBe(MAX_SUMMARY_ESCALATES);
+    expect(countRefusalDoorLines(flooded, "stuck")).toBe(MAX_SUMMARY_ESCALATES);
     const env = {
       SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service",
@@ -129,8 +157,8 @@ describe("a refusal line is factual", () => {
       return new Response("[]", { status: 200 });
     });
     const result = await appendCoachRefusal(env, "profile-1", {
-      asked: "I've been dizzy since this morning",
-      scope: "urgent",
+      asked: "should I skip dinner",
+      escalate: "stuck",
     });
     expect(result).toEqual({ ok: true, capped: true });
     expect(posts).toHaveLength(0);
