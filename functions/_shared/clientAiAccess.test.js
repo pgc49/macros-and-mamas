@@ -123,12 +123,55 @@ describe("loadCoachSelf can work from a draft row", () => {
 
   it("picks the newest unapproved row when several drafts exist", () => {
     expect(pickCoachMacros([
-      { id: "old", cal: 1500, approved: false, created_at: "2026-10-01T00:00:00.000Z" },
-      { id: "new", cal: 1700, approved: false, created_at: "2026-10-08T00:00:00.000Z" },
+      { profile_id: "old", cal: 1500, approved: false, approved_at: "2026-10-01T00:00:00.000Z" },
+      { profile_id: "new", cal: 1700, approved: false, approved_at: "2026-10-08T00:00:00.000Z" },
     ])).toEqual({
-      row: { id: "new", cal: 1700, approved: false, created_at: "2026-10-08T00:00:00.000Z" },
+      row: { profile_id: "new", cal: 1700, approved: false, approved_at: "2026-10-08T00:00:00.000Z" },
       status: "draft",
     });
+  });
+
+  it("treats a macros 400 as an outage, not as missing ranges", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      if (String(url).includes("/rest/v1/profiles")) {
+        return new Response(JSON.stringify([{ name: "QA", breastfeeding: false }]), { status: 200 });
+      }
+      if (String(url).includes("/rest/v1/macros")) {
+        return new Response(JSON.stringify({
+          code: "42703",
+          message: "column macros.created_at does not exist",
+        }), { status: 400 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+    const self = await loadCoachSelf(
+      { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "anon" },
+      "user-1",
+      "Bearer token",
+    );
+    expect(self.macrosStatus).toBe("outage");
+    expect(self.macros).toBeNull();
+    await expect(loadSelf(
+      { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "anon" },
+      "user-1",
+      "Bearer token",
+    )).rejects.toMatchObject({ reason: "outage" });
+  });
+
+  it("the test fake 400s unknown macros columns instead of ignoring them", async () => {
+    const { rejectUnknownPostgrestColumns, LIVE_MACROS_COLUMNS } = await import("./postgrestFake.js");
+    const bad = rejectUnknownPostgrestColumns(
+      "https://example.supabase.co/rest/v1/macros?profile_id=eq.1&select=*&order=created_at.desc,id.desc",
+      "macros",
+      LIVE_MACROS_COLUMNS,
+    );
+    expect(bad?.status).toBe(400);
+    const ok = rejectUnknownPostgrestColumns(
+      "https://example.supabase.co/rest/v1/macros?profile_id=eq.1&select=*",
+      "macros",
+      LIVE_MACROS_COLUMNS,
+    );
+    expect(ok).toBeNull();
   });
 });
 

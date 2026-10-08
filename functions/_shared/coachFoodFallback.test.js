@@ -6,6 +6,7 @@ import {
   buildCoachFallbackMeals,
   ensureFoodMeals,
   fallbackMealReply,
+  hideCoachMealMacros,
 } from "./coachFoodFallback.js";
 import { mealHaystack } from "./coachMealFilter.js";
 
@@ -83,6 +84,24 @@ describe("buildCoachFallbackMeals", () => {
     expect(noEggs.every((meal) => !/leftover chicken/i.test(meal.name))).toBe(true);
   });
 
+  it("accepts live custom-meal ingredients stored as text", () => {
+    const meals = buildCoachFallbackMeals({
+      text: "we're going to an italian place tonight",
+      slot: "dinner",
+      topic: "italian",
+      customMeals: [{
+        name: "Mom's lasagna",
+        cal: 520,
+        p: 28,
+        c: 48,
+        f: 22,
+        ingredients: "noodles; ricotta; beef; sauce",
+      }],
+    });
+    expect(meals.some((meal) => meal.name === "Mom's lasagna" && meal.fromSaved)).toBe(true);
+    expect(meals.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("includes a no-prep plate when her hands are full", () => {
     const meals = buildCoachFallbackMeals({
       text: "one-handed, I'm holding the baby and too tired to cook",
@@ -134,5 +153,14 @@ describe("alignReplyToMeals", () => {
       "Here's Grilled chicken and rice, Leftover chicken and rice, or Chicken thighs and rice.",
       meals,
     )).toBe("Here's Turkey skillet, or Salmon and rice.");
+  });
+});
+
+describe("hideCoachMealMacros", () => {
+  it("keeps the real numbers on the object", () => {
+    const hidden = hideCoachMealMacros([
+      { name: "Grilled chicken and rice", cal: 430, p: 45, c: 30, f: 12 },
+    ]);
+    expect(hidden[0]).toMatchObject({ hideMacros: true, cal: 430, p: 45, c: 30, f: 12 });
   });
 });

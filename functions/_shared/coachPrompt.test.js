@@ -155,6 +155,19 @@ describe("the prompt says what meal she is deciding", () => {
     expect(prompt).not.toContain("Approved ranges");
   });
 
+  it("does not lead with fine-tuning when macros are in outage", () => {
+    const prompt = buildCoachAskPrompt({
+      ...ARGS,
+      slot: "dinner",
+      macros: { cal: 1900, protein: 130, carbs: 190, fat: 65 },
+      macrosStatus: "outage",
+      question: "what should I eat",
+    });
+    expect(prompt).not.toContain("Fine-tuning");
+    expect(prompt).not.toContain("Callie's still fine-tuning your numbers");
+    expect(prompt).not.toContain("Working numbers");
+  });
+
   it("skips numbers when she has no macros row", () => {
     const prompt = buildCoachAskPrompt({
       ...ARGS,

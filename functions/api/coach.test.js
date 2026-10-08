@@ -13,6 +13,7 @@ vi.mock("../_shared/openrouter.js", () => openrouter);
 
 import { onRequestPost } from "./coach.js";
 import { COACH_DEFLECT } from "../../src/content/coachVoice.js";
+import { LIVE_MACROS_COLUMNS, rejectUnknownPostgrestColumns } from "../_shared/postgrestFake.js";
 
 const USER_ID = "00000000-0000-4000-8000-000000000010";
 
@@ -55,6 +56,7 @@ function mockSupabase({
   customMeals = [],
   summary = null,
   refusalWrite = true,
+  macrosOutage = false,
 } = {}) {
   let summaryRow = summary;
   const claimedTickets = new Map();
@@ -111,6 +113,14 @@ function mockSupabase({
       );
     }
     if (value.includes("/rest/v1/macros")) {
+      const rejected = rejectUnknownPostgrestColumns(value, "macros", LIVE_MACROS_COLUMNS);
+      if (rejected) return rejected;
+      if (macrosOutage) {
+        return new Response(JSON.stringify({
+          code: "42703",
+          message: "column macros.created_at does not exist",
+        }), { status: 400 });
+      }
       if (!macros && !macrosRow) return new Response("[]", { status: 200 });
       const row = macrosRow || { cal: 1750, protein: 140, carbs: 160, fat: 55, approved: true };
       return new Response(JSON.stringify([row]), { status: 200 });
@@ -1808,9 +1818,9 @@ const ALLERGY_CASES = [
   { id: "peanuts", leak: /peanut/i },
   { id: "tree_nuts", leak: /\b(almond|cashew|walnut|pecan|hazelnut|pistachio)\b/i },
   { id: "shellfish", leak: /\b(shrimp|prawn|crab|lobster|shellfish)\b/i },
-  { id: "fish", leak: /\b(salmon|tuna|halibut|cod|fish|tilapia)\b/i },
-  { id: "gluten", leak: /\b(wheat|barley|rye|gluten|sourdough|bread|flour|pasta)\b/i },
-  { id: "soy", leak: /\b(soy|tofu|tempeh|edamame)\b/i },
+  { id: "fish", leak: /\b(salmon|tuna|halibut|cod|fish|tilapia|nigiri|sashimi|poke|sushi)\b/i },
+  { id: "gluten", leak: /\b(wheat|barley|rye|gluten|sourdough|bread|flour|pasta|toast|cracker|tortilla)\b/i },
+  { id: "soy", leak: /\b(soy|tofu|tempeh|edamame|miso|sofritas)\b/i },
   { id: "sesame", leak: /\b(sesame|tahini)\b/i },
 ];
 const DIET_CASES = [
@@ -1820,7 +1830,10 @@ const DIET_CASES = [
 ];
 
 function hay(meal) {
-  return `${meal?.name || ""} ${meal?.desc || ""} ${(meal?.ingredients || []).map((row) => row?.item || row).join(" ")}`;
+  const ings = Array.isArray(meal?.ingredients)
+    ? meal.ingredients.map((row) => row?.item || row).join(" ")
+    : String(meal?.ingredients || "");
+  return `${meal?.name || ""} ${meal?.desc || ""} ${ings}`;
 }
 
 describe("saved allergies and diets on every plate path", () => {
@@ -1955,7 +1968,7 @@ describe("reviewer follow-ups", () => {
     expect(data.deflect).toBe("disordered");
     expect(data.noted).toBe(true);
     expect(data.meals.length).toBeGreaterThanOrEqual(2);
-    expect(data.meals.every((meal) => meal.hideMacros && !meal.cal && !meal.p)).toBe(true);
+    expect(data.meals.every((meal) => meal.hideMacros && meal.cal > 0 && meal.p > 0)).toBe(true);
     expect(COACH_DEFLECT.disordered.lineNoted).toBe(
       "I'm really glad you told me. I've added a note for Callie, and she'd love to hear from you directly too. Message her whenever you're ready. For now, here's something simple:",
     );
@@ -1994,7 +2007,7 @@ describe("reviewer follow-ups", () => {
     const data = await resp.json();
     expect(data.deflect).toBe("medication");
     expect(data.meals.length).toBeGreaterThanOrEqual(2);
-    expect(data.meals.every((meal) => meal.hideMacros && !meal.cal && !meal.p)).toBe(true);
+    expect(data.meals.every((meal) => meal.hideMacros && meal.cal > 0 && meal.p > 0)).toBe(true);
   });
 
   it("hands a medication question to Callie with simple food, never off-topic", async () => {
@@ -2019,5 +2032,78 @@ describe("reviewer follow-ups", () => {
     const curly = "Callie\u2019s still fine-tuning your numbers, so here\u2019s an easy one for now. Eggs.";
     expect(leadFineTuningReply(curly, { hasPlates: true })).not.toMatch(/fine-tuning your numbers.*fine-tuning your numbers/);
     expect(leadFineTuningReply(curly, { hasPlates: true })).toMatch(/Eggs/);
+  });
+
+  it("does not treat a macros 400 as missing ranges", async () => {
+    mockSupabase({ macrosOutage: true });
+    modelReturns({
+      scope: "food",
+      reply: "Here's turkey skillet.",
+      meals: [{ name: "Turkey skillet", cal: 360, p: 32, c: 12, f: 18, desc: "Turkey and veg." }],
+    });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "what should I eat for dinner", requestId: "ask-macros-400" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.reply || "").not.toMatch(/fine-tuning/);
+    expect(data.meals.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("accepts saved meals whose ingredients are live text", async () => {
+    mockSupabase({
+      customMeals: [{
+        name: "Mom's lasagna",
+        cal: 520,
+        protein: 28,
+        carbs: 48,
+        fat: 22,
+        ingredients: "noodles; ricotta; beef; sauce",
+      }],
+    });
+    openrouter.callOpenRouter.mockResolvedValue({ ok: false, kind: "timeout", status: 504, detail: "down" });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "what should I eat for dinner", requestId: "ask-text-ings" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(data.error).toBeUndefined();
+  });
+
+  it("keeps the model's Callie hand-back on unclear questions", async () => {
+    const asks = [
+      "I keep crying and I don't know why",
+      "I feel really down lately",
+      "my c-section scar is oozing",
+      "I have a UTI",
+      "how do I get my baby to sleep",
+    ];
+    for (const text of asks) {
+      mockSupabase();
+      modelReturns({ scope: "callie", reply: "That's Callie's." });
+      const resp = await onRequestPost({
+        request: request({ mode: "ask", text, requestId: `ask-handoff-${text.slice(0, 8)}` }),
+        env,
+      });
+      const data = await resp.json();
+      expect(resp.status, text).toBe(200);
+      expect(data.deflect, text).toBe("offTopic");
+      expect(data.meals || [], text).toEqual([]);
+    }
+  });
+
+  it("does not serve dinner when the model is down on a non-food question", async () => {
+    mockSupabase();
+    openrouter.callOpenRouter.mockResolvedValue({ ok: false, kind: "timeout", status: 504, detail: "down" });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "how do I get my baby to sleep", requestId: "ask-sleep-down" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.meals || []).toEqual([]);
+    expect(String(data.reply || data.message || "")).not.toMatch(/teriyaki|dinner|Here's /i);
   });
 });

@@ -66,6 +66,9 @@ function mockSetup(setup, { callsUsed = 0, noRanges = false } = {}) {
       return new Response(JSON.stringify([{ id: USER_ID, ...setup.profile }]), { status: 200 });
     }
     if (value.includes("/rest/v1/macros")) {
+      if (/[?&]order=/.test(value) && /created_at|\bid\b/.test(value)) {
+        return new Response(JSON.stringify({ code: "42703", message: "column macros.created_at does not exist" }), { status: 400 });
+      }
       if (noRanges || (!setup.macros && !setup.macrosRow)) return new Response("[]", { status: 200 });
       return new Response(JSON.stringify([setup.macrosRow]), { status: 200 });
     }

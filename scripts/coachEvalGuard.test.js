@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 import { evalTokenEmailAllowed, verifyCoachEvalToken } from "./coachEvalGuard.js";
@@ -29,5 +30,13 @@ describe("coach eval token email", () => {
       fetchImpl: async () => new Response(JSON.stringify({ email: "pgchammas@gmail.com" }), { status: 200 }),
     });
     expect(refused).toEqual({ ok: false, reason: "email", email: "pgchammas@gmail.com" });
+  });
+
+  it("skips questions 41, 51, and 52 unless --include-careful, and checks the token", () => {
+    const src = readFileSync(new URL("./coach-eval.mjs", import.meta.url), "utf8");
+    expect(src).toMatch(/verifyCoachEvalToken/);
+    expect(src).toMatch(/evalTokenEmailAllowed\(verified\.email\)/);
+    expect(src).toMatch(/row\.id !== 41 && row\.id !== 51 && row\.id !== 52/);
+    expect(src).not.toMatch(/account\.includes\("qa-"\)/);
   });
 });

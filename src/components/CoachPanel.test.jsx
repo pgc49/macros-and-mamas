@@ -926,6 +926,61 @@ describe("what isn't the coach's goes to Callie", () => {
     expect(postCoach.mock.calls[0][0].context.turnedDown).toContain(firstPlate);
     expect(postCoach.mock.calls[0][0].context.alreadySuggested).toContain(firstPlate);
   });
+
+  it("does not reshuffle a plate she has already been shown on a model reply", async () => {
+    const trio = [
+      { name: "Callie's chicken teriyaki", cal: 430, p: 40, c: 28, f: 14, servings: 1, desc: "Chicken teriyaki." },
+      { name: "Salmon + potatoes", cal: 440, p: 38, c: 30, f: 14, servings: 1, desc: "Salmon and potatoes." },
+      { name: "Halibut + rice", cal: 455, p: 44, c: 50, f: 7, servings: 1, desc: "Halibut and rice." },
+    ];
+    const postCoach = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        reply: "Here's Callie's chicken teriyaki, Salmon + potatoes, or Halibut + rice.",
+        meals: trio,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        reply: "Here's Callie's chicken teriyaki, Salmon + potatoes, or Halibut + rice.",
+        meals: trio,
+      });
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "something easy with leftover turkey" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(latestCardTitles().join(" ")).toMatch(/teriyaki|salmon|halibut/i));
+    const first = latestCardTitles();
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "something else easy with leftover turkey" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(2));
+    const second = latestCardTitles();
+    expect(second.length).toBeGreaterThanOrEqual(2);
+    expect(second.every((name) => !first.includes(name))).toBe(true);
+  });
+
+  it("rewrites a reply that names plates that are not on the cards", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Here's Halibut + rice, Salmon + potatoes, or Callie's chicken teriyaki.",
+      meals: [
+        { name: "Chicken tacos", cal: 420, p: 32, c: 36, f: 14, servings: 1, desc: "Two chicken tacos." },
+        { name: "Steak tacos", cal: 440, p: 30, c: 32, f: 16, servings: 1, desc: "Two steak tacos." },
+      ],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "can I have tacos tonight" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(latestCardTitles().some((name) => /taco/i.test(name))).toBe(true));
+    const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(latestTurn?.textContent).not.toMatch(/Halibut \+ rice|Salmon \+ potatoes|chicken teriyaki/i);
+  });
 });
 
 describe("coach card save contract", () => {
@@ -1378,6 +1433,8 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
     await screen.findByText(COACH_DEFLECT.emergency.line);
     expect(screen.getByRole("button", { name: COACH_DEFLECT.emergency.cta })).toBeTruthy();
+    const crisisTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(crisisTurn?.querySelectorAll("[data-testid='coach-card-title']")).toHaveLength(0);
     expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
       mode: "ask",
       text: "I want to die",
@@ -1491,6 +1548,30 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     expect(latestCardTitles().length).toBeGreaterThanOrEqual(2);
     const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
     expect(latestTurn?.textContent).not.toMatch(/\d+ cal ·/);
+  });
+
+  it("hides numbers, servings, and the estimate line when she is not tracking", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Here's Chicken tacos, Steak tacos, or Bean and salsa tacos.",
+      meals: [
+        { name: "Chicken tacos", cal: 420, p: 32, c: 36, f: 14, servings: 1.5, title: "Chicken tacos · 1.5 servings", desc: "Two chicken tacos." },
+        { name: "Steak tacos", cal: 440, p: 30, c: 32, f: 16, servings: 1, desc: "Two steak tacos." },
+        { name: "Bean and salsa tacos", cal: 360, p: 16, c: 52, f: 8, servings: 1, desc: "Bean tacos." },
+      ],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm not tracking. can I have tacos tonight" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(latestCardTitles().some((name) => /taco/i.test(name))).toBe(true));
+    expect(latestCardTitles().length).toBeGreaterThanOrEqual(2);
+    const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(latestTurn?.textContent).not.toMatch(/\d+ cal ·/);
+    expect(latestTurn?.textContent).not.toMatch(/1\.5 servings|Rough estimate/i);
+    expect(latestTurn?.querySelectorAll("[data-testid='coach-card-title']").length).toBeGreaterThanOrEqual(2);
   });
 
   it("fills breakfast plates on a coffee teach that also asks for food, without a coach Remove", async () => {

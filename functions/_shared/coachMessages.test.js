@@ -113,6 +113,26 @@ describe("sanitizeCoachCards", () => {
       reason: "Fits tonight.",
     }]);
   });
+
+  it("keeps real macros on a hidden-number card instead of writing zeros", () => {
+    const cards = sanitizeCoachCards([{
+      name: "Grilled chicken and rice",
+      title: "Grilled chicken and rice",
+      hideMacros: true,
+      cal: 430,
+      p: 45,
+      c: 30,
+      f: 12,
+      reason: "A simple plate.",
+    }]);
+    expect(cards[0]).toMatchObject({
+      hideMacros: true,
+      cal: 430,
+      p: 45,
+      c: 30,
+      f: 12,
+    });
+  });
 });
 
 describe("buildLocalCoachRecord", () => {

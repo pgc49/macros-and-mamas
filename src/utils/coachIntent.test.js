@@ -18,6 +18,7 @@ describe("asks the coach answers without a model", () => {
   });
 
   it("reads a slot out of a longer question the clock would get wrong", () => {
+    expect(slotNamedInAsk("3am grab")).toBe("snack");
     expect(slotNamedInAsk("I am going out to eat tonight for Italian")).toBe("dinner");
     expect(slotNamedInAsk("I have chicken and rice, what should I eat")).toBeNull();
   });

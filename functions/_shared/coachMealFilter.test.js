@@ -24,6 +24,15 @@ describe("extractAskConstraints", () => {
     expect(extractAskConstraints("no dairy please").noDairy).toBe(true);
     expect(extractAskConstraints("something else, I had chicken at lunch too").noChicken).toBe(true);
     expect(extractAskConstraints("I already had eggs this morning").noEggs).toBe(true);
+    expect(extractAskConstraints("something new for breakfast", null, {
+      currentAsk: "something new for breakfast",
+    }).noEggs).toBe(false);
+    expect(extractAskConstraints("no eggs this week, breakfast ideas").noEggs).toBe(true);
+    expect(extractAskConstraints(
+      "no eggs this week something new for breakfast",
+      null,
+      { currentAsk: "something new for breakfast" },
+    ).noEggs).toBe(true);
     expect(extractAskConstraints("make it vegetarian").vegetarian).toBe(true);
     expect(extractAskConstraints("I don't have spinach, swap?").noSpinach).toBe(true);
     expect(extractAskConstraints("dinner", {
@@ -56,5 +65,18 @@ describe("filterCoachMeals", () => {
       profile: { allergens: ["peanuts"] },
     });
     expect(kept.map((meal) => meal.name)).toEqual(["Rice and fruit"]);
+  });
+
+  it("carries no eggs this week from an earlier ask", () => {
+    const pancakes = {
+      name: "Protein pancakes",
+      desc: "Oats, egg, and protein.",
+      ingredients: [{ item: "large egg", amount: "1" }],
+    };
+    const oats = { name: "Protein oatmeal", desc: "Oats and protein powder." };
+    expect(filterCoachMeals([pancakes, oats], {
+      text: "something new for breakfast",
+      priorAsks: ["no eggs this week"],
+    }).map((meal) => meal.name)).toEqual(["Protein oatmeal"]);
   });
 });

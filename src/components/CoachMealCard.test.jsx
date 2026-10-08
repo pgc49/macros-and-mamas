@@ -192,6 +192,45 @@ describe("the recipe sheet", () => {
     expect(onLog).toHaveBeenCalledWith(builtCard);
   });
 
+  it("offers Pencil in / Save on a hidden-number card and keeps the real macros", async () => {
+    const onLog = vi.fn(async () => true);
+    const onPencil = vi.fn(async () => true);
+    const onSave = vi.fn(async () => true);
+    const hidden = {
+      ...builtCard,
+      hideMacros: true,
+      cal: 430,
+      p: 45,
+      c: 30,
+      f: 12,
+    };
+    render(<CoachMealCard card={hidden} onLog={onLog} onPencil={onPencil} onSave={onSave} />);
+    expect(screen.queryByRole("button", { name: "Log it" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Pencil in" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save to My meals" })).toBeTruthy();
+    expect(screen.queryByText(ESTIMATE)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/430 cal/);
+    fireEvent.click(screen.getByRole("button", { name: "Pencil in" }));
+    await waitFor(() => expect(onPencil).toHaveBeenCalledWith(expect.objectContaining({
+      cal: 430,
+      p: 45,
+      hideMacros: true,
+    })));
+    expect(onLog).not.toHaveBeenCalled();
+  });
+
+  it("reads live ingredient text on the sheet", () => {
+    render(
+      <CoachMealSheet
+        card={{ ...builtCard, ingredients: "noodles; ricotta; beef" }}
+        onClose={vi.fn()}
+        onLog={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("noodles")).toBeTruthy();
+    expect(screen.getByText("ricotta")).toBeTruthy();
+  });
+
   it("tells her how to order a restaurant plate, not how to cook it", () => {
     render(
       <CoachMealSheet
