@@ -33,7 +33,7 @@ import { coachEntryHint, coachRead, leftLine, macroStanding, shownCoachLead, slo
 import { formatRangeProgress } from "./rangeProgress.js";
 import { mealFitsRemaining } from "./eatingOutImpact.js";
 import { targetBands } from "./weekPlan.js";
-import { COACH_COPY } from "../content/coachVoice.js";
+import { COACH_COPY, skipMealCopy } from "../content/coachVoice.js";
 
 const MACROS = { cal: 1750, protein: 140, carbs: 160, fat: 55 };
 const BANDS = targetBands(MACROS);
@@ -307,22 +307,39 @@ describe("slot order", () => {
     expect(laterSlotsAfter("breakfast", new Set(), MORNING)).toEqual(["lunch", "dinner"]);
   });
 
-  it("treats a meal the clock went past and she never logged as skipped", () => {
-    expect(laterSlotsAfter("dinner", new Set(), EVENING)).toEqual([]);
-    expect(laterSlotsAfter("lunch", new Set(), ONE_PM)).toEqual(["dinner"]);
+  it("holds earlier unlogged meals when nothing is logged, instead of treating them as skipped", () => {
+    expect(laterSlotsAfter("dinner", new Set(), EVENING)).toEqual(["breakfast", "lunch"]);
+    expect(laterSlotsAfter("lunch", new Set(), ONE_PM)).toEqual(["breakfast", "dinner"]);
+    expect(laterSlotsAfter("dinner", new Set(["breakfast"]), EVENING)).toEqual([]);
+    expect(laterSlotsAfter("lunch", new Set(["breakfast"]), ONE_PM)).toEqual(["dinner"]);
   });
 
-  it("names the skipped meal so the copy can say so, instead of folding it in quietly", () => {
+  it("names a skipped meal only when she logged other meals or said she skipped", () => {
     const onePm = ONE_PM;
-    expect(skippedSlotsBefore("lunch", new Set(), onePm)).toEqual(["breakfast"]);
-    expect(skippedSlotsBefore("dinner", new Set(), EVENING)).toEqual(["breakfast", "lunch"]);
+    expect(skippedSlotsBefore("lunch", new Set(), onePm)).toEqual([]);
+    expect(skippedSlotsBefore("dinner", new Set(), EVENING)).toEqual([]);
     expect(skippedSlotsBefore("lunch", new Set(["breakfast"]), onePm)).toEqual([]);
+    expect(skippedSlotsBefore("dinner", new Set(["breakfast"]), EVENING)).toEqual(["lunch"]);
+    expect(skippedSlotsBefore("dinner", new Set(), EVENING, { saidSkipped: true })).toEqual(["breakfast", "lunch"]);
     // 8am, asking about lunch: breakfast has not been skipped yet.
     expect(skippedSlotsBefore("lunch", new Set(), MORNING)).toEqual([]);
   });
 
+  it("sizes dinner to a normal dinner share when nothing is logged tonight", () => {
+    const budget = budgetFor({ cal: 0, p: 0, c: 0, f: 0 }, {
+      slot: "dinner",
+      loggedSlots: new Set(),
+      now: EVENING,
+    });
+    expect(budget.skipped).toEqual([]);
+    expect(budget.laterSlots).toEqual(["breakfast", "lunch"]);
+    expect(Math.round(budget.cal)).toBe(Math.round(BANDS.calHi * DEFAULT_MEAL_SHARES.dinner));
+    expect(budget.cal).toBeLessThan(BANDS.calHi * 0.55);
+    expect(budget.cal).toBeGreaterThan(BANDS.calHi * 0.25);
+  });
+
   it("keeps a meal she hasn't eaten out of a snack's budget", () => {
-    expect(laterSlotsAfter("snack", new Set(), AFTERNOON)).toEqual(["lunch", "dinner"]);
+    expect(laterSlotsAfter("snack", new Set(), AFTERNOON)).toEqual(["breakfast", "lunch", "dinner"]);
     expect(laterSlotsAfter("snack", new Set(["lunch"]), AFTERNOON)).toEqual(["dinner"]);
     expect(laterSlotsAfter("snack", new Set(["breakfast", "lunch", "dinner"]), AFTERNOON)).toEqual([]);
   });
@@ -951,6 +968,13 @@ describe("copy matches the rest of the app", () => {
     const held = slotLeftRead(budget).held;
     expect(held).toMatch(/^Holding \d+ cal for lunch · \d+ for dinner/);
     expect(held).not.toMatch(/cal a snack/);
+  });
+
+  it("does not write a skip note when nothing is logged and she did not say she skipped", () => {
+    expect(skipMealCopy(["breakfast", "lunch"])).toBe("");
+    expect(skipMealCopy(["breakfast", "lunch"], { loggedOtherMeals: false, saidSkipped: false })).toBe("");
+    expect(skipMealCopy(["lunch"], { loggedOtherMeals: true })).toBe(COACH_COPY.skipNotice);
+    expect(skipMealCopy(["breakfast"], { saidSkipped: true })).toContain(COACH_COPY.skipNotice);
   });
 
   it("keeps the skip note and drops the leftover-math lead", () => {
