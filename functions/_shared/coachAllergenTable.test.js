@@ -75,4 +75,37 @@ describe("independent plate-to-allergen table", () => {
     });
     expect(vegan.every((meal) => !/nigiri|salmon|fish|chicken/i.test(mealHaystack(meal)))).toBe(true);
   });
+
+  it("tags chain plates so the bank allergen filter drops them", () => {
+    const matrix = [
+      { ask: "what's good at McDonald's", name: /egg mcmuffin/i, allergens: ["dairy"] },
+      { ask: "at Starbucks, what's a good option", name: /egg bites/i, allergens: ["dairy"] },
+      { ask: "what's good at Panera", name: /greek salad/i, allergens: ["dairy"] },
+      { ask: "what's good at Sweetgreen", name: /kale caesar/i, allergens: ["dairy", "eggs"] },
+      { ask: "what's good at Cava", name: /hummus/i, allergens: ["sesame"] },
+      { ask: "what's good at Subway", name: /sub/i, allergens: ["gluten"] },
+      { ask: "what's good at Panda Express", name: /teriyaki/i, allergens: ["soy", "gluten"] },
+      { ask: "pho tonight", name: /pho/i, allergens: ["fish"] },
+    ];
+    for (const row of matrix) {
+      const meals = buildCoachFallbackMeals({ text: row.ask, slot: "dinner", count: 6 });
+      const plate = meals.find((meal) => row.name.test(`${meal.name} ${mealHaystack(meal)}`));
+      expect(plate, `missing ${row.name} for ${row.ask}`).toBeTruthy();
+      for (const id of row.allergens) {
+        const kept = filterCoachMeals([plate], { text: row.ask, profile: { allergens: [id] } });
+        expect(kept, `${plate.name} leaked through ${id}`).toEqual([]);
+      }
+    }
+    const hummusRice = buildCoachFallbackMeals({
+      text: "hummus and rice",
+      slot: "dinner",
+      profile: { diet: "vegan" },
+      count: 6,
+    }).find((meal) => /hummus and rice/i.test(meal.name));
+    expect(hummusRice).toBeTruthy();
+    expect(filterCoachMeals([hummusRice], {
+      text: "hummus and rice",
+      profile: { allergens: ["sesame"] },
+    })).toEqual([]);
+  });
 });

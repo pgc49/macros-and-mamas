@@ -187,6 +187,13 @@ const DISORDERED = [
   /\bmak(e|ing) myself throw up\b/,
   /\bthrow(s|ing)? up after (meals?|eating|i eat)\b/,
   /\bonly eat(ing)? once a day\b/,
+  /\beat(ing)? only once a day\b/,
+  /\beat once a day\b/,
+  /\b(is|are|should)[^.?]{0,40}\b(800|900|1000|1200|1500)\s*(cal|cals|calories)\b[^.?]{0,20}\b(ok|okay|fine|enough)\b/,
+  /\b(800|900|1000|1200|1500)\s*(cal|cals|calories)[^.?]{0,20}\b(ok|okay|fine|a day|enough)\b/,
+  /\bis it fine to eat \d{3,4}\s*(cal|cals|calories)\b/,
+  /\bskip meals\b/,
+  /\bfast(ing)? while (nursing|breastfeeding)\b/,
   /\beat once a day\b.{0,24}\blose (faster|weight)\b/,
   /\bpurge\b/, /\bpurging\b/,
 ];
@@ -243,6 +250,12 @@ const SUPPLY = [
   /\bfor supply\b/,
   /\bok for supply\b/,
 ];
+
+/** Broth/pho/noodle questions about an active dish are food, not the supply door. */
+function isDishSupplyAsk(text) {
+  return /\b(pho|broth|noodles?)\b/.test(text)
+    && /\b(supply|nursing|breastfeed)/.test(text);
+}
 
 /**
  * Words that mean she is asking about food. Deliberately not a catch-all —
@@ -334,6 +347,7 @@ const MOOD = [
   /\banxious all the time\b/,
   /\banxiety all the time\b/,
   /\bnot bonding\b/,
+  /\bis it normal to feel this way\b/,
 ];
 
 export function isMoodAsk(raw) {
@@ -349,6 +363,43 @@ export function recentCarefulDoor(priorAsks = []) {
     else if (isMoodAsk(ask) && door !== "urgent") door = "mood";
   }
   return door;
+}
+
+export function recentCrisisAsks(priorAsks = []) {
+  return (Array.isArray(priorAsks) ? priorAsks : []).slice(-2).some((ask) => isCrisisUrgent(ask));
+}
+
+const CRISIS_DISMISS = /^(ok|okay|k|fine|i'?m fine( now)?|never mind|nvm|i'?m ok|i am fine( now)?)([.!]?)$/i;
+
+export function isCrisisDismiss(raw) {
+  const text = String(raw || "").toLowerCase().trim();
+  if (!text) return false;
+  return CRISIS_DISMISS.test(text)
+    || /\bi'?m fine now\b/.test(text)
+    || /\bnever mind\b/.test(text);
+}
+
+export function isExplicitMealAsk(raw) {
+  const text = String(raw || "").toLowerCase().trim();
+  if (!text || isCrisisDismiss(text)) return false;
+  return (FOOD_ASK.test(text) || hits(MEAL_INTENT, text)) && !CRISIS_DISMISS.test(text);
+}
+
+const IN_THREAD_FOLLOW = [
+  /^(yes|yeah|yep|sure|please|yes please|ok please)\.?$/i,
+  /\bi don'?t like (those|these|that|them)\b/,
+  /\bthe (first|second|third|last) one\b/,
+  /\bhow do i make (it|that|this)\b/,
+  /\bi only have \d+ minutes?\b/,
+  /\bin \d+ minutes?\b/,
+  /\bsounds good\b/,
+];
+
+export function isInThreadFollowUp(raw, priorAsks = []) {
+  if (!priorAsks?.length || recentCrisisAsks(priorAsks)) return false;
+  const text = String(raw || "").toLowerCase().trim();
+  if (!text) return false;
+  return IN_THREAD_FOLLOW.some((re) => re.test(text));
 }
 
 /** Feelings with no food in them that are not the mood door. */
@@ -415,6 +466,9 @@ export function classifyAsk(raw, { mode = "ask", priorAsks = [] } = {}) {
   // Crisis before every other door. A purge or ibuprofen line that also
   // says she wants to die is 911/988, not the disordered or pharmacist line.
   if (isCrisisUrgent(text)) return { scope: "urgent", aside: null };
+  if (recentCrisisAsks(priorAsks) && !isExplicitMealAsk(text)) {
+    return { scope: "urgent", aside: null, follow: true, crisisFollow: true };
+  }
   if (hits(DISORDERED, text)) return { scope: "disordered", aside: null };
   if (hits(MEDICATION, text)) return { scope: "medication", aside: null };
   if (hits(MOOD, text)) return { scope: "mood", aside: null };
@@ -429,18 +483,18 @@ export function classifyAsk(raw, { mode = "ask", priorAsks = [] } = {}) {
   // said protect it first, and if a mama thinks it's being affected, write
   // her directly. Mentioning that she nurses, without asking about output,
   // is still a food question, and the answer begins with the supply line.
-  if (hits(SUPPLY, text)) return { scope: "supply", aside: null };
+  if (hits(SUPPLY, text) && !isDishSupplyAsk(text)) return { scope: "supply", aside: null };
   if (hits(RANGES, text)) return { scope: "ranges", aside: null };
   if (hits(WEIGHT, text)) return { scope: "weight", aside: null };
   if (hits(ADMIN, text)) return { scope: "admin", aside: null };
   if (hits(EXERCISE_CAL, text)) return { scope: "off_topic", aside: null };
-  if (foodAsk || guilt) return { scope: "food", aside: null };
+  if (foodAsk || guilt || isInThreadFollowUp(text, priorAsks)) return { scope: "food", aside: null };
   const careful = recentCarefulDoor(priorAsks);
   if (careful) return { scope: careful, aside: null, follow: true };
   if (hits(OFF_TOPIC, text) || isEmotionalAsk(text)) return { scope: "off_topic", aside: null };
   // A kitchen or menu photo plus a "what can I make" caption is food,
   // even when the caption itself has no food word.
-  if (mode === "kitchen" || mode === "menu") return { scope: "food", aside: null };
+  if (mode === "kitchen" || mode === "menu" || mode === "photo") return { scope: "food", aside: null };
 
   // After a food ask, a non-food leftover ("I'm so lonely") is Callie's.
   if (priorAsks.length && !foodAsk && !guilt) return { scope: "off_topic", aside: null };
@@ -466,7 +520,7 @@ const MEAL_TEACH_HINT = new Set([
  * ("raise my calories") is not this, even though it says calories.
  */
 export function isMealAsk(raw, { mode = "ask", topic = null } = {}) {
-  if (mode === "menu" || mode === "kitchen") return true;
+  if (mode === "menu" || mode === "kitchen" || mode === "photo") return true;
   if (topic && MEAL_TEACH_HINT.has(topic)) return true;
   const text = String(raw || "").toLowerCase().trim();
   if (!text) return false;
@@ -522,7 +576,8 @@ const DEFLECT_FOR_SCOPE = {
   mood: "mood",
 };
 
-export function deflectForScope(scope, asked = "", { follow = false } = {}) {
+export function deflectForScope(scope, asked = "", { follow = false, crisisFollow = false } = {}) {
+  if (crisisFollow) return "crisisFollow";
   if (follow && scope === "mood") return "moodFollow";
   if (scope === "urgent") {
     if (isCrisisUrgent(asked)) return "emergency";

@@ -26,6 +26,11 @@ const DAIRY = [
   "yogurt", "yoghurt", "cottage", "cheese", "milk", "whey", "butter", "cream",
   "feta", "parmesan", "ricotta", "mozzarella", "cheddar", "jack", "monterey",
   "swiss", "provolone", "gouda", "brie", "queso", "quesadilla", "ghee", "cheesy",
+  "parm", "chicken parm", "tzatziki", "cotija", "crema", "paneer", "halloumi",
+  "kefir", "alfredo", "mascarpone", "burrata", "labneh", "custard", "casein",
+  "half-and-half", "parmigiano", "pecorino", "romano", "asiago", "colby",
+  "muenster", "havarti", "gruyere", "gruyère", "manchego", "raita", "lassi",
+  "creme fraiche", "crème fraîche",
 ];
 const HONEY = ["honey"];
 
@@ -38,7 +43,7 @@ const ALLERGEN_WORDS = {
   fish: ["salmon", "tuna", "halibut", "cod", "fish", "tilapia", "nigiri", "sashimi", "poke", "sushi"],
   gluten: ["wheat", "barley", "rye", "gluten", "sourdough", "bread", "flour", "pasta", "toast", "cracker", "crackers", "tortilla", "pizza", "noodles", "noodle", "ramen", "udon", "couscous", "flour tortilla", "lasagna"],
   soy: ["soy", "tofu", "tempeh", "edamame", "miso", "sofritas"],
-  sesame: ["sesame", "tahini"],
+  sesame: ["sesame", "tahini", "hummus"],
 };
 
 /** "Skip sour cream" is an order note. Nut butter is not dairy. */
@@ -54,7 +59,10 @@ const DAIRY_TOKENS = new Set([
   "yogurt", "yoghurt", "cottage", "cheese", "milk", "whey", "butter", "cream",
   "feta", "parmesan", "ricotta", "mozzarella", "dairy", "cheddar", "jack",
   "monterey", "swiss", "provolone", "gouda", "brie", "queso", "quesadilla",
-  "ghee", "cheesy",
+  "ghee", "cheesy", "parm", "tzatziki", "cotija", "crema", "paneer", "halloumi",
+  "kefir", "alfredo", "mascarpone", "burrata", "labneh", "custard", "casein",
+  "parmigiano", "pecorino", "romano", "asiago", "colby", "muenster", "havarti",
+  "gruyere", "gruyère", "manchego", "raita", "lassi",
 ]);
 
 /** Everything searchable about a meal: name, blurb, category, ingredient lines. */

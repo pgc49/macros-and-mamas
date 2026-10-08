@@ -29,7 +29,7 @@ import { sizeMealsForPersist } from "../../functions/_shared/coachPlateScale";
 import { isWontLogRefusal } from "../../functions/_shared/coachRefusalSummary";
 import { COACH_BUILD } from "../content/coachBuild";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
-import { filterCoachMeals, threadPriorAsks } from "../../functions/_shared/coachMealFilter";
+import { filterCoachMeals, mealBreaksSavedPrefs, threadPriorAsks } from "../../functions/_shared/coachMealFilter";
 import { COACH_LOCAL_PICKS_LINE } from "../content/coachVoice";
 import { captureCoachFailure } from "../utils/coachFailure";
 import { downscaleImage } from "../utils/imageDownscale";
@@ -297,7 +297,14 @@ export function CoachPanel({
         }
         return;
       }
-      answerWithCards({ echo: false });
+      const nextSlot = nextCoachSlot({ entries, plannedMeals, now: clock });
+      if (nextSlot) {
+        answerWithCards({
+          echo: false,
+          persist: false,
+          askLabel: COACH_COPY.openerFresh,
+        });
+      }
     } catch (error) {
       if (gen !== loadGenRef.current) return;
       openedRef.current = false;
@@ -345,7 +352,7 @@ export function CoachPanel({
         requestId: message.requestId || null,
         payload: message.role === "mama"
           ? null
-          : (message.cards?.length || message.deflect || message.aside || message.teach || message.notLogging
+          : (message.cards?.length || message.deflect || message.aside || message.teach || message.notLogging || message.showNumbers
             ? {
               cards: message.cards || [],
               deflect: message.deflect || null,
@@ -353,6 +360,7 @@ export function CoachPanel({
               aside: message.aside || null,
               teach: message.teach || null,
               ...(message.notLogging ? { notLogging: true } : {}),
+              ...(message.showNumbers ? { showNumbers: true } : {}),
             }
             : null),
       })).then((saved) => {
@@ -382,7 +390,7 @@ export function CoachPanel({
    * Cards for a slot, worked out here rather than asked for. `slot` is only
    * passed when she named one, so the usual case still follows the clock.
    */
-  const answerWithCards = ({ prefer = null, slot = null, askLabel = COACH_COPY.askEat, echo = true, aside = null } = {}) => {
+  const answerWithCards = ({ prefer = null, slot = null, askLabel = COACH_COPY.askEat, echo = true, persist = true, aside = null } = {}) => {
     const build = (skipNames) => buildCoachAnswer({
       ...inputs,
       slot: slot || slotOverride,
@@ -392,7 +400,10 @@ export function CoachPanel({
     });
 
     if (echo) push({ role: "mama", body: askLabel });
-    if (slot && slot !== answer?.slot) setSlotOverride(slot);
+    if (slot && slot !== answer?.slot) {
+      setSlotOverride(slot);
+      lastSlotAtRef.current = (clockRef.current instanceof Date ? clockRef.current : new Date()).getTime();
+    }
 
     let next = build(skipRef.current);
     let cards = next?.cards?.filter((c) => c.kind === "meal") || [];
@@ -441,12 +452,12 @@ export function CoachPanel({
     lead += skipLine || "";
     push({
       role: "coach",
-      body: shownCoachLead(lead.trim()) || COACH_LOCAL_PICKS_LINE,
+      body: shownCoachLead(lead.trim()) || (!echo ? COACH_COPY.openerFresh : COACH_LOCAL_PICKS_LINE),
       kind: "cards",
       cards,
       aside,
       template: "local.cards",
-    });
+    }, { persist });
   };
 
   const answerWithRead = ({ askLabel = COACH_COPY.askDay, echo = true, aside = null } = {}) => {
@@ -571,9 +582,38 @@ export function CoachPanel({
         return;
       }
 
-      // The model's meals are re-checked against the real budget here. One that
-      // no longer fits is dropped rather than shown with a caveat.
-      const suggested = cardsWithShownReason(buildSuggestedCards(mealsIn.length ? mealsIn : data.meals, fit, {
+      if (data.kind === "outage") {
+        push({
+          role: "coach",
+          body: data.reply || data.message || "I couldn't get to that. Try me again in a second.",
+          kind: "text",
+          cards: [],
+          requestId,
+        }, { persist: false });
+        return;
+      }
+
+      if (mealsIn.length) {
+        const safeMeals = mealsIn.filter((meal) => !mealBreaksSavedPrefs(meal, profile));
+        let cards = firstPaintPlates(cardsWithShownReason(buildSuggestedCards(safeMeals.length ? safeMeals : mealsIn, fit, {
+          source: data.mealSource || "new",
+          slot: slotForAsk,
+        })));
+        if (wontLogRef.current) cards = hideCoachMealMacros(cards);
+        skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
+        push({
+          role: "coach",
+          body: data.reply || data.message || (cards.length ? COACH_LOCAL_PICKS_LINE : COACH_BUSY_LINE),
+          kind: cards.length ? "cards" : "text",
+          cards,
+          aside: data.aside || (data.askCallie ? "care" : null),
+          requestId,
+          notLogging: wontLogRef.current,
+        }, { persist: false });
+        return;
+      }
+
+      const suggested = cardsWithShownReason(buildSuggestedCards(data.meals, fit, {
         source: data.mealSource || "new",
         slot: slotForAsk,
       }));
@@ -611,7 +651,7 @@ export function CoachPanel({
       push({
         role: "coach",
         body,
-        kind: data.kind === "outage" ? "text" : (cards.length ? "cards" : "text"),
+        kind: cards.length ? "cards" : "text",
         cards,
         aside: data.aside || (data.askCallie ? "care" : null),
         requestId,
@@ -693,11 +733,16 @@ export function CoachPanel({
     const refused = crisis || scopeIsRefused(verdict.scope) || isMoodAsk(text);
     push({ role: "mama", body: text, requestId });
     if (refused) {
-      const deflect = crisis ? "emergency" : deflectForScope(verdict.scope, text, { follow: verdict.follow === true });
+      const deflect = crisis
+        ? "emergency"
+        : deflectForScope(verdict.scope, text, {
+          follow: verdict.follow === true,
+          crisisFollow: verdict.crisisFollow === true,
+        });
       const hideNumbers = verdict.scope === "disordered"
         || wontLogRef.current
         || isWontLogRefusal(text);
-      const extra = (!crisis && (
+      const extra = (!crisis && !verdict.crisisFollow && (
         isMealAsk(text)
         || verdict.scope === "urgent"
         || verdict.scope === "supply"
@@ -737,6 +782,10 @@ export function CoachPanel({
         text,
         localDate: localDateIso(clockRef.current),
         requestId,
+        context: {
+          priorAsks: priorForAsk,
+          notLogging: wontLogRef.current,
+        },
       });
       if (result && (result.deflect || result.ok || result.reply)) {
         const serverCards = Array.isArray(result.meals)
@@ -987,12 +1036,9 @@ export function CoachPanel({
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: "1 1 auto" }}>
-          {!next && (
+          {!shownThread.length && !next && (
             <div style={bubble(false)}>{opener}</div>
           )}
-          {next && answer.snackAsk ? (
-            <div style={bubble(false)}>{COACH_COPY.snackAsk}</div>
-          ) : null}
 
           {staleBuild && (
             <div style={{ ...bubble(false), background: T.amberSoft, border: "none" }} role="status">
@@ -1048,7 +1094,7 @@ export function CoachPanel({
                 <div style={bubble(false)}>{COACH_COPY.nursingPreface}</div>
               )}
 
-              {m.body && (
+              {m.body && m.kind !== "deflect" && (
                 <div
                   data-coach-mama-bubble={m.role === "mama" ? m.id : undefined}
                   onMouseEnter={m.role === "mama" && onHideMessage && m.id && !String(m.id).startsWith("c_")
@@ -1290,15 +1336,16 @@ export function CoachPanel({
               type="button"
               style={chipBtn}
               disabled={busy}
-              onClick={() => {
+                onClick={() => {
                 wontLogRef.current = false;
                 wontLogDayRef.current = "";
                 setHidingNumbers(false);
-                onAppendMessage?.({
+                push({
                   role: "coach",
                   body: COACH_COPY.showNumbers,
                   kind: "text",
-                  payload: { showNumbers: true },
+                  template: "local.showNumbers",
+                  showNumbers: true,
                 });
               }}
             >

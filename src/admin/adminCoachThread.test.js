@@ -195,6 +195,21 @@ describe("buildAdminCoachView", () => {
     expect(flagLabel("stuck")).toBe("Stuck");
   });
 
+  it("does not pin outage rows on the attention list", () => {
+    const messages = [
+      mama("m1", "what should I eat", { seq: 1 }),
+      coach("c-out", {
+        seq: 2,
+        kind: "outage",
+        body: "I couldn't get to that.",
+        payload: { outage: true },
+      }),
+    ];
+    const view = buildAdminCoachView(messages);
+    expect(view.pinned).toEqual([]);
+    expect(coachFlag(messages[1])).toBeNull();
+  });
+
   it("keeps a null-date row in seq order and dates it from created_at", () => {
     const messages = [
       mama("m1", "what should I eat", { seq: 1, localDate: "2026-10-08" }),

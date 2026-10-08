@@ -4,12 +4,14 @@ import { macrosPlausible } from "./coachGuardrails.js";
 import {
   alignReplyToMeals,
   buildCoachFallbackMeals,
+  COACH_CHAIN_ASKS,
   ensureFoodMeals,
   fallbackMealReply,
+  foodQuestionLead,
   hideCoachMealMacros,
   replyPlateContract,
 } from "./coachFoodFallback.js";
-import { mealHaystack, mealLooksDairy } from "./coachMealFilter.js";
+import { extractAskConstraints, mealBreaksSavedPrefs, mealHaystack, mealLooksDairy } from "./coachMealFilter.js";
 
 describe("buildCoachFallbackMeals", () => {
   it("builds a veggie scramble from eggs and vegetables", () => {
@@ -258,5 +260,115 @@ describe("hideCoachMealMacros", () => {
       { name: "Grilled chicken and rice", cal: 430, p: 45, c: 30, f: 12 },
     ]);
     expect(hidden[0]).toMatchObject({ hideMacros: true, cal: 430, p: 45, c: 30, f: 12 });
+  });
+});
+
+describe("reviewer bank and allergen contracts", () => {
+  it("prints the guilt line once and hides card macros", () => {
+    const guilt = ensureFoodMeals([], { text: "ugh I ate half a sleeve of cookies", slot: "dinner" });
+    const copies = guilt.reply.split("One day doesn't change anything, and you still eat.").length - 1;
+    expect(copies).toBe(1);
+    expect(guilt.meals.every((meal) => meal.hideMacros && meal.cal > 0)).toBe(true);
+    const appetite = ensureFoodMeals([], { text: "honestly I'm not hungry but I should eat?", slot: "dinner" });
+    expect(appetite.reply.split("One day doesn't change anything, and you still eat.").length - 1).toBe(1);
+    expect(appetite.meals.every((meal) => meal.hideMacros)).toBe(true);
+  });
+
+  it("never says Yes — that works on a 1000-calorie ask", () => {
+    expect(foodQuestionLead("is it fine to eat 1000 calories a day?", [])).toBe("");
+    expect(foodQuestionLead("is 1200 calories ok", [])).toBe("");
+    expect(foodQuestionLead("should I skip meals", [])).toBe("");
+    const finished = ensureFoodMeals([], {
+      text: "is it fine to eat 1000 calories a day?",
+      slot: "dinner",
+      reply: "No — 1000 calories is too low.",
+    });
+    expect(finished.reply).not.toMatch(/^Yes — that works/i);
+  });
+
+  it("filters chain plates for dairy, vegan, and gluten-free", () => {
+    const asks = COACH_CHAIN_ASKS;
+    for (const profile of [
+      { allergens: ["dairy"] },
+      { diet: "vegan" },
+      { allergens: ["gluten"] },
+    ]) {
+      for (const text of asks) {
+        const meals = buildCoachFallbackMeals({ text, slot: "dinner", profile, count: 3 });
+        expect(meals.length, `${JSON.stringify(profile)} / ${text}`).toBeGreaterThanOrEqual(2);
+        expect(meals.every((meal) => !mealBreaksSavedPrefs(meal, profile)), `${JSON.stringify(profile)} / ${text} / ${meals.map((m) => m.name)}`).toBe(true);
+      }
+    }
+  });
+
+  it("builds Jordan Q12 from eggs and vegetables and names those cards", () => {
+    const filled = ensureFoodMeals([
+      { name: "Greek yogurt + protein powder", cal: 260, p: 40, c: 16, f: 2 },
+      { name: "Cottage cheese + fruit", cal: 200, p: 22, c: 16, f: 4 },
+      { name: "Protein shake + jerky", cal: 250, p: 36, c: 8, f: 6 },
+    ], {
+      text: "I want something new. I just have eggs and vegetables in my fridge.",
+      slot: "dinner",
+    });
+    expect(filled.meals.every((meal) => /scramble|frittata|omelette|fried rice|egg/i.test(meal.name))).toBe(true);
+    expect(filled.meals.every((meal) => meal.cal > 0 && meal.p > 0)).toBe(true);
+    expect(replyPlateContract(filled.reply, filled.meals).ok).toBe(true);
+    expect(filled.reply).toMatch(/scramble|frittata|omelette|fried rice/i);
+  });
+
+  it("joins Here's something… here's without a lowercase lead", () => {
+    const filled = ensureFoodMeals([], { text: "at Starbucks, what's a good option", slot: "dinner" });
+    expect(filled.reply).not.toMatch(/\. here's /i);
+    expect(filled.reply).toMatch(/Starbucks|Egg bites|Protein|Oatmeal|Chicken wrap/i);
+  });
+
+  it("reads sweet, snack, and light from the current ask only", () => {
+    const dinner = buildCoachFallbackMeals({
+      text: "sweet potato dinner ideas",
+      slot: "dinner",
+      priorAsks: ["I want something sweet"],
+    });
+    expect(extractAskConstraints("sweet potato dinner ideas", null, { currentAsk: "sweet potato dinner ideas" }).sweet).toBe(false);
+    expect(dinner.some((meal) => /potato|dinner|chicken|salmon|rice/i.test(meal.name + meal.desc))).toBe(true);
+    const afterSweet = buildCoachFallbackMeals({
+      text: "what should I eat for dinner",
+      slot: "dinner",
+      priorAsks: ["I want something sweet that still fits"],
+    });
+    expect(afterSweet.every((meal) => !/teriyaki/i.test(meal.name)) || afterSweet.length >= 2).toBe(true);
+    expect(extractAskConstraints("what should I eat for dinner", null, {
+      currentAsk: "what should I eat for dinner",
+    }).sweet).toBe(false);
+  });
+
+  it("fills 3 plates for vegan+soy+gluten, low-carb, and no-cook restricted profiles", () => {
+    const vegan = buildCoachFallbackMeals({
+      text: "what should I eat for dinner",
+      slot: "dinner",
+      profile: { diet: "vegan", allergens: ["soy", "gluten"] },
+      count: 3,
+    });
+    expect(vegan.length).toBeGreaterThanOrEqual(3);
+    const low = buildCoachFallbackMeals({
+      text: "low carb dinner idea",
+      slot: "dinner",
+      profile: { allergens: ["dairy"] },
+      count: 3,
+    });
+    expect(low.length).toBeGreaterThanOrEqual(3);
+    const nocook = buildCoachFallbackMeals({
+      text: "no cooking tonight",
+      slot: "dinner",
+      profile: { allergens: ["dairy"] },
+      count: 3,
+    });
+    expect(nocook.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("gives McDonald's, Subway, and Taco Bell three plates", () => {
+    for (const text of ["what's good at McDonald's", "what's good at Subway", "what's good at Taco Bell"]) {
+      const meals = buildCoachFallbackMeals({ text, slot: "lunch" });
+      expect(meals.length, text).toBeGreaterThanOrEqual(3);
+    }
   });
 });

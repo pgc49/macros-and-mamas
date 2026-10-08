@@ -36,12 +36,17 @@ export function pairedMamaBody(messages, index) {
 }
 
 export function isServerVerified(message) {
-  return message?.role === "coach" && (message?.source === "server" || message?.payload?.outage === true);
+  return message?.role === "coach" && message?.source === "server";
+}
+
+export function coachRowLabel(message) {
+  if (message?.kind === "outage" || message?.payload?.outage === true) return "outage";
+  return coachFlag(message);
 }
 
 export function coachFlag(message, asked = "") {
   if (!isServerVerified(message)) return null;
-  if (message?.kind === "outage" || message?.payload?.outage === true) return "outage";
+  if (message?.kind === "outage" || message?.payload?.outage === true) return null;
   const deflect = message?.payload?.deflect
     || (message?.kind === "deflect" ? "offTopic" : null);
   if (message?.kind !== "deflect" && !deflect) return null;

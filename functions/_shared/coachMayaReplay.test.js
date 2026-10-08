@@ -93,7 +93,7 @@ describe("Maya 13-ask replay", () => {
     expect(turns[5].teach).toBeNull();
 
     expect(turns[6].verdict.scope).toBe("supply");
-    expect(turns[7].verdict.scope).toBe("supply");
+    expect(turns[7].verdict.scope).toBe("food");
     expect(turns[7].reply).toMatch(/broth is fine for supply/i);
     expect(turns[7].teach).toBeNull();
 

@@ -120,6 +120,7 @@ export function ClientApp({
   onMealIdea,
   onSaveFoodPrefs,
   userId = null,
+  sessionEmail = "",
   unreadMessages = 0,
   onUnreadMessagesChange,
   mealHistoryByDate = {},
@@ -838,7 +839,7 @@ export function ClientApp({
             onAppendMessage={onAppendCoachMessage}
             onHideMessage={onHideCoachMessage}
             postCoach={postCoach}
-            email={profile?.email || ""}
+            email={profile?.email || sessionEmail || ""}
             isAdmin={profile?.role === "admin"}
           />
         </ErrorBoundary>

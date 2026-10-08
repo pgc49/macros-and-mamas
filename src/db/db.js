@@ -3672,6 +3672,7 @@ export const db = {
           topic,
           body: String(body || "").slice(0, 4000),
           payload,
+          requestId,
           localDate: day,
         }),
       });

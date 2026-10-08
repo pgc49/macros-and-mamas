@@ -15,6 +15,7 @@ export function readCoachClientData(resp, data) {
       mealSource: data?.mealSource || "new",
       aside: data?.aside || null,
       limited: data?.error === "rate_limited",
+      askCallie: data?.askCallie === true,
     };
   }
   return {

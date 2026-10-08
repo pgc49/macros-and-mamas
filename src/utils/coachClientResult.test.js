@@ -13,10 +13,12 @@ describe("readCoachClientData", () => {
         message: "That's all the thinking I've got for today. Here's Grilled chicken and rice.",
         meals: [PLATE],
         mealSource: "new",
+        askCallie: true,
       },
     );
     expect(data.ok).toBe(true);
     expect(data.limited).toBe(true);
+    expect(data.askCallie).toBe(true);
     expect(data.meals).toEqual([PLATE]);
     expect(data.reply).toMatch(/Grilled chicken/);
   });

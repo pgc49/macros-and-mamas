@@ -13,7 +13,7 @@ import {
 
 export { dairyScanText };
 
-const DAIRY = /\b(dairy|yogurt|yoghurt|cheese(?:\s*stick)?|string cheese|cheddar|jack|monterey|swiss|provolone|gouda|brie|feta|parmesan|mozzarella|queso|quesadilla|ghee|cheesy|cream|butter|whey|milk|cottage|shake|ricotta)\b/i;
+const DAIRY = /\b(dairy|yogurt|yoghurt|cheese(?:\s*stick)?|string cheese|cheddar|jack|monterey|swiss|provolone|gouda|brie|feta|parmesan|mozzarella|queso|quesadilla|ghee|cheesy|cream|butter|whey|milk|cottage|shake|ricotta|parm|chicken parm|tzatziki|cotija|crema|paneer|halloumi|kefir|alfredo|mascarpone|burrata|labneh|custard|casein|half[- ]and[- ]half|parmigiano|pecorino|romano|asiago|colby|muenster|havarti|gruy[eè]re|manchego|raita|lassi|cr[eè]me fra[iî]che)\b/i;
 const CHICKEN = /\bchicken\b/i;
 const EGGS = /\beggs?\b|\begg whites?\b/i;
 const SMOOTHIE = /\bsmoothie\b/i;
@@ -103,9 +103,9 @@ export function extractAskConstraints(text = "", profile = null, { currentAsk = 
     vegetarian: /\bvegetarian\b/.test(asked) || /\bmake it vegetarian\b/.test(asked) || diet === "vegetarian",
     lowCarb: /\blow[- ]?carb/.test(asked) || /\bfewer carbs?\b/.test(asked) || /\bless carbs?\b/.test(asked),
     highProtein: /\bhigh[- ]?protein\b/.test(asked) || /\bmore protein\b/.test(asked),
-    light: /\b(something light|lighter|light meal|keep it light)\b/.test(asked),
-    sweet: /\bsomething sweet\b/.test(asked) || (/\bsweet\b/.test(asked) && !/\bsweetgreen\b/.test(asked)),
-    snackish: /\b(bedtime|before (a |my )?walk|after (a |my )?walk|snack)\b/.test(asked),
+    light: /\b(something light|lighter|light meal|keep it light)\b/.test(current),
+    sweet: (/\bsomething sweet\b/.test(current) || (/\bsweet\b/.test(current) && !/\bsweetgreen\b/.test(current) && !/\bsweet potato/.test(current))),
+    snackish: /\b(bedtime|before (a |my )?walk|after (a |my )?walk|snack)\b/.test(current),
   };
 }
 

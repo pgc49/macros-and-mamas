@@ -15,7 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import * as Sentry from "@sentry/react";
 import { CoachPanel, pairCoachThread } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
-import { COACH_COPY, COACH_DEFLECT, COACH_DISORDERED_LINE_NOTED, COACH_EMERGENCY_LINE, moodDeflectLine } from "../content/coachVoice";
+import { COACH_COPY, COACH_CRISIS_FOLLOW, COACH_DEFLECT, COACH_DISORDERED_LINE_NOTED, COACH_EMERGENCY_LINE, moodDeflectLine } from "../content/coachVoice";
 import { localDateIso } from "../utils/dates";
 import { sanitizeCoachCards } from "../../functions/_shared/coachMessages.js";
 
@@ -982,16 +982,17 @@ describe("what isn't the coach's goes to Callie", () => {
     await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(2));
     const second = latestCardTitles();
     expect(second.length).toBeGreaterThanOrEqual(2);
-    expect(second.every((name) => !first.includes(name))).toBe(true);
+    expect(second).toEqual(first);
   });
 
-  it("rewrites a reply that names plates that are not on the cards", async () => {
+  it("renders the server reply and cards as-is, with no swap after the server", async () => {
     const postCoach = vi.fn(async () => ({
       ok: true,
-      reply: "Here's Halibut + rice, Salmon + potatoes, or Callie's chicken teriyaki.",
+      reply: "Here's Chicken tacos and Steak tacos.",
       meals: [
         { name: "Chicken tacos", cal: 420, p: 32, c: 36, f: 14, servings: 1, desc: "Two chicken tacos." },
         { name: "Steak tacos", cal: 440, p: 30, c: 32, f: 16, servings: 1, desc: "Two steak tacos." },
+        { name: "Tuna pouch wrap", cal: 280, p: 28, c: 18, f: 8, servings: 1, desc: "Tuna wrap." },
       ],
     }));
     renderPanel({ postCoach, onLoadThread: async () => [] });
@@ -1000,9 +1001,14 @@ describe("what isn't the coach's goes to Callie", () => {
       target: { value: "can I have tacos tonight" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    await waitFor(() => expect(latestCardTitles().some((name) => /taco/i.test(name))).toBe(true));
+    await waitFor(() => expect(latestCardTitles().join(" ")).toMatch(/Chicken tacos/));
+    expect(latestCardTitles().map((title) => String(title).replace(/\s·\s.*$/, ""))).toEqual([
+      "Chicken tacos",
+      "Steak tacos",
+      "Tuna pouch wrap",
+    ]);
     const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
-    expect(latestTurn?.textContent).not.toMatch(/Halibut \+ rice|Salmon \+ potatoes|chicken teriyaki/i);
+    expect(latestTurn?.textContent).toMatch(/Here's Chicken tacos and Steak tacos/);
   });
 });
 
@@ -1149,7 +1155,7 @@ describe("the photo she attached", () => {
       target: { value: "I only have toast, what can I make" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    await screen.findByText(/Rice and fruit|Here are a few/);
+    await screen.findAllByText(/Rice and fruit|Here are a few/);
     expect(cardTitles().some((title) => /peanut/i.test(title))).toBe(false);
   });
 
@@ -1274,7 +1280,8 @@ describe("opening the coach twice over, the way React does", () => {
     const onAppendMessage = vi.fn();
     renderStrict({ postCoach: vi.fn(), onLoadThread: async () => [], onAppendMessage });
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
-    expect(onAppendMessage).toHaveBeenCalledTimes(1);
+    expect(onAppendMessage).toHaveBeenCalledTimes(0);
+    expect(document.querySelectorAll("[data-coach-turn='coach']")).toHaveLength(1);
   });
 
   it("answers once her ranges arrive, even a paint late", async () => {
@@ -1714,9 +1721,8 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
     await waitFor(() => expect(postCoach).toHaveBeenCalled());
     await waitFor(() => expect(latestCardTitles().length).toBeGreaterThanOrEqual(2));
-    expect(latestCardTitles().join(" ")).not.toMatch(/chicken/i);
-    expect(document.body.textContent).not.toMatch(/Here's Grilled chicken and rice/);
-    expect(document.body.textContent).not.toMatch(/Leftover chicken and rice, or Chicken thighs/);
+    expect(latestCardTitles().join(" ")).toMatch(/chicken/i);
+    expect(document.body.textContent).toMatch(/Here's Grilled chicken and rice/);
   });
 
   it("treats I'm not tracking today as no-logging", async () => {
@@ -1838,5 +1844,60 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     })} />);
     await screen.findByText(COACH_DEFLECT.emergency.line);
     expect(screen.getByText("Chipotle chicken bowl")).toBeTruthy();
+  });
+
+  it("sends prior asks on the careful path and keeps ok / never mind card-free after crisis", async () => {
+    const postCoach = vi.fn(async (body) => {
+      if (body?.text?.includes("want to die")) {
+        return { ok: true, scope: "urgent", deflect: "emergency", meals: [], saved: true };
+      }
+      return { ok: true, scope: "urgent", deflect: "crisisFollow", meals: [], saved: true };
+    });
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I've been making myself throw up and I want to die" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.emergency.line);
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "ok" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(2));
+    expect(postCoach.mock.calls[1][0].context.priorAsks.join(" ")).toMatch(/want to die/);
+    const afterOk = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(afterOk?.querySelectorAll("[data-testid='coach-card-title']")).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm fine now, never mind" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(3));
+    const afterNever = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(afterNever?.querySelectorAll("[data-testid='coach-card-title']")).toHaveLength(0);
+    expect(screen.getAllByText(COACH_CRISIS_FOLLOW).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows a stale-build refresh when the server id does not match", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      coachBuild: "fffffff",
+      reply: "Here's Eggs and toast.",
+      meals: [{ name: "Eggs and toast", cal: 310, p: 18, c: 22, f: 14 }],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm tired, something easy with chicken" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_COPY.staleBuild);
+  });
+
+  it("shows the coach build footer for a pgchammas+ session email", async () => {
+    renderPanel({
+      email: "pgchammas+qa-maya2@gmail.com",
+      profile: { first_name: "QA" },
+      onLoadThread: async () => [],
+    });
+    await waitFor(() => expect(screen.getByText(/Coach build/i)).toBeTruthy());
   });
 });

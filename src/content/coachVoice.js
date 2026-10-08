@@ -219,6 +219,14 @@ export const COACH_COPY = {
     "For Chinese, a stir-fry: animal protein, veggies, and rice, light on the sauce.",
   teachSushi:
     "For sushi, nigiri and some soup.",
+  teachSushiNursing:
+    "Cooked rolls and low-mercury fish are the safer sushi picks while nursing. Skip raw if you want; Callie can help with the raw question.",
+  teachAlcoholNursing:
+    "Alcohol is up to you — no judgment either way. If you're nursing, time a drink after a feed and see how you feel. Callie can help you think through timing.",
+  teachWaterEat:
+    "Eat enough — drink to thirst, and if you're still hungry, have a bigger plate. You don't need to check with Callie on this one.",
+  teachEveryDay:
+    "Not every day. Some days are heavier, and that's okay. I'm here when you want the next plate.",
   teachPizzaMeal:
     "Pizza is the meal. You don't need a protein and a side next to it.",
   teachInNOut:
@@ -305,9 +313,25 @@ export const COACH_MOOD_LINE =
 export const COACH_MOOD_FOOD = "And whenever you're ready, here's something easy to eat:";
 export const COACH_MOOD_FOLLOW =
   "I hear you. You wouldn't be bothering anyone — Callie wants to hear from you. Message her whenever you're ready.";
+export const COACH_MOOD_WEEKS =
+  "You're not behind — this is common in the weeks after a baby. Callie wants to hear from you, and your doctor or midwife too. Postpartum Support International's helpline is 1-800-944-4773 (call or text).";
+export const COACH_CRISIS_FOLLOW =
+  "I'm still here with you. If this feels like an emergency, call 911. If you're having thoughts of hurting yourself or your baby, call or text 988. Callie will see this — message her too.";
+export const COACH_SIGN_OFF = COACH_COPY.teachEveryDay;
 
-export function moodDeflectLine(noted = false, { hasFood = false } = {}) {
-  let line = COACH_MOOD_LINE;
+export function onceLead(reply, line) {
+  const lead = String(line || "").trim();
+  const rest = String(reply || "").trim();
+  if (!lead) return rest;
+  if (!rest) return lead;
+  const escaped = lead.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stripped = rest.replace(new RegExp(escaped, "gi"), " ").replace(/\s{2,}/g, " ").trim();
+  if (!stripped) return lead;
+  return `${lead} ${stripped}`.trim();
+}
+
+export function moodDeflectLine(noted = false, { hasFood = false, weeks = false } = {}) {
+  let line = weeks ? COACH_MOOD_WEEKS : COACH_MOOD_LINE;
   if (noted === true) {
     line = line.replace(
       "Please tell Callie, and your doctor or midwife too.",
@@ -361,10 +385,11 @@ export function disorderedDeflectLine(noted) {
   return noted ? COACH_DISORDERED_LINE_NOTED : COACH_DISORDERED_LINE;
 }
 
-export function coachDeflectLine(deflect, { noted = false, hasFood = false } = {}) {
+export function coachDeflectLine(deflect, { noted = false, hasFood = false, weeks = false } = {}) {
   if (deflect === "disordered") return disorderedDeflectLine(noted === true);
-  if (deflect === "mood") return moodDeflectLine(noted === true, { hasFood });
-  if (deflect === "moodFollow") return COACH_MOOD_FOLLOW;
+  if (deflect === "mood") return moodDeflectLine(noted === true, { hasFood, weeks });
+  if (deflect === "moodFollow") return weeks ? COACH_MOOD_WEEKS : COACH_MOOD_FOLLOW;
+  if (deflect === "crisisFollow") return COACH_CRISIS_FOLLOW;
   return (COACH_DEFLECT[deflect] || COACH_DEFLECT.offTopic).line;
 }
 
@@ -376,7 +401,9 @@ export function leadFineTuningReply(reply, { hasPlates = false, plateCount = 0 }
   const many = Number(plateCount) >= 2;
   const lead = normalizeCoachApostrophes(many ? COACH_FINE_TUNING_FEW : COACH_FINE_TUNING_LINE);
   const rest = normalizeCoachApostrophes(String(reply || "")).trim()
-    .replace(/^Callie's still fine-tuning your numbers, so here(?:'s an easy one| are a few easy ones) for now\.\s*/i, "");
+    .replace(/Callie's still fine-tuning your numbers, so here(?:'s an easy one| are a few easy ones) for now\.\s*/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
   if (!hasPlates) {
     if (!rest) return "";
     return rest.slice(0, 400);
@@ -431,6 +458,10 @@ export const COACH_DEFLECT = {
   moodFollow: {
     line: COACH_MOOD_FOLLOW,
     cta: "Message Callie",
+  },
+  crisisFollow: {
+    line: COACH_CRISIS_FOLLOW,
+    cta: "Message Callie too",
   },
   care: {
     line: `That's something Callie might be better able to sit with than me. ${COACH_MESSAGE_HER}`,

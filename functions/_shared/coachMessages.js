@@ -19,6 +19,7 @@ const LOCAL_TEMPLATES = new Set([
   "local.noneFit",
   "local.teach",
   "local.text",
+  "local.showNumbers",
 ]);
 const MAX_CARDS = 4;
 const CARD_SOURCES = new Set(["bank", "my", "pantry", "menu", "kitchen", "new"]);
@@ -40,6 +41,14 @@ export function noteReserveRequestId(requestId) {
   if (!isCoachRequestId(ticket)) return "";
   const tagged = `${ticket}-note`;
   return isCoachRequestId(tagged) ? tagged : `${ticket.slice(0, 59)}-note`;
+}
+
+/** Chat-row ticket. Distinct from the model and note reserves. */
+export function recordReserveRequestId(requestId) {
+  const ticket = String(requestId || "").trim();
+  if (!isCoachRequestId(ticket)) return "";
+  const tagged = `${ticket}-row`;
+  return isCoachRequestId(tagged) ? tagged : `${ticket.slice(0, 59)}-row`;
 }
 
 /** Exact mama insert body. Live 080000 only accepts payload null or {}. */
@@ -151,6 +160,7 @@ export function sanitizeCoachReply({
       ...(payload.limited === true ? { limited: true } : {}),
       ...(payload.noted === true ? { noted: true } : {}),
       ...(payload.outage === true ? { outage: true } : {}),
+      ...(payload.showNumbers === true ? { showNumbers: true } : {}),
     };
     if (
       !nextPayload.cards.length
@@ -158,6 +168,10 @@ export function sanitizeCoachReply({
       && !nextPayload.aside
       && !nextPayload.teach
       && !nextPayload.requestId
+      && !nextPayload.showNumbers
+      && !nextPayload.outage
+      && !nextPayload.noted
+      && !nextPayload.limited
     ) {
       nextPayload = null;
     }
@@ -208,6 +222,15 @@ export function buildLocalCoachRecord(body = {}) {
       kind: "text",
       payload: null,
       source: "server",
+    };
+  }
+
+  if (template === "local.showNumbers") {
+    return {
+      body: COACH_COPY.showNumbers,
+      kind: "text",
+      payload: { showNumbers: true },
+      source: "client",
     };
   }
 
@@ -303,6 +326,41 @@ export async function countPainTeachToday(env, userId, topic, now = new Date()) 
   if (!read.ok) return { server: 0, client: 0, total: 0 };
   const rows = await read.json().catch(() => []);
   return painTeachCounts(rows, topic);
+}
+
+export async function findCoachReplyByRequestId(env, userId, requestId) {
+  const ticket = String(requestId || "").trim();
+  if (!userId || !isCoachRequestId(ticket)) return null;
+  const base = (env?.SUPABASE_URL || env?.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env?.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key) return null;
+  const url = `${base}/rest/v1/coach_messages?profile_id=eq.${encodeURIComponent(userId)}`
+    + `&request_id=eq.${encodeURIComponent(ticket)}&role=eq.coach&select=*&order=seq.desc&limit=1`;
+  const read = await fetch(url, {
+    headers: { apikey: key, authorization: `Bearer ${key}` },
+  });
+  if (!read.ok) return null;
+  const rows = await read.json().catch(() => []);
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+export function replaySavedCoach(row) {
+  const payload = row?.payload && typeof row.payload === "object" ? row.payload : {};
+  const deflect = payload.deflect || (row.kind === "deflect" ? "offTopic" : null);
+  return {
+    ok: true,
+    replayed: true,
+    saved: true,
+    scope: deflect === "emergency" || deflect === "crisisFollow" || deflect === "medical"
+      ? "urgent"
+      : (deflect === "mood" || deflect === "moodFollow" ? "mood" : "food"),
+    deflect: deflect || undefined,
+    noted: payload.noted === true,
+    reply: row.body || "",
+    meals: Array.isArray(payload.cards) ? payload.cards : [],
+    kind: row.kind,
+    mealSource: payload.cards?.some((card) => card?.source === "menu") ? "menu" : "new",
+  };
 }
 
 export async function persistServerCoach(env, userId, requestBody, message) {

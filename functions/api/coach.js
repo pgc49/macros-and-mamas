@@ -89,8 +89,8 @@ import {
   leadFineTuningReply,
   leadLimitReply,
   menuFromPageCopy,
+  onceLead,
 } from "../../src/content/coachVoice.js";
-import { COACH_BUILD } from "../../src/content/coachBuild.js";
 import { placeMealSource, restaurantFromAsk, slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 import {
@@ -102,13 +102,27 @@ import {
   isStuckPainCount,
   noteReserveRequestId,
   persistServerCoach,
+  recordReserveRequestId,
+  findCoachReplyByRequestId,
+  replaySavedCoach,
 } from "../_shared/coachMessages.js";
 import { sizeMealsForPersist } from "../_shared/coachPlateScale.js";
 import { notifyCrisisEmail } from "../_shared/coachCrisisEmail.js";
 import { alignReplyToMeals, ensureFoodMeals, fallbackMealReply, foodQuestionLead, hideCoachMealMacros, keepPlaceMeals, MEAL_TEACH_TOPICS, stripCoachMealMacros } from "../_shared/coachFoodFallback.js";
 
+let activeEnv = null;
+
+function coachBuildId(env) {
+  const raw = env?.CF_PAGES_COMMIT_SHA
+    || env?.VITE_APP_BUILD_ID
+    || env?.VITE_COACH_BUILD
+    || "";
+  const id = String(raw).trim();
+  return (id || "dev").slice(0, 7);
+}
+
 function json(obj, status = 200) {
-  return sendJson({ coachBuild: COACH_BUILD, ...obj }, status);
+  return sendJson({ coachBuild: coachBuildId(activeEnv), ...obj }, status);
 }
 
 const MAX_PER_DAY = 30;
@@ -121,11 +135,11 @@ const MAX_IMAGES = 3;
 const MAX_IMAGE_CHARS = 2_500_000;
 const MAX_TEXT = 600;
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
-const MODES = new Set(["ask", "menu", "kitchen", "record"]);
+const MODES = new Set(["ask", "menu", "kitchen", "photo", "record"]);
 const LOG_NAG = /\b(log it|pencil in|save to my meals|don't forget to log|log this|save this)\b/gi;
 
-function wantsFoodFill(text, { mode, scope, crisis = false, topic = null, priorAsks = [] } = {}) {
-  if (crisis || isCrisisUrgent(text)) return false;
+function wantsFoodFill(text, { mode, scope, crisis = false, topic = null, priorAsks = [], crisisFollow = false } = {}) {
+  if (crisis || crisisFollow || isCrisisUrgent(text)) return false;
   if (scope === "off_topic" || scope === "ranges" || scope === "weight" || scope === "admin") return false;
   if (scope === "mood") return isMealAsk(text, { mode, topic });
   if (scope === "urgent" || scope === "supply" || scope === "disordered" || scope === "medication") {
@@ -241,7 +255,8 @@ function fillForScope(text, { mode, scope, slot, day, profile, customMeals, hide
   meals = decorateMeals(meals, { hide: hideNumbers && !stripNumbers, strip: stripNumbers });
   let reply = alignReplyToMeals(filled.reply, meals);
   if (isGuiltAsk(text)) {
-    reply = `${COACH_GUILT_LINE} ${String(reply || "").replace(/\b\d+\s*(g|cal|cals|calories)\b/gi, "").replace(/\s{2,}/g, " ").trim()}`.trim();
+    meals = hideCoachMealMacros(meals);
+    reply = onceLead(String(reply || "").replace(/\b\d+\s*(g|cal|cals|calories)\b/gi, "").replace(/\s{2,}/g, " ").trim(), COACH_GUILT_LINE);
   }
   return { meals, reply };
 }
@@ -267,6 +282,18 @@ async function allowCoachNote(env, userId, { isAdmin, requestId }) {
   return limit.ok;
 }
 
+async function allowCoachRecord(env, userId, { isAdmin, requestId }) {
+  if (isAdmin) return true;
+  const limit = await checkAiLimit(env, userId, {
+    type: "coach_record",
+    max: MAX_RECORD_PER_DAY,
+    requestId: recordReserveRequestId(requestId),
+    busyMessage: "I couldn't save that just now. Try again in a minute.",
+    spentMessage: "That's enough saved replies for today. Tomorrow's a fresh start.",
+  });
+  return limit.ok;
+}
+
 function noteWriteSucceeded(wrote) {
   return Boolean(wrote?.ok && !wrote.skipped && !wrote.capped && !wrote.unchanged);
 }
@@ -281,11 +308,7 @@ async function persistCannedCoach(env, userId, body, message, {
   const allowed = await allowCoachNote(env, userId, { isAdmin, requestId });
   const door = escalateDoor(asked, { scope, escalate });
   const crisis = door === "crisis";
-  const pinAnyway = crisis
-    || door === "disordered"
-    || door === "medication"
-    || door === "supply"
-    || door === "mood";
+  const pinAnyway = crisis;
   let noted = false;
   if (door && (allowed || pinAnyway)) {
     const wrote = await appendCoachRefusal(env, userId, { asked, scope, escalate });
@@ -313,18 +336,24 @@ async function persistCannedCoach(env, userId, body, message, {
   }
   const deflect = message?.payload?.deflect;
   const cards = message?.payload?.cards || [];
-  const rendered = String(message?.body || "").trim()
-    || (deflect ? coachDeflectLine(deflect, { noted, hasFood: cards.length > 0 }) : "");
+  const weeks = /\b\d+\s*weeks?\b/.test(String(asked || ""));
+  const rendered = deflect
+    ? ""
+    : (String(message?.body || "").trim()
+      || coachDeflectLine(deflect, { noted, hasFood: cards.length > 0, weeks }));
+  const recordOk = crisis || isAdmin || await allowCoachRecord(env, userId, { isAdmin, requestId });
+  if (!recordOk) return { allowed: Boolean(allowed), noted, saved: false };
   await persistServerCoach(env, userId, body, {
     ...message,
     body: rendered,
-    payload: { ...(message.payload || {}), requestId, noted },
+    payload: { ...(message.payload || {}), requestId, noted, weeks },
   });
   return { allowed: Boolean(allowed), noted, saved: true };
 }
 
 export async function onRequestPost({ request, env, waitUntil }) {
   try {
+    activeEnv = env;
     const startedAt = Date.now();
     const authHeader = request.headers.get("authorization") || "";
     const user = await requireSupabaseUser(request, env);
@@ -336,9 +365,17 @@ export async function onRequestPost({ request, env, waitUntil }) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const mode = MODES.has(body.mode) ? body.mode : "ask";
+    const requested = MODES.has(body.mode) ? body.mode : "ask";
+    const mode = requested === "photo"
+      ? resolveCoachMode("photo", String(body.text || ""))
+      : requested;
     const isAdmin = access.role === "admin";
     const requestId = clampCoachRequestId(body.requestId);
+
+    if (mode !== "record") {
+      const existing = await findCoachReplyByRequestId(env, user.id, requestId);
+      if (existing) return json(replaySavedCoach(existing));
+    }
 
     // Local cards/read/teach only. The client never sends a model reply
     // back. Arbitrary coach content is rejected; pins never come from here.
@@ -444,6 +481,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
         ok: true,
         scope: "urgent",
         deflect: "emergency",
+        reply: coachDeflectLine("emergency"),
         meals: [],
       });
     }
@@ -475,23 +513,29 @@ export async function onRequestPost({ request, env, waitUntil }) {
         ok: true,
         scope: "stuck",
         deflect: "again",
+        reply: coachDeflectLine("again"),
         meals: filled.meals,
         mealSource: filled.meals.length ? "new" : undefined,
       });
     }
     if (scopeIsRefused(verdict.scope)) {
-      const deflect = deflectForScope(verdict.scope, text, { follow: verdict.follow === true });
+      const deflect = deflectForScope(verdict.scope, text, {
+        follow: verdict.follow === true,
+        crisisFollow: verdict.crisisFollow === true,
+      });
       const stripNumbers = verdict.scope === "disordered" || verdict.scope === "mood" || verdict.scope === "urgent";
       const hideNumbers = Boolean(earlyDay?.notLogging);
-      const filled = fillForScope(text, {
-        mode,
-        scope: verdict.scope,
-        slot,
-        day: earlyDay,
-        profile: await getFillProfile(),
-        hideNumbers,
-        stripNumbers,
-      });
+      const filled = verdict.crisisFollow
+        ? { meals: [], reply: "" }
+        : fillForScope(text, {
+          mode,
+          scope: verdict.scope,
+          slot,
+          day: earlyDay,
+          profile: await getFillProfile(),
+          hideNumbers,
+          stripNumbers,
+        });
       const persist = await persistCannedCoach(env, user.id, body, {
         body: coachDeflectLine(deflect, { hasFood: filled.meals.length > 0 }),
         kind: "deflect",
@@ -506,6 +550,10 @@ export async function onRequestPost({ request, env, waitUntil }) {
         ok: true,
         scope: verdict.scope,
         deflect,
+        reply: coachDeflectLine(deflect, {
+          noted: persist.noted === true,
+          hasFood: filled.meals.length > 0,
+        }),
         noted: persist.noted === true,
         saved: persist.saved === true,
         meals: filled.meals,
@@ -544,13 +592,17 @@ export async function onRequestPost({ request, env, waitUntil }) {
       });
     }
 
+    const photoOrLink = Boolean(hasMenuLink(text) || images.length || photoMode === "menu" || photoMode === "kitchen");
     const localLead = foodQuestionLead(text, []);
     if (
-      alreadySkippedAsk(text)
-      || isLowIntakeAsk(text)
-      || isNursingHungryAsk(text)
-      || isMetaCallieAsk(text)
-      || knownPlace
+      !photoOrLink
+      && (
+        alreadySkippedAsk(text)
+        || isLowIntakeAsk(text)
+        || isNursingHungryAsk(text)
+        || isMetaCallieAsk(text)
+        || knownPlace
+      )
     ) {
       const filled = ensureFoodMeals([], coachFillArgs({
         text,
@@ -575,23 +627,27 @@ export async function onRequestPost({ request, env, waitUntil }) {
         (localLead || filled.reply || "").trim() || fallbackMealReply(meals, text),
         meals,
       );
-      if (isGuiltAsk(text) && meals.length && !reply.startsWith(COACH_GUILT_LINE)) {
-        reply = `${COACH_GUILT_LINE} ${reply}`.trim();
+      if (isGuiltAsk(text) && meals.length) {
+        meals = hideCoachMealMacros(meals);
+        reply = onceLead(reply, COACH_GUILT_LINE);
       }
       if (earlyDay?.notLogging) {
         meals = hideCoachMealMacros(meals);
         reply = stripLogNag(reply);
       }
-      await persistLater(waitUntil, env, user.id, body, {
-        body: reply,
-        kind: meals.length ? "cards" : "text",
-        payload: { cards: persistMeals(meals, slot, placeMealSource(knownPlace, "new")), requestId },
-        requestId,
-      });
+      const recordOk = isAdmin || await allowCoachRecord(env, user.id, { isAdmin, requestId });
+      if (recordOk) {
+        await persistLater(waitUntil, env, user.id, body, {
+          body: reply,
+          kind: meals.length ? "cards" : "text",
+          payload: { cards: persistMeals(meals, slot, placeMealSource(knownPlace, "new")), requestId },
+          requestId,
+        });
+      }
       return json({
         ok: true,
         scope: "food",
-        saved: true,
+        saved: recordOk === true,
         reply,
         meals,
         mealSource: placeMealSource(knownPlace, "new"),
@@ -607,17 +663,20 @@ export async function onRequestPost({ request, env, waitUntil }) {
       if (!noteOk) {
         const reply = teachBody("menuClosed");
         const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: "menuClosed", reply, day: earlyDay, profile: await getFillProfile() }));
-        await persistLater(waitUntil, env, user.id, body, {
-          body: filled.reply,
-          kind: filled.meals.length ? "cards" : "text",
-          payload: { teach: "menuClosed", cards: persistMeals(filled.meals, slot), requestId },
-          requestId,
-        });
+        const recordOk = isAdmin || await allowCoachRecord(env, user.id, { isAdmin, requestId });
+        if (recordOk) {
+          await persistLater(waitUntil, env, user.id, body, {
+            body: filled.reply,
+            kind: filled.meals.length ? "cards" : "text",
+            payload: { teach: "menuClosed", cards: persistMeals(filled.meals, slot), requestId },
+            requestId,
+          });
+        }
         return json({
           ok: true,
           scope: "food",
           teach: "menuClosed",
-          saved: true,
+          saved: recordOk === true,
           reply: filled.reply,
           meals: filled.meals,
           mealSource: "new",
@@ -628,16 +687,20 @@ export async function onRequestPost({ request, env, waitUntil }) {
       if (!menuPage.ok) {
         const reply = teachBody("menuClosed");
         const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: "menuClosed", reply, day: earlyDay, profile: await getFillProfile() }));
-        await persistServerCoach(env, user.id, body, {
-          body: filled.reply,
-          kind: filled.meals.length ? "cards" : "text",
-          payload: { teach: "menuClosed", cards: persistMeals(filled.meals, slot), requestId },
-          requestId,
-        });
+        const recordOk = isAdmin || await allowCoachRecord(env, user.id, { isAdmin, requestId });
+        if (recordOk) {
+          await persistServerCoach(env, user.id, body, {
+            body: filled.reply,
+            kind: filled.meals.length ? "cards" : "text",
+            payload: { teach: "menuClosed", cards: persistMeals(filled.meals, slot), requestId },
+            requestId,
+          });
+        }
         return json({
           ok: true,
           scope: "food",
           teach: "menuClosed",
+          saved: recordOk === true,
           reply: filled.reply,
           meals: filled.meals,
           mealSource: "new",
@@ -645,8 +708,8 @@ export async function onRequestPost({ request, env, waitUntil }) {
       }
     }
 
-    // A reused requestId is a second try at the same ask, not a cached
-    // reply. The reserve allows one extra model call; we do not skip it.
+    // A reused requestId already returned above. This reserve is the
+    // first try at this ticket.
     if (!isAdmin) {
       const limit = await checkAiLimit(env, user.id, {
         type: "coach",
@@ -730,8 +793,9 @@ export async function onRequestPost({ request, env, waitUntil }) {
         }
         const persistOk = await allowOverCapPersist(env, user.id, { isAdmin, requestId });
         let reply = filled.reply || (photoAsk && meals.length ? COACH_LIMIT_PHOTO : (meals.length ? COACH_LIMIT_FOOD : limit.message));
-        if (isGuiltAsk(text) && meals.length && !String(reply).includes(COACH_GUILT_LINE)) {
-          reply = `${COACH_GUILT_LINE} ${reply}`.trim();
+        if (isGuiltAsk(text) && meals.length) {
+          meals = hideCoachMealMacros(meals);
+          reply = onceLead(reply, COACH_GUILT_LINE);
         }
         if (persistOk) {
           await persistLater(waitUntil, env, user.id, body, {
@@ -1041,7 +1105,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
       reply = fallbackMealReply(meals);
     }
     meals = distinctCoachMeals(meals, 3);
-    if (knownPlace) {
+    if (knownPlace && !menuPage?.ok && photoMode === "ask") {
       meals = keepPlaceMeals(meals, knownPlace);
       if (meals.length < 2) {
         const filled = ensureFoodMeals([], { ...fill, mode: "menu", reply: reply || "" });
@@ -1054,11 +1118,12 @@ export async function onRequestPost({ request, env, waitUntil }) {
     if (day?.notLogging) reply = stripLogNag(reply);
     if (workingNumbers) reply = leadFineTuningReply(reply, { hasPlates: meals.length > 0, plateCount: meals.length });
     if (isGuiltAsk(text) && meals.length) {
-      reply = `${COACH_GUILT_LINE} ${String(reply || "")
+      meals = hideCoachMealMacros(meals);
+      reply = onceLead(String(reply || "")
         .replace(/\b\d+\s*(g|cal|cals|calories)\b/gi, "")
         .replace(/\bkeeps things light on fat to balance out\b[^.]*\.?/gi, "")
         .replace(/\s{2,}/g, " ")
-        .trim()}`.trim();
+        .trim(), COACH_GUILT_LINE);
     }
 
     const mealSource = placeMealSource(knownPlace, orderMode === "menu" ? "menu" : photoMode === "kitchen" ? "kitchen" : "new");

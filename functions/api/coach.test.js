@@ -35,6 +35,14 @@ function request(body) {
   });
 }
 
+function coachMessagesForGet(url, rows) {
+  const ticket = decodeURIComponent((String(url).match(/request_id=eq\.([^&]+)/) || [])[1] || "");
+  if (!ticket) return rows || [];
+  return (rows || []).filter((row) => (
+    String(row.request_id || "") === ticket && (row.role || "coach") === "coach"
+  ));
+}
+
 function usedForType(type, { callsUsed, recordCallsUsed, noteCallsUsed, overCapCallsUsed }) {
   if (type === "coach_record") return recordCallsUsed;
   if (type === "coach_note") return noteCallsUsed;
@@ -62,6 +70,7 @@ function mockSupabase({
   let summaryRow = summary;
   const claimedTickets = new Map();
   let overCapUsed = overCapCallsUsed;
+  const savedCoach = [...thread];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     const value = String(url);
     if (value.includes("/auth/v1/user")) {
@@ -140,8 +149,13 @@ function mockSupabase({
     if (value.includes("client_summaries")) {
       return new Response(JSON.stringify(summaryRow ? [summaryRow] : []), { status: 200 });
     }
-    if (value.includes("coach_messages") && init?.method !== "POST") {
-      return new Response(JSON.stringify(thread), { status: 200 });
+    if (value.includes("coach_messages") && init?.method === "POST") {
+      const row = JSON.parse(init.body || "{}");
+      savedCoach.push({ role: "coach", ...row });
+      return new Response(null, { status: 201 });
+    }
+    if (value.includes("coach_messages")) {
+      return new Response(JSON.stringify(coachMessagesForGet(value, savedCoach)), { status: 200 });
     }
     if (pages) {
       for (const [host, page] of Object.entries(pages)) {
@@ -1074,10 +1088,14 @@ describe("an escalate lands on her card", () => {
       if (value.includes("client_summaries")) {
         return new Response(JSON.stringify([row]), { status: 200 });
       }
-      if (value.includes("coach_messages") && init?.method !== "POST") {
-        return new Response(JSON.stringify(thread), { status: 200 });
+      if (value.includes("coach_messages") && init?.method === "POST") {
+        const row = JSON.parse(init.body || "{}");
+        thread.push({ role: "coach", ...row });
+        return new Response(null, { status: 201 });
       }
-      if (value.includes("coach_messages")) return new Response(null, { status: 201 });
+      if (value.includes("coach_messages")) {
+        return new Response(JSON.stringify(coachMessagesForGet(value, thread)), { status: 200 });
+      }
       if (value.includes("api.resend.com")) {
         return new Response(JSON.stringify({ id: "re_test" }), { status: 200 });
       }
@@ -1226,9 +1244,10 @@ describe("an escalate lands on her card", () => {
     expect(resp.status).toBe(200);
     expect(data.deflect).toBe("supply");
     expect(coachMessagePosts()).toHaveLength(1);
-    expect(coachMessagePosts()[0].body).toMatch(/supply always comes first/i);
+    expect(coachMessagePosts()[0].body).toBe("");
+    expect(coachMessagePosts()[0].payload.deflect).toBe("supply");
     expect(summaryPosts()).toHaveLength(0);
-    expect(reserveTypes()).toEqual(["coach_note"]);
+    expect(reserveTypes()).toEqual(["coach_note", "coach_record"]);
   });
 
   it("still closes an unreadable menu over the note cap without saving", async () => {
@@ -1297,7 +1316,8 @@ describe("an escalate lands on her card", () => {
     });
     expect((await crisis.json()).deflect).toBe("emergency");
     expect(coachMessagePosts()).toHaveLength(2);
-    expect(coachMessagePosts()[1].body).toMatch(/988/);
+    expect(coachMessagePosts()[1].body).toBe("");
+    expect(coachMessagePosts()[1].payload.deflect).toBe("emergency");
     expect(summaryPosts()).toHaveLength(1);
     expect(summaryPosts()[0].summary).toContain("Coach refused (crisis): I want to die");
   });
@@ -1381,7 +1401,8 @@ describe("an escalate lands on her card", () => {
     });
     const data = await unclearCrisis.json();
     expect(data.deflect).toBe("emergency");
-    expect(data.reply).toBeUndefined();
+    expect(data.reply).toMatch(/988/);
+    expect(data.reply).not.toMatch(/I only do food/i);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
     expect(coachMessagePosts()[0].payload.deflect).toBe("emergency");
   });
@@ -1579,7 +1600,7 @@ describe("ask persists the server's own reply", () => {
     expect((await resp.json()).deflect).toBe("medical");
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
     expect(coachMessagePosts()).toHaveLength(1);
-    expect(reserveTypes()).toEqual(["coach_note"]);
+    expect(reserveTypes()).toEqual(["coach_note", "coach_record"]);
   });
 
   it("writes a model reply from its own output", async () => {
@@ -1634,7 +1655,7 @@ describe("ask persists the server's own reply", () => {
 });
 
 describe("cost", () => {
-  it("does not cache a reply by requestId — a reuse still spends one model call", async () => {
+  it("replays a reused requestId instead of calling the model again", async () => {
     mockSupabase();
     modelReturns({ scope: "food", reply: "The chicken bowl fits.", meals: [] });
     const first = await onRequestPost({
@@ -1647,7 +1668,9 @@ describe("cost", () => {
     });
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
-    expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(2);
+    expect((await second.json()).replayed).toBe(true);
+    expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(1);
+    expect(coachMessagePosts()).toHaveLength(1);
   });
 
   it("mints a requestId when the client sends something other than a uuid or 8–64 ticket", async () => {
@@ -2145,5 +2168,119 @@ describe("reviewer follow-ups", () => {
     const data = await resp.json();
     expect(data.meals || []).toEqual([]);
     expect(String(data.reply || data.message || "")).not.toMatch(/teriyaki|dinner|Here's /i);
+  });
+
+  it("lets a pasted menu link or photo win over the early restaurant path", async () => {
+    mockSupabase({ pages: { "itsjane.com": { body: JANE_HTML } } });
+    modelReturns({
+      scope: "food",
+      reply: "From the page: Chicken Taco Salad.",
+      meals: [{
+        name: "Chicken Taco Salad",
+        desc: "as printed",
+        cal: 440,
+        p: 38,
+        c: 30,
+        f: 21,
+        ingredients: [],
+        steps: [],
+      }],
+    });
+    const linked = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "https://www.itsjane.com/location/jane-on-fillmore/ Chipotle tonight what should I get",
+      }),
+      env,
+    });
+    const linkedData = await linked.json();
+    expect(linked.status).toBe(200);
+    expect(openrouter.callOpenRouter).toHaveBeenCalled();
+    expect(linkedData.meals[0].name).toBe("Chicken Taco Salad");
+    expect(linkedData.meals.every((meal) => !/chipotle/i.test(meal.name))).toBe(true);
+
+    openrouter.callOpenRouter.mockClear();
+    mockSupabase();
+    modelReturns({
+      scope: "food",
+      reply: "From the photo.",
+      meals: [{ name: "Menu salad", desc: "From the shot.", cal: 400, p: 30, c: 20, f: 16 }],
+    });
+    const photo = await onRequestPost({
+      request: request({
+        mode: "photo",
+        text: "Chipotle tonight, this is the menu",
+        images: [{ image_b64: "abc", media_type: "image/jpeg" }],
+      }),
+      env,
+    });
+    expect(photo.status).toBe(200);
+    expect(openrouter.callOpenRouter).toHaveBeenCalled();
+    expect((await photo.json()).meals[0].name).toBe("Menu salad");
+  });
+
+  it("routes photo mode with an empty caption to kitchen plates", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "photo",
+        text: "",
+        images: [{ image_b64: "abc", media_type: "image/jpeg" }],
+      }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    const data = await resp.json();
+    expect(data.meals?.length || 0).toBeGreaterThanOrEqual(2);
+  });
+
+  it("does not approve a 1000-calorie restriction ask", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "is it fine to eat 1000 calories a day?" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.scope).toBe("disordered");
+    expect(String(data.reply || "")).not.toMatch(/^Yes — that works/i);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it("keeps ok and never-mind after a crisis card-free", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "ok",
+        context: { priorAsks: ["I want to die"] },
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.scope).toBe("urgent");
+    expect(data.deflect).toBe("crisisFollow");
+    expect(data.meals || []).toEqual([]);
+  });
+
+  it("replays the same requestId without calling the model or saving again", async () => {
+    mockSupabase({
+      thread: [{
+        id: "row-1",
+        role: "coach",
+        body: "Here's Chipotle chicken bowl.",
+        kind: "cards",
+        payload: { cards: [{ name: "Chipotle chicken bowl", cal: 520, p: 48, c: 36, f: 14 }] },
+        request_id: "ask-retry-01",
+      }],
+    });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "Chipotle again", requestId: "ask-retry-01" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.replayed).toBe(true);
+    expect(data.meals[0].name).toBe("Chipotle chicken bowl");
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(coachMessagePosts()).toHaveLength(0);
   });
 });

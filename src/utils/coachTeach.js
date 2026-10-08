@@ -33,7 +33,9 @@ const TEACH_FIRST = [
 
   ["sweetener", /\b(artificial sweetener|aspartame|sucralose|stevia|splenda|diet coke|diet pepsi|zero sugar soda)\b/],
 
-  ["underDay", /\b(under (my )?(calories|cals)|calories left|i hit my protein|protein('?s| is) (in|covered|done)|should i eat more|eat more or (leave|stop)|done for (the )?day)\b/],
+  ["waterEat", /\b(should i eat more|drink more water|water or eat more)\b/],
+  ["everyDay", /\b(is this going to be like this every day|like this every day)\b/],
+  ["underDay", /\b(under (my )?(calories|cals)|calories left|i hit my protein|protein('?s| is) (in|covered|done)|eat more or (leave|stop)|done for (the )?day)\b/],
 ];
 
 const PS_METHOD = [
@@ -134,14 +136,21 @@ export function localCoachTeach(raw) {
   const text = normalize(raw);
   if (!text || text.length > 180) return null;
   for (const [topic, pattern] of TEACH_FIRST) {
-    if (pattern.test(text)) return { kind: "teach", topic };
+    if (!pattern.test(text)) continue;
+    if (topic === "alcohol" && /\b(nurs|breastfeed)\b/.test(text)) {
+      return { kind: "teach", topic: "alcoholNursing" };
+    }
+    return { kind: "teach", topic };
   }
   // In-N-Out is locked. Every other named place still needs that menu.
   if (IN_N_OUT.test(text)) return { kind: "teach", topic: "inNOut" };
   if (NAMED_RESTAURANT.test(text)) return null;
   if (ITALIAN.test(text)) return { kind: "teach", topic: "italian" };
   if (CHINESE.test(text)) return { kind: "teach", topic: "chinese" };
-  if (SUSHI.test(text)) return { kind: "teach", topic: "sushi" };
+  if (SUSHI.test(text)) {
+    if (/\b(nurs|breastfeed|raw)\b/.test(text)) return { kind: "teach", topic: "sushiNursing" };
+    return { kind: "teach", topic: "sushi" };
+  }
   if (PIZZA_MEAL.some((pattern) => pattern.test(text))) return { kind: "teach", topic: "pizzaMeal" };
   if (OTHER_CUISINE.test(text)) return null;
   if (NAMED_DISH.test(text)) return null;
@@ -160,6 +169,9 @@ export function teachBody(topic, ctx = {}) {
   if (topic === "italian") return COACH_COPY.teachItalian;
   if (topic === "chinese") return COACH_COPY.teachChinese;
   if (topic === "sushi") return COACH_COPY.teachSushi;
+  if (topic === "sushiNursing") return COACH_COPY.teachSushiNursing;
+  if (topic === "waterEat") return COACH_COPY.teachWaterEat;
+  if (topic === "everyDay") return COACH_COPY.teachEveryDay;
   if (topic === "pizzaMeal") return COACH_COPY.teachPizzaMeal;
   if (topic === "inNOut") return COACH_COPY.teachInNOut;
   if (topic === "steps") return COACH_COPY.teachSteps;
@@ -178,6 +190,7 @@ export function teachBody(topic, ctx = {}) {
     return `${COACH_COPY.teachRealFood} ${COACH_COPY.teachRealFoodLogAhead}`;
   }
   if (topic === "alcohol") return COACH_COPY.teachAlcohol;
+  if (topic === "alcoholNursing") return COACH_COPY.teachAlcoholNursing;
   if (topic === "coffee") return COACH_COPY.teachCoffee;
   if (topic === "fasting") return COACH_COPY.teachFasting;
   if (topic === "sweetener") return COACH_COPY.teachSweetener;

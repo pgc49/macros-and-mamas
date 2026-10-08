@@ -81,6 +81,7 @@ function ChatBubble({ message }) {
           {mine ? "Mama" : "Coach"}
           {message.hiddenAt ? " · removed by her" : ""}
           {!mine && message.source === "client" ? " · unverified" : ""}
+          {!mine && (message.kind === "outage" || message.payload?.outage) ? " · outage" : ""}
         </div>
         {message.body ? (
           <div style={{ fontSize: 14, lineHeight: 1.5, color: T.ink }}>{message.body}</div>

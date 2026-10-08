@@ -1830,6 +1830,7 @@ export default function App() {
         setProfile((p) => ({ ...p, homescreenTipDismissedAt: at }));
       }}
       userId={user?.id || null}
+      sessionEmail={user?.email || ""}
       unreadMessages={unreadMessages}
       onUnreadMessagesChange={setUnreadMessages}
       mealHistoryByDate={mealHistoryByDate}

@@ -72,7 +72,40 @@ describe("what the coach hands to Callie", () => {
       "I've been starving myself all week",
       "I hate my body right now",
     ];
-    for (const ask of asks) expect(scopeOf(ask), ask).toBe("urgent");
+    for (const ask of asks) expect(["urgent", "disordered"].includes(scopeOf(ask)), ask).toBe(true);
+  });
+
+  it("treats 1000-calorie, once-a-day, skip-meals, and fasting-while-nursing as disordered", () => {
+    const asks = [
+      "is it fine to eat 1000 calories a day?",
+      "is 1200 calories ok",
+      "eating only once a day",
+      "skip meals",
+      "fasting while nursing",
+    ];
+    for (const ask of asks) expect(classifyAsk(ask).scope, ask).toBe("disordered");
+  });
+
+  it("keeps the two turns after a crisis on 911/988 unless she asks for food", () => {
+    const prior = ["I want to die"];
+    expect(classifyAsk("ok", { priorAsks: prior })).toMatchObject({ scope: "urgent", crisisFollow: true });
+    expect(classifyAsk("I'm fine now, never mind", { priorAsks: prior })).toMatchObject({
+      scope: "urgent",
+      crisisFollow: true,
+    });
+    expect(classifyAsk("what should I eat for dinner", { priorAsks: prior }).scope).toBe("food");
+  });
+
+  it("treats in-thread follow-ups after food as food, not Callie's", () => {
+    const prior = ["what should I eat for dinner"];
+    for (const ask of [
+      "yes please",
+      "I don't like those",
+      "the second one sounds good, how do I make it",
+      "I only have 10 minutes",
+    ]) {
+      expect(classifyAsk(ask, { priorAsks: prior }).scope, ask).toBe("food");
+    }
   });
 
   it("never answers mental health", () => {
