@@ -23,11 +23,12 @@ import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, isCrisisUrgent, isMealAsk, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
-import { buildCoachFallbackMeals, MEAL_TEACH_TOPICS } from "../../functions/_shared/coachFoodFallback";
+import { alignReplyToMeals, buildCoachFallbackMeals, hideCoachMealMacros, MEAL_TEACH_TOPICS } from "../../functions/_shared/coachFoodFallback";
 import { sizeMealsForPersist } from "../../functions/_shared/coachPlateScale";
-import { askedForMealOptions } from "../../functions/_shared/coachAskMeals";
 import { isWontLogRefusal } from "../../functions/_shared/coachRefusalSummary";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
+import { filterCoachMeals } from "../../functions/_shared/coachMealFilter";
+import { COACH_LOCAL_PICKS_LINE } from "../content/coachVoice";
 import { captureCoachFailure } from "../utils/coachFailure";
 import { downscaleImage } from "../utils/imageDownscale";
 import { localDateIso } from "../utils/dates";
@@ -35,8 +36,16 @@ import { localDateIso } from "../utils/dates";
 const QUICK_ASKS = [
   { id: "eat", label: COACH_COPY.askEat, kind: "cards" },
   { id: "out", label: COACH_COPY.askOut, kind: "photo", photo: "menu" },
+  { id: "kitchen", label: COACH_COPY.askKitchen, kind: "photo", photo: "kitchen" },
   { id: "day", label: COACH_COPY.askDay, kind: "read" },
 ];
+
+function resolvePhotoKind(kind, text) {
+  if (/\b(kitchen|fridge|refrigerator|pantry|what i have|what'?s in my)\b/i.test(String(text || ""))) {
+    return "kitchen";
+  }
+  return kind;
+}
 
 let localId = 0;
 const nextId = () => {
@@ -347,8 +356,11 @@ export function CoachPanel({
       return;
     }
 
-    // One plate. A second card is only the half portion of that same plate.
-    cards = firstPaintPlates(cards);
+    const avoidText = thread.filter((row) => row.role === "mama").map((row) => row.body).join(" ");
+    cards = filterCoachMeals(firstPaintPlates(cards), { text: avoidText, profile, skipNames: skipRef.current });
+    if (cards.length < 2) {
+      cards = firstPaintPlates(next?.cards?.filter((c) => c.kind === "meal") || cards);
+    }
     skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
     const loggedOther = loggedSlotsFromEntries(entries).size > 0;
     const day = localDateIso(clock);
@@ -357,7 +369,14 @@ export function CoachPanel({
       : skipMealCopy(next.skipped, { loggedOtherMeals: loggedOther });
     if (skipLine) skipLectureRef.current = day;
     lead += skipLine || "";
-    push({ role: "coach", body: shownCoachLead(lead.trim()), kind: "cards", cards, aside, template: "local.cards" });
+    push({
+      role: "coach",
+      body: shownCoachLead(lead.trim()) || COACH_LOCAL_PICKS_LINE,
+      kind: "cards",
+      cards,
+      aside,
+      template: "local.cards",
+    });
   };
 
   const answerWithRead = ({ askLabel = COACH_COPY.askDay, echo = true, aside = null } = {}) => {
@@ -422,6 +441,7 @@ export function CoachPanel({
           snackCount: fit?.budget?.snackCount,
           turnedDown: turnedDownRef.current,
           alreadySuggested: skipRef.current,
+          priorAsks: thread.filter((row) => row.role === "mama").map((row) => row.body).filter(Boolean).slice(-6),
           notLogging: wontLogRef.current,
         }),
         localDate: localDateIso(clockRef.current),
@@ -453,9 +473,29 @@ export function CoachPanel({
         source: data.mealSource || "new",
         slot: slotForAsk,
       }));
-      const cards = askedForMealOptions(text) ? suggested.slice(0, 3) : firstPaintPlates(suggested);
+      const priorAsks = thread.filter((row) => row.role === "mama").map((row) => row.body).filter(Boolean);
+      let cards = firstPaintPlates(filterCoachMeals(suggested, {
+        text,
+        profile,
+        skipNames: skipRef.current,
+        priorAsks,
+      }));
+      if (!cards.length) {
+        cards = firstPaintPlates(sizeMealsForPersist(
+          buildCoachFallbackMeals({
+            text,
+            slot: slotForAsk,
+            profile,
+            customMeals,
+            priorAsks,
+          }),
+          null,
+          slotForAsk,
+          data.mealSource || "new",
+        ));
+      }
       skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
-      const body = data.reply || data.message || (cards.length ? "" : (
+      const body = alignReplyToMeals(data.reply || data.message || "", cards) || (cards.length ? COACH_LOCAL_PICKS_LINE : (
         (mode === "menu" || mode === "kitchen" || images?.length)
           ? COACH_COPY.cantSeeIt
           : COACH_BUSY_LINE
@@ -505,11 +545,13 @@ export function CoachPanel({
     refreshClock();
     const requestId = nextAskId();
     if (photo) {
-      const kind = photo.kind;
+      const kind = resolvePhotoKind(photo.kind, text);
       const mama = push({
         role: "mama",
         body: text || (kind === "menu" ? COACH_COPY.sentMenu : COACH_COPY.sentFridge),
         kind: "photo",
+        photoThumb: photo.b64,
+        photoKind: kind,
         requestId,
       });
       const images = [{ image_b64: photo.b64, media_type: "image/jpeg" }];
@@ -527,17 +569,25 @@ export function CoachPanel({
     if (scopeIsRefused(verdict.scope)) {
       const deflect = deflectForScope(verdict.scope, text);
       const crisis = deflect === "emergency" || isCrisisUrgent(text);
-      const extra = (!crisis && isMealAsk(text))
+      const extra = (!crisis && (
+        isMealAsk(text)
+        || verdict.scope === "urgent"
+        || verdict.scope === "supply"
+        || verdict.scope === "disordered"
+        || verdict.scope === "medication"
+      ))
         ? sizeMealsForPersist(
-          buildCoachFallbackMeals({
+          (verdict.scope === "disordered"
+            ? hideCoachMealMacros
+            : (meals) => meals)(buildCoachFallbackMeals({
             text,
-            slot: answerRef.current?.slot,
+            slot: slotNamedInAsk(text) || answerRef.current?.slot,
             profile,
             customMeals,
-            safe: verdict.scope === "urgent" || verdict.scope === "supply",
-          }),
+            safe: verdict.scope === "urgent" || verdict.scope === "supply" || verdict.scope === "disordered" || verdict.scope === "medication",
+          })),
           null,
-          answerRef.current?.slot,
+          slotNamedInAsk(text) || answerRef.current?.slot,
           "new",
         )
         : [];
@@ -569,17 +619,18 @@ export function CoachPanel({
       const carbsShort = answer?.bands
         ? (totals?.c || 0) < (answer.bands.cLo || 0)
         : false;
-      const extra = MEAL_TEACH_TOPICS.has(teach.topic)
+      const extra = (MEAL_TEACH_TOPICS.has(teach.topic) || isMealAsk(text, { topic: teach.topic }))
         ? sizeMealsForPersist(
           buildCoachFallbackMeals({
             text,
-            slot: answerRef.current?.slot,
+            slot: slotNamedInAsk(text) || answerRef.current?.slot,
             topic: teach.topic,
             profile,
             customMeals,
+            priorAsks: thread.filter((row) => row.role === "mama").map((row) => row.body),
           }),
           null,
-          answerRef.current?.slot,
+          slotNamedInAsk(text) || answerRef.current?.slot,
           "new",
         )
         : [];
@@ -799,15 +850,29 @@ export function CoachPanel({
           )}
 
           {shownThread.map((m) => (
-            <div key={m.id} style={{ display: "flex", flexDirection: "column" }}>
+            <div key={m.id} data-coach-turn={m.role} style={{ display: "flex", flexDirection: "column" }}>
               {(m.aside === "nursing" || m.aside === "both") && (
                 <div style={bubble(false)}>{COACH_COPY.nursingPreface}</div>
               )}
 
               {m.body && (
                 <div style={bubble(m.role === "mama")}>
+                  {m.photoThumb && (
+                    <img
+                      src={`data:image/jpeg;base64,${m.photoThumb}`}
+                      alt={m.photoKind === "menu" ? "Menu photo" : "Kitchen photo"}
+                      style={{
+                        width: "100%",
+                        maxWidth: 220,
+                        borderRadius: 10,
+                        marginBottom: 8,
+                        objectFit: "cover",
+                        border: `1px solid ${T.border}`,
+                      }}
+                    />
+                  )}
                   <div>{m.body}</div>
-                  {onHideMessage && m.id && !String(m.id).startsWith("c_") && (
+                  {m.role === "mama" && onHideMessage && m.id && !String(m.id).startsWith("c_") && (
                     <button
                       type="button"
                       onClick={() => hideMessage(m.id)}
@@ -833,27 +898,6 @@ export function CoachPanel({
               {m.kind === "deflect" && (
                 <div style={{ ...bubble(false), background: T.amberSoft, border: "none" }}>
                   <div style={{ marginBottom: 10 }}>{(COACH_DEFLECT[m.deflect] || COACH_DEFLECT.offTopic).line}</div>
-                  {onHideMessage && m.id && !String(m.id).startsWith("c_") && (
-                    <button
-                      type="button"
-                      onClick={() => hideMessage(m.id)}
-                      style={{
-                        display: "block",
-                        marginBottom: 10,
-                        fontFamily: F,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        padding: 0,
-                        border: "none",
-                        background: "none",
-                        color: T.inkSoft,
-                        cursor: "pointer",
-                        textDecoration: "underline",
-                      }}
-                    >
-                      {COACH_COPY.removeMessage}
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}

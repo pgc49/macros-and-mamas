@@ -90,26 +90,53 @@ export function pickApprovedMacros(rows) {
   return (Array.isArray(rows) ? rows : []).find((row) => row?.approved === true) || null;
 }
 
+function rowTime(row) {
+  return Date.parse(row?.created_at || row?.updated_at || row?.createdAt || 0) || 0;
+}
+
+function newestFirst(a, b) {
+  const byTime = rowTime(b) - rowTime(a);
+  if (byTime) return byTime;
+  return String(b?.id || "").localeCompare(String(a?.id || ""));
+}
+
 /** Coach may work from a draft row. Other endpoints keep approved-only. */
 export function pickCoachMacros(rows) {
   const list = Array.isArray(rows) ? rows : [];
   const approved = pickApprovedMacros(list);
   if (approved) return { row: approved, status: "approved" };
-  const draft = list.find((row) => row) || null;
+  const drafts = list.filter((row) => row && row.approved !== true).sort(newestFirst);
+  const draft = drafts[0] || null;
   if (draft) return { row: draft, status: "draft" };
   return { row: null, status: "none" };
 }
 
-async function loadSelfRows(env, userId, authHeader) {
+export async function loadCoachProfile(env, userId, authHeader) {
+  const { profileRow } = await loadSelfRows(env, userId, authHeader, { macros: false });
+  return selfFromRows(profileRow, null).profile;
+}
+
+async function loadSelfRows(env, userId, authHeader, { macros = true } = {}) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const anon = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || "";
   if (!base || !anon) throw new Error("missing supabase config");
+
+  if (!macros) {
+    const pResp = await fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=*`, {
+      headers: { apikey: anon, authorization: authHeader },
+    });
+    const profiles = await pResp.json().catch(() => []);
+    return {
+      profileRow: Array.isArray(profiles) ? profiles[0] : null,
+      macrosRows: [],
+    };
+  }
 
   const [pResp, mResp] = await Promise.all([
     fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=*`, {
       headers: { apikey: anon, authorization: authHeader },
     }),
-    fetch(`${base}/rest/v1/macros?profile_id=eq.${encodeURIComponent(userId)}&select=*`, {
+    fetch(`${base}/rest/v1/macros?profile_id=eq.${encodeURIComponent(userId)}&select=*&order=created_at.desc,id.desc`, {
       headers: { apikey: anon, authorization: authHeader },
     }),
   ]);
@@ -146,9 +173,9 @@ export async function loadCoachSelf(env, userId, authHeader) {
 export async function checkAiLimit(env, userId, { type, max, busyMessage, spentMessage, requestId = null } = {}) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!base || !key) {
+    if (!base || !key) {
     console.error(`${type} rate limit missing service role`);
-    return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
+    return { ok: false, reason: "outage", message: busyMessage, retryAfterSeconds: 60 };
   }
 
   const ticket = isCoachRequestId(requestId) ? String(requestId).trim() : "";
@@ -171,7 +198,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
     const reserved = await rpc.json().catch(() => null);
     if (reserved === true) return { ok: true, reserved: true };
     if (reserved === false) {
-      return { ok: false, message: spentMessage, retryAfterSeconds: 86400 };
+      return { ok: false, reason: "spent", message: spentMessage, retryAfterSeconds: 86400 };
     }
   }
 
@@ -194,7 +221,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
   if (!inserted || !inserted.ok) {
     // A 409 on request_id is not a reuse. The RPC is the only reuse path.
     console.error(`${type} rate limit reserve failed`, inserted?.status);
-    return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
+    return { ok: false, reason: "outage", message: busyMessage, retryAfterSeconds: 60 };
   }
 
   const row = await inserted.json().catch(() => null);
@@ -213,7 +240,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
   });
   if (!resp.ok) {
     console.error(`${type} rate limit count failed`, resp.status);
-    return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
+    return { ok: false, reason: "outage", message: busyMessage, retryAfterSeconds: 60 };
   }
 
   const match = (resp.headers.get("content-range") || "").match(/\/(\d+|\*)/);
@@ -225,7 +252,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
         headers: { apikey: key, authorization: `Bearer ${key}` },
       }).catch(() => {});
     }
-    return { ok: false, message: spentMessage, retryAfterSeconds: 86400 };
+    return { ok: false, reason: "spent", message: spentMessage, retryAfterSeconds: 86400 };
   }
   return { ok: true, used };
 }

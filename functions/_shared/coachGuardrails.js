@@ -29,7 +29,7 @@
  * The four refusal lists are what carry the guarantee, and they run first.
  * Nothing that is Callie's reaches a model regardless of how the rest reads.
  */
-export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "admin", "off_topic", "supply"];
+export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "admin", "off_topic", "supply", "disordered", "medication"];
 
 /**
  * Crisis and postpartum warning signs. These get the emergency line, not
@@ -179,6 +179,21 @@ const ADMIN = [
  * Shame about what she ate. On its own this is Callie's. If she also asks
  * what to eat next, the food gets answered and this rides along after.
  */
+/** Purge, restriction-to-lose, making herself throw up. Not ordinary nausea. */
+const DISORDERED = [
+  /\bmak(e|ing) myself throw up\b/,
+  /\bthrow(s|ing)? up after (meals?|eating|i eat)\b/,
+  /\bonly eat(ing)? once a day\b/,
+  /\beat once a day\b.{0,24}\blose (faster|weight)\b/,
+  /\bpurge\b/, /\bpurging\b/,
+];
+
+/** A named OTC or "should I take this pill" — not a food ask. */
+const MEDICATION = [
+  /\b(ibuprofen|advil|motrin|tylenol|acetaminophen|aspirin|aleve|naproxen|benadryl)\b/,
+  /\bshould i take\b.{0,28}\b(a |an )?(pill|tablet|dose|ibuprofen|advil|tylenol|aspirin)\b/,
+];
+
 const GUILT = [
   /\bfeel guilty\b/,
   /\bfeel(ing)? (awful|bad|terrible|so bad) about\b/,
@@ -195,8 +210,6 @@ const EXERCISE_CAL = [
 ];
 
 /** She mentioned nursing without asking whether supply is in trouble. */
-const NURSING_MENTION = /\b(breast ?feed|breastfeeding|nurs(e|es|ed|ing)|pumping|pumped)\b/;
-
 /** Asking about milk output specifically — not just mentioning that she nurses. */
 const SUPPLY = [
   /\bmilk (supply|production)\b/, /\bmy supply\b/, /\bdry(ing)? up\b/,
@@ -290,6 +303,8 @@ export function classifyAsk(raw) {
   if (!text) return { scope: "food", aside: null };
 
   // Never answered, never softened into an aside.
+  if (hits(DISORDERED, text)) return { scope: "disordered", aside: null };
+  if (hits(MEDICATION, text)) return { scope: "medication", aside: null };
   if (hits(URGENT, text)) return { scope: "urgent", aside: null };
 
   // Guilt with no next-meal question is still hers. Guilt plus "what do I
@@ -317,11 +332,8 @@ export function classifyAsk(raw) {
 }
 
 function foodWithAside(text, guilt, nextMeal) {
-  const nursing = NURSING_MENTION.test(text) && !hits(SUPPLY, text);
   const care = guilt && nextMeal;
-  if (care && nursing) return { scope: "food", aside: "both" };
   if (care) return { scope: "food", aside: "care" };
-  if (nursing) return { scope: "food", aside: "nursing" };
   return { scope: "food", aside: null };
 }
 
@@ -333,7 +345,8 @@ export function scopeIsRefused(scope) {
 const PLATE_ASK = /\b(eat|eating|eaten|ate|meal|lunch|dinner|breakfast|snack|hungry|starving|cook|fridge|menu|order|recipe|plate|dish|chicken|eggs?|salmon|yogurt|leftover|ideas|pizza|italian|chinese|sushi|taco|burger|smoothie|vegetarian|swap|surprise me|something new)\b/i;
 const MEAL_TEACH_HINT = new Set([
   "italian", "chinese", "sushi", "pizzaMeal", "inNOut", "psMethod",
-  "neverSkip", "realFood", "underDay", "fasting", "menuLink", "menuClosed", "menuMiss",
+  "neverSkip", "realFood", "underDay", "fasting", "coffee",
+  "menuLink", "menuClosed", "menuMiss",
 ]);
 
 /**
@@ -345,13 +358,27 @@ export function isMealAsk(raw, { mode = "ask", topic = null } = {}) {
   if (topic && MEAL_TEACH_HINT.has(topic)) return true;
   const text = String(raw || "").toLowerCase().trim();
   if (!text) return false;
+  if (isCrisisUrgent(text)) return false;
+  const verdict = classifyAsk(text);
+  if (verdict.scope === "off_topic" || verdict.scope === "ranges" || verdict.scope === "weight" || verdict.scope === "admin") {
+    return false;
+  }
   if (NEXT_MEAL.test(text)) return true;
   if (hits(MEAL_INTENT, text)) return true;
-  if (!PLATE_ASK.test(text) && !FOOD_ASK.test(text)) return false;
+  if (/\b(something else|anything else|what else)\b/.test(text)) return true;
+  if (verdict.scope === "food" || verdict.scope === "unclear") return true;
   if (hits(RANGES, text) && !NEXT_MEAL.test(text) && !/\bwhat (should|can|do) i (eat|have|make|order|get)\b/.test(text)) {
     return false;
   }
   return PLATE_ASK.test(text) || FOOD_ASK.test(text);
+}
+
+export function isDisorderedAsk(raw) {
+  return hits(DISORDERED, String(raw || "").toLowerCase().trim());
+}
+
+export function isMedicationAsk(raw) {
+  return hits(MEDICATION, String(raw || "").toLowerCase().trim());
 }
 
 /** Symptoms, medication, and restriction. Guilt alone is a care handoff, not this. */
@@ -374,6 +401,8 @@ const DEFLECT_FOR_SCOPE = {
   admin: "admin",
   off_topic: "offTopic",
   supply: "supply",
+  disordered: "disordered",
+  medication: "medication",
 };
 
 export function deflectForScope(scope, asked = "") {

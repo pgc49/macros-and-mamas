@@ -92,7 +92,8 @@ export function plainCoachPlates(payload) {
       const name = asDisplayString(card.name).trim() || asDisplayString(card.title).trim();
       if (!name) return null;
       return {
-        name,
+        name: name.slice(0, 48),
+        fromSaved: card.fromSaved === true || card.source === "my",
         macros: [
           `${Math.round(Number(card.cal) || 0)} cal`,
           `P${Math.round(Number(card.p) || 0)}`,

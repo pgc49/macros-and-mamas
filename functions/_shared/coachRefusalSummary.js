@@ -63,6 +63,8 @@ export function escalateDoor(asked, { escalate = null, scope = null } = {}) {
   // Symptoms first. "I'm skipping dinner because I feel dizzy" and
   // "I'm not logging because my chest hurts" must still reach Callie.
   if (isCrisisUrgent(question)) return "crisis";
+  if (scope === "disordered") return "disordered";
+  if (scope === "medication") return "medication";
   if (isClinicalUrgent(question)) return "medical";
   if (isWontLogRefusal(question)) return null;
   if (scope === "urgent" || scope === "medical") {

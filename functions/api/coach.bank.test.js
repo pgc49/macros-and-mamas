@@ -49,13 +49,17 @@ function request(body) {
 }
 
 function mockSetup(setup, { callsUsed = 0, noRanges = false } = {}) {
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     const value = String(url);
     if (value.includes("/auth/v1/user")) return new Response(JSON.stringify({ id: USER_ID }), { status: 200 });
     if (value.includes("select=paid,refunded,role")) {
       return new Response(JSON.stringify([{ paid: true, refunded: false, role: "client" }]), { status: 200 });
     }
     if (value.includes("rpc/reserve_estimate_call")) {
+      const body = JSON.parse(init?.body || "{}");
+      if (body.p_type === "coach_note" || body.p_type === "coach_over_cap") {
+        return new Response(JSON.stringify(true), { status: 200 });
+      }
       return new Response(JSON.stringify(callsUsed < 30), { status: 200 });
     }
     if (value.includes("/rest/v1/profiles?id=eq.")) {
@@ -190,7 +194,7 @@ const DEAD_END_PATHS = [
   {
     id: "noRanges",
     status: 200,
-    minMeals: 1,
+    minMeals: 2,
     lead: COACH_FINE_TUNING_LINE,
     noModel: false,
     mock: { noRanges: true },
@@ -208,7 +212,7 @@ const DEAD_END_PATHS = [
   {
     id: "modelDown",
     status: 200,
-    minMeals: 1,
+    minMeals: 2,
     lead: null,
     noModel: false,
     mock: {},
@@ -218,7 +222,7 @@ const DEAD_END_PATHS = [
   {
     id: "photoNoCards",
     status: 200,
-    minMeals: 1,
+    minMeals: 2,
     lead: null,
     noModel: false,
     mock: {},

@@ -91,6 +91,8 @@ describe("sanitizeCoachCards", () => {
       source: "bank",
       tag: COACH_COPY.sourceBank,
       basedOn: "Halibut + rice",
+      fromSaved: false,
+      hideMacros: false,
       servings: 2,
       cal: 910,
       p: 88,

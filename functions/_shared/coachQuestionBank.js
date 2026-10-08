@@ -3,6 +3,9 @@
  * "lol" included. Parentheticals in the brief are pass notes, not what she typed.
  */
 
+import { distinctCoachMeals, mealBaseName } from "./coachAskMeals.js";
+import { CALLIE_RECIPES } from "./callieRecipes.js";
+
 export const COACH_QUESTION_BANK_SETUPS = [
   {
     id: "A",
@@ -150,9 +153,28 @@ export const COACH_BANK_SHAPE_BY_SETUP = {
   E: "callie",
 };
 
-export function namedMealInReply(reply) {
-  return /\b(here's|here is|try|have|make|order|scramble|chicken|yogurt|shake|salmon|fish|taco|oatmeal|bowl|salad|burger|pizza|eggs?|nigiri|stir-fry|meatball|quesadilla|pasta|nuggets?|burrito)\b/i
-    .test(String(reply || ""));
+export function namedMealInReply(reply, meals = []) {
+  return platesNamedInReply(reply, meals).length > 0;
+}
+
+function escapePlateName(name) {
+  return String(name || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Meal names offered in the reply — not words like try or have, and not a teach aside. */
+export function platesNamedInReply(reply, catalog = []) {
+  const text = String(reply || "");
+  const offered = text.match(/here(?:'s| is| are)\s+([^.!?]+)/i);
+  if (!offered) return [];
+  const chunk = offered[1];
+  const names = [];
+  for (const item of catalog) {
+    const name = String(item?.name || item || "").trim();
+    if (name.length < 3) continue;
+    const re = new RegExp(`\\b${escapePlateName(name)}\\b`, "i");
+    if (re.test(chunk)) names.push(name);
+  }
+  return names;
 }
 
 export function mealHaystack(meal) {
@@ -170,13 +192,24 @@ export function mealQuestionPasses(resp, data, posts, question = {}, setup = {})
     return { ok: false, reason: "food question tripped a guardrail" };
   }
   const meals = Array.isArray(data?.meals) ? data.meals.filter((meal) => meal?.name) : [];
-  const named = meals.length > 0 || namedMealInReply(data?.reply);
-  if (!named) return { ok: false, reason: "no named meal" };
-  if (question.exactCount && meals.length !== question.exactCount) {
-    return { ok: false, reason: `wanted ${question.exactCount} plates, got ${meals.length}` };
+  const distinct = distinctCoachMeals(meals, 3);
+  if (distinct.length < 2) return { ok: false, reason: `wanted 2–3 distinct plates, got ${distinct.length}` };
+  const catalog = [
+    ...meals.map((meal) => meal.name),
+    ...CALLIE_RECIPES.map((row) => row.name),
+  ];
+  const mentioned = platesNamedInReply(data?.reply || data?.message || "", catalog);
+  const shown = new Set(distinct.map((meal) => mealBaseName(meal.name)));
+  for (const name of mentioned) {
+    if (!shown.has(mealBaseName(name))) {
+      return { ok: false, reason: `named ${name} not in cards` };
+    }
   }
-  if (question.options && meals.length < 2) {
-    return { ok: false, reason: `wanted 2–3 options, got ${meals.length}` };
+  if (question.exactCount && distinct.length !== question.exactCount) {
+    return { ok: false, reason: `wanted ${question.exactCount} plates, got ${distinct.length}` };
+  }
+  if (question.options && distinct.length < 2) {
+    return { ok: false, reason: `wanted 2–3 options, got ${distinct.length}` };
   }
   if (question.excludeLast) {
     const last = COACH_BANK_LAST_PLATE.toLowerCase();
@@ -220,8 +253,8 @@ export function carefulQuestionPasses(data, question = {}, { posts, summaries } 
   if (!data?.deflect) return { ok: false, reason: "no Callie handoff" };
   if (question.expectMeals) {
     const meals = Array.isArray(data?.meals) ? data.meals.filter((meal) => meal?.name) : [];
-    if (!meals.length && !namedMealInReply(data?.reply)) {
-      return { ok: false, reason: "careful meal question had no plate" };
+    if (distinctCoachMeals(meals, 3).length < 2) {
+      return { ok: false, reason: "careful meal question had fewer than 2 plates" };
     }
   }
   const line = String(data?.reply || data?.message || data?.deflect || "");
@@ -238,14 +271,15 @@ export function carefulQuestionPasses(data, question = {}, { posts, summaries } 
 
 export function deadEndPathPasses(resp, data, posts, {
   status = 200,
-  minMeals = 1,
+  minMeals = 2,
   lead = null,
   noModel = false,
   modelCalled = false,
 } = {}) {
   if (resp.status !== status) return { ok: false, reason: `status ${resp.status}` };
   const meals = Array.isArray(data?.meals) ? data.meals.filter((meal) => meal?.name) : [];
-  if (meals.length < minMeals) return { ok: false, reason: `plates ${meals.length}` };
+  const distinct = distinctCoachMeals(meals, 3);
+  if (distinct.length < minMeals) return { ok: false, reason: `plates ${distinct.length}` };
   const line = String(data?.reply || data?.message || "");
   if (lead && !line.includes(lead)) return { ok: false, reason: "missing lead-in" };
   if (noModel && modelCalled) return { ok: false, reason: "called the model" };

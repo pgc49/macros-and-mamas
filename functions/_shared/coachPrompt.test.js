@@ -202,7 +202,7 @@ describe("what it is allowed to write down", () => {
     const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "ideas" });
     expect(prompt).toMatch(/keep fat inside what's left/);
     expect(prompt).toMatch(/Don't talk about protein, fat or weight loss/);
-    expect(prompt).toMatch(/half portion is fine/);
+    expect(prompt).toMatch(/half portion of the same dish is not a second meal/);
     expect(prompt).not.toMatch(/Never suggest a half portion/);
     expect(prompt).toMatch(/Never tell her to skip a meal/);
     expect(prompt).not.toMatch(/the one that must stay in its band/);
@@ -221,11 +221,10 @@ describe("what it is allowed to write down", () => {
     expect(COACH_SYSTEM).toMatch(/Fat is the one Callie watches most/);
   });
 
-  it("asks for one plate unless she wants options, and to name a food why", () => {
+  it("asks for 2–3 distinct plates and a food why", () => {
     const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "I'm tired, something easy" });
-    expect(prompt).toMatch(/Suggest one plate/);
-    expect(prompt).toMatch(/second card only if it's the half portion/);
-    expect(prompt).toMatch(/Give up to 3 only when she asks for options/);
+    expect(prompt).toMatch(/Suggest 2–3 DISTINCT plates/);
+    expect(prompt).toMatch(/half portion of the same dish is not a second meal/);
     expect(prompt).toMatch(/Name the plate and one reason from her words/);
     expect(prompt).toMatch(/Slow-cooked or batch\s+recipes aren't quick/);
     expect(prompt).toMatch(/Rotate\./);

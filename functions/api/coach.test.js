@@ -12,6 +12,7 @@ const openrouter = vi.hoisted(() => ({
 vi.mock("../_shared/openrouter.js", () => openrouter);
 
 import { onRequestPost } from "./coach.js";
+import { COACH_DEFLECT } from "../../src/content/coachVoice.js";
 
 const USER_ID = "00000000-0000-4000-8000-000000000010";
 
@@ -32,9 +33,10 @@ function request(body) {
   });
 }
 
-function usedForType(type, { callsUsed, recordCallsUsed, noteCallsUsed }) {
+function usedForType(type, { callsUsed, recordCallsUsed, noteCallsUsed, overCapCallsUsed }) {
   if (type === "coach_record") return recordCallsUsed;
   if (type === "coach_note") return noteCallsUsed;
+  if (type === "coach_over_cap") return overCapCallsUsed;
   return callsUsed;
 }
 
@@ -45,6 +47,7 @@ function mockSupabase({
   callsUsed = 0,
   recordCallsUsed = 0,
   noteCallsUsed = 0,
+  overCapCallsUsed = 0,
   thread = [],
   pages = null,
   profile = null,
@@ -54,6 +57,7 @@ function mockSupabase({
 } = {}) {
   let summaryRow = summary;
   const claimedTickets = new Map();
+  let overCapUsed = overCapCallsUsed;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     const value = String(url);
     if (value.includes("/auth/v1/user")) {
@@ -65,7 +69,15 @@ function mockSupabase({
     if (value.includes("rpc/reserve_estimate_call")) {
       const body = JSON.parse(init?.body || "{}");
       const ticket = String(body.p_request_id || "").trim();
-      const used = usedForType(body.p_type, { callsUsed, recordCallsUsed, noteCallsUsed });
+      if (body.p_type === "coach_over_cap") {
+        if (overCapUsed < Number(body.p_max || 0)) {
+          overCapUsed += 1;
+          if (ticket) claimedTickets.set(ticket, { type: body.p_type, retried: false });
+          return new Response(JSON.stringify(true), { status: 200 });
+        }
+        return new Response(JSON.stringify(false), { status: 200 });
+      }
+      const used = usedForType(body.p_type, { callsUsed, recordCallsUsed, noteCallsUsed, overCapCallsUsed });
       if (ticket) {
         const prior = claimedTickets.get(ticket);
         if (prior) {
@@ -884,7 +896,7 @@ describe("the model ask sees the file the ranker sees", () => {
     expect(prompt).toContain("Sheet pan chicken");
   });
 
-  it("caps an ask at one plate plus an optional half", async () => {
+  it("keeps 2–3 distinct plates and drops a half of the same dish", async () => {
     mockSupabase();
     modelReturns({
       scope: "food",
@@ -899,7 +911,11 @@ describe("the model ask sees the file the ranker sees", () => {
       request: request({ mode: "ask", text: "what should I have for dinner", slot: "dinner" }),
       env,
     });
-    expect((await two.json()).meals.map((m) => m.name)).toEqual(["Chicken bowl"]);
+    expect((await two.json()).meals.map((m) => m.name)).toEqual([
+      "Chicken bowl",
+      "Salmon and rice",
+      "Turkey meatballs",
+    ]);
 
     modelReturns({
       scope: "food",
@@ -915,9 +931,13 @@ describe("the model ask sees the file the ranker sees", () => {
       env,
     });
     const halfMeals = (await half.json()).meals;
-    expect(halfMeals).toHaveLength(2);
-    expect(halfMeals.every((m) => m.name === "Chicken bowl")).toBe(true);
-    expect(halfMeals[1].servings).toBe(0.5);
+    expect(halfMeals.length).toBeGreaterThanOrEqual(2);
+    expect(halfMeals.length).toBeLessThanOrEqual(3);
+    expect(halfMeals.map((m) => m.name)).toContain("Chicken bowl");
+    expect(halfMeals.map((m) => m.name)).toContain("Salmon and rice");
+    expect(halfMeals.filter((m) => m.name === "Chicken bowl")).toHaveLength(1);
+    expect(new Set(halfMeals.map((m) => m.name)).size).toBe(halfMeals.length);
+    expect(halfMeals.every((m) => Number(m.servings) !== 0.5)).toBe(true);
   });
 
   it("keeps the same file on a menu photo, a kitchen photo, and a menu link", async () => {
@@ -1607,18 +1627,334 @@ describe("cost", () => {
     expect(resp.status).toBe(200);
   });
 
-  it("refuses rather than uncapping when the counter is unreadable", async () => {
+  it("treats a counter outage as model-down and does not show the daily-limit line", async () => {
+    mockSupabase();
+    const inner = globalThis.fetch.getMockImplementation();
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       const value = String(url);
-      if (value.includes("/auth/v1/user")) return new Response(JSON.stringify({ id: USER_ID }), { status: 200 });
-      if (value.includes("select=paid,refunded,role")) {
-        return new Response(JSON.stringify([{ paid: true, refunded: false, role: "client" }]), { status: 200 });
+      if (value.includes("rpc/reserve_estimate_call") || (value.includes("estimate_calls") && init?.method !== "POST")) {
+        return new Response("boom", { status: 500 });
       }
-      if (value.includes("estimate_calls") && init?.method !== "POST") return new Response("boom", { status: 500 });
-      return new Response("[]", { status: 200 });
+      return inner(url, init);
     });
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
-    expect(resp.status).toBe(429);
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(String(data.reply || data.message || "")).not.toMatch(/That's all the thinking I've got for today/);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it("returns picks on 5 over-cap asks and saves at most one row", async () => {
+    mockSupabase({ callsUsed: 30, customMeals: FILE.customMeals });
+    const replies = [];
+    for (let i = 0; i < 5; i += 1) {
+      const resp = await onRequestPost({
+        request: request({
+          mode: "ask",
+          text: "what should I have for dinner",
+          requestId: `ask-over-cap-${i + 1}x`,
+        }),
+        env,
+      });
+      expect(resp.status).toBe(429);
+      const data = await resp.json();
+      replies.push(data);
+      expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    }
+    expect(replies).toHaveLength(5);
+    expect(coachMessagePosts().filter((row) => row.payload?.limited)).toHaveLength(1);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it("does not put her custom meal name in a Coach-labelled body", async () => {
+    mockSupabase({
+      callsUsed: 30,
+      customMeals: [{ name: "Grandma's Secret Casserole XYZ", cal: 380, p: 32, c: 12, f: 18 }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "dinner ideas",
+        requestId: "ask-saved-meal",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(429);
+    expect(data.reply).not.toMatch(/Grandma's Secret Casserole XYZ/);
+    expect(data.meals.some((meal) => meal.fromSaved)).toBe(true);
+    const post = coachMessagePosts()[0];
+    expect(post.body).not.toMatch(/Grandma's Secret Casserole XYZ/);
+    expect(post.payload.cards.some((card) => card.fromSaved)).toBe(true);
+  });
+});
+
+describe("preview follow-ups and teach fills", () => {
+  it("fills 2–3 breakfast plates when coffee teach also asks for food", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "can i have coffee while nursing? what should i eat with it in the morning",
+        requestId: "ask-coffee-food",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.teach).toBe("coffee");
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(data.meals.map((meal) => meal.name)).size).toBe(data.meals.length);
+    expect(data.meals.map((meal) => meal.name).join(" ")).toMatch(/egg|yogurt|toast|sausage|pancake|oat/i);
+    expect(data.reply).toMatch(/Coffee is allowed/);
+    expect(data.aside).toBeFalsy();
+  });
+
+  it("leads a supply drop with the warm line and 2–3 simple plates", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "i feel like my milk supply dropped",
+        requestId: "ask-supply-warm",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.deflect).toBe("supply");
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(COACH_DEFLECT.supply.line).toMatch(/I'm sorry you're dealing with this/);
+    expect(COACH_DEFLECT.supply.line).not.toMatch(/That's one for Callie, not me/);
+    expect(COACH_DEFLECT.supply.line).not.toMatch(/directly immediately/);
+    expect(data.meals.every((meal) => meal.desc && meal.desc.toLowerCase() !== meal.name.toLowerCase())).toBe(true);
+  });
+
+  it("treats a kitchen note on a menu photo as home cooking", async () => {
+    mockSupabase();
+    modelReturns({
+      scope: "food",
+      reply: "From the menu.",
+      meals: [{ name: "Salmon salad", cal: 400, p: 35, c: 12, f: 18, desc: "Salmon salad", ingredients: [] }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "menu",
+        text: "this is what's in my kitchen, what can i make tonight",
+        images: [{ image_b64: "abc", media_type: "image/jpeg" }],
+        requestId: "ask-kitchen-infer",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.mealSource).toBe("kitchen");
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("excludes chicken after she said she is sick of it", async () => {
+    mockSupabase();
+    modelReturns({
+      scope: "food",
+      reply: "",
+      meals: [{ name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12, desc: "Chicken." }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "something else",
+        requestId: "ask-follow-dislike",
+        context: {
+          alreadySuggested: ["Chicken bowl"],
+          priorAsks: ["I'm so sick of eggs and chicken"],
+        },
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.reply).toBeTruthy();
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(data.meals.every((meal) => !/\bchicken\b/i.test(`${meal.name} ${meal.desc}`))).toBe(true);
+  });
+});
+
+const ALLERGY_CASES = [
+  { id: "dairy", leak: /yogurt|cheese|milk|whey|butter|cottage/i },
+  { id: "eggs", leak: /\beggs?\b/i },
+  { id: "peanuts", leak: /peanut/i },
+  { id: "tree_nuts", leak: /\b(almond|cashew|walnut|pecan|hazelnut|pistachio)\b/i },
+  { id: "shellfish", leak: /\b(shrimp|prawn|crab|lobster|shellfish)\b/i },
+  { id: "fish", leak: /\b(salmon|tuna|halibut|cod|fish|tilapia)\b/i },
+  { id: "gluten", leak: /\b(wheat|barley|rye|gluten|sourdough|bread|flour|pasta)\b/i },
+  { id: "soy", leak: /\b(soy|tofu|tempeh|edamame)\b/i },
+  { id: "sesame", leak: /\b(sesame|tahini)\b/i },
+];
+const DIET_CASES = [
+  { diet: "vegetarian", leak: /\b(chicken|turkey|beef|pork|steak|sausage|salmon|tuna|fish|halibut)\b/i },
+  { diet: "pescatarian", leak: /\b(chicken|turkey|beef|pork|steak|sausage)\b/i },
+  { diet: "vegan", leak: /\b(chicken|turkey|beef|egg|yogurt|cheese|honey|salmon|fish)\b/i },
+];
+
+function hay(meal) {
+  return `${meal?.name || ""} ${meal?.desc || ""} ${(meal?.ingredients || []).map((row) => row?.item || row).join(" ")}`;
+}
+
+describe("saved allergies and diets on every plate path", () => {
+  async function askOnPath(path, { allergens = [], diet = "none", text = "dinner ideas" } = {}) {
+    mockSupabase({
+      callsUsed: path === "429" ? 30 : 0,
+      profile: { ...FILE.profile, allergens, diet, food_avoids: "mushrooms" },
+    });
+    if (path === "down") {
+      openrouter.callOpenRouter.mockResolvedValue({ ok: false, kind: "timeout", status: 504, detail: "down" });
+      openrouter.parseJsonLoose.mockReturnValue({ ok: false });
+    } else if (path === "normal") {
+      modelReturns({
+        scope: "food",
+        reply: "Toast and peanut butter, or eggs and toast.",
+        meals: [
+          { name: "Toast and peanut butter", cal: 250, p: 10, c: 26, f: 12, desc: "Toast and peanut butter." },
+          { name: "Eggs and toast", cal: 310, p: 18, c: 22, f: 14, desc: "Eggs and toast." },
+          { name: "Salmon and rice", cal: 440, p: 38, c: 30, f: 14, desc: "Salmon and rice." },
+        ],
+      });
+    }
+    const asked = path === "teach"
+      ? "can i have coffee while nursing? what should i eat with it in the morning"
+      : path === "medical"
+        ? "I've been dizzy since this morning, what should I eat"
+        : path === "supply"
+          ? "i feel like my milk supply dropped"
+          : text;
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: asked, requestId: `ask-${path}-${allergens[0] || diet}` }),
+      env,
+    });
+    return { resp, data: await resp.json() };
+  }
+
+  for (const path of ["429", "down", "teach", "medical", "supply", "normal"]) {
+    for (const { id, leak } of ALLERGY_CASES) {
+      it(`${path} drops ${id}`, async () => {
+        const { data } = await askOnPath(path, { allergens: [id] });
+        expect(data.meals?.length || 0).toBeGreaterThanOrEqual(1);
+        expect(data.meals.every((meal) => !leak.test(hay(meal))), hay(data.meals?.[0])).toBe(true);
+      });
+    }
+    for (const { diet, leak } of DIET_CASES) {
+      it(`${path} honors ${diet}`, async () => {
+        const { data } = await askOnPath(path, { diet });
+        expect(data.meals?.length || 0).toBeGreaterThanOrEqual(1);
+        expect(data.meals.every((meal) => !leak.test(hay(meal))), hay(data.meals?.[0])).toBe(true);
+      });
+    }
+  }
+});
+
+describe("reviewer follow-ups", () => {
+  it("fills food for the five leftover asks when the model is down", async () => {
+    const asks = [
+      "can I have tacos?",
+      "what about a sandwich",
+      "what's healthy at mcdonalds",
+      "how many almonds can I have?",
+      "help me plan tomorrow",
+    ];
+    for (const text of asks) {
+      mockSupabase();
+      openrouter.callOpenRouter.mockResolvedValue({ ok: false, kind: "timeout", status: 504, detail: "down" });
+      const resp = await onRequestPost({ request: request({ mode: "ask", text, requestId: `ask-five-${text.slice(0, 8)}` }), env });
+      const data = await resp.json();
+      expect(resp.status, text).toBe(200);
+      expect(data.meals.length, text).toBeGreaterThanOrEqual(2);
+      expect(String(data.reply || data.message || ""), text).not.toBe("I can't think straight right now. Try again in a minute, or pick something from Meals.");
+    }
+  });
+
+  it("returns the crisis line with no plates when the profile read throws", async () => {
+    mockSupabase();
+    const inner = globalThis.fetch.getMockImplementation();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      const value = String(url);
+      if (value.includes("/rest/v1/profiles") && !value.includes("select=paid,refunded,role")) {
+        throw new Error("profile boom");
+      }
+      return inner(url, init);
+    });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "I want to die", requestId: "ask-crisis-profile" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.deflect).toBe("emergency");
+    expect(data.meals).toEqual([]);
+    expect(summaryPosts().length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("returns no plates on every crisis path", async () => {
+    const paths = [
+      async () => {
+        mockSupabase();
+        return onRequestPost({ request: request({ mode: "ask", text: "I want to die", requestId: "ask-crisis-ask" }), env });
+      },
+      async () => {
+        mockSupabase({ callsUsed: 30 });
+        return onRequestPost({ request: request({ mode: "ask", text: "I want to die", requestId: "ask-crisis-429" }), env });
+      },
+      async () => {
+        mockSupabase();
+        openrouter.callOpenRouter.mockResolvedValue({ ok: false, kind: "timeout" });
+        return onRequestPost({ request: request({ mode: "ask", text: "I want to die", requestId: "ask-crisis-down" }), env });
+      },
+    ];
+    for (const run of paths) {
+      const resp = await run();
+      const data = await resp.json();
+      expect(resp.status).toBe(200);
+      expect(data.deflect).toBe("emergency");
+      expect(data.meals).toEqual([]);
+    }
+  });
+
+  it("hands disordered eating to Callie with number-free plates", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "I've been making myself throw up after meals",
+        requestId: "ask-disordered",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.deflect).toBe("disordered");
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(data.meals.every((meal) => meal.hideMacros && !meal.cal && !meal.p)).toBe(true);
+    expect(COACH_DEFLECT.disordered.line).toMatch(/I'm glad you told me/);
+  });
+
+  it("hands a medication question to Callie with simple food, never off-topic", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "should I take ibuprofen", requestId: "ask-ibu" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.deflect).toBe("medication");
+    expect(data.deflect).not.toBe("offTopic");
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(COACH_DEFLECT.medication.line).toMatch(/doctor or pharmacist/);
+  });
+
+  it("only adds the draft line when a plate follows and does not double curly apostrophes", async () => {
+    const { leadFineTuningReply, COACH_FINE_TUNING_LINE } = await import("../../src/content/coachVoice.js");
+    expect(leadFineTuningReply("", { hasPlates: false })).toBe("");
+    expect(leadFineTuningReply("", { hasPlates: true })).toBe(COACH_FINE_TUNING_LINE);
+    const curly = "Callie\u2019s still fine-tuning your numbers, so here\u2019s an easy one for now. Eggs.";
+    expect(leadFineTuningReply(curly, { hasPlates: true })).not.toMatch(/fine-tuning your numbers.*fine-tuning your numbers/);
+    expect(leadFineTuningReply(curly, { hasPlates: true })).toMatch(/Eggs/);
   });
 });

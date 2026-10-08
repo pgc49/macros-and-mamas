@@ -165,21 +165,13 @@ export function pruneStaleMyMealCards(cards = [], customMeals = [], bankNames = 
 /** Thread rows as she should see them now. Raw history stays; deleted customs do not. */
 export function replayCoachMessages(messages = [], customMeals = []) {
   const list = messages || [];
-  let lastCards = -1;
-  for (let i = 0; i < list.length; i += 1) {
-    if (Array.isArray(list[i]?.cards) && list[i].cards.length) lastCards = i;
-  }
-  return list.map((message, index) => {
+  return list.map((message) => {
     const hasCards = Array.isArray(message?.cards) && message.cards.length > 0;
     const body = hasCards && message.role !== "mama"
       ? shownCoachLead(message.body)
       : message.body;
     if (!hasCards) {
       return body === message.body ? message : { ...message, body };
-    }
-    // Older suggestion sets stay in the thread as chat. They do not paint another bank.
-    if (index !== lastCards) {
-      return { ...message, body, cards: [] };
     }
     const cards = firstPaintPlates(pruneStaleMyMealCards(message.cards, customMeals));
     const same = body === (message.body || "")
@@ -229,6 +221,7 @@ export function coachDayForPrompt({
   snackCount = 1,
   turnedDown = [],
   alreadySuggested = [],
+  priorAsks = [],
   notLogging = false,
 } = {}) {
   const eaten = [];
@@ -289,6 +282,7 @@ export function coachDayForPrompt({
     skipped: skippedSlots,
     turnedDown: declined,
     alreadySuggested: suggested,
+    priorAsks: (priorAsks || []).map((item) => clipPromptText(item, 200)).filter(Boolean).slice(0, 8),
     notLogging: Boolean(notLogging),
     snackCount: Number.isFinite(snacks) ? Math.max(0, Math.min(4, snacks)) : 1,
   };

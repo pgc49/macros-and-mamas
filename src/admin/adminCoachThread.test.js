@@ -86,9 +86,17 @@ describe("plainCoachPlates", () => {
     });
     expect(plates).toEqual([{
       name: "Chicken bowl",
+      fromSaved: false,
       macros: "430 cal · P45 · C30 · F12",
       reason: "Gets protein into range.",
     }]);
+  });
+
+  it("marks a saved-meal card so Callie can see the label", () => {
+    const plates = plainCoachPlates({
+      cards: [{ name: "Grandma casserole", cal: 380, p: 32, c: 12, f: 18, fromSaved: true }],
+    });
+    expect(plates[0].fromSaved).toBe(true);
   });
 
   it("coerces card fields to strings so a bad payload cannot crash", () => {

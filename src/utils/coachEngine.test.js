@@ -566,7 +566,10 @@ describe("ranking", () => {
     }];
     const live = [{ id: "live-1", name: "Still saved meal" }];
     const shown = replayCoachMessages(messages, live);
-    expect(shown[0].cards.map((card) => card.name)).toEqual(["Still saved meal"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Still saved meal",
+      "Greek yogurt bowl",
+    ]);
     expect(replayCoachMessages(messages, [])[0].cards.map((card) => card.name)).toEqual([
       "Greek yogurt bowl",
     ]);
@@ -586,7 +589,11 @@ describe("ranking", () => {
       ],
     }];
     const shown = replayCoachMessages(messages, []);
-    expect(shown[0].cards.map((card) => card.name)).toEqual(["Sheet pan chicken"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Sheet pan chicken",
+      "Turkey meatballs",
+      "Halibut + rice",
+    ]);
     expect(shown[0].cards[0].reason).toMatch(/chicken/i);
     expect(shown[0].cards[0].reason).not.toMatch(/protein|fat in range|fits what's left|skipped a meal|hormonal/i);
     expect(JSON.stringify(shown[0].cards)).not.toContain(COACH_COPY.reasonGets);
@@ -611,7 +618,11 @@ describe("ranking", () => {
       ],
     }];
     const shown = replayCoachMessages(messages, []);
-    expect(shown[0].cards.map((card) => card.name)).toEqual(["Pulled chicken tacos"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Pulled chicken tacos",
+      "Halibut + rice",
+      "Turkey meatballs + rice",
+    ]);
     expect(shown[0].body).toContain("I noticed you skipped a meal");
     expect(shown[0].body).not.toMatch(/129g|of protein tonight|plenty of room|keep fat in its band/i);
     expect(shown[0].cards[0].reason).toMatch(/chicken|tortilla/i);
@@ -631,7 +642,7 @@ describe("ranking", () => {
       { name: "Pulled chicken tacos", title: "Pulled chicken tacos · half portion", servings: 0.5, reason: "" },
     ]).map((card) => card.title)).toEqual([
       "Pulled chicken tacos · 2 servings",
-      "Pulled chicken tacos · half portion",
+      "Halibut + rice · 2 servings",
     ]);
   });
 
@@ -657,8 +668,14 @@ describe("ranking", () => {
       },
     ];
     const shown = replayCoachMessages(messages, []);
-    expect(shown[0].cards).toEqual([]);
-    expect(shown[1].cards.map((card) => card.name)).toEqual(["Pulled chicken tacos"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Sheet pan chicken",
+      "Turkey meatballs + rice",
+    ]);
+    expect(shown[1].cards.map((card) => card.name)).toEqual([
+      "Pulled chicken tacos",
+      "Halibut + rice",
+    ]);
     expect(shown[1].cards[0].reason).toMatch(/chicken|tortilla/i);
     expect(shown[1].cards[0].reason).not.toMatch(/skipped a meal|hormonal/);
   });
@@ -730,11 +747,19 @@ describe("ranking", () => {
       "Leftover Pasta",
     ]);
     const shown = replayCoachMessages(messages, live);
-    expect(shown[0].cards.map((card) => card.name)).toEqual(["Sheet Pan Chicken with Sweet Potato"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Sheet Pan Chicken with Sweet Potato",
+      "Sausage, egg + whites scramble",
+      "Sheet pan chicken",
+    ]);
     expect(live).toEqual(snapshot);
 
     const afterDelete = replayCoachMessages(messages, []);
-    expect(afterDelete[0].cards.map((card) => card.name)).toEqual(["Sheet Pan Chicken with Sweet Potato"]);
+    expect(afterDelete[0].cards.map((card) => card.name)).toEqual([
+      "Sheet Pan Chicken with Sweet Potato",
+      "Sheet pan chicken",
+      "Leftover Pasta",
+    ]);
   });
 
   it("keeps the saved list when a custom meals fetch fails", () => {
@@ -792,6 +817,10 @@ describe("ranking", () => {
     expect(sourceTag("bank")).toBe(COACH_COPY.sourceBank);
     expect(sourceTag("bank")).toBe("Callie's recipe");
     expect(sourceTag("my")).toBe(COACH_COPY.sourceMy);
+    expect(sourceTag("new", "lunch")).toBe("Made for lunch");
+    expect(sourceTag("new", "breakfast")).toBe("Made for breakfast");
+    expect(sourceTag("new", "dinner")).toBe("Made for dinner");
+    expect(sourceTag("new")).toBe("Made for you");
   });
 
   it("offers a half portion when that is the only size that fits", () => {

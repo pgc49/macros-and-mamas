@@ -7,10 +7,35 @@
    recipes, her own meals, or a simple generic plate.
    ================================================================== */
 
+import { COACH_LOCAL_PICKS_LINE } from "../../src/content/coachVoice.js";
+import { mealBaseName } from "./coachAskMeals.js";
 import { CALLIE_RECIPES } from "./callieRecipes.js";
 import { macrosPlausible } from "./coachGuardrails.js";
-import { extractAskConstraints, filterCoachMeals, mealBreaksConstraints } from "./coachMealFilter.js";
+import { constraintTextFrom, extractAskConstraints, filterCoachMeals, mealBreaksConstraints, mealBreaksSavedPrefs } from "./coachMealFilter.js";
 import { sanitizePlanMeal } from "./planMealShape.js";
+
+export { COACH_LOCAL_PICKS_LINE };
+
+export const SAVED_MEAL_NAME_MAX = 48;
+const HANDS_FULL = /\b(one[- ]handed|one hand|holding (the )?baby|hands (are )?full|too tired|so tired|baby in (my )?arms)\b/i;
+
+export function capMealName(name) {
+  return String(name || "").replace(/\s+/g, " ").trim().slice(0, SAVED_MEAL_NAME_MAX);
+}
+
+function ingredientDesc(meal) {
+  const items = (meal?.ingredients || [])
+    .map((row) => {
+      if (typeof row === "string") return row.trim();
+      return [row?.amount, row?.item || row?.name].filter(Boolean).join(" ").trim();
+    })
+    .filter(Boolean);
+  if (items.length) return items.join(", ");
+  const desc = String(meal?.desc || "").trim();
+  const name = String(meal?.name || "").trim();
+  if (desc && desc.toLowerCase() !== name.toLowerCase()) return desc;
+  return desc || "A simple plate you can make now.";
+}
 
 const SLOT_CAT = {
   breakfast: "Breakfast",
@@ -22,7 +47,8 @@ const SLOT_CAT = {
 /** Teach topics that are still a meal question. */
 export const MEAL_TEACH_TOPICS = new Set([
   "italian", "chinese", "sushi", "pizzaMeal", "inNOut", "psMethod",
-  "neverSkip", "realFood", "underDay", "fasting", "menuLink", "menuClosed", "menuMiss",
+  "neverSkip", "realFood", "underDay", "fasting", "coffee",
+  "menuLink", "menuClosed", "menuMiss",
 ]);
 
 const FROM_WHAT_SHE_HAS = [
@@ -276,6 +302,13 @@ const TEACH_PLATES = {
     recipePlate("Grilled chicken big salad"),
     recipePlate("Protein shake"),
   ],
+  coffee: [
+    recipePlate("Sausage, egg + whites"),
+    recipePlate("Greek yogurt + berries"),
+    plate("Eggs and toast", "A simple breakfast with the coffee.", 310, 18, 22, 14, [
+      { item: "eggs", amount: "2" }, { item: "toast", amount: "1 slice" },
+    ]),
+  ],
   menuLink: psOrderPlates(),
   menuClosed: psOrderPlates(),
   menuMiss: psOrderPlates(),
@@ -325,11 +358,23 @@ const QUICK_PLATES = [
 ];
 
 const NO_COOK = [
-  plate("Rotisserie chicken and fruit", "Already cooked. Pair it with fruit.", 320, 32, 18, 10, [
+  plate("Rotisserie chicken and fruit", "4 oz rotisserie chicken and a piece of fruit. Already cooked.", 320, 32, 18, 10, [
     { item: "rotisserie chicken", amount: "4 oz" }, { item: "fruit", amount: "1 piece" },
   ]),
-  plate("Tuna and crackers", "A can of tuna and whatever crackers you have.", 280, 24, 18, 8, [
+  plate("Tuna and crackers", "A can of tuna and a handful of crackers. No cooking.", 280, 24, 18, 8, [
     { item: "tuna", amount: "1 can" }, { item: "crackers", amount: "a handful" },
+  ]),
+];
+
+const NO_PREP = [
+  plate("Rotisserie chicken and fruit", "4 oz rotisserie chicken and a piece of fruit. Nothing to cook.", 320, 32, 18, 10, [
+    { item: "rotisserie chicken", amount: "4 oz" }, { item: "fruit", amount: "1 piece" },
+  ]),
+  plate("Tuna and crackers", "A can of tuna and a handful of crackers. Eat it as-is.", 280, 24, 18, 8, [
+    { item: "tuna", amount: "1 can" }, { item: "crackers", amount: "a handful" },
+  ]),
+  plate("Apple and peanut butter", "An apple and a spoon of peanut butter. One-handed.", 190, 5, 28, 8, [
+    { item: "apple", amount: "1" }, { item: "peanut butter", amount: "1 tbsp" },
   ]),
 ];
 
@@ -374,19 +419,21 @@ function recipePlate(name) {
   };
 }
 
-function dietAllows(name, diet) {
-  const d = String(diet || "").toLowerCase();
-  const n = String(name || "").toLowerCase();
-  const meat = /\b(chicken|turkey|sausage|meatball|steak|burger|pulled|beef|pork|nuggets?)\b/;
-  const animal = /\b(chicken|turkey|sausage|meatball|steak|burger|salmon|tuna|fish|egg|yogurt|cheese|nigiri|beef)\b/;
-  if (d.includes("vegan") && animal.test(n)) return false;
-  if (d.includes("vegetarian") && !d.includes("pesc") && meat.test(n)) return false;
-  if (d.includes("pesc") && meat.test(n)) return false;
-  return true;
-}
+const ALLERGEN_FREE = [
+  plate("Rice and fruit", "Plain cooked rice and a piece of fruit.", 280, 6, 62, 1, [
+    { item: "cooked rice", amount: "1 cup" }, { item: "fruit", amount: "1 piece" },
+  ]),
+  plate("Rice cakes and banana", "Plain rice cakes and a banana.", 220, 4, 48, 2, [
+    { item: "rice cakes", amount: "2" }, { item: "banana", amount: "1" },
+  ]),
+  plate("Cucumber and rice", "Sliced cucumber over plain rice.", 210, 5, 44, 1, [
+    { item: "cooked rice", amount: "1 cup" }, { item: "cucumber", amount: "1 cup" },
+  ]),
+];
 
 function asMeal(raw, slot) {
   if (!raw?.name) return null;
+  const name = capMealName(raw.name);
   const meal = sanitizePlanMeal({
     slot,
     servings: 1,
@@ -394,17 +441,22 @@ function asMeal(raw, slot) {
     ingredients: raw.ingredients || [],
     steps: raw.steps || [],
     ...raw,
+    name,
+    desc: ingredientDesc({ ...raw, name }),
+    fromSaved: Boolean(raw.fromSaved),
   });
   return macrosPlausible(meal) ? meal : null;
 }
 
-function addMeal(out, seen, raw, slot, diet, constraints, skipNames) {
-  if (!raw || !dietAllows(raw.name, diet)) return;
+function addMeal(out, seen, raw, slot, diet, constraints, skipNames, profile) {
+  if (!raw) return;
   if (mealBreaksConstraints(raw, constraints, skipNames)) return;
-  const key = String(raw.name).trim().toLowerCase();
+  if (mealBreaksSavedPrefs(raw, profile)) return;
+  const key = mealBaseName(raw.name);
   if (!key || seen.has(key)) return;
   const meal = asMeal(raw, slot);
   if (!meal || mealBreaksConstraints(meal, constraints, skipNames)) return;
+  if (mealBreaksSavedPrefs(meal, profile)) return;
   seen.add(key);
   out.push(meal);
 }
@@ -421,7 +473,7 @@ function recipesForSlot(slot) {
 export function buildCoachFallbackMeals({
   text = "",
   slot = "dinner",
-  mode: _mode = "ask",
+  mode = "ask",
   topic = null,
   profile = null,
   customMeals = [],
@@ -429,17 +481,24 @@ export function buildCoachFallbackMeals({
   safe = false,
   skipNames = [],
   iron = false,
+  priorAsks = [],
 } = {}) {
-  const asked = String(text || "").toLowerCase();
+  const asked = constraintTextFrom(text, priorAsks).toLowerCase();
   const diet = profile?.diet || "";
-  const constraints = extractAskConstraints(text, profile);
+  const constraints = extractAskConstraints(asked, profile);
   const skip = (skipNames || []).map((item) => String(item || "").trim()).filter(Boolean);
   const out = [];
   const seen = new Set();
-  const add = (raw) => addMeal(out, seen, raw, slot, diet, constraints, skip);
+  const add = (raw) => addMeal(out, seen, raw, slot, diet, constraints, skip, profile);
+  const kitchen = mode === "kitchen";
 
   if (iron) {
     for (const meal of IRON_PLATES) add(meal);
+  }
+  if (HANDS_FULL.test(asked)) {
+    for (const meal of NO_PREP) add(meal);
+    for (const meal of NO_COOK) add(meal);
+    for (const meal of QUICK_PLATES) add(meal);
   }
   if (/\b(\d+\s+minutes?|5 minutes|screaming|zero prep|no cooking|less prep)\b/.test(asked)) {
     for (const meal of QUICK_PLATES) add(meal);
@@ -460,31 +519,36 @@ export function buildCoachFallbackMeals({
     if (out.length < count) {
       for (const meal of QUICK_PLATES) add(meal);
       for (const meal of VEG_PLATES) add(meal);
+      for (const meal of NO_PREP) add(meal);
     }
     return out.slice(0, count);
   }
 
-  for (const rule of FROM_WHAT_SHE_HAS) {
-    if (rule.test(asked)) add(rule.meal);
-    if (out.length >= count) return out.slice(0, count);
+  if (!kitchen) {
+    for (const rule of FROM_WHAT_SHE_HAS) {
+      if (rule.test(asked)) add(rule.meal);
+      if (out.length >= count) return out.slice(0, count);
+    }
+
+    for (const place of PLACE_PLATES) {
+      if (!place.test(asked)) continue;
+      for (const meal of place.meals) add(meal);
+      if (out.length >= count) return out.slice(0, count);
+    }
   }
 
-  for (const place of PLACE_PLATES) {
-    if (!place.test(asked)) continue;
-    for (const meal of place.meals) add(meal);
-    if (out.length >= count) return out.slice(0, count);
-  }
-
-  const teach = TEACH_PLATES[topic] || [];
+  const teach = kitchen ? [] : (TEACH_PLATES[topic] || []);
   for (const meal of teach) add(meal);
   if (out.length >= count) return out.slice(0, count);
 
   for (const meal of customMeals || []) {
     add({
-      name: meal.name,
-      desc: meal.desc || "One of your meals.",
+      name: capMealName(meal.name),
+      desc: ingredientDesc(meal) || "One of your meals.",
       cal: meal.cal, p: meal.p ?? meal.protein, c: meal.c ?? meal.carbs, f: meal.f ?? meal.fat,
-      basedOn: meal.name,
+      basedOn: capMealName(meal.name),
+      ingredients: meal.ingredients || [],
+      fromSaved: true,
     });
     if (out.length >= count) return out.slice(0, count);
   }
@@ -498,10 +562,22 @@ export function buildCoachFallbackMeals({
   for (const meal of SAFE_SIMPLE) add(meal);
   for (const meal of VEG_PLATES) add(meal);
   for (const meal of QUICK_PLATES) add(meal);
-  return out.slice(0, count);
+  for (const meal of NO_PREP) add(meal);
+  if (out.length < count) {
+    for (const meal of ALLERGEN_FREE) add(meal);
+  }
+  if (out.length < 1) {
+    const last = asMeal(ALLERGEN_FREE[0], slot);
+    if (last) out.push(last);
+  }
+  const kept = filterCoachMeals(out, { text, profile, skipNames: skip });
+  if (kept.length) return kept.slice(0, count);
+  const last = asMeal(ALLERGEN_FREE[0], slot);
+  return last ? [last] : out.slice(0, count);
 }
 
 export function fallbackMealReply(meals) {
+  if ((meals || []).some((meal) => meal?.fromSaved)) return COACH_LOCAL_PICKS_LINE;
   const names = (meals || []).map((meal) => meal.name).filter(Boolean);
   if (!names.length) return "Here's something simple you can make right now.";
   if (names.length === 1) return `Here's ${names[0]}.`;
@@ -517,11 +593,12 @@ export function padCoachMeals(meals, {
   profile,
   customMeals,
   skipNames = [],
-  count = 1,
+  count = 3,
   safe = false,
   iron = false,
+  priorAsks = [],
 } = {}) {
-  const kept = filterCoachMeals(meals, { text, profile, skipNames });
+  const kept = filterCoachMeals(meals, { text, profile, skipNames, priorAsks });
   if (kept.length >= count) return kept.slice(0, count);
   const extra = buildCoachFallbackMeals({
     text,
@@ -534,11 +611,12 @@ export function padCoachMeals(meals, {
     count,
     safe,
     iron,
+    priorAsks,
   });
-  const seen = new Set(kept.map((meal) => String(meal.name).trim().toLowerCase()));
+  const seen = new Set(kept.map((meal) => mealBaseName(meal.name)).filter(Boolean));
   for (const meal of extra) {
-    const key = String(meal.name).trim().toLowerCase();
-    if (seen.has(key)) continue;
+    const key = mealBaseName(meal.name);
+    if (!key || seen.has(key)) continue;
     kept.push(meal);
     seen.add(key);
     if (kept.length >= count) break;
@@ -546,7 +624,7 @@ export function padCoachMeals(meals, {
   return kept;
 }
 
-/** A food question that came back empty gets these plates and a named reply. */
+/** A food question that came back empty or short gets 2–3 plates and a reply. */
 export function ensureFoodMeals(meals, {
   text,
   slot,
@@ -560,18 +638,79 @@ export function ensureFoodMeals(meals, {
   skipNames = [],
   count = 3,
   iron = false,
+  priorAsks = [],
 } = {}) {
+  const want = Math.max(2, count || 3);
   const list = filterCoachMeals(
     Array.isArray(meals) ? meals.filter((meal) => meal?.name) : [],
-    { text, profile, skipNames },
+    { text, profile, skipNames, priorAsks },
   );
-  if (!force && list.length) return { meals: list, reply, filled: false };
-  const next = buildCoachFallbackMeals({
-    text, slot, mode, topic, profile, customMeals, safe, skipNames, count, iron,
+  if (!force && list.length >= want) {
+    const shownEarly = list.slice(0, want);
+    return {
+      meals: shownEarly,
+      reply: alignReplyToMeals(String(reply || "").trim() || fallbackMealReply(shownEarly), shownEarly),
+      filled: false,
+    };
+  }
+  const next = padCoachMeals(list, {
+    text, slot, mode, topic, profile, customMeals, safe, skipNames, count: want, iron, priorAsks,
   });
+  let kept = filterCoachMeals(next, { text, profile, skipNames, priorAsks });
+  if (!kept.length) {
+    kept = filterCoachMeals(ALLERGEN_FREE.map((meal) => asMeal(meal, slot)).filter(Boolean), {
+      text, profile, skipNames, priorAsks,
+    });
+    if (!kept.length) {
+      const last = asMeal(ALLERGEN_FREE[0], slot);
+      if (last) kept = [last];
+    }
+  }
+  const shown = kept.slice(0, want);
   return {
-    meals: next,
-    reply: String(reply || "").trim() || fallbackMealReply(next),
-    filled: next.length > 0,
+    meals: shown,
+    reply: alignReplyToMeals(String(reply || "").trim() || fallbackMealReply(shown), shown),
+    filled: shown.length > list.length,
   };
+}
+
+export function hideCoachMealMacros(meals) {
+  return (meals || []).map((meal) => ({
+    ...meal,
+    hideMacros: true,
+    cal: 0,
+    p: 0,
+    c: 0,
+    f: 0,
+  }));
+}
+
+function escapeMealName(name) {
+  return String(name || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Keep a reply only when every plate it names is actually shown. */
+export function alignReplyToMeals(reply, meals) {
+  const list = (meals || []).filter((meal) => meal?.name);
+  const text = String(reply || "").trim();
+  if (!list.length) return text;
+  if (!text) return fallbackMealReply(list);
+  const shown = new Set(list.map((meal) => mealBaseName(meal.name)));
+  const here = text.match(/here(?:'s| is| are)\s+([^.]+)/i);
+  if (here) {
+    const bits = here[1].split(/\s*,\s*|\s+or\s+/i).map((part) => part.trim().replace(/[.!?]+$/, ""));
+    for (const bit of bits) {
+      const base = mealBaseName(bit);
+      if (!base || base.length < 4) continue;
+      if (/^(a |an |the )?(next one|few that|few|something|simple plate)/i.test(base)) continue;
+      if (![...shown].some((name) => name === base || name.includes(base) || base.includes(name))) {
+        return fallbackMealReply(list);
+      }
+    }
+  }
+  for (const meal of list) {
+    const re = new RegExp(`\\b${escapeMealName(meal.name)}\\b`, "i");
+    if (re.test(text)) shown.add(mealBaseName(meal.name));
+  }
+  return text;
 }

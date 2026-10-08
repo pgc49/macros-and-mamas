@@ -4,6 +4,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
+import { COACH_COPY } from "../content/coachVoice";
 import { Card } from "../components/ui";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { db } from "../db/db";
@@ -89,6 +90,11 @@ function ChatBubble({ message }) {
         {plates.map((plate) => (
           <div key={`${message.id}-${plate.name}`} style={{ marginTop: 8 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{plate.name}</div>
+            {plate.fromSaved ? (
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.3, color: T.inkSoft, marginTop: 2 }}>
+                {COACH_COPY.adminSavedMeal}
+              </div>
+            ) : null}
             <div style={{ fontSize: 12.5, color: T.inkSoft }}>{plate.macros}</div>
             {plate.reason ? (
               <div style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.45, marginTop: 2 }}>

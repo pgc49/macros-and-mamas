@@ -80,6 +80,7 @@ export function sanitizeCoachContext(raw) {
     skipped: cleanList(raw.skipped, 4, 20).filter((slot) => SLOTS.has(slot)),
     turnedDown: cleanList(raw.turnedDown, 8, 80),
     alreadySuggested: cleanList(raw.alreadySuggested, 12, 80),
+    priorAsks: cleanList(raw.priorAsks, 8, 200),
     notLogging: raw.notLogging === true,
     snackCount: Number.isFinite(snacks) ? Math.max(0, Math.min(4, snacks)) : 1,
   };
@@ -105,10 +106,13 @@ She already turned these down:
 ${listOr(day.turnedDown, "(none)")}
 Already suggested in this chat — don't offer again unless she asks:
 ${listOr(day.alreadySuggested || [], "(none)")}
+What she already said she is sick of or does not want:
+${listOr(day.priorAsks || [], "(none)")}
 Plan around ${snacks} today.
 Do not suggest something she already ate or already turned down, unless she asks for it again.
+Honor foods she said she is sick of, hates, or does not want in earlier turns.
 Only treat a meal as skipped if she said she skipped it.${day.notLogging ? `
-She said she isn't logging. Don't mention logging, numbers or macros again. Give her one plate.` : ""}`;
+She said she isn't logging. Don't mention logging, numbers or macros again. Give her 2–3 different plates.` : ""}`;
 }
 
 function nursingBlock(profile) {
@@ -197,7 +201,7 @@ Callie hasn't finished her numbers. The figures above are working numbers only. 
   }
   if (macrosStatus === "none") {
     return `## Fine-tuning
-Callie has not set her numbers yet. Do not mention calories, protein, carbs, fat, grams, or ranges. Suggest one simple plate from what she said she has. Keep portions ordinary. Card macros may be an honest ingredient sum; the reply has no numbers. Start the reply with: "Callie's still fine-tuning your numbers, so here's an easy one for now."`;
+Callie has not set her numbers yet. Do not mention calories, protein, carbs, fat, grams, or ranges. Suggest 2–3 simple plates from what she said she has. Keep portions ordinary. Card macros may be an honest ingredient sum; the reply has no numbers. Start the reply with: "Callie's still fine-tuning your numbers, so here's an easy one for now."`;
   }
   return "";
 }
@@ -231,8 +235,8 @@ const SHARED_RULES = `## Rules
    Do not force a lunch plate into a breakfast name.
 4. Callie's house style: whole foods, max 2 whole eggs per meal (whites are fine),
    sweeten with honey, maple or applesauce. Choose plates that keep fat inside what's left.
-   Don't talk about protein, fat or weight loss in the reply. A half portion is fine next
-   to a full one, so she can choose. Never tell her to skip a meal.
+   Don't talk about protein, fat or weight loss in the reply. Never tell her to skip a meal.
+   A half portion of the same dish is not a second meal.
 5. "ingredients" is one serving on her plate. "steps" is only what she actually has to do —
    usually 3 to 6 for something cooked, [] when there is nothing to do. Never pad to a count,
    and never end on filler like "enjoy" or "serve and eat".
@@ -249,7 +253,7 @@ const SHARED_RULES = `## Rules
    Do not drop a canned teaching (Oreos, "real food", a
    generic restaurant spiel) unless she asked whether a specific food is allowed.
    If she says she isn't logging or hates tracking, don't mention logging, numbers or
-   macros again in this chat. Give her one plate. Not logging is fine, and it's never
+   macros again in this chat. Give her 2–3 different plates. Not logging is fine, and it's never
    a reason to send her to Callie.
 7. You cannot browse the web. Name a restaurant dish only when that exact name is
    in a "Page text" section in this prompt, or printed on a photo she sent.
@@ -296,9 +300,9 @@ ${String(question || "").trim().slice(0, 600)}
 """
 
 ${SHARED_RULES}
-11. Suggest one plate. A second card only if it's the half portion of that same plate.
-   Give up to 3 only when she asks for options. A question you can answer in a sentence
-   gets a sentence and no cards.
+11. Suggest 2–3 DISTINCT plates. Different dishes, not a full plate and its half.
+   Always include a short intro sentence. Card "desc" lists real ingredients,
+   never repeats the dish name.
 
 Return JSON: ${REPLY_SCHEMA}`;
 }

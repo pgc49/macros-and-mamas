@@ -103,37 +103,53 @@ export function portionTitle(name, servings) {
   return `${base} · ${s} servings`;
 }
 
-export function sourceTag(source) {
+export function sourceTag(source, slot) {
   if (source === "my") return COACH_COPY.sourceMy;
   if (source === "pantry") return COACH_COPY.sourcePantry;
   if (source === "menu") return COACH_COPY.sourceMenu;
   if (source === "kitchen") return COACH_COPY.sourceKitchen;
-  if (source === "new") return COACH_COPY.sourceNew;
+  if (source === "new") {
+    return (COACH_COPY.sourceNewBySlot && COACH_COPY.sourceNewBySlot[slot]) || COACH_COPY.sourceNew;
+  }
   return COACH_COPY.sourceBank;
 }
 
 /** Size — or drop — the plate the way the screen does. */
-export function sizeMealsForPersist(meals, budget, _slot, source) {
+export function sizeMealsForPersist(meals, budget, slot, source) {
   const out = [];
   for (const meal of meals || []) {
     const macros = mealMacros(meal);
     const scale = budget?.cal ? pickScale({ ...meal, ...macros }, budget) : 1;
     if (scale == null) continue;
-    const name = String(meal.name || "").trim();
-    const src = meal.source || source || "";
+    const name = String(meal.name || "").replace(/\s+/g, " ").trim().slice(0, 48);
+    const src = meal.fromSaved ? "my" : (meal.source || source || "");
+    const desc = String(meal.reason || meal.desc || "").trim();
+    const items = (meal.ingredients || [])
+      .map((row) => {
+        if (typeof row === "string") return row.trim();
+        return [row?.amount, row?.item || row?.name].filter(Boolean).join(" ").trim();
+      })
+      .filter(Boolean);
+    const reason = desc && desc.toLowerCase() !== name.toLowerCase()
+      ? desc
+      : (items.length ? items.join(", ") : desc);
     out.push({
       name,
       title: portionTitle(meal.title && scale === 1 ? meal.title : name, scale),
       source: src,
-      tag: meal.tag || sourceTag(src),
+      tag: meal.tag || sourceTag(src, slot),
       id: meal.id || "",
       basedOn: meal.basedOn || null,
+      fromSaved: Boolean(meal.fromSaved),
+      hideMacros: meal.hideMacros === true,
       servings: scale,
-      cal: Math.round(macros.cal * scale),
-      p: Math.round(macros.p * scale),
-      c: Math.round(macros.c * scale),
-      f: Math.round(macros.f * scale),
-      reason: meal.reason || meal.desc || "",
+      cal: meal.hideMacros ? 0 : Math.round(macros.cal * scale),
+      p: meal.hideMacros ? 0 : Math.round(macros.p * scale),
+      c: meal.hideMacros ? 0 : Math.round(macros.c * scale),
+      f: meal.hideMacros ? 0 : Math.round(macros.f * scale),
+      reason,
+      ingredients: meal.ingredients || [],
+      steps: meal.steps || [],
     });
   }
   return out;

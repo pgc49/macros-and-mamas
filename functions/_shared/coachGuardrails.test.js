@@ -173,7 +173,9 @@ describe("milk supply", () => {
   it("does not fire on someone just mentioning that she nurses", () => {
     expect(scopeOf("quick breakfast ideas, I'm nursing so I'm always starving")).toBe("food");
     expect(scopeOf("quick breakfast ideas, I'm nursing and short on time")).toBe("food");
-    expect(classifyAsk("quick breakfast ideas, I'm nursing so I'm always starving").aside).toBe("nursing");
+    expect(classifyAsk("quick breakfast ideas, I'm nursing so I'm always starving").aside).toBeNull();
+    expect(classifyAsk("can i have coffee while nursing").aside).toBeNull();
+    expect(classifyAsk("i hate salmon, what else is good while nursing").aside).toBeNull();
   });
 
   it("answers the next meal when she also feels awful, and keeps shame on its own", () => {
@@ -289,5 +291,23 @@ describe("isMealAsk", () => {
     expect(isMealAsk("can you raise my calories")).toBe(false);
     expect(isMealAsk("I want to die")).toBe(false);
     expect(isMealAsk("write me a poem")).toBe(false);
+  });
+
+  it("defaults leftover food wording to a meal ask", () => {
+    expect(isMealAsk("can I have tacos?")).toBe(true);
+    expect(isMealAsk("what about a sandwich")).toBe(true);
+    expect(isMealAsk("what's healthy at mcdonalds")).toBe(true);
+    expect(isMealAsk("how many almonds can I have?")).toBe(true);
+    expect(isMealAsk("help me plan tomorrow")).toBe(true);
+  });
+});
+
+describe("careful paths", () => {
+  it("routes disordered eating and medication, not ordinary food or off-topic", () => {
+    expect(scopeOf("I've been making myself throw up after meals")).toBe("disordered");
+    expect(scopeOf("I only eat once a day so I lose faster")).toBe("disordered");
+    expect(scopeOf("should I take ibuprofen")).toBe("medication");
+    expect(deflectForScope("disordered")).toBe("disordered");
+    expect(deflectForScope("medication")).toBe("medication");
   });
 });

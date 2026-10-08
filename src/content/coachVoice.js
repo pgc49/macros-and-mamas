@@ -180,7 +180,14 @@ export const COACH_COPY = {
   sourcePantry: "Pantry",
   sourceMenu: "From the menu",
   sourceKitchen: "From your kitchen",
-  sourceNew: "Made for tonight",
+  sourceNew: "Made for you",
+  sourceNewBySlot: {
+    breakfast: "Made for breakfast",
+    lunch: "Made for lunch",
+    dinner: "Made for dinner",
+    snack: "Made for a snack",
+  },
+  adminSavedMeal: "her saved meal",
 
   // Results
   noneFit:
@@ -246,10 +253,18 @@ export const COACH_COPY = {
   skipBreakfastHint:
     "Mornings can be busy, and a small appetite is often a blunted metabolism talking. Try starting with a protein shake if a full breakfast isn't easy yet.",
 
-  // A passing mention of nursing, before the food answer. A supply problem
-  // is still a full handoff — this line is not that.
+  // Only when she raises supply or a supply drop — not every nursing mention.
   nursingPreface:
-    "Callie builds your macros with your supply at the center and it is always protected. If you ever notice a negative shift in your supply, please reach out to Callie directly immediately.",
+    "Callie builds your macros with your supply at the center, and it is always protected. If you ever notice a negative shift in your supply, please reach out to Callie right away.",
+  // Lifecycle: new mama-facing supply strings. Warm first, then the handoff.
+  supplyWarm: "I'm sorry you're dealing with this.",
+  supplyHandoff:
+    "We protect your supply first, always. If you think it's dropping, Callie should hear it from you.",
+  // Lifecycle + Patrick: disordered-eating and medication careful lines.
+  disorderedWarm: "I'm glad you told me.",
+  disorderedHandoff: "This is one Callie needs to hear from you.",
+  medicationLine:
+    "I can't advise on medication. Ask your doctor or pharmacist, and message Callie so she knows.",
   snackAsk:
     "Do you want me to suggest three meals and one snack, or three meals and two snacks? I can make both work with your macros.",
 };
@@ -279,12 +294,23 @@ export const COACH_LIMIT_SPENT =
   "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.";
 export const COACH_FINE_TUNING_LINE =
   "Callie's still fine-tuning your numbers, so here's an easy one for now.";
+export const COACH_LOCAL_PICKS_LINE = "Here are a few that fit what's left.";
 
-export function leadFineTuningReply(reply) {
-  const rest = String(reply || "").trim();
-  if (!rest) return COACH_FINE_TUNING_LINE;
-  if (rest.startsWith(COACH_FINE_TUNING_LINE)) return rest.slice(0, 400);
-  return `${COACH_FINE_TUNING_LINE} ${rest}`.trim().slice(0, 400);
+function normalizeCoachApostrophes(text) {
+  return String(text || "").replace(/[\u2018\u2019\u201B]/g, "'");
+}
+
+export function leadFineTuningReply(reply, { hasPlates = false } = {}) {
+  const lead = normalizeCoachApostrophes(COACH_FINE_TUNING_LINE);
+  const rest = normalizeCoachApostrophes(String(reply || "")).trim();
+  if (!hasPlates) {
+    if (!rest) return "";
+    if (rest.startsWith(lead)) return rest.slice(lead.length).trim().slice(0, 400);
+    return rest.slice(0, 400);
+  }
+  if (!rest) return lead;
+  if (rest.startsWith(lead)) return rest.slice(0, 400);
+  return `${lead} ${rest}`.trim().slice(0, 400);
 }
 
 export function leadLimitReply(reply) {
@@ -334,7 +360,16 @@ export const COACH_DEFLECT = {
   },
   supply: {
     line:
-      `We protect your supply first, always. Your ranges already use the gentler calorie math for that. If you think your supply is being affected, that's something Callie might be better able to answer than me. ${COACH_MESSAGE_HER}`,
+      `${COACH_COPY.supplyWarm} ${COACH_COPY.supplyHandoff} ${COACH_MESSAGE_HER}`,
+    cta: "Message Callie",
+  },
+  disordered: {
+    line:
+      `${COACH_COPY.disorderedWarm} ${COACH_COPY.disorderedHandoff} ${COACH_MESSAGE_HER}`,
+    cta: "Message Callie",
+  },
+  medication: {
+    line: `${COACH_COPY.medicationLine}`,
     cta: "Message Callie",
   },
   again: {

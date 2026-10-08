@@ -120,6 +120,16 @@ describe("loadCoachSelf can work from a draft row", () => {
       { cal: 1800, approved: true },
     ])).toEqual({ row: { cal: 1800, approved: true }, status: "approved" });
   });
+
+  it("picks the newest unapproved row when several drafts exist", () => {
+    expect(pickCoachMacros([
+      { id: "old", cal: 1500, approved: false, created_at: "2026-10-01T00:00:00.000Z" },
+      { id: "new", cal: 1700, approved: false, created_at: "2026-10-08T00:00:00.000Z" },
+    ])).toEqual({
+      row: { id: "new", cal: 1700, approved: false, created_at: "2026-10-08T00:00:00.000Z" },
+      status: "draft",
+    });
+  });
 });
 
 describe("checkAiLimit reserves before the model", () => {

@@ -111,11 +111,13 @@ export function sanitizeCoachCards(cards) {
       tag,
       id,
       basedOn: basedOn || null,
+      fromSaved: card.fromSaved === true,
+      hideMacros: card.hideMacros === true,
       servings: cardServings(card.servings),
-      cal: num(card.cal),
-      p: num(card.p),
-      c: num(card.c),
-      f: num(card.f),
+      cal: card.hideMacros === true ? 0 : num(card.cal),
+      p: card.hideMacros === true ? 0 : num(card.p),
+      c: card.hideMacros === true ? 0 : num(card.c),
+      f: card.hideMacros === true ? 0 : num(card.f),
       reason,
     });
   }
@@ -146,6 +148,7 @@ export function sanitizeCoachReply({
       aside: payload.aside ? String(payload.aside).slice(0, 40) : null,
       teach: payload.teach ? String(payload.teach).slice(0, 40) : null,
       requestId: ticket,
+      ...(payload.limited === true ? { limited: true } : {}),
     };
     if (
       !nextPayload.cards.length
