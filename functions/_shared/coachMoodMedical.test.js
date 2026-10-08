@@ -41,7 +41,10 @@ describe("mood and medical cards", () => {
     expect(meals.length).toBeGreaterThanOrEqual(1);
     expect(meals.length).toBeLessThanOrEqual(2);
     const hay = meals.map((meal) => `${meal.name} ${meal.desc} ${(meal.ingredients || []).map((row) => row.item).join(" ")}`).join(" ").toLowerCase();
-    expect(hay).not.toMatch(/\b(milk|cheese|yogurt|butter|cream|ricotta|mozzarella|parmesan|egg|eggs)\b/);
+    expect(meals.map((meal) => meal.name), hay).not.toEqual([]);
+    expect(hay).not.toMatch(/\b(milk|cheese|butter|ricotta|mozzarella|parmesan|eggs?)\b/);
+    expect(hay).not.toMatch(/\b(?<!dairy-free )yogurt\b/);
+    expect(hay).not.toMatch(/\bcream\b/);
     expect(medicalDeflectLine()).not.toMatch(/chicken|yogurt|rice|toast|eggs?/i);
   });
 });

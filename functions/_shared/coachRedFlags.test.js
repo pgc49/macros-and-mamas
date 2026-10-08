@@ -64,7 +64,6 @@ export const MEDICAL_ASKS = [
   "my incision is red and hot",
   "I haven't eaten all day",
   "I haven't eaten anything all day",
-  "I've been crying all day",
   "my heart is racing",
   "I hurt myself at the gym",
   "I haven't slept for days",
@@ -103,6 +102,12 @@ describe("crisis and postpartum red flags", () => {
       expect(isCrisisUrgent(ask), ask).toBe(false);
       expect(escalateDoor(ask, { scope: "urgent" }), ask).toBe("medical");
     }
+  });
+
+  it("sends crying-all-day to the mood door, not medical", () => {
+    expect(classifyAsk("I've been crying all day").scope).toBe("mood");
+    expect(isCrisisUrgent("I've been crying all day")).toBe(false);
+    expect(escalateDoor("I've been crying all day", { scope: "mood" })).toBe("mood");
   });
 
   it("does not treat food idioms as a crisis", () => {

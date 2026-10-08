@@ -15,7 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import * as Sentry from "@sentry/react";
 import { CoachPanel, pairCoachThread } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
-import { COACH_COPY, COACH_DEFLECT, COACH_DISORDERED_LINE_NOTED, COACH_EMERGENCY_LINE } from "../content/coachVoice";
+import { COACH_COPY, COACH_DEFLECT, COACH_DISORDERED_LINE_NOTED, COACH_EMERGENCY_LINE, moodDeflectLine } from "../content/coachVoice";
 import { localDateIso } from "../utils/dates";
 import { sanitizeCoachCards } from "../../functions/_shared/coachMessages.js";
 
@@ -733,7 +733,7 @@ describe("what isn't the coach's goes to Callie", () => {
       target: { value: "ive been crying every day this week" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    await screen.findByText(COACH_DEFLECT.mood.line);
+    await screen.findByText(moodDeflectLine(true));
     expect(screen.getByRole("button", { name: COACH_DEFLECT.mood.cta })).toBeTruthy();
     expect(screen.queryByText(/I only do food/)).toBeNull();
   });
@@ -1466,20 +1466,26 @@ describe("priority pass: persist, crisis, reload, load error", () => {
   });
 
   it("retries a timeout with the same request id so it is not billed twice", async () => {
-    const postCoach = vi.fn()
-      .mockResolvedValueOnce({ ok: false, timeout: true, message: COACH_COPY.askTimeout })
-      .mockResolvedValueOnce({ ok: true, reply: "Eggs and toast.", meals: [] });
+    let asks = 0;
+    const postCoach = vi.fn(async (body) => {
+      if (body?.mode !== "ask") return { ok: true };
+      asks += 1;
+      if (asks === 1) return { ok: false, timeout: true, message: COACH_COPY.askTimeout };
+      return { ok: true, reply: "Eggs and toast.", meals: [{ name: "Eggs and toast", cal: 310, p: 18, c: 22, f: 14, desc: "Eggs and toast." }] };
+    });
     renderPanel({ postCoach });
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
       target: { value: "what can I make with leftover chicken" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    expect(await screen.findByText(COACH_COPY.askTimeout)).toBeTruthy();
+    expect((await screen.findAllByText(COACH_COPY.askTimeout)).length).toBeGreaterThanOrEqual(1);
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.retryAsk }));
-    await screen.findByText("Eggs and toast.");
-    expect(postCoach).toHaveBeenCalledTimes(2);
-    expect(postCoach.mock.calls[0][0].requestId).toBe(postCoach.mock.calls[1][0].requestId);
-    expect(postCoach.mock.calls[0][0].text).toBe("what can I make with leftover chicken");
+    await waitFor(() => {
+      const askCalls = postCoach.mock.calls.map(([body]) => body).filter((body) => body?.mode === "ask");
+      expect(askCalls).toHaveLength(2);
+      expect(askCalls[0].requestId).toBe(askCalls[1].requestId);
+      expect(askCalls[0].text).toBe("what can I make with leftover chicken");
+    });
   });
 
   it("shows a retry when today's thread fails to load", async () => {

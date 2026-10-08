@@ -154,7 +154,7 @@ export function coachPrefsFromProfile(profile, slot) {
   return {
     diet: profile?.diet || "none",
     dislikes: dislikeTokens({
-      allergens: profile?.allergens,
+      allergens: profile?.allergens || profile?.allergies,
       foodAvoids: profile?.foodAvoids ?? profile?.food_avoids,
       allergenNote: profile?.allergenNote ?? profile?.allergen_note,
     }),

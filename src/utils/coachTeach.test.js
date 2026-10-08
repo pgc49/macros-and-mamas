@@ -132,7 +132,7 @@ describe("a pain point asked a third time", () => {
 describe("the handoff closer", () => {
   it("asks her to message Callie instead of sounding like the bot already did", () => {
     expect(COACH_PASS).toBe(
-      "That's something Callie might be better able to answer than me. Message her and she'll get back to you.",
+      "That's something Callie might be better able to answer than me. Message Callie and she'll get back to you.",
     );
     expect(COACH_PASS).not.toMatch(/I'll pass/i);
   });

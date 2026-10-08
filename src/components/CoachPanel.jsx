@@ -460,6 +460,7 @@ export function CoachPanel({
     try {
       lastAskRef.current = { mode, text, images, requestId, slot: slotForAsk, at: nowMs };
       const data = await postCoach?.({
+        // ask path from send()
         mode,
         text,
         requestId,
@@ -493,7 +494,7 @@ export function CoachPanel({
       if (!data?.ok && !mealsIn.length && !data?.deflect) {
         const message = data?.timeout ? COACH_COPY.askTimeout : (data?.message || "I couldn't get to that. Try me again in a second.");
         setError(message);
-        push({ role: "coach", body: message, kind: "text", requestId }, { persist: true });
+        push({ role: "coach", body: message, kind: "text", requestId }, { persist: false });
         captureCoachFailure({ kind: data?.timeout ? "timeout" : "ask" });
         return;
       }
@@ -603,7 +604,7 @@ export function CoachPanel({
     const requestId = nextAskId();
     if (photo) {
       const kind = resolvePhotoKind(photo.kind, text);
-      const mama = push({
+      push({
         role: "mama",
         body: text || (kind === "menu" ? COACH_COPY.sentMenu : COACH_COPY.sentFridge),
         kind: "photo",
@@ -621,8 +622,9 @@ export function CoachPanel({
     // and does not spend a model call. The server classifies again; this copy
     // is only as trustworthy as the browser.
     const verdict = classifyAsk(text);
-    const mama = push({ role: "mama", body: text, requestId });
-    if (scopeIsRefused(verdict.scope)) {
+    const refused = scopeIsRefused(verdict.scope) || isMoodAsk(text);
+    push({ role: "mama", body: text, requestId });
+    if (refused) {
       const deflect = deflectForScope(verdict.scope, text);
       const crisis = deflect === "emergency" || isCrisisUrgent(text);
       const hideNumbers = verdict.scope === "disordered"
@@ -675,6 +677,7 @@ export function CoachPanel({
         cards: extra,
         requestId,
       }, { persist: false });
+      setBusy(false);
       return;
     }
 
@@ -692,6 +695,7 @@ export function CoachPanel({
         noteEscalation(text, "stuck", requestId);
         // Server persists the stuck handoff. Do not record it again here.
         push({ role: "coach", body: "", kind: "deflect", deflect: "again", requestId }, { persist: false });
+        setBusy(false);
         return;
       }
       const carbsShort = answer?.bands
@@ -747,6 +751,7 @@ export function CoachPanel({
           console.error("coach teach persist failed", error);
         });
       }
+      setBusy(false);
       return;
     }
 
@@ -759,6 +764,7 @@ export function CoachPanel({
       if (intent.kind === "read") answerWithRead({ echo: false, aside: verdict.aside });
       else if (intent.kind === "more") showMore({ echo: false });
       else answerWithCards({ prefer: intent.prefer, slot: intent.slot, echo: false, aside: verdict.aside });
+      setBusy(false);
       return;
     }
 

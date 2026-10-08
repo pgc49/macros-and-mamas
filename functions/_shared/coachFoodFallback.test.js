@@ -148,7 +148,7 @@ describe("alignReplyToMeals", () => {
     expect(alignReplyToMeals(
       "Those leftovers can wait. Here's Grilled chicken and rice, Turkey skillet, or Salmon and rice.",
       meals,
-    )).toBe("Those leftovers can wait. Or Turkey skillet or Salmon and rice.");
+    )).toBe("Those leftovers can wait. If you'd rather, there's also Turkey skillet or Salmon and rice.");
     expect(alignReplyToMeals(
       "Here's Grilled chicken and rice, Leftover chicken and rice, or Chicken thighs and rice.",
       meals,

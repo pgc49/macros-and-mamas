@@ -59,9 +59,8 @@ function alreadyHadFood(asked, food) {
 export function extractAskConstraints(text = "", profile = null, { currentAsk = null } = {}) {
   const asked = String(text || "").toLowerCase();
   const current = String(currentAsk != null ? currentAsk : text || "").toLowerCase();
-  const allergens = Array.isArray(profile?.allergens)
-    ? profile.allergens.map((item) => String(item).toLowerCase())
-    : [];
+  const allergens = (Array.isArray(profile?.allergens) ? profile.allergens : Array.isArray(profile?.allergies) ? profile.allergies : [])
+    .map((item) => String(item).toLowerCase());
   const avoids = String(profile?.foodAvoids || profile?.food_avoids || "").toLowerCase();
   const allergenNote = String(profile?.allergenNote || profile?.allergen_note || "").toLowerCase();
   const diet = String(profile?.diet || "").toLowerCase();
@@ -75,7 +74,9 @@ export function extractAskConstraints(text = "", profile = null, { currentAsk = 
       || avoidsFood(asked, "cottage cheese")
       || alreadyHadFood(current, "cottage cheese"),
     noChicken: avoidsFood(asked, "chicken") || alreadyHadFood(current, "chicken"),
-    noEggs: avoidsFood(asked, "eggs")
+    noEggs: allergens.includes("eggs")
+      || allergens.includes("egg")
+      || avoidsFood(asked, "eggs")
       || avoidsFood(asked, "egg")
       || alreadyHadFood(current, "eggs")
       || alreadyHadFood(current, "egg")

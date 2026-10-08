@@ -98,7 +98,7 @@ export const MAX_SUMMARY_ESCALATES = 5;
 export const MAX_MEDICAL_ESCALATES_PER_DAY = 3;
 
 export const MAX_SUMMARY_CHARS = 8000;
-export const MAX_LINE_CHARS = 295;
+export const MAX_LINE_CHARS = 265;
 export const MAX_SUPPLY_ESCALATES_PER_DAY = 3;
 export const MAX_DISORDERED_ESCALATES_PER_DAY = 3;
 export const MAX_MEDICATION_ESCALATES_PER_DAY = 3;

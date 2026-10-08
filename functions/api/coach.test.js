@@ -1626,7 +1626,7 @@ describe("ask persists the server's own reply", () => {
     expect(resp.status).toBe(200);
     const card = coachMessagePosts()[0].payload.cards[0];
     expect(card.servings).toBe(2);
-    expect(card.title).toBe("Salmon bowl · 2 servings");
+    expect(card.title).toBe("Salmon bowl · a double portion");
     expect(card.cal).toBe(560);
     expect(card.p).toBe(56);
   });
@@ -2107,13 +2107,13 @@ describe("reviewer follow-ups", () => {
 
   it("keeps the model's Callie hand-back on unclear questions", async () => {
     const asks = [
-      "I keep crying and I don't know why",
-      "I feel really down lately",
-      "my c-section scar is oozing",
-      "I have a UTI",
-      "how do I get my baby to sleep",
+      ["I keep crying and I don't know why", "mood"],
+      ["I feel really down lately", "mood"],
+      ["my c-section scar is oozing", "medical"],
+      ["I have a UTI", "medical"],
+      ["how do I get my baby to sleep", "offTopic"],
     ];
-    for (const text of asks) {
+    for (const [text, deflect] of asks) {
       mockSupabase();
       modelReturns({ scope: "callie", reply: "That's Callie's." });
       const resp = await onRequestPost({
@@ -2122,8 +2122,10 @@ describe("reviewer follow-ups", () => {
       });
       const data = await resp.json();
       expect(resp.status, text).toBe(200);
-      expect(data.deflect, text).toBe("offTopic");
-      expect(data.meals || [], text).toEqual([]);
+      expect(data.deflect, text).toBe(deflect);
+      if (deflect === "offTopic" || deflect === "mood") {
+        expect(data.meals || [], text).toEqual([]);
+      }
     }
   });
 
