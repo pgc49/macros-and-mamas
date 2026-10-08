@@ -144,6 +144,7 @@ export function sizeMealsForPersist(meals, budget, slot, source) {
       title: portionTitle(meal.title && scale === 1 ? meal.title : name, scale),
       source: src,
       tag: meal.tag || sourceTag(src, slot),
+      slot: slot || meal.slot || null,
       id: meal.id || "",
       basedOn: meal.basedOn || null,
       fromSaved: Boolean(meal.fromSaved),

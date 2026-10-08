@@ -528,8 +528,11 @@ describe("the coach answers on the device", () => {
 
     await screen.findByText("Chicken and rice tonight.");
     expect(postCoach.mock.calls[0][0].slot).toBe("dinner");
-    const logs = screen.getAllByRole("button", { name: COACH_COPY.logIt });
-    fireEvent.click(logs[logs.length - 1]);
+    const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    const titles = [...latestTurn.querySelectorAll("[data-testid='coach-card-title']")];
+    const idx = titles.findIndex((node) => /Chicken and rice/i.test(node.textContent));
+    expect(idx).toBeGreaterThanOrEqual(0);
+    fireEvent.click(within(latestTurn).getAllByRole("button", { name: COACH_COPY.logIt })[idx]);
     await waitFor(() => expect(onLogCard).toHaveBeenCalled());
     const card = onLogCard.mock.calls.at(-1)[0];
     expect(card.name).toMatch(/Chicken and rice/);
@@ -1433,7 +1436,7 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
     await screen.findByText(COACH_DEFLECT.emergency.line);
     expect(screen.getByRole("button", { name: COACH_DEFLECT.emergency.cta })).toBeTruthy();
-    const crisisTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    const crisisTurn = screen.getByText(COACH_DEFLECT.emergency.line).closest("[data-coach-turn='coach']");
     expect(crisisTurn?.querySelectorAll("[data-testid='coach-card-title']")).toHaveLength(0);
     expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
       mode: "ask",

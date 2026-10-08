@@ -5,11 +5,8 @@ import { LIVE_TABLE_COLUMNS, postgrestColumnsFromUrl } from "./postgrestFake.js"
 
 function sourceUrls(src) {
   const urls = [];
-  for (const match of String(src).matchAll(/`([^`]*\/rest\/v1\/[^`]+)`/g)) {
-    urls.push(match[1]);
-  }
-  for (const match of String(src).matchAll(/"([^"]*\/rest\/v1\/[^"]+)"/g)) {
-    urls.push(match[1]);
+  for (const match of String(src).matchAll(/\/rest\/v1\/[a-z0-9_]+(?:\?[^`"'\s]+)?/gi)) {
+    urls.push(match[0]);
   }
   return urls;
 }

@@ -12,7 +12,7 @@ import {
   hideCoachMealMacros,
   warmMealReply,
 } from "./coachFoodFallback.js";
-import { filterCoachMeals, ingredientList, mealHaystack } from "./coachMealFilter.js";
+import { ingredientList, mealHaystack } from "./coachMealFilter.js";
 import { sizeMealsForPersist, sourceTag } from "./coachPlateScale.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { coachSlotFromTime } from "../../src/utils/mealSlots.js";

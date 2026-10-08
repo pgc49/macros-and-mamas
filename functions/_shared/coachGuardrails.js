@@ -233,7 +233,8 @@ const FOOD_ASK = new RegExp(
     "\\bleftovers?\\b", "\\bchicken\\b", "\\bturkey\\b", "\\bsalmon\\b", "\\beggs?\\b",
     "\\byogurt\\b", "\\bpasta\\b", "\\brice\\b", "\\beaten\\b", "\\bate\\b", "\\bstarv(ing|ed)?\\b",
     "\\bsmoothie\\b", "\\bpizza\\b", "\\bcookies?\\b", "\\bcottage cheese\\b", "\\bvegetarian\\b",
-    "\\btortillas?\\b",
+    "\\btortillas?\\b", "\\btacos?\\b", "\\bsandwich(?:es)?\\b", "\\balmonds?\\b",
+    "\\bmcdonalds\\b",
   ].join("|"),
   "i",
 );
@@ -348,7 +349,7 @@ export function scopeIsRefused(scope) {
   return scope !== "food" && scope !== "unclear";
 }
 
-const PLATE_ASK = /\b(eat|eating|eaten|ate|meal|lunch|dinner|breakfast|snack|hungry|starving|cook|fridge|menu|order|recipe|plate|dish|chicken|eggs?|salmon|yogurt|leftover|ideas|pizza|italian|chinese|sushi|taco|burger|smoothie|vegetarian|swap|surprise me|something new)\b/i;
+const PLATE_ASK = /\b(eat|eating|eaten|ate|meal|lunch|dinner|breakfast|snack|hungry|starving|cook|fridge|menu|order|recipe|plate|dish|chicken|eggs?|salmon|yogurt|leftover|ideas|pizza|italian|chinese|sushi|tacos?|burgers?|sandwich(?:es)?|smoothie|vegetarian|swap|surprise me|something new|mcdonalds|almonds?|chipotle|thai|takeout|help me plan|plan tomorrow)\b/i;
 const MEAL_TEACH_HINT = new Set([
   "italian", "chinese", "sushi", "pizzaMeal", "inNOut", "psMethod",
   "neverSkip", "realFood", "underDay", "fasting", "coffee",

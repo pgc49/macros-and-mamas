@@ -124,6 +124,12 @@ export function mealBreaksSavedPrefs(meal, profile = null) {
   return false;
 }
 
+function askNamesThisPlate(text, name) {
+  const hay = String(text || "").toLowerCase();
+  const key = String(name || "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  return key.length >= 6 && hay.includes(key);
+}
+
 export function filterCoachMeals(meals, {
   text = "",
   profile = null,
@@ -131,7 +137,7 @@ export function filterCoachMeals(meals, {
   priorAsks = [],
 } = {}) {
   const constraints = extractAskConstraints(constraintTextFrom(text, priorAsks), profile, { currentAsk: text });
-  const skip = (skipNames || []).map((item) => String(item || "").trim()).filter(Boolean);
+  const skip = (skipNames || []).map((item) => String(item || "").trim()).filter((item) => !askNamesThisPlate(text, item));
   return (Array.isArray(meals) ? meals : []).filter((meal) => (
     meal?.name
     && !mealBreaksConstraints(meal, constraints, skip)

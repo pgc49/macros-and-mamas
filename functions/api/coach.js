@@ -99,6 +99,11 @@ const LOG_NAG = /\b(log it|pencil in|save to my meals|don't forget to log|log th
 function wantsFoodFill(text, { mode, scope, crisis = false, topic = null } = {}) {
   if (crisis || isCrisisUrgent(text)) return false;
   if (scope === "off_topic" || scope === "ranges" || scope === "weight" || scope === "admin") return false;
+  // Careful-path design: supply / medical / disordered / medication still
+  // get safe plates. Unclear does not — that stays a Callie handoff.
+  if (scope === "urgent" || scope === "supply" || scope === "disordered" || scope === "medication") {
+    return true;
+  }
   if (isMealAsk(text, { mode, topic })) return true;
   return false;
 }
