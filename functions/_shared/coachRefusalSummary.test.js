@@ -129,11 +129,52 @@ describe("a refusal line is factual", () => {
       return new Response("[]", { status: 200 });
     });
     const result = await appendCoachRefusal(env, "profile-1", {
-      asked: "I fainted after lunch",
+      asked: "I have a fever",
       scope: "urgent",
     });
     expect(result).toEqual({ ok: true, capped: true });
     expect(posts).toHaveLength(0);
+  });
+
+  it("keeps a same-day medical line and a later distinct crisis line", async () => {
+    const tenAmPt = new Date("2026-10-08T17:00:00.000Z");
+    const eightPmPt = new Date("2026-10-09T03:00:00.000Z");
+    expect(coachSummaryDateIso(tenAmPt)).toBe("2026-10-08");
+    expect(coachSummaryDateIso(eightPmPt)).toBe("2026-10-08");
+    let summary = "";
+    const env = {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service",
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (String(url).includes("append_coach_refusal_line")) {
+        const body = JSON.parse(init.body);
+        if (summary.includes(body.p_line)) {
+          return new Response(JSON.stringify({ ok: true, unchanged: true }), { status: 200 });
+        }
+        const n = countRefusalDoorLines(summary, body.p_door);
+        if (n >= body.p_max) {
+          return new Response(JSON.stringify({ ok: true, capped: true }), { status: 200 });
+        }
+        summary = mergeRefusalSummary(summary, body.p_line);
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+    const migraine = await appendCoachRefusal(env, "profile-1", {
+      asked: "I have a migraine",
+      scope: "urgent",
+      now: tenAmPt,
+    });
+    const crisis = await appendCoachRefusal(env, "profile-1", {
+      asked: "I want to die",
+      scope: "urgent",
+      now: eightPmPt,
+    });
+    expect(migraine).toEqual({ ok: true });
+    expect(crisis).toEqual({ ok: true });
+    expect(summary).toContain("Coach refused (medical): I have a migraine");
+    expect(summary).toContain("Coach refused (crisis): I want to die");
   });
 
   it("still caps stuck repeats so one mama cannot flood the card", async () => {

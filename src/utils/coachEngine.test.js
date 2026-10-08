@@ -18,6 +18,7 @@ import {
   unmatchedCoachPencils,
 } from "./coachBudget.js";
 import { buildCoachCard, cardsWithShownReason, coachReason, firstPaintPlates, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason } from "./coachRank.js";
+import { sizeMealsForPersist } from "./coachPlateScale.js";
 import { buildCoachAnswer, pruneStaleMyMealCards, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
 import { nextCustomMeals } from "./coachMyMeals.js";
 import { coachSlotFromTime } from "./mealSlots.js";
@@ -115,6 +116,39 @@ describe("protein is a floor, not a wall", () => {
     });
     expect(budget.pNeed).toBeLessThan(45);
     expect(pickScale({ name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }, budget)).toBe(1);
+  });
+
+  it("drops or sizes the same nine plates the screen would", () => {
+    const dinner = budgetFor({ cal: 900, p: 120, c: 80, f: 25 }, {
+      slot: "dinner",
+      loggedSlots: new Set(["breakfast", "lunch"]),
+    });
+    const hungry = budgetFor({ cal: 300, p: 15, c: 25, f: 8 }, {
+      slot: "dinner",
+      loggedSlots: new Set(["breakfast", "lunch"]),
+    });
+    const cases = [
+      { label: "1x fits, protein covered", meal: { name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }, budget: dinner },
+      { label: "1x fits, protein short so upscale", meal: { name: "Small plate", cal: 300, p: 22, c: 20, f: 8 }, budget: hungry },
+      { label: "1x fits, stay 1 when protein is already covered", meal: { name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }, budget: dinner },
+      { label: "half when only half fits", meal: { name: "Big bowl", cal: dinner.cal + 40, p: 40, c: 40, f: Math.max(1, dinner.f - 2) }, budget: dinner },
+      { label: "drop calories", meal: { name: "Huge", cal: 2000, p: 40, c: 40, f: 20 }, budget: dinner },
+      { label: "drop fat", meal: { name: "Fatty", cal: 400, p: 40, c: 10, f: 90 }, budget: dinner },
+      { label: "keep carby when fat fits", meal: { name: "Carby", cal: 400, p: 10, c: 200, f: 5 }, budget: dinner },
+      { label: "drop when neither 1 nor 0.5 fits", meal: { name: "Giant", cal: 5000, p: 80, c: 80, f: 80 }, budget: dinner },
+      { label: "no calorie budget keeps 1", meal: { name: "Anything", cal: 2000, p: 40, c: 40, f: 90 }, budget: { pNeed: 40 } },
+    ];
+    expect(cases).toHaveLength(9);
+    for (const { label, meal, budget } of cases) {
+      const scale = budget?.cal ? pickScale(meal, budget) : 1;
+      const saved = sizeMealsForPersist([meal], budget, "dinner", "bank");
+      if (scale == null) {
+        expect(saved, label).toEqual([]);
+      } else {
+        expect(saved, label).toHaveLength(1);
+        expect(saved[0].servings, label).toBe(scale);
+      }
+    }
   });
 
   it("still offers a bigger portion when the single serving leaves her short", () => {

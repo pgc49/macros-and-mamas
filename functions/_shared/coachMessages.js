@@ -34,6 +34,40 @@ export function clampCoachRequestId(value) {
   return isCoachRequestId(ticket) ? ticket : crypto.randomUUID();
 }
 
+/** Exact mama insert body. Live 080000 only accepts payload null or {}. */
+export function mamaCoachInsertRow({
+  profileId,
+  body = "",
+  kind = "text",
+  localDate = null,
+  requestId = null,
+} = {}) {
+  return {
+    profile_id: profileId,
+    role: "mama",
+    body: String(body || "").slice(0, 4000),
+    kind: kind === "photo" ? "photo" : "text",
+    payload: null,
+    local_date: localDate,
+    request_id: isCoachRequestId(requestId) ? String(requestId).trim() : null,
+  };
+}
+
+/** Mirrors coach_messages_insert_own_mama + the insert trigger. */
+export function mamaInsertPassesPolicy(row) {
+  if (!row || row.role !== "mama") return false;
+  if (row.kind !== "text" && row.kind !== "photo") return false;
+  if (row.payload != null && !(
+    typeof row.payload === "object"
+    && !Array.isArray(row.payload)
+    && Object.keys(row.payload).length === 0
+  )) {
+    return false;
+  }
+  if (row.request_id != null && !isCoachRequestId(row.request_id)) return false;
+  return true;
+}
+
 function clipCardText(value, max) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
@@ -86,9 +120,13 @@ export function sanitizeCoachReply({
   payload = null,
   localDate = null,
   source = "server",
+  requestId = null,
 } = {}) {
   const nextKind = COACH_KINDS.has(kind) ? kind : "text";
   const nextSource = source === "client" ? "client" : "server";
+  const ticket = isCoachRequestId(requestId)
+    ? String(requestId).trim()
+    : (isCoachRequestId(payload?.requestId) ? String(payload.requestId).trim() : null);
   let nextPayload = null;
   if (payload && typeof payload === "object" && !Array.isArray(payload)) {
     const deflect = nextSource === "client"
@@ -99,7 +137,7 @@ export function sanitizeCoachReply({
       deflect,
       aside: payload.aside ? String(payload.aside).slice(0, 40) : null,
       teach: payload.teach ? String(payload.teach).slice(0, 40) : null,
-      requestId: isCoachRequestId(payload.requestId) ? String(payload.requestId).trim() : null,
+      requestId: ticket,
     };
     if (
       !nextPayload.cards.length
@@ -118,6 +156,7 @@ export function sanitizeCoachReply({
     body: String(body || "").slice(0, 4000),
     kind: nextKind,
     payload: nextPayload,
+    request_id: ticket,
     local_date: /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null,
   };
 }
@@ -197,7 +236,7 @@ export async function insertCoachReply(env, userId, message) {
       apikey: key,
       authorization: `Bearer ${key}`,
       "content-type": "application/json",
-      prefer: "return=minimal",
+      prefer: "return=representation",
     },
     body: JSON.stringify({
       profile_id: userId,
@@ -206,6 +245,7 @@ export async function insertCoachReply(env, userId, message) {
       body: row.body,
       kind: row.kind,
       payload: row.payload,
+      request_id: row.request_id,
       local_date: row.local_date || coachSummaryDateIso(),
     }),
   });
@@ -213,27 +253,37 @@ export async function insertCoachReply(env, userId, message) {
     console.error("coach reply persist failed", write.status);
     return { ok: false };
   }
-  return { ok: true };
+  const saved = await write.json().catch(() => null);
+  const inserted = Array.isArray(saved) ? saved[0] : saved;
+  return { ok: true, id: inserted?.id || null };
+}
+
+export function painTeachCounts(rows, topic) {
+  const list = Array.isArray(rows) ? rows : [];
+  const match = (row) => row?.payload?.teach === topic || row?.payload?.deflect === topic;
+  const server = list.filter((row) => row?.source === "server" && match(row)).length;
+  const client = Math.min(2, list.filter((row) => row?.source === "client" && match(row)).length);
+  return { server, client, total: server + client };
+}
+
+export function isStuckPainCount(counts) {
+  return Boolean(counts && counts.total >= 2 && counts.server >= 1);
 }
 
 export async function countPainTeachToday(env, userId, topic, now = new Date()) {
-  if (!userId || !topic) return 0;
+  if (!userId || !topic) return { server: 0, client: 0, total: 0 };
   const base = (env?.SUPABASE_URL || env?.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = env?.SUPABASE_SERVICE_ROLE_KEY;
-  if (!base || !key) return 0;
+  if (!base || !key) return { server: 0, client: 0, total: 0 };
   const day = coachSummaryDateIso(now);
   const url = `${base}/rest/v1/coach_messages?profile_id=eq.${encodeURIComponent(userId)}`
-    + `&local_date=eq.${encodeURIComponent(day)}&role=eq.coach&source=eq.server&select=source,payload`;
+    + `&local_date=eq.${encodeURIComponent(day)}&role=eq.coach&select=source,payload`;
   const read = await fetch(url, {
     headers: { apikey: key, authorization: `Bearer ${key}` },
   });
-  if (!read.ok) return 0;
+  if (!read.ok) return { server: 0, client: 0, total: 0 };
   const rows = await read.json().catch(() => []);
-  if (!Array.isArray(rows)) return 0;
-  return rows.filter((row) => (
-    row?.source === "server"
-    && (row?.payload?.teach === topic || row?.payload?.deflect === topic)
-  )).length;
+  return painTeachCounts(rows, topic);
 }
 
 export async function persistServerCoach(env, userId, requestBody, message) {
@@ -242,6 +292,7 @@ export async function persistServerCoach(env, userId, requestBody, message) {
       ...message,
       localDate: message.localDate || replyLocalDate(requestBody),
       source: "server",
+      requestId: message.requestId || message.payload?.requestId || requestBody?.requestId,
     });
   } catch (error) {
     console.error("coach persist failed", error);

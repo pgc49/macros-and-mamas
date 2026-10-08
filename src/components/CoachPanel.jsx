@@ -53,6 +53,12 @@ export function pairCoachThread(rows = []) {
     && askId
     && other.requestId === askId
   ));
+  const orderMate = (role, skip) => list.findIndex((other, j) => (
+    !used.has(j)
+    && j !== skip
+    && other?.role === role
+    && !other.requestId
+  ));
   for (let i = 0; i < list.length; i += 1) {
     const row = list[i];
     if (used.has(i)) continue;
@@ -60,15 +66,15 @@ export function pairCoachThread(rows = []) {
     if (row?.role === "mama") {
       out.push(row);
       used.add(i);
-      const mate = mateOf("coach", askId, i);
+      const mate = askId ? mateOf("coach", askId, i) : orderMate("coach", i);
       if (mate >= 0) {
         out.push(list[mate]);
         used.add(mate);
       }
       continue;
     }
-    if (row?.role === "coach" && askId) {
-      const mate = mateOf("mama", askId, i);
+    if (row?.role === "coach") {
+      const mate = askId ? mateOf("mama", askId, i) : orderMate("mama", i);
       if (mate >= 0) {
         out.push(list[mate]);
         used.add(mate);
@@ -160,9 +166,10 @@ export function CoachPanel({
   const loadGenRef = useRef(0);
   const lastAskRef = useRef(null);
 
-  const refreshClock = () => {
-    onClockRefresh?.();
-    if (!now) clockRef.current = new Date();
+  const refreshClock = (instant = new Date()) => {
+    clockRef.current = instant;
+    onClockRefresh?.(instant);
+    return instant;
   };
 
   const nextAskId = () => {
@@ -228,7 +235,7 @@ export function CoachPanel({
           cards: r.payload?.cards || [],
           deflect: r.payload?.deflect || null,
           aside: r.payload?.aside || null,
-          requestId: r.payload?.requestId || null,
+          requestId: r.requestId || r.payload?.requestId || null,
         }));
         setThread(pairCoachThread(mapped));
         if (mapped.some((row) => String(row.body || "").includes(COACH_COPY.skipNotice))) {
@@ -257,7 +264,8 @@ export function CoachPanel({
   }, [thread.length, busy]);
 
   const push = (message, { persist = true } = {}) => {
-    const entry = { id: nextId(), ...message };
+    const localId = nextId();
+    const entry = { id: localId, ...message };
     setThread((list) => [...list, entry]);
     const pending = persist && onAppendMessage
       ? Promise.resolve(onAppendMessage({
@@ -266,16 +274,26 @@ export function CoachPanel({
         kind: message.kind || "text",
         template: message.template || (message.role === "coach" ? "local.text" : null),
         topic: message.teach || null,
-        payload: message.cards?.length || message.deflect || message.aside || message.teach || message.requestId
-          ? {
-            cards: message.cards || [],
-            deflect: message.deflect || null,
-            aside: message.aside || null,
-            teach: message.teach || null,
-            requestId: message.requestId || null,
-          }
-          : null,
-      })).catch((error) => {
+        requestId: message.requestId || null,
+        payload: message.role === "mama"
+          ? null
+          : (message.cards?.length || message.deflect || message.aside || message.teach
+            ? {
+              cards: message.cards || [],
+              deflect: message.deflect || null,
+              aside: message.aside || null,
+              teach: message.teach || null,
+            }
+            : null),
+      })).then((saved) => {
+        if (saved?.id) {
+          entry.id = saved.id;
+          setThread((list) => list.map((row) => (
+            row === entry || row.id === localId ? { ...row, id: saved.id } : row
+          )));
+        }
+        return saved;
+      }).catch((error) => {
         captureCoachFailure({ kind: "persist" });
         console.error("coach persist failed", error);
       })
@@ -300,7 +318,7 @@ export function CoachPanel({
       slot: slot || slotOverride,
       prefer,
       skipNames,
-      now: clock,
+      now: clockRef.current,
     });
 
     if (echo) push({ role: "mama", body: askLabel });
@@ -450,7 +468,11 @@ export function CoachPanel({
       requestId,
     };
     if (escalate) payload.escalate = escalate;
-    Promise.resolve(postCoach?.(payload)).catch((error) => {
+    Promise.resolve(postCoach?.(payload)).then((result) => {
+      if (result && result.ok === false) {
+        captureCoachFailure({ kind: "note", status: result.status || null });
+      }
+    }).catch((error) => {
       captureCoachFailure({ kind: "note" });
       console.error("coach note failed", error);
     });
@@ -516,8 +538,24 @@ export function CoachPanel({
         kind: "teach",
         teach: teach.topic,
         aside: verdict.aside,
-        template: "local.teach",
-      });
+        requestId,
+        template: PAIN_TOPICS.has(teach.topic) ? null : "local.teach",
+      }, { persist: !PAIN_TOPICS.has(teach.topic) });
+      if (PAIN_TOPICS.has(teach.topic)) {
+        Promise.resolve(postCoach?.({
+          mode: "ask",
+          text,
+          requestId,
+          localDate: localDateIso(clockRef.current),
+        })).then((result) => {
+          if (result && result.ok === false) {
+            captureCoachFailure({ kind: "persist", status: result.status || null });
+          }
+        }).catch((error) => {
+          captureCoachFailure({ kind: "persist" });
+          console.error("coach teach persist failed", error);
+        });
+      }
       return;
     }
 
@@ -903,6 +941,7 @@ export function CoachPanel({
               style={chipBtn}
               disabled={busy}
               onClick={() => {
+                refreshClock();
                 if (q.kind === "cards") answerWithCards({ askLabel: q.label });
                 else if (q.kind === "read") answerWithRead({ askLabel: q.label });
                 else pickPhoto(q.photo);

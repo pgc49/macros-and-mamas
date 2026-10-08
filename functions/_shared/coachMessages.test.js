@@ -7,6 +7,10 @@ import {
   countPainTeachToday,
   insertCoachReply,
   isCoachRequestId,
+  isStuckPainCount,
+  mamaCoachInsertRow,
+  mamaInsertPassesPolicy,
+  painTeachCounts,
   replyLocalDate,
   sanitizeCoachCards,
   sanitizeCoachReply,
@@ -167,9 +171,40 @@ describe("clampCoachRequestId", () => {
   });
 });
 
+describe("mama insert contract", () => {
+  it("builds the exact db.js body and the policy accepts it", () => {
+    const body = mamaCoachInsertRow({
+      profileId: "00000000-0000-4000-8000-000000000010",
+      body: "what should I eat",
+      kind: "text",
+      localDate: "2026-10-08",
+      requestId: "ask-live01",
+    });
+    expect(body).toEqual({
+      profile_id: "00000000-0000-4000-8000-000000000010",
+      role: "mama",
+      body: "what should I eat",
+      kind: "text",
+      payload: null,
+      local_date: "2026-10-08",
+      request_id: "ask-live01",
+    });
+    expect(mamaInsertPassesPolicy(body)).toBe(true);
+    expect(mamaInsertPassesPolicy({
+      ...body,
+      payload: { requestId: "ask-live01" },
+    })).toBe(false);
+    expect(mamaInsertPassesPolicy({
+      ...body,
+      request_id: "ask-1",
+    })).toBe(false);
+  });
+});
+
 describe("countPainTeachToday", () => {
-  it("counts only server-written teach rows, not recorded client ones", async () => {
+  it("counts up to two client teaches plus every server teach", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify([
+      { source: "client", payload: { teach: "neverSkip" } },
       { source: "client", payload: { teach: "neverSkip" } },
       { source: "client", payload: { teach: "neverSkip" } },
       { source: "server", payload: { teach: "neverSkip" } },
@@ -179,8 +214,13 @@ describe("countPainTeachToday", () => {
       SUPABASE_SERVICE_ROLE_KEY: "service-key",
     };
     const count = await countPainTeachToday(env, "mama-1", "neverSkip", new Date("2026-10-08T18:00:00.000Z"));
-    expect(count).toBe(1);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("source=eq.server");
+    expect(count).toEqual({ server: 1, client: 2, total: 3 });
+    expect(isStuckPainCount(count)).toBe(true);
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("source=eq.server");
+    expect(isStuckPainCount(painTeachCounts([
+      { source: "client", payload: { teach: "neverSkip" } },
+      { source: "client", payload: { teach: "neverSkip" } },
+    ], "neverSkip"))).toBe(false);
     fetchMock.mockRestore();
   });
 });
@@ -194,7 +234,7 @@ describe("replyLocalDate", () => {
 
 describe("insertCoachReply", () => {
   it("writes a coach-role row with the service role, never the mama JWT", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify([{ id: "row-1" }]), { status: 201 }));
     const env = {
       SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service-key",
@@ -206,7 +246,7 @@ describe("insertCoachReply", () => {
       localDate: "2026-10-08",
       source: "server",
     });
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, id: "row-1" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/rest/v1/coach_messages");
@@ -217,6 +257,7 @@ describe("insertCoachReply", () => {
     expect(body.role).toBe("coach");
     expect(body.source).toBe("server");
     expect(body.kind).toBe("cards");
+    expect(body.request_id).toBeNull();
     expect(body.created_at).toBeUndefined();
     expect(body.seq).toBeUndefined();
     expect(body.hidden_at).toBeUndefined();

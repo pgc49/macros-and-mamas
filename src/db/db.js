@@ -21,6 +21,7 @@ import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { ageFromDateOfBirth } from "../utils/dateOfBirth";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
 import { preserveRefusalLines } from "../../functions/_shared/coachRefusalSummary.js";
+import { mamaCoachInsertRow } from "../../functions/_shared/coachMessages.js";
 import { roundMealLogMacros } from "../utils/mealLogMacros";
 
 export { ageFromDateOfBirth };
@@ -173,6 +174,7 @@ function mapCoachMessageRow(r) {
     body: r.body || "",
     kind: r.kind || "text",
     payload: r.payload || null,
+    requestId: r.request_id || r.payload?.requestId || null,
     localDate: r.local_date || null,
     createdAt: r.created_at,
     hiddenAt: r.hidden_at || null,
@@ -3581,7 +3583,7 @@ export const db = {
     const uid = await requireUserId();
     const { data, error } = await supabase
       .from("coach_messages")
-      .select("id, role, body, kind, payload, local_date, created_at, hidden_at, seq, source")
+      .select("id, role, body, kind, payload, request_id, local_date, created_at, hidden_at, seq, source")
       .eq("profile_id", uid)
       .eq("local_date", localDate || localDateIso())
       .is("hidden_at", null)
@@ -3604,7 +3606,7 @@ export const db = {
     if (!clientId) throw new Error("clientId required");
     const { data, error } = await supabase
       .from("coach_messages")
-      .select("id, role, body, kind, payload, local_date, created_at, hidden_at, seq, source")
+      .select("id, role, body, kind, payload, request_id, local_date, created_at, hidden_at, seq, source")
       .eq("profile_id", clientId)
       .order("seq", { ascending: false })
       .limit(limit);
@@ -3620,6 +3622,7 @@ export const db = {
     body = "",
     kind = "text",
     payload = null,
+    requestId = null,
     localDate = null,
     template = null,
     topic = null,
@@ -3664,15 +3667,14 @@ export const db = {
     }
     const { data, error } = await supabase
       .from("coach_messages")
-      .insert({
-        profile_id: uid,
-        role: "mama",
-        body: String(body || "").slice(0, 4000),
+      .insert(mamaCoachInsertRow({
+        profileId: uid,
+        body,
         kind,
-        payload,
-        local_date: day,
-      })
-      .select("id, role, body, kind, payload, local_date, created_at, hidden_at, seq, source")
+        localDate: day,
+        requestId,
+      }))
+      .select("id, role, body, kind, payload, request_id, local_date, created_at, hidden_at, seq, source")
       .single();
     if (error) {
       console.warn("appendCoachMessage failed", error);

@@ -63,7 +63,7 @@ import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 import { hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../../src/utils/coachTeach.js";
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
-import { COACH_COPY, menuFromPageCopy } from "../../src/content/coachVoice.js";
+import { menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 import {
@@ -71,8 +71,12 @@ import {
   clampCoachRequestId,
   countPainTeachToday,
   insertCoachReply,
+  isCoachRequestId,
+  isStuckPainCount,
   persistServerCoach,
 } from "../_shared/coachMessages.js";
+import { sizeMealsForPersist } from "../../src/utils/coachPlateScale.js";
+import { notifyCrisisEmail } from "../_shared/coachCrisisEmail.js";
 
 const MAX_PER_DAY = 30;
 const MAX_RECORD_PER_DAY = 200;
@@ -110,7 +114,7 @@ async function persistCannedCoach(env, userId, body, message, {
 }) {
   const allowed = await allowCoachNote(env, userId, { isAdmin, requestId });
   const door = escalateDoor(asked, { scope, escalate });
-  const crisis = door === "medical";
+  const crisis = door === "crisis";
   if (!allowed && !crisis) return false;
   if (door && (allowed || crisis)) {
     const noted = await appendCoachRefusal(env, userId, { asked, scope, escalate });
@@ -121,6 +125,9 @@ async function persistCannedCoach(env, userId, body, message, {
         kind: "note",
         detail: "client_summaries append failed",
       });
+    }
+    if (door === "crisis" && noted.ok && !noted.skipped && !noted.capped && !noted.unchanged) {
+      await notifyCrisisEmail(env, { userId, asked });
     }
   }
   if (allowed) {
@@ -170,9 +177,22 @@ export async function onRequestPost({ request, env }) {
       const saved = await insertCoachReply(env, user.id, {
         ...local,
         localDate: body.localDate,
+        requestId: clampCoachRequestId(body.requestId),
       });
       if (!saved.ok) return json({ error: "could not save" }, 502);
-      return json({ ok: true, message: { role: "coach", source: local.source } });
+      return json({
+        ok: true,
+        message: {
+          id: saved.id || null,
+          role: "coach",
+          source: local.source,
+          body: local.body,
+          kind: local.kind,
+          payload: local.payload,
+          requestId: isCoachRequestId(body.requestId) ? String(body.requestId).trim() : null,
+          localDate: body.localDate || null,
+        },
+      });
     }
 
     if (!env.OPENROUTER_API_KEY) {
@@ -209,7 +229,7 @@ export async function onRequestPost({ request, env }) {
     const painCount = teach && PAIN_TOPICS.has(teach.topic)
       ? await countPainTeachToday(env, user.id, teach.topic)
       : 0;
-    if (teach && PAIN_TOPICS.has(teach.topic) && painCount >= 2) {
+    if (teach && PAIN_TOPICS.has(teach.topic) && isStuckPainCount(painCount)) {
       await persistCannedCoach(env, user.id, body, {
         body: "",
         kind: "deflect",
@@ -243,7 +263,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (teach) {
-      const reply = teachBody(teach.topic, { again: teach.topic === "neverSkip" && painCount >= 1 });
+      const reply = teachBody(teach.topic, { again: teach.topic === "neverSkip" && painCount.total >= 1 });
       await persistCannedCoach(env, user.id, body, {
         body: reply,
         kind: "text",
@@ -260,17 +280,31 @@ export async function onRequestPost({ request, env }) {
     }
 
     // A link we cannot read must not become a guessed dish.
+    // Reserve the note bucket before any fetch so a pasted URL cannot
+    // spend the hop budget after she is already over the cap.
     let menuPage = null;
     if (mode === "ask" && hasMenuLink(text)) {
+      const noteOk = isAdmin || await allowCoachNote(env, user.id, { isAdmin, requestId });
+      if (!noteOk) {
+        const reply = teachBody("menuClosed");
+        return json({
+          ok: true,
+          scope: "food",
+          teach: "menuClosed",
+          reply,
+          meals: [],
+        });
+      }
       const link = firstMenuLink(text);
       menuPage = link ? await fetchMenuPage(link) : { ok: false, reason: "bad-url" };
       if (!menuPage.ok) {
         const reply = teachBody("menuClosed");
-        await persistCannedCoach(env, user.id, body, {
+        await persistServerCoach(env, user.id, body, {
           body: reply,
           kind: "text",
-          payload: { teach: "menuClosed" },
-        }, { isAdmin, requestId, asked: text });
+          payload: { teach: "menuClosed", requestId },
+          requestId,
+        });
         return json({
           ok: true,
           scope: "food",
@@ -400,10 +434,14 @@ export async function onRequestPost({ request, env }) {
             detail: "client_summaries append failed",
           });
         }
+        if (noted.ok && !noted.skipped && !noted.capped && !noted.unchanged && deflect === "emergency") {
+          await notifyCrisisEmail(env, { userId: user.id, asked: text });
+        }
         await persistServerCoach(env, user.id, body, {
           body: "",
           kind: "deflect",
           payload: { deflect, requestId },
+          requestId,
         });
         return json({ ok: true, scope: "urgent", deflect, meals: [] });
       }
@@ -492,75 +530,6 @@ function parseRecent(value) {
     .map((n) => String(n || "").trim().slice(0, 80))
     .filter(Boolean)
     .slice(0, 25);
-}
-
-/**
- * Anything that reads like the model talking about itself, hedging like a
- * chatbot, or quoting her ranges back is dropped rather than shown.
- */
-function sourceTag(source) {
-  if (source === "my") return COACH_COPY.sourceMy;
-  if (source === "pantry") return COACH_COPY.sourcePantry;
-  if (source === "menu") return COACH_COPY.sourceMenu;
-  if (source === "kitchen") return COACH_COPY.sourceKitchen;
-  if (source === "new") return COACH_COPY.sourceNew;
-  return COACH_COPY.sourceBank;
-}
-
-function mealFitsBudget(macros, servings, budget) {
-  if (!budget?.cal) return true;
-  const cal = macros.cal * servings;
-  const fat = macros.f * servings;
-  return cal <= budget.cal * 1.05 && fat <= (budget.f || 1e9) * 1.05;
-}
-
-/** Size the plate the way she saw it. Kept here so /api/coach does not pull the ranker. */
-function sizeMealsForPersist(meals, budget, _slot, source) {
-  const out = [];
-  for (const meal of meals || []) {
-    const macros = {
-      cal: Number(meal.cal) || 0,
-      p: Number(meal.p) || 0,
-      c: Number(meal.c) || 0,
-      f: Number(meal.f) || 0,
-    };
-    let servings = Number(meal.servings);
-    if (!Number.isFinite(servings) || servings <= 0) servings = 1;
-    if (budget?.cal) {
-      if (mealFitsBudget(macros, 1, budget)) {
-        servings = 1;
-        if ((budget.pNeed || 0) > macros.p) {
-          for (const scale of [1.5, 2]) {
-            if (mealFitsBudget(macros, scale, budget)) servings = scale;
-          }
-        }
-      } else if (mealFitsBudget(macros, 0.5, budget)) {
-        servings = 0.5;
-      }
-    }
-    const name = String(meal.name || "").trim();
-    const title = servings === 1
-      ? (meal.title || name)
-      : servings === 0.5
-        ? `${name} · half portion`
-        : `${name} · ${servings} servings`;
-    const src = meal.source || source || "";
-    out.push({
-      name,
-      title,
-      source: src,
-      tag: meal.tag || sourceTag(src),
-      id: meal.id || "",
-      basedOn: meal.basedOn || null,
-      servings,
-      cal: Math.round(macros.cal * servings),
-      p: Math.round(macros.p * servings),
-      c: Math.round(macros.c * servings),
-      f: Math.round(macros.f * servings),
-      reason: meal.reason || meal.desc || "",
-    });
-  }
-  return out;
 }
 
 function cleanReply(raw) {

@@ -23,6 +23,18 @@ export function priorMamaBody(messages, index) {
   return "";
 }
 
+/** Pair by request_id. Old rows without one fall back to arrival order. */
+export function pairedMamaBody(messages, index) {
+  const askId = messages[index]?.requestId;
+  if (askId) {
+    for (let i = index - 1; i >= 0; i -= 1) {
+      const row = messages[i];
+      if (row?.role === "mama" && row.requestId === askId && row.body) return row.body;
+    }
+  }
+  return priorMamaBody(messages, index);
+}
+
 export function isServerVerified(message) {
   return message?.role === "coach" && message?.source === "server";
 }
@@ -108,7 +120,7 @@ export function buildAdminCoachView(messages = []) {
   const chronological = [...messages].sort(byOldest);
   const pinned = [];
   chronological.forEach((message, index) => {
-    const asked = priorMamaBody(chronological, index);
+    const asked = pairedMamaBody(chronological, index);
     const flag = coachFlag(message, asked);
     if (!flag) return;
     pinned.push({

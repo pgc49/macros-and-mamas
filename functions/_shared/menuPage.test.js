@@ -6,6 +6,7 @@ import {
   firstMenuLink,
   htmlToText,
   isBlockedMenuHost,
+  MENU_FETCH_BUDGET_MS,
   MENU_FETCH_TIMEOUT_MS,
   MENU_MAX_BYTES,
 } from "./menuPage.js";
@@ -62,11 +63,19 @@ describe("reading a menu page", () => {
       "https://2130706433/menu",
       "https://user:pass@www.itsjane.com/menu",
       "file:///etc/passwd",
+      "https://127.0.0.1./menu",
+      "https://100.64.0.1/menu",
+      "https://198.18.0.1/menu",
+      "https://[64:ff9b::1]/menu",
     ]) {
       expect(firstMenuLink(url), url).toBeNull();
     }
     expect(isBlockedMenuHost("fe80::1")).toBe(true);
     expect(isBlockedMenuHost("fd00:ec2::254")).toBe(true);
+    expect(isBlockedMenuHost("127.0.0.1.")).toBe(true);
+    expect(isBlockedMenuHost("100.64.0.1")).toBe(true);
+    expect(isBlockedMenuHost("198.19.255.255")).toBe(true);
+    expect(isBlockedMenuHost("64:ff9b::1")).toBe(true);
     expect(isBlockedMenuHost("www.itsjane.com")).toBe(false);
   });
 
@@ -109,8 +118,9 @@ describe("reading a menu page", () => {
     expect(page).toEqual({ ok: false, reason: "type" });
   });
 
-  it("uses a short timeout and refuses a body over the byte cap", async () => {
+  it("uses a short timeout, a 20s budget, and refuses a body over the byte cap", async () => {
     expect(MENU_FETCH_TIMEOUT_MS).toBe(5_000);
+    expect(MENU_FETCH_BUDGET_MS).toBe(20_000);
     expect(MENU_MAX_BYTES).toBe(1_500_000);
     const fetchImpl = vi.fn(async (_url, init) => {
       expect(init.signal).toBeDefined();
@@ -131,5 +141,21 @@ describe("reading a menu page", () => {
     const page = await fetchMenuPage("https://www.itsjane.com/menu", fetchImpl);
     expect(page).toEqual({ ok: false, reason: "redirect" });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops streaming the body at 1.5MB", async () => {
+    const chunk = new Uint8Array(400_000);
+    const stream = new ReadableStream({
+      start(controller) {
+        for (let i = 0; i < 5; i += 1) controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+    const fetchImpl = vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/html" },
+    }));
+    const page = await fetchMenuPage("https://www.example.com/menu", fetchImpl);
+    expect(page).toEqual({ ok: false, reason: "too-big" });
   });
 });

@@ -271,7 +271,7 @@ const COACH_MEDICAL_LINE = "That's one for Callie, not me, and I don't want you 
  */
 export const INCLUDE_COACH_EMERGENCY_LINE = true;
 export const COACH_EMERGENCY_LINE =
-  "This needs a person right now, not me. If you're in danger or this is an emergency, call 911. If you're having thoughts of hurting yourself or your baby, call or text 988. For bleeding, chest pain, trouble breathing, or fainting, call your doctor or 911. I've let Callie know.";
+  "This needs real help now. If you're in danger or thinking about hurting yourself or your baby, call 911, or call or text 988. Then call your doctor. Callie will see this message, but she may not see it right away.";
 
 export const COACH_DEFLECT = {
   callie: {

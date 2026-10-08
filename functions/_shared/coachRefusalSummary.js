@@ -16,6 +16,7 @@ import { COACH_CLOCK_TZ, wallClockParts } from "../../src/utils/mealSlots.js";
 const STUCK_TOPICS = new Set(["neverSkip", "fasting"]);
 
 const DOORS = {
+  crisis: "crisis",
   urgent: "medical",
   medical: "medical",
   stuck: "stuck",
@@ -58,7 +59,8 @@ export function escalateDoor(asked, { escalate = null, scope = null } = {}) {
   }
   // Symptoms first. "I'm skipping dinner because I feel dizzy" and
   // "I'm not logging because my chest hurts" must still reach Callie.
-  if (isCrisisUrgent(question) || isClinicalUrgent(question)) return "medical";
+  if (isCrisisUrgent(question)) return "crisis";
+  if (isClinicalUrgent(question)) return "medical";
   if (isWontLogRefusal(question)) return null;
   if (scope === "urgent" || scope === "medical") {
     return isClinicalUrgent(question) ? "medical" : null;
@@ -76,8 +78,17 @@ export function coachRefusalLine(asked, door) {
 /** One mama cannot flood Callie's card with the same door all day. */
 export const MAX_SUMMARY_ESCALATES = 5;
 
-/** Crisis / URGENT still append over the note cap, but only once a Pacific day. */
+/** Ordinary medical lines over the note cap. Crisis has its own ceiling. */
 export const MAX_MEDICAL_ESCALATES_PER_DAY = 1;
+
+/** Distinct crisis lines. Identical text the same Pacific day is a no-op. */
+export const MAX_CRISIS_ESCALATES_PER_DAY = 10;
+
+export function doorCap(door) {
+  if (door === "crisis") return MAX_CRISIS_ESCALATES_PER_DAY;
+  if (door === "medical") return MAX_MEDICAL_ESCALATES_PER_DAY;
+  return MAX_SUMMARY_ESCALATES;
+}
 
 export function countRefusalDoorLines(summary, door) {
   const prefix = `Coach refused (${door}):`;
@@ -137,6 +148,26 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
 
   const day = coachSummaryDateIso(now);
   const headers = { apikey: key, authorization: `Bearer ${key}` };
+  const rpc = await fetch(`${base}/rest/v1/rpc/append_coach_refusal_line`, {
+    method: "POST",
+    headers: {
+      ...headers,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      p_profile_id: userId,
+      p_for_date: day,
+      p_line: line,
+      p_door: door,
+      p_max: doorCap(door),
+    }),
+  }).catch(() => null);
+  if (rpc?.ok) {
+    const result = await rpc.json().catch(() => null);
+    if (result && typeof result === "object" && result.ok === true) return result;
+    if (result && typeof result === "object" && result.ok === false) return result;
+  }
+
   const readUrl = `${base}/rest/v1/client_summaries?profile_id=eq.${encodeURIComponent(userId)}`
     + `&for_date=eq.${day}&select=summary,suggested_touch,model`;
   const read = await fetch(readUrl, { headers });
@@ -147,8 +178,7 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
   const rows = await read.json().catch(() => null);
   if (!Array.isArray(rows)) return { ok: false };
   const existing = rows[0] || null;
-  const doorCap = door === "medical" ? MAX_MEDICAL_ESCALATES_PER_DAY : MAX_SUMMARY_ESCALATES;
-  if (countRefusalDoorLines(existing?.summary, door) >= doorCap) {
+  if (countRefusalDoorLines(existing?.summary, door) >= doorCap(door)) {
     return { ok: true, capped: true };
   }
   const summary = mergeRefusalSummary(existing?.summary, line);

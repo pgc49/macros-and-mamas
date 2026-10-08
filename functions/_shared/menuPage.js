@@ -9,6 +9,7 @@
  */
 
 export const MENU_FETCH_TIMEOUT_MS = 5_000;
+export const MENU_FETCH_BUDGET_MS = 20_000;
 export const MENU_MAX_BYTES = 1_500_000;
 const MAX_CHARS = 12_000;
 const MIN_CHARS = 80;
@@ -63,6 +64,8 @@ function isBlockedIpv4(parts) {
   if (a === 169 && b === 254) return true;
   if (a === 172 && b >= 16 && b <= 31) return true;
   if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 198 && b >= 18 && b <= 19) return true;
   if (a === 100 && b === 100 && c === 100 && d === 200) return true;
   return false;
 }
@@ -124,11 +127,12 @@ function isBlockedIpv6(host) {
   if (parsed.parts.slice(0, 7).every((n) => n === 0) && parsed.parts[7] === 1) return true;
   if ((a & 0xffc0) === 0xfe80) return true;
   if ((a & 0xfe00) === 0xfc00) return true;
+  if (parsed.parts[0] === 0x64 && parsed.parts[1] === 0xff9b) return true;
   return false;
 }
 
 export function isBlockedMenuHost(hostname) {
-  const host = String(hostname || "").toLowerCase().replace(/^\[|\]$/g, "");
+  const host = String(hostname || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.+$/, "");
   if (!host) return true;
   if (host === "localhost" || host.endsWith(".localhost")) return true;
   if (host.endsWith(".local") || host.endsWith(".internal")) return true;
@@ -164,11 +168,42 @@ export function firstMenuLink(raw) {
 /**
  * @returns {Promise<{ok: true, url: string, text: string} | {ok: false, reason: string}>}
  */
+async function readCappedBody(resp) {
+  if (!resp.body || typeof resp.body.getReader !== "function") {
+    const bytes = await resp.arrayBuffer();
+    if (bytes.byteLength > MENU_MAX_BYTES) return { ok: false, reason: "too-big" };
+    return { ok: true, bytes };
+  }
+  const reader = resp.body.getReader();
+  const chunks = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > MENU_MAX_BYTES) {
+      try { await reader.cancel(); } catch { /* ignore */ }
+      return { ok: false, reason: "too-big" };
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { ok: true, bytes: out.buffer };
+}
+
 export async function fetchMenuPage(rawUrl, fetchImpl = fetch) {
   let current = firstMenuLink(rawUrl);
   if (!current) return { ok: false, reason: "bad-url" };
+  const deadline = Date.now() + MENU_FETCH_BUDGET_MS;
 
   for (let hop = 0; hop < MAX_HOPS; hop += 1) {
+    const remain = deadline - Date.now();
+    if (remain <= 0) return { ok: false, reason: "network" };
     let resp;
     try {
       resp = await fetchImpl(current, {
@@ -177,7 +212,7 @@ export async function fetchMenuPage(rawUrl, fetchImpl = fetch) {
           accept: "text/html,application/xhtml+xml,text/plain",
           "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         },
-        signal: AbortSignal.timeout(MENU_FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(Math.min(MENU_FETCH_TIMEOUT_MS, remain)),
       });
     } catch {
       return { ok: false, reason: "network" };
@@ -198,9 +233,9 @@ export async function fetchMenuPage(rawUrl, fetchImpl = fetch) {
       return { ok: false, reason: "type" };
     }
 
-    const bytes = await resp.arrayBuffer();
-    if (bytes.byteLength > MENU_MAX_BYTES) return { ok: false, reason: "too-big" };
-    const text = htmlToText(new TextDecoder().decode(bytes)).slice(0, MAX_CHARS);
+    const body = await readCappedBody(resp);
+    if (!body.ok) return body;
+    const text = htmlToText(new TextDecoder().decode(body.bytes)).slice(0, MAX_CHARS);
     if (text.length < MIN_CHARS) return { ok: false, reason: "empty" };
     return { ok: true, url: current, text };
   }

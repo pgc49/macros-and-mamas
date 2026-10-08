@@ -234,6 +234,13 @@ export function ClientApp({
   useEffect(() => {
     if (tab === "coach") setCoachClock(new Date());
   }, [tab]);
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") setCoachClock(new Date());
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
   const coachAnswer = useMemo(
     () => (coachReady
       ? buildCoachAnswer({
@@ -819,7 +826,7 @@ export function ClientApp({
             mealHistoryByDate={mealHistoryByDate}
             customMeals={customMeals}
             now={coachClock}
-            onClockRefresh={() => setCoachClock(new Date())}
+            onClockRefresh={(instant) => setCoachClock(instant instanceof Date ? instant : new Date())}
             onLogCard={onLogCoachCard}
             onPencilCard={onPencilCoachCard}
             onSaveCard={onSaveCoachCard}

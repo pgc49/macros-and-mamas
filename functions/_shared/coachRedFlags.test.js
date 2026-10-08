@@ -10,8 +10,8 @@ import {
 import { appendCoachRefusal, escalateDoor } from "./coachRefusalSummary.js";
 import { COACH_DEFLECT, COACH_EMERGENCY_LINE, INCLUDE_COACH_EMERGENCY_LINE } from "../../src/content/coachVoice.js";
 
-/** At least the 21 reviewer phrasings. Each must append exactly once. */
-export const RED_FLAG_ASKS = [
+/** Crisis / 911 line. */
+export const CRISIS_ASKS = [
   "I want to die",
   "I've had thoughts of hurting myself",
   "thoughts of hurting myself",
@@ -25,29 +25,55 @@ export const RED_FLAG_ASKS = [
   "I'm passing out",
   "soaking through pads",
   "passing large clots",
-  "I've been bleeding heavily",
-  "I have a fever",
   "bad headache and my vision is blurry",
   "one of my legs is swollen and painful",
   "I had a seizure",
   "I'm hearing things that aren't there",
   "I'm seeing things that aren't there",
   "I haven't slept for days",
+  "my heart is racing and I have chest pain",
+  "my heart is racing and I can't catch my breath",
+];
+
+/** Ordinary medical — Callie's card, not 911. */
+export const MEDICAL_ASKS = [
+  "I've been bleeding heavily",
+  "I have a fever",
   "I'm skipping dinner because I feel dizzy",
   "only eating 800 calories",
+  "I have high blood pressure",
+  "I've been vomiting all morning",
+  "I feel nauseous",
+  "I think I have mastitis",
+  "my breast is red, hot, and hard and I have a fever",
+  "my incision is red and hot",
+  "I haven't eaten all day",
+  "I've been crying all day",
+  "my heart is racing",
 ];
+
+/** At least the 21 reviewer phrasings. Each must append exactly once. */
+export const RED_FLAG_ASKS = [...CRISIS_ASKS, ...MEDICAL_ASKS];
 
 const RED_FLAG_NEGATIVES = [
   "I'm dying for tacos",
   "this workout is killing me",
+  "my heart races when I see dessert",
 ];
 
 describe("crisis and postpartum red flags", () => {
   it("classifies every reviewer phrasing as urgent", () => {
     expect(RED_FLAG_ASKS.length).toBeGreaterThanOrEqual(21);
-    for (const ask of RED_FLAG_ASKS) {
+    for (const ask of CRISIS_ASKS) {
+      expect(classifyAsk(ask).scope, ask).toBe("urgent");
+      expect(isCrisisUrgent(ask), ask).toBe(true);
+      expect(isClinicalUrgent(ask), ask).toBe(true);
+      expect(escalateDoor(ask, { scope: "urgent" }), ask).toBe("crisis");
+    }
+    for (const ask of MEDICAL_ASKS) {
       expect(classifyAsk(ask).scope, ask).toBe("urgent");
       expect(isClinicalUrgent(ask), ask).toBe(true);
+      expect(isCrisisUrgent(ask), ask).toBe(false);
       expect(escalateDoor(ask, { scope: "urgent" }), ask).toBe("medical");
     }
   });
@@ -60,6 +86,9 @@ describe("crisis and postpartum red flags", () => {
     expect(classifyAsk("this workout is killing me").scope).toBe("off_topic");
     expect(isClinicalUrgent("this workout is killing me")).toBe(false);
     expect(escalateDoor("this workout is killing me", { scope: "off_topic" })).toBeNull();
+    expect(classifyAsk("my heart races when I see dessert").scope).not.toBe("urgent");
+    expect(isClinicalUrgent("my heart races when I see dessert")).toBe(false);
+    expect(isCrisisUrgent("my heart races when I see dessert")).toBe(false);
   });
 
   it("uses the emergency line for crisis and the medical line for ordinary symptoms", () => {
@@ -117,14 +146,16 @@ describe("crisis and postpartum red flags", () => {
       const first = await appendCoachRefusal(env, "profile-1", { asked: ask, scope: "urgent" });
       expect(first.ok, ask).toBe(true);
       expect(first.unchanged || first.capped, `${ask} first write`).toBeFalsy();
-      const lines = String(posts.at(-1)?.summary || "").split("\n").filter((line) => line.startsWith("Coach refused (medical):"));
+      const door = CRISIS_ASKS.includes(ask) ? "crisis" : "medical";
+      const prefix = `Coach refused (${door}):`;
+      const lines = String(posts.at(-1)?.summary || "").split("\n").filter((line) => line.startsWith(prefix));
       expect(lines, ask).toHaveLength(1);
       expect(lines[0], ask).toContain(ask);
 
       const repeat = await appendCoachRefusal(env, "profile-1", { asked: ask, scope: "urgent" });
       expect(repeat.ok, `${ask} repeat`).toBe(true);
       expect(repeat.unchanged || repeat.capped, `${ask} once`).toBeTruthy();
-      const after = String(posts.at(-1)?.summary || "").split("\n").filter((line) => line.startsWith("Coach refused (medical):"));
+      const after = String(posts.at(-1)?.summary || "").split("\n").filter((line) => line.startsWith(prefix));
       expect(after, `${ask} still once`).toHaveLength(1);
     }
 

@@ -1,6 +1,6 @@
 begin;
 
-select plan(32);
+select plan(38);
 
 select ok(
   exists (
@@ -212,6 +212,33 @@ select throws_ok(
   'mama cannot insert a payload'
 );
 
+select lives_ok(
+  $$insert into public.coach_messages (profile_id, role, body, kind, payload, request_id)
+    values (
+      '00000000-0000-0000-0000-0000000000a2',
+      'mama',
+      'pair me',
+      'text',
+      '{}'::jsonb,
+      'ask-live01'
+    )$$,
+  'mama can insert request_id with an empty payload'
+);
+
+select throws_ok(
+  $$insert into public.coach_messages (profile_id, role, body, kind, request_id)
+    values (
+      '00000000-0000-0000-0000-0000000000a2',
+      'mama',
+      'too short',
+      'text',
+      'ask-1'
+    )$$,
+  '23514',
+  null,
+  'request_id shorter than 8 is rejected'
+);
+
 select is(
   public.hide_coach_messages(array['00000000-0000-0000-0000-0000000000c1']::uuid[]),
   1,
@@ -315,6 +342,37 @@ select throws_ok(
   'P0001',
   'coach_messages are append-only except hidden_at',
   'trigger freezes source on a service-role/owner update'
+);
+
+select throws_ok(
+  $$update public.coach_messages
+      set request_id = 'forged-id'
+    where id = '00000000-0000-0000-0000-0000000000c2'$$,
+  'P0001',
+  'coach_messages are append-only except hidden_at',
+  'trigger freezes request_id on hide'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'append_coach_refusal_line'
+      and p.prosecdef
+  ),
+  'append_coach_refusal_line is SECURITY DEFINER'
+);
+
+select ok(
+  has_function_privilege('service_role', 'public.append_coach_refusal_line(uuid, date, text, text, integer)', 'execute'),
+  'service_role can execute append_coach_refusal_line'
+);
+
+select ok(
+  not has_function_privilege('authenticated', 'public.append_coach_refusal_line(uuid, date, text, text, integer)', 'execute'),
+  'authenticated cannot execute append_coach_refusal_line'
 );
 
 select * from finish();

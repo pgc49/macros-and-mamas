@@ -8,13 +8,14 @@
  *  - the coach doesn't hand back a card she has already turned down
  */
 
-import { StrictMode } from "react";
+import { StrictMode, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
+import * as Sentry from "@sentry/react";
 import { CoachPanel, pairCoachThread } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
-import { COACH_COPY, COACH_DEFLECT } from "../content/coachVoice";
+import { COACH_COPY, COACH_DEFLECT, COACH_EMERGENCY_LINE } from "../content/coachVoice";
 import { localDateIso } from "../utils/dates";
 import { sanitizeCoachCards } from "../../functions/_shared/coachMessages.js";
 
@@ -27,6 +28,7 @@ vi.mock("@sentry/react", () => ({ captureMessage: vi.fn() }));
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 const MACROS = { cal: 1750, protein: 140, carbs: 160, fat: 55 };
@@ -729,7 +731,10 @@ describe("what isn't the coach's goes to Callie", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await screen.findByText(COACH_COPY.teachNeverSkip);
-    expect(postCoach).not.toHaveBeenCalled();
+    expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "ask",
+      text: "should I skip dinner, I'm way over",
+    }));
 
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
       target: { value: "should I skip dinner, I'm way over" },
@@ -738,14 +743,14 @@ describe("what isn't the coach's goes to Callie", () => {
     expect(screen.getByText(COACH_COPY.teachNeverSkipAgain)).toBeTruthy();
     expect(screen.getAllByText(COACH_COPY.teachNeverSkip)).toHaveLength(1);
     expect(COACH_COPY.teachNeverSkipAgain).not.toBe(COACH_COPY.teachNeverSkip);
-    expect(postCoach).not.toHaveBeenCalled();
+    expect(postCoach).toHaveBeenCalledTimes(2);
 
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
       target: { value: "should I skip dinner, I'm way over" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
     await screen.findByText(COACH_DEFLECT.again.line);
-    expect(postCoach).toHaveBeenCalledTimes(1);
+    expect(postCoach).toHaveBeenCalledTimes(3);
     expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
       mode: "ask",
       text: "should I skip dinner, I'm way over",
@@ -755,7 +760,7 @@ describe("what isn't the coach's goes to Callie", () => {
     const coachRecords = onAppendMessage.mock.calls
       .map(([message]) => message)
       .filter((message) => message.role === "coach");
-    expect(coachRecords.filter((message) => message.template === "local.teach")).toHaveLength(2);
+    expect(coachRecords.filter((message) => message.template === "local.teach")).toHaveLength(0);
     expect(coachRecords.some((message) => message.kind === "deflect" || message.template === "local.text")).toBe(false);
   });
 
@@ -1090,6 +1095,16 @@ describe("pairCoachThread", () => {
     ];
     expect(pairCoachThread(rows).map((row) => row.id)).toEqual(["m2", "c2", "m1", "c1"]);
   });
+
+  it("falls back to arrival order for old rows without a request id", () => {
+    const rows = [
+      { id: "m1", role: "mama", body: "first" },
+      { id: "c2", role: "coach", body: "second answer" },
+      { id: "m2", role: "mama", body: "second" },
+      { id: "c1", role: "coach", body: "first answer" },
+    ];
+    expect(pairCoachThread(rows).map((row) => row.id)).toEqual(["m1", "c2", "m2", "c1"]);
+  });
 });
 
 describe("priority pass: persist, crisis, reload, load error", () => {
@@ -1155,8 +1170,59 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     expect(onAppendMessage).toHaveBeenCalledWith(expect.objectContaining({
       role: "mama",
       body: "will this affect my milk supply",
-      payload: expect.objectContaining({ requestId: expect.any(String) }),
+      payload: null,
+      requestId: expect.any(String),
     }));
+  });
+
+  it("offers Remove once the insert returns an id", async () => {
+    let n = 0;
+    const onAppendMessage = vi.fn(async () => ({ id: `saved-${++n}` }));
+    const onHideMessage = vi.fn(async () => true);
+    renderPanel({ postCoach: vi.fn(), onAppendMessage, onHideMessage });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "will this affect my milk supply" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.supply.line);
+    await waitFor(() => expect(screen.getAllByRole("button", { name: COACH_COPY.removeMessage }).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByRole("button", { name: COACH_COPY.removeMessage }).at(-1));
+    await waitFor(() => expect(onHideMessage).toHaveBeenCalledWith([expect.stringMatching(/^saved-\d+$/)]));
+  });
+
+  it("reports a failed crisis note to Sentry and still shows the emergency line", async () => {
+    const postCoach = vi.fn(async () => ({ ok: false, status: 502 }));
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I want to die" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_EMERGENCY_LINE);
+    await waitFor(() => expect(Sentry.captureMessage).toHaveBeenCalled());
+  });
+
+  it("recomputes Dinner when she taps a quick ask at 6:30pm", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-04T15:00:00.000Z"));
+    function Harness() {
+      const [now, setNow] = useState(() => new Date());
+      return (
+        <CoachPanel
+          {...panelProps({
+            now,
+            onClockRefresh: (instant) => setNow(instant),
+            onLoadThread: async () => [],
+          })}
+        />
+      );
+    }
+    render(<Harness />);
+    await screen.findByText(COACH_COPY.title);
+    expect(document.body.textContent).toMatch(/Breakfast/);
+    vi.setSystemTime(new Date("2026-09-05T01:30:00.000Z"));
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askEat }));
+    await waitFor(() => expect(document.body.textContent).toMatch(/Dinner · \d+ cal/));
+    vi.useRealTimers();
   });
 
   it("shows the emergency line and Message Callie for a crisis ask", async () => {

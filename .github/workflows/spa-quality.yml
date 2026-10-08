@@ -156,6 +156,10 @@ jobs:
             cp supabase/migrations/20261008091000_estimate_calls_reserve.sql \
               "$DB_ROOT/supabase/migrations/"
           fi
+          if [ -f supabase/migrations/20261008100000_coach_request_id_and_refusal.sql ]; then
+            cp supabase/migrations/20261008100000_coach_request_id_and_refusal.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           if [ -f supabase/tests/coach_messages_rls.sql ]; then
             cp supabase/tests/coach_messages_rls.sql "$DB_ROOT/supabase/tests/"
           fi

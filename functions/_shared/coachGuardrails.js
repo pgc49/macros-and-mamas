@@ -86,6 +86,9 @@ const CRISIS = [
   /\b(haven'?t|have not|not) (been )?slept?\b.{0,24}\b(for )?(days|a few days|two days|2 days|3 days)\b/,
   /\bnot sleep(ing)? for days\b/,
   /\bhaven'?t slept in days\b/,
+  // Racing heart with chest pain or shortness of breath
+  /\b(racing|pounding) heart\b.{0,40}\b(chest|breath|breathe)/,
+  /\bheart (is )?(racing|pounding)\b.{0,40}\b(chest|breath|breathe)/,
 ];
 
 const URGENT = [
@@ -93,9 +96,22 @@ const URGENT = [
   // Ordinary symptoms — medical line, not 911
   /\bdizz(y|iness)\b/, /\blight[- ]?headed\b/,
   /\bpalpitation/,
+  /\b(racing|pounding) heart\b/,
+  /\bheart (is )?(racing|pounding)\b/,
+  /\bheart races\b(?!\s+when\b)/,
   /\bbleed(ing)?\b/,
   /\bfever\b/, /\bmigraine/, /\bnumbness\b/, /\brash\b/,
-  /\bvomit/, /\bdiarrh/, /\bconstipat/, /\bcontractions\b/, /\bpreeclamp/,
+  /\bvomit/, /\bnause(a|ous|ated)\b/,
+  /\bdiarrh/, /\bconstipat/, /\bcontractions\b/, /\bpreeclamp/,
+  /\b(high blood pressure|hypertension)\b/,
+  /\bblood pressure is high\b/,
+  /\bmastitis\b/,
+  /\bbreast.{0,48}\b(red|hot|hard).{0,48}\bfever/,
+  /\b(red|hot) incision\b/,
+  /\bincision.{0,24}\b(red|hot|swollen|infected)/,
+  /\b(haven'?t|have not|not) (been )?eat(en|ing)? all day\b/,
+  /\b(didn'?t|did not) eat all day\b/,
+  /\bcry(ing)? all day\b/,
   // Restriction that is not an idiom
   /\bonly eating\b.{0,24}\b\d{2,4}\s*(calories?|cals?)\b/,
   /\beating (only )?\d{2,4}\s*(calories?|cals?)\b/,

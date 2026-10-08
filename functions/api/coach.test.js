@@ -20,6 +20,8 @@ const env = {
   SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "service",
   SUPABASE_ANON_KEY: "anon",
+  RESEND_API_KEY: "re-key",
+  CALLIE_NOTIFY_EMAIL: "calista@nourishwithcalista.com",
 };
 
 function request(body) {
@@ -85,6 +87,9 @@ function mockSupabase({
       return new Response(JSON.stringify([row]), { status: 200 });
     }
     if (value.includes("custom_meals")) return new Response(JSON.stringify(customMeals), { status: 200 });
+    if (value.includes("api.resend.com")) {
+      return new Response(JSON.stringify({ id: "re_test" }), { status: 200 });
+    }
     if (value.includes("client_summaries") && init?.method === "POST") {
       summaryRow = JSON.parse(init.body);
       return new Response(null, { status: 201 });
@@ -485,7 +490,7 @@ describe("what comes back", () => {
     const prompt = openrouter.callOpenRouter.mock.calls[0][0].messages[1].content;
     expect(prompt).toContain("Chicken Taco Salad");
     expect(prompt).toMatch(/must appear in the page text/);
-    expect(postedCalls()).toHaveLength(1);
+    expect(reserveTypes()).toEqual(["coach_note", "coach"]);
   });
 
   it("asks for a photo when the page has no dish the model named", async () => {
@@ -747,6 +752,9 @@ describe("an escalate lands on her card", () => {
         return new Response(JSON.stringify(thread), { status: 200 });
       }
       if (value.includes("coach_messages")) return new Response(null, { status: 201 });
+      if (value.includes("api.resend.com")) {
+        return new Response(JSON.stringify({ id: "re_test" }), { status: 200 });
+      }
       return new Response("[]", { status: 200 });
     });
     return posts;
@@ -845,6 +853,23 @@ describe("an escalate lands on her card", () => {
     expect(posts[0].suggested_touch).toBe("Say hi.");
   });
 
+  it("pins Stuck when two client teaches sit next to one server-verified ask", async () => {
+    mockSupabase({
+      thread: [
+        { role: "coach", source: "client", payload: { teach: "neverSkip" } },
+        { role: "coach", source: "client", payload: { teach: "neverSkip" } },
+        { role: "coach", source: "server", payload: { teach: "neverSkip" } },
+      ],
+    });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "should I skip dinner" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.deflect).toBe("again");
+    expect(summaryPosts()[0].summary).toContain("Coach refused (stuck): should I skip dinner");
+  });
+
   it("does not mint a Stuck pin from two recorded client teaches plus one real ask", async () => {
     mockSupabase({
       thread: [
@@ -892,6 +917,7 @@ describe("an escalate lands on her card", () => {
     expect(data.teach).toBe("menuClosed");
     expect(coachMessagePosts()).toHaveLength(0);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(globalThis.fetch.mock.calls.every(([url]) => !String(url).includes("itsjane.com"))).toBe(true);
   });
 
   it("still teaches over the note cap without saving the row", async () => {
@@ -927,24 +953,38 @@ describe("an escalate lands on her card", () => {
     expect(summaryPosts()).toHaveLength(0);
   });
 
-  it("appends a crisis once over the note cap and does not save the pin", async () => {
+  it("appends a crisis over the note cap and does not save the pin", async () => {
     mockSupabase({ noteCallsUsed: 20 });
-    const first = await onRequestPost({
+    const medical = await onRequestPost({
       request: request({ mode: "ask", text: "I've been dizzy since this morning" }),
       env,
     });
-    expect((await first.json()).deflect).toBe("medical");
+    expect((await medical.json()).deflect).toBe("medical");
     expect(coachMessagePosts()).toHaveLength(0);
-    expect(summaryPosts()).toHaveLength(1);
-    expect(summaryPosts()[0].summary).toContain("Coach refused (medical): I've been dizzy since this morning");
+    expect(summaryPosts()).toHaveLength(0);
 
-    const second = await onRequestPost({
-      request: request({ mode: "ask", text: "I fainted after lunch" }),
+    const crisis = await onRequestPost({
+      request: request({ mode: "ask", text: "I want to die" }),
       env,
     });
-    expect((await second.json()).deflect).toBe("emergency");
+    expect((await crisis.json()).deflect).toBe("emergency");
     expect(coachMessagePosts()).toHaveLength(0);
     expect(summaryPosts()).toHaveLength(1);
+    expect(summaryPosts()[0].summary).toContain("Coach refused (crisis): I want to die");
+  });
+
+  it("keeps a same-day medical line and a later crisis line", async () => {
+    const posts = summaryFetch();
+    await onRequestPost({
+      request: request({ mode: "ask", text: "I have a migraine" }),
+      env,
+    });
+    await onRequestPost({
+      request: request({ mode: "ask", text: "I want to die" }),
+      env,
+    });
+    expect(posts.at(-1).summary).toContain("Coach refused (medical): I have a migraine");
+    expect(posts.at(-1).summary).toContain("Coach refused (crisis): I want to die");
   });
 
   it("ignores a client stuck flag when she has not asked three times", async () => {

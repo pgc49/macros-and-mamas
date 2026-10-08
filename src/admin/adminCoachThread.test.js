@@ -5,6 +5,8 @@ import {
   coachDisplayDate,
   coachFlag,
   flagLabel,
+  pairedMamaBody,
+  priorMamaBody,
   plainCoachPlates,
 } from "./adminCoachThread.js";
 
@@ -14,6 +16,7 @@ const mama = (id, body, extra = {}) => ({
   body,
   kind: "text",
   payload: null,
+  requestId: extra.requestId || null,
   seq: extra.seq ?? 1,
   createdAt: extra.createdAt || "2026-10-08T16:00:00.000Z",
   hiddenAt: extra.hiddenAt || null,
@@ -31,6 +34,7 @@ const coach = (id, extra = {}) => ({
   hiddenAt: extra.hiddenAt || null,
   localDate: extra.localDate === undefined ? "2026-10-08" : extra.localDate,
   source: extra.source || "server",
+  requestId: extra.requestId || extra.payload?.requestId || null,
 });
 
 describe("coachFlag", () => {
@@ -100,6 +104,25 @@ describe("plainCoachPlates", () => {
     expect(plates[0].name).toBe("Safe plate");
     expect(plates[0].macros).toBe("430 cal · P0 · C0 · F0");
     expect(plates[0].reason).toBe("");
+  });
+});
+
+describe("pairedMamaBody", () => {
+  it("pairs by request_id and falls back to order for old rows", () => {
+    const messages = [
+      mama("m1", "first", { seq: 1, requestId: "a" }),
+      coach("c1", { seq: 2, requestId: "a", kind: "deflect", payload: { deflect: "care" } }),
+      mama("m2", "second", { seq: 3, requestId: "b" }),
+      coach("c2", { seq: 4, requestId: "b", kind: "deflect", payload: { deflect: "emergency" } }),
+    ];
+    expect(pairedMamaBody(messages, 3)).toBe("second");
+    expect(pairedMamaBody(messages, 1)).toBe("first");
+    const old = [
+      mama("m1", "old first", { seq: 1 }),
+      coach("c1", { seq: 2, kind: "deflect", payload: { deflect: "care" } }),
+    ];
+    expect(pairedMamaBody(old, 1)).toBe("old first");
+    expect(priorMamaBody(old, 1)).toBe("old first");
   });
 });
 
