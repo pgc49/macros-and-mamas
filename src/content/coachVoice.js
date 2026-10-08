@@ -53,6 +53,8 @@ export const COACH_COPY = {
   betaLabel: "Beta",
   betaNote:
     "Next meal, eating out, or a photo of the menu or fridge. Ranges, the scale, supply, and workouts stay with Callie.",
+  callieReads:
+    "Callie reads these chats too, including anything you delete, so she can step in when you need her.",
   entryTitle: "Not sure what to eat?",
   entryCta: "Ask the coach",
 

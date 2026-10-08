@@ -64,6 +64,16 @@ function renderPanel(props = {}) {
 const cardTitles = () => screen.queryAllByTestId("coach-card-title").map((n) => n.textContent);
 
 describe("the coach answers on the device", () => {
+  it("tells her Callie can read the chat before she types", async () => {
+    renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
+    const note = await screen.findByTestId("coach-callie-reads");
+    expect(note.textContent).toBe(COACH_COPY.callieReads);
+    const scroller = document.querySelector("[data-coach-scroll]");
+    const composer = screen.getByLabelText(COACH_COPY.placeholder);
+    expect(scroller.contains(note)).toBe(true);
+    expect(note.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("has already answered by the time she gets there", async () => {
     const postCoach = vi.fn();
     const onLoadThread = vi.fn(async () => []);

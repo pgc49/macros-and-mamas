@@ -517,6 +517,13 @@ export function CoachPanel({
           </div>
         </div>
 
+        <p
+          data-testid="coach-callie-reads"
+          style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.45, margin: "0 0 12px" }}
+        >
+          {COACH_COPY.callieReads}
+        </p>
+
         <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: "1 1 auto" }}>
           {!next && (
             <div style={bubble(false)}>{opener}</div>
