@@ -22,7 +22,7 @@ describe("Lifecycle mood and medical copy", () => {
 
   it("prefixes the Callie note only when the write succeeded", () => {
     expect(moodDeflectLine(true)).toBe(
-      "I'm so sorry. That's a lot to carry, and you don't have to push through it alone. Crying a lot in the weeks after a baby is really common, and it's very treatable. I've added a note for Callie, and please tell her, and your doctor or midwife too. Postpartum Support International's helpline is 1-800-944-4773 (call or text). If you ever feel unsafe, call or text 988.",
+      "I'm so sorry. That's a lot to carry, and you don't have to push through it alone. Crying a lot in the weeks after a baby is really common, and it's very treatable. I've added a note for Callie. Please tell her too, and your doctor or midwife. Postpartum Support International's helpline is 1-800-944-4773 (call or text). If you ever feel unsafe, call or text 988.",
     );
     expect(moodDeflectLine(false)).not.toMatch(/I've added a note/);
     expect(moodDeflectLine(true)).not.toMatch(/she'll get back|reply soon/i);

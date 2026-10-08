@@ -36,11 +36,12 @@ export function pairedMamaBody(messages, index) {
 }
 
 export function isServerVerified(message) {
-  return message?.role === "coach" && message?.source === "server";
+  return message?.role === "coach" && (message?.source === "server" || message?.payload?.outage === true);
 }
 
 export function coachFlag(message, asked = "") {
   if (!isServerVerified(message)) return null;
+  if (message?.kind === "outage" || message?.payload?.outage === true) return "outage";
   const deflect = message?.payload?.deflect
     || (message?.kind === "deflect" ? "offTopic" : null);
   if (message?.kind !== "deflect" && !deflect) return null;
@@ -70,6 +71,7 @@ export function coachDisplayDate(message) {
 export function flagLabel(flag) {
   if (flag === "stuck") return "Stuck";
   if (flag === "medical") return "Medical";
+  if (flag === "outage") return "Outage";
   return "Deflect";
 }
 

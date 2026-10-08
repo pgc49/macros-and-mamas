@@ -5,6 +5,8 @@
 
 import { distinctCoachMeals, mealBaseName } from "./coachAskMeals.js";
 import { CALLIE_RECIPES } from "./callieRecipes.js";
+import { mealLooksDairy } from "./coachMealFilter.js";
+import { COACH_GUILT_LINE } from "../../src/content/coachVoice.js";
 
 export const COACH_QUESTION_BANK_SETUPS = [
   {
@@ -217,7 +219,42 @@ export function mealQuestionPasses(resp, data, posts, question = {}, setup = {})
       return { ok: false, reason: "repeated the last plate" };
     }
   }
+  const line = String(data?.reply || data?.message || "");
+  if (/do not have .{0,48}menu|don'?t have .{0,48}menu|menu details on hand/i.test(line)) {
+    return { ok: false, reason: "said no menu" };
+  }
+  if (/absolutely not|you never skip a meal/i.test(line)) {
+    return { ok: false, reason: "scolded a skip" };
+  }
+  if (/^here(?:'s| is| are) [^.]+\.\s*$/i.test(line.trim())) {
+    return { ok: false, reason: "bare offer" };
+  }
+  if ([43, 44, 45, 46].includes(question.id) && !line.includes(COACH_GUILT_LINE)) {
+    return { ok: false, reason: "missing no-shame" };
+  }
+  if (question.id === 47 && !/food questions i answer here/i.test(line)) {
+    return { ok: false, reason: "missing meta Callie line" };
+  }
+  if (question.id === 39 && !/nursing burns/i.test(line)) {
+    return { ok: false, reason: "missing nursing-hungry" };
+  }
+  if (question.id === 19 && !/eat now/i.test(line)) {
+    return { ok: false, reason: "missing eat-now" };
+  }
+  const dairyForbid = new Set(["dairy", "yogurt", "yoghurt", "cheese", "milk", "butter", "cream", "whey", "shake"]);
   for (const word of question.forbid || []) {
+    if (word === "cottage") {
+      if (meals.some((meal) => /\bcottage\b/i.test(mealHaystack(meal)))) {
+        return { ok: false, reason: `broke ${word}` };
+      }
+      continue;
+    }
+    if (dairyForbid.has(word)) {
+      if (meals.some((meal) => mealLooksDairy(meal))) {
+        return { ok: false, reason: `broke ${word}` };
+      }
+      continue;
+    }
     const re = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}s?\\b`, "i");
     if (meals.some((meal) => re.test(mealHaystack(meal)))) {
       return { ok: false, reason: `broke ${word}` };
@@ -233,7 +270,7 @@ export function mealQuestionPasses(resp, data, posts, question = {}, setup = {})
     }
   }
   if (setup.id === "E") {
-    if (meals.some((meal) => /\b(dairy|yogurt|yoghurt|cheese|milk|butter|whey|cream|cottage|shake)\b/i.test(mealHaystack(meal)))) {
+    if (meals.some((meal) => mealLooksDairy(meal))) {
       return { ok: false, reason: "broke dairy-free / cottage avoid" };
     }
   }

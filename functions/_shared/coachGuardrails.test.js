@@ -330,4 +330,20 @@ describe("careful paths", () => {
     expect(deflectForScope("disordered")).toBe("disordered");
     expect(deflectForScope("medication")).toBe("medication");
   });
+
+  it("puts crisis ahead of disordered, medication, supply, mood, and symptom", () => {
+    expect(scopeOf("I've been making myself throw up and I want to die")).toBe("urgent");
+    expect(deflectForScope("urgent", "I've been making myself throw up and I want to die")).toBe("emergency");
+    expect(scopeOf("should I take ibuprofen? I want to hurt myself")).toBe("urgent");
+    expect(deflectForScope("urgent", "should I take ibuprofen? I want to hurt myself")).toBe("emergency");
+    expect(scopeOf("my supply dropped and I want to die")).toBe("urgent");
+    expect(scopeOf("I've been crying every day and I want to die")).toBe("urgent");
+    expect(scopeOf("I've been dizzy since this morning and I want to die")).toBe("urgent");
+  });
+
+  it("hands leftover non-food after a food ask to Callie", () => {
+    expect(classifyAsk("I'm so lonely", { priorAsks: ["what should I have for dinner"] }).scope).toBe("off_topic");
+    expect(classifyAsk("my baby has colic", { priorAsks: ["dinner ideas"] }).scope).toBe("off_topic");
+    expect(classifyAsk("my back is killing me", { priorAsks: ["snack before bed?"] }).scope).toBe("off_topic");
+  });
 });

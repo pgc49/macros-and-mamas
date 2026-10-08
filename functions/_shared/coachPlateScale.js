@@ -118,10 +118,11 @@ export function sourceTag(source, slot) {
   if (source === "pantry") return COACH_COPY.sourcePantry;
   if (source === "menu") return COACH_COPY.sourceMenu;
   if (source === "kitchen") return COACH_COPY.sourceKitchen;
+  if (source === "bank") return COACH_COPY.sourceBank;
   if (source === "new") {
     return (COACH_COPY.sourceNewBySlot && COACH_COPY.sourceNewBySlot[slot]) || COACH_COPY.sourceNew;
   }
-  return COACH_COPY.sourceBank;
+  return COACH_COPY.sourceNew;
 }
 
 /** Size — or drop — the plate the way the screen does. */

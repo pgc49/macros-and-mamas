@@ -79,4 +79,19 @@ describe("filterCoachMeals", () => {
       priorAsks: ["no eggs this week"],
     }).map((meal) => meal.name)).toEqual(["Protein oatmeal"]);
   });
+
+  it("drops cheddar, jack, feta, and quesadilla on a dairy allergy", () => {
+    const melt = { name: "Cheesy turkey melt", desc: "A melt with cheddar." };
+    const jack = { name: "Chicken quesadilla", desc: "Tortilla and Monterey Jack." };
+    const feta = { name: "Greek salad", desc: "Greens with feta." };
+    const rice = { name: "Turkey and rice", desc: "Turkey and rice." };
+    const dairy = { allergens: ["dairy"] };
+    expect(filterCoachMeals([melt, jack, feta, rice], {
+      text: "dinner ideas",
+      profile: dairy,
+    }).map((meal) => meal.name)).toEqual(["Turkey and rice"]);
+    expect(filterCoachMeals([feta, rice], {
+      text: "no dairy please",
+    }).map((meal) => meal.name)).toEqual(["Turkey and rice"]);
+  });
 });

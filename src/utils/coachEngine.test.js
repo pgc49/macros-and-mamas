@@ -43,11 +43,11 @@ const BANDS = targetBands(MACROS);
  * Pacific wall clock as absolute instants. Host timezone must not matter:
  * 8:00am PDT, 1:00pm PDT, 3:00pm PDT, 6:30pm PDT, and the lived 9:07pm PDT.
  */
-const MORNING = new Date("2026-09-04T15:00:00.000Z");
-const ONE_PM = new Date("2026-09-04T20:00:00.000Z");
-const AFTERNOON = new Date("2026-09-04T22:00:00.000Z");
-const EVENING = new Date("2026-09-05T01:30:00.000Z");
-const LIVED_EVENING = new Date("2026-10-01T04:07:00.000Z");
+const MORNING = new Date(2026, 8, 4, 8, 0, 0);
+const ONE_PM = new Date(2026, 8, 4, 13, 0, 0);
+const AFTERNOON = new Date(2026, 8, 4, 15, 0, 0);
+const EVENING = new Date(2026, 8, 4, 18, 30, 0);
+const LIVED_EVENING = new Date(2026, 9, 1, 21, 7, 0);
 
 function budgetFor(totals, opts = {}) {
   return attachDayHighs(
@@ -1058,8 +1058,8 @@ describe("copy matches the rest of the app", () => {
   });
 
   it("does not put leftover math on the Today door", () => {
-    const evening = new Date("2026-10-01T04:07:00.000Z");
-    const morning = new Date("2026-09-04T15:00:00.000Z");
+    const evening = new Date(2026, 9, 1, 21, 7, 0);
+    const morning = new Date(2026, 8, 4, 8, 0, 0);
     const read = { line1: "You need about 129g of protein tonight.", line2: COACH_COPY.plenty };
     expect(coachEntryHint({
       loggedSlots: new Set(),

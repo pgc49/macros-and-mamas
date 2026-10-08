@@ -14,7 +14,7 @@
 import { CALLIE_RECIPES } from "./callieRecipes.js";
 import { buildCustomMealsBlock } from "./customMealsPrompt.js";
 import { buildDietSafetyBlock, dietPromptLabel } from "./foodPrefs.js";
-import { threadPriorAsks } from "./coachMealFilter.js";
+import { capPriorAskChars, threadPriorAsks } from "./coachMealFilter.js";
 
 export const COACH_SYSTEM =
   "You are the meal coach inside Macros and Mamas, Callie's postpartum macro coaching program. "
@@ -83,7 +83,7 @@ export function sanitizeCoachContext(raw) {
     skipped: cleanList(raw.skipped, 4, 20).filter((slot) => SLOTS.has(slot)),
     turnedDown: cleanList(raw.turnedDown, 8, 80),
     alreadySuggested: cleanList(raw.alreadySuggested, 12, 80),
-    priorAsks: threadPriorAsks(cleanList(raw.priorAsks, 40, 200, { newest: true }), { limit: 8 }),
+    priorAsks: capPriorAskChars(threadPriorAsks(cleanList(raw.priorAsks, 40, 200, { newest: true }), { limit: 8 })),
     notLogging: raw.notLogging === true,
     snackCount: Number.isFinite(snacks) ? Math.max(0, Math.min(4, snacks)) : 1,
   };

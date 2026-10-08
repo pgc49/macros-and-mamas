@@ -31,6 +31,7 @@ function formatWhen(iso) {
 const FLAG_TONE = {
   stuck: { bg: T.amberSoft, color: T.amber },
   medical: { bg: T.amberSoft, color: T.amber },
+  outage: { bg: T.amberSoft, color: T.amber },
   deflect: { bg: T.accentSoft, color: T.accentDeep },
 };
 

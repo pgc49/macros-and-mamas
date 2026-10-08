@@ -154,12 +154,12 @@ describe("replay harness — Maya leftover + Jordan honest take", () => {
   });
 
   it("6:40pm and 3am grab get the right slot tag", () => {
-    const dinner = new Date("2026-10-08T01:40:00.000Z"); // 6:40pm PDT
+    const dinner = new Date(2026, 9, 7, 18, 40, 0);
     expect(coachSlotFromTime(dinner)).toBe("dinner");
     expect(sourceTag("new", "dinner")).toBe(COACH_COPY.sourceNewBySlot.dinner);
     expect(sourceTag("new", "dinner")).not.toBe(COACH_COPY.sourceNewBySlot.lunch);
     expect(slotNamedInAsk("3am grab")).toBe("snack");
-    const threeAm = new Date("2026-10-08T10:00:00.000Z"); // 3:00am PDT
+    const threeAm = new Date(2026, 9, 8, 3, 0, 0);
     expect(coachSlotFromTime(threeAm)).toBe("snack");
     expect(sourceTag("new", "snack")).toBe(COACH_COPY.sourceNewBySlot.snack);
   });

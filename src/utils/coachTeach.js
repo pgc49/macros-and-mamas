@@ -14,9 +14,9 @@
 import { COACH_COPY, underDayCopy } from "../content/coachVoice.js";
 
 const TEACH_FIRST = [
-  // Never skip — before the restaurant patterns, so "skip dinner because I'm
-  // out" is still a skip, not a PS-method question.
-  ["neverSkip", /\b(skip|skipping|skipped)\b[^.?]{0,20}\b(dinner|lunch|breakfast|snack|this meal|a meal|eating)\b/],
+  // Only the "should I skip" question. "I skipped lunch, what now" is food.
+  ["neverSkip", /\bshould i (even )?(skip|skipping)\b[^.?]{0,24}\b(dinner|lunch|breakfast|snack|this meal|a meal|eating)\b/],
+  ["neverSkip", /\b(skip|skipping)\b[^.?]{0,20}\b(dinner|lunch|breakfast|snack|this meal|a meal|eating)\b/],
   ["neverSkip", /\bshould i (even )?eat\b[^.?]{0,20}\b(over|overshot|over my)\b/],
   ["neverSkip", /\b(make up for it|over so)\b[^.?]{0,16}\bskip\b/],
 
@@ -42,10 +42,14 @@ const PS_METHOD = [
 ];
 
 const REAL_FOOD = [
-  /\b(is|are) [^.?]{0,28}\b(ok|okay|fine|allowed)\b/,
+  /\b(is|are) (a |an |some )?(pizza|slice|protein bar|bar|oreo|cookie|cookies|chips?|ice cream|treat|candy)\b.{0,16}\b(ok|okay|fine|allowed)\b/,
+  /\bis pizza ok\b/,
   /\bcan i (have|eat) (a |an |some )?(pizza|slice|protein bar|bar|oreo|cookie|cookies|chips?|ice cream)\b/,
   /\bwhat about (a |an |some )?(pizza|wine|beer|oreo|protein bar|bar|slice)\b/,
 ];
+
+const NAMED_DISH =
+  /\b(pho|ramen|broth|noodles?|banh mi|pad thai|pad see ew|bibimbap|gyro|falafel|shawarma|poke)\b/;
 
 const IN_N_OUT = /\b(in[- ]?n[- ]?out|inn n out|in and out)\b/;
 
@@ -96,10 +100,36 @@ function normalize(raw) {
  * Matched before the meal router and before a model call. A food question
  * that isn't one of these still goes through the usual path.
  */
+export function alreadySkippedAsk(raw) {
+  const text = normalize(raw);
+  return /\bskipped\b/.test(text) && /\b(what now|what should i|eat now|what do i eat)\b/.test(text);
+}
+
+export function isLowIntakeAsk(raw) {
+  const text = normalize(raw);
+  return /\beat(ing)? this little\b/.test(text)
+    || /\bthis little while (nursing|breastfeeding)\b/.test(text)
+    || /\bok to eat this little\b/.test(text);
+}
+
+export function isNursingHungryAsk(raw) {
+  const text = normalize(raw);
+  return /\b(breastfeed|nursing|breast feeding)/.test(text) && /\b(always hungry|so hungry|starving)\b/.test(text);
+}
+
+export function isMetaCallieAsk(raw) {
+  const text = normalize(raw);
+  return /\bwhy do you keep (saying )?ask callie\b/.test(text)
+    || /\bwhy (do you|are you) (keep )?(saying|telling me to) ask callie\b/.test(text);
+}
+
 export function localCoachTeach(raw) {
   // A link is fetched server-side. Saying "from this menu" with no link and
   // no photo is still a guess, so that one stays here.
   if (hasMenuLink(raw)) return null;
+  if (alreadySkippedAsk(raw) || isLowIntakeAsk(raw) || isNursingHungryAsk(raw) || isMetaCallieAsk(raw)) {
+    return null;
+  }
   if (menuUnseen(raw)) return { kind: "teach", topic: "menuLink" };
   const text = normalize(raw);
   if (!text || text.length > 180) return null;
@@ -114,6 +144,7 @@ export function localCoachTeach(raw) {
   if (SUSHI.test(text)) return { kind: "teach", topic: "sushi" };
   if (PIZZA_MEAL.some((pattern) => pattern.test(text))) return { kind: "teach", topic: "pizzaMeal" };
   if (OTHER_CUISINE.test(text)) return null;
+  if (NAMED_DISH.test(text)) return null;
   if (STEPS.test(text) && !MEAL_ASK.test(text)) return { kind: "teach", topic: "steps" };
   for (const pattern of PS_METHOD) {
     if (pattern.test(text)) return { kind: "teach", topic: "psMethod" };
@@ -138,6 +169,10 @@ export function teachBody(topic, ctx = {}) {
   if (topic === "neverSkip") {
     return ctx.again ? COACH_COPY.teachNeverSkipAgain : COACH_COPY.teachNeverSkip;
   }
+  if (topic === "skippedMeal") return COACH_COPY.teachSkippedMeal;
+  if (topic === "lowIntake") return COACH_COPY.teachLowIntake;
+  if (topic === "nursingHungry") return COACH_COPY.teachNursingHungry;
+  if (topic === "metaCallie") return COACH_COPY.teachMetaCallie;
   if (topic === "realFood") {
     if (ctx.notLogging) return COACH_COPY.teachRealFood;
     return `${COACH_COPY.teachRealFood} ${COACH_COPY.teachRealFoodLogAhead}`;

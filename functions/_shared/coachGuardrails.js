@@ -205,7 +205,12 @@ const GUILT = [
   /\b(half )?a sleeve of cookies\b/,
   /\bate half a sleeve\b/,
   /\bnot hungry but i should eat\b/,
+  /\bdon'?t want to log\b/,
+  /\bcan'?t send me a new (breakfast|lunch|dinner|meal)\b/,
+  /\byou can'?t send me\b/,
   /\bskipped (lunch|breakfast|dinner|a meal)\b/,
+  /\bi (messed up|screwed up|ruined it)\b/,
+  /\bshouldn'?t have (eaten|had)\b/,
 ];
 
 const NEXT_MEAL = /\b(what should i eat|what (do|can|should) i (eat|have|get|order)|what to eat next|eat next|for (breakfast|lunch|dinner)|what'?s for (breakfast|lunch|dinner))\b/;
@@ -229,8 +234,14 @@ const SUPPLY = [
   /\b(breast ?feed|breastfeeding|nursing|pumping)\b[^.?!]{0,30}\b(enough|affect|hurt|drop|boost|increase|impact|safe)\b/,
   /\b(enough|affect|hurt|drop|boost|increase|impact)\b[^.?!]{0,30}\b(milk|supply)\b/,
   /\bpumping less than usual\b/,
+  /\bpumped? (way )?less\b/,
+  /\bpumping less\b/,
+  /\boutput dropped\b/,
+  /\bsupply tanked\b/,
   /\blos(ing|t) my milk\b/,
   /\bsupply went down\b/,
+  /\bfor supply\b/,
+  /\bok for supply\b/,
 ];
 
 /**
@@ -251,6 +262,7 @@ const FOOD_ASK = new RegExp(
     "\\bsmoothie\\b", "\\bpizza\\b", "\\bcookies?\\b", "\\bcottage cheese\\b", "\\bvegetarian\\b",
     "\\btortillas?\\b", "\\btacos?\\b", "\\bsandwich(?:es)?\\b", "\\balmonds?\\b",
     "\\bmcdonalds\\b",
+    "\\bpho\\b", "\\bbroth\\b", "\\bnoodles?\\b", "\\bwraps?\\b", "\\bbeef\\b",
   ].join("|"),
   "i",
 );
@@ -316,6 +328,7 @@ const MOOD = [
   /\bi'?ve been crying\b/,
   /\bive been crying\b/,
   /\bcry(ing)? and i don'?t know why\b/,
+  /\bcry(ing)?\b.{0,48}\bdon'?t (really )?know why\b/,
   /\bfeel(ing)? (really )?(down|low|hopeless)( lately)?\b/,
   /\bnot myself\b/,
   /\banxious all the time\b/,
@@ -327,10 +340,26 @@ export function isMoodAsk(raw) {
   return hits(MOOD, String(raw || "").toLowerCase().trim());
 }
 
+/** Last two mama asks: stay in mood/crisis when the next line is not food. */
+export function recentCarefulDoor(priorAsks = []) {
+  const recent = (Array.isArray(priorAsks) ? priorAsks : []).slice(-2);
+  let door = null;
+  for (const ask of recent) {
+    if (isCrisisUrgent(ask)) door = "urgent";
+    else if (isMoodAsk(ask) && door !== "urgent") door = "mood";
+  }
+  return door;
+}
+
 /** Feelings with no food in them that are not the mood door. */
 const EMOTIONAL = [
   /\b(get|getting) (my |the )?baby to sleep\b/,
   /\bbaby sleep\b/,
+  /\bso lonely\b/,
+  /\bi'?m lonely\b/,
+  /\bcolic\b/,
+  /\bmy back is killing me\b/,
+  /\bback (is |keeps )?killing me\b/,
 ];
 
 export function isEmotionalAsk(raw) {
@@ -379,14 +408,15 @@ function hits(patterns, text) {
  *   something the coach shouldn't speak to — she gets her cards and one
  *   honest line, rather than a dead end.
  */
-export function classifyAsk(raw, { mode = "ask" } = {}) {
+export function classifyAsk(raw, { mode = "ask", priorAsks = [] } = {}) {
   const text = String(raw || "").toLowerCase().trim();
   if (!text) return { scope: "food", aside: null };
 
-  // Never answered, never softened into an aside.
+  // Crisis before every other door. A purge or ibuprofen line that also
+  // says she wants to die is 911/988, not the disordered or pharmacist line.
+  if (isCrisisUrgent(text)) return { scope: "urgent", aside: null };
   if (hits(DISORDERED, text)) return { scope: "disordered", aside: null };
   if (hits(MEDICATION, text)) return { scope: "medication", aside: null };
-  if (isCrisisUrgent(text)) return { scope: "urgent", aside: null };
   if (hits(MOOD, text)) return { scope: "mood", aside: null };
   if (hits(URGENT, text)) return { scope: "urgent", aside: null };
 
@@ -405,10 +435,15 @@ export function classifyAsk(raw, { mode = "ask" } = {}) {
   if (hits(ADMIN, text)) return { scope: "admin", aside: null };
   if (hits(EXERCISE_CAL, text)) return { scope: "off_topic", aside: null };
   if (foodAsk || guilt) return { scope: "food", aside: null };
+  const careful = recentCarefulDoor(priorAsks);
+  if (careful) return { scope: careful, aside: null, follow: true };
   if (hits(OFF_TOPIC, text) || isEmotionalAsk(text)) return { scope: "off_topic", aside: null };
   // A kitchen or menu photo plus a "what can I make" caption is food,
   // even when the caption itself has no food word.
   if (mode === "kitchen" || mode === "menu") return { scope: "food", aside: null };
+
+  // After a food ask, a non-food leftover ("I'm so lonely") is Callie's.
+  if (priorAsks.length && !foodAsk && !guilt) return { scope: "off_topic", aside: null };
 
   // No refusal matched and no food word either. The model looks at it.
   return { scope: "unclear", aside: null };
@@ -487,7 +522,8 @@ const DEFLECT_FOR_SCOPE = {
   mood: "mood",
 };
 
-export function deflectForScope(scope, asked = "") {
+export function deflectForScope(scope, asked = "", { follow = false } = {}) {
+  if (follow && scope === "mood") return "moodFollow";
   if (scope === "urgent") {
     if (isCrisisUrgent(asked)) return "emergency";
     return isClinicalUrgent(asked) ? "medical" : "care";

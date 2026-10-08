@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { localCoachIntent, slotNamedInAsk } from "./coachIntent.js";
+import { isFollowUpAsk, localCoachIntent, slotNamedInAsk } from "./coachIntent.js";
 
 describe("asks the coach answers without a model", () => {
   it("routes the question she asks most", () => {
@@ -81,6 +81,13 @@ describe("asks the coach answers without a model", () => {
     expect(localCoachIntent("something lighter")).toMatchObject({ prefer: "lighter" });
     expect(localCoachIntent("more protein")).toMatchObject({ prefer: "protein" });
     expect(localCoachIntent("none of these")).toMatchObject({ kind: "more" });
+  });
+
+  it("only inherits a slot for ~30 minutes", () => {
+    const now = Date.parse("2026-09-04T18:30:00");
+    expect(isFollowUpAsk("something else", { lastAt: now - 10 * 60 * 1000, now })).toBe(true);
+    expect(isFollowUpAsk("something else", { lastAt: now - 31 * 60 * 1000, now })).toBe(false);
+    expect(isFollowUpAsk("something else", { lastAt: 0, now })).toBe(false);
   });
 });
 

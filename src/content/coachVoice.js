@@ -60,6 +60,8 @@ export const COACH_COPY = {
   retryLoad: "Try again",
   askTimeout: "That took too long. Try me again.",
   retryAsk: "Try me again",
+  staleBuild: "This screen is out of date. Refresh to get the latest coach.",
+  refreshCoach: "Refresh",
   entryTitle: "Not sure what to eat?",
   entryCta: "Ask the coach",
 
@@ -70,8 +72,9 @@ export const COACH_COPY = {
   addPhoto: "Attach a photo",
   photoMenu: "Menu",
   photoFridge: "Fridge",
-  photoReadyMenu: "Menu photo ready",
-  photoReadyKitchen: "Kitchen photo ready",
+  photoReady: "Photo ready",
+  photoReadyMenu: "Photo ready",
+  photoReadyKitchen: "Photo ready",
   photoRemove: "Remove photo",
   showNumbers: "Show numbers again",
   thinking: "Thinking",
@@ -229,9 +232,17 @@ export const COACH_COPY = {
   teachMenuMiss:
     "I opened the link, but I won't name a dish I couldn't find on the page. Send a photo of the menu.",
   teachNeverSkip:
-    "Absolutely not. You never skip a meal! The goal isn't to nail your macros every single time — it's to nourish yourself and learn how to fuel your body. Eat something simple and lower calorie: grilled chicken and rice, or even a protein shake. Follow your hunger, too. Some days you burned more, and those days need more.",
+    "Don't skip — eat something simple now. The goal isn't to nail your macros every single time. Follow your hunger; some days you burned more, and those days need more.",
   teachNeverSkipAgain:
-    "Still eat something tonight, even if it's small. Greek yogurt with berries or a protein shake is enough when nothing sounds good.",
+    "Still eat something now, even if it's small. A simple plate is enough when nothing sounds good.",
+  teachSkippedMeal:
+    "Eat now — something simple is enough. Skipping already happened; the next bite is what matters.",
+  teachLowIntake:
+    "No — eat more. Nursing needs fuel, and a small day is a reason to eat, not a reason to wait.",
+  teachNursingHungry:
+    "Nursing burns a lot. Here are filling options.",
+  teachMetaCallie:
+    "Food questions I answer here. Health, supply-worry, and feelings questions go to Callie because she knows you.",
   teachRealFood:
     "Any real food can fit your macros. A slice of pizza is real food — water, yeast, flour, tomatoes, cheese. An Oreo is not; it's full of stuff made in a lab. We can make macros work for real food.",
   teachRealFoodLogAhead:
@@ -292,13 +303,15 @@ const COACH_MEDICAL_LINE = medicalDeflectLine();
 export const COACH_MOOD_LINE =
   "I'm so sorry. That's a lot to carry, and you don't have to push through it alone. Crying a lot in the weeks after a baby is really common, and it's very treatable. Please tell Callie, and your doctor or midwife too. Postpartum Support International's helpline is 1-800-944-4773 (call or text). If you ever feel unsafe, call or text 988.";
 export const COACH_MOOD_FOOD = "And whenever you're ready, here's something easy to eat:";
+export const COACH_MOOD_FOLLOW =
+  "I hear you. You wouldn't be bothering anyone — Callie wants to hear from you. Message her whenever you're ready.";
 
 export function moodDeflectLine(noted = false, { hasFood = false } = {}) {
   let line = COACH_MOOD_LINE;
   if (noted === true) {
     line = line.replace(
       "Please tell Callie, and your doctor or midwife too.",
-      "I've added a note for Callie, and please tell her, and your doctor or midwife too.",
+      "I've added a note for Callie. Please tell her too, and your doctor or midwife.",
     );
   }
   if (INCLUDE_MATERNAL_MENTAL_HEALTH_HOTLINE) {
@@ -329,6 +342,8 @@ export const COACH_GUILT_LINE = "One day doesn't change anything, and you still 
 export const COACH_WATER_SNACK = "Have some water.";
 export const COACH_FINE_TUNING_LINE =
   "Callie's still fine-tuning your numbers, so here's an easy one for now.";
+export const COACH_FINE_TUNING_FEW =
+  "Callie's still fine-tuning your numbers, so here are a few easy ones for now.";
 export const COACH_LOCAL_PICKS_LINE = "Here are a few easy ones that work for today.";
 
 /** Careful lines. Each ends by leading into plates so she never hits a stop. */
@@ -349,6 +364,7 @@ export function disorderedDeflectLine(noted) {
 export function coachDeflectLine(deflect, { noted = false, hasFood = false } = {}) {
   if (deflect === "disordered") return disorderedDeflectLine(noted === true);
   if (deflect === "mood") return moodDeflectLine(noted === true, { hasFood });
+  if (deflect === "moodFollow") return COACH_MOOD_FOLLOW;
   return (COACH_DEFLECT[deflect] || COACH_DEFLECT.offTopic).line;
 }
 
@@ -356,12 +372,13 @@ function normalizeCoachApostrophes(text) {
   return String(text || "").replace(/[\u2018\u2019\u201B]/g, "'");
 }
 
-export function leadFineTuningReply(reply, { hasPlates = false } = {}) {
-  const lead = normalizeCoachApostrophes(COACH_FINE_TUNING_LINE);
-  const rest = normalizeCoachApostrophes(String(reply || "")).trim();
+export function leadFineTuningReply(reply, { hasPlates = false, plateCount = 0 } = {}) {
+  const many = Number(plateCount) >= 2;
+  const lead = normalizeCoachApostrophes(many ? COACH_FINE_TUNING_FEW : COACH_FINE_TUNING_LINE);
+  const rest = normalizeCoachApostrophes(String(reply || "")).trim()
+    .replace(/^Callie's still fine-tuning your numbers, so here(?:'s an easy one| are a few easy ones) for now\.\s*/i, "");
   if (!hasPlates) {
     if (!rest) return "";
-    if (rest.startsWith(lead)) return rest.slice(lead.length).trim().slice(0, 400);
     return rest.slice(0, 400);
   }
   if (!rest) return lead;
@@ -378,10 +395,13 @@ export function leadLimitReply(reply, { hasPlates = false, photo = false } = {})
     return `${COACH_LIMIT_PHOTO} ${rest}`.trim().slice(0, 400);
   }
   if (hasPlates) {
-    if (!rest || rest.startsWith(COACH_LIMIT_FOOD) || rest.startsWith(COACH_LIMIT_LINE)) {
+    const stripped = rest
+      .replace(/^Here are a few easy ones(?: that work for today)?\.\s*/i, "")
+      .replace(/^Here's something that fits what you asked\.\s*/i, "");
+    if (!stripped || stripped.startsWith(COACH_LIMIT_FOOD) || stripped.startsWith(COACH_LIMIT_LINE)) {
       return COACH_LIMIT_FOOD;
     }
-    return `${COACH_LIMIT_FOOD} ${rest}`.trim().slice(0, 400);
+    return `${COACH_LIMIT_FOOD} ${stripped}`.trim().slice(0, 400);
   }
   if (!rest) return COACH_LIMIT_SPENT;
   if (rest.startsWith(COACH_LIMIT_LINE)) return rest.slice(0, 400);
@@ -406,6 +426,10 @@ export const COACH_DEFLECT = {
   },
   mood: {
     line: COACH_MOOD_LINE,
+    cta: "Message Callie",
+  },
+  moodFollow: {
+    line: COACH_MOOD_FOLLOW,
     cta: "Message Callie",
   },
   care: {

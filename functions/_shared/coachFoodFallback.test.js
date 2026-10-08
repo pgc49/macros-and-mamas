@@ -7,8 +7,9 @@ import {
   ensureFoodMeals,
   fallbackMealReply,
   hideCoachMealMacros,
+  replyPlateContract,
 } from "./coachFoodFallback.js";
-import { mealHaystack } from "./coachMealFilter.js";
+import { mealHaystack, mealLooksDairy } from "./coachMealFilter.js";
 
 describe("buildCoachFallbackMeals", () => {
   it("builds a veggie scramble from eggs and vegetables", () => {
@@ -148,12 +149,107 @@ describe("alignReplyToMeals", () => {
     expect(alignReplyToMeals(
       "Those leftovers can wait. Here's Grilled chicken and rice, Turkey skillet, or Salmon and rice.",
       meals,
-    )).toBe("Those leftovers can wait. If you'd rather, there's also Turkey skillet or Salmon and rice.");
+    )).toBe("Those leftovers can wait. Here's Turkey skillet and Salmon and rice.");
     expect(alignReplyToMeals(
       "Here's Grilled chicken and rice, Leftover chicken and rice, or Chicken thighs and rice.",
       meals,
-    )).toBe("Here's Turkey skillet, or Salmon and rice.");
+    )).toBe("Here's Turkey skillet and Salmon and rice.");
+    expect(alignReplyToMeals(
+      "Eat the leftovers. Or turkey meatballs or turkey taco bowl.",
+      meals,
+    )).not.toMatch(/^Or | Or /);
   });
+});
+
+describe("live bank plates", () => {
+  it("keeps Chipotle, Starbucks, and Trader Joe's plates on dairy-free", () => {
+    const dairy = { allergens: ["dairy"], food_avoids: "cottage cheese", allergen_note: "dairy-free" };
+    const chipotle = buildCoachFallbackMeals({ text: "what can I order at Chipotle", slot: "dinner", profile: dairy });
+    expect(chipotle.length).toBeGreaterThanOrEqual(2);
+    expect(chipotle.every((meal) => meal.orderOnly && meal.source === "menu")).toBe(true);
+    expect(chipotle.every((meal) => !mealLooksDairy(meal))).toBe(true);
+
+    const starbucks = buildCoachFallbackMeals({ text: "at Starbucks, what's a good option", slot: "dinner", profile: dairy });
+    expect(starbucks.length).toBeGreaterThanOrEqual(2);
+    expect(starbucks.every((meal) => meal.orderOnly)).toBe(true);
+
+    const tjs = buildCoachFallbackMeals({ text: "Trader Joe's run, what should I grab for easy lunches", slot: "dinner", profile: dairy });
+    expect(tjs.length).toBeGreaterThanOrEqual(2);
+    expect(tjs.every((meal) => meal.source === "pantry")).toBe(true);
+    expect(tjs.every((meal) => meal.source !== "menu")).toBe(true);
+  });
+
+  it("matches snack, walk, sweet, and eggs-and-veg plates to the ask", () => {
+    const snack = buildCoachFallbackMeals({ text: "snack before bed?", slot: "dinner" });
+    expect(snack.length).toBeGreaterThanOrEqual(2);
+    expect(snack.every((meal) => !/teriyaki|taco|salmon/i.test(meal.name))).toBe(true);
+
+    const walk = buildCoachFallbackMeals({ text: "what should I eat before a walk", slot: "dinner" });
+    expect(walk.length).toBeGreaterThanOrEqual(2);
+    expect(walk.every((meal) => !/teriyaki|meatball|salmon/i.test(meal.name))).toBe(true);
+
+    const sweet = buildCoachFallbackMeals({
+      text: "I want something sweet that still fits",
+      slot: "dinner",
+      profile: { allergens: ["dairy"] },
+    });
+    expect(sweet.length).toBeGreaterThanOrEqual(2);
+    expect(sweet.every((meal) => !mealLooksDairy(meal))).toBe(true);
+    expect(sweet.every((meal) => !/teriyaki|meatball|salmon/i.test(meal.name))).toBe(true);
+
+    const eggs = ensureFoodMeals([], { text: "eggs and veggies, what can I make", slot: "dinner" });
+    expect(eggs.meals.length).toBeGreaterThanOrEqual(2);
+    expect(eggs.meals.every((meal) => /scramble|frittata|omelette|egg/i.test(meal.name))).toBe(true);
+    expect(replyPlateContract(eggs.reply, eggs.meals).ok).toBe(true);
+    expect(eggs.reply).not.toMatch(/^Here(?:'s| is| are) [^.]+\.\s*$/i);
+  });
+
+  it("never says the menu is missing and rewrites prose when a plate is dropped", () => {
+    const chick = ensureFoodMeals([], { text: "what's good at Chick-fil-A", slot: "dinner" });
+    expect(chick.meals.length).toBeGreaterThanOrEqual(2);
+    expect(chick.reply).not.toMatch(/do not have|don'?t have .{0,24}menu|menu details on hand/i);
+    expect(replyPlateContract(chick.reply, chick.meals).ok).toBe(true);
+
+    const dropped = alignReplyToMeals(
+      "Here's Tuna pouch wrap, Egg bites, and Protein box.",
+      [{ name: "Egg bites" }, { name: "Chicken wrap" }],
+    );
+    expect(dropped).not.toMatch(/Tuna pouch wrap/i);
+    expect(replyPlateContract(dropped, [{ name: "Egg bites" }, { name: "Chicken wrap" }]).ok).toBe(true);
+  });
+});
+
+describe("diet plate matrix", () => {
+  const asks = [
+    "what should I have for dinner",
+    "give me 3 options for dinner",
+    "something new please",
+    "what should I eat",
+    "I'm hungry",
+    "lunch ideas",
+  ];
+  const profiles = [
+    { diet: "vegan" },
+    { diet: "vegetarian" },
+    { diet: "pescatarian" },
+    { allergens: ["dairy"] },
+    { allergens: ["gluten"] },
+    { allergens: ["eggs"] },
+    { diet: "vegan", allergens: ["gluten"] },
+    { diet: "vegan", allergens: ["eggs"] },
+    { diet: "vegetarian", allergens: ["dairy"] },
+    { diet: "pescatarian", allergens: ["dairy"] },
+    { diet: "vegan", allergens: ["dairy", "gluten"] },
+  ];
+
+  it.each(profiles.flatMap((profile) => asks.map((text) => [profile, text])))(
+    "fills 3 plates of at least 15g for %j / %s",
+    (profile, text) => {
+      const meals = buildCoachFallbackMeals({ text, slot: "dinner", profile, count: 3 });
+      expect(meals.length).toBeGreaterThanOrEqual(3);
+      expect(meals.every((meal) => (Number(meal.p) || 0) >= 15)).toBe(true);
+    },
+  );
 });
 
 describe("hideCoachMealMacros", () => {

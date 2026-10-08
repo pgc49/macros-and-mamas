@@ -150,6 +150,7 @@ export function sanitizeCoachReply({
       requestId: ticket,
       ...(payload.limited === true ? { limited: true } : {}),
       ...(payload.noted === true ? { noted: true } : {}),
+      ...(payload.outage === true ? { outage: true } : {}),
     };
     if (
       !nextPayload.cards.length

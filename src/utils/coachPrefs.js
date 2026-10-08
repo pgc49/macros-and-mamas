@@ -24,7 +24,8 @@ const FISH = [
 const EGGS = ["egg", "eggs", "whites"];
 const DAIRY = [
   "yogurt", "yoghurt", "cottage", "cheese", "milk", "whey", "butter", "cream",
-  "feta", "parmesan", "ricotta", "mozzarella",
+  "feta", "parmesan", "ricotta", "mozzarella", "cheddar", "jack", "monterey",
+  "swiss", "provolone", "gouda", "brie", "queso", "quesadilla", "ghee", "cheesy",
 ];
 const HONEY = ["honey"];
 
@@ -39,6 +40,22 @@ const ALLERGEN_WORDS = {
   soy: ["soy", "tofu", "tempeh", "edamame", "miso", "sofritas"],
   sesame: ["sesame", "tahini"],
 };
+
+/** "Skip sour cream" is an order note. Nut butter is not dairy. */
+export function dairyScanText(hay = "") {
+  return String(hay || "")
+    .replace(/\bdairy[- ]free(?:\s+yogurt|\s+yoghurt)?\b/gi, " ")
+    .replace(/\b(peanut|almond|cashew|sunflower|nut)\s+butter\b/gi, " ")
+    .replace(/\b(skip|no|without|hold|easy on)\s+(the\s+)?(extra\s+)?sour cream\b/gi, " ")
+    .replace(/\b(skip|no|without|hold|easy on)\s+(the\s+)?(extra\s+)?(?:cheese|cheddar|provolone|feta)\b/gi, " ");
+}
+
+const DAIRY_TOKENS = new Set([
+  "yogurt", "yoghurt", "cottage", "cheese", "milk", "whey", "butter", "cream",
+  "feta", "parmesan", "ricotta", "mozzarella", "dairy", "cheddar", "jack",
+  "monterey", "swiss", "provolone", "gouda", "brie", "queso", "quesadilla",
+  "ghee", "cheesy",
+]);
 
 /** Everything searchable about a meal: name, blurb, category, ingredient lines. */
 export function mealHaystack(meal) {
@@ -68,7 +85,7 @@ export function dislikeTokens({ allergens, foodAvoids, allergenNote } = {}) {
   const extra = [foodAvoids, allergenNote].filter(Boolean).join(",");
   for (const part of String(extra).split(/[\n,]+/)) {
     const t = part.trim().toLowerCase();
-    if (t.length >= 3) tokens.push(t);
+    if (t.length >= 3 && !/^dairy[- ]free$/.test(t) && t !== "df") tokens.push(t);
   }
   return [...new Set(tokens)];
 }
@@ -81,7 +98,8 @@ function singularize(word) {
 }
 
 export function mealHitsToken(meal, token) {
-  const hay = mealHaystack(meal);
+  const t0 = String(token || "").toLowerCase().trim();
+  const hay = DAIRY_TOKENS.has(t0) ? dairyScanText(mealHaystack(meal)) : mealHaystack(meal);
   const t = String(token || "").toLowerCase().trim();
   if (!t) return false;
   if (t.includes(" ")) return hay.includes(t);
@@ -98,7 +116,10 @@ export function mealAllowedForDiet(meal, diet) {
   const has = (list) => list.some((w) => hay.includes(w));
   if (d === "pescatarian") return !has(LAND_MEAT);
   if (d === "vegetarian") return !has(LAND_MEAT) && !has(FISH);
-  if (d === "vegan") return !has(LAND_MEAT) && !has(FISH) && !has(EGGS) && !has(DAIRY) && !has(HONEY);
+  if (d === "vegan") {
+    const dairyHay = dairyScanText(hay);
+    return !has(LAND_MEAT) && !has(FISH) && !has(EGGS) && !DAIRY.some((w) => dairyHay.includes(w)) && !has(HONEY);
+  }
   return true;
 }
 

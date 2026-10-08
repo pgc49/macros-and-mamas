@@ -12,7 +12,7 @@ import { mealBaseName } from "./coachAskMeals.js";
 import { CALLIE_RECIPES } from "./callieRecipes.js";
 import { isGuiltAsk, macrosPlausible } from "./coachGuardrails.js";
 import { constraintTextFrom, extractAskConstraints, filterCoachMeals, ingredientList, mealBreaksConstraints, mealBreaksSavedPrefs } from "./coachMealFilter.js";
-import { restaurantFromAsk } from "../../src/utils/coachIntent.js";
+import { isMenuRestaurant, restaurantFromAsk } from "../../src/utils/coachIntent.js";
 import { sanitizePlanMeal } from "./planMealShape.js";
 
 export { COACH_LOCAL_PICKS_LINE };
@@ -34,8 +34,10 @@ function ingredientDesc(meal) {
   if (items.length) return items.join(", ");
   const desc = String(meal?.desc || "").trim();
   const name = String(meal?.name || "").trim();
-  if (desc && desc.toLowerCase() !== name.toLowerCase()) return desc;
-  return desc || "A simple plate you can make now.";
+  if (!desc || desc.toLowerCase() === name.toLowerCase() || !/\s/.test(desc)) {
+    return "A simple plate you can make now.";
+  }
+  return desc;
 }
 
 const SLOT_CAT = {
@@ -53,6 +55,16 @@ export const MEAL_TEACH_TOPICS = new Set([
 ]);
 
 const FROM_WHAT_SHE_HAS = [
+  {
+    test: (text) => /\b(ground beef|beef)\b/.test(text) && /\brice\b/.test(text),
+    meal: {
+      name: "Ground beef and rice",
+      desc: "The ground beef and rice you have. Brown the beef and serve it over rice.",
+      cal: 460, p: 34, c: 42, f: 16,
+      ingredients: [{ item: "ground beef", amount: "5 oz" }, { item: "cooked rice", amount: "1 cup" }],
+      steps: ["Brown the beef and serve it over the rice."],
+    },
+  },
   {
     test: (text) => /\beggs?\b/.test(text) && /\b(veg|vegetable|spinach|pepper|onion|fridge)\b/.test(text),
     meal: {
@@ -94,13 +106,23 @@ const FROM_WHAT_SHE_HAS = [
     },
   },
   {
-    test: (text) => /\btortillas?\b/.test(text) && /\bbeans?\b/.test(text),
+    test: (text) => /\btortillas?\b/.test(text) && /\bbeans?\b/.test(text) && /\bcheese\b/.test(text),
     meal: {
       name: "Bean and cheese quesadilla",
       desc: "Tortillas, beans, and cheese in a skillet.",
       cal: 380, p: 18, c: 42, f: 14,
       ingredients: [{ item: "tortillas", amount: "2" }, { item: "beans", amount: "1/2 cup" }, { item: "cheese", amount: "1 oz" }],
       steps: ["Warm the tortillas with beans and cheese until the cheese melts."],
+    },
+  },
+  {
+    test: (text) => /\btortillas?\b/.test(text) && /\bbeans?\b/.test(text),
+    meal: {
+      name: "Bean and salsa tacos",
+      desc: "Tortillas, beans, and salsa. Skip the cheese if it's off the table.",
+      cal: 360, p: 16, c: 52, f: 8,
+      ingredients: [{ item: "tortillas", amount: "2" }, { item: "beans", amount: "3/4 cup" }, { item: "salsa", amount: "2 tbsp" }],
+      steps: ["Warm the tortillas with beans and salsa."],
     },
   },
   {
@@ -186,7 +208,11 @@ const FROM_WHAT_SHE_HAS = [
 ];
 
 function orderPlate(name, desc, cal, p, c, f, ingredients = []) {
-  return { ...plate(name, desc, cal, p, c, f, ingredients), source: "menu", orderOnly: true };
+  return { ...plate(name, desc, cal, p, c, f, ingredients), source: "menu", orderOnly: true, fixedPortion: true };
+}
+
+function grabPlate(name, desc, cal, p, c, f, ingredients = []) {
+  return { ...plate(name, desc, cal, p, c, f, ingredients), source: "pantry", fixedPortion: true };
 }
 
 const PLACE_PLATES = [
@@ -201,6 +227,20 @@ const PLACE_PLATES = [
       ]),
       orderPlate("Chipotle sofritas bowl", "Say: sofritas, beans, fajita veggies, salsa. No sour cream.", 430, 22, 48, 12, [
         { item: "sofritas", amount: "1 serving" }, { item: "beans", amount: "regular" }, { item: "fajita veggies", amount: "regular" }, { item: "salsa", amount: "regular" },
+      ]),
+    ],
+  },
+  {
+    test: (text) => /\bpho\b/.test(text),
+    meals: [
+      orderPlate("Pho with extra protein", "Pho with extra steak, broth first, a small scoop of noodles.", 480, 36, 38, 14, [
+        { item: "pho broth", amount: "1 bowl" }, { item: "steak", amount: "extra" }, { item: "rice noodles", amount: "a small scoop" },
+      ]),
+      orderPlate("Pho, extra meat, easy on noodles", "Ask for extra protein and go easy on the noodles. Broth is fine for supply.", 450, 34, 32, 14, [
+        { item: "pho", amount: "1 bowl" }, { item: "extra meat", amount: "1 order" }, { item: "noodles", amount: "half" },
+      ]),
+      orderPlate("Pho with an egg", "Pho with an egg in the broth. Skip a second helping of noodles if you want.", 420, 28, 36, 12, [
+        { item: "pho broth", amount: "1 bowl" }, { item: "egg", amount: "1" }, { item: "rice noodles", amount: "a small scoop" },
       ]),
     ],
   },
@@ -221,36 +261,230 @@ const PLACE_PLATES = [
   {
     test: (text) => /\bstarbucks\b/.test(text),
     meals: [
-      plate("Egg white bites", "Egg white and red pepper bites.", 170, 12, 11, 8, [
-        { item: "egg white bites", amount: "1 order" },
+      orderPlate("Egg bites", "Say: egg bites. Pair with a protein box if you want more.", 300, 20, 16, 16, [
+        { item: "egg bites", amount: "1 order" },
       ]),
-      plate("Turkey bacon sandwich", "The turkey bacon, egg white, and cheddar.", 230, 17, 28, 5, [
+      orderPlate("Protein box", "The eggs and cheese protein box.", 370, 23, 31, 19, [
+        { item: "protein box", amount: "1" },
+      ]),
+      orderPlate("Turkey bacon sandwich", "The turkey bacon, egg white, and cheddar.", 230, 17, 28, 5, [
         { item: "turkey bacon sandwich", amount: "1" },
+      ]),
+      orderPlate("Oatmeal with fruit", "Say: oatmeal. Add banana if they have it.", 220, 6, 40, 4, [
+        { item: "oatmeal", amount: "1" }, { item: "banana", amount: "1" },
+      ]),
+      orderPlate("Chicken wrap", "Say: chicken wrap. No sauce if you want it lighter.", 360, 24, 32, 12, [
+        { item: "chicken wrap", amount: "1" },
       ]),
     ],
   },
   {
     test: (text) => /\btrader joe/.test(text),
     meals: [
-      plate("Grilled chicken strips", "A bag of grilled chicken and a salad kit.", 320, 36, 8, 12, [
+      grabPlate("Grilled chicken strips", "A bag of grilled chicken and a salad kit.", 320, 36, 8, 12, [
         { item: "grilled chicken strips", amount: "4 oz" }, { item: "salad kit", amount: "1 serving" },
       ]),
-      plate("Turkey burger", "Frozen turkey burger on a bun or lettuce.", 380, 28, 24, 16, [
+      grabPlate("Turkey burger", "Frozen turkey burger on a bun or lettuce.", 380, 28, 24, 16, [
         { item: "turkey burger", amount: "1" },
+      ]),
+      grabPlate("Salmon and a salad kit", "Frozen salmon and a bagged salad.", 420, 34, 12, 22, [
+        { item: "frozen salmon", amount: "5 oz" }, { item: "salad kit", amount: "1 serving" },
+      ]),
+    ],
+  },
+  {
+    test: (text) => /\bin[- ]?n[- ]?out\b/.test(text),
+    meals: [
+      orderPlate("Protein Style burger", "Say: Protein Style, no spread, mustard or ketchup if you want it.", 400, 25, 15, 22, [
+        { item: "Protein Style burger", amount: "1" },
+      ]),
+      orderPlate("Protein Style, mustard only", "Say: Protein Style, mustard only, no spread.", 380, 25, 12, 20, [
+        { item: "Protein Style burger", amount: "1" }, { item: "mustard", amount: "on the burger" },
+      ]),
+      orderPlate("Protein Style and a few fries", "Say: Protein Style, and a few fries if you want them.", 520, 26, 38, 26, [
+        { item: "Protein Style burger", amount: "1" }, { item: "fries", amount: "a few" },
       ]),
     ],
   },
   {
     test: (text) => /\bchick[- ]?fil[- ]?a\b/.test(text),
     meals: [
-      plate("Grilled nuggets", "An 8-count with a fruit cup.", 130, 25, 2, 3, [
+      orderPlate("Grilled nuggets", "Say: 8-count grilled nuggets and a fruit cup. No sauce if you want it lighter.", 250, 28, 14, 4, [
         { item: "grilled nuggets", amount: "8-count" }, { item: "fruit cup", amount: "1" },
       ]),
-      plate("Grilled chicken sandwich", "Grilled sandwich, no sauce if you want it lighter.", 380, 37, 41, 6, [
+      orderPlate("Grilled chicken sandwich", "Say: grilled sandwich, no sauce if you want it lighter.", 380, 37, 41, 6, [
         { item: "grilled chicken sandwich", amount: "1" },
+      ]),
+      orderPlate("Cool wrap", "Say: grilled cool wrap. Ask for dressing on the side.", 350, 28, 28, 12, [
+        { item: "cool wrap", amount: "1" },
       ]),
     ],
   },
+  {
+    test: (text) => /\bpanera\b/.test(text),
+    meals: [
+      orderPlate("Turkey sandwich", "Say: turkey on whole grain, extra turkey, easy on the spread.", 480, 36, 44, 14, [
+        { item: "turkey sandwich", amount: "1" },
+      ]),
+      orderPlate("Greek salad with chicken", "Say: Greek salad, add chicken, dressing on the side.", 420, 32, 18, 22, [
+        { item: "Greek salad", amount: "1" }, { item: "chicken", amount: "1 scoop" },
+      ]),
+      orderPlate("Warm grain bowl", "Say: warm grain bowl with extra chicken, half the dressing.", 500, 34, 48, 16, [
+        { item: "grain bowl", amount: "1" }, { item: "chicken", amount: "extra" },
+      ]),
+    ],
+  },
+  {
+    test: (text) => /\bsweetgreen\b/.test(text),
+    meals: [
+      orderPlate("Chicken harvest bowl", "Say: chicken, extra chicken, dressing on the side.", 480, 38, 36, 16, [
+        { item: "chicken", amount: "double" }, { item: "warm grains", amount: "half" },
+      ]),
+      orderPlate("Kale Caesar with chicken", "Say: kale Caesar, extra chicken, dressing on the side.", 420, 36, 18, 20, [
+        { item: "kale Caesar", amount: "1" }, { item: "chicken", amount: "extra" },
+      ]),
+    ],
+  },
+  {
+    test: (text) => /\bsubway\b/.test(text),
+    meals: [
+      orderPlate("Turkey sub", "Say: 6-inch turkey, extra turkey, veggies, mustard, skip mayo.", 380, 28, 40, 8, [
+        { item: "turkey sub", amount: "6-inch" },
+      ]),
+      orderPlate("Chicken sub", "Say: 6-inch grilled chicken, extra protein, veggies, no mayo.", 400, 32, 40, 8, [
+        { item: "chicken sub", amount: "6-inch" },
+      ]),
+    ],
+  },
+  {
+    test: (text) => /\btaco bell\b/.test(text),
+    meals: [
+      orderPlate("Cantina chicken bowl", "Say: cantina chicken bowl, extra chicken, easy on the chips.", 480, 32, 42, 16, [
+        { item: "cantina chicken", amount: "1 bowl" },
+      ]),
+      orderPlate("Crunchwrap, no sour cream", "Say: crunchwrap, no sour cream, add extra protein if they will.", 540, 20, 50, 22, [
+        { item: "crunchwrap", amount: "1" },
+      ]),
+    ],
+  },
+  {
+    test: (text) => /\bmcdonald'?s\b/.test(text),
+    meals: [
+      orderPlate("Egg McMuffin", "Say: Egg McMuffin. Add a side of fruit if you want it.", 310, 17, 30, 13, [
+        { item: "Egg McMuffin", amount: "1" },
+      ]),
+      orderPlate("McChicken, no mayo", "Say: McChicken, no mayo.", 360, 14, 40, 16, [
+        { item: "McChicken", amount: "1" },
+      ]),
+    ],
+  },
+  {
+    test: (text) => /\bcava\b/.test(text),
+    meals: [
+      orderPlate("Cava chicken bowl", "Say: greens, chicken, extra chicken, hummus, harissa, half rice.", 480, 38, 36, 16, [
+        { item: "chicken", amount: "double" }, { item: "hummus", amount: "regular" }, { item: "rice", amount: "half" },
+      ]),
+      orderPlate("Cava steak bowl", "Say: steak, greens, cucumber, garlic dressing on the side.", 460, 36, 28, 18, [
+        { item: "steak", amount: "1 scoop" }, { item: "greens", amount: "base" },
+      ]),
+    ],
+  },
+  {
+    test: (text) => /\bjersey mike/i.test(text),
+    meals: [
+      orderPlate("Turkey and provolone", "Say: #7 turkey, extra meat, easy on the oil, no extra cheese.", 480, 36, 40, 16, [
+        { item: "turkey sub", amount: "regular" },
+      ]),
+      orderPlate("Club supreme, easy oil", "Say: club, extra turkey, oil on the side.", 520, 34, 42, 20, [
+        { item: "club sub", amount: "regular" },
+      ]),
+    ],
+  },
+  {
+    test: (text) => /\bpanda express\b/.test(text),
+    meals: [
+      orderPlate("Grilled teriyaki plate", "Say: grilled teriyaki, super greens, half the rice.", 480, 36, 40, 12, [
+        { item: "grilled teriyaki", amount: "1 scoop" }, { item: "super greens", amount: "1" }, { item: "rice", amount: "half" },
+      ]),
+      orderPlate("String bean chicken", "Say: string bean chicken, super greens, skip the extra sauce.", 420, 28, 28, 14, [
+        { item: "string bean chicken", amount: "1 scoop" }, { item: "super greens", amount: "1" },
+      ]),
+    ],
+  },
+  {
+    test: (text) => /\bmexican\b/.test(text),
+    meals: [
+      orderPlate("Chicken taco plate", "Say: two chicken tacos, extra chicken, salsa, skip sour cream.", 460, 36, 36, 14, [
+        { item: "chicken tacos", amount: "2" }, { item: "salsa", amount: "on the side" },
+      ]),
+      orderPlate("Steak fajitas", "Say: steak fajitas, extra veg, tortillas on the side.", 500, 38, 32, 18, [
+        { item: "steak fajitas", amount: "1 order" }, { item: "tortillas", amount: "on the side" },
+      ]),
+      orderPlate("Chicken burrito bowl", "Say: bowl, extra chicken, beans, salsa, no sour cream.", 480, 40, 40, 12, [
+        { item: "chicken", amount: "double" }, { item: "beans", amount: "regular" }, { item: "rice", amount: "half" },
+      ]),
+    ],
+  },
+];
+
+const SWEET_PLATES = [
+  plate("Greek yogurt with berries", "Yogurt and fruit when you want something sweet.", 180, 24, 16, 2, [
+    { item: "nonfat Greek yogurt", amount: "170g" }, { item: "berries", amount: "75g" },
+  ]),
+  plate("Cottage cheese and fruit", "Cottage cheese with fruit.", 200, 22, 16, 4, [
+    { item: "cottage cheese", amount: "1 cup" }, { item: "fruit", amount: "1 cup" },
+  ]),
+  plate("Banana and peanut butter", "A banana with a spoon of peanut butter.", 220, 8, 28, 10, [
+    { item: "banana", amount: "1" }, { item: "peanut butter", amount: "1 tbsp" },
+  ]),
+  plate("Apple and almond butter", "An apple with a spoon of almond butter.", 230, 6, 26, 12, [
+    { item: "apple", amount: "1" }, { item: "almond butter", amount: "1 tbsp" },
+  ]),
+  plate("Frozen berries and oats", "Frozen berries over a handful of oats.", 210, 6, 40, 3, [
+    { item: "frozen berries", amount: "1 cup" }, { item: "oats", amount: "1/3 cup" },
+  ]),
+  plate("Dates and almonds", "A few dates and a handful of almonds.", 220, 5, 28, 10, [
+    { item: "dates", amount: "3" }, { item: "almonds", amount: "1 oz" },
+  ]),
+];
+
+const WALK_SNACKS = [
+  plate("Yogurt cup", "A yogurt you can eat before you go.", 150, 16, 12, 2, [
+    { item: "Greek yogurt", amount: "170g" },
+  ]),
+  plate("Banana and string cheese", "A banana and a cheese stick.", 190, 8, 24, 6, [
+    { item: "banana", amount: "1" }, { item: "string cheese", amount: "1" },
+  ]),
+  plate("Apple and almonds", "An apple and a small handful of almonds.", 220, 6, 24, 12, [
+    { item: "apple", amount: "1" }, { item: "almonds", amount: "1 oz" },
+  ]),
+  plate("Banana and almonds", "A banana and a small handful of almonds.", 230, 5, 28, 12, [
+    { item: "banana", amount: "1" }, { item: "almonds", amount: "1 oz" },
+  ]),
+  plate("Deli turkey roll-ups", "Turkey slices you can eat before you go.", 180, 24, 2, 6, [
+    { item: "deli turkey", amount: "3 oz" },
+  ]),
+];
+
+const EGG_VEG_MORE = [
+  plate("Veggie frittata", "Eggs and the vegetables, in a skillet.", 340, 24, 8, 22, [
+    { item: "eggs", amount: "3" }, { item: "mixed vegetables", amount: "1 cup" },
+  ]),
+  plate("Veggie omelette", "Eggs folded over the vegetables you have.", 320, 22, 6, 22, [
+    { item: "eggs", amount: "2" }, { item: "mixed vegetables", amount: "1 cup" },
+  ]),
+];
+
+const LOW_CARB_PLATES = [
+  plate("Turkey and cucumbers", "Turkey slices and cucumber. Low carb.", 220, 28, 6, 8, [
+    { item: "turkey", amount: "4 oz" }, { item: "cucumber", amount: "1 cup" },
+  ]),
+  plate("Eggs and spinach", "Eggs and a pile of spinach.", 260, 20, 4, 18, [
+    { item: "eggs", amount: "2" }, { item: "spinach", amount: "2 cups" },
+  ]),
+  plate("Grilled chicken and veg", "Chicken and a vegetable. Keep the carbs low.", 320, 40, 8, 10, [
+    { item: "chicken breast", amount: "5 oz" }, { item: "green vegetables", amount: "2 cups" },
+  ]),
 ];
 
 const TEACH_PLATES = {
@@ -373,6 +607,12 @@ const QUICK_PLATES = [
   plate("Toast and peanut butter", "Near-zero prep. Water too.", 250, 10, 26, 12, [
     { item: "toast", amount: "1 slice" }, { item: "peanut butter", amount: "1 tbsp" },
   ]),
+  plate("Rice cakes and banana", "Plain rice cakes and a banana.", 220, 4, 48, 2, [
+    { item: "rice cakes", amount: "2" }, { item: "banana", amount: "1" },
+  ]),
+  plate("Apple and almonds", "An apple and a small handful of almonds.", 220, 6, 24, 12, [
+    { item: "apple", amount: "1" }, { item: "almonds", amount: "1 oz" },
+  ]),
 ];
 
 const NO_COOK_PROTEIN = [
@@ -432,6 +672,24 @@ const VEGAN_SAFE = [
   ]),
   plate("Lentil and rice bowl", "Lentils and rice with salsa.", 400, 22, 62, 6, [
     { item: "lentils", amount: "1 cup" }, { item: "cooked rice", amount: "1 cup" }, { item: "salsa", amount: "1/4 cup" },
+  ]),
+  plate("Hummus and rice bowl", "Hummus, rice, and cucumber.", 420, 16, 58, 12, [
+    { item: "hummus", amount: "1/2 cup" }, { item: "cooked rice", amount: "1 cup" }, { item: "cucumber", amount: "1 cup" },
+  ]),
+  plate("Peanut stew and rice", "Peanut stew over rice.", 460, 18, 52, 16, [
+    { item: "peanut stew", amount: "1 cup" }, { item: "cooked rice", amount: "1 cup" },
+  ]),
+];
+
+const PESC_PLATES = [
+  plate("Shrimp and rice", "Shrimp, rice, and steamed vegetables.", 400, 32, 42, 6, [
+    { item: "shrimp", amount: "5 oz" }, { item: "cooked rice", amount: "1 cup" }, { item: "vegetables", amount: "1 cup" },
+  ]),
+  plate("White fish and potatoes", "White fish, potatoes, and a vegetable.", 400, 38, 28, 10, [
+    { item: "white fish", amount: "6 oz" }, { item: "potatoes", amount: "1 cup" }, { item: "green vegetables", amount: "1 cup" },
+  ]),
+  plate("Salmon and rice", "Salmon over rice.", 440, 38, 30, 14, [
+    { item: "salmon", amount: "5 oz" }, { item: "cooked rice", amount: "1 cup" },
   ]),
 ];
 
@@ -495,8 +753,14 @@ const VEG_PLATES = [
   plate("Egg and toast", "Eggs and toast when meat is off.", 310, 18, 22, 14, [
     { item: "eggs", amount: "2" }, { item: "toast", amount: "1 slice" },
   ]),
-  plate("Peanut butter toast and fruit", "Toast, peanut butter, and a piece of fruit.", 320, 12, 40, 12, [
-    { item: "toast", amount: "1 slice" }, { item: "peanut butter", amount: "1 tbsp" }, { item: "fruit", amount: "1" },
+  plate("Greek yogurt bowl", "Yogurt, berries, and a scoop of protein.", 280, 24, 28, 4, [
+    { item: "nonfat Greek yogurt", amount: "170g" }, { item: "berries", amount: "75g" }, { item: "protein powder", amount: "1 scoop" },
+  ]),
+  plate("Tofu scramble", "Tofu scramble with vegetables.", 340, 22, 16, 16, [
+    { item: "tofu", amount: "6 oz" }, { item: "vegetables", amount: "1 cup" },
+  ]),
+  plate("Chickpea pasta", "Chickpea pasta with marinara.", 420, 20, 56, 8, [
+    { item: "chickpea pasta", amount: "2 oz dry" }, { item: "marinara", amount: "1 cup" },
   ]),
 ];
 
@@ -561,14 +825,35 @@ function asMeal(raw, slot) {
     name,
     desc: ingredientDesc({ ...raw, name }),
     fromSaved: Boolean(raw.fromSaved),
+    orderOnly: Boolean(raw.orderOnly),
+    fixedPortion: Boolean(raw.fixedPortion || raw.orderOnly),
+    ...(raw.source ? { source: raw.source } : {}),
   });
   return macrosPlausible(meal) ? meal : null;
+}
+
+function shownTooOften(name, skipNames = []) {
+  const key = mealBaseName(name);
+  if (!key) return false;
+  const hits = (skipNames || []).filter((item) => mealBaseName(item) === key).length;
+  if (!hits) return false;
+  const replyCount = Math.max(1, Math.ceil((skipNames || []).length / 3));
+  const cap = Math.max(1, Math.ceil(replyCount / 5));
+  return hits >= cap && (skipNames || []).length >= 3;
 }
 
 function addMeal(out, seen, raw, slot, diet, constraints, skipNames, profile) {
   if (!raw) return;
   if (slot === "breakfast" && /\brotisserie chicken pieces\b/i.test(raw.name || "")) return;
-  if (slot && slot !== "snack" && (Number(raw.p) || 0) < MEAL_PROTEIN_FLOOR && !raw.orderOnly) return;
+  const skipProteinFloor = Boolean(
+    raw.orderOnly
+    || constraints?.sweet
+    || constraints?.snackish
+    || constraints?.light
+    || slot === "snack",
+  );
+  if (slot && slot !== "snack" && (Number(raw.p) || 0) < MEAL_PROTEIN_FLOOR && !skipProteinFloor) return;
+  if (shownTooOften(raw.name, skipNames)) return;
   if (mealBreaksConstraints(raw, constraints, skipNames)) return;
   if (mealBreaksSavedPrefs(raw, profile)) return;
   const key = mealBaseName(raw.name);
@@ -617,16 +902,38 @@ export function buildCoachFallbackMeals({
   const skip = (skipNames || []).map((item) => String(item || "").trim()).filter(Boolean);
   const out = [];
   const seen = new Set();
-  const oneHanded = HANDS_FULL.test(asked) || /\b(one[- ]handed|holding (the )?baby)\b/i.test(asked);
+  const oneHanded = HANDS_FULL.test(inventory) || /\b(one[- ]handed|holding (the )?baby)\b/i.test(inventory);
   const add = (raw) => {
     if (oneHanded && /\b(bowl|soup|oatmeal)\b/i.test(String(raw?.name || ""))) return;
     addMeal(out, seen, raw, slot, diet, constraints, skip, profile);
   };
   const kitchen = mode === "kitchen";
-  const place = restaurantFromAsk(text);
+  const namedPantry = /\b(nvm|never mind|we have|i have|got |ground|beef|chicken|rice|eggs?|leftover|yogurt|pasta|turkey|salmon|beans?)\b/.test(inventory);
+  const place = restaurantFromAsk(text) || /\bpho\b/.test(inventory);
 
+  if (constraints.sweet) {
+    for (const meal of SWEET_PLATES) add(meal);
+    if (out.length >= 2) return out.slice(0, count);
+  }
+  if (constraints.snackish || slot === "snack") {
+    for (const meal of WALK_SNACKS) add(meal);
+    for (const meal of QUICK_PLATES) add(meal);
+    for (const meal of SWEET_PLATES) add(meal);
+    if (out.length >= 2) return out.slice(0, count);
+  }
+  if (constraints.lowCarb) {
+    for (const meal of LOW_CARB_PLATES) add(meal);
+    if (out.length >= 2) return out.slice(0, count);
+  }
   if (iron) {
     for (const meal of IRON_PLATES) add(meal);
+  }
+  if (place) {
+    for (const rule of PLACE_PLATES) {
+      if (!rule.test(inventory)) continue;
+      for (const meal of rule.meals) add(meal);
+    }
+    if (out.length >= 2) return out.slice(0, count);
   }
   if (oneHanded) {
     for (const meal of CAR_HANDHELD) add(meal);
@@ -638,7 +945,12 @@ export function buildCoachFallbackMeals({
     for (const meal of CAR_HANDHELD) add(meal);
     for (const meal of NO_COOK_PROTEIN) add(meal);
   }
-  if (/\btacos?\b/.test(asked)) {
+  if (/\b(don'?t have to cook|no cooking|no[- ]cook|zero prep)\b/.test(inventory)) {
+    for (const meal of NO_COOK_PROTEIN) add(meal);
+    for (const meal of NO_COOK) add(meal);
+    if (out.length >= 2) return out.slice(0, count);
+  }
+  if (/\btacos?\b/.test(inventory)) {
     for (const meal of TACO_PLATES) add(meal);
   }
   if (/\b(don'?t have to cook|no cooking|no[- ]cook|zero prep)\b/.test(asked) || (/\b70g\b/.test(asked) && /\bprotein\b/.test(asked))) {
@@ -650,8 +962,19 @@ export function buildCoachFallbackMeals({
     for (const meal of NO_COOK_PROTEIN) add(meal);
     for (const meal of NO_COOK) add(meal);
   }
-  if (constraints.vegetarian) {
-    for (const meal of VEG_PLATES) add(meal);
+  if (diet === "vegan") {
+    for (const meal of rotateList(VEGAN_SAFE, skip)) add(meal);
+    if (out.length >= count) return out.slice(0, count);
+  }
+  if (diet === "vegetarian" || constraints.vegetarian) {
+    for (const meal of rotateList(VEG_PLATES, skip)) add(meal);
+    for (const meal of rotateList(VEGAN_SAFE, skip)) add(meal);
+    if (out.length >= count) return out.slice(0, count);
+  }
+  if (diet === "pescatarian") {
+    for (const meal of rotateList(PESC_PLATES, skip)) add(meal);
+    for (const meal of rotateList(VEG_PLATES, skip)) add(meal);
+    if (out.length >= count) return out.slice(0, count);
   }
   if (constraints.noEggs && (slot === "breakfast" || /\bbreakfast\b/.test(asked))) {
     for (const meal of NO_EGG_BREAKFAST) add(meal);
@@ -677,17 +1000,17 @@ export function buildCoachFallbackMeals({
     return out.slice(0, count);
   }
 
-  for (const rule of FROM_WHAT_SHE_HAS) {
-    if (rule.test(inventory)) add(rule.meal);
-    if (out.length >= count) return out.slice(0, count);
-  }
-
-  if (place) {
-    for (const rule of PLACE_PLATES) {
+  if (!kitchen || namedPantry) {
+    let fromHand = false;
+    for (const rule of FROM_WHAT_SHE_HAS) {
       if (!rule.test(inventory)) continue;
-      for (const meal of rule.meals) add(meal);
+      add(rule.meal);
+      fromHand = true;
     }
-    if (out.length >= count) return out.slice(0, count);
+    if (fromHand && /\beggs?\b/.test(inventory) && /\b(veg|vegetable)/.test(inventory)) {
+      for (const meal of EGG_VEG_MORE) add(meal);
+    }
+    if (fromHand && out.length >= 2) return out.slice(0, count);
   }
 
   const teach = kitchen ? [] : (TEACH_PLATES[topic] || []);
@@ -706,10 +1029,13 @@ export function buildCoachFallbackMeals({
     if (out.length >= count) return out.slice(0, count);
   }
 
-  const preferred = recipesForSlot(slot);
-  for (const recipe of preferred) {
-    add(recipePlate(recipe.name));
-    if (out.length >= count) return out.slice(0, count);
+  const useRecipes = !place && !constraints.sweet && !constraints.snackish && slot !== "snack";
+  if (useRecipes) {
+    const preferred = recipesForSlot(slot);
+    for (const recipe of preferred) {
+      add(recipePlate(recipe.name));
+      if (out.length >= count) return out.slice(0, count);
+    }
   }
 
   for (const meal of rotateList(PROTEIN_FORWARD, skip)) add(meal);
@@ -724,7 +1050,7 @@ export function buildCoachFallbackMeals({
     const last = asMeal(ALLERGEN_FREE[0], slot);
     if (last) out.push(last);
   }
-  const kept = filterCoachMeals(out, { text, profile, skipNames: skip });
+  const kept = filterCoachMeals(out, { text, profile, skipNames: skip, priorAsks });
   if (kept.length) return kept.slice(0, count);
   const last = asMeal(ALLERGEN_FREE[0], slot);
   return last ? [last] : out.slice(0, count);
@@ -734,34 +1060,73 @@ function offerLine(meals) {
   const names = (meals || []).map((meal) => meal.name).filter(Boolean);
   if (!names.length) return "";
   if (names.length === 1) return `Here's ${names[0]}.`;
-  if (names.length === 2) return `Here's ${names[0]}, or ${names[1]}.`;
-  return `Here's ${names[0]}, ${names[1]}, or ${names[2]}.`;
+  if (names.length === 2) return `Here's ${names[0]} and ${names[1]}.`;
+  return `Here's ${names[0]}, ${names[1]}, and ${names[2]}.`;
 }
 
+export function foodQuestionLead(text = "", meals = []) {
+  const asked = String(text || "").toLowerCase();
+  if (!asked) return "";
+  if (/\bwhy do you keep (saying )?ask callie\b/.test(asked) || /\bwhy (do you|are you).{0,24}ask callie\b/.test(asked)) {
+    return "Food questions I answer here. Health, supply-worry, and feelings questions go to Callie because she knows you. ";
+  }
+  if (/\bskipped\b/.test(asked) && /\b(what now|what should i|eat now)\b/.test(asked)) {
+    return "Eat now — something simple is enough. ";
+  }
+  if (/\beat(ing)? this little\b/.test(asked) || /\bthis little while (nursing|breastfeeding)\b/.test(asked)) {
+    return "No — eat more. Nursing needs fuel, and a small day is a reason to eat, not a reason to wait. ";
+  }
+  if (/\b(breastfeed|nursing|breast feeding)/.test(asked) && /\b(always hungry|so hungry)\b/.test(asked)) {
+    return "Nursing burns a lot. Here are filling options. ";
+  }
+  if (/\bwraps?\b/.test(asked) && /\bprotein\b/.test(asked)) {
+    return "Yes, if there's a real protein in that wrap — chicken, turkey, or beans. If it's mostly veg, add a side. ";
+  }
+  if (/\bbroth\b/.test(asked) && (/\bsupply\b/.test(asked) || /\bnoodles?\b/.test(asked))) {
+    return "Yes — broth is fine for supply. A small scoop of noodles is okay; skip the extra bowl if you want. ";
+  }
+  if (/\benough protein\b/.test(asked)) {
+    const p = Number(meals[0]?.p) || 0;
+    if (p >= 25) return "Yes — that has enough protein. ";
+    return "Not quite on its own — pair it with more protein. ";
+  }
+  if (/\b(is|are|should) [^.?]{0,48}\b(ok|okay|fine)\b/.test(asked) && (FOOD_HINT.test(asked) || meals.length)) {
+    return "Yes — that works. ";
+  }
+  return "";
+}
+
+const FOOD_HINT = /\b(wrap|broth|noodle|pho|protein|nursing|chicken|rice|beef|egg|pizza|taco)\b/;
+
 export function warmMealReply(meals, text = "") {
-  if ((meals || []).some((meal) => meal?.fromSaved)) return COACH_LOCAL_PICKS_LINE;
+  if ((meals || []).some((meal) => meal?.fromSaved)) {
+    const yesNo = foodQuestionLead(text, meals);
+    return yesNo ? `${yesNo.trim()} ${COACH_LOCAL_PICKS_LINE}` : COACH_LOCAL_PICKS_LINE;
+  }
   const offer = offerLine(meals);
   if (!offer) return COACH_LOCAL_PICKS_LINE;
   const asked = String(text || "").toLowerCase();
-  let lead = "";
+  let lead = foodQuestionLead(asked, meals);
   const gap = asked.match(/(\d+)\s*g(?:rams)?\s+(?:of\s+)?protein/);
   if (gap && meals.length >= 2) {
     const need = Number(gap[1]);
     const two = (Number(meals[0]?.p) || 0) + (Number(meals[1]?.p) || 0);
-    if (need > 0 && two >= need) lead = "Have both and you're basically there. ";
+    if (need > 0 && two >= need && meals.length === 2) lead = "Have both and you're basically there. ";
   }
   if (!lead && isGuiltAsk(asked)) lead = `${COACH_GUILT_LINE} `;
-  if (/\brotisserie\b/.test(asked) || (/\bchicken\b/.test(asked) && /\brice\b/.test(asked))) {
+  if (!lead && (/\brotisserie\b/.test(asked) || (/\bchicken\b/.test(asked) && /\brice\b/.test(asked)))) {
     lead = "Since you've got chicken and rice already, ";
-  } else if (/\bchipotle\b/.test(asked)) {
+  } else if (!lead && /\bpho\b/.test(asked)) {
+    lead = "For pho, broth first, extra protein, go easy on the noodles. ";
+  } else if (!lead && /\bchipotle\b/.test(asked)) {
     lead = "At Chipotle, ";
-  } else if (/\bthai\b/.test(asked)) {
+  } else if (!lead && /\bthai\b/.test(asked)) {
     lead = "For Thai tonight, ";
-  } else if (/\btacos?\b/.test(asked)) {
+  } else if (!lead && /\btacos?\b/.test(asked)) {
     lead = "Yes — tacos work. ";
-  } else if (/\b(don'?t have to cook|no cooking|no[- ]cook)\b/.test(asked)) {
+  } else if (!lead && /\b(don'?t have to cook|no cooking|no[- ]cook)\b/.test(asked)) {
     lead = "Nothing to cook: ";
-  } else if (asked.trim()) {
+  } else if (!lead && asked.trim()) {
     lead = "Here's something that fits what you asked. ";
   }
   if (!lead) return offer;
@@ -836,7 +1201,7 @@ export function ensureFoodMeals(meals, {
     const shownEarly = list.slice(0, want);
     return {
       meals: shownEarly,
-      reply: alignReplyToMeals(String(reply || "").trim() || fallbackMealReply(shownEarly), shownEarly),
+      reply: finishMealReply(text, shownEarly, reply),
       filled: false,
     };
   }
@@ -856,9 +1221,30 @@ export function ensureFoodMeals(meals, {
   const shown = kept.slice(0, want);
   return {
     meals: shown,
-    reply: alignReplyToMeals(String(reply || "").trim() || fallbackMealReply(shown), shown),
+    reply: finishMealReply(text, shown, reply),
     filled: shown.length > list.length,
   };
+}
+
+export function keepPlaceMeals(meals, place) {
+  if (!isMenuRestaurant(place)) return meals || [];
+  return (meals || []).filter((meal) => meal.orderOnly || meal.source === "menu");
+}
+
+function finishMealReply(text, meals, reply = "") {
+  let out = String(reply || "").trim() || fallbackMealReply(meals, text);
+  const lead = foodQuestionLead(text, meals);
+  if (lead && !out.toLowerCase().startsWith(lead.trim().toLowerCase())) {
+    out = `${lead.trim()} ${out}`.trim();
+  }
+  if (isGuiltAsk(text) && meals.length && !out.includes(COACH_GUILT_LINE)) {
+    out = `${COACH_GUILT_LINE} ${out}`.trim();
+  }
+  out = out.replace(/\bfrom your plan\b/gi, "for now");
+  if (/^here(?:'s| is| are)\s+[^.]+\.\s*$/i.test(out) && !foodQuestionLead(text, meals)) {
+    out = fallbackMealReply(meals, text);
+  }
+  return alignReplyToMeals(out, meals);
 }
 
 export function hideCoachMealMacros(meals) {
@@ -901,13 +1287,8 @@ function offerNamesUnshown(sentence, shown) {
 
 function trailingOrOffer(meals, alreadyNamed = new Set()) {
   if ((meals || []).some((meal) => meal?.fromSaved)) return COACH_LOCAL_PICKS_LINE;
-  const names = (meals || [])
-    .map((meal) => meal.name)
-    .filter((name) => name && !alreadyNamed.has(mealBaseName(name)));
-  if (!names.length) return "";
-  if (names.length === 1) return `If you'd rather, there's also ${names[0]}.`;
-  if (names.length === 2) return `If you'd rather, there's also ${names[0]} or ${names[1]}.`;
-  return `If you'd rather, there's also ${names[0]}, ${names[1]}, or ${names[2]}.`;
+  const rest = (meals || []).filter((meal) => meal.name && !alreadyNamed.has(mealBaseName(meal.name)));
+  return offerLine(rest);
 }
 
 /** Keep warm prose. Rewrite only an offer sentence that names a dropped plate. */
@@ -936,7 +1317,50 @@ export function alignReplyToMeals(reply, meals) {
     return fallbackMealReply(list);
   });
   let out = (changed ? next.join(" ") : text).trim();
-  out = out.replace(/^Or\s+/i, "If you'd rather, there's also ");
-  out = out.replace(/\s+Or\s+/g, " If you'd rather, there's also ");
+  const leftover = out.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const kept = [];
+  let droppedOr = false;
+  for (const sentence of leftover) {
+    if (/^Or\b/i.test(sentence)) {
+      droppedOr = true;
+      continue;
+    }
+    kept.push(sentence);
+  }
+  out = kept.join(" ").trim();
+  if (droppedOr) {
+    const named = offerLine(list);
+    if (named && !out.toLowerCase().includes(String(list[0]?.name || "").toLowerCase())) {
+      out = `${out} ${named}`.trim();
+    }
+  }
   return out.replace(/\s{2,}/g, " ").trim();
+}
+
+/** Prose names only plates on screen; cards match the sentence when it lists them. */
+export function replyPlateContract(reply, meals) {
+  const list = (meals || []).filter((meal) => meal?.name);
+  const text = String(reply || "").trim();
+  const shown = new Set(list.map((meal) => mealBaseName(meal.name)));
+  const missing = [];
+  for (const sentence of text.split(/(?<=[.!?])\s+/).filter(Boolean)) {
+    if (!/^(here(?:'s| is| are)|or)\b/i.test(sentence) && !OFFER_LEAD.test(sentence)) continue;
+    if (offerNamesUnshown(sentence, shown)) {
+      for (const bit of offerBits(sentence)) {
+        const base = mealBaseName(bit);
+        if (base && base.length >= 4 && ![...shown].some((name) => name === base || name.includes(base) || base.includes(name))) {
+          missing.push(base);
+        }
+      }
+    }
+  }
+  const generic = /few easy ones|something that fits|eat now|nursing burns|one day doesn't|food questions i answer/i.test(text);
+  const listing = /here(?:'s| is| are) .+(,| and )/i.test(text);
+  const unnamed = listing && !generic
+    ? list.filter((meal) => {
+      const key = mealBaseName(meal.name);
+      return key && !text.toLowerCase().includes(key);
+    }).map((meal) => meal.name)
+    : [];
+  return { ok: missing.length === 0 && unnamed.length === 0 && !/^or\b/i.test(text), missing, unnamed };
 }

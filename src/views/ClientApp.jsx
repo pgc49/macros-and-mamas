@@ -228,8 +228,8 @@ export function ClientApp({
   const calProgress = formatRangeProgress(rangeTotals?.cal, calLo, calHi, " cal", rangeEatenWord);
   const anyOver = [pSt, cSt, fSt, calSt].includes("over");
   const coachReady = coachIsAvailable({ macros, mealLogDate: mealLogDate || todayLog?.date });
-  // One instant for the Today card and the Coach tab. The door reads it as
-  // Pacific wall time (`coachSlotFromTime`), not the browser's local hour.
+  // One instant for the Today card and the Coach tab. The door reads the
+  // device's local clock (`coachSlotFromTime`), not a hard-coded Pacific zone.
   const [coachClock, setCoachClock] = useState(() => new Date());
   useEffect(() => {
     if (tab === "coach") setCoachClock(new Date());
@@ -838,6 +838,8 @@ export function ClientApp({
             onAppendMessage={onAppendCoachMessage}
             onHideMessage={onHideCoachMessage}
             postCoach={postCoach}
+            email={profile?.email || ""}
+            isAdmin={profile?.role === "admin"}
           />
         </ErrorBoundary>
       )}

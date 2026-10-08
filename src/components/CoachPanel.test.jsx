@@ -391,7 +391,7 @@ describe("the coach answers on the device", () => {
   });
 
   it("opens on dinner after lunch when the clock is evening", async () => {
-    const evening = new Date("2026-10-01T04:07:00.000Z");
+    const evening = new Date(2026, 9, 1, 21, 7, 0);
     renderPanel({
       now: evening,
       onLoadThread: async () => [],
@@ -878,7 +878,7 @@ describe("what isn't the coach's goes to Callie", () => {
 
   it("does not say she skipped a meal when nothing is logged tonight", async () => {
     renderPanel({
-      now: new Date("2026-09-05T01:30:00.000Z"),
+      now: new Date(2026, 8, 4, 18, 30, 0),
       entries: [],
       totals: { cal: 0, p: 0, c: 0, f: 0 },
       onLoadThread: async () => [],
@@ -1425,7 +1425,7 @@ describe("priority pass: persist, crisis, reload, load error", () => {
 
   it("recomputes Dinner when she taps a quick ask at 6:30pm", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-09-04T15:00:00.000Z"));
+    vi.setSystemTime(new Date(2026, 8, 4, 8, 0, 0));
     function Harness() {
       const [now, setNow] = useState(() => new Date());
       return (
@@ -1441,10 +1441,34 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     render(<Harness />);
     await screen.findByText(COACH_COPY.title);
     expect(document.body.textContent).toMatch(/Breakfast/);
-    vi.setSystemTime(new Date("2026-09-05T01:30:00.000Z"));
+    vi.setSystemTime(new Date(2026, 8, 4, 18, 30, 0));
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askEat }));
     await waitFor(() => expect(document.body.textContent).toMatch(/Dinner · \d+ cal/));
     vi.useRealTimers();
+  });
+
+  it.each([
+    ["I've been making myself throw up and I want to die"],
+    ["should I take ibuprofen? I want to hurt myself"],
+    ["my supply dropped and I want to die"],
+    ["I've been crying every day and I want to die"],
+    ["I've been dizzy since this morning and I want to die"],
+  ])("shows 911/988 when crisis is mixed into %s", async (text) => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      scope: "urgent",
+      deflect: "emergency",
+      meals: [],
+    }));
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), { target: { value: text } });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.emergency.line);
+    expect(screen.queryByText(COACH_DEFLECT.disordered.line)).toBeNull();
+    expect(screen.queryByText(COACH_DEFLECT.medication.line)).toBeNull();
+    expect(screen.queryByText(COACH_DEFLECT.supply.line)).toBeNull();
+    expect(document.body.textContent).toMatch(/911|988/);
+    expect(postCoach).toHaveBeenCalled();
   });
 
   it("shows the emergency line and Message Callie too for a crisis ask", async () => {
@@ -1760,5 +1784,59 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     expect(postCoach.mock.calls[0][0].mode).toBe("kitchen");
     expect(postCoach.mock.calls[0][0].text).toBe("this is what I have, what can I make");
     await screen.findByText("From what you have.");
+  });
+
+  it("keeps crisis, queue, slot, and saved rows honest across a reload", async () => {
+    const saved = [];
+    const postCoach = vi.fn(async (body) => {
+      if (body?.text?.includes("want to die")) {
+        return { ok: true, scope: "urgent", deflect: "emergency", meals: [], saved: true };
+      }
+      return {
+        ok: true,
+        saved: true,
+        reply: "At Chipotle, here's Chipotle chicken bowl, Chipotle steak bowl, and Chipotle sofritas bowl.",
+        meals: [
+          { name: "Chipotle chicken bowl", cal: 520, p: 48, c: 36, f: 14, desc: "Chicken bowl.", orderOnly: true, source: "menu" },
+          { name: "Chipotle steak bowl", cal: 480, p: 40, c: 30, f: 16, desc: "Steak bowl.", orderOnly: true, source: "menu" },
+          { name: "Chipotle sofritas bowl", cal: 430, p: 22, c: 48, f: 12, desc: "Sofritas bowl.", orderOnly: true, source: "menu" },
+        ],
+      };
+    });
+    const onAppendMessage = vi.fn(async (row) => {
+      saved.push(row);
+      return { id: `saved-${saved.length}` };
+    });
+    const { rerender } = renderPanel({
+      postCoach,
+      onAppendMessage,
+      onLoadThread: async () => [],
+      now: new Date(2026, 8, 4, 18, 30, 0),
+    });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I've been making myself throw up and I want to die" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.emergency.line);
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "what can I order at Chipotle" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText("Chipotle chicken bowl");
+    const coachSaves = onAppendMessage.mock.calls.map(([row]) => row).filter((row) => row.role === "coach");
+    expect(coachSaves.every((row) => row.kind !== "deflect")).toBe(true);
+    rerender(<CoachPanel {...panelProps({
+      postCoach,
+      onAppendMessage,
+      now: new Date(2026, 8, 4, 18, 30, 0),
+      onLoadThread: async () => [
+        { id: "1", role: "mama", body: "I've been making myself throw up and I want to die", requestId: "a" },
+        { id: "2", role: "coach", body: COACH_DEFLECT.emergency.line, kind: "deflect", payload: { deflect: "emergency", cards: [] }, requestId: "a" },
+        { id: "3", role: "mama", body: "what can I order at Chipotle", requestId: "b" },
+        { id: "4", role: "coach", body: "At Chipotle, here's Chipotle chicken bowl.", kind: "cards", payload: { cards: [{ name: "Chipotle chicken bowl" }] }, requestId: "b" },
+      ],
+    })} />);
+    await screen.findByText(COACH_DEFLECT.emergency.line);
+    expect(screen.getByText("Chipotle chicken bowl")).toBeTruthy();
   });
 });

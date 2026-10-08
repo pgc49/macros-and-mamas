@@ -13,6 +13,7 @@ vi.mock("../_shared/openrouter.js", () => openrouter);
 
 import { onRequestPost } from "./coach.js";
 import { COACH_DEFLECT } from "../../src/content/coachVoice.js";
+import { dairyScanText } from "../_shared/coachMealFilter.js";
 import { LIVE_MACROS_COLUMNS, rejectUnknownPostgrestColumns } from "../_shared/postgrestFake.js";
 
 const USER_ID = "00000000-0000-4000-8000-000000000010";
@@ -307,7 +308,7 @@ describe("access", () => {
     expect(resp.status).toBe(200);
     const data = await resp.json();
     expect(data.reply).toBe(
-      "Callie's still fine-tuning your numbers, so here's an easy one for now. A veggie scramble with two or three eggs and the vegetables you have.",
+      "Callie's still fine-tuning your numbers, so here are a few easy ones for now. A veggie scramble with two or three eggs and the vegetables you have.",
     );
     expect(data.meals.length).toBeGreaterThanOrEqual(1);
     expect(data.meals[0].name).toBe("Veggie scramble");
@@ -352,7 +353,7 @@ describe("access", () => {
     expect(resp.status).toBe(200);
     const data = await resp.json();
     expect(data.reply).toBe(
-      "Callie's still fine-tuning your numbers, so here's an easy one for now. A veggie scramble with two or three eggs and the vegetables you have.",
+      "Callie's still fine-tuning your numbers, so here are a few easy ones for now. A veggie scramble with two or three eggs and the vegetables you have.",
     );
     expect(data.meals.length).toBeGreaterThanOrEqual(1);
     expect(data.meals[0].name).toBe("Veggie scramble");
@@ -488,22 +489,19 @@ describe("the guardrail runs before the model", () => {
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
 
-  it("sends a named restaurant to the model instead of the canned PS line", async () => {
+  it("answers a named chain from the locked plates, not the canned PS line", async () => {
     mockSupabase();
     const resp = await onRequestPost({
       request: request({ mode: "ask", text: "I'm going to Chipotle, what should I order" }),
       env,
     });
+    const data = await resp.json();
     expect(resp.status).toBe(200);
-    expect((await resp.json()).scope).toBe("food");
-    expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(1);
-    expect(openrouter.callOpenRouter.mock.calls[0][0].models[0]).toBe("google/gemini-3.5-flash");
-    expect(openrouter.callOpenRouter.mock.calls[0][0].temperature).toBe(0.5);
-    expect(openrouter.callOpenRouter.mock.calls[0][0].messages).toHaveLength(2);
-    expect(openrouter.callOpenRouter.mock.calls[0][0].reasoning).toEqual({
-      effort: "low",
-      exclude: true,
-    });
+    expect(data.scope).toBe("food");
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(data.meals.every((meal) => meal.orderOnly || /chipotle/i.test(meal.name))).toBe(true);
+    expect(data.reply).not.toMatch(/PS method/i);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
 
   it("answers skip-dinner in Callie's words, without a model call", async () => {
@@ -514,8 +512,9 @@ describe("the guardrail runs before the model", () => {
     });
     const data = await resp.json();
     expect(data.teach).toBe("neverSkip");
-    expect(data.reply).toMatch(/never skip a meal/i);
-    expect(data.reply).not.toMatch(/Still eat something tonight/);
+    expect(data.reply).toMatch(/Don't skip/i);
+    expect(data.reply).not.toMatch(/Absolutely not/);
+    expect(data.reply).not.toMatch(/Still eat something now/);
     expect(data.meals.length).toBeGreaterThanOrEqual(2);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
@@ -530,8 +529,8 @@ describe("the guardrail runs before the model", () => {
     });
     const data = await resp.json();
     expect(data.teach).toBe("neverSkip");
-    expect(data.reply).toMatch(/Still eat something tonight/);
-    expect(data.reply).not.toMatch(/You never skip a meal/);
+    expect(data.reply).toMatch(/Still eat something now/);
+    expect(data.reply).not.toMatch(/Absolutely not/);
   });
 });
 
@@ -1226,7 +1225,8 @@ describe("an escalate lands on her card", () => {
     const data = await resp.json();
     expect(resp.status).toBe(200);
     expect(data.deflect).toBe("supply");
-    expect(coachMessagePosts()).toHaveLength(0);
+    expect(coachMessagePosts()).toHaveLength(1);
+    expect(coachMessagePosts()[0].body).toMatch(/supply always comes first/i);
     expect(summaryPosts()).toHaveLength(0);
     expect(reserveTypes()).toEqual(["coach_note"]);
   });
@@ -1243,7 +1243,7 @@ describe("an escalate lands on her card", () => {
     const data = await resp.json();
     expect(resp.status).toBe(200);
     expect(data.teach).toBe("menuClosed");
-    expect(coachMessagePosts()).toHaveLength(0);
+    expect(coachMessagePosts()).toHaveLength(1);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
     expect(globalThis.fetch.mock.calls.every(([url]) => !String(url).includes("itsjane.com"))).toBe(true);
   });
@@ -1257,8 +1257,8 @@ describe("an escalate lands on her card", () => {
     const data = await resp.json();
     expect(resp.status).toBe(200);
     expect(data.teach).toBe("neverSkip");
-    expect(data.reply).toMatch(/never skip a meal/i);
-    expect(coachMessagePosts()).toHaveLength(0);
+    expect(data.reply).toMatch(/Don't skip/i);
+    expect(coachMessagePosts()).toHaveLength(1);
     expect(summaryPosts()).toHaveLength(0);
   });
 
@@ -1277,7 +1277,7 @@ describe("an escalate lands on her card", () => {
     const data = await resp.json();
     expect(resp.status).toBe(200);
     expect(data.deflect).toBe("again");
-    expect(coachMessagePosts()).toHaveLength(0);
+    expect(coachMessagePosts()).toHaveLength(1);
     expect(summaryPosts()).toHaveLength(0);
   });
 
@@ -1288,7 +1288,7 @@ describe("an escalate lands on her card", () => {
       env,
     });
     expect((await medical.json()).deflect).toBe("medical");
-    expect(coachMessagePosts()).toHaveLength(0);
+    expect(coachMessagePosts()).toHaveLength(1);
     expect(summaryPosts()).toHaveLength(0);
 
     const crisis = await onRequestPost({
@@ -1296,7 +1296,8 @@ describe("an escalate lands on her card", () => {
       env,
     });
     expect((await crisis.json()).deflect).toBe("emergency");
-    expect(coachMessagePosts()).toHaveLength(0);
+    expect(coachMessagePosts()).toHaveLength(2);
+    expect(coachMessagePosts()[1].body).toMatch(/988/);
     expect(summaryPosts()).toHaveLength(1);
     expect(summaryPosts()[0].summary).toContain("Coach refused (crisis): I want to die");
   });
@@ -1868,6 +1869,11 @@ function hay(meal) {
   return `${meal?.name || ""} ${meal?.desc || ""} ${ings}`;
 }
 
+function leakHay(meal, allergenId) {
+  const text = hay(meal);
+  return allergenId === "dairy" ? dairyScanText(text) : text;
+}
+
 describe("saved allergies and diets on every plate path", () => {
   async function askOnPath(path, { allergens = [], diet = "none", text = "dinner ideas" } = {}) {
     mockSupabase({
@@ -1907,7 +1913,7 @@ describe("saved allergies and diets on every plate path", () => {
       it(`${path} drops ${id}`, async () => {
         const { data } = await askOnPath(path, { allergens: [id] });
         expect(data.meals?.length || 0).toBeGreaterThanOrEqual(1);
-        expect(data.meals.every((meal) => !leak.test(hay(meal))), hay(data.meals?.[0])).toBe(true);
+        expect(data.meals.every((meal) => !leak.test(leakHay(meal, id))), leakHay(data.meals?.[0], id)).toBe(true);
       });
     }
     for (const { diet, leak } of DIET_CASES) {

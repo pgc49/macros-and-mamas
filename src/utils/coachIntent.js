@@ -107,19 +107,38 @@ export const FOLLOW_UP_ASK = /\b(something else|anything else|what else|another(
 
 export function isFollowUpAsk(raw, { lastAt = 0, now = Date.now() } = {}) {
   if (!FOLLOW_UP_ASK.test(String(raw || ""))) return false;
-  if (!lastAt) return true;
+  if (!lastAt) return false;
   return now - Number(lastAt) <= 30 * 60 * 1000;
 }
 
 const CHAINS = [
   [/\bchipotle\b/i, "chipotle"],
   [/\bthai\b/i, "thai"],
+  [/\bmexican\b/i, "mexican"],
   [/\bstarbucks\b/i, "starbucks"],
   [/\btrader joe/i, "traderJoes"],
   [/\bchick[- ]?fil[- ]?a\b/i, "chickFilA"],
-  [/\bmcdonalds\b/i, "mcdonalds"],
+  [/\bmcdonald'?s\b/i, "mcdonalds"],
   [/\bin[- ]?n[- ]?out\b/i, "inNOut"],
+  [/\bpanera\b/i, "panera"],
+  [/\bsweetgreen\b/i, "sweetgreen"],
+  [/\bsubway\b/i, "subway"],
+  [/\btaco bell\b/i, "tacoBell"],
+  [/\bcava\b/i, "cava"],
+  [/\bjersey mike/i, "jerseyMikes"],
+  [/\bpanda express\b/i, "pandaExpress"],
 ];
+
+/** Grocery runs are a place, not a restaurant menu. */
+export function isMenuRestaurant(place) {
+  return Boolean(place && place !== "traderJoes" && place !== "generic");
+}
+
+export function placeMealSource(place, fallback = "new") {
+  if (isMenuRestaurant(place)) return "menu";
+  if (place === "traderJoes") return "pantry";
+  return fallback;
+}
 
 /** A named chain or a takeout/order ask. Never a hungry ask with no restaurant. */
 export function restaurantFromAsk(raw) {

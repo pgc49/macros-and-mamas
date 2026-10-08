@@ -61,14 +61,23 @@ import {
 import {
   checkAiLimit,
   fetchEnrollment,
-  json,
+  json as sendJson,
   loadCoachProfile,
   loadCoachSelf,
   requireSupabaseUser,
 } from "../_shared/clientAiAccess.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
-import { hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../../src/utils/coachTeach.js";
+import {
+  alreadySkippedAsk,
+  hasMenuLink,
+  isLowIntakeAsk,
+  isMetaCallieAsk,
+  isNursingHungryAsk,
+  localCoachTeach,
+  PAIN_TOPICS,
+  teachBody,
+} from "../../src/utils/coachTeach.js";
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
 import {
   COACH_BUSY_LINE,
@@ -76,11 +85,13 @@ import {
   COACH_LIMIT_FOOD,
   COACH_LIMIT_PHOTO,
   COACH_LIMIT_SPENT,
+  coachDeflectLine,
   leadFineTuningReply,
   leadLimitReply,
   menuFromPageCopy,
 } from "../../src/content/coachVoice.js";
-import { restaurantFromAsk, slotNamedInAsk } from "../../src/utils/coachIntent.js";
+import { COACH_BUILD } from "../../src/content/coachBuild.js";
+import { placeMealSource, restaurantFromAsk, slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 import {
   buildLocalCoachRecord,
@@ -94,7 +105,11 @@ import {
 } from "../_shared/coachMessages.js";
 import { sizeMealsForPersist } from "../_shared/coachPlateScale.js";
 import { notifyCrisisEmail } from "../_shared/coachCrisisEmail.js";
-import { alignReplyToMeals, ensureFoodMeals, fallbackMealReply, hideCoachMealMacros, MEAL_TEACH_TOPICS, stripCoachMealMacros } from "../_shared/coachFoodFallback.js";
+import { alignReplyToMeals, ensureFoodMeals, fallbackMealReply, foodQuestionLead, hideCoachMealMacros, keepPlaceMeals, MEAL_TEACH_TOPICS, stripCoachMealMacros } from "../_shared/coachFoodFallback.js";
+
+function json(obj, status = 200) {
+  return sendJson({ coachBuild: COACH_BUILD, ...obj }, status);
+}
 
 const MAX_PER_DAY = 30;
 const MAX_RECORD_PER_DAY = 200;
@@ -148,6 +163,10 @@ function resolveCoachMode(mode, text) {
   if (/\b(kitchen|fridge|refrigerator|pantry|what i have|what'?s in my)\b/i.test(String(text || ""))) {
     return "kitchen";
   }
+  if (/\b(menu|restaurant|order at|from the menu)\b/i.test(String(text || ""))) {
+    return "menu";
+  }
+  if (mode === "photo") return "kitchen";
   return mode;
 }
 
@@ -189,7 +208,7 @@ function finishLocalPicks(filled, { day, workingNumbers = false, lead = null } =
   let reply = alignReplyToMeals(filled?.reply || "", meals);
   if (day?.notLogging) reply = stripLogNag(reply);
   if (typeof lead === "function") reply = lead(reply);
-  else if (workingNumbers) reply = leadFineTuningReply(reply, { hasPlates: meals.length > 0 });
+  else if (workingNumbers) reply = leadFineTuningReply(reply, { hasPlates: meals.length > 0, plateCount: meals.length });
   return { meals, reply };
 }
 
@@ -268,7 +287,6 @@ async function persistCannedCoach(env, userId, body, message, {
     || door === "supply"
     || door === "mood";
   let noted = false;
-  if (!allowed && !pinAnyway) return { allowed: false, noted: false };
   if (door && (allowed || pinAnyway)) {
     const wrote = await appendCoachRefusal(env, userId, { asked, scope, escalate });
     noted = noteWriteSucceeded(wrote);
@@ -293,13 +311,16 @@ async function persistCannedCoach(env, userId, body, message, {
       await notifyCrisisEmail(env, { userId, asked });
     }
   }
-  if (allowed) {
-    await persistServerCoach(env, userId, body, {
-      ...message,
-      payload: { ...(message.payload || {}), requestId, noted },
-    });
-  }
-  return { allowed: Boolean(allowed), noted };
+  const deflect = message?.payload?.deflect;
+  const cards = message?.payload?.cards || [];
+  const rendered = String(message?.body || "").trim()
+    || (deflect ? coachDeflectLine(deflect, { noted, hasFood: cards.length > 0 }) : "");
+  await persistServerCoach(env, userId, body, {
+    ...message,
+    body: rendered,
+    payload: { ...(message.payload || {}), requestId, noted },
+  });
+  return { allowed: Boolean(allowed), noted, saved: true };
 }
 
 export async function onRequestPost({ request, env, waitUntil }) {
@@ -364,6 +385,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
       return json({ error: "coach unavailable" }, 503);
     }
     const text = String(body.text || "").trim().slice(0, MAX_TEXT);
+    const knownPlace = restaurantFromAsk(text);
     const askedSlot = slotNamedInAsk(text);
     const slot = askedSlot
       || (SLOTS.has(String(body.slot || "").toLowerCase())
@@ -398,7 +420,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
     // Classify free text on ask and on a photo note. A symptom typed under
     // a menu shot must still reach Callie. An empty photo note stays food.
     const verdict = (mode === "ask" || text.length >= 2)
-      ? classifyAsk(text, { mode: photoMode })
+      ? classifyAsk(text, { mode: photoMode, priorAsks: earlyDay?.priorAsks || [] })
       : { scope: "food", aside: null };
 
     // Crisis must persist before any profile read. A thrown file load
@@ -406,7 +428,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
     if (isCrisisUrgent(text)) {
       try {
         await persistCannedCoach(env, user.id, body, {
-          body: "",
+          body: coachDeflectLine("emergency"),
           kind: "deflect",
           payload: { deflect: "emergency", cards: [] },
         }, {
@@ -440,7 +462,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
         ? ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: teach.topic, safe: true, day: earlyDay, profile: await getFillProfile() }))
         : { meals: [] };
       await persistCannedCoach(env, user.id, body, {
-        body: "",
+        body: coachDeflectLine("again"),
         kind: "deflect",
         payload: { deflect: "again", cards: persistMeals(filled.meals, slot) },
       }, {
@@ -458,7 +480,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
       });
     }
     if (scopeIsRefused(verdict.scope)) {
-      const deflect = deflectForScope(verdict.scope, text);
+      const deflect = deflectForScope(verdict.scope, text, { follow: verdict.follow === true });
       const stripNumbers = verdict.scope === "disordered" || verdict.scope === "mood" || verdict.scope === "urgent";
       const hideNumbers = Boolean(earlyDay?.notLogging);
       const filled = fillForScope(text, {
@@ -471,7 +493,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
         stripNumbers,
       });
       const persist = await persistCannedCoach(env, user.id, body, {
-        body: "",
+        body: coachDeflectLine(deflect, { hasFood: filled.meals.length > 0 }),
         kind: "deflect",
         payload: { deflect, cards: persistMeals(filled.meals, slot) },
       }, {
@@ -485,6 +507,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
         scope: verdict.scope,
         deflect,
         noted: persist.noted === true,
+        saved: persist.saved === true,
         meals: filled.meals,
         mealSource: filled.meals.length ? "new" : undefined,
       });
@@ -513,10 +536,65 @@ export async function onRequestPost({ request, env, waitUntil }) {
         ok: true,
         scope: "food",
         teach: teach.topic,
+        saved: true,
         reply: teachReply,
         meals: filled.meals,
         mealSource: filled.meals.length ? "new" : undefined,
         aside: verdict.aside || null,
+      });
+    }
+
+    const localLead = foodQuestionLead(text, []);
+    if (
+      alreadySkippedAsk(text)
+      || isLowIntakeAsk(text)
+      || isNursingHungryAsk(text)
+      || isMetaCallieAsk(text)
+      || knownPlace
+    ) {
+      const filled = ensureFoodMeals([], coachFillArgs({
+        text,
+        slot: (/\b(bedtime|walk|snack)\b/i.test(text) ? "snack" : slot),
+        mode: knownPlace ? "menu" : mode,
+        day: earlyDay,
+        profile: await getFillProfile(),
+        reply: localLead,
+      }));
+      let meals = keepPlaceMeals(filled.meals, knownPlace);
+      if (knownPlace && meals.length < 2) {
+        const extra = ensureFoodMeals([], coachFillArgs({
+          text,
+          slot,
+          mode: "menu",
+          day: earlyDay,
+          profile: await getFillProfile(),
+        }));
+        meals = keepPlaceMeals(extra.meals, knownPlace);
+      }
+      let reply = alignReplyToMeals(
+        (localLead || filled.reply || "").trim() || fallbackMealReply(meals, text),
+        meals,
+      );
+      if (isGuiltAsk(text) && meals.length && !reply.startsWith(COACH_GUILT_LINE)) {
+        reply = `${COACH_GUILT_LINE} ${reply}`.trim();
+      }
+      if (earlyDay?.notLogging) {
+        meals = hideCoachMealMacros(meals);
+        reply = stripLogNag(reply);
+      }
+      await persistLater(waitUntil, env, user.id, body, {
+        body: reply,
+        kind: meals.length ? "cards" : "text",
+        payload: { cards: persistMeals(meals, slot, placeMealSource(knownPlace, "new")), requestId },
+        requestId,
+      });
+      return json({
+        ok: true,
+        scope: "food",
+        saved: true,
+        reply,
+        meals,
+        mealSource: placeMealSource(knownPlace, "new"),
       });
     }
 
@@ -529,10 +607,17 @@ export async function onRequestPost({ request, env, waitUntil }) {
       if (!noteOk) {
         const reply = teachBody("menuClosed");
         const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: "menuClosed", reply, day: earlyDay, profile: await getFillProfile() }));
+        await persistLater(waitUntil, env, user.id, body, {
+          body: filled.reply,
+          kind: filled.meals.length ? "cards" : "text",
+          payload: { teach: "menuClosed", cards: persistMeals(filled.meals, slot), requestId },
+          requestId,
+        });
         return json({
           ok: true,
           scope: "food",
           teach: "menuClosed",
+          saved: true,
           reply: filled.reply,
           meals: filled.meals,
           mealSource: "new",
@@ -644,7 +729,10 @@ export async function onRequestPost({ request, env, waitUntil }) {
           });
         }
         const persistOk = await allowOverCapPersist(env, user.id, { isAdmin, requestId });
-        const reply = filled.reply || (photoAsk && meals.length ? COACH_LIMIT_PHOTO : (meals.length ? COACH_LIMIT_FOOD : limit.message));
+        let reply = filled.reply || (photoAsk && meals.length ? COACH_LIMIT_PHOTO : (meals.length ? COACH_LIMIT_FOOD : limit.message));
+        if (isGuiltAsk(text) && meals.length && !String(reply).includes(COACH_GUILT_LINE)) {
+          reply = `${COACH_GUILT_LINE} ${reply}`.trim();
+        }
         if (persistOk) {
           await persistLater(waitUntil, env, user.id, body, {
             body: reply,
@@ -653,6 +741,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
               cards: persistMeals(meals, slot),
               requestId,
               limited: true,
+              askCallie: true,
             },
             requestId,
           });
@@ -665,6 +754,8 @@ export async function onRequestPost({ request, env, waitUntil }) {
             meals,
             mealSource: meals.length ? "new" : undefined,
             retry_after_seconds: limit.retryAfterSeconds,
+            askCallie: true,
+            saved: persistOk === true,
           },
           429,
         );
@@ -723,7 +814,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
       models: resolveCoachModels(env),
       maxTokens: images.length ? 8000 : 4000,
       temperature: 0.5,
-      timeoutMs: Math.max(4_000, (images.length ? 20_000 : (hasMenuLink(text) ? 10_000 : 18_000)) - (Date.now() - startedAt)),
+      timeoutMs: Math.max(4_000, (images.length ? 16_000 : (hasMenuLink(text) ? 10_000 : 18_000)) - (Date.now() - startedAt)),
       attempts: 1,
       reasoning: { effort: "low", exclude: true },
       messages: [
@@ -767,17 +858,19 @@ export async function onRequestPost({ request, env, waitUntil }) {
           aside: verdict.aside || null,
         });
       }
-      const downDeflect = isMoodAsk(text) ? "mood" : "offTopic";
+      const outageLine = "I couldn't get to that. Try me again in a second.";
       await persistLater(waitUntil, env, user.id, body, {
-        body: "",
-        kind: "deflect",
-        payload: { deflect: downDeflect, requestId },
+        body: outageLine,
+        kind: "outage",
+        payload: { outage: true, requestId },
         requestId,
       });
       return json({
         ok: true,
-        scope: downDeflect === "mood" ? "mood" : "off_topic",
-        deflect: downDeflect,
+        scope: "food",
+        kind: "outage",
+        saved: true,
+        reply: outageLine,
         meals: [],
       });
     }
@@ -797,7 +890,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
         if (day?.notLogging) meals = hideCoachMealMacros(meals);
         let reply = filled.reply;
         if (day?.notLogging) reply = stripLogNag(reply);
-        if (workingNumbers) reply = leadFineTuningReply(reply, { hasPlates: meals.length > 0 });
+        if (workingNumbers) reply = leadFineTuningReply(reply, { hasPlates: meals.length > 0, plateCount: meals.length });
         reply = alignReplyToMeals(reply, meals);
         await persistLater(waitUntil, env, user.id, body, {
           body: reply,
@@ -819,17 +912,19 @@ export async function onRequestPost({ request, env, waitUntil }) {
           aside: verdict.aside || null,
         });
       }
-      const parseDeflect = isMoodAsk(text) ? "mood" : "offTopic";
+      const outageLine = "I couldn't get to that. Try me again in a second.";
       await persistLater(waitUntil, env, user.id, body, {
-        body: "",
-        kind: "deflect",
-        payload: { deflect: parseDeflect, requestId },
+        body: outageLine,
+        kind: "outage",
+        payload: { outage: true, requestId },
         requestId,
       });
       return json({
         ok: true,
-        scope: parseDeflect === "mood" ? "mood" : "off_topic",
-        deflect: parseDeflect,
+        scope: "food",
+        kind: "outage",
+        saved: true,
+        reply: outageLine,
         meals: [],
       });
     }
@@ -892,6 +987,9 @@ export async function onRequestPost({ request, env, waitUntil }) {
     }
 
     let reply = modelHandedOff ? "" : cleanReply(parsed.value?.reply);
+    if (/do not have .{0,48}menu|don'?t have .{0,48}menu|menu details on hand|can'?t see the menu/i.test(reply)) {
+      reply = "";
+    }
     const orderMode = menuPage?.ok ? "menu" : photoMode;
     let meals = modelHandedOff ? [] : normalizeMeals(parsed.value, slot, orderMode, {
       lockSlot: Boolean(askedSlot),
@@ -943,18 +1041,27 @@ export async function onRequestPost({ request, env, waitUntil }) {
       reply = fallbackMealReply(meals);
     }
     meals = distinctCoachMeals(meals, 3);
-    if (restaurantFromAsk(text)) {
-      meals = meals.map((meal) => ({ ...meal, source: "menu", orderOnly: true }));
+    if (knownPlace) {
+      meals = keepPlaceMeals(meals, knownPlace);
+      if (meals.length < 2) {
+        const filled = ensureFoodMeals([], { ...fill, mode: "menu", reply: reply || "" });
+        meals = keepPlaceMeals(filled.meals, knownPlace);
+        reply = filled.reply;
+      }
     }
     if (day?.notLogging) meals = hideCoachMealMacros(meals);
     reply = alignReplyToMeals(reply, meals);
     if (day?.notLogging) reply = stripLogNag(reply);
-    if (workingNumbers) reply = leadFineTuningReply(reply, { hasPlates: meals.length > 0 });
+    if (workingNumbers) reply = leadFineTuningReply(reply, { hasPlates: meals.length > 0, plateCount: meals.length });
     if (isGuiltAsk(text) && meals.length) {
-      reply = `${COACH_GUILT_LINE} ${String(reply || "").replace(/\b\d+\s*(g|cal|cals|calories)\b/gi, "").replace(/\s{2,}/g, " ").trim()}`.trim();
+      reply = `${COACH_GUILT_LINE} ${String(reply || "")
+        .replace(/\b\d+\s*(g|cal|cals|calories)\b/gi, "")
+        .replace(/\bkeeps things light on fat to balance out\b[^.]*\.?/gi, "")
+        .replace(/\s{2,}/g, " ")
+        .trim()}`.trim();
     }
 
-    const mealSource = restaurantFromAsk(text) || orderMode === "menu" ? "menu" : photoMode === "kitchen" ? "kitchen" : "new";
+    const mealSource = placeMealSource(knownPlace, orderMode === "menu" ? "menu" : photoMode === "kitchen" ? "kitchen" : "new");
     const shownMeals = sizeMealsForPersist(meals, budget, slot, mealSource);
     await persistLater(waitUntil, env, user.id, body, {
       body: reply,

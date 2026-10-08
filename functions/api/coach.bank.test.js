@@ -18,7 +18,7 @@ vi.mock("../_shared/openrouter.js", () => openrouter);
 
 import { classifyAsk, isCrisisUrgent, isMealAsk } from "../_shared/coachGuardrails.js";
 import { onRequestPost } from "./coach.js";
-import { COACH_FINE_TUNING_LINE, COACH_LIMIT_FOOD } from "../../src/content/coachVoice.js";
+import { COACH_FINE_TUNING_FEW, COACH_LIMIT_FOOD } from "../../src/content/coachVoice.js";
 import {
   bankContextFor,
   COACH_BANK_LAST_PLATE,
@@ -198,7 +198,7 @@ const DEAD_END_PATHS = [
     id: "noRanges",
     status: 200,
     minMeals: 2,
-    lead: COACH_FINE_TUNING_LINE,
+    lead: COACH_FINE_TUNING_FEW,
     noModel: false,
     mock: { noRanges: true },
     body: { mode: "ask", text: DEAD_END_ASK },
