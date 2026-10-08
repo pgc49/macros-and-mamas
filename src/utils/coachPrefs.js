@@ -6,7 +6,7 @@
  * nudge the score. Ported from the Help me decide engine (PR 332).
  */
 
-import { normalizeAllergens, normalizeDiet } from "../content/foodPrefs";
+import { normalizeAllergens, normalizeDiet } from "../content/foodPrefs.js";
 
 const STOP = new Set([
   "with", "from", "that", "this", "have", "your", "some", "into", "over",
