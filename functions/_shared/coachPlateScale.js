@@ -4,6 +4,7 @@
  */
 
 import { COACH_COPY } from "../../src/content/coachVoice.js";
+import { ingredientList } from "./coachMealFilter.js";
 
 export const SCALE_CANDIDATES = [1, 1.5, 2];
 export const PROTEIN_OVER_OK = 10;
@@ -75,6 +76,10 @@ export function coachMealFits(meal, budget) {
  * does, offer the half. If neither fits, drop the plate.
  */
 export function pickScale(meal, budget) {
+  // Restaurant orders and canned fallback plates keep the numbers they were
+  // written with. Scaling the same tuna plate to 2× on one turn and 1× on
+  // the next is how 280 became 560.
+  if (meal?.orderOnly || meal?.fixedPortion || meal?.source === "menu") return 1;
   if (!budget) return null;
   const fits = (s) => coachMealFits(scaleMeal(meal, s), budget);
   const p1 = mealMacros(meal).p;
@@ -100,40 +105,83 @@ export function portionTitle(name, servings) {
   const s = snapServings(servings || 1);
   if (s === 1) return base;
   if (s === 0.5) return `${base} · half portion`;
+  if (s === 2) return `${base} · a double portion`;
+  if (s === 1.5) {
+    const bowl = /\b(bowl|soup|chili|stew|oatmeal|yogurt|smoothie|salad)\b/i.test(base);
+    return `${base} · a bigger ${bowl ? "bowl" : "plate"}`;
+  }
   return `${base} · ${s} servings`;
 }
 
-export function sourceTag(source) {
+export function sourceTag(source, slot) {
   if (source === "my") return COACH_COPY.sourceMy;
   if (source === "pantry") return COACH_COPY.sourcePantry;
   if (source === "menu") return COACH_COPY.sourceMenu;
   if (source === "kitchen") return COACH_COPY.sourceKitchen;
-  if (source === "new") return COACH_COPY.sourceNew;
-  return COACH_COPY.sourceBank;
+  if (source === "bank") return COACH_COPY.sourceBank;
+  if (source === "new") {
+    return (COACH_COPY.sourceNewBySlot && COACH_COPY.sourceNewBySlot[slot]) || COACH_COPY.sourceNew;
+  }
+  return COACH_COPY.sourceNew;
+}
+
+/** Late-day leftover: keep plates that fit, else the 2–3 lightest real ones. */
+export function fitCoachPlates(meals, budget, slot, source = "new") {
+  const fitted = sizeMealsForPersist(meals, budget, slot, source);
+  if (fitted.length >= 2) return fitted;
+  const snacks = sizeMealsForPersist(
+    (meals || []).filter((meal) => (Number(meal?.cal) || 0) > 0 && (Number(meal?.cal) || 9999) <= Math.max(220, Number(budget?.cal) || 0)),
+    budget,
+    "snack",
+    source,
+  );
+  if (snacks.length >= 2) return snacks;
+  const lightest = [...(meals || [])]
+    .filter((meal) => meal?.name)
+    .sort((a, b) => (Number(a.cal) || 0) - (Number(b.cal) || 0))
+    .slice(0, 3);
+  return sizeMealsForPersist(lightest, null, slot, source);
 }
 
 /** Size — or drop — the plate the way the screen does. */
-export function sizeMealsForPersist(meals, budget, _slot, source) {
+export function sizeMealsForPersist(meals, budget, slot, source) {
   const out = [];
   for (const meal of meals || []) {
     const macros = mealMacros(meal);
-    const scale = budget?.cal ? pickScale({ ...meal, ...macros }, budget) : 1;
+    const lockPortion = meal.orderOnly || meal.fixedPortion || meal.source === "menu";
+    const scale = lockPortion ? 1 : (budget?.cal ? pickScale({ ...meal, ...macros }, budget) : 1);
     if (scale == null) continue;
-    const name = String(meal.name || "").trim();
-    const src = meal.source || source || "";
+    const name = String(meal.name || "").replace(/\s+/g, " ").trim().slice(0, 48);
+    const src = meal.fromSaved ? "my" : (meal.source || source || "");
+    const desc = String(meal.reason || meal.desc || "").trim();
+    const items = ingredientList(meal)
+      .map((row) => {
+        if (typeof row === "string") return row.trim();
+        return [row?.amount, row?.item || row?.name].filter(Boolean).join(" ").trim();
+      })
+      .filter(Boolean);
+    const reason = desc && desc.toLowerCase() !== name.toLowerCase()
+      ? desc
+      : (items.length ? items.join(", ") : desc);
     out.push({
       name,
       title: portionTitle(meal.title && scale === 1 ? meal.title : name, scale),
       source: src,
-      tag: meal.tag || sourceTag(src),
+      tag: meal.tag || sourceTag(src, slot),
+      slot: slot || meal.slot || null,
       id: meal.id || "",
       basedOn: meal.basedOn || null,
+      fromSaved: Boolean(meal.fromSaved),
+      hideMacros: meal.hideMacros === true,
+      noMealActions: meal.noMealActions === true,
       servings: scale,
       cal: Math.round(macros.cal * scale),
       p: Math.round(macros.p * scale),
       c: Math.round(macros.c * scale),
       f: Math.round(macros.f * scale),
-      reason: meal.reason || meal.desc || "",
+      reason,
+      ingredients: ingredientList(meal),
+      steps: meal.steps || [],
     });
   }
   return out;

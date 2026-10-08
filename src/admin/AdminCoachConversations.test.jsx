@@ -51,7 +51,10 @@ describe("AdminCoachConversations", () => {
         body: "Tonight.",
         kind: "cards",
         payload: {
-          cards: [{ name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12, reason: "Gets protein into range." }],
+          cards: [
+            { name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12, reason: "Gets protein into range." },
+            { name: "Grandma casserole", cal: 380, p: 32, c: 12, f: 18, fromSaved: true, reason: "Turkey and rice." },
+          ],
         },
         seq: 2,
         createdAt: "2026-10-08T16:00:01.000Z",
@@ -75,6 +78,8 @@ describe("AdminCoachConversations", () => {
     expect(await screen.findByText("Coach conversations")).toBeTruthy();
     expect(db.loadClientCoachThread).toHaveBeenCalledWith("mama-1");
     expect(screen.getByText("Chicken bowl")).toBeTruthy();
+    expect(screen.getByText("Grandma casserole")).toBeTruthy();
+    expect(screen.getByText("her saved meal")).toBeTruthy();
     expect(screen.getByText("430 cal · P45 · C30 · F12")).toBeTruthy();
     expect(screen.getByText("Gets protein into range.")).toBeTruthy();
     expect(screen.getByText(/removed by her/)).toBeTruthy();

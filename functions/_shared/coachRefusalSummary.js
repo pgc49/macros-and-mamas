@@ -23,8 +23,20 @@ const DOORS = {
   again: "stuck",
 };
 
+/** A supply drop is Callie's, not an ordinary "will this affect supply" aside. */
+const SUPPLY_DROP = /\b(supply|milk)\b.{0,28}\b(drop(?:ped|ping)?|dipped|low|down|dry(?:ing)? up)\b/;
+
 /** Skip-the-log. Eat-and-move-on ("skip dinner") is a teach, not this. */
-const WONT_LOG = /\b(?:won'?t|will not|not going to|don'?t|do not|cant|can't)\s+(?:want to\s+)?log\b|\bnot logging\b|\bhate tracking\b/;
+const WONT_LOG = new RegExp([
+  String.raw`\b(?:won'?t|will not|not going to|don'?t|do not|cant|can't)\s+(?:want to\s+)?log\b`,
+  String.raw`\bnot logging\b`,
+  String.raw`\bhate tracking\b`,
+  String.raw`\bnot tracking\b`,
+  String.raw`\bnot counting\b`,
+  String.raw`\bno numbers today\b`,
+  String.raw`\bdon'?t want to track\b`,
+  String.raw`\bdo not want to track\b`,
+].join("|"));
 
 /** She said she skipped a meal. Used for the skip note, not for a Callie card. */
 const SAID_SKIPPED = /\bskip(?:ped|ping)?\s+(?:dinner|lunch|breakfast|snack|this meal|a meal|eating)\b/;
@@ -60,11 +72,15 @@ export function escalateDoor(asked, { escalate = null, scope = null } = {}) {
   // Symptoms first. "I'm skipping dinner because I feel dizzy" and
   // "I'm not logging because my chest hurts" must still reach Callie.
   if (isCrisisUrgent(question)) return "crisis";
+  if (scope === "disordered") return "disordered";
+  if (scope === "medication") return "medication";
+  if (scope === "mood") return "mood";
   if (isClinicalUrgent(question)) return "medical";
   if (isWontLogRefusal(question)) return null;
   if (scope === "urgent" || scope === "medical") {
     return isClinicalUrgent(question) ? "medical" : null;
   }
+  if (scope === "supply" && SUPPLY_DROP.test(question.toLowerCase())) return "supply";
   return null;
 }
 
@@ -82,7 +98,11 @@ export const MAX_SUMMARY_ESCALATES = 5;
 export const MAX_MEDICAL_ESCALATES_PER_DAY = 3;
 
 export const MAX_SUMMARY_CHARS = 8000;
-const MAX_LINE_CHARS = 300;
+export const MAX_LINE_CHARS = 265;
+export const MAX_SUPPLY_ESCALATES_PER_DAY = 3;
+export const MAX_DISORDERED_ESCALATES_PER_DAY = 3;
+export const MAX_MEDICATION_ESCALATES_PER_DAY = 3;
+export const MAX_MOOD_ESCALATES_PER_DAY = 3;
 const REFUSAL_PREFIX = "Coach refused (";
 
 export function clipRefusalLine(line) {
@@ -124,10 +144,48 @@ export function fitRefusalSummary(lines, { incoming = null } = {}) {
 /** Distinct crisis lines. Identical text the same Pacific day is a no-op. */
 export const MAX_CRISIS_ESCALATES_PER_DAY = 10;
 
+/** Per-door daily caps. Crisis 10 / medical 3 / stuck 5 stay; new doors are 3. */
 export function doorCap(door) {
   if (door === "crisis") return MAX_CRISIS_ESCALATES_PER_DAY;
   if (door === "medical") return MAX_MEDICAL_ESCALATES_PER_DAY;
+  if (door === "supply") return MAX_SUPPLY_ESCALATES_PER_DAY;
+  if (door === "disordered") return MAX_DISORDERED_ESCALATES_PER_DAY;
+  if (door === "medication") return MAX_MEDICATION_ESCALATES_PER_DAY;
+  if (door === "mood") return MAX_MOOD_ESCALATES_PER_DAY;
   return MAX_SUMMARY_ESCALATES;
+}
+
+export function doorCaps() {
+  return {
+    crisis: doorCap("crisis"),
+    medical: doorCap("medical"),
+    stuck: doorCap("stuck"),
+    supply: doorCap("supply"),
+    disordered: doorCap("disordered"),
+    medication: doorCap("medication"),
+    mood: doorCap("mood"),
+  };
+}
+
+/** 8000 − 10×300. Non-crisis appends stop once refused lines reach this. */
+export function crisisRoomReserveChars() {
+  return MAX_SUMMARY_CHARS - MAX_CRISIS_ESCALATES_PER_DAY * MAX_LINE_CHARS;
+}
+
+export function worstCaseRefusalChars() {
+  const lines = Object.values(doorCaps()).reduce((n, cap) => n + cap, 0);
+  return lines * MAX_LINE_CHARS + Math.max(0, lines - 1);
+}
+
+function refusedBlockLength(summary) {
+  const lines = String(summary || "").split("\n").filter((line) => line.startsWith(REFUSAL_PREFIX));
+  if (!lines.length) return 0;
+  return lines.join("\n").length;
+}
+
+export function blocksNonCrisisForCrisisRoom(summary, door) {
+  if (!door || door === "crisis") return false;
+  return refusedBlockLength(summary) >= crisisRoomReserveChars();
 }
 
 export function countRefusalDoorLines(summary, door) {
@@ -144,6 +202,10 @@ export function mergeRefusalSummary(existing, line) {
   const lines = prior.length ? prior.split("\n") : [];
   if (lines.some((row) => row === next)) {
     return { ok: true, summary: prior, unchanged: true };
+  }
+  const door = (next.match(/^Coach refused \(([^)]+)\):/) || [])[1] || "";
+  if (blocksNonCrisisForCrisisRoom(prior, door)) {
+    return { ok: false, reason: "full", summary: prior };
   }
   const fitted = fitRefusalSummary([...lines, next], { incoming: next });
   if (!fitted.ok) return { ok: false, reason: fitted.reason || "full", summary: prior };
@@ -169,7 +231,9 @@ export function preserveRefusalLines(existing, fresh) {
     .split("\n")
     .filter((line) => line.startsWith(REFUSAL_PREFIX));
   const prose = String(fresh || "").trim();
-  const proseLines = prose ? prose.split("\n") : [];
+  const proseLines = prose
+    ? prose.split("\n").filter((line) => !line.startsWith(REFUSAL_PREFIX))
+    : [];
   const combined = [...proseLines];
   for (const line of refused) {
     if (!combined.some((row) => row === line)) combined.push(line);
@@ -199,6 +263,20 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
 
   const day = coachSummaryDateIso(now);
   const headers = { apikey: key, authorization: `Bearer ${key}` };
+  const readUrl = `${base}/rest/v1/client_summaries?profile_id=eq.${encodeURIComponent(userId)}`
+    + `&for_date=eq.${day}&select=summary,suggested_touch,model`;
+
+  if (door !== "crisis") {
+    const peek = await fetch(readUrl, { headers }).catch(() => null);
+    if (peek?.ok) {
+      const rows = await peek.json().catch(() => null);
+      const summary = Array.isArray(rows) ? rows[0]?.summary : "";
+      if (blocksNonCrisisForCrisisRoom(summary, door)) {
+        return { ok: false, reason: "full" };
+      }
+    }
+  }
+
   const rpc = await fetch(`${base}/rest/v1/rpc/append_coach_refusal_line`, {
     method: "POST",
     headers: {
@@ -219,8 +297,6 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
     if (result && typeof result === "object" && result.ok === false) return result;
   }
 
-  const readUrl = `${base}/rest/v1/client_summaries?profile_id=eq.${encodeURIComponent(userId)}`
-    + `&for_date=eq.${day}&select=summary,suggested_touch,model`;
   const read = await fetch(readUrl, { headers });
   if (!read.ok) {
     console.error("coach refusal summary read failed", read.status);
@@ -229,6 +305,9 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
   const rows = await read.json().catch(() => null);
   if (!Array.isArray(rows)) return { ok: false };
   const existing = rows[0] || null;
+  if (blocksNonCrisisForCrisisRoom(existing?.summary, door)) {
+    return { ok: false, reason: "full" };
+  }
   const merged = mergeRefusalSummary(existing?.summary, line);
   if (merged.unchanged) return { ok: true, unchanged: true };
   if (countRefusalDoorLines(existing?.summary, door) >= doorCap(door)) {

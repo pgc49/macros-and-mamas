@@ -43,11 +43,11 @@ const BANDS = targetBands(MACROS);
  * Pacific wall clock as absolute instants. Host timezone must not matter:
  * 8:00am PDT, 1:00pm PDT, 3:00pm PDT, 6:30pm PDT, and the lived 9:07pm PDT.
  */
-const MORNING = new Date("2026-09-04T15:00:00.000Z");
-const ONE_PM = new Date("2026-09-04T20:00:00.000Z");
-const AFTERNOON = new Date("2026-09-04T22:00:00.000Z");
-const EVENING = new Date("2026-09-05T01:30:00.000Z");
-const LIVED_EVENING = new Date("2026-10-01T04:07:00.000Z");
+const MORNING = new Date(2026, 8, 4, 8, 0, 0);
+const ONE_PM = new Date(2026, 8, 4, 13, 0, 0);
+const AFTERNOON = new Date(2026, 8, 4, 15, 0, 0);
+const EVENING = new Date(2026, 8, 4, 18, 30, 0);
+const LIVED_EVENING = new Date(2026, 9, 1, 21, 7, 0);
 
 function budgetFor(totals, opts = {}) {
   return attachDayHighs(
@@ -566,7 +566,10 @@ describe("ranking", () => {
     }];
     const live = [{ id: "live-1", name: "Still saved meal" }];
     const shown = replayCoachMessages(messages, live);
-    expect(shown[0].cards.map((card) => card.name)).toEqual(["Still saved meal"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Still saved meal",
+      "Greek yogurt bowl",
+    ]);
     expect(replayCoachMessages(messages, [])[0].cards.map((card) => card.name)).toEqual([
       "Greek yogurt bowl",
     ]);
@@ -586,7 +589,11 @@ describe("ranking", () => {
       ],
     }];
     const shown = replayCoachMessages(messages, []);
-    expect(shown[0].cards.map((card) => card.name)).toEqual(["Sheet pan chicken"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Sheet pan chicken",
+      "Turkey meatballs",
+      "Halibut + rice",
+    ]);
     expect(shown[0].cards[0].reason).toMatch(/chicken/i);
     expect(shown[0].cards[0].reason).not.toMatch(/protein|fat in range|fits what's left|skipped a meal|hormonal/i);
     expect(JSON.stringify(shown[0].cards)).not.toContain(COACH_COPY.reasonGets);
@@ -611,7 +618,11 @@ describe("ranking", () => {
       ],
     }];
     const shown = replayCoachMessages(messages, []);
-    expect(shown[0].cards.map((card) => card.name)).toEqual(["Pulled chicken tacos"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Pulled chicken tacos",
+      "Halibut + rice",
+      "Turkey meatballs + rice",
+    ]);
     expect(shown[0].body).toContain("I noticed you skipped a meal");
     expect(shown[0].body).not.toMatch(/129g|of protein tonight|plenty of room|keep fat in its band/i);
     expect(shown[0].cards[0].reason).toMatch(/chicken|tortilla/i);
@@ -631,7 +642,7 @@ describe("ranking", () => {
       { name: "Pulled chicken tacos", title: "Pulled chicken tacos · half portion", servings: 0.5, reason: "" },
     ]).map((card) => card.title)).toEqual([
       "Pulled chicken tacos · 2 servings",
-      "Pulled chicken tacos · half portion",
+      "Halibut + rice · 2 servings",
     ]);
   });
 
@@ -657,8 +668,14 @@ describe("ranking", () => {
       },
     ];
     const shown = replayCoachMessages(messages, []);
-    expect(shown[0].cards).toEqual([]);
-    expect(shown[1].cards.map((card) => card.name)).toEqual(["Pulled chicken tacos"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Sheet pan chicken",
+      "Turkey meatballs + rice",
+    ]);
+    expect(shown[1].cards.map((card) => card.name)).toEqual([
+      "Pulled chicken tacos",
+      "Halibut + rice",
+    ]);
     expect(shown[1].cards[0].reason).toMatch(/chicken|tortilla/i);
     expect(shown[1].cards[0].reason).not.toMatch(/skipped a meal|hormonal/);
   });
@@ -730,11 +747,19 @@ describe("ranking", () => {
       "Leftover Pasta",
     ]);
     const shown = replayCoachMessages(messages, live);
-    expect(shown[0].cards.map((card) => card.name)).toEqual(["Sheet Pan Chicken with Sweet Potato"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual([
+      "Sheet Pan Chicken with Sweet Potato",
+      "Sausage, egg + whites scramble",
+      "Sheet pan chicken",
+    ]);
     expect(live).toEqual(snapshot);
 
     const afterDelete = replayCoachMessages(messages, []);
-    expect(afterDelete[0].cards.map((card) => card.name)).toEqual(["Sheet Pan Chicken with Sweet Potato"]);
+    expect(afterDelete[0].cards.map((card) => card.name)).toEqual([
+      "Sheet Pan Chicken with Sweet Potato",
+      "Sheet pan chicken",
+      "Leftover Pasta",
+    ]);
   });
 
   it("keeps the saved list when a custom meals fetch fails", () => {
@@ -792,6 +817,10 @@ describe("ranking", () => {
     expect(sourceTag("bank")).toBe(COACH_COPY.sourceBank);
     expect(sourceTag("bank")).toBe("Callie's recipe");
     expect(sourceTag("my")).toBe(COACH_COPY.sourceMy);
+    expect(sourceTag("new", "lunch")).toBe("Made for lunch");
+    expect(sourceTag("new", "breakfast")).toBe("Made for breakfast");
+    expect(sourceTag("new", "dinner")).toBe("Made for dinner");
+    expect(sourceTag("new")).toBe("Made for you");
   });
 
   it("offers a half portion when that is the only size that fits", () => {
@@ -1029,8 +1058,8 @@ describe("copy matches the rest of the app", () => {
   });
 
   it("does not put leftover math on the Today door", () => {
-    const evening = new Date("2026-10-01T04:07:00.000Z");
-    const morning = new Date("2026-09-04T15:00:00.000Z");
+    const evening = new Date(2026, 9, 1, 21, 7, 0);
+    const morning = new Date(2026, 8, 4, 8, 0, 0);
     const read = { line1: "You need about 129g of protein tonight.", line2: COACH_COPY.plenty };
     expect(coachEntryHint({
       loggedSlots: new Set(),

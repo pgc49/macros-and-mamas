@@ -90,47 +90,104 @@ export function pickApprovedMacros(rows) {
   return (Array.isArray(rows) ? rows : []).find((row) => row?.approved === true) || null;
 }
 
+function rowTime(row) {
+  return Date.parse(row?.approved_at || 0) || 0;
+}
+
+function newestFirst(a, b) {
+  const byTime = rowTime(b) - rowTime(a);
+  if (byTime) return byTime;
+  return String(b?.profile_id || "").localeCompare(String(a?.profile_id || ""));
+}
+
 /** Coach may work from a draft row. Other endpoints keep approved-only. */
 export function pickCoachMacros(rows) {
   const list = Array.isArray(rows) ? rows : [];
   const approved = pickApprovedMacros(list);
   if (approved) return { row: approved, status: "approved" };
-  const draft = list.find((row) => row) || null;
+  const drafts = list.filter((row) => row && row.approved !== true).sort(newestFirst);
+  const draft = drafts[0] || null;
   if (draft) return { row: draft, status: "draft" };
   return { row: null, status: "none" };
 }
 
-async function loadSelfRows(env, userId, authHeader) {
+export async function loadCoachProfile(env, userId, authHeader) {
+  const { profileRow } = await loadSelfRows(env, userId, authHeader, { macros: false });
+  return selfFromRows(profileRow, null).profile;
+}
+
+async function loadSelfRows(env, userId, authHeader, { macros = true } = {}) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const anon = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || "";
   if (!base || !anon) throw new Error("missing supabase config");
 
+  const headers = { apikey: anon, authorization: authHeader };
+  if (!macros) {
+    const pResp = await fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=*`, { headers });
+    const profiles = pResp.ok ? await pResp.json().catch(() => []) : [];
+    return {
+      profileRow: Array.isArray(profiles) ? profiles[0] : null,
+      macrosRows: [],
+      macrosOutage: false,
+    };
+  }
+
   const [pResp, mResp] = await Promise.all([
-    fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=*`, {
-      headers: { apikey: anon, authorization: authHeader },
-    }),
-    fetch(`${base}/rest/v1/macros?profile_id=eq.${encodeURIComponent(userId)}&select=*`, {
-      headers: { apikey: anon, authorization: authHeader },
-    }),
+    fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=*`, { headers }),
+    // One row per profile. Do not order by created_at/id — those columns
+    // are not on live public.macros and PostgREST 400s the whole read.
+    fetch(`${base}/rest/v1/macros?profile_id=eq.${encodeURIComponent(userId)}&select=*`, { headers }),
   ]);
 
-  const profiles = await pResp.json().catch(() => []);
-  const macrosRows = await mResp.json().catch(() => []);
+  const profiles = pResp.ok ? await pResp.json().catch(() => []) : [];
+  if (!mResp.ok) {
+    console.error("macros read failed", mResp.status);
+    try {
+      globalThis.Sentry?.captureMessage?.("macros read failed", { extra: { status: mResp.status } });
+    } catch { /* Sentry is optional on the worker */ }
+    return {
+      profileRow: Array.isArray(profiles) ? profiles[0] : null,
+      macrosRows: [],
+      macrosOutage: true,
+    };
+  }
+  const macrosRows = await mResp.json().catch(() => null);
+  if (!Array.isArray(macrosRows)) {
+    console.error("macros read failed", "non-array");
+    try {
+      globalThis.Sentry?.captureMessage?.("macros read failed", { extra: { status: mResp.status, reason: "non-array" } });
+    } catch { /* optional */ }
+    return {
+      profileRow: Array.isArray(profiles) ? profiles[0] : null,
+      macrosRows: [],
+      macrosOutage: true,
+    };
+  }
   return {
     profileRow: Array.isArray(profiles) ? profiles[0] : null,
-    macrosRows: Array.isArray(macrosRows) ? macrosRows : [],
+    macrosRows,
+    macrosOutage: false,
   };
 }
 
 /** Everything the prompt needs about her, and the ranges Callie approved. */
 export async function loadSelf(env, userId, authHeader) {
-  const { profileRow, macrosRows } = await loadSelfRows(env, userId, authHeader);
+  const { profileRow, macrosRows, macrosOutage } = await loadSelfRows(env, userId, authHeader);
+  if (macrosOutage) {
+    const err = new Error("macros read failed");
+    err.reason = "outage";
+    throw err;
+  }
   return selfFromRows(profileRow, pickApprovedMacros(macrosRows));
 }
 
 /** Coach-only. Draft or missing ranges still get a meal. */
 export async function loadCoachSelf(env, userId, authHeader) {
-  const { profileRow, macrosRows } = await loadSelfRows(env, userId, authHeader);
+  const { profileRow, macrosRows, macrosOutage } = await loadSelfRows(env, userId, authHeader);
+  if (macrosOutage) {
+    const self = selfFromRows(profileRow, null);
+    return { ...self, macrosStatus: "outage" };
+  }
   const picked = pickCoachMacros(macrosRows);
   const self = selfFromRows(profileRow, picked.row);
   return { ...self, macrosStatus: picked.status };
@@ -148,7 +205,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key) {
     console.error(`${type} rate limit missing service role`);
-    return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
+    return { ok: false, reason: "outage", message: busyMessage, retryAfterSeconds: 60 };
   }
 
   const ticket = isCoachRequestId(requestId) ? String(requestId).trim() : "";
@@ -171,7 +228,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
     const reserved = await rpc.json().catch(() => null);
     if (reserved === true) return { ok: true, reserved: true };
     if (reserved === false) {
-      return { ok: false, message: spentMessage, retryAfterSeconds: 86400 };
+      return { ok: false, reason: "spent", message: spentMessage, retryAfterSeconds: 86400 };
     }
   }
 
@@ -194,7 +251,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
   if (!inserted || !inserted.ok) {
     // A 409 on request_id is not a reuse. The RPC is the only reuse path.
     console.error(`${type} rate limit reserve failed`, inserted?.status);
-    return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
+    return { ok: false, reason: "outage", message: busyMessage, retryAfterSeconds: 60 };
   }
 
   const row = await inserted.json().catch(() => null);
@@ -213,7 +270,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
   });
   if (!resp.ok) {
     console.error(`${type} rate limit count failed`, resp.status);
-    return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
+    return { ok: false, reason: "outage", message: busyMessage, retryAfterSeconds: 60 };
   }
 
   const match = (resp.headers.get("content-range") || "").match(/\/(\d+|\*)/);
@@ -225,7 +282,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
         headers: { apikey: key, authorization: `Bearer ${key}` },
       }).catch(() => {});
     }
-    return { ok: false, message: spentMessage, retryAfterSeconds: 86400 };
+    return { ok: false, reason: "spent", message: spentMessage, retryAfterSeconds: 86400 };
   }
   return { ok: true, used };
 }

@@ -4,7 +4,7 @@
  * skim before she reads the chat.
  */
 
-import { COACH_DEFLECT } from "../content/coachVoice";
+import { coachDeflectLine } from "../content/coachVoice";
 import { isClinicalUrgent } from "../../functions/_shared/coachGuardrails.js";
 import { coachSummaryDateIso } from "../../functions/_shared/coachRefusalSummary.js";
 
@@ -39,14 +39,21 @@ export function isServerVerified(message) {
   return message?.role === "coach" && message?.source === "server";
 }
 
+export function coachRowLabel(message) {
+  if (message?.kind === "outage" || message?.payload?.outage === true) return "outage";
+  return coachFlag(message);
+}
+
 export function coachFlag(message, asked = "") {
   if (!isServerVerified(message)) return null;
+  if (message?.kind === "outage" || message?.payload?.outage === true) return null;
   const deflect = message?.payload?.deflect
     || (message?.kind === "deflect" ? "offTopic" : null);
   if (message?.kind !== "deflect" && !deflect) return null;
   if (deflect === "again") return "stuck";
   if (
     deflect === "emergency"
+    || deflect === "crisisFollow"
     || deflect === "medical"
     || (deflect === "care" && isClinicalUrgent(asked))
   ) {
@@ -70,12 +77,17 @@ export function coachDisplayDate(message) {
 export function flagLabel(flag) {
   if (flag === "stuck") return "Stuck";
   if (flag === "medical") return "Medical";
+  if (flag === "outage") return "Outage";
   return "Deflect";
 }
 
 export function deflectLine(message) {
-  const key = message?.payload?.deflect;
-  return (COACH_DEFLECT[key] || COACH_DEFLECT.offTopic).line;
+  const cards = Array.isArray(message?.payload?.cards) ? message.payload.cards : (message?.cards || []);
+  return coachDeflectLine(message?.payload?.deflect || message?.deflect, {
+    noted: message?.payload?.noted === true || message?.noted === true,
+    hasFood: cards.length > 0,
+    weeks: message?.payload?.weeks === true || message?.weeks === true,
+  });
 }
 
 function asDisplayString(value) {
@@ -92,7 +104,8 @@ export function plainCoachPlates(payload) {
       const name = asDisplayString(card.name).trim() || asDisplayString(card.title).trim();
       if (!name) return null;
       return {
-        name,
+        name: name.slice(0, 48),
+        fromSaved: card.fromSaved === true || card.source === "my",
         macros: [
           `${Math.round(Number(card.cal) || 0)} cal`,
           `P${Math.round(Number(card.p) || 0)}`,

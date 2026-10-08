@@ -23,6 +23,7 @@ const SLOT_WORDS = [
   // on" unrecognisable and sent the one question the bank answers best to the
   // model.
   [/\b(snacks?)( on)?\b/, "snack"],
+  [/\b3\s*a\.?m\.?\b/, "snack"],
 ];
 
 /** Words that never change which answer she wants. */
@@ -80,12 +81,74 @@ function normalize(raw) {
  * Returns `null` when the message needs the model, which is the default for
  * anything not recognised outright.
  */
+/**
+ * Past-tense meal talk ("I had chicken at lunch") is history, not the
+ * slot she wants now. Follow-ups inherit the previous slot instead.
+ */
+function stripPastSlotMentions(text) {
+  return String(text || "")
+    .replace(/\b(?:already\s+)?(?:had|ate|eaten)\s+(?:(?:a|my|the)\s+)?(?:breakfast|lunch|dinner|supper|snack)\b/g, " ")
+    .replace(/\b(?:already\s+)?(?:had|ate|eaten)\b[^.?,]{0,40}?\b(?:at|for)\s+(?:breakfast|lunch|dinner|supper|snack|morning|tonight|evening|midday)\b/g, " ")
+    .replace(/\bfor\s+(?:breakfast|lunch|dinner|supper|snack)\s+i\s+(?:had|ate)\b/g, " ")
+    .replace(/\b(?:breakfast|lunch|dinner|supper|snack)\s+(?:was|already)\b/g, " ");
+}
+
 /** Slot she named in the question, or null. Beats the clock when she said tonight. */
 export function slotNamedInAsk(raw) {
-  const text = normalize(raw);
-  if (!text) return null;
+  const text = stripPastSlotMentions(normalize(raw));
+  if (!text.trim()) return null;
   for (const [pattern, name] of SLOT_WORDS) {
     if (pattern.test(text)) return normalizeSlot(name);
+  }
+  return null;
+}
+
+export const FOLLOW_UP_ASK = /\b(something else|anything else|what else|another( one)?|not that|none of these)\b/i;
+
+export function isFollowUpAsk(raw, { lastAt = 0, now = Date.now() } = {}) {
+  if (!FOLLOW_UP_ASK.test(String(raw || ""))) return false;
+  if (!lastAt) return false;
+  return now - Number(lastAt) <= 30 * 60 * 1000;
+}
+
+const CHAINS = [
+  [/\bchipotle\b/i, "chipotle"],
+  [/\bthai\b/i, "thai"],
+  [/\bmexican\b/i, "mexican"],
+  [/\bstarbucks\b/i, "starbucks"],
+  [/\btrader joe/i, "traderJoes"],
+  [/\bchick[- ]?fil[- ]?a\b/i, "chickFilA"],
+  [/\bmcdonald'?s\b/i, "mcdonalds"],
+  [/\bin[- ]?n[- ]?out\b/i, "inNOut"],
+  [/\bpanera\b/i, "panera"],
+  [/\bsweetgreen\b/i, "sweetgreen"],
+  [/\bsubway\b/i, "subway"],
+  [/\btaco bell\b/i, "tacoBell"],
+  [/\bcava\b/i, "cava"],
+  [/\bjersey mike/i, "jerseyMikes"],
+  [/\bpanda express\b/i, "pandaExpress"],
+];
+
+/** Grocery runs are a place, not a restaurant menu. */
+export function isMenuRestaurant(place) {
+  return Boolean(place && place !== "traderJoes" && place !== "generic");
+}
+
+export function placeMealSource(place, fallback = "new") {
+  if (isMenuRestaurant(place)) return "menu";
+  if (place === "traderJoes") return "pantry";
+  return fallback;
+}
+
+/** A named chain or a takeout/order ask. Never a hungry ask with no restaurant. */
+export function restaurantFromAsk(raw) {
+  const text = String(raw || "").toLowerCase();
+  if (!text) return null;
+  for (const [re, id] of CHAINS) {
+    if (re.test(text)) return id;
+  }
+  if (/\b(takeout|take[- ]out|picking up|getting)\b/.test(text) && /\b(order|food|dinner|lunch)\b/.test(text)) {
+    return "generic";
   }
   return null;
 }
@@ -94,11 +157,10 @@ export function localCoachIntent(raw) {
   const text = normalize(raw);
   if (!text || text.length > 60) return null;
 
-  let slot = null;
-  let stripped = text;
-  for (const [pattern, name] of SLOT_WORDS) {
+  const slot = slotNamedInAsk(raw);
+  let stripped = stripPastSlotMentions(text);
+  for (const [pattern] of SLOT_WORDS) {
     if (!pattern.test(stripped)) continue;
-    slot = normalizeSlot(name);
     stripped = stripped.replace(pattern, " ");
     break;
   }

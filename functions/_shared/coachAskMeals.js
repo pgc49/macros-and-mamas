@@ -1,8 +1,8 @@
 /**
  * How many plates an ask is allowed to return.
  *
- * One plate is the default. A second card is only the half portion of that
- * same plate. Up to three only when she asked for options.
+ * Food replies show 2–3 DISTINCT meals. A half portion of the same plate
+ * does not count as a second meal.
  */
 
 function plateBase(name) {
@@ -13,6 +13,10 @@ function plateBase(name) {
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+}
+
+export function mealBaseName(name) {
+  return plateBase(name);
 }
 
 export function isHalfAskMeal(plate, other) {
@@ -27,15 +31,33 @@ export function isHalfAskMeal(plate, other) {
 }
 
 export function askedForMealOptions(text) {
-  return /\b(options|a few( ideas| things)?|give me \d|show me (a few|some|others|more)|couple of|two or three|2 or 3)\b/i
+  return /\b(options|ideas?|something new|surprise me|bored|a few( ideas| things)?|give me \d|show me (a few|some|others|more)|couple of|two or three|2 or 3)\b/i
     .test(String(text || ""));
 }
 
-export function limitAskMeals(meals, { askedForOptions = false } = {}) {
-  const list = (Array.isArray(meals) ? meals : []).filter((meal) => meal?.name);
-  if (askedForOptions) return list.slice(0, 3);
-  if (!list.length) return [];
-  const plate = list[0];
-  const half = list.slice(1).find((meal) => isHalfAskMeal(plate, meal));
-  return half ? [plate, half] : [plate];
+/** How many plates she asked for. Food always gets at least two. */
+export function askedMealCount(text) {
+  const asked = String(text || "");
+  const numbered = asked.match(/\b(?:give me |show me )?(\d)\s+(options?|ideas?|dinners?|things|plates?)/i);
+  if (numbered) return Math.min(3, Math.max(2, Number(numbered[1])));
+  return 3;
+}
+
+/** Keep the first 2–3 plates with different base names. Halves of a kept plate drop. */
+export function distinctCoachMeals(meals, max = 3) {
+  const out = [];
+  const seen = new Set();
+  for (const meal of meals || []) {
+    if (!meal?.name) continue;
+    const base = plateBase(meal.name);
+    if (!base || seen.has(base)) continue;
+    seen.add(base);
+    out.push(meal);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+export function limitAskMeals(meals) {
+  return distinctCoachMeals(meals, 3);
 }

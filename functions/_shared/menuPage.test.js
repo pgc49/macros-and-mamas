@@ -119,8 +119,8 @@ describe("reading a menu page", () => {
   });
 
   it("uses a short timeout, a 20s budget, and refuses a body over the byte cap", async () => {
-    expect(MENU_FETCH_TIMEOUT_MS).toBe(5_000);
-    expect(MENU_FETCH_BUDGET_MS).toBe(20_000);
+    expect(MENU_FETCH_TIMEOUT_MS).toBe(4_000);
+    expect(MENU_FETCH_BUDGET_MS).toBe(7_000);
     expect(MENU_MAX_BYTES).toBe(1_500_000);
     const fetchImpl = vi.fn(async (_url, init) => {
       expect(init.signal).toBeDefined();

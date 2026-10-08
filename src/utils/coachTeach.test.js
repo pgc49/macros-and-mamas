@@ -70,10 +70,14 @@ describe("Callie's own answers, before a model is called", () => {
   it("never tells her to skip a meal", () => {
     expect(localCoachTeach("should I skip dinner")).toMatchObject({ topic: "neverSkip" });
     expect(localCoachTeach("I'm 400 over, skip dinner?")).toMatchObject({ topic: "neverSkip" });
-    expect(teachBody("neverSkip")).toMatch(/never skip a meal/i);
+    expect(teachBody("neverSkip")).toMatch(/Don't skip/i);
+    expect(teachBody("neverSkip")).not.toMatch(/Absolutely not/);
+    expect(localCoachTeach("I skipped lunch, what now")).toBeNull();
+    expect(localCoachTeach("is it ok to eat this little while nursing")).toBeNull();
+    expect(localCoachTeach("my mom is bringing over pho, what should i get")).toBeNull();
     expect(teachBody("neverSkip", { again: true })).toBe(COACH_COPY.teachNeverSkipAgain);
     expect(teachBody("neverSkip", { again: true })).not.toBe(teachBody("neverSkip"));
-    expect(teachBody("neverSkip", { again: true })).toMatch(/Still eat something tonight/);
+    expect(teachBody("neverSkip", { again: true })).toMatch(/Still eat something now/);
   });
 
   it("answers is-this-ok as real food, not a verdict", () => {
@@ -112,6 +116,7 @@ describe("Callie's own answers, before a model is called", () => {
   it("does not swallow a meal ask", () => {
     expect(localCoachTeach("what should I eat")).toBeNull();
     expect(localCoachTeach("what can I eat that won't blow through both")).toBeNull();
+    expect(localCoachTeach("how do I hit protein without more chicken")).toBeNull();
     expect(localCoachTeach("how's my day looking")).toBeNull();
   });
 });
@@ -131,7 +136,7 @@ describe("a pain point asked a third time", () => {
 describe("the handoff closer", () => {
   it("asks her to message Callie instead of sounding like the bot already did", () => {
     expect(COACH_PASS).toBe(
-      "That's something Callie might be better able to answer than me. Message her and she'll get back to you.",
+      "That's something Callie might be better able to answer than me. Message Callie and she'll get back to you.",
     );
     expect(COACH_PASS).not.toMatch(/I'll pass/i);
   });

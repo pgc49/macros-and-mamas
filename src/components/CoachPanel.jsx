@@ -8,6 +8,7 @@ import {
   COACH_DEFLECT,
   COACH_SLOT_TITLE,
   askForSlotCopy,
+  coachDeflectLine,
   skipMealCopy,
 } from "../content/coachVoice";
 import { shownCoachLead } from "../utils/coachLines";
@@ -21,22 +22,47 @@ import {
 import { cardsWithShownReason, firstPaintPlates } from "../utils/coachRank";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
-import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
-import { classifyAsk, deflectForScope, isCrisisUrgent, isMealAsk, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
-import { buildCoachFallbackMeals, MEAL_TEACH_TOPICS } from "../../functions/_shared/coachFoodFallback";
-import { sizeMealsForPersist } from "../../functions/_shared/coachPlateScale";
-import { askedForMealOptions } from "../../functions/_shared/coachAskMeals";
+import { isFollowUpAsk, isMenuRestaurant, localCoachIntent, restaurantFromAsk, slotNamedInAsk } from "../utils/coachIntent";
+import { classifyAsk, deflectForScope, isCrisisUrgent, isMealAsk, isMoodAsk, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
+import { alignReplyToMeals, buildCoachFallbackMeals, hideCoachMealMacros, MEAL_TEACH_TOPICS, padCoachMeals, stripCoachMealMacros } from "../../functions/_shared/coachFoodFallback";
+import { fitCoachPlates, sizeMealsForPersist } from "../../functions/_shared/coachPlateScale";
 import { isWontLogRefusal } from "../../functions/_shared/coachRefusalSummary";
+import { COACH_BUILD } from "../content/coachBuild";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
+import { filterCoachMeals, mealBreaksSavedPrefs, threadPriorAsks } from "../../functions/_shared/coachMealFilter";
+import { COACH_LOCAL_PICKS_LINE } from "../content/coachVoice";
 import { captureCoachFailure } from "../utils/coachFailure";
 import { downscaleImage } from "../utils/imageDownscale";
 import { localDateIso } from "../utils/dates";
 
+function showsCoachBuild(email, admin) {
+  if (admin) return true;
+  const raw = String(email || "").trim().toLowerCase();
+  const at = raw.indexOf("@");
+  const local = at >= 0 ? raw.slice(0, at) : raw;
+  return local.startsWith("pgchammas+");
+}
+
+const SLOT_HOLD_MS = 30 * 60 * 1000;
+
 const QUICK_ASKS = [
   { id: "eat", label: COACH_COPY.askEat, kind: "cards" },
   { id: "out", label: COACH_COPY.askOut, kind: "photo", photo: "menu" },
+  { id: "kitchen", label: COACH_COPY.askKitchen, kind: "photo", photo: "kitchen" },
   { id: "day", label: COACH_COPY.askDay, kind: "read" },
 ];
+
+function resolvePhotoKind(kind, text) {
+  const note = String(text || "");
+  if (/\b(kitchen|fridge|refrigerator|pantry|what i have|what'?s in my)\b/i.test(note)) {
+    return "kitchen";
+  }
+  if (/\b(menu|restaurant|order at|from the menu)\b/i.test(note)) {
+    return "menu";
+  }
+  if (kind === "menu" || kind === "kitchen") return kind;
+  return "kitchen";
+}
 
 let localId = 0;
 const nextId = () => {
@@ -142,6 +168,8 @@ export function CoachPanel({
   postCoach,
   onClockRefresh,
   now = null,
+  email = "",
+  isAdmin = false,
 }) {
   // Captured once, unless the caller hands an instant (tests, the Today card).
   // The slot is Pacific wall time of this instant, not Date#getHours.
@@ -156,6 +184,7 @@ export function CoachPanel({
   const [photo, setPhoto] = useState(null);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [activeMamaId, setActiveMamaId] = useState(null);
   const fileRef = useRef(null);
   const photoKindRef = useRef("menu");
   const endRef = useRef(null);
@@ -166,9 +195,16 @@ export function CoachPanel({
   const skipRef = useRef([]);
   const turnedDownRef = useRef([]);
   const wontLogRef = useRef(false);
+  const wontLogDayRef = useRef("");
+  const [hidingNumbers, setHidingNumbers] = useState(false);
+  const [staleBuild, setStaleBuild] = useState(false);
   const skipLectureRef = useRef("");
   const loadGenRef = useRef(0);
   const lastAskRef = useRef(null);
+  const sendQueueRef = useRef([]);
+  const lastSlotAtRef = useRef(0);
+  const threadRef = useRef([]);
+  threadRef.current = thread;
 
   const refreshClock = (instant = new Date()) => {
     clockRef.current = instant;
@@ -238,16 +274,43 @@ export function CoachPanel({
           kind: r.kind,
           cards: r.payload?.cards || [],
           deflect: r.payload?.deflect || null,
+          noted: r.payload?.noted === true,
           aside: r.payload?.aside || null,
           requestId: r.requestId || r.payload?.requestId || null,
+          localDate: r.localDate || r.local_date || null,
+          notLogging: r.payload?.notLogging === true,
+          showNumbers: r.payload?.showNumbers === true,
+          weeks: r.payload?.weeks === true,
         }));
         setThread(pairCoachThread(mapped));
+        const seen = mapped.flatMap((row) => (row.cards || []).map((card) => card.name).filter(Boolean));
+        if (seen.length) skipRef.current = [...new Set([...skipRef.current, ...seen])];
         if (mapped.some((row) => String(row.body || "").includes(COACH_COPY.skipNotice))) {
           skipLectureRef.current = localDateIso(clock);
         }
+        const today = localDateIso(clock);
+        const todayRows = mapped.filter((row) => !row.localDate || row.localDate === today);
+        const logFlags = todayRows.filter((row) => row.notLogging || row.showNumbers || isWontLogRefusal(row.body));
+        const lastFlag = logFlags.at(-1);
+        if (lastFlag && !lastFlag.showNumbers) {
+          wontLogRef.current = true;
+          wontLogDayRef.current = today;
+          setHidingNumbers(true);
+        } else {
+          wontLogRef.current = false;
+          wontLogDayRef.current = "";
+          setHidingNumbers(false);
+        }
         return;
       }
-      answerWithCards({ echo: false });
+      const nextSlot = nextCoachSlot({ entries, plannedMeals, now: clock });
+      if (nextSlot) {
+        answerWithCards({
+          echo: false,
+          persist: false,
+          askLabel: COACH_COPY.openerFresh,
+        });
+      }
     } catch (error) {
       if (gen !== loadGenRef.current) return;
       openedRef.current = false;
@@ -267,10 +330,24 @@ export function CoachPanel({
     endRef.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
   }, [thread.length, busy]);
 
+  const replaceCoachTurn = (requestId, patch) => {
+    setThread((list) => {
+      const next = list.map((row) => (
+        row.requestId === requestId && row.role === "coach" ? { ...row, ...patch } : row
+      ));
+      threadRef.current = next;
+      return next;
+    });
+  };
+
   const push = (message, { persist = true } = {}) => {
     const localId = nextId();
     const entry = { id: localId, ...message };
-    setThread((list) => [...list, entry]);
+    setThread((list) => {
+      const next = [...list, entry];
+      threadRef.current = next;
+      return next;
+    });
     const pending = persist && onAppendMessage
       ? Promise.resolve(onAppendMessage({
         role: message.role,
@@ -281,13 +358,15 @@ export function CoachPanel({
         requestId: message.requestId || null,
         payload: message.role === "mama"
           ? null
-          : (message.cards?.length || message.deflect || message.aside || message.teach || message.notLogging
+          : (message.cards?.length || message.deflect || message.aside || message.teach || message.notLogging || message.showNumbers
             ? {
               cards: message.cards || [],
               deflect: message.deflect || null,
+              noted: message.noted === true,
               aside: message.aside || null,
               teach: message.teach || null,
               ...(message.notLogging ? { notLogging: true } : {}),
+              ...(message.showNumbers ? { showNumbers: true } : {}),
             }
             : null),
       })).then((saved) => {
@@ -317,17 +396,23 @@ export function CoachPanel({
    * Cards for a slot, worked out here rather than asked for. `slot` is only
    * passed when she named one, so the usual case still follows the clock.
    */
-  const answerWithCards = ({ prefer = null, slot = null, askLabel = COACH_COPY.askEat, echo = true, aside = null } = {}) => {
+  const answerWithCards = ({ prefer = null, slot = null, askLabel = COACH_COPY.askEat, echo = true, persist = true, aside = null } = {}) => {
+    const nowMs = (clockRef.current instanceof Date ? clockRef.current : new Date()).getTime();
+    const held = lastSlotAtRef.current && nowMs - lastSlotAtRef.current <= SLOT_HOLD_MS ? slotOverride : null;
+    if (slotOverride && !held && !slot) setSlotOverride(null);
     const build = (skipNames) => buildCoachAnswer({
       ...inputs,
-      slot: slot || slotOverride,
+      slot: slot || held,
       prefer,
       skipNames,
       now: clockRef.current,
     });
 
     if (echo) push({ role: "mama", body: askLabel });
-    if (slot && slot !== answer?.slot) setSlotOverride(slot);
+    if (slot && slot !== answer?.slot) {
+      setSlotOverride(slot);
+      lastSlotAtRef.current = (clockRef.current instanceof Date ? clockRef.current : new Date()).getTime();
+    }
 
     let next = build(skipRef.current);
     let cards = next?.cards?.filter((c) => c.kind === "meal") || [];
@@ -347,8 +432,25 @@ export function CoachPanel({
       return;
     }
 
-    // One plate. A second card is only the half portion of that same plate.
-    cards = firstPaintPlates(cards);
+    const priorAsks = threadPriorAsks(thread.filter((row) => row.role === "mama").map((row) => row.body));
+    cards = filterCoachMeals(firstPaintPlates(cards), { text: askLabel, profile, skipNames: skipRef.current, priorAsks });
+    if (cards.length < 3) {
+      cards = firstPaintPlates(sizeMealsForPersist(
+        padCoachMeals(cards, {
+          text: askLabel,
+          slot: next?.slot || answer?.slot,
+          profile,
+          customMeals,
+          skipNames: skipRef.current,
+          priorAsks,
+          count: 3,
+        }),
+        null,
+        next?.slot || answer?.slot,
+        "new",
+      ));
+    }
+    if (wontLogRef.current) cards = hideCoachMealMacros(cards);
     skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
     const loggedOther = loggedSlotsFromEntries(entries).size > 0;
     const day = localDateIso(clock);
@@ -357,7 +459,14 @@ export function CoachPanel({
       : skipMealCopy(next.skipped, { loggedOtherMeals: loggedOther });
     if (skipLine) skipLectureRef.current = day;
     lead += skipLine || "";
-    push({ role: "coach", body: shownCoachLead(lead.trim()), kind: "cards", cards, aside, template: "local.cards" });
+    push({
+      role: "coach",
+      body: shownCoachLead(lead.trim()) || (!echo ? COACH_COPY.openerFresh : COACH_LOCAL_PICKS_LINE),
+      kind: "cards",
+      cards,
+      aside,
+      template: "local.cards",
+    }, { persist });
   };
 
   const answerWithRead = ({ askLabel = COACH_COPY.askDay, echo = true, aside = null } = {}) => {
@@ -383,23 +492,53 @@ export function CoachPanel({
   /* ---------------------------------------------------------------- */
 
   const send = async ({ mode, text, images, requestId = null }) => {
-    if (busy || sentRef.current) return;
+    if (sentRef.current) {
+      sendQueueRef.current.push({ mode, text, images, requestId });
+      setBusy(true);
+      return;
+    }
     sentRef.current = true;
     setBusy(true);
     setError("");
     refreshClock();
-    // "Tonight" / "dinner" beats the clock. The panel may still be on
-    // breakfast from an earlier open; the cards and the log have to follow
-    // the meal she just named.
+    const todayIso = localDateIso(clockRef.current);
+    if (wontLogDayRef.current && wontLogDayRef.current !== todayIso) {
+      wontLogRef.current = false;
+      wontLogDayRef.current = "";
+      setHidingNumbers(false);
+    }
+    // "Tonight" / "dinner" beats the clock. Follow-ups inherit the last
+    // slot only when they really are a follow-up, and only for ~30 minutes.
+    const nowMs = (clockRef.current instanceof Date ? clockRef.current : new Date()).getTime();
+    let holdSlot = slotOverride;
+    let holdAt = lastSlotAtRef.current;
+    if (holdAt && nowMs - holdAt > SLOT_HOLD_MS) {
+      holdSlot = null;
+      holdAt = 0;
+      setSlotOverride(null);
+      lastSlotAtRef.current = 0;
+    }
     const named = slotNamedInAsk(text);
-    const slotForAsk = named || answer?.slot || "dinner";
+    const follow = isFollowUpAsk(text, { lastAt: holdAt, now: nowMs });
+    if (named) {
+      holdSlot = named;
+      setSlotOverride(named);
+      lastSlotAtRef.current = nowMs;
+    } else if (!follow) {
+      holdSlot = null;
+      setSlotOverride(null);
+    }
+    const slotForAsk = named
+      || (follow ? (holdSlot || lastAskRef.current?.slot || answer?.slot) : answer?.slot)
+      || "dinner";
     const fit = named && named !== answer?.slot
       ? (buildCoachAnswer({ ...inputs, slot: named, now: clockRef.current }) || answer)
       : answer;
     if (named && named !== answer?.slot) setSlotOverride(named);
     try {
-      lastAskRef.current = { mode, text, images, requestId };
+      lastAskRef.current = { mode, text, images, requestId, slot: slotForAsk, at: nowMs };
       const data = await postCoach?.({
+        // ask path from send()
         mode,
         text,
         requestId,
@@ -422,14 +561,20 @@ export function CoachPanel({
           snackCount: fit?.budget?.snackCount,
           turnedDown: turnedDownRef.current,
           alreadySuggested: skipRef.current,
+          priorAsks: threadPriorAsks(threadRef.current.filter((row) => row.role === "mama").map((row) => row.body)),
           notLogging: wontLogRef.current,
+          lastCards: [...threadRef.current].reverse().find((row) => row.role === "coach" && (row.cards || []).length)?.cards || [],
         }),
         localDate: localDateIso(clockRef.current),
         images,
       });
 
-      if (!data?.ok) {
-        setError(data?.timeout ? COACH_COPY.askTimeout : (data?.message || "I couldn't get to that. Try me again in a second."));
+      const mealsIn = Array.isArray(data?.meals) ? data.meals.filter((meal) => meal?.name) : [];
+      if (data?.coachBuild && data.coachBuild !== COACH_BUILD) setStaleBuild(true);
+      if (!data?.ok && !mealsIn.length && !data?.deflect) {
+        const message = data?.timeout ? COACH_COPY.askTimeout : (data?.message || "I couldn't get to that. Try me again in a second.");
+        setError(message);
+        push({ role: "coach", body: message, kind: "text", requestId }, { persist: false });
         captureCoachFailure({ kind: data?.timeout ? "timeout" : "ask" });
         return;
       }
@@ -441,20 +586,87 @@ export function CoachPanel({
           body: "",
           kind: "deflect",
           deflect: data.deflect,
+          noted: data.noted === true,
+          weeks: data.weeks === true,
           cards: extra,
         }, { persist: false });
         return;
       }
 
-      // The model's meals are re-checked against the real budget here. One that
-      // no longer fits is dropped rather than shown with a caveat.
+      if (data.kind === "outage") {
+        push({
+          role: "coach",
+          body: data.reply || data.message || "I couldn't get to that. Try me again in a second.",
+          kind: "text",
+          cards: [],
+          requestId,
+        }, { persist: false });
+        return;
+      }
+
+      if (mealsIn.length) {
+        const safeMeals = mealsIn.filter((meal) => !mealBreaksSavedPrefs(meal, profile));
+        const pool = safeMeals.length ? safeMeals : mealsIn;
+        let cards = firstPaintPlates(cardsWithShownReason(buildSuggestedCards(pool, fit, {
+          source: data.mealSource || "new",
+          slot: slotForAsk,
+        })));
+        if (cards.length < 2) {
+          cards = firstPaintPlates(fitCoachPlates(pool, fit?.budget, slotForAsk, data.mealSource || "new"));
+        }
+        if (data.mealSource === "menu" || mode === "menu") {
+          const menuOnly = cards.filter((card) => card.source === "menu" || card.orderOnly);
+          if (menuOnly.length) cards = menuOnly;
+        }
+        if (wontLogRef.current) cards = hideCoachMealMacros(cards);
+        skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
+        const reply = alignReplyToMeals(
+          data.reply || data.message || (cards.length ? COACH_LOCAL_PICKS_LINE : COACH_BUSY_LINE),
+          cards,
+        );
+        push({
+          role: "coach",
+          body: reply,
+          kind: cards.length ? "cards" : "text",
+          cards,
+          aside: data.aside || (data.askCallie ? "care" : null),
+          requestId,
+          notLogging: wontLogRef.current,
+        }, { persist: false });
+        return;
+      }
+
       const suggested = cardsWithShownReason(buildSuggestedCards(data.meals, fit, {
         source: data.mealSource || "new",
         slot: slotForAsk,
       }));
-      const cards = askedForMealOptions(text) ? suggested.slice(0, 3) : firstPaintPlates(suggested);
+      const priorAsks = threadPriorAsks(threadRef.current.filter((row) => row.role === "mama").map((row) => row.body));
+      let cards = firstPaintPlates(filterCoachMeals(suggested, {
+        text,
+        profile,
+        skipNames: skipRef.current,
+        priorAsks,
+      }));
+      if (cards.length < 2) {
+        cards = firstPaintPlates(sizeMealsForPersist(
+          padCoachMeals(cards, {
+            text,
+            slot: slotForAsk,
+            mode,
+            profile,
+            customMeals,
+            skipNames: skipRef.current,
+            priorAsks,
+            count: 3,
+          }),
+          null,
+          slotForAsk,
+          isMenuRestaurant(restaurantFromAsk(text)) ? "menu" : (data.mealSource || "new"),
+        ));
+      }
+      if (wontLogRef.current) cards = hideCoachMealMacros(cards);
       skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
-      const body = data.reply || (cards.length ? "" : (
+      const body = alignReplyToMeals(data.reply || data.message || "", cards) || (cards.length ? COACH_LOCAL_PICKS_LINE : (
         (mode === "menu" || mode === "kitchen" || images?.length)
           ? COACH_COPY.cantSeeIt
           : COACH_BUSY_LINE
@@ -464,15 +676,30 @@ export function CoachPanel({
         body,
         kind: cards.length ? "cards" : "text",
         cards,
-        aside: data.aside || null,
+        aside: data.aside || (data.askCallie ? "care" : null),
+        requestId,
+        notLogging: wontLogRef.current,
       }, { persist: false });
     } catch (e) {
       console.error("coach send failed", e);
       captureCoachFailure({ kind: "ask" });
-      setError("I couldn't get to that. Try me again in a second.");
+      const message = "I couldn't get to that. Try me again in a second.";
+      setError(message);
+      push({ role: "coach", body: message, kind: "text", requestId, retry: true }, { persist: false });
     } finally {
       sentRef.current = false;
-      setBusy(false);
+      const queued = sendQueueRef.current.shift();
+      if (queued) {
+        send({
+          ...queued,
+          text: queued.text,
+          mode: queued.mode,
+          images: queued.images,
+          requestId: queued.requestId,
+        });
+      } else {
+        setBusy(false);
+      }
     }
   };
 
@@ -501,58 +728,111 @@ export function CoachPanel({
     const text = input.trim();
     if (!text && !photo) return;
     setInput("");
+    setBusy(true);
     refreshClock();
     const requestId = nextAskId();
     if (photo) {
-      const kind = photo.kind;
-      const mama = push({
+      const kind = resolvePhotoKind(photo.kind, text);
+      push({
         role: "mama",
         body: text || (kind === "menu" ? COACH_COPY.sentMenu : COACH_COPY.sentFridge),
         kind: "photo",
+        photoThumb: photo.b64,
+        photoKind: kind,
         requestId,
       });
       const images = [{ image_b64: photo.b64, media_type: "image/jpeg" }];
       setPhoto(null);
-      await mama.saved;
-      await send({ mode: kind, text, images, requestId });
+      send({ mode: kind, text, images, requestId });
       return;
     }
     // The same guardrail the endpoint runs, run here as well. She sees Message
     // Callie in this frame, unsent. The post records the refusal on her card
     // and does not spend a model call. The server classifies again; this copy
     // is only as trustworthy as the browser.
-    const verdict = classifyAsk(text);
-    const mama = push({ role: "mama", body: text, requestId });
-    if (scopeIsRefused(verdict.scope)) {
-      const deflect = deflectForScope(verdict.scope, text);
-      const crisis = deflect === "emergency" || isCrisisUrgent(text);
-      const extra = (!crisis && isMealAsk(text))
+    const priorForAsk = threadPriorAsks(threadRef.current.filter((row) => row.role === "mama").map((row) => row.body));
+    const crisis = isCrisisUrgent(text);
+    const verdict = classifyAsk(text, { priorAsks: priorForAsk });
+    const refused = crisis || scopeIsRefused(verdict.scope) || isMoodAsk(text);
+    push({ role: "mama", body: text, requestId });
+    if (refused) {
+      const deflect = crisis
+        ? "emergency"
+        : deflectForScope(verdict.scope, text, {
+          follow: verdict.follow === true,
+          crisisFollow: verdict.crisisFollow === true,
+        });
+      const hideNumbers = verdict.scope === "disordered"
+        || wontLogRef.current
+        || isWontLogRefusal(text);
+      const extra = (!crisis && !verdict.crisisFollow && (
+        isMealAsk(text)
+        || verdict.scope === "urgent"
+        || verdict.scope === "supply"
+        || verdict.scope === "disordered"
+        || verdict.scope === "medication"
+      ))
         ? sizeMealsForPersist(
-          buildCoachFallbackMeals({
+          (verdict.scope === "disordered" || verdict.scope === "mood" || verdict.scope === "urgent"
+            ? stripCoachMealMacros
+            : hideNumbers
+            ? hideCoachMealMacros
+            : (meals) => meals)(buildCoachFallbackMeals({
             text,
-            slot: answerRef.current?.slot,
+            slot: slotNamedInAsk(text) || answerRef.current?.slot,
             profile,
             customMeals,
-            safe: verdict.scope === "urgent" || verdict.scope === "supply",
-          }),
+            skipNames: skipRef.current,
+            priorAsks: priorForAsk,
+            safe: true,
+          })),
           null,
-          answerRef.current?.slot,
+          verdict.scope === "urgent" ? "snack" : (slotNamedInAsk(text) || answerRef.current?.slot),
           "new",
         )
         : [];
-      noteEscalation(text, null, requestId);
       push({
         role: "coach",
         body: "",
         kind: "deflect",
         deflect,
+        noted: false,
         cards: extra,
         requestId,
       }, { persist: false });
+      const result = await postCoach?.({
+        mode: "ask",
+        text,
+        localDate: localDateIso(clockRef.current),
+        requestId,
+        context: {
+          priorAsks: priorForAsk,
+          notLogging: wontLogRef.current,
+        },
+      });
+      if (result && (result.deflect || result.ok || result.reply)) {
+        const serverCards = Array.isArray(result.meals)
+          ? sizeMealsForPersist(result.meals, null, slotNamedInAsk(text) || answerRef.current?.slot, result.mealSource || "new")
+          : extra;
+        replaceCoachTurn(requestId, {
+          deflect: result.deflect || deflect,
+          noted: result.noted === true,
+          cards: crisis ? [] : serverCards,
+          body: result.reply || "",
+          kind: "deflect",
+        });
+      } else if (result && result.ok === false) {
+        captureCoachFailure({ kind: "note", status: result.status || null });
+      }
+      setBusy(false);
       return;
     }
 
-    if (isWontLogRefusal(text)) wontLogRef.current = true;
+    if (isWontLogRefusal(text)) {
+      wontLogRef.current = true;
+      wontLogDayRef.current = localDateIso(clockRef.current);
+      setHidingNumbers(true);
+    }
 
     // Callie's own sentences, before the meal router and before a model.
     // Asked a third time in a day, a pain point goes to her instead.
@@ -563,22 +843,27 @@ export function CoachPanel({
         noteEscalation(text, "stuck", requestId);
         // Server persists the stuck handoff. Do not record it again here.
         push({ role: "coach", body: "", kind: "deflect", deflect: "again", requestId }, { persist: false });
+        setBusy(false);
         return;
       }
       const carbsShort = answer?.bands
         ? (totals?.c || 0) < (answer.bands.cLo || 0)
         : false;
-      const extra = MEAL_TEACH_TOPICS.has(teach.topic)
+      const extra = (MEAL_TEACH_TOPICS.has(teach.topic) || isMealAsk(text, { topic: teach.topic }))
         ? sizeMealsForPersist(
-          buildCoachFallbackMeals({
+          (wontLogRef.current
+            ? hideCoachMealMacros
+            : (meals) => meals)(buildCoachFallbackMeals({
             text,
-            slot: answerRef.current?.slot,
+            slot: slotNamedInAsk(text) || answerRef.current?.slot,
             topic: teach.topic,
             profile,
             customMeals,
-          }),
+            skipNames: skipRef.current,
+            priorAsks: threadPriorAsks(thread.filter((row) => row.role === "mama").map((row) => row.body)),
+          })),
           null,
-          answerRef.current?.slot,
+          slotNamedInAsk(text) || answerRef.current?.slot,
           "new",
         )
         : [];
@@ -614,6 +899,7 @@ export function CoachPanel({
           console.error("coach teach persist failed", error);
         });
       }
+      setBusy(false);
       return;
     }
 
@@ -626,11 +912,11 @@ export function CoachPanel({
       if (intent.kind === "read") answerWithRead({ echo: false, aside: verdict.aside });
       else if (intent.kind === "more") showMore({ echo: false });
       else answerWithCards({ prefer: intent.prefer, slot: intent.slot, echo: false, aside: verdict.aside });
+      setBusy(false);
       return;
     }
 
-    await mama.saved;
-    await send({ mode: "ask", text, requestId });
+    send({ mode: "ask", text, requestId });
   };
 
   const pickPhoto = (kind) => {
@@ -686,6 +972,13 @@ export function CoachPanel({
     () => replayCoachMessages(thread, customMeals),
     [thread, customMeals],
   );
+  const lastPersistedMamaId = useMemo(() => {
+    for (let i = shownThread.length - 1; i >= 0; i -= 1) {
+      const row = shownThread[i];
+      if (row?.role === "mama" && row.id && !String(row.id).startsWith("c_")) return row.id;
+    }
+    return null;
+  }, [shownThread]);
 
   if (!answer) {
     return (
@@ -766,12 +1059,33 @@ export function CoachPanel({
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: "1 1 auto" }}>
-          {!next && (
+          {!shownThread.length && !next && (
             <div style={bubble(false)}>{opener}</div>
           )}
-          {next && answer.snackAsk ? (
-            <div style={bubble(false)}>{COACH_COPY.snackAsk}</div>
-          ) : null}
+
+          {staleBuild && (
+            <div style={{ ...bubble(false), background: T.amberSoft, border: "none" }} role="status">
+              <div style={{ marginBottom: 10 }}>{COACH_COPY.staleBuild}</div>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                style={{
+                  fontFamily: F,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  padding: "9px 14px",
+                  minHeight: 40,
+                  borderRadius: 999,
+                  border: "none",
+                  background: T.accent,
+                  color: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                {COACH_COPY.refreshCoach}
+              </button>
+            </div>
+          )}
 
           {loadError && (
             <div style={{ ...bubble(false), background: T.amberSoft, border: "none" }} role="alert">
@@ -798,29 +1112,59 @@ export function CoachPanel({
           )}
 
           {shownThread.map((m) => (
-            <div key={m.id} style={{ display: "flex", flexDirection: "column" }}>
+            <div key={m.id} data-coach-turn={m.role} style={{ display: "flex", flexDirection: "column" }}>
               {(m.aside === "nursing" || m.aside === "both") && (
                 <div style={bubble(false)}>{COACH_COPY.nursingPreface}</div>
               )}
 
-              {m.body && (
-                <div style={bubble(m.role === "mama")}>
+              {m.body && m.kind !== "deflect" && (
+                <div
+                  data-coach-mama-bubble={m.role === "mama" ? m.id : undefined}
+                  onMouseEnter={m.role === "mama" && onHideMessage && m.id && !String(m.id).startsWith("c_")
+                    ? () => setActiveMamaId(m.id)
+                    : undefined}
+                  onMouseLeave={m.role === "mama"
+                    ? () => setActiveMamaId((id) => (id === m.id ? null : id))
+                    : undefined}
+                  onClick={m.role === "mama" && onHideMessage && m.id && !String(m.id).startsWith("c_") && m.id !== lastPersistedMamaId
+                    ? () => setActiveMamaId(m.id)
+                    : undefined}
+                  style={bubble(m.role === "mama")}
+                >
+                  {m.photoThumb && (
+                    <img
+                      src={`data:image/jpeg;base64,${m.photoThumb}`}
+                      alt={m.photoKind === "menu" ? "Menu photo" : "Kitchen photo"}
+                      style={{
+                        width: "100%",
+                        maxWidth: 220,
+                        borderRadius: 10,
+                        marginBottom: 8,
+                        objectFit: "cover",
+                        border: `1px solid ${T.border}`,
+                      }}
+                    />
+                  )}
                   <div>{m.body}</div>
-                  {onHideMessage && m.id && !String(m.id).startsWith("c_") && (
+                  {m.role === "mama" && onHideMessage && m.id && !String(m.id).startsWith("c_")
+                    && (m.id === lastPersistedMamaId || activeMamaId === m.id) && (
                     <button
                       type="button"
-                      onClick={() => hideMessage(m.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        hideMessage(m.id);
+                      }}
                       style={{
-                        marginTop: 8,
+                        marginTop: 4,
                         fontFamily: F,
-                        fontSize: 12,
-                        fontWeight: 700,
+                        fontSize: 11,
+                        fontWeight: 500,
                         padding: 0,
                         border: "none",
                         background: "none",
                         color: T.inkSoft,
                         cursor: "pointer",
-                        textDecoration: "underline",
+                        opacity: 0.72,
                       }}
                     >
                       {COACH_COPY.removeMessage}
@@ -831,28 +1175,7 @@ export function CoachPanel({
 
               {m.kind === "deflect" && (
                 <div style={{ ...bubble(false), background: T.amberSoft, border: "none" }}>
-                  <div style={{ marginBottom: 10 }}>{(COACH_DEFLECT[m.deflect] || COACH_DEFLECT.offTopic).line}</div>
-                  {onHideMessage && m.id && !String(m.id).startsWith("c_") && (
-                    <button
-                      type="button"
-                      onClick={() => hideMessage(m.id)}
-                      style={{
-                        display: "block",
-                        marginBottom: 10,
-                        fontFamily: F,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        padding: 0,
-                        border: "none",
-                        background: "none",
-                        color: T.inkSoft,
-                        cursor: "pointer",
-                        textDecoration: "underline",
-                      }}
-                    >
-                      {COACH_COPY.removeMessage}
-                    </button>
-                  )}
+                  <div style={{ marginBottom: 10 }}>{coachDeflectLine(m.deflect, { noted: m.noted, hasFood: (m.cards || []).length > 0, weeks: m.weeks === true })}</div>
                   <button
                     type="button"
                     onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}
@@ -943,7 +1266,7 @@ export function CoachPanel({
           {error && (
             <div style={{ ...bubble(false), background: T.amberSoft, border: "none", color: T.amber }} role="alert">
               <div>{error}</div>
-              {error === COACH_COPY.askTimeout && lastAskRef.current && (
+              {lastAskRef.current && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1031,6 +1354,27 @@ export function CoachPanel({
               </button>
             </>
           )}
+          {hidingNumbers && (
+            <button
+              type="button"
+              style={chipBtn}
+              disabled={busy}
+                onClick={() => {
+                wontLogRef.current = false;
+                wontLogDayRef.current = "";
+                setHidingNumbers(false);
+                push({
+                  role: "coach",
+                  body: COACH_COPY.showNumbers,
+                  kind: "text",
+                  template: "local.showNumbers",
+                  showNumbers: true,
+                }, { persist: false });
+              }}
+            >
+              {COACH_COPY.showNumbers}
+            </button>
+          )}
         </div>
 
         {photo && (
@@ -1057,7 +1401,7 @@ export function CoachPanel({
               }}
             />
             <span style={{ fontSize: 12.5, color: T.inkSoft }}>
-              {photo.kind === "menu" ? COACH_COPY.photoMenu : COACH_COPY.photoFridge} ready
+              {COACH_COPY.photoReady}
             </span>
             <button
               type="button"
@@ -1074,7 +1418,7 @@ export function CoachPanel({
             type="button"
             aria-label={COACH_COPY.addPhoto}
             disabled={busy}
-            onClick={() => pickPhoto("menu")}
+            onClick={() => pickPhoto("photo")}
             style={{
               width: 44,
               height: 44,
@@ -1158,6 +1502,11 @@ export function CoachPanel({
             {COACH_COPY.send}
           </button>
         </div>
+        {showsCoachBuild(email, isAdmin) && (
+          <div style={{ fontSize: 11, color: T.inkSoft, padding: "0 2px 6px" }}>
+            Coach build {String(import.meta.env?.VITE_APP_BUILD_ID || COACH_BUILD)}
+          </div>
+        )}
       </div>
 
       {sheetCard && (

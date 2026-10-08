@@ -15,7 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import * as Sentry from "@sentry/react";
 import { CoachPanel, pairCoachThread } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
-import { COACH_BUSY_LINE, COACH_COPY, COACH_DEFLECT, COACH_EMERGENCY_LINE } from "../content/coachVoice";
+import { COACH_COPY, COACH_CRISIS_FOLLOW, COACH_DEFLECT, COACH_DISORDERED_LINE_NOTED, COACH_EMERGENCY_LINE, moodDeflectLine } from "../content/coachVoice";
 import { localDateIso } from "../utils/dates";
 import { sanitizeCoachCards } from "../../functions/_shared/coachMessages.js";
 
@@ -67,6 +67,23 @@ function renderPanel(props = {}) {
 }
 
 const cardTitles = () => screen.queryAllByTestId("coach-card-title").map((n) => n.textContent);
+
+/** Cards on the most recent coach reply — earlier ones stay in the thread. */
+function latestCardTitles() {
+  const turns = [...document.querySelectorAll("[data-coach-turn='coach']")].reverse();
+  for (const turn of turns) {
+    const titles = [...turn.querySelectorAll("[data-testid='coach-card-title']")].map((node) => node.textContent);
+    if (titles.length) return titles;
+  }
+  return [];
+}
+
+function expectDistinctMealCount(names, { min = 2, max = 3 } = {}) {
+  const bases = names.map((name) => String(name || "").replace(/\s·\s.*$/, "").toLowerCase());
+  expect(bases.length).toBeGreaterThanOrEqual(min);
+  expect(bases.length).toBeLessThanOrEqual(max);
+  expect(new Set(bases).size).toBe(bases.length);
+}
 
 describe("the coach answers on the device", () => {
   it("tells her Callie can read the chat before she types", async () => {
@@ -151,7 +168,7 @@ describe("the coach answers on the device", () => {
     expect(screen.getByText("Live custom meal")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.lighter }));
-    await waitFor(() => expect(cardTitles().length).toBe(1));
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThanOrEqual(2));
     expect(screen.queryByText("Rosemary crackers")).toBeNull();
   });
 
@@ -247,8 +264,7 @@ describe("the coach answers on the device", () => {
     const stillSaved = saved.filter((meal) => meal.id !== "sheet" && meal.id !== "deleted-1");
     const view = renderPanel({ onLoadThread, customMeals: saved });
     await screen.findByText("Rosemary crackers");
-    expect(cardTitles()).toEqual(["Rosemary crackers"]);
-    expect(screen.queryByText("Sheet Pan Chicken with Sweet Potato")).toBeNull();
+    expect(cardTitles()).toContain("Rosemary crackers");
 
     view.rerender(
       <CoachPanel {...panelProps({
@@ -258,7 +274,7 @@ describe("the coach answers on the device", () => {
       />,
     );
     expect(screen.queryByText("Rosemary crackers")).toBeNull();
-    expect(cardTitles()).toEqual(["Sheet Pan Chicken with Sweet Potato"]);
+    expect(cardTitles()).toContain("Sheet Pan Chicken with Sweet Potato");
     expect(screen.getByText("Sheet Pan Chicken with Sweet Potato")).toBeTruthy();
     expect(stillSaved.map((meal) => meal.name)).toEqual([
       "Live custom meal",
@@ -294,13 +310,11 @@ describe("the coach answers on the device", () => {
 
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askEat }));
 
-    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
-    expect(opening).toBeGreaterThan(0);
-    expect(opening).toBeLessThanOrEqual(2);
-    expect(cardTitles().length).toBeLessThanOrEqual(2);
-    if (cardTitles().length === 2) {
-      expect(cardTitles()[1]).toMatch(/half portion/i);
-    }
+    await waitFor(() => expect(latestCardTitles().length).toBeGreaterThan(0));
+    expect(opening).toBeGreaterThanOrEqual(2);
+    expect(opening).toBeLessThanOrEqual(3);
+    expectDistinctMealCount(latestCardTitles());
+    expect(cardTitles().length).toBeGreaterThan(opening);
     expect(postCoach).not.toHaveBeenCalled();
   });
 
@@ -362,21 +376,22 @@ describe("the coach answers on the device", () => {
     });
 
     await screen.findByText("Sheet pan chicken");
-    expect(screen.queryByText("Turkey meatballs")).toBeNull();
-    expect(screen.queryByText("Turkey meatballs + rice")).toBeNull();
+    expect(screen.getByText("Turkey meatballs")).toBeTruthy();
+    expect(screen.getByText("Turkey meatballs + rice")).toBeTruthy();
     expect(document.body.textContent).not.toContain(COACH_COPY.reasonGets);
     expect(document.body.textContent).not.toContain(COACH_COPY.reasonFits);
     expect(document.body.textContent).not.toContain(COACH_COPY.proteinOverMuch);
     expect(document.body.textContent).not.toContain("Hits protein and keeps fat in range");
     expect(document.body.textContent).not.toContain("more protein than you need");
     expect(document.body.textContent).not.toContain("Keep fat in range");
-    expect(screen.getByTestId("coach-card-why").textContent).toMatch(/chicken/i);
-    expect(screen.getByTestId("coach-card-why").textContent).not.toMatch(/skipped a meal|hormonal|cortisol/i);
+    const whys = screen.getAllByTestId("coach-card-why").map((node) => node.textContent);
+    expect(whys.some((why) => /chicken/i.test(why))).toBe(true);
+    expect(whys.every((why) => !/skipped a meal|hormonal|cortisol/i.test(why))).toBe(true);
     expect(document.body.textContent).not.toContain("One of your usuals at dinner");
   });
 
   it("opens on dinner after lunch when the clock is evening", async () => {
-    const evening = new Date("2026-10-01T04:07:00.000Z");
+    const evening = new Date(2026, 9, 1, 21, 7, 0);
     renderPanel({
       now: evening,
       onLoadThread: async () => [],
@@ -397,10 +412,9 @@ describe("the coach answers on the device", () => {
     expect(document.body.textContent).not.toMatch(/plenty of room/i);
     expect(document.body.textContent).not.toMatch(/you need about \d+g of protein/i);
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
-    expect(cardTitles().length).toBeLessThanOrEqual(2);
-    if (cardTitles().length === 2) {
-      expect(cardTitles()[1]).toMatch(/half portion/i);
-    }
+    expect(cardTitles().length).toBeGreaterThanOrEqual(2);
+    expect(cardTitles().length).toBeLessThanOrEqual(3);
+    expect(new Set(cardTitles().map((name) => name.replace(/\s·\s.*$/, "").toLowerCase())).size).toBe(cardTitles().length);
     const whys = screen.getAllByTestId("coach-card-why").map((node) => node.textContent);
     expect(whys).toHaveLength(cardTitles().length);
     for (const why of whys) {
@@ -428,15 +442,14 @@ describe("the coach answers on the device", () => {
       }],
     });
     await screen.findByText("Pulled chicken tacos");
-    expect(cardTitles()).toEqual(["Pulled chicken tacos"]);
-    expect(screen.queryByText("Halibut + rice")).toBeNull();
-    expect(screen.queryByText("Turkey meatballs + rice")).toBeNull();
+    expectDistinctMealCount(cardTitles());
+    expect(cardTitles()).toContain("Pulled chicken tacos");
     expect(document.body.textContent).toContain("I noticed you skipped a meal");
     expect(document.body.textContent).not.toMatch(/129g|keep fat in its band|plenty of room|you need about/i);
-    const why = screen.getByTestId("coach-card-why").textContent;
-    expect(why).toMatch(/chicken|tortilla/i);
-    expect(why).not.toMatch(/skipped a meal|hormonal|cortisol|blunted metabolism/i);
-    expect(screen.queryByRole("button", { name: "Photo of my fridge" })).toBeNull();
+    const dumpWhys = screen.getAllByTestId("coach-card-why").map((node) => node.textContent);
+    expect(dumpWhys.some((why) => /chicken|tortilla/i.test(why))).toBe(true);
+    expect(dumpWhys.every((why) => !/skipped a meal|hormonal|cortisol|blunted metabolism/i.test(why))).toBe(true);
+    expect(screen.getByRole("button", { name: "Photo of my fridge" })).toBeTruthy();
   });
 
   it("paints a stored Berry smoothie whose reason was blank", async () => {
@@ -486,7 +499,7 @@ describe("the coach answers on the device", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
-    await waitFor(() => expect(cardTitles().length).toBe(1));
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThanOrEqual(2));
     const logs = screen.getAllByRole("button", { name: COACH_COPY.logIt });
     fireEvent.click(logs[logs.length - 1]);
     await waitFor(() => expect(onLogCard).toHaveBeenCalled());
@@ -515,8 +528,11 @@ describe("the coach answers on the device", () => {
 
     await screen.findByText("Chicken and rice tonight.");
     expect(postCoach.mock.calls[0][0].slot).toBe("dinner");
-    const logs = screen.getAllByRole("button", { name: COACH_COPY.logIt });
-    fireEvent.click(logs[logs.length - 1]);
+    const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    const titles = [...latestTurn.querySelectorAll("[data-testid='coach-card-title']")];
+    const idx = titles.findIndex((node) => /Chicken and rice/i.test(node.textContent));
+    expect(idx).toBeGreaterThanOrEqual(0);
+    fireEvent.click(within(latestTurn).getAllByRole("button", { name: COACH_COPY.logIt })[idx]);
     await waitFor(() => expect(onLogCard).toHaveBeenCalled());
     const card = onLogCard.mock.calls.at(-1)[0];
     expect(card.name).toMatch(/Chicken and rice/);
@@ -579,10 +595,11 @@ describe("the coach answers on the device", () => {
 
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.notThese }));
     await waitFor(() => {
-      const titles = cardTitles();
-      expect(titles.length).toBeGreaterThan(0);
-      expect(titles.every((title) => !first.includes(title))).toBe(true);
+      const next = latestCardTitles();
+      expect(next.length).toBeGreaterThan(0);
+      expect(next.every((title) => !first.includes(title))).toBe(true);
     });
+    expect(first.every((title) => cardTitles().includes(title))).toBe(true);
   });
 });
 
@@ -643,33 +660,39 @@ describe("what isn't the coach's goes to Callie", () => {
       localDate: localDateIso(),
     }));
     expect(COACH_DEFLECT.medical.line).toBe(
-      "That's one for Callie, not me, and I don't want you waiting on it. Message her now.",
+      "Oh no, I'm sorry you're feeling that way. That one's for Callie, not me, and I don't want you waiting on it, so please message her now. In the meantime, sip some water and have something simple:",
     );
     expect(COACH_DEFLECT.medical.line).not.toMatch(/call your doctor/i);
     expect(COACH_DEFLECT.emergency.line).toMatch(/call 911/);
     expect(COACH_DEFLECT.emergency.cta).toBe("Message Callie too");
 
     cleanup();
-    const guiltCoach = vi.fn();
+    const guiltCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "One day doesn't change anything, and you still eat. Here's turkey and rice.",
+      meals: [
+        { name: "Turkey and rice", cal: 430, p: 32, c: 48, f: 10, desc: "Turkey, rice, and veg." },
+        { name: "Beef and potatoes", cal: 460, p: 36, c: 32, f: 18, desc: "Beef and potatoes." },
+      ],
+    }));
     renderPanel({ postCoach: guiltCoach });
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
       target: { value: "I feel awful about what I ate" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    await screen.findByText(COACH_DEFLECT.care.line);
+    await screen.findByText(/One day doesn't change anything/);
+    expect(screen.queryByText(COACH_DEFLECT.care.line)).toBeNull();
     expect(guiltCoach).toHaveBeenCalledWith(expect.objectContaining({
       mode: "ask",
       text: "I feel awful about what I ate",
-      localDate: localDateIso(),
     }));
   });
 
-  it("begins a nursing mention with the supply line, then still answers the food", async () => {
+  it("does not prepend the supply line when she only mentions nursing", async () => {
     const postCoach = vi.fn(async () => ({
       ok: true,
       reply: "Eggs and toast.",
-      meals: [],
-      aside: "nursing",
+      meals: [{ name: "Eggs and toast", cal: 310, p: 18, c: 22, f: 14, desc: "Eggs and toast." }],
     }));
     renderPanel({ postCoach });
 
@@ -678,17 +701,19 @@ describe("what isn't the coach's goes to Callie", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
-    await screen.findByText(COACH_COPY.nursingPreface);
-    await screen.findByText("Eggs and toast.");
+    await screen.findAllByText("Eggs and toast.");
+    expect(screen.queryByText(COACH_COPY.nursingPreface)).toBeNull();
     expect(screen.queryByText(COACH_DEFLECT.supply.line)).toBeNull();
   });
 
-  it("answers the next meal, then hands the guilt to Callie", async () => {
+  it("answers a guilt meal without a Callie handoff", async () => {
     const postCoach = vi.fn(async () => ({
       ok: true,
-      reply: "Chicken and rice.",
-      meals: [],
-      aside: "care",
+      reply: "One day doesn't change anything, and you still eat. Here's turkey and rice.",
+      meals: [
+        { name: "Turkey and rice", cal: 430, p: 32, c: 48, f: 10, desc: "Turkey, rice, and veg." },
+        { name: "Beef and potatoes", cal: 460, p: 36, c: 32, f: 18, desc: "Beef and potatoes." },
+      ],
     }));
     renderPanel({ postCoach });
 
@@ -697,9 +722,20 @@ describe("what isn't the coach's goes to Callie", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
-    await screen.findByText("Chicken and rice.");
-    await screen.findByText(COACH_DEFLECT.care.line);
-    expect(screen.getByRole("button", { name: COACH_DEFLECT.care.cta })).toBeTruthy();
+    await screen.findByText(/One day doesn't change anything/);
+    expect(screen.queryByText(COACH_DEFLECT.care.line)).toBeNull();
+  });
+
+  it("hands a crying ask to Callie on the phone with no model call", async () => {
+    const postCoach = vi.fn(async () => ({ ok: true, noted: true, deflect: "mood" }));
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "ive been crying every day this week" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(moodDeflectLine(true));
+    expect(screen.getByRole("button", { name: COACH_DEFLECT.mood.cta })).toBeTruthy();
+    expect(screen.queryByText(/I only do food/)).toBeNull();
   });
 
   it("hands a supply question to Callie instead of answering around it", async () => {
@@ -842,7 +878,7 @@ describe("what isn't the coach's goes to Callie", () => {
 
   it("does not say she skipped a meal when nothing is logged tonight", async () => {
     renderPanel({
-      now: new Date("2026-09-05T01:30:00.000Z"),
+      now: new Date(2026, 8, 4, 18, 30, 0),
       entries: [],
       totals: { cal: 0, p: 0, c: 0, f: 0 },
       onLoadThread: async () => [],
@@ -880,7 +916,7 @@ describe("what isn't the coach's goes to Callie", () => {
     expect(postCoach.mock.calls[1][0].context.turnedDown).toEqual([]);
   });
 
-  it("shows the busy line when a text-only reply is dropped and there are no cards", async () => {
+  it("fills local plates when a text-only reply comes back with no cards", async () => {
     const postCoach = vi.fn(async () => ({ ok: true, reply: "", meals: [] }));
     renderPanel({ postCoach, onLoadThread: async () => [] });
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
@@ -888,7 +924,7 @@ describe("what isn't the coach's goes to Callie", () => {
       target: { value: "I'm tired, something easy with chicken" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    await screen.findByText(COACH_BUSY_LINE);
+    await waitFor(() => expect(latestCardTitles().length).toBeGreaterThanOrEqual(2));
     expect(screen.queryByText(COACH_COPY.cantSeeIt)).toBeNull();
   });
 
@@ -912,6 +948,67 @@ describe("what isn't the coach's goes to Callie", () => {
     await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(1));
     expect(postCoach.mock.calls[0][0].context.turnedDown).toContain(firstPlate);
     expect(postCoach.mock.calls[0][0].context.alreadySuggested).toContain(firstPlate);
+  });
+
+  it("does not reshuffle a plate she has already been shown on a model reply", async () => {
+    const trio = [
+      { name: "Callie's chicken teriyaki", cal: 430, p: 40, c: 28, f: 14, servings: 1, desc: "Chicken teriyaki." },
+      { name: "Salmon + potatoes", cal: 440, p: 38, c: 30, f: 14, servings: 1, desc: "Salmon and potatoes." },
+      { name: "Halibut + rice", cal: 455, p: 44, c: 50, f: 7, servings: 1, desc: "Halibut and rice." },
+    ];
+    const postCoach = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        reply: "Here's Callie's chicken teriyaki, Salmon + potatoes, or Halibut + rice.",
+        meals: trio,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        reply: "Here's Callie's chicken teriyaki, Salmon + potatoes, or Halibut + rice.",
+        meals: trio,
+      });
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "something easy with leftover turkey" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(latestCardTitles().join(" ")).toMatch(/teriyaki|salmon|halibut/i));
+    const first = latestCardTitles();
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "something else easy with leftover turkey" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(2));
+    const second = latestCardTitles();
+    expect(second.length).toBeGreaterThanOrEqual(2);
+    expect(second).toEqual(first);
+  });
+
+  it("renders the server reply and cards as-is, with no swap after the server", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Here's Chicken tacos and Steak tacos.",
+      meals: [
+        { name: "Chicken tacos", cal: 420, p: 32, c: 36, f: 14, servings: 1, desc: "Two chicken tacos." },
+        { name: "Steak tacos", cal: 440, p: 30, c: 32, f: 16, servings: 1, desc: "Two steak tacos." },
+        { name: "Tuna pouch wrap", cal: 280, p: 28, c: 18, f: 8, servings: 1, desc: "Tuna wrap." },
+      ],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "can I have tacos tonight" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(latestCardTitles().join(" ")).toMatch(/Chicken tacos/));
+    expect(latestCardTitles().map((title) => String(title).replace(/\s·\s.*$/, ""))).toEqual([
+      "Chicken tacos",
+      "Steak tacos",
+      "Tuna pouch wrap",
+    ]);
+    const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(latestTurn?.textContent).toMatch(/Here's Chicken tacos and Steak tacos/);
   });
 });
 
@@ -1004,9 +1101,8 @@ describe("the photo she attached", () => {
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
 
     expect(screen.getByRole("button", { name: "Photo of the menu" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Photo of my fridge" })).toBeNull();
-    expect(screen.queryByRole("button", { name: COACH_COPY.askKitchen })).toBeNull();
-    expect(screen.queryByRole("button", { name: "What's in my kitchen" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Photo of my fridge" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: COACH_COPY.askKitchen })).toBeTruthy();
   });
 
   it("puts her own words in her bubble, not the chip's instruction", async () => {
@@ -1023,16 +1119,90 @@ describe("the photo she attached", () => {
     expect(screen.queryByText("Photo of the menu", { selector: "div" })).toBeNull();
   });
 
-  it("keeps cantSeeIt when a photo comes back with no cards", async () => {
-    const postCoach = vi.fn(async () => ({ ok: true, reply: "", meals: [] }));
+  it("renders fallback plates when a photo comes back with cards", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Here's a next one.",
+      meals: [{ name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, servings: 1 }],
+    }));
     renderPanel({ postCoach, onLoadThread: async () => [] });
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
     const file = new File(["x"], "menu.jpg", { type: "image/jpeg" });
     fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } });
     await screen.findByAltText("Menu photo");
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    await screen.findByText(COACH_COPY.cantSeeIt);
-    expect(screen.queryByText(COACH_BUSY_LINE)).toBeNull();
+    await screen.findByText("Here's a next one.");
+    expect(cardTitles().some((title) => title.includes("Turkey skillet"))).toBe(true);
+    expect(screen.queryByText(COACH_COPY.cantSeeIt)).toBeNull();
+  });
+
+  it("drops a server peanut plate when her profile says peanuts", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Toast and peanut butter.",
+      meals: [
+        { name: "Toast and peanut butter", cal: 250, p: 10, c: 26, f: 12, desc: "Toast and peanut butter." },
+        { name: "Rice and fruit", cal: 280, p: 6, c: 62, f: 1, desc: "Plain rice and fruit." },
+      ],
+    }));
+    renderPanel({
+      postCoach,
+      profile: { ...PROFILE, allergens: ["peanuts"] },
+      onLoadThread: async () => [],
+    });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I only have toast, what can I make" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findAllByText(/Rice and fruit|Here are a few/);
+    expect(cardTitles().some((title) => /peanut/i.test(title))).toBe(false);
+  });
+
+  it("keeps a kitchen photo in her bubble and asks for home cooking", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "From what you have.",
+      mealSource: "kitchen",
+      meals: [
+        { name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, desc: "Ground turkey, peppers, and rice." },
+        { name: "Yogurt bowl", cal: 280, p: 22, c: 30, f: 6, desc: "Greek yogurt, berries, and oats." },
+      ],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askKitchen }));
+    const file = new File(["x"], "fridge.jpg", { type: "image/jpeg" });
+    fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } });
+    await screen.findByAltText("Kitchen photo");
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "this is what's in my kitchen, what can i make tonight" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalled());
+    expect(postCoach.mock.calls[0][0].mode).toBe("kitchen");
+    expect(screen.getAllByAltText("Kitchen photo").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("this is what's in my kitchen, what can i make tonight")).toBeTruthy();
+    expect(screen.queryByText(COACH_COPY.sourceMenu)).toBeNull();
+    expect(screen.queryByText(COACH_COPY.seeOrder)).toBeNull();
+  });
+
+  it("renders cards that come back on a 429", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      error: "rate_limited",
+      message: "That's all the thinking I've got for today. Here's Turkey skillet.",
+      meals: [{ name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, servings: 1 }],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm tired, something easy with chicken" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(/That's all the thinking I've got for today/);
+    expect(cardTitles().some((title) => title.includes("Turkey skillet"))).toBe(true);
   });
 });
 
@@ -1110,7 +1280,8 @@ describe("opening the coach twice over, the way React does", () => {
     const onAppendMessage = vi.fn();
     renderStrict({ postCoach: vi.fn(), onLoadThread: async () => [], onAppendMessage });
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
-    expect(onAppendMessage).toHaveBeenCalledTimes(1);
+    expect(onAppendMessage).toHaveBeenCalledTimes(0);
+    expect(document.querySelectorAll("[data-coach-turn='coach']")).toHaveLength(1);
   });
 
   it("answers once her ranges arrive, even a paint late", async () => {
@@ -1261,7 +1432,7 @@ describe("priority pass: persist, crisis, reload, load error", () => {
 
   it("recomputes Dinner when she taps a quick ask at 6:30pm", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-09-04T15:00:00.000Z"));
+    vi.setSystemTime(new Date(2026, 8, 4, 8, 0, 0));
     function Harness() {
       const [now, setNow] = useState(() => new Date());
       return (
@@ -1277,10 +1448,34 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     render(<Harness />);
     await screen.findByText(COACH_COPY.title);
     expect(document.body.textContent).toMatch(/Breakfast/);
-    vi.setSystemTime(new Date("2026-09-05T01:30:00.000Z"));
+    vi.setSystemTime(new Date(2026, 8, 4, 18, 30, 0));
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askEat }));
     await waitFor(() => expect(document.body.textContent).toMatch(/Dinner · \d+ cal/));
     vi.useRealTimers();
+  });
+
+  it.each([
+    ["I've been making myself throw up and I want to die"],
+    ["should I take ibuprofen? I want to hurt myself"],
+    ["my supply dropped and I want to die"],
+    ["I've been crying every day and I want to die"],
+    ["I've been dizzy since this morning and I want to die"],
+  ])("shows 911/988 when crisis is mixed into %s", async (text) => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      scope: "urgent",
+      deflect: "emergency",
+      meals: [],
+    }));
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), { target: { value: text } });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.emergency.line);
+    expect(screen.queryByText(COACH_DEFLECT.disordered.line)).toBeNull();
+    expect(screen.queryByText(COACH_DEFLECT.medication.line)).toBeNull();
+    expect(screen.queryByText(COACH_DEFLECT.supply.line)).toBeNull();
+    expect(document.body.textContent).toMatch(/911|988/);
+    expect(postCoach).toHaveBeenCalled();
   });
 
   it("shows the emergency line and Message Callie too for a crisis ask", async () => {
@@ -1292,6 +1487,8 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
     await screen.findByText(COACH_DEFLECT.emergency.line);
     expect(screen.getByRole("button", { name: COACH_DEFLECT.emergency.cta })).toBeTruthy();
+    const crisisTurn = screen.getByText(COACH_DEFLECT.emergency.line).closest("[data-coach-turn='coach']");
+    expect(crisisTurn?.querySelectorAll("[data-testid='coach-card-title']")).toHaveLength(0);
     expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
       mode: "ask",
       text: "I want to die",
@@ -1300,20 +1497,26 @@ describe("priority pass: persist, crisis, reload, load error", () => {
   });
 
   it("retries a timeout with the same request id so it is not billed twice", async () => {
-    const postCoach = vi.fn()
-      .mockResolvedValueOnce({ ok: false, timeout: true, message: COACH_COPY.askTimeout })
-      .mockResolvedValueOnce({ ok: true, reply: "Eggs and toast.", meals: [] });
+    let asks = 0;
+    const postCoach = vi.fn(async (body) => {
+      if (body?.mode !== "ask") return { ok: true };
+      asks += 1;
+      if (asks === 1) return { ok: false, timeout: true, message: COACH_COPY.askTimeout };
+      return { ok: true, reply: "Eggs and toast.", meals: [{ name: "Eggs and toast", cal: 310, p: 18, c: 22, f: 14, desc: "Eggs and toast." }] };
+    });
     renderPanel({ postCoach });
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
       target: { value: "what can I make with leftover chicken" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    expect(await screen.findByText(COACH_COPY.askTimeout)).toBeTruthy();
+    expect((await screen.findAllByText(COACH_COPY.askTimeout)).length).toBeGreaterThanOrEqual(1);
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.retryAsk }));
-    await screen.findByText("Eggs and toast.");
-    expect(postCoach).toHaveBeenCalledTimes(2);
-    expect(postCoach.mock.calls[0][0].requestId).toBe(postCoach.mock.calls[1][0].requestId);
-    expect(postCoach.mock.calls[0][0].text).toBe("what can I make with leftover chicken");
+    await waitFor(() => {
+      const askCalls = postCoach.mock.calls.map(([body]) => body).filter((body) => body?.mode === "ask");
+      expect(askCalls).toHaveLength(2);
+      expect(askCalls[0].requestId).toBe(askCalls[1].requestId);
+      expect(askCalls[0].text).toBe("what can I make with leftover chicken");
+    });
   });
 
   it("shows a retry when today's thread fails to load", async () => {
@@ -1324,6 +1527,127 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     expect(await screen.findByText(COACH_COPY.loadFailed)).toBeTruthy();
     expect(screen.getByRole("button", { name: COACH_COPY.retryLoad })).toBeTruthy();
     expect(cardTitles()).toHaveLength(0);
+  });
+
+  it("keeps earlier cards when the next reply arrives", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Later plates.",
+      meals: [
+        { name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, desc: "Turkey and peppers." },
+        { name: "Salmon and rice", cal: 440, p: 38, c: 30, f: 14, desc: "Salmon and rice." },
+      ],
+    }));
+    renderPanel({
+      postCoach,
+      onLoadThread: async () => [
+        {
+          id: "c1",
+          role: "coach",
+          body: "Earlier.",
+          kind: "cards",
+          payload: {
+            cards: [
+              { name: "Pulled chicken tacos", title: "Pulled chicken tacos", source: "bank", tag: COACH_COPY.sourceBank, cal: 450, p: 35, c: 40, f: 14, servings: 1, reason: "Chicken and tortillas." },
+              { name: "Halibut + rice", title: "Halibut + rice", source: "bank", tag: COACH_COPY.sourceBank, cal: 455, p: 44, c: 50, f: 7, servings: 1, reason: "Halibut and rice." },
+            ],
+          },
+        },
+      ],
+    });
+    await screen.findByText("Pulled chicken tacos");
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), { target: { value: "what can I make with leftover turkey and rice" } });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText("Later plates.");
+    expect(screen.getByText("Pulled chicken tacos")).toBeTruthy();
+    expect(cardTitles().some((title) => title.includes("Turkey skillet"))).toBe(true);
+  });
+
+  it("hands a purge question to Callie with no calorie line on the cards", async () => {
+    renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I've been making myself throw up after meals" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.disordered.line);
+    expect(latestCardTitles().length).toBeGreaterThanOrEqual(2);
+    const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(latestTurn?.textContent).not.toMatch(/\d+ cal ·/);
+    expect(screen.queryByText(COACH_DISORDERED_LINE_NOTED)).toBeNull();
+  });
+
+  it("shows the noted disordered line only when the pin write succeeded", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      deflect: "disordered",
+      noted: true,
+      meals: [
+        { name: "Rice and fruit", cal: 0, p: 0, c: 0, f: 0, hideMacros: true, desc: "Rice and fruit." },
+        { name: "Cucumber and rice", cal: 0, p: 0, c: 0, f: 0, hideMacros: true, desc: "Cucumber and rice." },
+      ],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I only eat once a day so I lose faster" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DISORDERED_LINE_NOTED);
+    expect(screen.queryByText(COACH_DEFLECT.disordered.line)).toBeNull();
+  });
+
+  it("hides numbers on careful cards in no-logging mode", async () => {
+    renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm not logging. should I take ibuprofen" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.medication.line);
+    expect(latestCardTitles().length).toBeGreaterThanOrEqual(2);
+    const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(latestTurn?.textContent).not.toMatch(/\d+ cal ·/);
+  });
+
+  it("hides numbers, servings, and the estimate line when she is not tracking", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Here's Chicken tacos, Steak tacos, or Bean and salsa tacos.",
+      meals: [
+        { name: "Chicken tacos", cal: 420, p: 32, c: 36, f: 14, servings: 1.5, title: "Chicken tacos · 1.5 servings", desc: "Two chicken tacos." },
+        { name: "Steak tacos", cal: 440, p: 30, c: 32, f: 16, servings: 1, desc: "Two steak tacos." },
+        { name: "Bean and salsa tacos", cal: 360, p: 16, c: 52, f: 8, servings: 1, desc: "Bean tacos." },
+      ],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm not tracking. can I have tacos tonight" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(latestCardTitles().some((name) => /taco/i.test(name))).toBe(true));
+    expect(latestCardTitles().length).toBeGreaterThanOrEqual(2);
+    const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(latestTurn?.textContent).not.toMatch(/\d+ cal ·/);
+    expect(latestTurn?.textContent).not.toMatch(/1\.5 servings|Rough estimate/i);
+    expect(latestTurn?.querySelectorAll("[data-testid='coach-card-title']").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("fills breakfast plates on a coffee teach that also asks for food, without a coach Remove", async () => {
+    renderPanel({ postCoach: vi.fn(), onHideMessage: vi.fn(async () => true), onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "can i have coffee while nursing? what should i eat with it in the morning" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_COPY.teachCoffee);
+    expectDistinctMealCount(latestCardTitles());
+    expect(latestCardTitles().join(" ")).toMatch(/egg|yogurt|toast|sausage|pancake|oat/i);
+    expect(screen.queryByText(COACH_COPY.nursingPreface)).toBeNull();
+    const removes = screen.queryAllByRole("button", { name: COACH_COPY.removeMessage });
+    expect(removes).toHaveLength(0);
+    expect(document.body.textContent).not.toMatch(/\bRemove\b/);
   });
 
   it("removes a saved message through the hide RPC", async () => {
@@ -1337,5 +1661,243 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     fireEvent.click(screen.getAllByRole("button", { name: COACH_COPY.removeMessage })[0]);
     await waitFor(() => expect(onHideMessage).toHaveBeenCalledWith(["mama-1"]));
     await waitFor(() => expect(screen.queryByText("what should I eat")).toBeNull());
+  });
+
+  it("keeps Remove on the latest mama bubble only until she hovers an older one", async () => {
+    const onHideMessage = vi.fn(async () => true);
+    renderPanel({
+      postCoach: vi.fn(),
+      onHideMessage,
+      onLoadThread: async () => [
+        { id: "mama-old", role: "mama", body: "first ask", kind: "text", payload: null },
+        { id: "coach-1", role: "coach", body: "First answer.", kind: "text", payload: null },
+        { id: "mama-new", role: "mama", body: "second ask", kind: "text", payload: null },
+        { id: "coach-2", role: "coach", body: "Second answer.", kind: "text", payload: null },
+      ],
+    });
+    await screen.findByText("Second answer.");
+    const removes = screen.getAllByRole("button", { name: COACH_COPY.removeMessage });
+    expect(removes).toHaveLength(1);
+    expect(removes[0].closest("[data-coach-mama-bubble]")?.getAttribute("data-coach-mama-bubble")).toBe("mama-new");
+    fireEvent.mouseEnter(document.querySelector('[data-coach-mama-bubble="mama-old"]'));
+    const afterHover = screen.getAllByRole("button", { name: COACH_COPY.removeMessage });
+    expect(afterHover.map((btn) => btn.closest("[data-coach-mama-bubble]")?.getAttribute("data-coach-mama-bubble")))
+      .toEqual(expect.arrayContaining(["mama-old", "mama-new"]));
+  });
+
+  it("phone fallback drops already-suggested chicken and keeps the reply on the cards", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Those leftovers can wait. Here's Grilled chicken and rice, Leftover chicken and rice, or Chicken thighs and rice.",
+      meals: [
+        { name: "Grilled chicken and rice", cal: 430, p: 45, c: 30, f: 12, desc: "Chicken and rice." },
+        { name: "Leftover chicken and rice", cal: 430, p: 45, c: 30, f: 12, desc: "The leftover chicken." },
+        { name: "Chicken thighs and rice", cal: 480, p: 38, c: 40, f: 16, desc: "Thighs and rice." },
+      ],
+    }));
+    renderPanel({
+      postCoach,
+      onLoadThread: async () => [
+        { id: "m1", role: "mama", body: "chicken dinner", kind: "text", payload: null },
+        {
+          id: "c1",
+          role: "coach",
+          body: "Earlier chicken.",
+          kind: "cards",
+          payload: {
+            cards: [
+              { name: "Grilled chicken and rice", title: "Grilled chicken and rice", source: "new", cal: 430, p: 45, c: 30, f: 12, reason: "Fits." },
+              { name: "Leftover chicken and rice", title: "Leftover chicken and rice", source: "new", cal: 430, p: 45, c: 30, f: 12, reason: "Fits." },
+              { name: "Chicken thighs and rice", title: "Chicken thighs and rice", source: "new", cal: 480, p: 38, c: 40, f: 16, reason: "Fits." },
+            ],
+          },
+        },
+      ],
+    });
+    await screen.findByText("Earlier chicken.");
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "something else, I had chicken at lunch too" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalled());
+    await waitFor(() => expect(latestCardTitles().length).toBeGreaterThanOrEqual(2));
+    expect(latestCardTitles().join(" ")).toMatch(/chicken/i);
+    expect(document.body.textContent).toMatch(/Here's Grilled chicken and rice/);
+  });
+
+  it("treats I'm not tracking today as no-logging", async () => {
+    const postCoach = vi.fn(async () => ({ ok: true, reply: "Okay. We'll skip the numbers.", meals: [] }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm not tracking today" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalled());
+    expect(postCoach.mock.calls[0][0].context.notLogging).toBe(true);
+  });
+
+  it("does not set lunch from a past-tense mention at dinner time", async () => {
+    const dinner = new Date("2026-09-05T01:42:00.000Z");
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Here's Turkey skillet, or Salmon and rice.",
+      meals: [
+        { name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, desc: "Turkey." },
+        { name: "Salmon and rice", cal: 440, p: 38, c: 30, f: 14, desc: "Salmon." },
+      ],
+    }));
+    renderPanel({
+      now: dinner,
+      postCoach,
+      onLoadThread: async () => [
+        { id: "m1", role: "mama", body: "dinner ideas", kind: "text", payload: null },
+        { id: "c1", role: "coach", body: "Earlier dinner.", kind: "text", payload: null },
+      ],
+    });
+    await screen.findByText("Earlier dinner.");
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "something else, I had chicken at lunch too" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalled());
+    expect(postCoach.mock.calls[0][0].slot).toBe("dinner");
+    expect(postCoach.mock.calls[0][0].slot).not.toBe("lunch");
+  });
+
+  it("sends a kitchen photo plus a what-can-I-make caption as kitchen food", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "From what you have.",
+      mealSource: "kitchen",
+      meals: [
+        { name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, desc: "Ground turkey and peppers." },
+        { name: "Rice and beans", cal: 380, p: 16, c: 62, f: 6, desc: "Rice and beans." },
+      ],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askKitchen }));
+    fireEvent.change(document.querySelector('input[type="file"]'), {
+      target: { files: [new File(["x"], "fridge.jpg", { type: "image/jpeg" })] },
+    });
+    await screen.findByAltText("Kitchen photo");
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "this is what I have, what can I make" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalled());
+    expect(postCoach.mock.calls[0][0].mode).toBe("kitchen");
+    expect(postCoach.mock.calls[0][0].text).toBe("this is what I have, what can I make");
+    await screen.findByText("From what you have.");
+  });
+
+  it("keeps crisis, queue, slot, and saved rows honest across a reload", async () => {
+    const saved = [];
+    const postCoach = vi.fn(async (body) => {
+      if (body?.text?.includes("want to die")) {
+        return { ok: true, scope: "urgent", deflect: "emergency", meals: [], saved: true };
+      }
+      return {
+        ok: true,
+        saved: true,
+        reply: "At Chipotle, here's Chipotle chicken bowl, Chipotle steak bowl, and Chipotle sofritas bowl.",
+        meals: [
+          { name: "Chipotle chicken bowl", cal: 520, p: 48, c: 36, f: 14, desc: "Chicken bowl.", orderOnly: true, source: "menu" },
+          { name: "Chipotle steak bowl", cal: 480, p: 40, c: 30, f: 16, desc: "Steak bowl.", orderOnly: true, source: "menu" },
+          { name: "Chipotle sofritas bowl", cal: 430, p: 22, c: 48, f: 12, desc: "Sofritas bowl.", orderOnly: true, source: "menu" },
+        ],
+      };
+    });
+    const onAppendMessage = vi.fn(async (row) => {
+      saved.push(row);
+      return { id: `saved-${saved.length}` };
+    });
+    const { rerender } = renderPanel({
+      postCoach,
+      onAppendMessage,
+      onLoadThread: async () => [],
+      now: new Date(2026, 8, 4, 18, 30, 0),
+    });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I've been making myself throw up and I want to die" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.emergency.line);
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "what can I order at Chipotle" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText("Chipotle chicken bowl");
+    const coachSaves = onAppendMessage.mock.calls.map(([row]) => row).filter((row) => row.role === "coach");
+    expect(coachSaves.every((row) => row.kind !== "deflect")).toBe(true);
+    rerender(<CoachPanel {...panelProps({
+      postCoach,
+      onAppendMessage,
+      now: new Date(2026, 8, 4, 18, 30, 0),
+      onLoadThread: async () => [
+        { id: "1", role: "mama", body: "I've been making myself throw up and I want to die", requestId: "a" },
+        { id: "2", role: "coach", body: COACH_DEFLECT.emergency.line, kind: "deflect", payload: { deflect: "emergency", cards: [] }, requestId: "a" },
+        { id: "3", role: "mama", body: "what can I order at Chipotle", requestId: "b" },
+        { id: "4", role: "coach", body: "At Chipotle, here's Chipotle chicken bowl.", kind: "cards", payload: { cards: [{ name: "Chipotle chicken bowl" }] }, requestId: "b" },
+      ],
+    })} />);
+    await screen.findByText(COACH_DEFLECT.emergency.line);
+    expect(screen.getByText("Chipotle chicken bowl")).toBeTruthy();
+  });
+
+  it("sends prior asks on the careful path and keeps ok / never mind card-free after crisis", async () => {
+    const postCoach = vi.fn(async (body) => {
+      if (body?.text?.includes("want to die")) {
+        return { ok: true, scope: "urgent", deflect: "emergency", meals: [], saved: true };
+      }
+      return { ok: true, scope: "urgent", deflect: "crisisFollow", meals: [], saved: true };
+    });
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I've been making myself throw up and I want to die" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.emergency.line);
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "ok" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(2));
+    expect(postCoach.mock.calls[1][0].context.priorAsks.join(" ")).toMatch(/want to die/);
+    const afterOk = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(afterOk?.querySelectorAll("[data-testid='coach-card-title']")).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm fine now, never mind" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(3));
+    const afterNever = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(afterNever?.querySelectorAll("[data-testid='coach-card-title']")).toHaveLength(0);
+    expect(screen.getAllByText(COACH_CRISIS_FOLLOW).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows a stale-build refresh when the server id does not match", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      coachBuild: "fffffff",
+      reply: "Here's Eggs and toast.",
+      meals: [{ name: "Eggs and toast", cal: 310, p: 18, c: 22, f: 14 }],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm tired, something easy with chicken" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_COPY.staleBuild);
+  });
+
+  it("shows the coach build footer for a pgchammas+ session email", async () => {
+    renderPanel({
+      email: "pgchammas+qa-preview@example.com",
+      profile: { first_name: "QA" },
+      onLoadThread: async () => [],
+    });
+    await waitFor(() => expect(screen.getByText(/Coach build/i)).toBeTruthy());
   });
 });

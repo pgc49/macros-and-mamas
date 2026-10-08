@@ -46,10 +46,12 @@ export function guessSlotFromTime(date = new Date()) {
   return slotFromClockMinutes(date.getHours() * 60 + date.getMinutes());
 }
 
-/** Callie's meal door. Sticky QA and the program clock are Pacific. */
+/** Optional override for tests. The live door uses the device clock. */
 export const COACH_CLOCK_TZ = "America/Los_Angeles";
 
 function slotFromClockMinutes(mins) {
+  // A 3am grab is a snack, not breakfast.
+  if (mins < 5 * 60) return "snack";
   if (mins < 10 * 60 + 30) return "breakfast";
   if (mins < 14 * 60) return "lunch";
   if (mins < 17 * 60) return "snack";
@@ -84,15 +86,14 @@ export function wallClockParts(instant, timeZone) {
 
 /**
  * Which meal the coach is standing in front of.
- *
- * Always Pacific wall time, from `wallClockParts`, never `Date#getHours`.
- * `41d358a` rewrote the Date only when Intl said UTC, then read local hours.
- * On the sticky retest Intl already said America/Los_Angeles, so the rewrite
- * did not run, and the browser's local hour was still breakfast at 9:07pm PDT.
+ * Device local time unless a test passes an explicit zone.
  */
-export function coachSlotFromTime(instant = new Date(), timeZone = COACH_CLOCK_TZ) {
-  const { hour, minute } = wallClockParts(instant, timeZone);
-  return slotFromClockMinutes(hour * 60 + minute);
+export function coachSlotFromTime(instant = new Date(), timeZone = null) {
+  if (timeZone) {
+    const { hour, minute } = wallClockParts(instant, timeZone);
+    return slotFromClockMinutes(hour * 60 + minute);
+  }
+  return slotFromClockMinutes(instant.getHours() * 60 + instant.getMinutes());
 }
 
 /** Slot for a new log: prefer explicit, else guess. */

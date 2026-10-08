@@ -32,6 +32,12 @@ describe("what the coach answers", () => {
   it("treats a bare greeting as food, not as off topic", () => {
     expect(scopeOf("")).toBe("food");
   });
+
+  it("treats a kitchen photo caption as food even without a food word", () => {
+    expect(scopeOf("this is what I have, what can I make")).toBe("food");
+    expect(classifyAsk("this is what I have, what can I make", { mode: "kitchen" }).scope).toBe("food");
+    expect(isMealAsk("this is what I have, what can I make", { mode: "kitchen" })).toBe(true);
+  });
 });
 
 describe("what the coach hands to Callie", () => {
@@ -63,11 +69,52 @@ describe("what the coach hands to Callie", () => {
       "how few calories can I eat and still be ok",
       "I binged last night and feel disgusting",
       "I want to skip meals tomorrow to make up for it",
-      "I feel awful about what I ate today",
       "I've been starving myself all week",
       "I hate my body right now",
     ];
-    for (const ask of asks) expect(scopeOf(ask), ask).toBe("urgent");
+    for (const ask of asks) expect(["urgent", "disordered"].includes(scopeOf(ask)), ask).toBe(true);
+  });
+
+  it("treats 1000-calorie, once-a-day, skip-meals, and fasting-while-nursing as disordered", () => {
+    const asks = [
+      "is it fine to eat 1000 calories a day?",
+      "is 1200 calories ok",
+      "under 1400 calories a day ok?",
+      "eating only once a day",
+      "is it ok to eat 1 meal a day while nursing?",
+      "only 2 meals a day?",
+      "skip meals",
+      "fasting while nursing",
+      "fast 16 hours while breastfeeding",
+    ];
+    for (const ask of asks) expect(classifyAsk(ask).scope, ask).toBe("disordered");
+  });
+
+  it("keeps a one-off skip dinner tonight as food, not disordered", () => {
+    expect(classifyAsk("just don't eat dinner tonight?").scope).toBe("food");
+    expect(classifyAsk("should I skip dinner tonight?").scope).toBe("food");
+  });
+
+  it("keeps the two turns after a crisis on 911/988 unless she asks for food", () => {
+    const prior = ["I want to die"];
+    expect(classifyAsk("ok", { priorAsks: prior })).toMatchObject({ scope: "urgent", crisisFollow: true });
+    expect(classifyAsk("I'm fine now, never mind", { priorAsks: prior })).toMatchObject({
+      scope: "urgent",
+      crisisFollow: true,
+    });
+    expect(classifyAsk("what should I eat for dinner", { priorAsks: prior }).scope).toBe("food");
+  });
+
+  it("treats in-thread follow-ups after food as food, not Callie's", () => {
+    const prior = ["what should I eat for dinner"];
+    for (const ask of [
+      "yes please",
+      "I don't like those",
+      "the second one sounds good, how do I make it",
+      "I only have 10 minutes",
+    ]) {
+      expect(classifyAsk(ask, { priorAsks: prior }).scope, ask).toBe("food");
+    }
   });
 
   it("never answers mental health", () => {
@@ -173,14 +220,31 @@ describe("milk supply", () => {
   it("does not fire on someone just mentioning that she nurses", () => {
     expect(scopeOf("quick breakfast ideas, I'm nursing so I'm always starving")).toBe("food");
     expect(scopeOf("quick breakfast ideas, I'm nursing and short on time")).toBe("food");
-    expect(classifyAsk("quick breakfast ideas, I'm nursing so I'm always starving").aside).toBe("nursing");
+    expect(classifyAsk("quick breakfast ideas, I'm nursing so I'm always starving").aside).toBeNull();
+    expect(classifyAsk("can i have coffee while nursing").aside).toBeNull();
+    expect(classifyAsk("i hate salmon, what else is good while nursing").aside).toBeNull();
   });
 
-  it("answers the next meal when she also feels awful, and keeps shame on its own", () => {
-    expect(scopeOf("I feel awful about what I ate today")).toBe("urgent");
+  it("treats guilt and a skipped lunch as meal questions, not Callie's", () => {
+    expect(scopeOf("I feel awful about what I ate today")).toBe("food");
+    expect(scopeOf("ugh I ate half a sleeve of cookies")).toBe("food");
+    expect(scopeOf("I'm not hungry but I should eat?")).toBe("food");
+    expect(scopeOf("I blew it today")).toBe("food");
+    expect(scopeOf("I skipped lunch")).toBe("food");
     const next = classifyAsk("what should I eat for dinner, I feel awful about what I ate");
     expect(next.scope).toBe("food");
-    expect(next.aside).toBe("care");
+    expect(next.aside).toBeNull();
+  });
+
+  it("sends postpartum crying to the mood door, not off-topic or crisis", () => {
+    expect(scopeOf("ive been crying every day this week")).toBe("mood");
+    expect(scopeOf("I keep crying and I don't know why")).toBe("mood");
+    expect(scopeOf("I feel really down lately")).toBe("mood");
+    expect(scopeOf("I want to die")).toBe("urgent");
+  });
+
+  it("keeps a supply drop plus not-eating-enough on the supply door", () => {
+    expect(scopeOf("i feel like my milk supply dropped this week. am i not eating enough?")).toBe("supply");
   });
 
   it("leaves workout calories to Callie and still answers food after the gym", () => {
@@ -278,6 +342,9 @@ describe("isMealAsk", () => {
     expect(isMealAsk("what should I have for dinner")).toBe(true);
     expect(isMealAsk("what should I eat before my run")).toBe(true);
     expect(isMealAsk("is pizza ok")).toBe(true);
+    expect(isMealAsk("something new please")).toBe(true);
+    expect(isMealAsk("surprise me")).toBe(true);
+    expect(isMealAsk("why do you keep saying ask Callie")).toBe(true);
     expect(isMealAsk("", { mode: "kitchen" })).toBe(true);
     expect(isMealAsk("a short note", { mode: "menu" })).toBe(true);
   });
@@ -286,5 +353,39 @@ describe("isMealAsk", () => {
     expect(isMealAsk("can you raise my calories")).toBe(false);
     expect(isMealAsk("I want to die")).toBe(false);
     expect(isMealAsk("write me a poem")).toBe(false);
+  });
+
+  it("defaults leftover food wording to a meal ask", () => {
+    expect(isMealAsk("can I have tacos?")).toBe(true);
+    expect(isMealAsk("what about a sandwich")).toBe(true);
+    expect(isMealAsk("what's healthy at mcdonalds")).toBe(true);
+    expect(isMealAsk("how many almonds can I have?")).toBe(true);
+    expect(isMealAsk("help me plan tomorrow")).toBe(true);
+  });
+});
+
+describe("careful paths", () => {
+  it("routes disordered eating and medication, not ordinary food or off-topic", () => {
+    expect(scopeOf("I've been making myself throw up after meals")).toBe("disordered");
+    expect(scopeOf("I only eat once a day so I lose faster")).toBe("disordered");
+    expect(scopeOf("should I take ibuprofen")).toBe("medication");
+    expect(deflectForScope("disordered")).toBe("disordered");
+    expect(deflectForScope("medication")).toBe("medication");
+  });
+
+  it("puts crisis ahead of disordered, medication, supply, mood, and symptom", () => {
+    expect(scopeOf("I've been making myself throw up and I want to die")).toBe("urgent");
+    expect(deflectForScope("urgent", "I've been making myself throw up and I want to die")).toBe("emergency");
+    expect(scopeOf("should I take ibuprofen? I want to hurt myself")).toBe("urgent");
+    expect(deflectForScope("urgent", "should I take ibuprofen? I want to hurt myself")).toBe("emergency");
+    expect(scopeOf("my supply dropped and I want to die")).toBe("urgent");
+    expect(scopeOf("I've been crying every day and I want to die")).toBe("urgent");
+    expect(scopeOf("I've been dizzy since this morning and I want to die")).toBe("urgent");
+  });
+
+  it("hands leftover non-food after a food ask to Callie", () => {
+    expect(classifyAsk("I'm so lonely", { priorAsks: ["what should I have for dinner"] }).scope).toBe("off_topic");
+    expect(classifyAsk("my baby has colic", { priorAsks: ["dinner ideas"] }).scope).toBe("off_topic");
+    expect(classifyAsk("my back is killing me", { priorAsks: ["snack before bed?"] }).scope).toBe("off_topic");
   });
 });

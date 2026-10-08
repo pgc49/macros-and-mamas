@@ -9,6 +9,7 @@
  */
 
 import { COACH_COPY, COACH_SLOT_LABEL } from "../content/coachVoice.js";
+import { distinctCoachMeals } from "../../functions/_shared/coachAskMeals.js";
 import { withRecipeDetail } from "../content/recipeDetails.js";
 import { mealMacros } from "./eatingOutImpact.js";
 import { snapServings } from "./servings.jsx";
@@ -299,13 +300,6 @@ export function shownCoachReason(card) {
   return plateFoodClause(card) || dishNameClause(card);
 }
 
-function isHalfSwap(plate, other) {
-  const base = String(plate?.name || "").replace(/\s·\s.*$/, "").trim().toLowerCase();
-  const otherName = String(other?.name || "").replace(/\s·\s.*$/, "").trim().toLowerCase();
-  if (!base || base !== otherName) return false;
-  return Number(other?.servings) === 0.5 || /half portion/i.test(other?.title || "");
-}
-
 /**
  * Stamp the line under the plate onto every card that can name food or the
  * dish. Cards with nothing to say are dropped. Always a new object, so a
@@ -322,16 +316,11 @@ export function cardsWithShownReason(cards = []) {
 }
 
 /**
- * First paint is one plate. A second card is only the half portion of that
- * same plate. A second full bank meal is not a swap. Plates with nothing to
- * name are skipped.
+ * First paint is 2–3 distinct plates. A half portion of a plate already
+ * shown does not count as a second meal.
  */
 export function firstPaintPlates(cards = []) {
-  const named = cardsWithShownReason(cards);
-  if (!named.length) return [];
-  const plate = named[0];
-  const swap = named.find((card, index) => index > 0 && isHalfSwap(plate, card));
-  return swap ? [plate, swap] : [plate];
+  return distinctCoachMeals(cardsWithShownReason(cards), 3);
 }
 
 /**
@@ -459,6 +448,7 @@ function skipKey(name) {
   return String(name || "")
     .toLowerCase()
     .replace(/\s·\s[\d.]+×$/i, "")
+    .replace(/\s·\s(?:half portion|[\d.]+ servings)$/i, "")
     .replace(/\s*\([^)]*\)/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -497,7 +487,7 @@ export function buildCoachCard(meal, budget, ctx = {}) {
     reason: coachReason(next, budget, { over: ctx.over }),
   });
   next.title = portionTitle(next.name, servings);
-  next.tag = sourceTag(next.source);
+  next.tag = sourceTag(next.source, ctx.slot);
   next.proteinNote = proteinOverNote(next, budget);
   return next;
 }

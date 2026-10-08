@@ -10,8 +10,16 @@ import {
   isWontLogRefusal,
   saidSheSkipped,
   MAX_MEDICAL_ESCALATES_PER_DAY,
+  MAX_SUPPLY_ESCALATES_PER_DAY,
+  MAX_DISORDERED_ESCALATES_PER_DAY,
+  MAX_MEDICATION_ESCALATES_PER_DAY,
+  MAX_CRISIS_ESCALATES_PER_DAY,
   MAX_SUMMARY_ESCALATES,
   MAX_SUMMARY_CHARS,
+  MAX_LINE_CHARS,
+  blocksNonCrisisForCrisisRoom,
+  crisisRoomReserveChars,
+  worstCaseRefusalChars,
   fitRefusalSummary,
   mergeRefusalSummary,
   preserveRefusalLines,
@@ -31,6 +39,7 @@ describe("a refusal line is factual", () => {
     expect(escalateDoor("I've been dizzy since this morning", { scope: "urgent" })).toBe("medical");
     expect(escalateDoor("should I skip dinner", { escalate: "stuck" })).toBe("stuck");
     expect(escalateDoor("will this affect my supply", { scope: "supply" })).toBeNull();
+    expect(escalateDoor("I feel like my supply dropped, what should I eat", { scope: "supply" })).toBe("supply");
     expect(escalateDoor("I feel awful about what I ate", { scope: "urgent" })).toBeNull();
     expect(escalateDoor("what workout should I do", { scope: "off_topic" })).toBeNull();
     expect(escalateDoor("what should I eat", { escalate: "stuck" })).toBeNull();
@@ -279,6 +288,10 @@ describe("a refusal line is factual", () => {
     expect(isWontLogRefusal("I won't log this")).toBe(true);
     expect(isWontLogRefusal("I will not log dinner")).toBe(true);
     expect(isWontLogRefusal("I hate tracking")).toBe(true);
+    expect(isWontLogRefusal("I'm not tracking today")).toBe(true);
+    expect(isWontLogRefusal("not counting today")).toBe(true);
+    expect(isWontLogRefusal("no numbers today")).toBe(true);
+    expect(isWontLogRefusal("I don't want to track")).toBe(true);
     expect(isWontLogRefusal("should I skip dinner")).toBe(false);
     expect(isLoggingRefusal("I won't log this")).toBe(true);
     expect(isLoggingRefusal("should I skip dinner")).toBe(false);
@@ -286,6 +299,25 @@ describe("a refusal line is factual", () => {
     expect(saidSheSkipped("I won't log this")).toBe(false);
     expect(isWontLogRefusal("will this affect my milk supply")).toBe(false);
     expect(isWontLogRefusal("I've been dizzy since this morning")).toBe(false);
+  });
+
+  it("reserves crisis room so a 300-char worst case cannot fill 8000", () => {
+    expect(MAX_SUPPLY_ESCALATES_PER_DAY).toBe(3);
+    expect(MAX_DISORDERED_ESCALATES_PER_DAY).toBe(3);
+    expect(MAX_MEDICATION_ESCALATES_PER_DAY).toBe(3);
+    expect(MAX_CRISIS_ESCALATES_PER_DAY).toBe(10);
+    expect(crisisRoomReserveChars()).toBe(MAX_SUMMARY_CHARS - MAX_CRISIS_ESCALATES_PER_DAY * MAX_LINE_CHARS);
+    expect(worstCaseRefusalChars()).toBeLessThanOrEqual(MAX_SUMMARY_CHARS);
+    const prior = Array.from({ length: 22 }, (_, i) => (
+      `Coach refused (stuck): ${String(i).padEnd(MAX_LINE_CHARS, "x")}`
+    )).join("\n");
+    expect(blocksNonCrisisForCrisisRoom(prior, "supply")).toBe(true);
+    expect(mergeRefusalSummary(prior, "Coach refused (supply): my supply dipped")).toEqual({
+      ok: false,
+      reason: "full",
+      summary: prior,
+    });
+    expect(blocksNonCrisisForCrisisRoom(prior, "crisis")).toBe(false);
   });
 
   it("treats a full refusal card as a failed write", async () => {

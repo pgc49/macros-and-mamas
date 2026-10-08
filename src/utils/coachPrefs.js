@@ -6,7 +6,7 @@
  * nudge the score. Ported from the Help me decide engine (PR 332).
  */
 
-import { normalizeAllergens, normalizeDiet } from "../content/foodPrefs";
+import { normalizeAllergens, normalizeDiet } from "../content/foodPrefs.js";
 
 const STOP = new Set([
   "with", "from", "that", "this", "have", "your", "some", "into", "over",
@@ -19,12 +19,18 @@ const LAND_MEAT = [
 ];
 const FISH = [
   "salmon", "tuna", "halibut", "cod", "fish", "tilapia", "shrimp", "prawn",
-  "crab", "lobster", "shellfish",
+  "crab", "lobster", "shellfish", "nigiri", "sashimi", "poke", "sushi",
 ];
 const EGGS = ["egg", "eggs", "whites"];
 const DAIRY = [
   "yogurt", "yoghurt", "cottage", "cheese", "milk", "whey", "butter", "cream",
-  "feta", "parmesan",
+  "feta", "parmesan", "ricotta", "mozzarella", "cheddar", "jack", "monterey",
+  "swiss", "provolone", "gouda", "brie", "queso", "quesadilla", "ghee", "cheesy",
+  "parm", "chicken parm", "tzatziki", "cotija", "crema", "paneer", "halloumi",
+  "kefir", "alfredo", "mascarpone", "burrata", "labneh", "custard", "casein",
+  "half-and-half", "parmigiano", "pecorino", "romano", "asiago", "colby",
+  "muenster", "havarti", "gruyere", "gruyère", "manchego", "raita", "lassi",
+  "creme fraiche", "crème fraîche",
 ];
 const HONEY = ["honey"];
 
@@ -34,11 +40,30 @@ const ALLERGEN_WORDS = {
   peanuts: ["peanut", "peanuts"],
   tree_nuts: ["almond", "cashew", "walnut", "pecan", "hazelnut", "pistachio", "nut"],
   shellfish: ["shrimp", "prawn", "crab", "lobster", "shellfish"],
-  fish: ["salmon", "tuna", "halibut", "cod", "fish", "tilapia"],
-  gluten: ["wheat", "barley", "rye", "gluten", "sourdough", "bread", "flour", "pasta"],
-  soy: ["soy", "tofu", "tempeh", "edamame"],
-  sesame: ["sesame", "tahini"],
+  fish: ["salmon", "tuna", "halibut", "cod", "fish", "tilapia", "nigiri", "sashimi", "poke", "sushi", "anchovy", "caesar"],
+  gluten: ["wheat", "barley", "rye", "gluten", "sourdough", "bread", "flour", "pasta", "toast", "cracker", "crackers", "tortilla", "pizza", "noodles", "noodle", "ramen", "udon", "couscous", "flour tortilla", "lasagna", "english muffin", "muffin", "bun", "wrap", "sandwich"],
+  soy: ["soy", "tofu", "tempeh", "edamame", "miso", "sofritas", "soy sauce", "teriyaki"],
+  sesame: ["sesame", "tahini", "hummus"],
 };
+
+/** "Skip sour cream" is an order note. Nut butter is not dairy. */
+export function dairyScanText(hay = "") {
+  return String(hay || "")
+    .replace(/\bdairy[- ]free(?:\s+yogurt|\s+yoghurt)?\b/gi, " ")
+    .replace(/\b(peanut|almond|cashew|sunflower|nut)\s+butter\b/gi, " ")
+    .replace(/\b(skip|no|without|hold|easy on)\s+(the\s+)?(extra\s+)?sour cream\b/gi, " ")
+    .replace(/\b(skip|no|without|hold|easy on)\s+(the\s+)?(extra\s+)?(?:cheese|cheddar|provolone|feta)\b/gi, " ");
+}
+
+const DAIRY_TOKENS = new Set([
+  "yogurt", "yoghurt", "cottage", "cheese", "milk", "whey", "butter", "cream",
+  "feta", "parmesan", "ricotta", "mozzarella", "dairy", "cheddar", "jack",
+  "monterey", "swiss", "provolone", "gouda", "brie", "queso", "quesadilla",
+  "ghee", "cheesy", "parm", "tzatziki", "cotija", "crema", "paneer", "halloumi",
+  "kefir", "alfredo", "mascarpone", "burrata", "labneh", "custard", "casein",
+  "parmigiano", "pecorino", "romano", "asiago", "colby", "muenster", "havarti",
+  "gruyere", "gruyère", "manchego", "raita", "lassi",
+]);
 
 /** Everything searchable about a meal: name, blurb, category, ingredient lines. */
 export function mealHaystack(meal) {
@@ -68,7 +93,7 @@ export function dislikeTokens({ allergens, foodAvoids, allergenNote } = {}) {
   const extra = [foodAvoids, allergenNote].filter(Boolean).join(",");
   for (const part of String(extra).split(/[\n,]+/)) {
     const t = part.trim().toLowerCase();
-    if (t.length >= 3) tokens.push(t);
+    if (t.length >= 3 && !/^dairy[- ]free$/.test(t) && t !== "df") tokens.push(t);
   }
   return [...new Set(tokens)];
 }
@@ -81,7 +106,8 @@ function singularize(word) {
 }
 
 export function mealHitsToken(meal, token) {
-  const hay = mealHaystack(meal);
+  const t0 = String(token || "").toLowerCase().trim();
+  const hay = DAIRY_TOKENS.has(t0) ? dairyScanText(mealHaystack(meal)) : mealHaystack(meal);
   const t = String(token || "").toLowerCase().trim();
   if (!t) return false;
   if (t.includes(" ")) return hay.includes(t);
@@ -98,7 +124,10 @@ export function mealAllowedForDiet(meal, diet) {
   const has = (list) => list.some((w) => hay.includes(w));
   if (d === "pescatarian") return !has(LAND_MEAT);
   if (d === "vegetarian") return !has(LAND_MEAT) && !has(FISH);
-  if (d === "vegan") return !has(LAND_MEAT) && !has(FISH) && !has(EGGS) && !has(DAIRY) && !has(HONEY);
+  if (d === "vegan") {
+    const dairyHay = dairyScanText(hay);
+    return !has(LAND_MEAT) && !has(FISH) && !has(EGGS) && !DAIRY.some((w) => dairyHay.includes(w)) && !has(HONEY);
+  }
   return true;
 }
 
@@ -154,7 +183,7 @@ export function coachPrefsFromProfile(profile, slot) {
   return {
     diet: profile?.diet || "none",
     dislikes: dislikeTokens({
-      allergens: profile?.allergens,
+      allergens: profile?.allergens || profile?.allergies,
       foodAvoids: profile?.foodAvoids ?? profile?.food_avoids,
       allergenNote: profile?.allergenNote ?? profile?.allergen_note,
     }),

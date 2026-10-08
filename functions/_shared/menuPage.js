@@ -8,8 +8,8 @@
  * metadata addresses never get fetched — including after a redirect.
  */
 
-export const MENU_FETCH_TIMEOUT_MS = 5_000;
-export const MENU_FETCH_BUDGET_MS = 20_000;
+export const MENU_FETCH_TIMEOUT_MS = 4_000;
+export const MENU_FETCH_BUDGET_MS = 7_000;
 export const MENU_MAX_BYTES = 1_500_000;
 const MAX_CHARS = 12_000;
 const MIN_CHARS = 80;

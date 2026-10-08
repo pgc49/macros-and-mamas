@@ -8,4 +8,5 @@ export {
   portionTitle,
   sourceTag,
   sizeMealsForPersist,
+  fitCoachPlates,
 } from "../../functions/_shared/coachPlateScale.js";

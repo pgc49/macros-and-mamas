@@ -22,7 +22,7 @@
 export const COACH_NAME = "Meal Coach";
 
 /** She has to tap Message Callie. The bot does not send this for her. */
-export const COACH_MESSAGE_HER = "Message her and she'll get back to you.";
+export const COACH_MESSAGE_HER = "Message Callie and she'll get back to you.";
 
 export const COACH_PASS =
   `That's something Callie might be better able to answer than me. ${COACH_MESSAGE_HER}`;
@@ -60,6 +60,8 @@ export const COACH_COPY = {
   retryLoad: "Try again",
   askTimeout: "That took too long. Try me again.",
   retryAsk: "Try me again",
+  staleBuild: "This screen is out of date. Refresh to get the latest coach.",
+  refreshCoach: "Refresh",
   entryTitle: "Not sure what to eat?",
   entryCta: "Ask the coach",
 
@@ -70,7 +72,11 @@ export const COACH_COPY = {
   addPhoto: "Attach a photo",
   photoMenu: "Menu",
   photoFridge: "Fridge",
+  photoReady: "Photo ready",
+  photoReadyMenu: "Photo ready",
+  photoReadyKitchen: "Photo ready",
   photoRemove: "Remove photo",
+  showNumbers: "Show numbers again",
   thinking: "Thinking",
 
   // Openers
@@ -180,7 +186,14 @@ export const COACH_COPY = {
   sourcePantry: "Pantry",
   sourceMenu: "From the menu",
   sourceKitchen: "From your kitchen",
-  sourceNew: "Made for tonight",
+  sourceNew: "Made for you",
+  sourceNewBySlot: {
+    breakfast: "Made for breakfast",
+    lunch: "Made for lunch",
+    dinner: "Made for dinner",
+    snack: "Made for a snack",
+  },
+  adminSavedMeal: "her saved meal",
 
   // Results
   noneFit:
@@ -206,6 +219,14 @@ export const COACH_COPY = {
     "For Chinese, a stir-fry: animal protein, veggies, and rice, light on the sauce.",
   teachSushi:
     "For sushi, nigiri and some soup.",
+  teachSushiNursing:
+    "Cooked rolls and low-mercury fish are the safer sushi picks while nursing. Skip raw if you want; Callie can help with the raw question.",
+  teachAlcoholNursing:
+    "Alcohol is up to you — no judgment either way. If you're nursing, time a drink after a feed and see how you feel. Callie can help you think through timing.",
+  teachWaterEat:
+    "Eat enough — drink to thirst, and if you're still hungry, have a bigger plate. You don't need to check with Callie on this one.",
+  teachEveryDay:
+    "Not every day. Some days are heavier, and that's okay. I'm here when you want the next plate.",
   teachPizzaMeal:
     "Pizza is the meal. You don't need a protein and a side next to it.",
   teachInNOut:
@@ -219,9 +240,17 @@ export const COACH_COPY = {
   teachMenuMiss:
     "I opened the link, but I won't name a dish I couldn't find on the page. Send a photo of the menu.",
   teachNeverSkip:
-    "Absolutely not. You never skip a meal! The goal isn't to nail your macros every single time — it's to nourish yourself and learn how to fuel your body. Eat something simple and lower calorie: grilled chicken and rice, or even a protein shake. Follow your hunger, too. Some days you burned more, and those days need more.",
+    "Don't skip — eat something simple now. The goal isn't to nail your macros every single time. Follow your hunger; some days you burned more, and those days need more.",
   teachNeverSkipAgain:
-    "Still eat something tonight, even if it's small. Greek yogurt with berries or a protein shake is enough when nothing sounds good.",
+    "Still eat something now, even if it's small. A simple plate is enough when nothing sounds good.",
+  teachSkippedMeal:
+    "Eat now — something simple is enough. Skipping already happened; the next bite is what matters.",
+  teachLowIntake:
+    "No — eat more. Nursing needs fuel, and a small day is a reason to eat, not a reason to wait.",
+  teachNursingHungry:
+    "Nursing burns a lot. Here are filling options.",
+  teachMetaCallie:
+    "Food questions I answer here. Health, supply-worry, and feelings questions go to Callie because she knows you.",
   teachRealFood:
     "Any real food can fit your macros. A slice of pizza is real food — water, yeast, flour, tomatoes, cheese. An Oreo is not; it's full of stuff made in a lab. We can make macros work for real food.",
   teachRealFoodLogAhead:
@@ -246,10 +275,9 @@ export const COACH_COPY = {
   skipBreakfastHint:
     "Mornings can be busy, and a small appetite is often a blunted metabolism talking. Try starting with a protein shake if a full breakfast isn't easy yet.",
 
-  // A passing mention of nursing, before the food answer. A supply problem
-  // is still a full handoff — this line is not that.
+  // Only when she raises supply or a supply drop — not every nursing mention.
   nursingPreface:
-    "Callie builds your macros with your supply at the center and it is always protected. If you ever notice a negative shift in your supply, please reach out to Callie directly immediately.",
+    "Callie builds your plan around your supply, and protecting it always comes first. If you ever notice it dropping, message her right away.",
   snackAsk:
     "Do you want me to suggest three meals and one snack, or three meals and two snacks? I can make both work with your macros.",
 };
@@ -263,9 +291,62 @@ export const COACH_COPY = {
  * medical handoff without that yes.
  */
 export const INCLUDE_COACH_DOCTOR_SENTENCE = false;
-export const COACH_DOCTOR_SENTENCE = "If you feel faint or it's getting worse, call your doctor.";
+export const COACH_DOCTOR_SENTENCE = "If it feels serious or gets worse, call your doctor.";
+export const INCLUDE_MATERNAL_MENTAL_HEALTH_HOTLINE = false;
+export const COACH_MATERNAL_HOTLINE =
+  "The National Maternal Mental Health Hotline is 1-833-852-6262 (call or text, 24/7, free).";
 
-const COACH_MEDICAL_LINE = "That's one for Callie, not me, and I don't want you waiting on it. Message her now.";
+const COACH_MEDICAL_CORE =
+  "Oh no, I'm sorry you're feeling that way. That one's for Callie, not me, and I don't want you waiting on it, so please message her now.";
+const COACH_MEDICAL_TAIL = "In the meantime, sip some water and have something simple:";
+
+export function medicalDeflectLine() {
+  return INCLUDE_COACH_DOCTOR_SENTENCE
+    ? `${COACH_MEDICAL_CORE} ${COACH_DOCTOR_SENTENCE} ${COACH_MEDICAL_TAIL}`
+    : `${COACH_MEDICAL_CORE} ${COACH_MEDICAL_TAIL}`;
+}
+
+const COACH_MEDICAL_LINE = medicalDeflectLine();
+
+export const COACH_MOOD_LINE =
+  "I'm so sorry. That's a lot to carry, and you don't have to push through it alone. Crying a lot in the weeks after a baby is really common, and it's very treatable. Please tell Callie, and your doctor or midwife too. Postpartum Support International's helpline is 1-800-944-4773 (call or text). If you ever feel unsafe, call or text 988.";
+export const COACH_MOOD_FOOD = "And whenever you're ready, here's something easy to eat:";
+export const COACH_MOOD_FOLLOW =
+  "I hear you. You wouldn't be bothering anyone — Callie wants to hear from you. Message her whenever you're ready.";
+export const COACH_MOOD_WEEKS =
+  "You're not behind — this is common in the weeks after a baby. Callie wants to hear from you, and your doctor or midwife too. Postpartum Support International's helpline is 1-800-944-4773 (call or text).";
+export const COACH_CRISIS_FOLLOW =
+  "I'm still here with you. If this feels like an emergency, call 911. If you're having thoughts of hurting yourself or your baby, call or text 988. Callie will see this — message her too.";
+export const COACH_SIGN_OFF = COACH_COPY.teachEveryDay;
+
+export function onceLead(reply, line) {
+  const lead = String(line || "").trim();
+  const rest = String(reply || "").trim();
+  if (!lead) return rest;
+  if (!rest) return lead;
+  const escaped = lead.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stripped = rest.replace(new RegExp(escaped, "gi"), " ").replace(/\s{2,}/g, " ").trim();
+  if (!stripped) return lead;
+  return `${lead} ${stripped}`.trim();
+}
+
+export function moodDeflectLine(noted = false, { hasFood = false, weeks = false } = {}) {
+  let line = weeks ? COACH_MOOD_WEEKS : COACH_MOOD_LINE;
+  if (noted === true) {
+    line = line.replace(
+      "Please tell Callie, and your doctor or midwife too.",
+      "I've added a note for Callie. Please tell her too, and your doctor or midwife.",
+    );
+  }
+  if (INCLUDE_MATERNAL_MENTAL_HEALTH_HOTLINE) {
+    line = line.replace(
+      "1-800-944-4773 (call or text).",
+      `1-800-944-4773 (call or text). ${COACH_MATERNAL_HOTLINE}`,
+    );
+  }
+  if (hasFood) line = `${line} ${COACH_MOOD_FOOD}`;
+  return line;
+}
 
 /**
  * Crisis / postpartum warning signs. ON by default. One constant so
@@ -274,14 +355,84 @@ const COACH_MEDICAL_LINE = "That's one for Callie, not me, and I don't want you 
 export const INCLUDE_COACH_EMERGENCY_LINE = true;
 export const COACH_BUSY_LINE =
   "I can't think straight right now. Try again in a minute, or pick something from Meals.";
+export const COACH_LIMIT_LINE = "That's all the thinking I've got for today.";
+export const COACH_LIMIT_SPENT =
+  "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.";
+export const COACH_LIMIT_FOOD =
+  "That's all the thinking I've got for today, but here are a few easy ones.";
+export const COACH_LIMIT_PHOTO =
+  "I can't look at photos again until tonight, but here are a few easy ones.";
+export const COACH_GUILT_LINE = "One day doesn't change anything, and you still eat.";
+export const COACH_WATER_SNACK = "Have some water.";
 export const COACH_FINE_TUNING_LINE =
   "Callie's still fine-tuning your numbers, so here's an easy one for now.";
+export const COACH_FINE_TUNING_FEW =
+  "Callie's still fine-tuning your numbers, so here are a few easy ones for now.";
+export const COACH_LOCAL_PICKS_LINE = "Here are a few easy ones that work for today.";
 
-export function leadFineTuningReply(reply) {
+/** Careful lines. Each ends by leading into plates so she never hits a stop. */
+export const COACH_SUPPLY_LINE =
+  "I'm sorry, that's really stressful. Your supply always comes first. If you think it's dropping, message Callie and she'll get back to you. In the meantime, here are a few easy ones:";
+export const COACH_DISORDERED_LINE =
+  "I'm really glad you told me. Callie would love to hear from you directly. Message her whenever you're ready. For now, here's something simple:";
+export const COACH_DISORDERED_LINE_NOTED =
+  "I'm really glad you told me. I've added a note for Callie, and she'd love to hear from you directly too. Message her whenever you're ready. For now, here's something simple:";
+export const COACH_MEDICATION_LINE =
+  "That one's for your doctor or pharmacist, not me. Let Callie know too so she can plan around it. Here's something easy in the meantime:";
+
+/** Only claim the note when the pin or flag write succeeded on this request. */
+export function disorderedDeflectLine(noted) {
+  return noted ? COACH_DISORDERED_LINE_NOTED : COACH_DISORDERED_LINE;
+}
+
+export function coachDeflectLine(deflect, { noted = false, hasFood = false, weeks = false } = {}) {
+  if (deflect === "disordered") return disorderedDeflectLine(noted === true);
+  if (deflect === "mood") return moodDeflectLine(noted === true, { hasFood, weeks });
+  if (deflect === "moodFollow") return weeks ? COACH_MOOD_WEEKS : COACH_MOOD_FOLLOW;
+  if (deflect === "crisisFollow") return COACH_CRISIS_FOLLOW;
+  return (COACH_DEFLECT[deflect] || COACH_DEFLECT.offTopic).line;
+}
+
+function normalizeCoachApostrophes(text) {
+  return String(text || "").replace(/[\u2018\u2019\u201B]/g, "'");
+}
+
+export function leadFineTuningReply(reply, { hasPlates = false, plateCount = 0 } = {}) {
+  const many = Number(plateCount) >= 2;
+  const lead = normalizeCoachApostrophes(many ? COACH_FINE_TUNING_FEW : COACH_FINE_TUNING_LINE);
+  const rest = normalizeCoachApostrophes(String(reply || "")).trim()
+    .replace(/Callie's still fine-tuning your numbers, so here(?:'s an easy one| are a few easy ones) for now\.\s*/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (!hasPlates) {
+    if (!rest) return "";
+    return rest.slice(0, 400);
+  }
+  if (!rest) return lead;
+  if (rest.startsWith(lead)) return rest.slice(0, 400);
+  return `${lead} ${rest}`.trim().slice(0, 400);
+}
+
+export function leadLimitReply(reply, { hasPlates = false, photo = false } = {}) {
   const rest = String(reply || "").trim();
-  if (!rest) return COACH_FINE_TUNING_LINE;
-  if (rest.startsWith(COACH_FINE_TUNING_LINE)) return rest.slice(0, 400);
-  return `${COACH_FINE_TUNING_LINE} ${rest}`.trim().slice(0, 400);
+  if (photo && hasPlates) {
+    if (!rest || rest.startsWith(COACH_LIMIT_PHOTO) || rest.startsWith(COACH_LIMIT_LINE)) {
+      return COACH_LIMIT_PHOTO;
+    }
+    return `${COACH_LIMIT_PHOTO} ${rest}`.trim().slice(0, 400);
+  }
+  if (hasPlates) {
+    const stripped = rest
+      .replace(/^Here are a few easy ones(?: that work for today)?\.\s*/i, "")
+      .replace(/^Here's something that fits what you asked\.\s*/i, "");
+    if (!stripped || stripped.startsWith(COACH_LIMIT_FOOD) || stripped.startsWith(COACH_LIMIT_LINE)) {
+      return COACH_LIMIT_FOOD;
+    }
+    return `${COACH_LIMIT_FOOD} ${stripped}`.trim().slice(0, 400);
+  }
+  if (!rest) return COACH_LIMIT_SPENT;
+  if (rest.startsWith(COACH_LIMIT_LINE)) return rest.slice(0, 400);
+  return `${COACH_LIMIT_LINE} ${rest}`.trim().slice(0, 400);
 }
 
 export const COACH_EMERGENCY_LINE =
@@ -297,10 +448,20 @@ export const COACH_DEFLECT = {
     cta: "Message Callie too",
   },
   medical: {
-    line: INCLUDE_COACH_DOCTOR_SENTENCE
-      ? `${COACH_MEDICAL_LINE} ${COACH_DOCTOR_SENTENCE}`
-      : COACH_MEDICAL_LINE,
+    line: medicalDeflectLine(),
     cta: "Message Callie",
+  },
+  mood: {
+    line: COACH_MOOD_LINE,
+    cta: "Message Callie",
+  },
+  moodFollow: {
+    line: COACH_MOOD_FOLLOW,
+    cta: "Message Callie",
+  },
+  crisisFollow: {
+    line: COACH_CRISIS_FOLLOW,
+    cta: "Message Callie too",
   },
   care: {
     line: `That's something Callie might be better able to sit with than me. ${COACH_MESSAGE_HER}`,
@@ -319,12 +480,20 @@ export const COACH_DEFLECT = {
     cta: "Message Callie",
   },
   offTopic: {
-    line: `I only do food and your ranges. ${COACH_MESSAGE_HER}`,
+    line: `That's something Callie can sit with better than I can. ${COACH_MESSAGE_HER}`,
     cta: "Message Callie",
   },
   supply: {
-    line:
-      `We protect your supply first, always. Your ranges already use the gentler calorie math for that. If you think your supply is being affected, that's something Callie might be better able to answer than me. ${COACH_MESSAGE_HER}`,
+    line: COACH_SUPPLY_LINE,
+    cta: "Message Callie",
+  },
+  disordered: {
+    line: COACH_DISORDERED_LINE,
+    lineNoted: COACH_DISORDERED_LINE_NOTED,
+    cta: "Message Callie",
+  },
+  medication: {
+    line: COACH_MEDICATION_LINE,
     cta: "Message Callie",
   },
   again: {

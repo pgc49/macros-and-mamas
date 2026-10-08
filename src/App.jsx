@@ -14,6 +14,7 @@ import { coachCardVia, coachLogFromCard, unscaleRankedCard } from "./utils/coach
 import { nextCustomMeals } from "./utils/coachMyMeals";
 import { clearCoachPencil, removeCoachPencilMatchingLog, writeCoachPencil } from "./utils/coachPencil";
 import { stripPortionSuffix } from "./utils/coachPrefs";
+import { readCoachClientData } from "./utils/coachClientResult";
 import { ingredientsToText } from "./utils/planMealShape";
 import { COACH_ASK_CALLIE_PREFILL } from "./content/coachVoice";
 import {
@@ -1345,7 +1346,7 @@ export default function App() {
 
   const postCoach = async (payload) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 35_000);
+    const timer = setTimeout(() => controller.abort(), 22_000);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -1357,10 +1358,7 @@ export default function App() {
         signal: controller.signal,
       });
       const data = await resp.json().catch(() => null);
-      if (!resp.ok) {
-        return { ok: false, message: data?.message || "I couldn't get to that. Try me again in a second." };
-      }
-      return data;
+      return readCoachClientData(resp, data);
     } catch (e) {
       const timedOut = e?.name === "AbortError";
       console.error("postCoach failed", e);
@@ -1832,6 +1830,7 @@ export default function App() {
         setProfile((p) => ({ ...p, homescreenTipDismissedAt: at }));
       }}
       userId={user?.id || null}
+      sessionEmail={user?.email || ""}
       unreadMessages={unreadMessages}
       onUnreadMessagesChange={setUnreadMessages}
       mealHistoryByDate={mealHistoryByDate}

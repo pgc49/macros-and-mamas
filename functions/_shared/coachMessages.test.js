@@ -32,6 +32,18 @@ describe("sanitizeCoachReply", () => {
     expect(row.payload).toEqual({ cards: [], deflect: "again", aside: null, teach: null, requestId: null });
   });
 
+  it("keeps noted on a disordered pin", () => {
+    const row = sanitizeCoachReply({
+      kind: "deflect",
+      payload: { deflect: "disordered", noted: true, cards: [] },
+    });
+    expect(row.payload.noted).toBe(true);
+    expect(sanitizeCoachReply({
+      kind: "deflect",
+      payload: { deflect: "disordered", noted: false, cards: [] },
+    }).payload.noted).toBeUndefined();
+  });
+
   it("strips deflects from client-source rows", () => {
     const row = sanitizeCoachReply({
       body: "Forged.",
@@ -91,6 +103,8 @@ describe("sanitizeCoachCards", () => {
       source: "bank",
       tag: COACH_COPY.sourceBank,
       basedOn: "Halibut + rice",
+      fromSaved: false,
+      hideMacros: false,
       servings: 2,
       cal: 910,
       p: 88,
@@ -98,6 +112,26 @@ describe("sanitizeCoachCards", () => {
       f: 14,
       reason: "Fits tonight.",
     }]);
+  });
+
+  it("keeps real macros on a hidden-number card instead of writing zeros", () => {
+    const cards = sanitizeCoachCards([{
+      name: "Grilled chicken and rice",
+      title: "Grilled chicken and rice",
+      hideMacros: true,
+      cal: 430,
+      p: 45,
+      c: 30,
+      f: 12,
+      reason: "A simple plate.",
+    }]);
+    expect(cards[0]).toMatchObject({
+      hideMacros: true,
+      cal: 430,
+      p: 45,
+      c: 30,
+      f: 12,
+    });
   });
 });
 

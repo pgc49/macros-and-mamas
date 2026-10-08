@@ -26,6 +26,7 @@ import { buildCoachCard, cardsWithShownReason, firstPaintPlates, rankBankCards }
 import { coachPrefsFromProfile } from "./coachPrefs.js";
 import { budgetSentence, coachRead, leftLine, shownCoachLead, slotLeftRead } from "./coachLines.js";
 import { bankMealNameSet, buildLiveMyMealsLookup, cardIsGoneCustom } from "./coachMyMeals.js";
+import { filterCoachMeals, threadPriorAsks } from "../../functions/_shared/coachMealFilter.js";
 
 const HISTORY_DAYS = 28;
 
@@ -163,13 +164,11 @@ export function pruneStaleMyMealCards(cards = [], customMeals = [], bankNames = 
 }
 
 /** Thread rows as she should see them now. Raw history stays; deleted customs do not. */
-export function replayCoachMessages(messages = [], customMeals = []) {
+export function replayCoachMessages(messages = [], customMeals = [], { profile } = {}) {
   const list = messages || [];
-  let lastCards = -1;
-  for (let i = 0; i < list.length; i += 1) {
-    if (Array.isArray(list[i]?.cards) && list[i].cards.length) lastCards = i;
-  }
-  return list.map((message, index) => {
+  const mamaAsks = [];
+  return list.map((message) => {
+    if (message?.role === "mama") mamaAsks.push(message.body);
     const hasCards = Array.isArray(message?.cards) && message.cards.length > 0;
     const body = hasCards && message.role !== "mama"
       ? shownCoachLead(message.body)
@@ -177,11 +176,12 @@ export function replayCoachMessages(messages = [], customMeals = []) {
     if (!hasCards) {
       return body === message.body ? message : { ...message, body };
     }
-    // Older suggestion sets stay in the thread as chat. They do not paint another bank.
-    if (index !== lastCards) {
-      return { ...message, body, cards: [] };
-    }
-    const cards = firstPaintPlates(pruneStaleMyMealCards(message.cards, customMeals));
+    const currentAsk = mamaAsks[mamaAsks.length - 1] || "";
+    const priorAsks = threadPriorAsks(mamaAsks.slice(0, -1));
+    const cards = firstPaintPlates(filterCoachMeals(
+      pruneStaleMyMealCards(message.cards, customMeals),
+      { text: currentAsk, profile, priorAsks },
+    ));
     const same = body === (message.body || "")
       && cards.length === message.cards.length
       && cards.every((card, i) => card === message.cards[i]);
@@ -200,7 +200,7 @@ export function buildSuggestedCards(meals, answer, { source = "new", slot = null
   const cardSlot = slot || answer.slot;
   const out = [];
   for (const meal of meals || []) {
-    const card = buildCoachCard({ ...meal, source }, answer.budget, {
+    const card = buildCoachCard({ ...meal, source: meal.source || source }, answer.budget, {
       likes: answer.prefs?.likes,
       slot: cardSlot,
       over: answer.over,
@@ -229,7 +229,9 @@ export function coachDayForPrompt({
   snackCount = 1,
   turnedDown = [],
   alreadySuggested = [],
+  priorAsks = [],
   notLogging = false,
+  lastCards = [],
 } = {}) {
   const eaten = [];
   for (const entry of entries) {
@@ -289,8 +291,13 @@ export function coachDayForPrompt({
     skipped: skippedSlots,
     turnedDown: declined,
     alreadySuggested: suggested,
+    priorAsks: threadPriorAsks(
+      (priorAsks || []).map((item) => clipPromptText(item, 200)).filter(Boolean),
+      { limit: 8 },
+    ),
     notLogging: Boolean(notLogging),
     snackCount: Number.isFinite(snacks) ? Math.max(0, Math.min(4, snacks)) : 1,
+    lastCards: (lastCards || []).filter((card) => card?.name).slice(0, 3),
   };
 }
 

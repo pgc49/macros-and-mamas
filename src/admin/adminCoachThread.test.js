@@ -4,11 +4,13 @@ import {
   buildAdminCoachView,
   coachDisplayDate,
   coachFlag,
+  deflectLine,
   flagLabel,
   pairedMamaBody,
   priorMamaBody,
   plainCoachPlates,
 } from "./adminCoachThread.js";
+import { COACH_DISORDERED_LINE, COACH_DISORDERED_LINE_NOTED } from "../content/coachVoice";
 
 const mama = (id, body, extra = {}) => ({
   id,
@@ -45,6 +47,7 @@ describe("coachFlag", () => {
       "I've been dizzy since this morning",
     )).toBe("medical");
     expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "emergency" }, source: "server" })).toBe("medical");
+    expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "crisisFollow" }, source: "server" })).toBe("medical");
     expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "medical" }, source: "server" })).toBe("medical");
     expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "ranges" }, source: "server" })).toBe("deflect");
     expect(coachFlag({ role: "coach", kind: "text", payload: null, source: "server" })).toBeNull();
@@ -72,6 +75,14 @@ describe("coachFlag", () => {
   });
 });
 
+describe("deflectLine", () => {
+  it("uses the noted disordered line only when the pin write succeeded", () => {
+    expect(deflectLine({ payload: { deflect: "disordered", noted: true } })).toBe(COACH_DISORDERED_LINE_NOTED);
+    expect(deflectLine({ payload: { deflect: "disordered", noted: false } })).toBe(COACH_DISORDERED_LINE);
+    expect(deflectLine({ payload: { deflect: "disordered" } })).toBe(COACH_DISORDERED_LINE);
+  });
+});
+
 describe("plainCoachPlates", () => {
   it("renders plate and why in plain form", () => {
     const plates = plainCoachPlates({
@@ -86,9 +97,17 @@ describe("plainCoachPlates", () => {
     });
     expect(plates).toEqual([{
       name: "Chicken bowl",
+      fromSaved: false,
       macros: "430 cal · P45 · C30 · F12",
       reason: "Gets protein into range.",
     }]);
+  });
+
+  it("marks a saved-meal card so Callie can see the label", () => {
+    const plates = plainCoachPlates({
+      cards: [{ name: "Grandma casserole", cal: 380, p: 32, c: 12, f: 18, fromSaved: true }],
+    });
+    expect(plates[0].fromSaved).toBe(true);
   });
 
   it("coerces card fields to strings so a bad payload cannot crash", () => {
@@ -175,6 +194,21 @@ describe("buildAdminCoachView", () => {
       ["c2", "medical"],
     ]);
     expect(flagLabel("stuck")).toBe("Stuck");
+  });
+
+  it("does not pin outage rows on the attention list", () => {
+    const messages = [
+      mama("m1", "what should I eat", { seq: 1 }),
+      coach("c-out", {
+        seq: 2,
+        kind: "outage",
+        body: "I couldn't get to that.",
+        payload: { outage: true },
+      }),
+    ];
+    const view = buildAdminCoachView(messages);
+    expect(view.pinned).toEqual([]);
+    expect(coachFlag(messages[1])).toBeNull();
   });
 
   it("keeps a null-date row in seq order and dates it from created_at", () => {

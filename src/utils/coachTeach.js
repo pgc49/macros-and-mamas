@@ -12,11 +12,12 @@
  */
 
 import { COACH_COPY, underDayCopy } from "../content/coachVoice.js";
+import { isSkipTonightAsk } from "../../functions/_shared/coachGuardrails.js";
 
 const TEACH_FIRST = [
-  // Never skip — before the restaurant patterns, so "skip dinner because I'm
-  // out" is still a skip, not a PS-method question.
-  ["neverSkip", /\b(skip|skipping|skipped)\b[^.?]{0,20}\b(dinner|lunch|breakfast|snack|this meal|a meal|eating)\b/],
+  // Only the "should I skip" question. "I skipped lunch, what now" is food.
+  ["neverSkip", /\bshould i (even )?(skip|skipping)\b[^.?]{0,24}\b(dinner|lunch|breakfast|snack|this meal|a meal|eating)\b/],
+  ["neverSkip", /\b(skip|skipping)\b[^.?]{0,20}\b(dinner|lunch|breakfast|snack|this meal|a meal|eating)\b/],
   ["neverSkip", /\bshould i (even )?eat\b[^.?]{0,20}\b(over|overshot|over my)\b/],
   ["neverSkip", /\b(make up for it|over so)\b[^.?]{0,16}\bskip\b/],
 
@@ -33,7 +34,9 @@ const TEACH_FIRST = [
 
   ["sweetener", /\b(artificial sweetener|aspartame|sucralose|stevia|splenda|diet coke|diet pepsi|zero sugar soda)\b/],
 
-  ["underDay", /\b(under (my )?(calories|cals)|calories left|hit( my)? protein|protein('?s| is) (in|covered|done)|should i eat more|eat more or (leave|stop)|done for (the )?day)\b/],
+  ["waterEat", /\b(should i (be )?(eat(ing)?|drink(ing)?) more|eating more or drinking more|drink more water|water or (eat|eating) more)\b/],
+  ["everyDay", /\b(is this going to be like this every day|like this every day|going to be like this)\b/],
+  ["underDay", /\b(under (my )?(calories|cals)|calories left|i hit my protein|protein('?s| is) (in|covered|done)|eat more or (leave|stop)|done for (the )?day)\b/],
 ];
 
 const PS_METHOD = [
@@ -42,10 +45,14 @@ const PS_METHOD = [
 ];
 
 const REAL_FOOD = [
-  /\b(is|are) [^.?]{0,28}\b(ok|okay|fine|allowed)\b/,
+  /\b(is|are) (a |an |some )?(pizza|slice|protein bar|bar|oreo|cookie|cookies|chips?|ice cream|treat|candy)\b.{0,16}\b(ok|okay|fine|allowed)\b/,
+  /\bis pizza ok\b/,
   /\bcan i (have|eat) (a |an |some )?(pizza|slice|protein bar|bar|oreo|cookie|cookies|chips?|ice cream)\b/,
   /\bwhat about (a |an |some )?(pizza|wine|beer|oreo|protein bar|bar|slice)\b/,
 ];
+
+const NAMED_DISH =
+  /\b(pho|ramen|broth|noodles?|banh mi|pad thai|pad see ew|bibimbap|gyro|falafel|shawarma|poke)\b/;
 
 const IN_N_OUT = /\b(in[- ]?n[- ]?out|inn n out|in and out)\b/;
 
@@ -96,24 +103,59 @@ function normalize(raw) {
  * Matched before the meal router and before a model call. A food question
  * that isn't one of these still goes through the usual path.
  */
+export function alreadySkippedAsk(raw) {
+  const text = normalize(raw);
+  return /\bskipped\b/.test(text) && /\b(what now|what should i|eat now|what do i eat)\b/.test(text);
+}
+
+export function isLowIntakeAsk(raw) {
+  const text = normalize(raw);
+  return /\beat(ing)? this little\b/.test(text)
+    || /\bthis little while (nursing|breastfeeding)\b/.test(text)
+    || /\bok to eat this little\b/.test(text);
+}
+
+export function isNursingHungryAsk(raw) {
+  const text = normalize(raw);
+  return /\b(breastfeed|nursing|breast feeding)/.test(text) && /\b(always hungry|so hungry|starving)\b/.test(text);
+}
+
+export function isMetaCallieAsk(raw) {
+  const text = normalize(raw);
+  return /\bwhy do you keep (saying )?ask callie\b/.test(text)
+    || /\bwhy (do you|are you) (keep )?(saying|telling me to) ask callie\b/.test(text);
+}
+
 export function localCoachTeach(raw) {
   // A link is fetched server-side. Saying "from this menu" with no link and
   // no photo is still a guess, so that one stays here.
   if (hasMenuLink(raw)) return null;
+  if (alreadySkippedAsk(raw) || isLowIntakeAsk(raw) || isNursingHungryAsk(raw) || isMetaCallieAsk(raw)) {
+    return null;
+  }
   if (menuUnseen(raw)) return { kind: "teach", topic: "menuLink" };
   const text = normalize(raw);
-  if (!text || text.length > 180) return null;
+  if (!text || text.length > 240) return null;
   for (const [topic, pattern] of TEACH_FIRST) {
-    if (pattern.test(text)) return { kind: "teach", topic };
+    if (!pattern.test(text)) continue;
+    if (topic === "neverSkip" && isSkipTonightAsk(raw)) continue;
+    if (topic === "alcohol" && /\b(nurs(?:e|ing|ed)?|breastfeed(?:ing|s)?)\b/.test(text)) {
+      return { kind: "teach", topic: "alcoholNursing" };
+    }
+    return { kind: "teach", topic };
   }
   // In-N-Out is locked. Every other named place still needs that menu.
   if (IN_N_OUT.test(text)) return { kind: "teach", topic: "inNOut" };
   if (NAMED_RESTAURANT.test(text)) return null;
   if (ITALIAN.test(text)) return { kind: "teach", topic: "italian" };
   if (CHINESE.test(text)) return { kind: "teach", topic: "chinese" };
-  if (SUSHI.test(text)) return { kind: "teach", topic: "sushi" };
+  if (SUSHI.test(text)) {
+    if (/\b(nurs(?:e|ing|ed)?|breastfeed(?:ing|s)?|raw)\b/.test(text)) return { kind: "teach", topic: "sushiNursing" };
+    return { kind: "teach", topic: "sushi" };
+  }
   if (PIZZA_MEAL.some((pattern) => pattern.test(text))) return { kind: "teach", topic: "pizzaMeal" };
   if (OTHER_CUISINE.test(text)) return null;
+  if (NAMED_DISH.test(text)) return null;
   if (STEPS.test(text) && !MEAL_ASK.test(text)) return { kind: "teach", topic: "steps" };
   for (const pattern of PS_METHOD) {
     if (pattern.test(text)) return { kind: "teach", topic: "psMethod" };
@@ -129,6 +171,9 @@ export function teachBody(topic, ctx = {}) {
   if (topic === "italian") return COACH_COPY.teachItalian;
   if (topic === "chinese") return COACH_COPY.teachChinese;
   if (topic === "sushi") return COACH_COPY.teachSushi;
+  if (topic === "sushiNursing") return COACH_COPY.teachSushiNursing;
+  if (topic === "waterEat") return COACH_COPY.teachWaterEat;
+  if (topic === "everyDay") return COACH_COPY.teachEveryDay;
   if (topic === "pizzaMeal") return COACH_COPY.teachPizzaMeal;
   if (topic === "inNOut") return COACH_COPY.teachInNOut;
   if (topic === "steps") return COACH_COPY.teachSteps;
@@ -138,11 +183,16 @@ export function teachBody(topic, ctx = {}) {
   if (topic === "neverSkip") {
     return ctx.again ? COACH_COPY.teachNeverSkipAgain : COACH_COPY.teachNeverSkip;
   }
+  if (topic === "skippedMeal") return COACH_COPY.teachSkippedMeal;
+  if (topic === "lowIntake") return COACH_COPY.teachLowIntake;
+  if (topic === "nursingHungry") return COACH_COPY.teachNursingHungry;
+  if (topic === "metaCallie") return COACH_COPY.teachMetaCallie;
   if (topic === "realFood") {
     if (ctx.notLogging) return COACH_COPY.teachRealFood;
     return `${COACH_COPY.teachRealFood} ${COACH_COPY.teachRealFoodLogAhead}`;
   }
   if (topic === "alcohol") return COACH_COPY.teachAlcohol;
+  if (topic === "alcoholNursing") return COACH_COPY.teachAlcoholNursing;
   if (topic === "coffee") return COACH_COPY.teachCoffee;
   if (topic === "fasting") return COACH_COPY.teachFasting;
   if (topic === "sweetener") return COACH_COPY.teachSweetener;

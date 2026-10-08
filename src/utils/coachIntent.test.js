@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { localCoachIntent, slotNamedInAsk } from "./coachIntent.js";
+import { isFollowUpAsk, localCoachIntent, slotNamedInAsk } from "./coachIntent.js";
 
 describe("asks the coach answers without a model", () => {
   it("routes the question she asks most", () => {
@@ -18,8 +18,17 @@ describe("asks the coach answers without a model", () => {
   });
 
   it("reads a slot out of a longer question the clock would get wrong", () => {
+    expect(slotNamedInAsk("3am grab")).toBe("snack");
     expect(slotNamedInAsk("I am going out to eat tonight for Italian")).toBe("dinner");
     expect(slotNamedInAsk("I have chicken and rice, what should I eat")).toBeNull();
+  });
+
+  it("does not take a slot from a past-tense meal mention", () => {
+    expect(slotNamedInAsk("something else, I had chicken at lunch too")).toBeNull();
+    expect(slotNamedInAsk("I had eggs at breakfast already")).toBeNull();
+    expect(slotNamedInAsk("I ate leftover salmon for dinner")).toBeNull();
+    expect(slotNamedInAsk("I had chicken at lunch, what should I eat for dinner")).toBe("dinner");
+    expect(slotNamedInAsk("had lunch already, what's for dinner")).toBe("dinner");
   });
 
   it("carries the slot she named", () => {
@@ -72,6 +81,13 @@ describe("asks the coach answers without a model", () => {
     expect(localCoachIntent("something lighter")).toMatchObject({ prefer: "lighter" });
     expect(localCoachIntent("more protein")).toMatchObject({ prefer: "protein" });
     expect(localCoachIntent("none of these")).toMatchObject({ kind: "more" });
+  });
+
+  it("only inherits a slot for ~30 minutes", () => {
+    const now = Date.parse("2026-09-04T18:30:00");
+    expect(isFollowUpAsk("something else", { lastAt: now - 10 * 60 * 1000, now })).toBe(true);
+    expect(isFollowUpAsk("something else", { lastAt: now - 31 * 60 * 1000, now })).toBe(false);
+    expect(isFollowUpAsk("something else", { lastAt: 0, now })).toBe(false);
   });
 });
 
