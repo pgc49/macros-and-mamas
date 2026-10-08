@@ -200,7 +200,7 @@ export function mealQuestionPasses(resp, data, posts, question = {}, setup = {})
     }
   }
   if (setup.id === "E") {
-    if (meals.some((meal) => /\b(dairy|yogurt|yoghurt|cheese|milk|butter|whey|cream|cottage)\b/i.test(mealHaystack(meal)))) {
+    if (meals.some((meal) => /\b(dairy|yogurt|yoghurt|cheese|milk|butter|whey|cream|cottage|shake)\b/i.test(mealHaystack(meal)))) {
       return { ok: false, reason: "broke dairy-free / cottage avoid" };
     }
   }

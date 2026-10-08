@@ -254,6 +254,8 @@ export async function onRequestPost({ request, env }) {
       ...(body.context || {}),
       notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
     });
+    const loadedSelf = await loadCoachSelf(env, user.id, authHeader);
+    const earlyProfile = loadedSelf?.profile || null;
 
     if (mode === "ask" && text.length < 2) {
       return json({ error: "Ask me something about your next meal." }, 400);
@@ -279,7 +281,7 @@ export async function onRequestPost({ request, env }) {
       : 0;
     if (teach && PAIN_TOPICS.has(teach.topic) && isStuckPainCount(painCount)) {
       const filled = wantsFoodFill(text, { mode, topic: teach.topic, scope: "food" })
-        ? ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: teach.topic, safe: true, day: earlyDay }))
+        ? ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: teach.topic, safe: true, day: earlyDay, profile: earlyProfile }))
         : { meals: [] };
       await persistCannedCoach(env, user.id, body, {
         body: "",
@@ -309,6 +311,7 @@ export async function onRequestPost({ request, env }) {
           mode,
           safe: verdict.scope === "urgent" || verdict.scope === "supply",
           day: earlyDay,
+          profile: earlyProfile,
         }))
         : { meals: [] };
       await persistCannedCoach(env, user.id, body, {
@@ -336,7 +339,7 @@ export async function onRequestPost({ request, env }) {
         notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
       });
       const filled = MEAL_TEACH_TOPICS.has(teach.topic)
-        ? ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: teach.topic, reply, day: earlyDay }))
+        ? ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: teach.topic, reply, day: earlyDay, profile: earlyProfile }))
         : { meals: [], reply };
       const teachReply = earlyDay?.notLogging ? stripLogNag(filled.reply || reply) : (filled.reply || reply);
       await persistCannedCoach(env, user.id, body, {
@@ -367,7 +370,7 @@ export async function onRequestPost({ request, env }) {
       const noteOk = isAdmin || await allowCoachNote(env, user.id, { isAdmin, requestId });
       if (!noteOk) {
         const reply = teachBody("menuClosed");
-        const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: "menuClosed", reply, day: earlyDay }));
+        const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: "menuClosed", reply, day: earlyDay, profile: earlyProfile }));
         return json({
           ok: true,
           scope: "food",
@@ -381,7 +384,7 @@ export async function onRequestPost({ request, env }) {
       menuPage = link ? await fetchMenuPage(link) : { ok: false, reason: "bad-url" };
       if (!menuPage.ok) {
         const reply = teachBody("menuClosed");
-        const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: "menuClosed", reply, day: earlyDay }));
+        const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: "menuClosed", reply, day: earlyDay, profile: earlyProfile }));
         await persistServerCoach(env, user.id, body, {
           body: filled.reply,
           kind: filled.meals.length ? "cards" : "text",
@@ -423,7 +426,7 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    const { profile, macros, macrosStatus } = await loadCoachSelf(env, user.id, authHeader);
+    const { profile, macros, macrosStatus } = loadedSelf || {};
     if (!profile) {
       const message = "I couldn't load your file just now. Try again in a minute.";
       await persistServerCoach(env, user.id, body, {

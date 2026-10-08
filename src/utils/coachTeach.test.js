@@ -112,6 +112,7 @@ describe("Callie's own answers, before a model is called", () => {
   it("does not swallow a meal ask", () => {
     expect(localCoachTeach("what should I eat")).toBeNull();
     expect(localCoachTeach("what can I eat that won't blow through both")).toBeNull();
+    expect(localCoachTeach("how do I hit protein without more chicken")).toBeNull();
     expect(localCoachTeach("how's my day looking")).toBeNull();
   });
 });

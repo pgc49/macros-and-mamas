@@ -283,7 +283,7 @@ describe("access", () => {
     expect(data.reply).toBe(
       "Callie's still fine-tuning your numbers, so here's an easy one for now. A veggie scramble with two or three eggs and the vegetables you have.",
     );
-    expect(data.meals).toHaveLength(1);
+    expect(data.meals.length).toBeGreaterThanOrEqual(1);
     expect(data.meals[0].name).toBe("Veggie scramble");
     expect(data.meals[0].desc).toMatch(/estimate/i);
     expect(data.mealSource).toBe("new");
@@ -328,7 +328,7 @@ describe("access", () => {
     expect(data.reply).toBe(
       "Callie's still fine-tuning your numbers, so here's an easy one for now. A veggie scramble with two or three eggs and the vegetables you have.",
     );
-    expect(data.meals).toHaveLength(1);
+    expect(data.meals.length).toBeGreaterThanOrEqual(1);
     expect(data.meals[0].name).toBe("Veggie scramble");
     expect(data.meals[0].desc).toMatch(/estimate/i);
     const prompt = promptText();

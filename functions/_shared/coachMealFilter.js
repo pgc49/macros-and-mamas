@@ -4,7 +4,7 @@
  * backstop so a leftover yogurt card cannot leak through on a dairy-free ask.
  */
 
-const DAIRY = /\b(dairy|yogurt|yoghurt|cheese|milk|butter|whey|cream|cottage)\b/i;
+const DAIRY = /\b(dairy|yogurt|yoghurt|cheese|milk|butter|whey|cream|cottage|shake)\b/i;
 const CHICKEN = /\bchicken\b/i;
 const EGGS = /\beggs?\b|\begg whites?\b/i;
 const SMOOTHIE = /\bsmoothie\b/i;

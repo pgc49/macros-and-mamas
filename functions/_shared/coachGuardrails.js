@@ -210,7 +210,7 @@ const SUPPLY = [
  */
 const FOOD_ASK = new RegExp(
   [
-    "\\beat(ing)?\\b", "\\bmeals?\\b", "\\blunch\\b", "\\bdinner\\b", "\\bbreakfast\\b",
+    "\\beat(ing)?\\b", "\\bmeals?\\b", "\\blunch(es)?\\b", "\\bdinners?\\b", "\\bbreakfasts?\\b",
     "\\bbrunch\\b", "\\bsnacks?\\b", "\\bfood\\b", "\\brecipes?\\b", "\\border(ing)?\\b",
     "\\bmenu\\b", "\\brestaurants?\\b", "\\bhungry\\b", "\\bcook(ing)?\\b", "\\bfridge\\b",
     "\\bpantry\\b", "\\bcraving\\b", "\\bmacros?\\b", "\\bfits?\\b", "\\bleft\\b",
@@ -220,8 +220,7 @@ const FOOD_ASK = new RegExp(
     "\\bleftovers?\\b", "\\bchicken\\b", "\\bturkey\\b", "\\bsalmon\\b", "\\beggs?\\b",
     "\\byogurt\\b", "\\bpasta\\b", "\\brice\\b", "\\beaten\\b", "\\bate\\b", "\\bstarv(ing|ed)?\\b",
     "\\bsmoothie\\b", "\\bpizza\\b", "\\bcookies?\\b", "\\bcottage cheese\\b", "\\bvegetarian\\b",
-    "\\bchipotle\\b", "\\bstarbucks\\b", "\\bchick[- ]?fil[- ]?a\\b", "\\btrader joe",
-    "\\bthai\\b", "\\btortillas?\\b",
+    "\\btortillas?\\b",
   ].join("|"),
   "i",
 );

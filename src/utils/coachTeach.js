@@ -33,7 +33,7 @@ const TEACH_FIRST = [
 
   ["sweetener", /\b(artificial sweetener|aspartame|sucralose|stevia|splenda|diet coke|diet pepsi|zero sugar soda)\b/],
 
-  ["underDay", /\b(under (my )?(calories|cals)|calories left|hit( my)? protein|protein('?s| is) (in|covered|done)|should i eat more|eat more or (leave|stop)|done for (the )?day)\b/],
+  ["underDay", /\b(under (my )?(calories|cals)|calories left|i hit my protein|protein('?s| is) (in|covered|done)|should i eat more|eat more or (leave|stop)|done for (the )?day)\b/],
 ];
 
 const PS_METHOD = [

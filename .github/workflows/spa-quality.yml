@@ -41,6 +41,9 @@ jobs:
       - name: Product leftover-hole unit tests
         run: npm run test:product
 
+      - name: Coach question bank and door tests
+        run: npm run test:coach
+
       - name: Production build
         run: npm run build
 

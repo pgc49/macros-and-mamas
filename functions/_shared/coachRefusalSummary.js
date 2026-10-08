@@ -21,7 +21,6 @@ const DOORS = {
   medical: "medical",
   stuck: "stuck",
   again: "stuck",
-  supply: "supply",
 };
 
 /** A supply drop is Callie's, not an ordinary "will this affect supply" aside. */

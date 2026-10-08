@@ -421,7 +421,7 @@ function recipesForSlot(slot) {
 export function buildCoachFallbackMeals({
   text = "",
   slot = "dinner",
-  mode = "ask",
+  mode: _mode = "ask",
   topic = null,
   profile = null,
   customMeals = [],
@@ -565,12 +565,7 @@ export function ensureFoodMeals(meals, {
     Array.isArray(meals) ? meals.filter((meal) => meal?.name) : [],
     { text, profile, skipNames },
   );
-  if (!force && list.length) {
-    const padded = count > list.length
-      ? padCoachMeals(list, { text, slot, mode, topic, profile, customMeals, skipNames, count, safe, iron })
-      : list;
-    return { meals: padded, reply, filled: padded.length !== list.length };
-  }
+  if (!force && list.length) return { meals: list, reply, filled: false };
   const next = buildCoachFallbackMeals({
     text, slot, mode, topic, profile, customMeals, safe, skipNames, count, iron,
   });
