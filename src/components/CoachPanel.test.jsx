@@ -15,7 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import * as Sentry from "@sentry/react";
 import { CoachPanel, pairCoachThread } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
-import { COACH_COPY, COACH_DEFLECT, COACH_EMERGENCY_LINE } from "../content/coachVoice";
+import { COACH_BUSY_LINE, COACH_COPY, COACH_DEFLECT, COACH_EMERGENCY_LINE } from "../content/coachVoice";
 import { localDateIso } from "../utils/dates";
 import { sanitizeCoachCards } from "../../functions/_shared/coachMessages.js";
 
@@ -880,6 +880,18 @@ describe("what isn't the coach's goes to Callie", () => {
     expect(postCoach.mock.calls[1][0].context.turnedDown).toEqual([]);
   });
 
+  it("shows the busy line when a text-only reply is dropped and there are no cards", async () => {
+    const postCoach = vi.fn(async () => ({ ok: true, reply: "", meals: [] }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm tired, something easy with chicken" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_BUSY_LINE);
+    expect(screen.queryByText(COACH_COPY.cantSeeIt)).toBeNull();
+  });
+
   it("only marks plates as turned down after she dismisses them", async () => {
     const postCoach = vi.fn(async () => ({
       ok: true,
@@ -1009,6 +1021,18 @@ describe("the photo she attached", () => {
 
     await screen.findByText("I'm eating out — here's the menu");
     expect(screen.queryByText("Photo of the menu", { selector: "div" })).toBeNull();
+  });
+
+  it("keeps cantSeeIt when a photo comes back with no cards", async () => {
+    const postCoach = vi.fn(async () => ({ ok: true, reply: "", meals: [] }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    const file = new File(["x"], "menu.jpg", { type: "image/jpeg" });
+    fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } });
+    await screen.findByAltText("Menu photo");
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_COPY.cantSeeIt);
+    expect(screen.queryByText(COACH_BUSY_LINE)).toBeNull();
   });
 });
 

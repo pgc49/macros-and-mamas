@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import {
   COACH_ASK_CALLIE_PREFILL,
+  COACH_BUSY_LINE,
   COACH_COPY,
   COACH_DEFLECT,
   COACH_SLOT_TITLE,
@@ -444,7 +445,11 @@ export function CoachPanel({
       }));
       const cards = askedForMealOptions(text) ? suggested.slice(0, 3) : firstPaintPlates(suggested);
       skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
-      const body = data.reply || (cards.length ? "" : COACH_COPY.cantSeeIt);
+      const body = data.reply || (cards.length ? "" : (
+        (mode === "menu" || mode === "kitchen" || images?.length)
+          ? COACH_COPY.cantSeeIt
+          : COACH_BUSY_LINE
+      ));
       push({
         role: "coach",
         body,

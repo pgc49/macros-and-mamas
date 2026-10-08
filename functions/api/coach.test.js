@@ -435,6 +435,18 @@ describe("what comes back", () => {
     expect(openrouter.messageForKind).not.toHaveBeenCalled();
   });
 
+  it("uses the Coach busy line when the model answer is unreadable", async () => {
+    mockSupabase();
+    openrouter.callOpenRouter.mockResolvedValue({ ok: true, text: "not json", model: "google/gemini-3.5-flash" });
+    openrouter.parseJsonLoose.mockReturnValue({ ok: false, error: new Error("bad json") });
+    const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
+    expect(resp.status).toBe(502);
+    const data = await resp.json();
+    expect(data.message).toBe("I can't think straight right now. Try again in a minute, or pick something from Meals.");
+    expect(data.message).not.toMatch(/\bAI\b|Callie has been notified/);
+    expect(openrouter.messageForKind).not.toHaveBeenCalled();
+  });
+
   it("skips the log-ahead sentence when she is not logging", async () => {
     mockSupabase();
     const resp = await onRequestPost({
@@ -1381,6 +1393,9 @@ describe("cost", () => {
     mockSupabase({ callsUsed: 30 });
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
     expect(resp.status).toBe(429);
+    expect((await resp.json()).message).toBe(
+      "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.",
+    );
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
 

@@ -48,7 +48,6 @@ import { escalateDoor, isWontLogRefusal } from "../_shared/coachRefusalSummary.j
 import {
   callOpenRouter,
   logAiFailure,
-  messageForKind,
   parseJsonLoose,
   resolveCoachModels,
 } from "../_shared/openrouter.js";
@@ -87,12 +86,6 @@ const MAX_IMAGE_CHARS = 2_500_000;
 const MAX_TEXT = 600;
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
 const MODES = new Set(["ask", "menu", "kitchen", "record"]);
-
-const COACH_FAILURE_COPY = {
-  retryLabel: "ask me again",
-  manualLabel: "pick something from Meals",
-  unavailableLine: COACH_BUSY_LINE,
-};
 
 async function allowCoachNote(env, userId, { isAdmin, requestId }) {
   if (isAdmin) return true;
@@ -327,7 +320,7 @@ export async function onRequestPost({ request, env }) {
         max: MAX_PER_DAY,
         requestId,
         busyMessage: COACH_BUSY_LINE,
-        spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
+        spentMessage: "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.",
       });
       if (!limit.ok) {
         return json(
@@ -419,7 +412,7 @@ export async function onRequestPost({ request, env }) {
         detail: result.text.slice(0, 300),
       });
       return json(
-        { error: "could not read that", message: messageForKind("empty", COACH_FAILURE_COPY) },
+        { error: "could not read that", message: COACH_BUSY_LINE },
         502,
       );
     }
