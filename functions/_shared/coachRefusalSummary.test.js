@@ -7,6 +7,8 @@ import {
   countRefusalDoorLines,
   escalateDoor,
   isLoggingRefusal,
+  isWontLogRefusal,
+  saidSheSkipped,
   MAX_SUMMARY_ESCALATES,
   mergeRefusalSummary,
   preserveRefusalLines,
@@ -135,10 +137,15 @@ describe("a refusal line is factual", () => {
   });
 
   it("does not treat a logging refusal as a card for Callie", () => {
+    expect(isWontLogRefusal("I won't log this")).toBe(true);
+    expect(isWontLogRefusal("I will not log dinner")).toBe(true);
+    expect(isWontLogRefusal("I hate tracking")).toBe(true);
+    expect(isWontLogRefusal("should I skip dinner")).toBe(false);
     expect(isLoggingRefusal("I won't log this")).toBe(true);
-    expect(isLoggingRefusal("I will not log dinner")).toBe(true);
-    expect(isLoggingRefusal("should I skip dinner")).toBe(true);
-    expect(isLoggingRefusal("will this affect my milk supply")).toBe(false);
-    expect(isLoggingRefusal("I've been dizzy since this morning")).toBe(false);
+    expect(isLoggingRefusal("should I skip dinner")).toBe(false);
+    expect(saidSheSkipped("should I skip dinner")).toBe(true);
+    expect(saidSheSkipped("I won't log this")).toBe(false);
+    expect(isWontLogRefusal("will this affect my milk supply")).toBe(false);
+    expect(isWontLogRefusal("I've been dizzy since this morning")).toBe(false);
   });
 });

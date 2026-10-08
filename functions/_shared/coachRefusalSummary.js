@@ -22,15 +22,27 @@ const DOORS = {
   again: "stuck",
 };
 
-/** Skip-the-log / eat-and-move-on. That handoff is not a card for Callie. */
-const LOGGING_REFUSAL = /\b(?:won'?t|will not|not going to|don'?t|do not|cant|can't)\s+(?:want to\s+)?log\b|\bnot logging\b|\bskip(?:ping)?\s+(?:dinner|lunch|breakfast|snack|this meal|a meal|eating)\b/;
+/** Skip-the-log. Eat-and-move-on ("skip dinner") is a teach, not this. */
+const WONT_LOG = /\b(?:won'?t|will not|not going to|don'?t|do not|cant|can't)\s+(?:want to\s+)?log\b|\bnot logging\b|\bhate tracking\b/;
+
+/** She said she skipped a meal. Used for the skip note, not for a Callie card. */
+const SAID_SKIPPED = /\bskip(?:ped|ping)?\s+(?:dinner|lunch|breakfast|snack|this meal|a meal|eating)\b/;
 
 export function refusalDoor(scope) {
   return DOORS[scope] || null;
 }
 
+export function isWontLogRefusal(text) {
+  return WONT_LOG.test(String(text || "").toLowerCase());
+}
+
+/** @deprecated use isWontLogRefusal — skip dinner is a teach, not a logging refusal. */
 export function isLoggingRefusal(text) {
-  return LOGGING_REFUSAL.test(String(text || "").toLowerCase());
+  return isWontLogRefusal(text);
+}
+
+export function saidSheSkipped(text) {
+  return SAID_SKIPPED.test(String(text || "").toLowerCase());
 }
 
 /**
@@ -44,7 +56,7 @@ export function escalateDoor(asked, { escalate = null, scope = null } = {}) {
     const teach = localCoachTeach(question);
     return teach && STUCK_TOPICS.has(teach.topic) ? "stuck" : null;
   }
-  if (isLoggingRefusal(question)) return null;
+  if (isWontLogRefusal(question)) return null;
   if (scope === "urgent" || scope === "medical" || isClinicalUrgent(question)) {
     return isClinicalUrgent(question) ? "medical" : null;
   }

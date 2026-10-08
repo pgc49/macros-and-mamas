@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   classifyAsk,
+  deflectForScope,
   macrosPlausible,
+  replyHasJargon,
   replyIsClean,
   scopeIsRefused,
+  scrubCoachReply,
 } from "./coachGuardrails.js";
 
 const scopeOf = (text) => classifyAsk(text).scope;
@@ -245,5 +248,23 @@ describe("the reply itself", () => {
     expect(replyIsClean("I'm not a doctor, but you should eat more.")).toBe(false);
     expect(replyIsClean("As an AI, I can't help with that.")).toBe(false);
     expect(replyIsClean("Have a cheat meal, you earned it.")).toBe(false);
+  });
+
+  it("strips internal jargon instead of dropping the whole reply", () => {
+    expect(replyHasJargon("Try the salmon from Callie's bank tonight.")).toBe(true);
+    expect(replyHasJargon("Keep fat in its band.")).toBe(true);
+    expect(replyHasJargon("Hit the protein floor.")).toBe(true);
+    expect(replyHasJargon("This slot is dinner.")).toBe(true);
+    expect(scrubCoachReply("Try the salmon from Callie's bank tonight.")).toBe("Try the salmon tonight.");
+    expect(scrubCoachReply("Keep fat in its band and enjoy it.")).toBe("Keep fat in and enjoy it.");
+    expect(scrubCoachReply("Hit the protein floor with eggs.")).toBe("Hit the with eggs.");
+    expect(replyIsClean(scrubCoachReply("Try the salmon from Callie's bank tonight."))).toBe(true);
+    expect(scrubCoachReply("Chicken and rice. You'll like it.")).toBe("Chicken and rice. You'll like it.");
+  });
+
+  it("hands a clinical ask to the medical line, not the care handoff", () => {
+    expect(deflectForScope("urgent", "I've been dizzy since this morning")).toBe("medical");
+    expect(deflectForScope("urgent", "I feel awful about what I ate")).toBe("care");
+    expect(deflectForScope("supply")).toBe("supply");
   });
 });

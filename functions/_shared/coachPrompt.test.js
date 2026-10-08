@@ -12,6 +12,7 @@ import {
   buildCoachKitchenPrompt,
   buildCoachMenuLinkPrompt,
   buildCoachMenuPrompt,
+  COACH_SYSTEM,
   sanitizeCoachContext,
 } from "./coachPrompt.js";
 
@@ -168,11 +169,64 @@ describe("what it is allowed to write down", () => {
     expect(prompt).toMatch(/PS method/);
   });
 
-  it("tells the model fat is the constraint, and that a half portion can sit beside a full one", () => {
+  it("tells the model how to choose the plate, and that a half portion can sit beside a full one", () => {
     const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "ideas" });
-    expect(prompt).toMatch(/the one that must stay in its band/);
+    expect(prompt).toMatch(/keep fat inside what's left/);
+    expect(prompt).toMatch(/Don't talk about protein, fat or weight loss/);
     expect(prompt).toMatch(/half portion is fine/);
     expect(prompt).not.toMatch(/Never suggest a half portion/);
     expect(prompt).toMatch(/Never tell her to skip a meal/);
+    expect(prompt).not.toMatch(/the one that must stay in its band/);
+    expect(prompt).not.toMatch(/key for\s+weight loss/);
+  });
+
+  it("bans internal jargon in the reply and names Callie's recipes as an internal list", () => {
+    const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "ideas" });
+    expect(prompt).toContain("## Callie's recipes (internal list)");
+    expect(prompt).not.toContain("## Callie's recipe bank");
+    expect(prompt).toMatch(/then Callie's recipes/);
+    expect(prompt).not.toMatch(/then Callie's bank/);
+    expect(prompt).toMatch(/never says bank, floor, band, slot, budget/);
+    expect(prompt).toMatch(/A Callie recipe is just its dish name/);
+    expect(COACH_SYSTEM).toMatch(/This is how you choose the plate\. It is never how you talk to her/);
+    expect(COACH_SYSTEM).toMatch(/Fat is the one Callie watches most/);
+  });
+
+  it("asks for one plate unless she wants options, and to name a food why", () => {
+    const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "I'm tired, something easy" });
+    expect(prompt).toMatch(/Suggest one plate/);
+    expect(prompt).toMatch(/second card only if it's the half portion/);
+    expect(prompt).toMatch(/Give up to 3 only when she asks for options/);
+    expect(prompt).toMatch(/Name the plate and one reason from her words/);
+    expect(prompt).toMatch(/Slow-cooked or batch\s+recipes aren't quick/);
+    expect(prompt).toMatch(/Rotate\./);
+  });
+
+  it("does not assume an unlogged meal was skipped", () => {
+    const day = sanitizeCoachContext({ skipped: ["breakfast"], eaten: [] });
+    const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "ideas", day });
+    expect(prompt).toMatch(/Not logged yet \(she may have eaten and not logged/);
+    expect(prompt).toMatch(/Only treat a meal as skipped if she said she skipped it/);
+    expect(prompt).not.toMatch(/If a meal was skipped, feed the rest of the day/);
+    expect(prompt).not.toMatch(/Passed without being logged/);
+  });
+
+  it("puts already-suggested plates on the prompt so it does not repeat them", () => {
+    const day = sanitizeCoachContext({
+      alreadySuggested: ["Pulled chicken tacos", "Sheet pan chicken"],
+    });
+    const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "something easy", day });
+    expect(prompt).toContain("Already suggested in this chat — don't offer again unless she asks:");
+    expect(prompt).toContain("Pulled chicken tacos");
+    expect(prompt).toContain("Sheet pan chicken");
+    expect(day.alreadySuggested).toEqual(["Pulled chicken tacos", "Sheet pan chicken"]);
+  });
+
+  it("flags a won't-log chat so the model drops numbers", () => {
+    const day = sanitizeCoachContext({ notLogging: true });
+    const prompt = buildCoachAskPrompt({ ...ARGS, slot: "dinner", question: "I hate tracking", day });
+    expect(day.notLogging).toBe(true);
+    expect(prompt).toMatch(/She said she isn't logging/);
+    expect(prompt).toMatch(/If she says she isn't logging or hates tracking/);
   });
 });

@@ -71,6 +71,9 @@ describe("Callie's own answers, before a model is called", () => {
     expect(localCoachTeach("should I skip dinner")).toMatchObject({ topic: "neverSkip" });
     expect(localCoachTeach("I'm 400 over, skip dinner?")).toMatchObject({ topic: "neverSkip" });
     expect(teachBody("neverSkip")).toMatch(/never skip a meal/i);
+    expect(teachBody("neverSkip", { again: true })).toBe(COACH_COPY.teachNeverSkipAgain);
+    expect(teachBody("neverSkip", { again: true })).not.toBe(teachBody("neverSkip"));
+    expect(teachBody("neverSkip", { again: true })).toMatch(/Still eat something tonight/);
   });
 
   it("answers is-this-ok as real food, not a verdict", () => {

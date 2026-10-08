@@ -232,7 +232,7 @@ export function isClinicalUrgent(raw) {
 
 /** Which of Callie's handoff lines a refused scope gets. */
 const DEFLECT_FOR_SCOPE = {
-  urgent: "care",
+  urgent: "medical",
   ranges: "ranges",
   weight: "weight",
   admin: "admin",
@@ -240,7 +240,10 @@ const DEFLECT_FOR_SCOPE = {
   supply: "supply",
 };
 
-export function deflectForScope(scope) {
+export function deflectForScope(scope, asked = "") {
+  if (scope === "urgent") {
+    return isClinicalUrgent(asked) ? "medical" : "care";
+  }
   return DEFLECT_FOR_SCOPE[scope] || "offTopic";
 }
 
@@ -271,6 +274,38 @@ const REPLY_BANNED = [
   /\bas an ai\b/i,
   /\bcheat (meal|day)\b/i,
 ];
+
+/** Internal jargon. Strip or rewrite — do not drop the whole reply. */
+const REPLY_JARGON = [
+  /\b(from|in) (the|callie'?s) bank\b/gi,
+  /\bprotein floor\b/gi,
+  /\b(its|her|your) band\b/gi,
+  /\bslot\b/gi,
+];
+
+function tidyScrubbed(text) {
+  return String(text || "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.!?])/g, "$1")
+    .replace(/^\s*[,.;:]\s*/, "")
+    .trim();
+}
+
+export function scrubCoachReply(text) {
+  let out = String(text || "");
+  for (const re of REPLY_JARGON) {
+    out = out.replace(new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`), "");
+  }
+  return tidyScrubbed(out);
+}
+
+export function replyHasJargon(text) {
+  const s = String(text || "");
+  return REPLY_JARGON.some((re) => {
+    re.lastIndex = 0;
+    return re.test(s);
+  });
+}
 
 export function replyIsClean(text) {
   const s = String(text || "");
