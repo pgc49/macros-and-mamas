@@ -10,8 +10,8 @@
  *
  * WARNING: this writes to the live Supabase project shared by Cloudflare
  * previews. Setups B–E need their own QA accounts — they are not simulated
- * from setup A. Questions 41 and 51 append to Callie's card unless you pass
- * --include-careful.
+ * from setup A. Questions 41, 51, and 52 append to Callie's card unless you
+ * pass --include-careful.
  */
 import { execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -83,10 +83,10 @@ const setups = allSetups
   ? COACH_QUESTION_BANK_SETUPS
   : [COACH_QUESTION_BANK_SETUPS.find((row) => row.id === setupId) || COACH_QUESTION_BANK_SETUPS[0]];
 const questions = COACH_QUESTION_BANK.filter((row) => row.id >= start).slice(0, limit)
-  .filter((row) => includeCareful || (row.id !== 41 && row.id !== 51));
+  .filter((row) => includeCareful || (row.id !== 41 && row.id !== 51 && row.id !== 52));
 
 if (!includeCareful) {
-  console.warn("Skipping questions 41 and 51 (they write to Callie's card). Pass --include-careful to run them.");
+  console.warn("Skipping questions 41, 51, and 52 (they write to Callie's card). Pass --include-careful to run them.");
 }
 
 const results = [];

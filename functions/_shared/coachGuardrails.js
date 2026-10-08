@@ -372,7 +372,9 @@ export function isMealAsk(raw, { mode = "ask", topic = null } = {}) {
   if (NEXT_MEAL.test(text)) return true;
   if (hits(MEAL_INTENT, text)) return true;
   if (/\b(something else|anything else|what else)\b/.test(text)) return true;
-  if (verdict.scope === "food" || verdict.scope === "unclear") return true;
+  if (verdict.scope === "food") return true;
+  // Unclear is not automatically food. Only switch when she named food or
+  // sent a kitchen/menu photo. Otherwise the model hand-back stays Callie's.
   if (hits(RANGES, text) && !NEXT_MEAL.test(text) && !/\bwhat (should|can|do) i (eat|have|make|order|get)\b/.test(text)) {
     return false;
   }

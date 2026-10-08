@@ -18,10 +18,20 @@ const COTTAGE = /\bcottage cheese\b/i;
 const SPINACH = /\bspinach\b/i;
 const MEAT = /\b(chicken|turkey|beef|pork|steak|sausage|bacon|meatball|salmon|tuna|fish|halibut|burger|nuggets?)\b/i;
 
+/** Live custom_meals.ingredients is text. Arrays stay arrays. */
+export function ingredientList(meal) {
+  const raw = meal?.ingredients;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    return raw.split(/[\n;]+/).map((part) => part.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 export function mealHaystack(meal) {
   if (!meal) return "";
   const bits = [meal.name, meal.desc, meal.title];
-  for (const row of meal.ingredients || []) {
+  for (const row of ingredientList(meal)) {
     if (typeof row === "string") bits.push(row);
     else bits.push(row?.item, row?.amount, row?.name);
   }
@@ -46,8 +56,9 @@ function alreadyHadFood(asked, food) {
   ).test(asked);
 }
 
-export function extractAskConstraints(text = "", profile = null) {
+export function extractAskConstraints(text = "", profile = null, { currentAsk = null } = {}) {
   const asked = String(text || "").toLowerCase();
+  const current = String(currentAsk != null ? currentAsk : text || "").toLowerCase();
   const allergens = Array.isArray(profile?.allergens)
     ? profile.allergens.map((item) => String(item).toLowerCase())
     : [];
@@ -62,17 +73,18 @@ export function extractAskConstraints(text = "", profile = null) {
       || /\bi'?m dairy free\b/.test(asked),
     noCottage: /\bcottage cheese\b/.test(avoids)
       || avoidsFood(asked, "cottage cheese")
-      || alreadyHadFood(asked, "cottage cheese"),
-    noChicken: avoidsFood(asked, "chicken") || alreadyHadFood(asked, "chicken"),
+      || alreadyHadFood(current, "cottage cheese"),
+    noChicken: avoidsFood(asked, "chicken") || alreadyHadFood(current, "chicken"),
     noEggs: avoidsFood(asked, "eggs")
       || avoidsFood(asked, "egg")
-      || alreadyHadFood(asked, "eggs")
-      || alreadyHadFood(asked, "egg")
-      || /\bbesides eggs\b/.test(asked),
-    noSalmon: avoidsFood(asked, "salmon") || alreadyHadFood(asked, "salmon"),
+      || alreadyHadFood(current, "eggs")
+      || alreadyHadFood(current, "egg")
+      || /\bbesides eggs\b/.test(asked)
+      || /\bno eggs this week\b/.test(asked),
+    noSalmon: avoidsFood(asked, "salmon") || alreadyHadFood(current, "salmon"),
     noSmoothie: /\bnot the smoothie\b/.test(asked)
       || /\bno smoothie\b/.test(asked)
-      || alreadyHadFood(asked, "smoothie"),
+      || alreadyHadFood(current, "smoothie"),
     noSpinach: /\bdon'?t have spinach\b/.test(asked) || /\bno spinach\b/.test(asked),
     vegetarian: /\bvegetarian\b/.test(asked) || /\bmake it vegetarian\b/.test(asked) || diet === "vegetarian",
   };
@@ -118,7 +130,7 @@ export function filterCoachMeals(meals, {
   skipNames = [],
   priorAsks = [],
 } = {}) {
-  const constraints = extractAskConstraints(constraintTextFrom(text, priorAsks), profile);
+  const constraints = extractAskConstraints(constraintTextFrom(text, priorAsks), profile, { currentAsk: text });
   const skip = (skipNames || []).map((item) => String(item || "").trim()).filter(Boolean);
   return (Array.isArray(meals) ? meals : []).filter((meal) => (
     meal?.name

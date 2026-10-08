@@ -5,6 +5,7 @@ import { T, F, FD } from "../theme/tokens";
 import { COACH_COPY } from "../content/coachVoice";
 import { logSaveSucceeded } from "../utils/logSave";
 import { shownCoachReason } from "../utils/coachRank";
+import { ingredientList } from "../../functions/_shared/coachMealFilter";
 
 const AI_SOURCES = new Set(["menu", "kitchen", "new"]);
 
@@ -18,7 +19,7 @@ function macroLine(meal) {
  * capital rather than lowering any of them — lowering would eat proper nouns.
  */
 function ingredientLines(meal) {
-  const raw = Array.isArray(meal?.ingredients) ? meal.ingredients : [];
+  const raw = ingredientList(meal);
   return raw
     .map((line) => {
       if (typeof line === "string") return line.trim();
@@ -87,10 +88,13 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
     }
   };
 
-  const isEstimate = AI_SOURCES.has(card.source);
+  const hideNumbers = card.hideMacros === true;
+  const isEstimate = !hideNumbers && AI_SOURCES.has(card.source);
   const done = phase === "logged" || phase === "pencilled";
   const why = shownCoachReason(card);
   const historyWhy = /^You've had this at /i.test(why);
+  // Hidden-number cards: Pencil in / Save. Do not offer Log — that wrote zeros.
+  const logHidden = hideNumbers;
   // A plate with nothing under it reads as a blank why. Don't paint it.
   if (!actionsOnly && !why) return null;
 
@@ -118,9 +122,11 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
           </div>
 
           <div data-testid="coach-card-title" style={{ fontFamily: FD, fontSize: 18, lineHeight: 1.25, marginBottom: 2 }}>
-            {card.title}
+            {hideNumbers
+              ? (card.name || String(card.title || "").replace(/\s·\s(?:half portion|[\d.]+ servings)$/i, ""))
+              : card.title}
           </div>
-          {!card.hideMacros && (
+          {!hideNumbers && (
             <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{macroLine(card)}</div>
           )}
           {why && (
@@ -145,18 +151,20 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
           </span>
         ) : (
           <>
-            <button
-              type="button"
-              style={actionBtn("primary", phase === "busy")}
-              disabled={phase === "busy"}
-              onClick={() => run(onLog, "logged")}
-            >
-              {COACH_COPY.logIt}
-            </button>
+            {!logHidden && (
+              <button
+                type="button"
+                style={actionBtn("primary", phase === "busy")}
+                disabled={phase === "busy"}
+                onClick={() => run(onLog, "logged")}
+              >
+                {COACH_COPY.logIt}
+              </button>
+            )}
             {onPencil && (
               <button
                 type="button"
-                style={actionBtn("ghost", phase === "busy")}
+                style={actionBtn(logHidden ? "primary" : "ghost", phase === "busy")}
                 disabled={phase === "busy"}
                 onClick={() => run(onPencil, "pencilled")}
               >
@@ -175,7 +183,7 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
           </button>
         )}
       </div>
-      {onSave && !done && isEstimate && (
+      {onSave && !done && (isEstimate || hideNumbers) && (
         <button
           type="button"
           style={{
@@ -238,8 +246,12 @@ export function CoachMealSheet({ card, onClose, onLog, onPencil, onSave }) {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div>
-            <div style={{ fontFamily: FD, fontSize: 21, lineHeight: 1.2 }}>{card.title}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>{macroLine(card)}</div>
+            <div style={{ fontFamily: FD, fontSize: 21, lineHeight: 1.2 }}>
+              {card.hideMacros ? (card.name || card.title) : card.title}
+            </div>
+            {!card.hideMacros && (
+              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>{macroLine(card)}</div>
+            )}
           </div>
           <button
             type="button"

@@ -114,10 +114,10 @@ export function sanitizeCoachCards(cards) {
       fromSaved: card.fromSaved === true,
       hideMacros: card.hideMacros === true,
       servings: cardServings(card.servings),
-      cal: card.hideMacros === true ? 0 : num(card.cal),
-      p: card.hideMacros === true ? 0 : num(card.p),
-      c: card.hideMacros === true ? 0 : num(card.c),
-      f: card.hideMacros === true ? 0 : num(card.f),
+      cal: num(card.cal),
+      p: num(card.p),
+      c: num(card.c),
+      f: num(card.f),
       reason,
     });
   }

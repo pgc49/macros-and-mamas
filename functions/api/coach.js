@@ -100,7 +100,7 @@ function wantsFoodFill(text, { mode, scope, crisis = false, topic = null } = {})
   if (crisis || isCrisisUrgent(text)) return false;
   if (scope === "off_topic" || scope === "ranges" || scope === "weight" || scope === "admin") return false;
   if (isMealAsk(text, { mode, topic })) return true;
-  return scope !== "off_topic";
+  return false;
 }
 
 function coachFillArgs({ text, slot, mode, topic, profile, customMeals, day, reply, safe, iron }) {
@@ -608,6 +608,7 @@ export async function onRequestPost({ request, env }) {
       notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
     });
     const workingNumbers = macrosStatus === "draft" || macrosStatus === "none";
+    // macrosStatus "outage" is not "no numbers" — do not lead with fine-tuning.
     const args = { profile, macros, macrosStatus, budget, slot, customMeals, recentNames, day };
 
     let prompt;
@@ -638,7 +639,7 @@ export async function onRequestPost({ request, env }) {
       models: resolveCoachModels(env),
       maxTokens: images.length ? 8000 : 4000,
       temperature: 0.5,
-      timeoutMs: images.length ? 30_000 : 25_000,
+      timeoutMs: images.length ? 20_000 : 18_000,
       attempts: 1,
       reasoning: { effort: "low", exclude: true },
       messages: [
@@ -701,7 +702,7 @@ export async function onRequestPost({ request, env }) {
         model: result.model,
         detail: result.text.slice(0, 300),
       });
-      if (wantsFoodFill(text, { mode, scope: "food" })) {
+      if (wantsFoodFill(text, { mode, scope: verdict.scope })) {
         const filled = ensureFoodMeals([], coachFillArgs({ text, slot, mode, profile, customMeals, day }));
         let reply = filled.reply;
         if (day?.notLogging) reply = stripLogNag(reply);

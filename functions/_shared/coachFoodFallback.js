@@ -11,7 +11,7 @@ import { COACH_LOCAL_PICKS_LINE } from "../../src/content/coachVoice.js";
 import { mealBaseName } from "./coachAskMeals.js";
 import { CALLIE_RECIPES } from "./callieRecipes.js";
 import { macrosPlausible } from "./coachGuardrails.js";
-import { constraintTextFrom, extractAskConstraints, filterCoachMeals, mealBreaksConstraints, mealBreaksSavedPrefs } from "./coachMealFilter.js";
+import { constraintTextFrom, extractAskConstraints, filterCoachMeals, ingredientList, mealBreaksConstraints, mealBreaksSavedPrefs } from "./coachMealFilter.js";
 import { sanitizePlanMeal } from "./planMealShape.js";
 
 export { COACH_LOCAL_PICKS_LINE };
@@ -24,7 +24,7 @@ export function capMealName(name) {
 }
 
 function ingredientDesc(meal) {
-  const items = (meal?.ingredients || [])
+  const items = ingredientList(meal)
     .map((row) => {
       if (typeof row === "string") return row.trim();
       return [row?.amount, row?.item || row?.name].filter(Boolean).join(" ").trim();
@@ -143,6 +143,16 @@ const FROM_WHAT_SHE_HAS = [
     },
   },
   {
+    test: (text) => /\brotisserie\b/.test(text) && /\bspinach\b/.test(text) && /\brice\b/.test(text),
+    meal: {
+      name: "Rotisserie chicken, spinach, and rice",
+      desc: "The leftover chicken over rice with the spinach wilted in.",
+      cal: 460, p: 42, c: 36, f: 14,
+      ingredients: [{ item: "rotisserie chicken", amount: "5 oz" }, { item: "spinach", amount: "2 cups" }, { item: "cooked rice", amount: "1 cup" }],
+      steps: ["Warm the chicken and rice, wilt the spinach in the same pan."],
+    },
+  },
+  {
     test: (text) => /\b(leftover|left over)\b/.test(text) && /\bchicken\b/.test(text),
     meal: {
       name: "Leftover chicken and rice",
@@ -174,26 +184,36 @@ const FROM_WHAT_SHE_HAS = [
   },
 ];
 
+function orderPlate(name, desc, cal, p, c, f, ingredients = []) {
+  return { ...plate(name, desc, cal, p, c, f, ingredients), source: "menu", orderOnly: true };
+}
+
 const PLACE_PLATES = [
   {
     test: (text) => /\bchipotle\b/.test(text),
     meals: [
-      plate("Chicken burrito bowl", "Chicken, rice, beans, salsa. Skip the sour cream if fat is tight.", 500, 42, 50, 12, [
-        { item: "chicken", amount: "1 serving" }, { item: "rice and beans", amount: "regular" }, { item: "salsa", amount: "as you like" },
+      orderPlate("Chipotle chicken bowl", "Double chicken, fajita veggies, half rice, salsa. Skip sour cream if fat is tight.", 520, 48, 36, 14, [
+        { item: "chicken", amount: "double" }, { item: "fajita veggies", amount: "regular" }, { item: "rice", amount: "half" },
       ]),
-      plate("Steak salad bowl", "Steak over lettuce with salsa and a little rice.", 430, 38, 22, 16, [
-        { item: "steak", amount: "1 serving" }, { item: "salad lettuce", amount: "regular" },
+      orderPlate("Chipotle steak bowl", "Steak, fajita veggies, half rice, salsa.", 480, 40, 30, 16, [
+        { item: "steak", amount: "1 serving" }, { item: "fajita veggies", amount: "regular" }, { item: "rice", amount: "half" },
+      ]),
+      orderPlate("Chipotle sofritas bowl", "Sofritas, beans, fajita veggies, salsa. No sour cream.", 430, 22, 48, 12, [
+        { item: "sofritas", amount: "1 serving" }, { item: "beans", amount: "regular" }, { item: "fajita veggies", amount: "regular" },
       ]),
     ],
   },
   {
     test: (text) => /\bthai\b/.test(text),
     meals: [
-      plate("Chicken satay", "Satay with cucumber salad, sauce on the side.", 420, 36, 18, 18, [
-        { item: "chicken satay", amount: "1 order" },
+      orderPlate("Pad krapow chicken", "Basil chicken, rice on the side, sauce light.", 480, 36, 42, 16, [
+        { item: "pad krapow chicken", amount: "1 order" }, { item: "rice", amount: "on the side" },
       ]),
-      plate("Shrimp larb", "Larb with extra veg, dressing on the side.", 380, 28, 16, 16, [
-        { item: "shrimp larb", amount: "1 order" },
+      orderPlate("Chicken larb", "Larb with extra veg, dressing on the side.", 380, 28, 16, 16, [
+        { item: "chicken larb", amount: "1 order" },
+      ]),
+      orderPlate("Lighter Thai curry", "A smaller curry, extra veg, rice on the side.", 450, 24, 40, 18, [
+        { item: "Thai curry", amount: "small" }, { item: "vegetables", amount: "extra" },
       ]),
     ],
   },
@@ -248,9 +268,9 @@ const TEACH_PLATES = {
     recipePlate("Callie's chicken teriyaki"),
   ],
   sushi: [
-    plate("Nigiri and soup", "Nigiri and some soup — Callie's sushi plate.", 380, 32, 40, 8, [
-      { item: "nigiri", amount: "6 pieces" }, { item: "miso soup", amount: "1 bowl" },
-    ]),
+      plate("Nigiri and soup", "Fish nigiri and miso soup — Callie's sushi plate.", 380, 32, 40, 8, [
+        { item: "fish nigiri", amount: "6 pieces" }, { item: "miso soup", amount: "1 bowl" },
+      ]),
     plate("Salmon nigiri", "A simple sushi order.", 350, 30, 36, 8, [
       { item: "salmon nigiri", amount: "6 pieces" },
     ]),
@@ -352,8 +372,56 @@ const QUICK_PLATES = [
   plate("Toast and peanut butter", "Near-zero prep. Water too.", 250, 10, 26, 12, [
     { item: "toast", amount: "1 slice" }, { item: "peanut butter", amount: "1 tbsp" },
   ]),
-  plate("Banana and leftover protein", "Whatever protein is already cooked, plus a banana.", 280, 24, 30, 6, [
-    { item: "banana", amount: "1" }, { item: "cooked protein", amount: "3 oz" },
+];
+
+const NO_COOK_PROTEIN = [
+  plate("Greek yogurt and protein powder", "Yogurt stirred with a scoop of protein. No cooking.", 260, 40, 16, 2, [
+    { item: "nonfat Greek yogurt", amount: "170g" }, { item: "protein powder", amount: "1 scoop" },
+  ]),
+  plate("Tuna pouch wrap", "A tuna pouch in a tortilla. Eat it in the car.", 280, 28, 18, 8, [
+    { item: "tuna pouch", amount: "1" }, { item: "tortilla", amount: "1" },
+  ]),
+  plate("Deli turkey roll-ups", "Turkey slices rolled up. No spoon, no plate.", 220, 28, 2, 8, [
+    { item: "deli turkey", amount: "4 oz" },
+  ]),
+  plate("Cottage cheese and fruit", "Cottage cheese and a piece of fruit. Already ready.", 240, 24, 20, 6, [
+    { item: "cottage cheese", amount: "1 cup" }, { item: "fruit", amount: "1" },
+  ]),
+  plate("Protein shake and jerky", "A shake and a stick of jerky. Handheld.", 250, 36, 8, 6, [
+    { item: "protein shake", amount: "1" }, { item: "beef jerky", amount: "1 oz" },
+  ]),
+];
+
+const TACO_PLATES = [
+  plate("Chicken tacos", "Two chicken tacos with salsa.", 420, 32, 36, 14, [
+    { item: "chicken", amount: "4 oz" }, { item: "corn tortillas", amount: "2" }, { item: "salsa", amount: "2 tbsp" },
+  ]),
+  plate("Steak tacos", "Two steak tacos, onion and cilantro.", 440, 30, 32, 16, [
+    { item: "steak", amount: "4 oz" }, { item: "corn tortillas", amount: "2" }, { item: "onion and cilantro", amount: "a handful" },
+  ]),
+  plate("Bean and salsa tacos", "Bean tacos when meat is off.", 360, 16, 52, 8, [
+    { item: "beans", amount: "3/4 cup" }, { item: "corn tortillas", amount: "2" }, { item: "salsa", amount: "2 tbsp" },
+  ]),
+];
+
+const CAR_HANDHELD = [
+  plate("Deli turkey roll-ups", "Turkey slices. No spoon, eat in the car.", 220, 28, 2, 8, [
+    { item: "deli turkey", amount: "4 oz" },
+  ]),
+  plate("Rotisserie chicken pieces", "Pull the chicken and eat it from the container.", 280, 36, 0, 12, [
+    { item: "rotisserie chicken", amount: "4 oz" },
+  ]),
+  plate("Tuna pouch wrap", "Tuna pouch in a tortilla. One hand.", 280, 28, 18, 8, [
+    { item: "tuna pouch", amount: "1" }, { item: "tortilla", amount: "1" },
+  ]),
+];
+
+const NO_EGG_BREAKFAST = [
+  plate("Protein oatmeal", "Oats with protein powder and berries. No eggs.", 310, 30, 40, 4, [
+    { item: "oats", amount: "1/2 cup dry" }, { item: "protein powder", amount: "1 scoop" }, { item: "berries", amount: "2/3 cup" },
+  ]),
+  plate("Turkey sausage and fruit", "Sausage and a piece of fruit. No eggs.", 280, 18, 22, 12, [
+    { item: "turkey sausage", amount: "2 links" }, { item: "fruit", amount: "1" },
   ]),
 ];
 
@@ -390,17 +458,8 @@ const VEG_PLATES = [
   ]),
 ];
 
-const NO_EGG_BREAKFAST = [
-  plate("Protein oatmeal", "Oats with protein powder and berries.", 310, 30, 40, 4, [
-    { item: "oats", amount: "1/2 cup dry" }, { item: "protein powder", amount: "1 scoop" }, { item: "berries", amount: "2/3 cup" },
-  ]),
-  plate("Turkey sausage and fruit", "Sausage and a piece of fruit. No eggs.", 280, 18, 22, 12, [
-    { item: "turkey sausage", amount: "2 links" }, { item: "fruit", amount: "1" },
-  ]),
-];
-
 function plate(name, desc, cal, p, c, f, ingredients = [], steps = []) {
-  return { name, desc, cal, p, c, f, ingredients, steps };
+  return { name, desc, cal, p, c, f, ingredients, steps, fixedPortion: true };
 }
 
 function recipePlate(name) {
@@ -414,8 +473,16 @@ function recipePlate(name) {
     c: recipe.c,
     f: recipe.f,
     basedOn: recipe.name,
-    ingredients: [],
+    ingredients: recipe.name === "Protein pancakes"
+      ? [
+        { item: "dry oats", amount: "½ cup" },
+        { item: "large egg", amount: "1" },
+        { item: "vanilla protein", amount: "1 scoop" },
+        { item: "unsweetened applesauce", amount: "¼ cup" },
+      ]
+      : [],
     steps: [],
+    fixedPortion: true,
   };
 }
 
@@ -486,7 +553,8 @@ export function buildCoachFallbackMeals({
   const asked = constraintTextFrom(text, priorAsks).toLowerCase();
   const inventory = String(text || "").toLowerCase();
   const diet = profile?.diet || "";
-  const constraints = extractAskConstraints(asked, profile);
+  const constraints = extractAskConstraints(asked, profile, { currentAsk: String(text || "") });
+  const mealSlot = slot !== "snack";
   const skip = (skipNames || []).map((item) => String(item || "").trim()).filter(Boolean);
   const out = [];
   const seen = new Set();
@@ -499,10 +567,23 @@ export function buildCoachFallbackMeals({
   if (HANDS_FULL.test(asked)) {
     for (const meal of NO_PREP) add(meal);
     for (const meal of NO_COOK) add(meal);
-    for (const meal of QUICK_PLATES) add(meal);
+    for (const meal of NO_COOK_PROTEIN) add(meal);
+    if (!mealSlot) for (const meal of QUICK_PLATES) add(meal);
+  }
+  if (/\b(in the car|eat in the car|driving|on the (go|road)|handheld|no spoon)\b/.test(asked)) {
+    for (const meal of CAR_HANDHELD) add(meal);
+    for (const meal of NO_COOK_PROTEIN) add(meal);
+  }
+  if (/\btacos?\b/.test(asked)) {
+    for (const meal of TACO_PLATES) add(meal);
+  }
+  if (/\b(don'?t have to cook|no cooking|no[- ]cook|zero prep)\b/.test(asked) || (/\b70g\b/.test(asked) && /\bprotein\b/.test(asked))) {
+    for (const meal of NO_COOK_PROTEIN) add(meal);
+    for (const meal of NO_COOK) add(meal);
   }
   if (/\b(\d+\s+minutes?|5 minutes|screaming|zero prep|no cooking|less prep)\b/.test(asked)) {
-    for (const meal of QUICK_PLATES) add(meal);
+    if (!mealSlot) for (const meal of QUICK_PLATES) add(meal);
+    for (const meal of NO_COOK_PROTEIN) add(meal);
     for (const meal of NO_COOK) add(meal);
   }
   if (constraints.vegetarian) {
@@ -518,24 +599,22 @@ export function buildCoachFallbackMeals({
   if (safe) {
     for (const meal of SAFE_SIMPLE) add(meal);
     if (out.length < count) {
-      for (const meal of QUICK_PLATES) add(meal);
+      if (!mealSlot) for (const meal of QUICK_PLATES) add(meal);
       for (const meal of VEG_PLATES) add(meal);
       for (const meal of NO_PREP) add(meal);
     }
     return out.slice(0, count);
   }
 
-  if (!kitchen) {
-    for (const rule of FROM_WHAT_SHE_HAS) {
-      if (rule.test(inventory)) add(rule.meal);
-      if (out.length >= count) return out.slice(0, count);
-    }
+  for (const rule of FROM_WHAT_SHE_HAS) {
+    if (rule.test(inventory)) add(rule.meal);
+    if (out.length >= count) return out.slice(0, count);
+  }
 
-    for (const place of PLACE_PLATES) {
-      if (!place.test(asked)) continue;
-      for (const meal of place.meals) add(meal);
-      if (out.length >= count) return out.slice(0, count);
-    }
+  for (const place of PLACE_PLATES) {
+    if (!place.test(inventory) && !place.test(asked)) continue;
+    for (const meal of place.meals) add(meal);
+    if (out.length >= count) return out.slice(0, count);
   }
 
   const teach = kitchen ? [] : (TEACH_PLATES[topic] || []);
@@ -548,7 +627,7 @@ export function buildCoachFallbackMeals({
       desc: ingredientDesc(meal) || "One of your meals.",
       cal: meal.cal, p: meal.p ?? meal.protein, c: meal.c ?? meal.carbs, f: meal.f ?? meal.fat,
       basedOn: capMealName(meal.name),
-      ingredients: meal.ingredients || [],
+      ingredients: ingredientList(meal),
       fromSaved: true,
     });
     if (out.length >= count) return out.slice(0, count);
@@ -562,7 +641,7 @@ export function buildCoachFallbackMeals({
 
   for (const meal of SAFE_SIMPLE) add(meal);
   for (const meal of VEG_PLATES) add(meal);
-  for (const meal of QUICK_PLATES) add(meal);
+  if (!mealSlot) for (const meal of QUICK_PLATES) add(meal);
   for (const meal of NO_PREP) add(meal);
   if (out.length < count) {
     for (const meal of ALLERGEN_FREE) add(meal);
@@ -577,13 +656,38 @@ export function buildCoachFallbackMeals({
   return last ? [last] : out.slice(0, count);
 }
 
-export function fallbackMealReply(meals) {
-  if ((meals || []).some((meal) => meal?.fromSaved)) return COACH_LOCAL_PICKS_LINE;
+function offerLine(meals) {
   const names = (meals || []).map((meal) => meal.name).filter(Boolean);
   if (!names.length) return "Here's something simple you can make right now.";
   if (names.length === 1) return `Here's ${names[0]}.`;
   if (names.length === 2) return `Here's ${names[0]}, or ${names[1]}.`;
   return `Here's ${names[0]}, ${names[1]}, or ${names[2]}.`;
+}
+
+export function warmMealReply(meals, text = "") {
+  if ((meals || []).some((meal) => meal?.fromSaved)) return COACH_LOCAL_PICKS_LINE;
+  const offer = offerLine(meals);
+  const asked = String(text || "").toLowerCase();
+  let lead = "";
+  if (/\brotisserie\b/.test(asked) || (/\bchicken\b/.test(asked) && /\brice\b/.test(asked))) {
+    lead = "Since you've got chicken and rice already, ";
+  } else if (/\bchipotle\b/.test(asked)) {
+    lead = "At Chipotle, ";
+  } else if (/\bthai\b/.test(asked)) {
+    lead = "For Thai tonight, ";
+  } else if (/\btacos?\b/.test(asked)) {
+    lead = "Yes — tacos work. ";
+  } else if (/\b(don'?t have to cook|no cooking|no[- ]cook)\b/.test(asked)) {
+    lead = "Nothing to cook: ";
+  } else if (asked.trim()) {
+    lead = "Here's something that fits what you asked. ";
+  }
+  if (!lead) return offer;
+  return `${lead}${offer.charAt(0).toLowerCase()}${offer.slice(1)}`;
+}
+
+export function fallbackMealReply(meals, text = "") {
+  return warmMealReply(meals, text);
 }
 
 export function padCoachMeals(meals, {
@@ -679,10 +783,6 @@ export function hideCoachMealMacros(meals) {
   return (meals || []).map((meal) => ({
     ...meal,
     hideMacros: true,
-    cal: 0,
-    p: 0,
-    c: 0,
-    f: 0,
   }));
 }
 

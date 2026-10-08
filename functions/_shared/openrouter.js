@@ -37,7 +37,7 @@ export const COACH_MODEL_CHAIN = [
   "google/gemini-3.1-flash-lite",
 ];
 
-const DEFAULT_TIMEOUT_MS = 24_000;
+const DEFAULT_TIMEOUT_MS = 18_000;
 const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 400;
 

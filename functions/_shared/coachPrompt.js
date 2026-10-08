@@ -171,7 +171,7 @@ function fileBlock(profile, macros, macrosStatus = "approved") {
 - Protein: ${n(macros.protein)} g
 - Carbs: ${n(macros.carbs)} g
 - Fat: ${n(macros.fat)} g`);
-  } else if (hasNumbers && macrosStatus !== "none") {
+  } else if (hasNumbers && macrosStatus !== "none" && macrosStatus !== "outage") {
     parts.push(`## Approved ranges — Callie's numbers for the day. Use them. Do not recite them.
 - Calories: ${n(macros.cal)}
 - Protein: ${n(macros.protein)} g
@@ -195,6 +195,7 @@ ${months} months postpartum. Choose the plate from that. Do not mention her stag
 }
 
 function fineTuningBlock(macrosStatus) {
+  if (macrosStatus === "outage") return "";
   if (macrosStatus === "draft") {
     return `## Fine-tuning
 Callie hasn't finished her numbers. The figures above are working numbers only. Keep portions simple. Make no promises about exact macros. Do not recite them. Start the reply with: "Callie's still fine-tuning your numbers, so here's an easy one for now."`;

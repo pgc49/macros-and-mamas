@@ -19,7 +19,7 @@ const LAND_MEAT = [
 ];
 const FISH = [
   "salmon", "tuna", "halibut", "cod", "fish", "tilapia", "shrimp", "prawn",
-  "crab", "lobster", "shellfish",
+  "crab", "lobster", "shellfish", "nigiri", "sashimi", "poke", "sushi",
 ];
 const EGGS = ["egg", "eggs", "whites"];
 const DAIRY = [
@@ -34,9 +34,9 @@ const ALLERGEN_WORDS = {
   peanuts: ["peanut", "peanuts"],
   tree_nuts: ["almond", "cashew", "walnut", "pecan", "hazelnut", "pistachio", "nut"],
   shellfish: ["shrimp", "prawn", "crab", "lobster", "shellfish"],
-  fish: ["salmon", "tuna", "halibut", "cod", "fish", "tilapia"],
-  gluten: ["wheat", "barley", "rye", "gluten", "sourdough", "bread", "flour", "pasta"],
-  soy: ["soy", "tofu", "tempeh", "edamame"],
+  fish: ["salmon", "tuna", "halibut", "cod", "fish", "tilapia", "nigiri", "sashimi", "poke", "sushi"],
+  gluten: ["wheat", "barley", "rye", "gluten", "sourdough", "bread", "flour", "pasta", "toast", "cracker", "crackers", "tortilla"],
+  soy: ["soy", "tofu", "tempeh", "edamame", "miso", "sofritas"],
   sesame: ["sesame", "tahini"],
 };
 

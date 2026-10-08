@@ -23,6 +23,7 @@ const SLOT_WORDS = [
   // on" unrecognisable and sent the one question the bank answers best to the
   // model.
   [/\b(snacks?)( on)?\b/, "snack"],
+  [/\b3\s*a\.?m\.?\b/, "snack"],
 ];
 
 /** Words that never change which answer she wants. */

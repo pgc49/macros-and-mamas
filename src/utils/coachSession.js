@@ -192,7 +192,7 @@ export function buildSuggestedCards(meals, answer, { source = "new", slot = null
   const cardSlot = slot || answer.slot;
   const out = [];
   for (const meal of meals || []) {
-    const card = buildCoachCard({ ...meal, source }, answer.budget, {
+    const card = buildCoachCard({ ...meal, source: meal.source || source }, answer.budget, {
       likes: answer.prefs?.likes,
       slot: cardSlot,
       over: answer.over,

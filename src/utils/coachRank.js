@@ -448,6 +448,7 @@ function skipKey(name) {
   return String(name || "")
     .toLowerCase()
     .replace(/\s·\s[\d.]+×$/i, "")
+    .replace(/\s·\s(?:half portion|[\d.]+ servings)$/i, "")
     .replace(/\s*\([^)]*\)/g, "")
     .replace(/\s+/g, " ")
     .trim();

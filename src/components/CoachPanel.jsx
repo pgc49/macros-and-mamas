@@ -24,7 +24,7 @@ import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, isCrisisUrgent, isMealAsk, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
-import { alignReplyToMeals, buildCoachFallbackMeals, hideCoachMealMacros, MEAL_TEACH_TOPICS } from "../../functions/_shared/coachFoodFallback";
+import { alignReplyToMeals, buildCoachFallbackMeals, hideCoachMealMacros, MEAL_TEACH_TOPICS, padCoachMeals } from "../../functions/_shared/coachFoodFallback";
 import { sizeMealsForPersist } from "../../functions/_shared/coachPlateScale";
 import { isWontLogRefusal } from "../../functions/_shared/coachRefusalSummary";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
@@ -363,10 +363,24 @@ export function CoachPanel({
     }
 
     const avoidText = thread.filter((row) => row.role === "mama").map((row) => row.body).join(" ");
-    cards = filterCoachMeals(firstPaintPlates(cards), { text: avoidText, profile, skipNames: skipRef.current });
+    const priorAsks = threadPriorAsks(thread.filter((row) => row.role === "mama").map((row) => row.body));
+    cards = filterCoachMeals(firstPaintPlates(cards), { text: avoidText, profile, skipNames: skipRef.current, priorAsks });
     if (cards.length < 2) {
-      cards = firstPaintPlates(next?.cards?.filter((c) => c.kind === "meal") || cards);
+      cards = firstPaintPlates(sizeMealsForPersist(
+        padCoachMeals(cards, {
+          text: avoidText,
+          slot: next?.slot || answer?.slot,
+          profile,
+          customMeals,
+          skipNames: skipRef.current,
+          priorAsks,
+        }),
+        null,
+        next?.slot || answer?.slot,
+        "new",
+      ));
     }
+    if (wontLogRef.current) cards = hideCoachMealMacros(cards);
     skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
     const loggedOther = loggedSlotsFromEntries(entries).size > 0;
     const day = localDateIso(clock);
@@ -487,11 +501,12 @@ export function CoachPanel({
         skipNames: skipRef.current,
         priorAsks,
       }));
-      if (!cards.length) {
+      if (cards.length < 2) {
         cards = firstPaintPlates(sizeMealsForPersist(
-          buildCoachFallbackMeals({
+          padCoachMeals(cards, {
             text,
             slot: slotForAsk,
+            mode,
             profile,
             customMeals,
             skipNames: skipRef.current,
@@ -502,6 +517,7 @@ export function CoachPanel({
           data.mealSource || "new",
         ));
       }
+      if (wontLogRef.current) cards = hideCoachMealMacros(cards);
       skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
       const body = alignReplyToMeals(data.reply || data.message || "", cards) || (cards.length ? COACH_LOCAL_PICKS_LINE : (
         (mode === "menu" || mode === "kitchen" || images?.length)
@@ -646,7 +662,9 @@ export function CoachPanel({
         : false;
       const extra = (MEAL_TEACH_TOPICS.has(teach.topic) || isMealAsk(text, { topic: teach.topic }))
         ? sizeMealsForPersist(
-          buildCoachFallbackMeals({
+          (wontLogRef.current
+            ? hideCoachMealMacros
+            : (meals) => meals)(buildCoachFallbackMeals({
             text,
             slot: slotNamedInAsk(text) || answerRef.current?.slot,
             topic: teach.topic,
@@ -654,7 +672,7 @@ export function CoachPanel({
             customMeals,
             skipNames: skipRef.current,
             priorAsks: threadPriorAsks(thread.filter((row) => row.role === "mama").map((row) => row.body)),
-          }),
+          })),
           null,
           slotNamedInAsk(text) || answerRef.current?.slot,
           "new",

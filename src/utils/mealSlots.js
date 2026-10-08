@@ -50,6 +50,8 @@ export function guessSlotFromTime(date = new Date()) {
 export const COACH_CLOCK_TZ = "America/Los_Angeles";
 
 function slotFromClockMinutes(mins) {
+  // A 3am grab is a snack, not breakfast.
+  if (mins < 5 * 60) return "snack";
   if (mins < 10 * 60 + 30) return "breakfast";
   if (mins < 14 * 60) return "lunch";
   if (mins < 17 * 60) return "snack";
