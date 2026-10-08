@@ -9,6 +9,7 @@ import { T, F, FD } from "../theme/tokens";
 import { Card, RangeBand, rangeState } from "../components/ui";
 import { formatRangeProgress } from "../utils/rangeProgress";
 import { db } from "../db/db";
+import { AdminCoachConversations } from "./AdminCoachConversations";
 import {
   addDaysIso,
   formatLongDay,
@@ -372,6 +373,8 @@ export function AdminClientTracking({ client }) {
           </div>
         )}
       </Card>
+
+      <AdminCoachConversations client={client} />
     </div>
   );
 }
