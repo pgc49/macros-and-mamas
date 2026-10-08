@@ -4,6 +4,7 @@ import { teachBody } from "../../src/utils/coachTeach.js";
 import {
   buildLocalCoachRecord,
   insertCoachReply,
+  replyLocalDate,
   sanitizeCoachCards,
   sanitizeCoachReply,
 } from "./coachMessages.js";
@@ -97,6 +98,13 @@ describe("buildLocalCoachRecord", () => {
     expect(row.kind).toBe("cards");
     expect(row.payload.cards).toHaveLength(1);
     expect(row.payload.deflect).toBeUndefined();
+  });
+});
+
+describe("replyLocalDate", () => {
+  it("keeps a valid day and otherwise uses the Pacific calendar day", () => {
+    expect(replyLocalDate({ localDate: "2026-10-08" })).toBe("2026-10-08");
+    expect(replyLocalDate({}, new Date("2026-10-02T01:05:00.000Z"))).toBe("2026-10-01");
   });
 });
 

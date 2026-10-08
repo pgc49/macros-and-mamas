@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   COACH_MESSAGE_POLICIES,
   buildAdminCoachView,
+  coachDisplayDate,
   coachFlag,
   flagLabel,
   plainCoachPlates,
@@ -28,27 +29,36 @@ const coach = (id, extra = {}) => ({
   seq: extra.seq ?? 2,
   createdAt: extra.createdAt || "2026-10-08T16:00:01.000Z",
   hiddenAt: extra.hiddenAt || null,
-  localDate: extra.localDate || "2026-10-08",
+  localDate: extra.localDate === undefined ? "2026-10-08" : extra.localDate,
+  source: extra.source || "server",
 });
 
 describe("coachFlag", () => {
-  it("pins stuck, medical, and other deflects from server-verified rows", () => {
-    expect(coachFlag({ kind: "deflect", payload: { deflect: "again" }, source: "server" })).toBe("stuck");
+  it("pins stuck, medical, and other deflects from server-verified coach rows", () => {
+    expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "again" }, source: "server" })).toBe("stuck");
     expect(coachFlag(
-      { kind: "deflect", payload: { deflect: "care" }, source: "server" },
+      { role: "coach", kind: "deflect", payload: { deflect: "care" }, source: "server" },
       "I've been dizzy since this morning",
     )).toBe("medical");
-    expect(coachFlag({ kind: "deflect", payload: { deflect: "ranges" } })).toBe("deflect");
-    expect(coachFlag({ kind: "text", payload: null })).toBeNull();
+    expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "ranges" }, source: "server" })).toBe("deflect");
+    expect(coachFlag({ role: "coach", kind: "text", payload: null, source: "server" })).toBeNull();
   });
 
-  it("does not pin client-recorded payloads", () => {
+  it("does not pin mama rows or client-recorded payloads", () => {
     expect(coachFlag({
+      role: "mama",
+      kind: "deflect",
+      payload: { deflect: "again" },
+      source: "server",
+    })).toBeNull();
+    expect(coachFlag({
+      role: "coach",
       kind: "deflect",
       payload: { deflect: "again" },
       source: "client",
     })).toBeNull();
     expect(coachFlag({
+      role: "coach",
       kind: "deflect",
       payload: { deflect: "care" },
       source: "client",
@@ -113,6 +123,22 @@ describe("buildAdminCoachView", () => {
       ["c2", "medical"],
     ]);
     expect(flagLabel("stuck")).toBe("Stuck");
+  });
+
+  it("keeps a null-date row in seq order and dates it from created_at", () => {
+    const messages = [
+      mama("m1", "what should I eat", { seq: 1, localDate: "2026-10-08" }),
+      coach("c-null", {
+        seq: 2,
+        localDate: null,
+        createdAt: "2026-10-02T01:05:00.000Z",
+        body: "Saved without a day.",
+      }),
+      mama("m2", "thanks", { seq: 3, localDate: "2026-10-08" }),
+    ];
+    const view = buildAdminCoachView(messages);
+    expect(view.thread.map((m) => m.id)).toEqual(["m2", "c-null", "m1"]);
+    expect(coachDisplayDate(messages[1])).toBe("2026-10-01");
   });
 });
 

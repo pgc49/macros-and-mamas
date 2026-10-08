@@ -10,6 +10,7 @@ import { db } from "../db/db";
 import { formatLongDay } from "../utils/dates";
 import {
   buildAdminCoachView,
+  coachDisplayDate,
   deflectLine,
   flagLabel,
   plainCoachPlates,
@@ -98,7 +99,7 @@ function ChatBubble({ message }) {
         ))}
       </div>
       <div style={{ fontSize: 11.5, color: T.inkSoft, marginTop: 3 }}>
-        {message.localDate ? formatLongDay(message.localDate) : ""}
+        {coachDisplayDate(message) ? formatLongDay(coachDisplayDate(message)) : ""}
         {message.createdAt ? ` · ${formatWhen(message.createdAt)}` : ""}
       </div>
     </div>

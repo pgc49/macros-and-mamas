@@ -57,18 +57,20 @@ import {
 } from "../_shared/clientAiAccess.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
-import { hasMenuLink, localCoachTeach, teachBody } from "../../src/utils/coachTeach.js";
+import { hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../../src/utils/coachTeach.js";
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
 import { menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 import {
   buildLocalCoachRecord,
+  countPainTeachToday,
   insertCoachReply,
   persistServerCoach,
 } from "../_shared/coachMessages.js";
 
 const MAX_PER_DAY = 30;
+const MAX_RECORD_PER_DAY = 200;
 const MAX_IMAGES = 3;
 const MAX_IMAGE_CHARS = 2_500_000;
 const MAX_TEXT = 600;
@@ -100,10 +102,10 @@ export async function onRequestPost({ request, env }) {
     if (mode === "record") {
       if (!isAdmin) {
         const limit = await checkAiLimit(env, user.id, {
-          type: "coach",
-          max: MAX_PER_DAY,
-          busyMessage: "I can't think straight right now. Try again in a minute, or pick something from Meals.",
-          spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
+          type: "coach_record",
+          max: MAX_RECORD_PER_DAY,
+          busyMessage: "I couldn't save that just now. Try again in a minute.",
+          spentMessage: "That's enough saved replies for today. Tomorrow's a fresh start.",
         });
         if (!limit.ok) {
           return json(
@@ -146,9 +148,32 @@ export async function onRequestPost({ request, env }) {
     // onto her card. A photo of a menu is a food question by construction, so
     // only free text is classified. Skip-the-log stays a teach, not a card.
     const verdict = mode === "ask" ? classifyAsk(text) : { scope: "food", aside: null };
-    // A third ask of the same pain teach is a stuck escalate. The client
-    // already showed Callie. This post only writes the one-line brief.
-    if (body.escalate === "stuck") {
+
+    if (!isAdmin) {
+      const limit = await checkAiLimit(env, user.id, {
+        type: "coach",
+        max: MAX_PER_DAY,
+        busyMessage: "I can't think straight right now. Try again in a minute, or pick something from Meals.",
+        spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
+      });
+      if (!limit.ok) {
+        return json(
+          { error: "rate_limited", message: limit.message, retry_after_seconds: limit.retryAfterSeconds },
+          429,
+        );
+      }
+    }
+
+    // Callie's own sentences. Same matcher the client runs, so a crafted
+    // request cannot spend a model call on a question she already answered.
+    // A pasted link is not one of those sentences. It is fetched below.
+    const teach = mode === "ask" && !hasMenuLink(text) ? localCoachTeach(text) : null;
+    // Ignore escalate:'stuck' from the client. The third pain ask today
+    // is stuck; anything earlier is just the teach again.
+    const painCount = teach && PAIN_TOPICS.has(teach.topic)
+      ? await countPainTeachToday(env, user.id, teach.topic)
+      : 0;
+    if (teach && PAIN_TOPICS.has(teach.topic) && painCount >= 2) {
       await appendCoachRefusal(env, user.id, { asked: text, escalate: "stuck" });
       await persistServerCoach(env, user.id, body, {
         body: "",
@@ -173,10 +198,6 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
-    // Callie's own sentences. Same matcher the client runs, so a crafted
-    // request cannot spend a model call on a question she already answered.
-    // A pasted link is not one of those sentences. It is fetched below.
-    const teach = mode === "ask" && !hasMenuLink(text) ? localCoachTeach(text) : null;
     if (teach) {
       const reply = teachBody(teach.topic);
       await persistServerCoach(env, user.id, body, {
@@ -194,8 +215,7 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
-    // Fetch before the model, and before the daily cap. A link we cannot
-    // read must not become a guessed dish, and must not spend a call.
+    // A link we cannot read must not become a guessed dish.
     let menuPage = null;
     if (mode === "ask" && hasMenuLink(text)) {
       const link = firstMenuLink(text);
@@ -214,21 +234,6 @@ export async function onRequestPost({ request, env }) {
           reply,
           meals: [],
         });
-      }
-    }
-
-    if (!isAdmin) {
-      const limit = await checkAiLimit(env, user.id, {
-        type: "coach",
-        max: MAX_PER_DAY,
-        busyMessage: "I can't think straight right now. Try again in a minute, or pick something from Meals.",
-        spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
-      });
-      if (!limit.ok) {
-        return json(
-          { error: "rate_limited", message: limit.message, retry_after_seconds: limit.retryAfterSeconds },
-          429,
-        );
       }
     }
 

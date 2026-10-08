@@ -150,6 +150,13 @@ describe("a food question with no food word in it", () => {
     expect(scopeOf("what should I eat after the gym")).toBe("food");
     expect(scopeOf("breakfast ideas I can make while the baby naps")).toBe("food");
   });
+
+  it("does not treat bedtime or baby-routine time as off-scope", () => {
+    expect(scopeOf("something quick with chicken I can make in like 15 min after bedtime")).toBe("food");
+    expect(scopeOf("what should I eat after bedtime")).toBe("food");
+    expect(scopeOf("after the baby goes down what's for dinner")).toBe("food");
+    expect(scopeOf("how do I get the baby to sleep through the night")).toBe("off_topic");
+  });
 });
 
 describe("milk supply", () => {

@@ -1,6 +1,6 @@
 begin;
 
-select plan(22);
+select plan(27);
 
 select ok(
   exists (
@@ -137,7 +137,7 @@ select ok(
 );
 
 insert into public.coach_messages (
-  id, profile_id, role, body, kind, hidden_at, created_at, seq
+  id, profile_id, role, body, kind, hidden_at, created_at, seq, source
 ) values (
   '00000000-0000-0000-0000-0000000000c3',
   '00000000-0000-0000-0000-0000000000a2',
@@ -146,7 +146,8 @@ insert into public.coach_messages (
   'text',
   '2020-01-01T00:00:00Z',
   '2020-01-01T00:00:00Z',
-  1
+  1,
+  'server'
 );
 
 select ok(
@@ -158,6 +159,35 @@ select ok(
       and seq is distinct from 1
   ),
   'insert trigger forces hidden_at null and server created_at/seq'
+);
+
+select is(
+  (select source from public.coach_messages
+    where id = '00000000-0000-0000-0000-0000000000c3'),
+  'client',
+  'mama insert can never produce source=server'
+);
+
+select throws_ok(
+  $$insert into public.coach_messages (profile_id, role, body, kind)
+    values ('00000000-0000-0000-0000-0000000000a2', 'mama', 'forged pin', 'deflect')$$,
+  '42501',
+  null,
+  'mama cannot insert kind=deflect'
+);
+
+select throws_ok(
+  $$insert into public.coach_messages (profile_id, role, body, kind, payload)
+    values (
+      '00000000-0000-0000-0000-0000000000a2',
+      'mama',
+      'forged pin',
+      'text',
+      '{"deflect":"again"}'::jsonb
+    )$$,
+  '42501',
+  null,
+  'mama cannot insert a payload'
 );
 
 select is(
@@ -233,6 +263,25 @@ select is(
       and hidden_at is null),
   1,
   'admin can read another mama thread'
+);
+
+reset role;
+select throws_ok(
+  $$update public.coach_messages
+      set id = '00000000-0000-0000-0000-0000000000ff'
+    where id = '00000000-0000-0000-0000-0000000000c2'$$,
+  'P0001',
+  'coach_messages are append-only except hidden_at',
+  'trigger freezes id on a service-role/owner update'
+);
+
+select throws_ok(
+  $$update public.coach_messages
+      set source = 'server'
+    where id = '00000000-0000-0000-0000-0000000000c2'$$,
+  'P0001',
+  'coach_messages are append-only except hidden_at',
+  'trigger freezes source on a service-role/owner update'
 );
 
 select * from finish();

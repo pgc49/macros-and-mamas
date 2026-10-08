@@ -4,8 +4,10 @@ import {
   appendCoachRefusal,
   coachRefusalLine,
   coachSummaryDateIso,
+  countRefusalDoorLines,
   escalateDoor,
   isLoggingRefusal,
+  MAX_SUMMARY_ESCALATES,
   mergeRefusalSummary,
   preserveRefusalLines,
   refusalDoor,
@@ -102,6 +104,34 @@ describe("a refusal line is factual", () => {
     });
     expect(supply).toEqual({ ok: false, skipped: true });
     expect(posts).toHaveLength(1);
+  });
+
+  it("caps stuck and medical lines so one mama cannot flood the card", async () => {
+    const flooded = Array.from({ length: MAX_SUMMARY_ESCALATES }, (_, i) => (
+      `Coach refused (medical): ask ${i}`
+    )).join("\n");
+    expect(countRefusalDoorLines(flooded, "medical")).toBe(MAX_SUMMARY_ESCALATES);
+    const env = {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service",
+    };
+    const posts = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (String(url).includes("client_summaries") && init?.method === "POST") {
+        posts.push(JSON.parse(init.body));
+        return new Response(null, { status: 201 });
+      }
+      if (String(url).includes("client_summaries")) {
+        return new Response(JSON.stringify([{ summary: flooded }]), { status: 200 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+    const result = await appendCoachRefusal(env, "profile-1", {
+      asked: "I've been dizzy since this morning",
+      scope: "urgent",
+    });
+    expect(result).toEqual({ ok: true, capped: true });
+    expect(posts).toHaveLength(0);
   });
 
   it("does not treat a logging refusal as a card for Callie", () => {

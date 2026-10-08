@@ -6,6 +6,7 @@
 
 import { COACH_DEFLECT } from "../content/coachVoice";
 import { isClinicalUrgent } from "../../functions/_shared/coachGuardrails.js";
+import { coachSummaryDateIso } from "../../functions/_shared/coachRefusalSummary.js";
 
 export const COACH_MESSAGE_POLICIES = {
   select: "coach_messages_select_own_visible_or_admin",
@@ -22,7 +23,7 @@ export function priorMamaBody(messages, index) {
 }
 
 export function isServerVerified(message) {
-  return message?.source !== "client";
+  return message?.role === "coach" && message?.source === "server";
 }
 
 export function coachFlag(message, asked = "") {
@@ -33,6 +34,18 @@ export function coachFlag(message, asked = "") {
   if (deflect === "again") return "stuck";
   if (deflect === "care" && isClinicalUrgent(asked)) return "medical";
   return "deflect";
+}
+
+/** Dated rows use local_date. A missing date follows created_at's Pacific day. */
+export function coachDisplayDate(message) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(message?.localDate || ""))) {
+    return message.localDate;
+  }
+  if (message?.createdAt) {
+    const parsed = new Date(message.createdAt);
+    if (!Number.isNaN(parsed.getTime())) return coachSummaryDateIso(parsed);
+  }
+  return "";
 }
 
 export function flagLabel(flag) {

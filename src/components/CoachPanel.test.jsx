@@ -15,6 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { CoachPanel } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
 import { COACH_COPY, COACH_DEFLECT } from "../content/coachVoice";
+import { localDateIso } from "../utils/dates";
 
 // jsdom has no canvas, so the real downscale resolves null and no preview
 // would ever render here.
@@ -600,7 +601,6 @@ describe("what isn't the coach's goes to Callie", () => {
       ["can I lower my calories", COACH_DEFLECT.ranges.line],
       ["when does my plan end", COACH_DEFLECT.admin.line],
       ["what workout should I do today", COACH_DEFLECT.offTopic.line],
-      ["I feel awful about what I ate", COACH_DEFLECT.care.line],
     ];
 
     for (const [question, line] of ordinary) {
@@ -625,6 +625,21 @@ describe("what isn't the coach's goes to Callie", () => {
     expect(postCoach).toHaveBeenCalledWith({
       mode: "ask",
       text: "I've been dizzy since this morning",
+      localDate: localDateIso(),
+    });
+
+    cleanup();
+    const guiltCoach = vi.fn();
+    renderPanel({ postCoach: guiltCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I feel awful about what I ate" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.care.line);
+    expect(guiltCoach).toHaveBeenCalledWith({
+      mode: "ask",
+      text: "I feel awful about what I ate",
+      localDate: localDateIso(),
     });
   });
 
@@ -682,7 +697,8 @@ describe("what isn't the coach's goes to Callie", () => {
 
   it("answers eating-out and skip-dinner in Callie's words, without a request", async () => {
     const postCoach = vi.fn();
-    renderPanel({ postCoach });
+    const onAppendMessage = vi.fn();
+    renderPanel({ postCoach, onAppendMessage });
 
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
       target: { value: "should I skip dinner, I'm way over" },
@@ -709,7 +725,13 @@ describe("what isn't the coach's goes to Callie", () => {
       mode: "ask",
       text: "should I skip dinner, I'm way over",
       escalate: "stuck",
+      localDate: localDateIso(),
     });
+    const coachRecords = onAppendMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.role === "coach");
+    expect(coachRecords.filter((message) => message.template === "local.teach")).toHaveLength(2);
+    expect(coachRecords.some((message) => message.kind === "deflect" || message.template === "local.text")).toBe(false);
   });
 
   it("sends a pasted menu link to be read, and shows only what comes back", async () => {

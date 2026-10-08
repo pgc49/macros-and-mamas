@@ -21,7 +21,7 @@ import { cardsWithShownReason, firstPaintPlates } from "../utils/coachRank";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
-import { classifyAsk, deflectForScope, isClinicalUrgent, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
+import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
 import { downscaleImage } from "../utils/imageDownscale";
 import { localDateIso } from "../utils/dates";
@@ -342,7 +342,7 @@ export function CoachPanel({
   // append a stuck or medical brief. A failure here does not take Message
   // Callie away. Supply, care, and off-scope stay in the thread only.
   const noteEscalation = (asked, escalate) => {
-    const payload = { mode: "ask", text: asked };
+    const payload = { mode: "ask", text: asked, localDate: localDateIso(clock) };
     if (escalate) payload.escalate = escalate;
     Promise.resolve(postCoach?.(payload)).catch(() => {});
   };
@@ -366,7 +366,7 @@ export function CoachPanel({
     const verdict = classifyAsk(text);
     push({ role: "mama", body: text });
     if (verdict.scope === "urgent") {
-      if (isClinicalUrgent(text)) noteEscalation(text);
+      noteEscalation(text);
       push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) }, { persist: false });
       return;
     }
@@ -377,7 +377,7 @@ export function CoachPanel({
     if (teach) {
       if (PAIN_TOPICS.has(teach.topic) && countTeachInThread(thread, teach.topic) >= 2) {
         noteEscalation(text, "stuck");
-        push({ role: "coach", body: "", kind: "deflect", deflect: "again" });
+        push({ role: "coach", body: "", kind: "deflect", deflect: "again" }, { persist: false });
         return;
       }
       const carbsShort = answer?.bands

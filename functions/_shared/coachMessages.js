@@ -10,6 +10,7 @@
 
 import { COACH_COPY } from "../../src/content/coachVoice.js";
 import { teachBody } from "../../src/utils/coachTeach.js";
+import { coachSummaryDateIso } from "./coachRefusalSummary.js";
 
 const COACH_KINDS = new Set(["text", "cards", "deflect", "photo", "read"]);
 const LOCAL_TEMPLATES = new Set([
@@ -138,9 +139,10 @@ export function buildLocalCoachRecord(body = {}) {
   };
 }
 
-export function replyLocalDate(body) {
+export function replyLocalDate(body, now = new Date()) {
   const day = String(body?.localDate || "").trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return day;
+  return coachSummaryDateIso(now);
 }
 
 export async function insertCoachReply(env, userId, message) {
@@ -168,7 +170,7 @@ export async function insertCoachReply(env, userId, message) {
       body: row.body,
       kind: row.kind,
       payload: row.payload,
-      local_date: row.local_date,
+      local_date: row.local_date || coachSummaryDateIso(),
     }),
   });
   if (!write.ok) {
@@ -176,6 +178,25 @@ export async function insertCoachReply(env, userId, message) {
     return { ok: false };
   }
   return { ok: true };
+}
+
+export async function countPainTeachToday(env, userId, topic, now = new Date()) {
+  if (!userId || !topic) return 0;
+  const base = (env?.SUPABASE_URL || env?.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env?.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key) return 0;
+  const day = coachSummaryDateIso(now);
+  const url = `${base}/rest/v1/coach_messages?profile_id=eq.${encodeURIComponent(userId)}`
+    + `&local_date=eq.${encodeURIComponent(day)}&role=eq.coach&select=payload`;
+  const read = await fetch(url, {
+    headers: { apikey: key, authorization: `Bearer ${key}` },
+  });
+  if (!read.ok) return 0;
+  const rows = await read.json().catch(() => []);
+  if (!Array.isArray(rows)) return 0;
+  return rows.filter((row) => (
+    row?.payload?.teach === topic || row?.payload?.deflect === topic
+  )).length;
 }
 
 export async function persistServerCoach(env, userId, requestBody, message) {

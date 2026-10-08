@@ -140,6 +140,10 @@ jobs:
             cp supabase/migrations/20261008070000_coach_messages_hide_rpc.sql \
               "$DB_ROOT/supabase/migrations/"
           fi
+          if [ -f supabase/migrations/20261008080000_coach_messages_source_lock.sql ]; then
+            cp supabase/migrations/20261008080000_coach_messages_source_lock.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
           if [ -f supabase/tests/coach_messages_rls.sql ]; then
             cp supabase/tests/coach_messages_rls.sql "$DB_ROOT/supabase/tests/"
           fi

@@ -35,6 +35,8 @@ function mockSupabase({
   role = "client",
   macros = true,
   callsUsed = 0,
+  recordCallsUsed = 0,
+  thread = [],
   pages = null,
   profile = null,
   macrosRow = null,
@@ -49,9 +51,10 @@ function mockSupabase({
       return new Response(JSON.stringify([{ paid, refunded: false, role }]), { status: 200 });
     }
     if (value.includes("estimate_calls") && init?.method !== "POST") {
+      const used = value.includes("type=eq.coach_record") ? recordCallsUsed : callsUsed;
       return new Response("[]", {
         status: 200,
-        headers: { "content-range": `0-0/${callsUsed}` },
+        headers: { "content-range": `0-0/${used}` },
       });
     }
     if (value.includes("estimate_calls")) return new Response(null, { status: 201 });
@@ -67,6 +70,9 @@ function mockSupabase({
       return new Response(JSON.stringify([row]), { status: 200 });
     }
     if (value.includes("custom_meals")) return new Response(JSON.stringify(customMeals), { status: 200 });
+    if (value.includes("coach_messages") && init?.method !== "POST") {
+      return new Response(JSON.stringify(thread), { status: 200 });
+    }
     if (pages) {
       for (const [host, page] of Object.entries(pages)) {
         if (!value.includes(host)) continue;
@@ -355,7 +361,6 @@ describe("what comes back", () => {
     expect(data.reply).toMatch(/couldn't open that link/i);
     expect(data.reply).toMatch(/photo/i);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
-    expect(postedCalls()).toHaveLength(0);
   });
 
   it("does not fetch a private address pasted as a menu", async () => {
@@ -370,7 +375,6 @@ describe("what comes back", () => {
     const data = await resp.json();
     expect(data.teach).toBe("menuClosed");
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
-    expect(postedCalls()).toHaveLength(0);
     const hosts = globalThis.fetch.mock.calls.map(([url]) => String(url));
     expect(hosts.some((url) => url.includes("169.254"))).toBe(false);
   });
@@ -594,7 +598,7 @@ describe("the model ask sees the file the ranker sees", () => {
 });
 
 describe("an escalate lands on her card", () => {
-  function summaryFetch() {
+  function summaryFetch({ thread = [] } = {}) {
     let row = {
       summary: "Callie already wrote this.",
       suggested_touch: "Say hi.",
@@ -609,6 +613,13 @@ describe("an escalate lands on her card", () => {
       if (value.includes("select=paid,refunded,role")) {
         return new Response(JSON.stringify([{ paid: true, refunded: false, role: "client" }]), { status: 200 });
       }
+      if (value.includes("estimate_calls") && init?.method !== "POST") {
+        return new Response("[]", {
+          status: 200,
+          headers: { "content-range": "0-0/0" },
+        });
+      }
+      if (value.includes("estimate_calls")) return new Response(null, { status: 201 });
       if (value.includes("client_summaries") && init?.method === "POST") {
         const body = JSON.parse(init.body);
         posts.push(body);
@@ -618,6 +629,10 @@ describe("an escalate lands on her card", () => {
       if (value.includes("client_summaries")) {
         return new Response(JSON.stringify([row]), { status: 200 });
       }
+      if (value.includes("coach_messages") && init?.method !== "POST") {
+        return new Response(JSON.stringify(thread), { status: 200 });
+      }
+      if (value.includes("coach_messages")) return new Response(null, { status: 201 });
       return new Response("[]", { status: 200 });
     });
     return posts;
@@ -698,7 +713,12 @@ describe("an escalate lands on her card", () => {
   });
 
   it("appends a stuck brief on the third pain teach and does not wipe the seed", async () => {
-    const posts = summaryFetch();
+    const posts = summaryFetch({
+      thread: [
+        { role: "coach", payload: { teach: "neverSkip" } },
+        { role: "coach", payload: { teach: "neverSkip" } },
+      ],
+    });
     const stuck = await onRequestPost({
       request: request({ mode: "ask", text: "should I skip dinner", escalate: "stuck" }),
       env,
@@ -709,6 +729,18 @@ describe("an escalate lands on her card", () => {
     expect(posts[0].summary.startsWith("Callie already wrote this.")).toBe(true);
     expect(posts[0].summary).toContain("Coach refused (stuck): should I skip dinner");
     expect(posts[0].suggested_touch).toBe("Say hi.");
+  });
+
+  it("ignores a client stuck flag when she has not asked three times", async () => {
+    const posts = summaryFetch({ thread: [] });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "should I skip dinner", escalate: "stuck" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.teach).toBe("neverSkip");
+    expect(data.deflect).toBeUndefined();
+    expect(posts).toHaveLength(0);
   });
 
   it("does not write a summary for an ordinary refuse", async () => {
@@ -839,8 +871,23 @@ describe("record persists a coach reply with the service role", () => {
     expect(posts[0].payload.cards[0].name).toBe("Chicken bowl");
   });
 
-  it("rate-limits record the same as a model call", async () => {
+  it("does not spend the model cap on a local record", async () => {
     mockSupabase({ callsUsed: 30 });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "record",
+        template: "local.cards",
+        payload: { cards: [{ name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }] },
+        localDate: "2026-10-08",
+      }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    expect(coachMessagePosts()).toHaveLength(1);
+  });
+
+  it("rate-limits record on its own generous cap", async () => {
+    mockSupabase({ recordCallsUsed: 200 });
     const resp = await onRequestPost({
       request: request({
         mode: "record",
@@ -885,6 +932,32 @@ describe("ask persists the server's own reply", () => {
     expect(posts[0].source).toBe("server");
     expect(posts[0].body).toBe(data.reply);
     expect(posts[0].payload.teach).toBe("neverSkip");
+  });
+
+  it("defaults a missing localDate to the Pacific day", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-02T01:05:00.000Z"));
+    try {
+      mockSupabase();
+      const resp = await onRequestPost({
+        request: request({ mode: "ask", text: "I've been dizzy since this morning" }),
+        env,
+      });
+      expect(resp.status).toBe(200);
+      expect(coachMessagePosts()[0].local_date).toBe("2026-10-01");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not write a refusal when she is already at the cap", async () => {
+    mockSupabase({ callsUsed: 30 });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "I've been dizzy since this morning" }),
+      env,
+    });
+    expect(resp.status).toBe(429);
+    expect(coachMessagePosts()).toHaveLength(0);
   });
 
   it("writes a model reply from its own output", async () => {

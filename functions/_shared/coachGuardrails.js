@@ -135,6 +135,8 @@ const FOOD_ASK = new RegExp(
     "\\bprotein\\b", "\\bcarbs?\\b", "\\bcalories\\b", "\\btakeout\\b", "\\btake[- ]out\\b",
     "\\bgrocer", "\\bdelivery\\b", "\\bdoordash\\b", "\\buber eats\\b", "\\bgrubhub\\b",
     "\\bhave for\\b", "\\bportions?\\b", "\\bserving\\b", "\\bplate\\b", "\\bdish\\b",
+    "\\bleftovers?\\b", "\\bchicken\\b", "\\bturkey\\b", "\\bsalmon\\b", "\\beggs?\\b",
+    "\\byogurt\\b", "\\bpasta\\b", "\\brice\\b",
   ].join("|"),
   "i",
 );
@@ -153,8 +155,8 @@ const OFF_TOPIC = [
   // Fitness
   /\b(workout|exercise|gym|cardio|lifting|weights|treadmill|yoga|pilates|peloton)\b/,
   /\b(steps|running|jogging) (goal|target|per day)\b/,
-  // Sleep, the baby, the house
-  /\bsleep(ing)?\b/, /\bnaps?\b/, /\bbedtime\b/, /\binsomnia\b/,
+  // Sleep trouble and baby-care gear — not ordinary time-of-day or routine.
+  /\bcan'?t sleep\b/, /\bsleep through the night\b/, /\bsleep training\b/, /\binsomnia\b/,
   /\b(daycare|teething|diapers?|stroller|car seat|nursery)\b/,
   // Screens and downtime
   /\b(tv|netflix|movie|watch|podcast|playlist)\b/,

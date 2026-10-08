@@ -58,6 +58,16 @@ export function coachRefusalLine(asked, door) {
   return `Coach refused (${door}): ${question}`;
 }
 
+/** One mama cannot flood Callie's card with the same door all day. */
+export const MAX_SUMMARY_ESCALATES = 5;
+
+export function countRefusalDoorLines(summary, door) {
+  const prefix = `Coach refused (${door}):`;
+  return String(summary || "")
+    .split("\n")
+    .filter((line) => line.startsWith(prefix)).length;
+}
+
 export function mergeRefusalSummary(existing, line) {
   const prior = String(existing || "").trim();
   const next = String(line || "").trim();
@@ -119,6 +129,9 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
   const rows = await read.json().catch(() => null);
   if (!Array.isArray(rows)) return { ok: false };
   const existing = rows[0] || null;
+  if (countRefusalDoorLines(existing?.summary, door) >= MAX_SUMMARY_ESCALATES) {
+    return { ok: true, capped: true };
+  }
   const summary = mergeRefusalSummary(existing?.summary, line);
   if (existing && summary === String(existing.summary || "").trim()) {
     return { ok: true, unchanged: true };
