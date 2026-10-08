@@ -193,8 +193,8 @@ select is(
 select throws_ok(
   $$insert into public.coach_messages (profile_id, role, body, kind)
     values ('00000000-0000-0000-0000-0000000000a2', 'mama', 'forged pin', 'deflect')$$,
-  '42501',
-  null,
+  'P0001',
+  'mama coach_messages kind must be text or photo',
   'mama cannot insert kind=deflect'
 );
 
@@ -207,8 +207,8 @@ select throws_ok(
       'text',
       '{"deflect":"again"}'::jsonb
     )$$,
-  '42501',
-  null,
+  'P0001',
+  'mama coach_messages payload must be empty',
   'mama cannot insert a payload'
 );
 
