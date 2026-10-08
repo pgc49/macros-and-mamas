@@ -1132,6 +1132,22 @@ describe("ask persists the server's own reply", () => {
 });
 
 describe("cost", () => {
+  it("does not cache a reply by requestId — a reuse still spends one model call", async () => {
+    mockSupabase();
+    modelReturns({ scope: "food", reply: "The chicken bowl fits.", meals: [] });
+    const first = await onRequestPost({
+      request: request({ mode: "ask", text: "dinner ideas", requestId: "ask-1" }),
+      env,
+    });
+    const second = await onRequestPost({
+      request: request({ mode: "ask", text: "dinner ideas", requestId: "ask-1" }),
+      env,
+    });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(openrouter.callOpenRouter).toHaveBeenCalledTimes(2);
+  });
+
   it("stops her at the daily cap", async () => {
     mockSupabase({ callsUsed: 30 });
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });

@@ -160,7 +160,7 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
     }),
   }).catch(() => null);
   if (!inserted || !inserted.ok) {
-    if (inserted?.status === 409 && ticket) return { ok: true, reused: true };
+    // A 409 on request_id is not a reuse. The RPC is the only reuse path.
     console.error(`${type} rate limit reserve failed`, inserted?.status);
     return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
   }

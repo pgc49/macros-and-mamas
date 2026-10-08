@@ -234,6 +234,8 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
+    // A reused requestId is a second try at the same ask, not a cached
+    // reply. The reserve allows one extra model call; we do not skip it.
     if (!isAdmin) {
       const limit = await checkAiLimit(env, user.id, {
         type: "coach",

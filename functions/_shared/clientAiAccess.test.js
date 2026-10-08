@@ -91,7 +91,7 @@ describe("checkAiLimit reserves before the model", () => {
     expect(globalThis.fetch.mock.calls.filter(([url]) => String(url).includes("estimate_calls") && !String(url).includes("rpc"))).toHaveLength(0);
   });
 
-  it("reuses the same request id instead of billing twice", async () => {
+  it("treats a fallback 409 on request_id as busy, not a reuse", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       if (String(url).includes("rpc/reserve_estimate_call")) {
         return new Response("missing", { status: 404 });
@@ -108,6 +108,6 @@ describe("checkAiLimit reserves before the model", () => {
       busyMessage: "Try again.",
       requestId: "ask-1",
     });
-    expect(limit).toEqual({ ok: true, reused: true });
+    expect(limit).toEqual({ ok: false, message: "Try again.", retryAfterSeconds: 60 });
   });
 });
