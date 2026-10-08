@@ -76,9 +76,9 @@ async function alreadyEmailedThisHour(env, userId, ticket) {
       request_id: ticket,
     }),
   }).catch(() => null);
-  if (!inserted) return false;
+  if (!inserted || (inserted.status !== 409 && !inserted.ok)) return "failed";
   if (inserted.status === 409) return true;
-  return !inserted.ok;
+  return false;
 }
 
 async function loadMamaFirstName(env, userId) {
@@ -107,8 +107,15 @@ export async function notifyCrisisEmail(env, {
   const to = callieOpsEmail(env);
   if (!to || !userId) return { ok: false, skipped: true };
   const ticket = crisisEmailHourKey(userId, now);
-  if (await alreadyEmailedThisHour(env, userId, ticket)) {
-    return { ok: true, skipped: "hourly" };
+  const hourly = await alreadyEmailedThisHour(env, userId, ticket);
+  if (hourly === true) return { ok: true, skipped: "hourly" };
+  if (hourly === "failed") {
+    await captureCoachWorkerFailure(env, {
+      userId,
+      kind: "crisis-email",
+      detail: "crisis email dedupe insert failed",
+    });
+    return { ok: false, error: "dedupe" };
   }
   const name = first || await loadMamaFirstName(env, userId);
   const adminUrl = `${adminPortalUrl(env)}?client=${encodeURIComponent(userId)}`;

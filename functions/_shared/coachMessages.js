@@ -263,12 +263,12 @@ export function painTeachCounts(rows, topic) {
   const list = Array.isArray(rows) ? rows : [];
   const match = (row) => row?.payload?.teach === topic || row?.payload?.deflect === topic;
   const server = list.filter((row) => row?.source === "server" && match(row)).length;
-  const client = Math.min(2, list.filter((row) => row?.source === "client" && match(row)).length);
+  const client = list.filter((row) => row?.source === "client" && match(row)).length;
   return { server, client, total: server + client };
 }
 
 export function isStuckPainCount(counts) {
-  return Boolean(counts && counts.total >= 2 && counts.server >= 1);
+  return Boolean(counts && counts.server >= 2);
 }
 
 export async function countPainTeachToday(env, userId, topic, now = new Date()) {

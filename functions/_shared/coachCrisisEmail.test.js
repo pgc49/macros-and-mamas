@@ -97,6 +97,30 @@ describe("notifyCrisisEmail", () => {
     vi.restoreAllMocks();
   });
 
+  it("does not send when the hourly dedupe insert fails", async () => {
+    const send = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
+    const result = await notifyCrisisEmail({
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service",
+    }, {
+      userId: USER_ID,
+      asked: "I want to die",
+      first: "Sam",
+      now: NOW,
+      send,
+      enabled: true,
+    });
+    expect(result).toEqual({ ok: false, error: "dedupe" });
+    expect(send).not.toHaveBeenCalled();
+    expect(openrouter.logAiFailure).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      userId: USER_ID,
+      kind: "crisis-email",
+      detail: "crisis email dedupe insert failed",
+    }));
+    vi.restoreAllMocks();
+  });
+
   it("logs a failed send", async () => {
     const send = vi.fn(async () => ({ data: null, error: { message: "resend down" } }));
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));

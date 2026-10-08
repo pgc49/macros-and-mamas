@@ -83,7 +83,8 @@ declare
   n integer;
   next_summary text;
 begin
-  if p_profile_id is null or nullif(btrim(p_line), '') is null or nullif(btrim(p_door), '') is null then
+  p_line := left(btrim(p_line), 300);
+  if p_profile_id is null or nullif(p_line, '') is null or nullif(btrim(p_door), '') is null then
     return jsonb_build_object('ok', false, 'skipped', true);
   end if;
 
@@ -111,10 +112,18 @@ begin
     return jsonb_build_object('ok', true, 'capped', true);
   end if;
 
-  next_summary := case
-    when nullif(btrim(coalesce(existing_summary, '')), '') is null then p_line
-    else left(existing_summary || E'\n' || p_line, 4000)
-  end;
+  if nullif(btrim(coalesce(existing_summary, '')), '') is null then
+    next_summary := p_line;
+  else
+    next_summary := existing_summary || E'\n' || p_line;
+    while length(next_summary) > 4000 loop
+      if position(E'\n' in next_summary) = 0 then
+        next_summary := p_line;
+        exit;
+      end if;
+      next_summary := substring(next_summary from position(E'\n' in next_summary) + 1);
+    end loop;
+  end if;
 
   insert into public.client_summaries as cs (profile_id, for_date, summary, suggested_touch, model)
   values (p_profile_id, p_for_date, next_summary, existing_touch, existing_model)

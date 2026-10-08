@@ -1,6 +1,6 @@
 begin;
 
-select plan(38);
+select plan(42);
 
 select ok(
   exists (
@@ -373,6 +373,76 @@ select ok(
 select ok(
   not has_function_privilege('authenticated', 'public.append_coach_refusal_line(uuid, date, text, text, integer)', 'execute'),
   'authenticated cannot execute append_coach_refusal_line'
+);
+
+create table if not exists public.client_summaries (
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  for_date date not null,
+  summary text not null,
+  suggested_touch text,
+  model text,
+  created_at timestamptz not null default now(),
+  primary key (profile_id, for_date)
+);
+
+select is(
+  (
+    public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a2',
+      '2026-10-08',
+      'Coach refused (crisis): ' || repeat('x', 400),
+      'crisis',
+      10
+    )->>'ok'
+  ),
+  'true',
+  'append_coach_refusal_line writes a clipped crisis line'
+);
+
+select is(
+  (
+    select length(summary)
+    from public.client_summaries
+    where profile_id = '00000000-0000-0000-0000-0000000000a2'
+      and for_date = '2026-10-08'
+  ),
+  300,
+  'append_coach_refusal_line clips p_line to 300 before any use'
+);
+
+insert into public.client_summaries (profile_id, for_date, summary)
+values (
+  '00000000-0000-0000-0000-0000000000a3',
+  '2026-10-09',
+  'DROP-ME' || repeat('z', 388) || E'\n'
+    || (select string_agg(lpad(i::text, 395, 'o'), E'\n') from generate_series(2, 10) as i)
+);
+
+select is(
+  (
+    public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a3',
+      '2026-10-09',
+      'Coach refused (crisis): newest-crisis-must-survive',
+      'crisis',
+      10
+    )->>'ok'
+  ),
+  'true',
+  'append_coach_refusal_line keeps a crisis line that would overflow 4000'
+);
+
+select ok(
+  (
+    select
+      length(summary) <= 4000
+      and summary like '%Coach refused (crisis): newest-crisis-must-survive'
+      and position('DROP-ME' in summary) = 0
+    from public.client_summaries
+    where profile_id = '00000000-0000-0000-0000-0000000000a3'
+      and for_date = '2026-10-09'
+  ),
+  'overflow drops the oldest lines and keeps the newest crisis'
 );
 
 select * from finish();

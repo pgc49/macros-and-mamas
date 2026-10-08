@@ -907,12 +907,11 @@ describe("an escalate lands on her card", () => {
     expect(posts[0].suggested_touch).toBe("Say hi.");
   });
 
-  it("pins Stuck when two client teaches sit next to one server-verified ask", async () => {
+  it("does not pin Stuck on real ask + recorded teach + real ask", async () => {
     mockSupabase({
       thread: [
-        { role: "coach", source: "client", payload: { teach: "neverSkip" } },
-        { role: "coach", source: "client", payload: { teach: "neverSkip" } },
         { role: "coach", source: "server", payload: { teach: "neverSkip" } },
+        { role: "coach", source: "client", payload: { teach: "neverSkip" } },
       ],
     });
     const resp = await onRequestPost({
@@ -920,8 +919,10 @@ describe("an escalate lands on her card", () => {
       env,
     });
     const data = await resp.json();
-    expect(data.deflect).toBe("again");
-    expect(summaryPosts()[0].summary).toContain("Coach refused (stuck): should I skip dinner");
+    expect(data.teach).toBe("neverSkip");
+    expect(data.deflect).toBeUndefined();
+    expect(coachMessagePosts()[0].source).toBe("server");
+    expect(summaryPosts()).toHaveLength(0);
   });
 
   it("does not mint a Stuck pin from two recorded client teaches plus one real ask", async () => {

@@ -213,10 +213,9 @@ describe("mama insert contract", () => {
 });
 
 describe("countPainTeachToday", () => {
-  it("counts up to two client teaches plus every server teach", async () => {
+  it("pins Stuck from two server asks, never from recorded client teaches", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify([
-      { source: "client", payload: { teach: "neverSkip" } },
-      { source: "client", payload: { teach: "neverSkip" } },
+      { source: "server", payload: { teach: "neverSkip" } },
       { source: "client", payload: { teach: "neverSkip" } },
       { source: "server", payload: { teach: "neverSkip" } },
     ]), { status: 200 }));
@@ -225,9 +224,13 @@ describe("countPainTeachToday", () => {
       SUPABASE_SERVICE_ROLE_KEY: "service-key",
     };
     const count = await countPainTeachToday(env, "mama-1", "neverSkip", new Date("2026-10-08T18:00:00.000Z"));
-    expect(count).toEqual({ server: 1, client: 2, total: 3 });
+    expect(count).toEqual({ server: 2, client: 1, total: 3 });
     expect(isStuckPainCount(count)).toBe(true);
     expect(String(fetchMock.mock.calls[0][0])).not.toContain("source=eq.server");
+    expect(isStuckPainCount(painTeachCounts([
+      { source: "server", payload: { teach: "neverSkip" } },
+      { source: "client", payload: { teach: "neverSkip" } },
+    ], "neverSkip"))).toBe(false);
     expect(isStuckPainCount(painTeachCounts([
       { source: "client", payload: { teach: "neverSkip" } },
       { source: "client", payload: { teach: "neverSkip" } },
