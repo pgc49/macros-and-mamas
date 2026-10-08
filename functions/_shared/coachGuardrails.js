@@ -258,6 +258,9 @@ const MEAL_INTENT = [
   /\bhaven'?t eaten\b/,
   /\bwhat'?s good at\b/,
   /\bgood option\b/,
+  /\bwhat (can|should|could|do) i make\b/,
+  /\bthis is what i have\b/,
+  /\bwhat i have\b/,
 ];
 
 /**
@@ -298,7 +301,7 @@ function hits(patterns, text) {
  *   something the coach shouldn't speak to — she gets her cards and one
  *   honest line, rather than a dead end.
  */
-export function classifyAsk(raw) {
+export function classifyAsk(raw, { mode = "ask" } = {}) {
   const text = String(raw || "").toLowerCase().trim();
   if (!text) return { scope: "food", aside: null };
 
@@ -326,6 +329,9 @@ export function classifyAsk(raw) {
   if (hits(EXERCISE_CAL, text)) return { scope: "off_topic", aside: null };
   if (foodAsk || (guilt && nextMeal)) return foodWithAside(text, guilt, nextMeal);
   if (hits(OFF_TOPIC, text)) return { scope: "off_topic", aside: null };
+  // A kitchen or menu photo plus a "what can I make" caption is food,
+  // even when the caption itself has no food word.
+  if (mode === "kitchen" || mode === "menu") return { scope: "food", aside: null };
 
   // No refusal matched and no food word either. The model looks at it.
   return { scope: "unclear", aside: null };

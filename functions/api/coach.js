@@ -350,7 +350,7 @@ export async function onRequestPost({ request, env }) {
     // Classify free text on ask and on a photo note. A symptom typed under
     // a menu shot must still reach Callie. An empty photo note stays food.
     const verdict = (mode === "ask" || text.length >= 2)
-      ? classifyAsk(text)
+      ? classifyAsk(text, { mode: photoMode })
       : { scope: "food", aside: null };
 
     // Crisis must persist before any profile read. A thrown file load

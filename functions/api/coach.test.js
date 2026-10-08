@@ -582,6 +582,24 @@ describe("what comes back", () => {
     expect(coachMessagePosts()).toHaveLength(1);
   });
 
+  it("treats a kitchen photo plus a what-can-I-make caption as food", async () => {
+    mockSupabase();
+    modelReturns({ scope: "food", reply: "From what you have.", meals: [] });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "kitchen",
+        text: "this is what I have, what can I make",
+        images: [{ image_b64: "abc", media_type: "image/jpeg" }],
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.scope === "food" || data.meals.length >= 2).toBe(true);
+    expect(data.deflect).toBeFalsy();
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("fills plates for a kitchen photo with only a short note", async () => {
     mockSupabase();
     modelReturns({ scope: "food", reply: "", meals: [] });

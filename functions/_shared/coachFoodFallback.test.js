@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { macrosPlausible } from "./coachGuardrails.js";
 import {
+  alignReplyToMeals,
   buildCoachFallbackMeals,
   ensureFoodMeals,
   fallbackMealReply,
 } from "./coachFoodFallback.js";
+import { mealHaystack } from "./coachMealFilter.js";
 
 describe("buildCoachFallbackMeals", () => {
   it("builds a veggie scramble from eggs and vegetables", () => {
@@ -55,6 +57,32 @@ describe("buildCoachFallbackMeals", () => {
     expect(meals.every((meal) => !/peanut/i.test(`${meal.name} ${meal.desc}`))).toBe(true);
   });
 
+  it("uses thread-wide constraints when the phone drops already-suggested plates", () => {
+    const chickenSkip = [
+      "Grilled chicken and rice",
+      "Leftover chicken and rice",
+      "Chicken thighs and rice",
+    ];
+    const noChicken = buildCoachFallbackMeals({
+      text: "something else, I had chicken at lunch too",
+      slot: "dinner",
+      skipNames: chickenSkip,
+      priorAsks: ["chicken dinner"],
+    });
+    expect(noChicken.length).toBeGreaterThanOrEqual(2);
+    expect(noChicken.every((meal) => !/chicken/i.test(mealHaystack(meal)))).toBe(true);
+
+    const noEggs = buildCoachFallbackMeals({
+      text: "no eggs, what about breakfast",
+      slot: "breakfast",
+      skipNames: ["Sausage, egg + whites", "Veggie scramble"],
+      priorAsks: ["I had leftover chicken last night"],
+    });
+    expect(noEggs.length).toBeGreaterThanOrEqual(2);
+    expect(noEggs.every((meal) => !/\begg/i.test(mealHaystack(meal)))).toBe(true);
+    expect(noEggs.every((meal) => !/leftover chicken/i.test(meal.name))).toBe(true);
+  });
+
   it("includes a no-prep plate when her hands are full", () => {
     const meals = buildCoachFallbackMeals({
       text: "one-handed, I'm holding the baby and too tired to cook",
@@ -89,5 +117,22 @@ describe("ensureFoodMeals", () => {
     expect(filled.reply).toBe("Here are a few easy ones that work for today.");
     expect(filled.reply).not.toMatch(/Grandma's Secret Casserole XYZ/);
     expect(fallbackMealReply(filled.meals)).not.toMatch(/Grandma's Secret/);
+  });
+});
+
+describe("alignReplyToMeals", () => {
+  it("keeps warm prose and only rewrites a trailing offer that names a dropped plate", () => {
+    const meals = [
+      { name: "Turkey skillet" },
+      { name: "Salmon and rice" },
+    ];
+    expect(alignReplyToMeals(
+      "Those leftovers can wait. Here's Grilled chicken and rice, Turkey skillet, or Salmon and rice.",
+      meals,
+    )).toBe("Those leftovers can wait. Or Turkey skillet or Salmon and rice.");
+    expect(alignReplyToMeals(
+      "Here's Grilled chicken and rice, Leftover chicken and rice, or Chicken thighs and rice.",
+      meals,
+    )).toBe("Here's Turkey skillet, or Salmon and rice.");
   });
 });

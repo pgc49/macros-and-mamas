@@ -1521,4 +1521,134 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     await waitFor(() => expect(onHideMessage).toHaveBeenCalledWith(["mama-1"]));
     await waitFor(() => expect(screen.queryByText("what should I eat")).toBeNull());
   });
+
+  it("keeps Remove on the latest mama bubble only until she hovers an older one", async () => {
+    const onHideMessage = vi.fn(async () => true);
+    renderPanel({
+      postCoach: vi.fn(),
+      onHideMessage,
+      onLoadThread: async () => [
+        { id: "mama-old", role: "mama", body: "first ask", kind: "text", payload: null },
+        { id: "coach-1", role: "coach", body: "First answer.", kind: "text", payload: null },
+        { id: "mama-new", role: "mama", body: "second ask", kind: "text", payload: null },
+        { id: "coach-2", role: "coach", body: "Second answer.", kind: "text", payload: null },
+      ],
+    });
+    await screen.findByText("Second answer.");
+    const removes = screen.getAllByRole("button", { name: COACH_COPY.removeMessage });
+    expect(removes).toHaveLength(1);
+    expect(removes[0].closest("[data-coach-mama-bubble]")?.getAttribute("data-coach-mama-bubble")).toBe("mama-new");
+    fireEvent.mouseEnter(document.querySelector('[data-coach-mama-bubble="mama-old"]'));
+    const afterHover = screen.getAllByRole("button", { name: COACH_COPY.removeMessage });
+    expect(afterHover.map((btn) => btn.closest("[data-coach-mama-bubble]")?.getAttribute("data-coach-mama-bubble")))
+      .toEqual(expect.arrayContaining(["mama-old", "mama-new"]));
+  });
+
+  it("phone fallback drops already-suggested chicken and keeps the reply on the cards", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Those leftovers can wait. Here's Grilled chicken and rice, Leftover chicken and rice, or Chicken thighs and rice.",
+      meals: [
+        { name: "Grilled chicken and rice", cal: 430, p: 45, c: 30, f: 12, desc: "Chicken and rice." },
+        { name: "Leftover chicken and rice", cal: 430, p: 45, c: 30, f: 12, desc: "The leftover chicken." },
+        { name: "Chicken thighs and rice", cal: 480, p: 38, c: 40, f: 16, desc: "Thighs and rice." },
+      ],
+    }));
+    renderPanel({
+      postCoach,
+      onLoadThread: async () => [
+        { id: "m1", role: "mama", body: "chicken dinner", kind: "text", payload: null },
+        {
+          id: "c1",
+          role: "coach",
+          body: "Earlier chicken.",
+          kind: "cards",
+          payload: {
+            cards: [
+              { name: "Grilled chicken and rice", title: "Grilled chicken and rice", source: "new", cal: 430, p: 45, c: 30, f: 12, reason: "Fits." },
+              { name: "Leftover chicken and rice", title: "Leftover chicken and rice", source: "new", cal: 430, p: 45, c: 30, f: 12, reason: "Fits." },
+              { name: "Chicken thighs and rice", title: "Chicken thighs and rice", source: "new", cal: 480, p: 38, c: 40, f: 16, reason: "Fits." },
+            ],
+          },
+        },
+      ],
+    });
+    await screen.findByText("Earlier chicken.");
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "something else, I had chicken at lunch too" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalled());
+    await waitFor(() => expect(latestCardTitles().length).toBeGreaterThanOrEqual(2));
+    expect(latestCardTitles().join(" ")).not.toMatch(/chicken/i);
+    expect(document.body.textContent).not.toMatch(/Here's Grilled chicken and rice/);
+    expect(document.body.textContent).not.toMatch(/Leftover chicken and rice, or Chicken thighs/);
+  });
+
+  it("treats I'm not tracking today as no-logging", async () => {
+    const postCoach = vi.fn(async () => ({ ok: true, reply: "Okay. We'll skip the numbers.", meals: [] }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm not tracking today" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalled());
+    expect(postCoach.mock.calls[0][0].context.notLogging).toBe(true);
+  });
+
+  it("does not set lunch from a past-tense mention at dinner time", async () => {
+    const dinner = new Date("2026-09-05T01:42:00.000Z");
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Here's Turkey skillet, or Salmon and rice.",
+      meals: [
+        { name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, desc: "Turkey." },
+        { name: "Salmon and rice", cal: 440, p: 38, c: 30, f: 14, desc: "Salmon." },
+      ],
+    }));
+    renderPanel({
+      now: dinner,
+      postCoach,
+      onLoadThread: async () => [
+        { id: "m1", role: "mama", body: "dinner ideas", kind: "text", payload: null },
+        { id: "c1", role: "coach", body: "Earlier dinner.", kind: "text", payload: null },
+      ],
+    });
+    await screen.findByText("Earlier dinner.");
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "something else, I had chicken at lunch too" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalled());
+    expect(postCoach.mock.calls[0][0].slot).toBe("dinner");
+    expect(postCoach.mock.calls[0][0].slot).not.toBe("lunch");
+  });
+
+  it("sends a kitchen photo plus a what-can-I-make caption as kitchen food", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "From what you have.",
+      mealSource: "kitchen",
+      meals: [
+        { name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, desc: "Ground turkey and peppers." },
+        { name: "Rice and beans", cal: 380, p: 16, c: 62, f: 6, desc: "Rice and beans." },
+      ],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askKitchen }));
+    fireEvent.change(document.querySelector('input[type="file"]'), {
+      target: { files: [new File(["x"], "fridge.jpg", { type: "image/jpeg" })] },
+    });
+    await screen.findByAltText("Kitchen photo");
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "this is what I have, what can I make" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalled());
+    expect(postCoach.mock.calls[0][0].mode).toBe("kitchen");
+    expect(postCoach.mock.calls[0][0].text).toBe("this is what I have, what can I make");
+    await screen.findByText("From what you have.");
+  });
 });

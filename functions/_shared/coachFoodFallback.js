@@ -484,6 +484,7 @@ export function buildCoachFallbackMeals({
   priorAsks = [],
 } = {}) {
   const asked = constraintTextFrom(text, priorAsks).toLowerCase();
+  const inventory = String(text || "").toLowerCase();
   const diet = profile?.diet || "";
   const constraints = extractAskConstraints(asked, profile);
   const skip = (skipNames || []).map((item) => String(item || "").trim()).filter(Boolean);
@@ -526,7 +527,7 @@ export function buildCoachFallbackMeals({
 
   if (!kitchen) {
     for (const rule of FROM_WHAT_SHE_HAS) {
-      if (rule.test(asked)) add(rule.meal);
+      if (rule.test(inventory)) add(rule.meal);
       if (out.length >= count) return out.slice(0, count);
     }
 
@@ -685,32 +686,50 @@ export function hideCoachMealMacros(meals) {
   }));
 }
 
-function escapeMealName(name) {
-  return String(name || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const OFFER_LEAD = /^(here(?:'s| is| are)|or(?: if you(?:'d| would) rather,?)?)\s+/i;
+
+function offerBits(chunk) {
+  return String(chunk || "")
+    .replace(/^(here(?:'s| is| are)|or(?: if you(?:'d| would) rather,?)?)\s+/i, "")
+    .split(/\s*,\s*|\s+or\s+/i)
+    .map((part) => part.trim().replace(/[.!?]+$/, ""))
+    .filter(Boolean);
 }
 
-/** Keep a reply only when every plate it names is actually shown. */
+function offerNamesUnshown(sentence, shown) {
+  return offerBits(sentence).some((bit) => {
+    const base = mealBaseName(bit);
+    if (!base || base.length < 4) return false;
+    if (/^(a |an |the )?(next one|few that|few|something|simple plate)/i.test(base)) return false;
+    return ![...shown].some((name) => name === base || name.includes(base) || base.includes(name));
+  });
+}
+
+function trailingOrOffer(meals) {
+  if ((meals || []).some((meal) => meal?.fromSaved)) return COACH_LOCAL_PICKS_LINE;
+  const names = (meals || []).map((meal) => meal.name).filter(Boolean);
+  if (!names.length) return "Here's something simple you can make right now.";
+  if (names.length === 1) return `Or ${names[0]}.`;
+  if (names.length === 2) return `Or ${names[0]} or ${names[1]}.`;
+  return `Or ${names[0]} or ${names[1]}.`;
+}
+
+/** Keep warm prose. Rewrite only an offer sentence that names a dropped plate. */
 export function alignReplyToMeals(reply, meals) {
   const list = (meals || []).filter((meal) => meal?.name);
   const text = String(reply || "").trim();
   if (!list.length) return text;
   if (!text) return fallbackMealReply(list);
   const shown = new Set(list.map((meal) => mealBaseName(meal.name)));
-  const here = text.match(/here(?:'s| is| are)\s+([^.]+)/i);
-  if (here) {
-    const bits = here[1].split(/\s*,\s*|\s+or\s+/i).map((part) => part.trim().replace(/[.!?]+$/, ""));
-    for (const bit of bits) {
-      const base = mealBaseName(bit);
-      if (!base || base.length < 4) continue;
-      if (/^(a |an |the )?(next one|few that|few|something|simple plate)/i.test(base)) continue;
-      if (![...shown].some((name) => name === base || name.includes(base) || base.includes(name))) {
-        return fallbackMealReply(list);
-      }
-    }
-  }
-  for (const meal of list) {
-    const re = new RegExp(`\\b${escapeMealName(meal.name)}\\b`, "i");
-    if (re.test(text)) shown.add(mealBaseName(meal.name));
-  }
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  let changed = false;
+  const next = sentences.map((sentence, i) => {
+    const isOffer = OFFER_LEAD.test(sentence) || /^here(?:'s| is| are)\b/i.test(sentence);
+    if (!isOffer || !offerNamesUnshown(sentence, shown)) return sentence;
+    changed = true;
+    if (i === sentences.length - 1 && sentences.length > 1) return trailingOrOffer(list);
+    return fallbackMealReply(list);
+  });
+  if (changed) return next.join(" ").trim();
   return text;
 }

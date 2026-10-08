@@ -80,10 +80,21 @@ function normalize(raw) {
  * Returns `null` when the message needs the model, which is the default for
  * anything not recognised outright.
  */
+/**
+ * Past-tense meal talk ("I had chicken at lunch") is history, not the
+ * slot she wants now. Follow-ups inherit the previous slot instead.
+ */
+function stripPastSlotMentions(text) {
+  return String(text || "")
+    .replace(/\b(?:already\s+)?(?:had|ate|eaten)\b[^.?]{0,48}\b(?:breakfast|lunch|dinner|supper|snack|morning|tonight|evening|midday)\b/g, " ")
+    .replace(/\bfor\s+(?:breakfast|lunch|dinner|supper|snack)\s+i\s+(?:had|ate)\b/g, " ")
+    .replace(/\b(?:breakfast|lunch|dinner|supper|snack)\s+(?:was|already)\b/g, " ");
+}
+
 /** Slot she named in the question, or null. Beats the clock when she said tonight. */
 export function slotNamedInAsk(raw) {
-  const text = normalize(raw);
-  if (!text) return null;
+  const text = stripPastSlotMentions(normalize(raw));
+  if (!text.trim()) return null;
   for (const [pattern, name] of SLOT_WORDS) {
     if (pattern.test(text)) return normalizeSlot(name);
   }
@@ -94,11 +105,10 @@ export function localCoachIntent(raw) {
   const text = normalize(raw);
   if (!text || text.length > 60) return null;
 
-  let slot = null;
-  let stripped = text;
-  for (const [pattern, name] of SLOT_WORDS) {
+  const slot = slotNamedInAsk(raw);
+  let stripped = stripPastSlotMentions(text);
+  for (const [pattern] of SLOT_WORDS) {
     if (!pattern.test(stripped)) continue;
-    slot = normalizeSlot(name);
     stripped = stripped.replace(pattern, " ");
     break;
   }

@@ -32,6 +32,12 @@ describe("what the coach answers", () => {
   it("treats a bare greeting as food, not as off topic", () => {
     expect(scopeOf("")).toBe("food");
   });
+
+  it("treats a kitchen photo caption as food even without a food word", () => {
+    expect(scopeOf("this is what I have, what can I make")).toBe("food");
+    expect(classifyAsk("this is what I have, what can I make", { mode: "kitchen" }).scope).toBe("food");
+    expect(isMealAsk("this is what I have, what can I make", { mode: "kitchen" })).toBe(true);
+  });
 });
 
 describe("what the coach hands to Callie", () => {

@@ -37,6 +37,15 @@ function avoidsFood(asked, food) {
     || new RegExp(`\\bno (?:more )?${word}\\b`).test(asked);
 }
 
+/** She already ate it — do not treat that as inventory or suggest it again. */
+function alreadyHadFood(asked, food) {
+  const word = String(food || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (!word) return false;
+  return new RegExp(
+    `\\b(?:already\\s+)?(?:had|ate|eaten)\\b[^.?]{0,40}\\b${word}\\b`,
+  ).test(asked);
+}
+
 export function extractAskConstraints(text = "", profile = null) {
   const asked = String(text || "").toLowerCase();
   const allergens = Array.isArray(profile?.allergens)
@@ -49,12 +58,21 @@ export function extractAskConstraints(text = "", profile = null) {
     noDairy: allergens.includes("dairy")
       || /\bdairy[- ]free\b/.test(asked)
       || /\bdairy[- ]free\b/.test(allergenNote)
+      || /\bno dairy\b/.test(asked)
       || /\bi'?m dairy free\b/.test(asked),
-    noCottage: /\bcottage cheese\b/.test(avoids) || avoidsFood(asked, "cottage cheese"),
-    noChicken: avoidsFood(asked, "chicken"),
-    noEggs: avoidsFood(asked, "eggs") || avoidsFood(asked, "egg") || /\bbesides eggs\b/.test(asked),
-    noSalmon: avoidsFood(asked, "salmon"),
-    noSmoothie: /\bnot the smoothie\b/.test(asked) || /\bno smoothie\b/.test(asked),
+    noCottage: /\bcottage cheese\b/.test(avoids)
+      || avoidsFood(asked, "cottage cheese")
+      || alreadyHadFood(asked, "cottage cheese"),
+    noChicken: avoidsFood(asked, "chicken") || alreadyHadFood(asked, "chicken"),
+    noEggs: avoidsFood(asked, "eggs")
+      || avoidsFood(asked, "egg")
+      || alreadyHadFood(asked, "eggs")
+      || alreadyHadFood(asked, "egg")
+      || /\bbesides eggs\b/.test(asked),
+    noSalmon: avoidsFood(asked, "salmon") || alreadyHadFood(asked, "salmon"),
+    noSmoothie: /\bnot the smoothie\b/.test(asked)
+      || /\bno smoothie\b/.test(asked)
+      || alreadyHadFood(asked, "smoothie"),
     noSpinach: /\bdon'?t have spinach\b/.test(asked) || /\bno spinach\b/.test(asked),
     vegetarian: /\bvegetarian\b/.test(asked) || /\bmake it vegetarian\b/.test(asked) || diet === "vegetarian",
   };
@@ -75,8 +93,14 @@ export function mealBreaksConstraints(meal, constraints = {}, skipNames = []) {
   return false;
 }
 
+export const COACH_THREAD_ASK_LIMIT = 10;
+
+export function threadPriorAsks(asks = [], { limit = COACH_THREAD_ASK_LIMIT } = {}) {
+  return (Array.isArray(asks) ? asks : []).map((row) => String(row || "").trim()).filter(Boolean).slice(-limit);
+}
+
 export function constraintTextFrom(text = "", priorAsks = []) {
-  return [text, ...(Array.isArray(priorAsks) ? priorAsks : [])].filter(Boolean).join(" ");
+  return [text, ...threadPriorAsks(priorAsks)].filter(Boolean).join(" ");
 }
 
 /** Saved diet + allergens + Food prefs avoids. Same gate the ranker uses. */

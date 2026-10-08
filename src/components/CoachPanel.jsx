@@ -28,7 +28,7 @@ import { alignReplyToMeals, buildCoachFallbackMeals, hideCoachMealMacros, MEAL_T
 import { sizeMealsForPersist } from "../../functions/_shared/coachPlateScale";
 import { isWontLogRefusal } from "../../functions/_shared/coachRefusalSummary";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
-import { filterCoachMeals } from "../../functions/_shared/coachMealFilter";
+import { filterCoachMeals, threadPriorAsks } from "../../functions/_shared/coachMealFilter";
 import { COACH_LOCAL_PICKS_LINE } from "../content/coachVoice";
 import { captureCoachFailure } from "../utils/coachFailure";
 import { downscaleImage } from "../utils/imageDownscale";
@@ -166,6 +166,7 @@ export function CoachPanel({
   const [photo, setPhoto] = useState(null);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [activeMamaId, setActiveMamaId] = useState(null);
   const fileRef = useRef(null);
   const photoKindRef = useRef("menu");
   const endRef = useRef(null);
@@ -253,6 +254,8 @@ export function CoachPanel({
           requestId: r.requestId || r.payload?.requestId || null,
         }));
         setThread(pairCoachThread(mapped));
+        const seen = mapped.flatMap((row) => (row.cards || []).map((card) => card.name).filter(Boolean));
+        if (seen.length) skipRef.current = [...new Set([...skipRef.current, ...seen])];
         if (mapped.some((row) => String(row.body || "").includes(COACH_COPY.skipNotice))) {
           skipLectureRef.current = localDateIso(clock);
         }
@@ -444,7 +447,7 @@ export function CoachPanel({
           snackCount: fit?.budget?.snackCount,
           turnedDown: turnedDownRef.current,
           alreadySuggested: skipRef.current,
-          priorAsks: thread.filter((row) => row.role === "mama").map((row) => row.body).filter(Boolean).slice(-6),
+          priorAsks: threadPriorAsks(thread.filter((row) => row.role === "mama").map((row) => row.body)),
           notLogging: wontLogRef.current,
         }),
         localDate: localDateIso(clockRef.current),
@@ -477,7 +480,7 @@ export function CoachPanel({
         source: data.mealSource || "new",
         slot: slotForAsk,
       }));
-      const priorAsks = thread.filter((row) => row.role === "mama").map((row) => row.body).filter(Boolean);
+      const priorAsks = threadPriorAsks(thread.filter((row) => row.role === "mama").map((row) => row.body));
       let cards = firstPaintPlates(filterCoachMeals(suggested, {
         text,
         profile,
@@ -491,6 +494,7 @@ export function CoachPanel({
             slot: slotForAsk,
             profile,
             customMeals,
+            skipNames: skipRef.current,
             priorAsks,
           }),
           null,
@@ -591,6 +595,8 @@ export function CoachPanel({
             slot: slotNamedInAsk(text) || answerRef.current?.slot,
             profile,
             customMeals,
+            skipNames: skipRef.current,
+            priorAsks: threadPriorAsks(thread.filter((row) => row.role === "mama").map((row) => row.body)),
             safe: verdict.scope === "urgent" || verdict.scope === "supply" || verdict.scope === "disordered" || verdict.scope === "medication",
           })),
           null,
@@ -646,7 +652,8 @@ export function CoachPanel({
             topic: teach.topic,
             profile,
             customMeals,
-            priorAsks: thread.filter((row) => row.role === "mama").map((row) => row.body),
+            skipNames: skipRef.current,
+            priorAsks: threadPriorAsks(thread.filter((row) => row.role === "mama").map((row) => row.body)),
           }),
           null,
           slotNamedInAsk(text) || answerRef.current?.slot,
@@ -757,6 +764,13 @@ export function CoachPanel({
     () => replayCoachMessages(thread, customMeals),
     [thread, customMeals],
   );
+  const lastPersistedMamaId = useMemo(() => {
+    for (let i = shownThread.length - 1; i >= 0; i -= 1) {
+      const row = shownThread[i];
+      if (row?.role === "mama" && row.id && !String(row.id).startsWith("c_")) return row.id;
+    }
+    return null;
+  }, [shownThread]);
 
   if (!answer) {
     return (
@@ -875,7 +889,19 @@ export function CoachPanel({
               )}
 
               {m.body && (
-                <div style={bubble(m.role === "mama")}>
+                <div
+                  data-coach-mama-bubble={m.role === "mama" ? m.id : undefined}
+                  onMouseEnter={m.role === "mama" && onHideMessage && m.id && !String(m.id).startsWith("c_")
+                    ? () => setActiveMamaId(m.id)
+                    : undefined}
+                  onMouseLeave={m.role === "mama"
+                    ? () => setActiveMamaId((id) => (id === m.id ? null : id))
+                    : undefined}
+                  onClick={m.role === "mama" && onHideMessage && m.id && !String(m.id).startsWith("c_") && m.id !== lastPersistedMamaId
+                    ? () => setActiveMamaId(m.id)
+                    : undefined}
+                  style={bubble(m.role === "mama")}
+                >
                   {m.photoThumb && (
                     <img
                       src={`data:image/jpeg;base64,${m.photoThumb}`}
@@ -891,21 +917,25 @@ export function CoachPanel({
                     />
                   )}
                   <div>{m.body}</div>
-                  {m.role === "mama" && onHideMessage && m.id && !String(m.id).startsWith("c_") && (
+                  {m.role === "mama" && onHideMessage && m.id && !String(m.id).startsWith("c_")
+                    && (m.id === lastPersistedMamaId || activeMamaId === m.id) && (
                     <button
                       type="button"
-                      onClick={() => hideMessage(m.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        hideMessage(m.id);
+                      }}
                       style={{
-                        marginTop: 8,
+                        marginTop: 4,
                         fontFamily: F,
-                        fontSize: 12,
-                        fontWeight: 700,
+                        fontSize: 11,
+                        fontWeight: 500,
                         padding: 0,
                         border: "none",
                         background: "none",
                         color: T.inkSoft,
                         cursor: "pointer",
-                        textDecoration: "underline",
+                        opacity: 0.72,
                       }}
                     >
                       {COACH_COPY.removeMessage}

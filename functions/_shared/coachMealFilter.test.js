@@ -21,6 +21,9 @@ describe("extractAskConstraints", () => {
     expect(extractAskConstraints("I'm so sick of eggs and chicken").noEggs).toBe(true);
     expect(extractAskConstraints("i hate salmon, what else is good").noSalmon).toBe(true);
     expect(extractAskConstraints("I'm dairy free, breakfast ideas?").noDairy).toBe(true);
+    expect(extractAskConstraints("no dairy please").noDairy).toBe(true);
+    expect(extractAskConstraints("something else, I had chicken at lunch too").noChicken).toBe(true);
+    expect(extractAskConstraints("I already had eggs this morning").noEggs).toBe(true);
     expect(extractAskConstraints("make it vegetarian").vegetarian).toBe(true);
     expect(extractAskConstraints("I don't have spinach, swap?").noSpinach).toBe(true);
     expect(extractAskConstraints("dinner", {

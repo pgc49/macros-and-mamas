@@ -22,6 +22,14 @@ describe("asks the coach answers without a model", () => {
     expect(slotNamedInAsk("I have chicken and rice, what should I eat")).toBeNull();
   });
 
+  it("does not take a slot from a past-tense meal mention", () => {
+    expect(slotNamedInAsk("something else, I had chicken at lunch too")).toBeNull();
+    expect(slotNamedInAsk("I had eggs at breakfast already")).toBeNull();
+    expect(slotNamedInAsk("I ate leftover salmon for dinner")).toBeNull();
+    expect(slotNamedInAsk("I had chicken at lunch, what should I eat for dinner")).toBe("dinner");
+    expect(slotNamedInAsk("had lunch already, what's for dinner")).toBe("dinner");
+  });
+
   it("carries the slot she named", () => {
     expect(localCoachIntent("what should I eat for dinner?")).toMatchObject({
       kind: "cards",
