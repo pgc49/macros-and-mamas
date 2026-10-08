@@ -152,7 +152,7 @@ describe("checkAiLimit reserves before the model", () => {
       busyMessage: "Try again.",
       requestId: "ask-1",
     });
-    expect(limit).toEqual({ ok: false, message: "That's all for today.", retryAfterSeconds: 86400 });
+    expect(limit).toEqual({ ok: false, reason: "spent", message: "That's all for today.", retryAfterSeconds: 86400 });
     expect(globalThis.fetch.mock.calls.filter(([url]) => String(url).includes("estimate_calls") && !String(url).includes("rpc"))).toHaveLength(0);
   });
 
@@ -173,6 +173,6 @@ describe("checkAiLimit reserves before the model", () => {
       busyMessage: "Try again.",
       requestId: "ask-1",
     });
-    expect(limit).toEqual({ ok: false, message: "Try again.", retryAfterSeconds: 60 });
+    expect(limit).toEqual({ ok: false, reason: "outage", message: "Try again.", retryAfterSeconds: 60 });
   });
 });

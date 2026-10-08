@@ -15,7 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import * as Sentry from "@sentry/react";
 import { CoachPanel, pairCoachThread } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
-import { COACH_BUSY_LINE, COACH_COPY, COACH_DEFLECT, COACH_EMERGENCY_LINE } from "../content/coachVoice";
+import { COACH_COPY, COACH_DEFLECT, COACH_EMERGENCY_LINE } from "../content/coachVoice";
 import { localDateIso } from "../utils/dates";
 import { sanitizeCoachCards } from "../../functions/_shared/coachMessages.js";
 
