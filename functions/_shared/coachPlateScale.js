@@ -125,6 +125,24 @@ export function sourceTag(source, slot) {
   return COACH_COPY.sourceNew;
 }
 
+/** Late-day leftover: keep plates that fit, else the 2–3 lightest real ones. */
+export function fitCoachPlates(meals, budget, slot, source = "new") {
+  const fitted = sizeMealsForPersist(meals, budget, slot, source);
+  if (fitted.length >= 2) return fitted;
+  const snacks = sizeMealsForPersist(
+    (meals || []).filter((meal) => (Number(meal?.cal) || 0) > 0 && (Number(meal?.cal) || 9999) <= Math.max(220, Number(budget?.cal) || 0)),
+    budget,
+    "snack",
+    source,
+  );
+  if (snacks.length >= 2) return snacks;
+  const lightest = [...(meals || [])]
+    .filter((meal) => meal?.name)
+    .sort((a, b) => (Number(a.cal) || 0) - (Number(b.cal) || 0))
+    .slice(0, 3);
+  return sizeMealsForPersist(lightest, null, slot, source);
+}
+
 /** Size — or drop — the plate the way the screen does. */
 export function sizeMealsForPersist(meals, budget, slot, source) {
   const out = [];

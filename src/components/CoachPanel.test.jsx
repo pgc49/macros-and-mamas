@@ -1894,7 +1894,7 @@ describe("priority pass: persist, crisis, reload, load error", () => {
 
   it("shows the coach build footer for a pgchammas+ session email", async () => {
     renderPanel({
-      email: "pgchammas+qa-maya2@gmail.com",
+      email: "pgchammas+qa-preview@example.com",
       profile: { first_name: "QA" },
       onLoadThread: async () => [],
     });

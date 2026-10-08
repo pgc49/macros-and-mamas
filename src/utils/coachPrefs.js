@@ -40,9 +40,9 @@ const ALLERGEN_WORDS = {
   peanuts: ["peanut", "peanuts"],
   tree_nuts: ["almond", "cashew", "walnut", "pecan", "hazelnut", "pistachio", "nut"],
   shellfish: ["shrimp", "prawn", "crab", "lobster", "shellfish"],
-  fish: ["salmon", "tuna", "halibut", "cod", "fish", "tilapia", "nigiri", "sashimi", "poke", "sushi"],
-  gluten: ["wheat", "barley", "rye", "gluten", "sourdough", "bread", "flour", "pasta", "toast", "cracker", "crackers", "tortilla", "pizza", "noodles", "noodle", "ramen", "udon", "couscous", "flour tortilla", "lasagna"],
-  soy: ["soy", "tofu", "tempeh", "edamame", "miso", "sofritas"],
+  fish: ["salmon", "tuna", "halibut", "cod", "fish", "tilapia", "nigiri", "sashimi", "poke", "sushi", "anchovy", "caesar"],
+  gluten: ["wheat", "barley", "rye", "gluten", "sourdough", "bread", "flour", "pasta", "toast", "cracker", "crackers", "tortilla", "pizza", "noodles", "noodle", "ramen", "udon", "couscous", "flour tortilla", "lasagna", "english muffin", "muffin", "bun", "wrap", "sandwich"],
+  soy: ["soy", "tofu", "tempeh", "edamame", "miso", "sofritas", "soy sauce", "teriyaki"],
   sesame: ["sesame", "tahini", "hummus"],
 };
 

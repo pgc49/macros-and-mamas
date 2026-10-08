@@ -47,6 +47,7 @@ describe("coachFlag", () => {
       "I've been dizzy since this morning",
     )).toBe("medical");
     expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "emergency" }, source: "server" })).toBe("medical");
+    expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "crisisFollow" }, source: "server" })).toBe("medical");
     expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "medical" }, source: "server" })).toBe("medical");
     expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "ranges" }, source: "server" })).toBe("deflect");
     expect(coachFlag({ role: "coach", kind: "text", payload: null, source: "server" })).toBeNull();

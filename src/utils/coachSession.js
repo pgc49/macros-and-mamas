@@ -231,6 +231,7 @@ export function coachDayForPrompt({
   alreadySuggested = [],
   priorAsks = [],
   notLogging = false,
+  lastCards = [],
 } = {}) {
   const eaten = [];
   for (const entry of entries) {
@@ -296,6 +297,7 @@ export function coachDayForPrompt({
     ),
     notLogging: Boolean(notLogging),
     snackCount: Number.isFinite(snacks) ? Math.max(0, Math.min(4, snacks)) : 1,
+    lastCards: (lastCards || []).filter((card) => card?.name).slice(0, 3),
   };
 }
 

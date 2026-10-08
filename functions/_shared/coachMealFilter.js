@@ -63,6 +63,17 @@ function alreadyHadFood(asked, food) {
   ).test(asked);
 }
 
+/** A newer "I have eggs" / "actually I can have X" clears a temporary no-X. Allergies stay. */
+export function currentRestoresFood(current, food) {
+  const t = String(current || "").toLowerCase();
+  const word = food === "egg" || food === "eggs" ? "eggs?" : String(food || "").replace(/s$/, "s?");
+  if (!t || !word) return false;
+  return new RegExp(
+    `\\b(?:i (?:just )?have|we have|actually i can (?:have|eat)|i can (?:have|eat)|just have|only have)\\b.{0,48}\\b${word}\\b`,
+  ).test(t)
+    || new RegExp(`\\b${word}\\b.{0,28}\\b(?:and (?:veg|vegetables?)|in my fridge|now)\\b`).test(t);
+}
+
 export function extractAskConstraints(text = "", profile = null, { currentAsk = null } = {}) {
   const asked = String(text || "").toLowerCase();
   const current = String(currentAsk != null ? currentAsk : text || "").toLowerCase();
@@ -71,6 +82,7 @@ export function extractAskConstraints(text = "", profile = null, { currentAsk = 
   const avoids = String(profile?.foodAvoids || profile?.food_avoids || "").toLowerCase();
   const allergenNote = String(profile?.allergenNote || profile?.allergen_note || "").toLowerCase();
   const diet = String(profile?.diet || "").toLowerCase();
+  const eggAllergy = allergens.includes("eggs") || allergens.includes("egg");
   return {
     noDairy: allergens.includes("dairy")
       || /\bdairy[- ]free\b/.test(asked)
@@ -86,16 +98,20 @@ export function extractAskConstraints(text = "", profile = null, { currentAsk = 
     noCottage: /\bcottage cheese\b/.test(avoids)
       || avoidsFood(asked, "cottage cheese")
       || alreadyHadFood(current, "cottage cheese"),
-    noChicken: avoidsFood(asked, "chicken") || alreadyHadFood(current, "chicken"),
-    noEggs: allergens.includes("eggs")
-      || allergens.includes("egg")
-      || avoidsFood(asked, "eggs")
-      || avoidsFood(asked, "egg")
-      || alreadyHadFood(current, "eggs")
-      || alreadyHadFood(current, "egg")
-      || /\bbesides eggs\b/.test(asked)
-      || /\bno eggs this week\b/.test(asked),
-    noSalmon: avoidsFood(asked, "salmon") || alreadyHadFood(current, "salmon"),
+    noChicken: (avoidsFood(asked, "chicken") || alreadyHadFood(current, "chicken"))
+      && !currentRestoresFood(current, "chicken"),
+    noEggs: eggAllergy || (
+      (
+        avoidsFood(asked, "eggs")
+        || avoidsFood(asked, "egg")
+        || alreadyHadFood(current, "eggs")
+        || alreadyHadFood(current, "egg")
+        || /\bbesides eggs\b/.test(asked)
+        || /\bno eggs this week\b/.test(asked)
+      ) && !currentRestoresFood(current, "eggs")
+    ),
+    noSalmon: (avoidsFood(asked, "salmon") || alreadyHadFood(current, "salmon"))
+      && !currentRestoresFood(current, "salmon"),
     noSmoothie: /\bnot the smoothie\b/.test(asked)
       || /\bno smoothie\b/.test(asked)
       || alreadyHadFood(current, "smoothie"),

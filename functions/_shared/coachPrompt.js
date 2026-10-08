@@ -86,6 +86,18 @@ export function sanitizeCoachContext(raw) {
     priorAsks: capPriorAskChars(threadPriorAsks(cleanList(raw.priorAsks, 40, 200, { newest: true }), { limit: 8 })),
     notLogging: raw.notLogging === true,
     snackCount: Number.isFinite(snacks) ? Math.max(0, Math.min(4, snacks)) : 1,
+    lastCards: Array.isArray(raw.lastCards)
+      ? raw.lastCards.filter((card) => card?.name).slice(0, 3).map((card) => ({
+        name: String(card.name || "").trim().slice(0, 48),
+        desc: String(card.desc || card.reason || "").trim().slice(0, 200),
+        cal: Number(card.cal) || 0,
+        p: Number(card.p) || 0,
+        c: Number(card.c) || 0,
+        f: Number(card.f) || 0,
+        ingredients: Array.isArray(card.ingredients) ? card.ingredients.slice(0, 8) : [],
+        steps: Array.isArray(card.steps) ? card.steps.slice(0, 6) : [],
+      }))
+      : [],
   };
 }
 

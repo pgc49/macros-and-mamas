@@ -97,7 +97,12 @@ describe("crisis and postpartum red flags", () => {
       expect(escalateDoor(ask, { scope: "urgent" }), ask).toBe("crisis");
     }
     for (const ask of MEDICAL_ASKS) {
-      expect(classifyAsk(ask).scope, ask).toBe("urgent");
+      const scope = classifyAsk(ask).scope;
+      if (ask === "only eating 800 calories") {
+        expect(scope, ask).toBe("disordered");
+        continue;
+      }
+      expect(scope, ask).toBe("urgent");
       expect(isClinicalUrgent(ask), ask).toBe(true);
       expect(isCrisisUrgent(ask), ask).toBe(false);
       expect(escalateDoor(ask, { scope: "urgent" }), ask).toBe("medical");

@@ -53,6 +53,7 @@ export function coachFlag(message, asked = "") {
   if (deflect === "again") return "stuck";
   if (
     deflect === "emergency"
+    || deflect === "crisisFollow"
     || deflect === "medical"
     || (deflect === "care" && isClinicalUrgent(asked))
   ) {
@@ -81,7 +82,12 @@ export function flagLabel(flag) {
 }
 
 export function deflectLine(message) {
-  return coachDeflectLine(message?.payload?.deflect, { noted: message?.payload?.noted === true });
+  const cards = Array.isArray(message?.payload?.cards) ? message.payload.cards : (message?.cards || []);
+  return coachDeflectLine(message?.payload?.deflect || message?.deflect, {
+    noted: message?.payload?.noted === true || message?.noted === true,
+    hasFood: cards.length > 0,
+    weeks: message?.payload?.weeks === true || message?.weeks === true,
+  });
 }
 
 function asDisplayString(value) {

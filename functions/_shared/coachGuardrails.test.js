@@ -79,11 +79,20 @@ describe("what the coach hands to Callie", () => {
     const asks = [
       "is it fine to eat 1000 calories a day?",
       "is 1200 calories ok",
+      "under 1400 calories a day ok?",
       "eating only once a day",
+      "is it ok to eat 1 meal a day while nursing?",
+      "only 2 meals a day?",
       "skip meals",
       "fasting while nursing",
+      "fast 16 hours while breastfeeding",
     ];
     for (const ask of asks) expect(classifyAsk(ask).scope, ask).toBe("disordered");
+  });
+
+  it("keeps a one-off skip dinner tonight as food, not disordered", () => {
+    expect(classifyAsk("just don't eat dinner tonight?").scope).toBe("food");
+    expect(classifyAsk("should I skip dinner tonight?").scope).toBe("food");
   });
 
   it("keeps the two turns after a crisis on 911/988 unless she asks for food", () => {

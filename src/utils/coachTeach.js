@@ -12,6 +12,7 @@
  */
 
 import { COACH_COPY, underDayCopy } from "../content/coachVoice.js";
+import { isSkipTonightAsk } from "../../functions/_shared/coachGuardrails.js";
 
 const TEACH_FIRST = [
   // Only the "should I skip" question. "I skipped lunch, what now" is food.
@@ -33,8 +34,8 @@ const TEACH_FIRST = [
 
   ["sweetener", /\b(artificial sweetener|aspartame|sucralose|stevia|splenda|diet coke|diet pepsi|zero sugar soda)\b/],
 
-  ["waterEat", /\b(should i eat more|drink more water|water or eat more)\b/],
-  ["everyDay", /\b(is this going to be like this every day|like this every day)\b/],
+  ["waterEat", /\b(should i (be )?(eat(ing)?|drink(ing)?) more|eating more or drinking more|drink more water|water or (eat|eating) more)\b/],
+  ["everyDay", /\b(is this going to be like this every day|like this every day|going to be like this)\b/],
   ["underDay", /\b(under (my )?(calories|cals)|calories left|i hit my protein|protein('?s| is) (in|covered|done)|eat more or (leave|stop)|done for (the )?day)\b/],
 ];
 
@@ -134,10 +135,11 @@ export function localCoachTeach(raw) {
   }
   if (menuUnseen(raw)) return { kind: "teach", topic: "menuLink" };
   const text = normalize(raw);
-  if (!text || text.length > 180) return null;
+  if (!text || text.length > 240) return null;
   for (const [topic, pattern] of TEACH_FIRST) {
     if (!pattern.test(text)) continue;
-    if (topic === "alcohol" && /\b(nurs|breastfeed)\b/.test(text)) {
+    if (topic === "neverSkip" && isSkipTonightAsk(raw)) continue;
+    if (topic === "alcohol" && /\b(nurs(?:e|ing|ed)?|breastfeed(?:ing|s)?)\b/.test(text)) {
       return { kind: "teach", topic: "alcoholNursing" };
     }
     return { kind: "teach", topic };
@@ -148,7 +150,7 @@ export function localCoachTeach(raw) {
   if (ITALIAN.test(text)) return { kind: "teach", topic: "italian" };
   if (CHINESE.test(text)) return { kind: "teach", topic: "chinese" };
   if (SUSHI.test(text)) {
-    if (/\b(nurs|breastfeed|raw)\b/.test(text)) return { kind: "teach", topic: "sushiNursing" };
+    if (/\b(nurs(?:e|ing|ed)?|breastfeed(?:ing|s)?|raw)\b/.test(text)) return { kind: "teach", topic: "sushiNursing" };
     return { kind: "teach", topic: "sushi" };
   }
   if (PIZZA_MEAL.some((pattern) => pattern.test(text))) return { kind: "teach", topic: "pizzaMeal" };

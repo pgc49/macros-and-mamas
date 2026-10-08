@@ -1234,6 +1234,31 @@ describe("an escalate lands on her card", () => {
     expect(summaryPosts()).toHaveLength(0);
   });
 
+  it("still pins mood and supply after 20 canned notes", async () => {
+    mockSupabase({ noteCallsUsed: 20 });
+    const mood = await onRequestPost({
+      request: request({ mode: "ask", text: "I've been crying all day" }),
+      env,
+    });
+    const moodData = await mood.json();
+    expect(mood.status).toBe(200);
+    expect(moodData.deflect).toBe("mood");
+    expect(moodData.noted).toBe(true);
+    expect(summaryPosts()).toHaveLength(1);
+    expect(summaryPosts()[0].summary).toContain("Coach refused (mood): I've been crying all day");
+
+    const supply = await onRequestPost({
+      request: request({ mode: "ask", text: "i feel like my milk supply dropped" }),
+      env,
+    });
+    const supplyData = await supply.json();
+    expect(supply.status).toBe(200);
+    expect(supplyData.deflect).toBe("supply");
+    expect(supplyData.noted).toBe(true);
+    expect(summaryPosts()).toHaveLength(2);
+    expect(summaryPosts().at(-1).summary).toContain("Coach refused (supply): i feel like my milk supply dropped");
+  });
+
   it("still shows a canned refuse over the note cap and does not save or append", async () => {
     mockSupabase({ noteCallsUsed: 20 });
     const resp = await onRequestPost({
@@ -1731,9 +1756,10 @@ describe("cost", () => {
     expect(data.meals.length).toBeGreaterThanOrEqual(2);
     expect(String(data.reply || data.message || "")).not.toMatch(/That's all the thinking I've got for today/);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(coachMessagePosts()).toHaveLength(0);
   });
 
-  it("returns picks on 5 over-cap asks and saves at most one row", async () => {
+  it("returns picks on 5 over-cap asks and saves each under the record bucket", async () => {
     mockSupabase({ callsUsed: 30, customMeals: FILE.customMeals });
     const replies = [];
     for (let i = 0; i < 5; i += 1) {
@@ -1749,9 +1775,10 @@ describe("cost", () => {
       const data = await resp.json();
       replies.push(data);
       expect(data.meals.length).toBeGreaterThanOrEqual(2);
+      expect(data.saved).toBe(true);
     }
     expect(replies).toHaveLength(5);
-    expect(coachMessagePosts().filter((row) => row.payload?.limited)).toHaveLength(1);
+    expect(coachMessagePosts().filter((row) => row.payload?.limited).length).toBeGreaterThanOrEqual(5);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
 
@@ -2260,6 +2287,34 @@ describe("reviewer follow-ups", () => {
     expect(data.scope).toBe("urgent");
     expect(data.deflect).toBe("crisisFollow");
     expect(data.meals || []).toEqual([]);
+  });
+
+  it("does not replay a food row when the reused requestId is a crisis ask", async () => {
+    mockSupabase({
+      thread: [{
+        id: "row-food",
+        role: "coach",
+        body: "Here's Chipotle chicken bowl.",
+        kind: "cards",
+        payload: { cards: [{ name: "Chipotle chicken bowl", cal: 520, p: 48, c: 36, f: 14 }] },
+        request_id: "ask-reuse-crisis",
+      }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "I want to die",
+        requestId: "ask-reuse-crisis",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.replayed).toBeUndefined();
+    expect(data.deflect).toBe("emergency");
+    expect(data.reply).toMatch(/988/);
+    expect(data.meals || []).toEqual([]);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(summaryPosts()[0].summary).toContain("Coach refused (crisis): I want to die");
   });
 
   it("replays the same requestId without calling the model or saving again", async () => {

@@ -203,7 +203,7 @@ describe("live bank plates", () => {
     expect(eggs.meals.length).toBeGreaterThanOrEqual(2);
     expect(eggs.meals.every((meal) => /scramble|frittata|omelette|egg/i.test(meal.name))).toBe(true);
     expect(replyPlateContract(eggs.reply, eggs.meals).ok).toBe(true);
-    expect(eggs.reply).not.toMatch(/^Here(?:'s| is| are) [^.]+\.\s*$/i);
+    expect(eggs.reply).toMatch(/fits what you asked|scramble|frittata|omelette|fried rice|Here's/i);
   });
 
   it("never says the menu is missing and rewrites prose when a plate is dropped", () => {

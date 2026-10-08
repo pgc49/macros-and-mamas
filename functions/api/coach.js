@@ -47,6 +47,7 @@ import {
   macrosPlausible,
   replyHasJargon,
   replyIsClean,
+  isSkipTonightAsk,
   scopeIsRefused,
 } from "../_shared/coachGuardrails.js";
 import { askedMealCount, distinctCoachMeals, limitAskMeals } from "../_shared/coachAskMeals.js";
@@ -109,6 +110,7 @@ import {
 import { sizeMealsForPersist } from "../_shared/coachPlateScale.js";
 import { notifyCrisisEmail } from "../_shared/coachCrisisEmail.js";
 import { alignReplyToMeals, ensureFoodMeals, fallbackMealReply, foodQuestionLead, hideCoachMealMacros, keepPlaceMeals, MEAL_TEACH_TOPICS, stripCoachMealMacros } from "../_shared/coachFoodFallback.js";
+import { COACH_FOLLOW_CLOSE, followUpKind, lastCardsFromContext, pickLastCard, spicePlate } from "../_shared/coachFollowUp.js";
 
 let activeEnv = null;
 
@@ -130,7 +132,7 @@ const MAX_RECORD_PER_DAY = 200;
 const MAX_NOTES_PER_DAY = 20;
 const COACH_NOTE_TYPE = "coach_note";
 const COACH_OVER_CAP_TYPE = "coach_over_cap";
-const MAX_OVER_CAP_PER_DAY = 1;
+const MAX_OVER_CAP_PER_DAY = MAX_RECORD_PER_DAY;
 const MAX_IMAGES = 3;
 const MAX_IMAGE_CHARS = 2_500_000;
 const MAX_TEXT = 600;
@@ -145,17 +147,23 @@ function wantsFoodFill(text, { mode, scope, crisis = false, topic = null, priorA
   if (scope === "urgent" || scope === "supply" || scope === "disordered" || scope === "medication") {
     return true;
   }
-  if (isMealAsk(text, { mode, topic }) || isGuiltAsk(text) || isShortFoodAsk(text)) return true;
+  if (isMealAsk(text, { mode, topic }) || isGuiltAsk(text) || isShortFoodAsk(text) || isSkipTonightAsk(text)) return true;
+  const kind = followUpKind(text);
+  if (kind && kind !== "close") return true;
   const t = String(text || "").trim();
   if (t.length <= 80 && (priorAsks || []).some((ask) => isMealAsk(ask))) return true;
   return false;
 }
 
 function coachFillArgs({ text, slot, mode, topic, profile, customMeals, day, reply, safe, iron }) {
+  const lastCards = lastCardsFromContext(day);
+  const follow = followUpKind(text);
+  const keepLast = follow === "pick" || follow === "more" || follow === "spicier";
+  const lastNames = new Set(lastCards.map((card) => String(card.name || "").trim().toLowerCase()));
   const skipNames = [
     ...((day && day.alreadySuggested) || []),
     ...((day && day.turnedDown) || []),
-  ];
+  ].filter((name) => !keepLast || !lastNames.has(String(name || "").trim().toLowerCase()));
   return {
     text,
     slot,
@@ -308,7 +316,11 @@ async function persistCannedCoach(env, userId, body, message, {
   const allowed = await allowCoachNote(env, userId, { isAdmin, requestId });
   const door = escalateDoor(asked, { scope, escalate });
   const crisis = door === "crisis";
-  const pinAnyway = crisis;
+  const pinAnyway = crisis
+    || door === "disordered"
+    || door === "medication"
+    || door === "supply"
+    || door === "mood";
   let noted = false;
   if (door && (allowed || pinAnyway)) {
     const wrote = await appendCoachRefusal(env, userId, { asked, scope, escalate });
@@ -371,10 +383,15 @@ export async function onRequestPost({ request, env, waitUntil }) {
       : requested;
     const isAdmin = access.role === "admin";
     const requestId = clampCoachRequestId(body.requestId);
+    const incomingText = String(body.text || "").trim().slice(0, MAX_TEXT);
+    const crisisAsk = isCrisisUrgent(incomingText);
 
     if (mode !== "record") {
       const existing = await findCoachReplyByRequestId(env, user.id, requestId);
-      if (existing) return json(replaySavedCoach(existing));
+      if (existing) {
+        const savedCrisis = existing.payload?.deflect === "emergency";
+        if (!crisisAsk || savedCrisis) return json(replaySavedCoach(existing));
+      }
     }
 
     // Local cards/read/teach only. The client never sends a model reply
@@ -518,7 +535,120 @@ export async function onRequestPost({ request, env, waitUntil }) {
         mealSource: filled.meals.length ? "new" : undefined,
       });
     }
+    const stealTeach = Boolean(
+      teach
+      && !isCrisisUrgent(text)
+      && !verdict.crisisFollow
+      && verdict.scope !== "disordered"
+      && verdict.scope !== "medication"
+      && verdict.scope !== "supply"
+      && verdict.scope !== "urgent"
+      && !(verdict.scope === "mood" && teach.topic !== "everyDay" && teach.topic !== "waterEat"),
+    );
+    if (stealTeach && teach) {
+      const reply = teachBody(teach.topic, {
+        again: teach.topic === "neverSkip" && painCount.total >= 1,
+        notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
+      });
+      const fillTeach = MEAL_TEACH_TOPICS.has(teach.topic) || isMealAsk(text, { topic: teach.topic });
+      const filled = fillTeach
+        ? ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: teach.topic, reply, day: earlyDay, profile: await getFillProfile() }))
+        : { meals: [], reply };
+      const teachReply = earlyDay?.notLogging ? stripLogNag(filled.reply || reply) : (filled.reply || reply);
+      const persist = await persistCannedCoach(env, user.id, body, {
+        body: teachReply,
+        kind: filled.meals.length ? "cards" : "text",
+        payload: {
+          teach: teach.topic,
+          aside: verdict.aside || null,
+          cards: persistMeals(filled.meals, slot),
+        },
+      }, { isAdmin, requestId, asked: text });
+      return json({
+        ok: true,
+        scope: "food",
+        teach: teach.topic,
+        saved: persist.saved === true,
+        reply: teachReply,
+        meals: filled.meals,
+        mealSource: filled.meals.length ? "new" : undefined,
+        aside: verdict.aside || null,
+      });
+    }
+
+    const follow = followUpKind(text);
+    const lastCards = lastCardsFromContext(earlyDay);
+    if (follow === "close") {
+      const persist = await persistCannedCoach(env, user.id, body, {
+        body: COACH_FOLLOW_CLOSE,
+        kind: "text",
+        payload: { cards: [] },
+      }, { isAdmin, requestId, asked: text });
+      return json({
+        ok: true,
+        scope: "food",
+        saved: persist.saved === true,
+        reply: COACH_FOLLOW_CLOSE,
+        meals: [],
+      });
+    }
+    if (follow && lastCards.length) {
+      let meals = [];
+      let reply = "";
+      if (follow === "pick") {
+        const picked = pickLastCard(text, lastCards);
+        meals = picked ? [picked] : lastCards.slice(0, 1);
+        reply = meals[0]?.name
+          ? `Here's ${meals[0].name}. ${Array.isArray(meals[0].steps) && meals[0].steps[0] ? meals[0].steps[0] : "Same plate as last time."}`
+          : fallbackMealReply(meals, text);
+      } else if (follow === "spicier") {
+        const picked = spicePlate(pickLastCard(text, lastCards) || lastCards[0]);
+        meals = picked ? [picked] : lastCards.slice(0, 1);
+        reply = meals[0]?.name ? `Same plate, spicier: ${meals[0].name}.` : fallbackMealReply(meals, text);
+      } else if (follow === "more") {
+        const filled = ensureFoodMeals(lastCards, coachFillArgs({
+          text: `${text} more like ${lastCards.map((card) => card.name).join(", ")}`,
+          slot,
+          mode,
+          day: earlyDay,
+          profile: await getFillProfile(),
+        }));
+        meals = filled.meals;
+        reply = filled.reply;
+      } else if (follow === "easier") {
+        const filled = ensureFoodMeals([], {
+          ...coachFillArgs({
+            text: "too tired to cook, no cooking, one-handed",
+            slot,
+            mode,
+            day: earlyDay,
+            profile: await getFillProfile(),
+          }),
+          count: 3,
+        });
+        meals = filled.meals;
+        reply = "Something easier: " + (filled.reply || fallbackMealReply(meals, text));
+      }
+      if (meals.length) {
+        reply = alignReplyToMeals(reply, meals);
+        const persist = await persistCannedCoach(env, user.id, body, {
+          body: reply,
+          kind: "cards",
+          payload: { cards: persistMeals(meals, slot) },
+        }, { isAdmin, requestId, asked: text });
+        return json({
+          ok: true,
+          scope: "food",
+          saved: persist.saved === true,
+          reply,
+          meals,
+          mealSource: "new",
+        });
+      }
+    }
+
     if (scopeIsRefused(verdict.scope)) {
+      const weeks = verdict.scope === "mood" && /\b\d+\s*weeks?\b/.test(text);
       const deflect = deflectForScope(verdict.scope, text, {
         follow: verdict.follow === true,
         crisisFollow: verdict.crisisFollow === true,
@@ -537,9 +667,9 @@ export async function onRequestPost({ request, env, waitUntil }) {
           stripNumbers,
         });
       const persist = await persistCannedCoach(env, user.id, body, {
-        body: coachDeflectLine(deflect, { hasFood: filled.meals.length > 0 }),
+        body: "",
         kind: "deflect",
-        payload: { deflect, cards: persistMeals(filled.meals, slot) },
+        payload: { deflect, cards: persistMeals(filled.meals, slot), weeks },
       }, {
         isAdmin,
         requestId,
@@ -550,45 +680,16 @@ export async function onRequestPost({ request, env, waitUntil }) {
         ok: true,
         scope: verdict.scope,
         deflect,
+        weeks,
         reply: coachDeflectLine(deflect, {
           noted: persist.noted === true,
           hasFood: filled.meals.length > 0,
+          weeks,
         }),
         noted: persist.noted === true,
         saved: persist.saved === true,
         meals: filled.meals,
         mealSource: filled.meals.length ? "new" : undefined,
-      });
-    }
-
-    if (teach) {
-      const reply = teachBody(teach.topic, {
-        again: teach.topic === "neverSkip" && painCount.total >= 1,
-        notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
-      });
-      const fillTeach = MEAL_TEACH_TOPICS.has(teach.topic) || isMealAsk(text, { topic: teach.topic });
-      const filled = fillTeach
-        ? ensureFoodMeals([], coachFillArgs({ text, slot, mode, topic: teach.topic, reply, day: earlyDay, profile: await getFillProfile() }))
-        : { meals: [], reply };
-      const teachReply = earlyDay?.notLogging ? stripLogNag(filled.reply || reply) : (filled.reply || reply);
-      await persistCannedCoach(env, user.id, body, {
-        body: teachReply,
-        kind: filled.meals.length ? "cards" : "text",
-        payload: {
-          teach: teach.topic,
-          aside: verdict.aside || null,
-          cards: persistMeals(filled.meals, slot),
-        },
-      }, { isAdmin, requestId, asked: text });
-      return json({
-        ok: true,
-        scope: "food",
-        teach: teach.topic,
-        saved: true,
-        reply: teachReply,
-        meals: filled.meals,
-        mealSource: filled.meals.length ? "new" : undefined,
-        aside: verdict.aside || null,
       });
     }
 
@@ -601,6 +702,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
         || isLowIntakeAsk(text)
         || isNursingHungryAsk(text)
         || isMetaCallieAsk(text)
+        || isSkipTonightAsk(text)
         || knownPlace
       )
     ) {
@@ -627,9 +729,9 @@ export async function onRequestPost({ request, env, waitUntil }) {
         (localLead || filled.reply || "").trim() || fallbackMealReply(meals, text),
         meals,
       );
-      if (isGuiltAsk(text) && meals.length) {
+      if ((isGuiltAsk(text) || isSkipTonightAsk(text)) && meals.length) {
         meals = hideCoachMealMacros(meals);
-        reply = onceLead(reply, COACH_GUILT_LINE);
+        reply = isSkipTonightAsk(text) ? reply : onceLead(reply, COACH_GUILT_LINE);
       }
       if (earlyDay?.notLogging) {
         meals = hideCoachMealMacros(meals);
@@ -774,15 +876,6 @@ export async function onRequestPost({ request, env, waitUntil }) {
         if (earlyDay?.notLogging) meals = hideCoachMealMacros(meals);
         if (outage) {
           const reply = filled.reply || fallbackMealReply(meals, text) || COACH_BUSY_LINE;
-          await persistLater(waitUntil, env, user.id, body, {
-            body: reply,
-            kind: meals.length ? "cards" : "text",
-            payload: {
-              cards: persistMeals(meals, slot),
-              requestId,
-            },
-            requestId,
-          });
           return json({
             ok: true,
             scope: "food",

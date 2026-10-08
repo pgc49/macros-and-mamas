@@ -25,7 +25,7 @@ import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { isFollowUpAsk, isMenuRestaurant, localCoachIntent, restaurantFromAsk, slotNamedInAsk } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, isCrisisUrgent, isMealAsk, isMoodAsk, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
 import { alignReplyToMeals, buildCoachFallbackMeals, hideCoachMealMacros, MEAL_TEACH_TOPICS, padCoachMeals, stripCoachMealMacros } from "../../functions/_shared/coachFoodFallback";
-import { sizeMealsForPersist } from "../../functions/_shared/coachPlateScale";
+import { fitCoachPlates, sizeMealsForPersist } from "../../functions/_shared/coachPlateScale";
 import { isWontLogRefusal } from "../../functions/_shared/coachRefusalSummary";
 import { COACH_BUILD } from "../content/coachBuild";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
@@ -53,10 +53,15 @@ const QUICK_ASKS = [
 ];
 
 function resolvePhotoKind(kind, text) {
-  if (/\b(kitchen|fridge|refrigerator|pantry|what i have|what'?s in my)\b/i.test(String(text || ""))) {
+  const note = String(text || "");
+  if (/\b(kitchen|fridge|refrigerator|pantry|what i have|what'?s in my)\b/i.test(note)) {
     return "kitchen";
   }
-  return kind;
+  if (/\b(menu|restaurant|order at|from the menu)\b/i.test(note)) {
+    return "menu";
+  }
+  if (kind === "menu" || kind === "kitchen") return kind;
+  return "kitchen";
 }
 
 let localId = 0;
@@ -275,6 +280,7 @@ export function CoachPanel({
           localDate: r.localDate || r.local_date || null,
           notLogging: r.payload?.notLogging === true,
           showNumbers: r.payload?.showNumbers === true,
+          weeks: r.payload?.weeks === true,
         }));
         setThread(pairCoachThread(mapped));
         const seen = mapped.flatMap((row) => (row.cards || []).map((card) => card.name).filter(Boolean));
@@ -391,9 +397,12 @@ export function CoachPanel({
    * passed when she named one, so the usual case still follows the clock.
    */
   const answerWithCards = ({ prefer = null, slot = null, askLabel = COACH_COPY.askEat, echo = true, persist = true, aside = null } = {}) => {
+    const nowMs = (clockRef.current instanceof Date ? clockRef.current : new Date()).getTime();
+    const held = lastSlotAtRef.current && nowMs - lastSlotAtRef.current <= SLOT_HOLD_MS ? slotOverride : null;
+    if (slotOverride && !held && !slot) setSlotOverride(null);
     const build = (skipNames) => buildCoachAnswer({
       ...inputs,
-      slot: slot || slotOverride,
+      slot: slot || held,
       prefer,
       skipNames,
       now: clockRef.current,
@@ -554,6 +563,7 @@ export function CoachPanel({
           alreadySuggested: skipRef.current,
           priorAsks: threadPriorAsks(threadRef.current.filter((row) => row.role === "mama").map((row) => row.body)),
           notLogging: wontLogRef.current,
+          lastCards: [...threadRef.current].reverse().find((row) => row.role === "coach" && (row.cards || []).length)?.cards || [],
         }),
         localDate: localDateIso(clockRef.current),
         images,
@@ -577,6 +587,7 @@ export function CoachPanel({
           kind: "deflect",
           deflect: data.deflect,
           noted: data.noted === true,
+          weeks: data.weeks === true,
           cards: extra,
         }, { persist: false });
         return;
@@ -595,15 +606,27 @@ export function CoachPanel({
 
       if (mealsIn.length) {
         const safeMeals = mealsIn.filter((meal) => !mealBreaksSavedPrefs(meal, profile));
-        let cards = firstPaintPlates(cardsWithShownReason(buildSuggestedCards(safeMeals.length ? safeMeals : mealsIn, fit, {
+        const pool = safeMeals.length ? safeMeals : mealsIn;
+        let cards = firstPaintPlates(cardsWithShownReason(buildSuggestedCards(pool, fit, {
           source: data.mealSource || "new",
           slot: slotForAsk,
         })));
+        if (cards.length < 2) {
+          cards = firstPaintPlates(fitCoachPlates(pool, fit?.budget, slotForAsk, data.mealSource || "new"));
+        }
+        if (data.mealSource === "menu" || mode === "menu") {
+          const menuOnly = cards.filter((card) => card.source === "menu" || card.orderOnly);
+          if (menuOnly.length) cards = menuOnly;
+        }
         if (wontLogRef.current) cards = hideCoachMealMacros(cards);
         skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
+        const reply = alignReplyToMeals(
+          data.reply || data.message || (cards.length ? COACH_LOCAL_PICKS_LINE : COACH_BUSY_LINE),
+          cards,
+        );
         push({
           role: "coach",
-          body: data.reply || data.message || (cards.length ? COACH_LOCAL_PICKS_LINE : COACH_BUSY_LINE),
+          body: reply,
           kind: cards.length ? "cards" : "text",
           cards,
           aside: data.aside || (data.askCallie ? "care" : null),
@@ -1152,7 +1175,7 @@ export function CoachPanel({
 
               {m.kind === "deflect" && (
                 <div style={{ ...bubble(false), background: T.amberSoft, border: "none" }}>
-                  <div style={{ marginBottom: 10 }}>{coachDeflectLine(m.deflect, { noted: m.noted, hasFood: (m.cards || []).length > 0 })}</div>
+                  <div style={{ marginBottom: 10 }}>{coachDeflectLine(m.deflect, { noted: m.noted, hasFood: (m.cards || []).length > 0, weeks: m.weeks === true })}</div>
                   <button
                     type="button"
                     onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}
@@ -1346,7 +1369,7 @@ export function CoachPanel({
                   kind: "text",
                   template: "local.showNumbers",
                   showNumbers: true,
-                });
+                }, { persist: false });
               }}
             >
               {COACH_COPY.showNumbers}

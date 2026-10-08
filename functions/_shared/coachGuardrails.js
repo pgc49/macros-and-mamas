@@ -189,14 +189,35 @@ const DISORDERED = [
   /\bonly eat(ing)? once a day\b/,
   /\beat(ing)? only once a day\b/,
   /\beat once a day\b/,
-  /\b(is|are|should)[^.?]{0,40}\b(800|900|1000|1200|1500)\s*(cal|cals|calories)\b[^.?]{0,20}\b(ok|okay|fine|enough)\b/,
-  /\b(800|900|1000|1200|1500)\s*(cal|cals|calories)[^.?]{0,20}\b(ok|okay|fine|a day|enough)\b/,
-  /\bis it fine to eat \d{3,4}\s*(cal|cals|calories)\b/,
+  /\b(only |just )?(1|2|one|two) meals? a day\b/,
+  /\beat(ing)? (only )?(1|2|one|two) meals?( a day)?\b/,
   /\bskip meals\b/,
-  /\bfast(ing)? while (nursing|breastfeeding)\b/,
+  /\bfast(?:ing)?(?:\s+\d+\s*hours?)?.{0,24}\b(nurs(?:e|ing|ed)?|breastfeed(?:ing|s)?)\b/,
   /\beat once a day\b.{0,24}\blose (faster|weight)\b/,
   /\bpurge\b/, /\bpurging\b/,
 ];
+
+/** Restriction-to-lose: any calorie number under 1500 framed as ok / a day / under. */
+export function isVeryLowCalorieAsk(raw) {
+  const text = String(raw || "").toLowerCase();
+  if (!text) return false;
+  const hits = [...text.matchAll(/\b(?:under|less than|only|just|eat(?:ing)?|is|are|should)?[^.]{0,24}?(\d{3,4})\s*(?:cal|cals|calories)\b/g)];
+  return hits.some((hit) => {
+    const n = Number(hit[1]);
+    if (!(n > 0 && n < 1500)) return false;
+    return /\b(ok|okay|fine|enough|a day|under|less than|only|is it)\b/.test(text);
+  });
+}
+
+/** A one-off "skip dinner tonight" is fuel, not the disordered door. */
+export function isSkipTonightAsk(raw) {
+  const text = String(raw || "").toLowerCase();
+  if (!text) return false;
+  if (/\bskip meals\b/.test(text) || /\bmeals? a day\b/.test(text)) return false;
+  return /\b(just don'?t eat|don'?t eat)\b.{0,24}\b(dinner|lunch|breakfast|tonight)\b/.test(text)
+    || /\bskip\b.{0,20}\b(dinner|lunch|breakfast|this meal)\b.{0,12}\btonight\b/.test(text)
+    || /\bskip\b.{0,12}\btonight\b/.test(text);
+}
 
 /** A named OTC or "should I take this pill" — not a food ask. */
 const MEDICATION = [
@@ -469,7 +490,7 @@ export function classifyAsk(raw, { mode = "ask", priorAsks = [] } = {}) {
   if (recentCrisisAsks(priorAsks) && !isExplicitMealAsk(text)) {
     return { scope: "urgent", aside: null, follow: true, crisisFollow: true };
   }
-  if (hits(DISORDERED, text)) return { scope: "disordered", aside: null };
+  if (hits(DISORDERED, text) || isVeryLowCalorieAsk(text)) return { scope: "disordered", aside: null };
   if (hits(MEDICATION, text)) return { scope: "medication", aside: null };
   if (hits(MOOD, text)) return { scope: "mood", aside: null };
   if (hits(URGENT, text)) return { scope: "urgent", aside: null };
@@ -510,9 +531,9 @@ export function scopeIsRefused(scope) {
 
 const PLATE_ASK = /\b(eat|eating|eaten|ate|meal|lunch|dinner|breakfast|snack|hungry|starving|cook|fridge|menu|order|recipe|plate|dish|chicken|eggs?|salmon|yogurt|leftover|ideas|pizza|italian|chinese|sushi|tacos?|burgers?|sandwich(?:es)?|smoothie|vegetarian|swap|surprise me|something new|mcdonalds|almonds?|chipotle|thai|takeout|help me plan|plan tomorrow)\b/i;
 const MEAL_TEACH_HINT = new Set([
-  "italian", "chinese", "sushi", "pizzaMeal", "inNOut", "psMethod",
-  "neverSkip", "realFood", "underDay", "fasting", "coffee",
-  "menuLink", "menuClosed", "menuMiss",
+  "italian", "chinese", "sushi", "sushiNursing", "pizzaMeal", "inNOut", "psMethod",
+  "neverSkip", "realFood", "underDay", "fasting", "coffee", "waterEat",
+  "alcoholNursing", "menuLink", "menuClosed", "menuMiss",
 ]);
 
 /**
@@ -544,7 +565,8 @@ export function isMealAsk(raw, { mode = "ask", topic = null } = {}) {
 }
 
 export function isDisorderedAsk(raw) {
-  return hits(DISORDERED, String(raw || "").toLowerCase().trim());
+  const text = String(raw || "").toLowerCase().trim();
+  return hits(DISORDERED, text) || isVeryLowCalorieAsk(text);
 }
 
 export function isMedicationAsk(raw) {

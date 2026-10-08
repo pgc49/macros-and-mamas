@@ -67,6 +67,24 @@ describe("filterCoachMeals", () => {
     expect(kept.map((meal) => meal.name)).toEqual(["Rice and fruit"]);
   });
 
+  it("lets I just have eggs override an older no eggs this week", () => {
+    const pancakes = {
+      name: "Protein pancakes",
+      desc: "Oats, egg, and protein.",
+      ingredients: [{ item: "large egg", amount: "1" }],
+    };
+    const oats = { name: "Protein oatmeal", desc: "Oats and protein powder." };
+    expect(filterCoachMeals([pancakes, oats], {
+      text: "I just have eggs and vegetables",
+      priorAsks: ["no eggs this week", "something new for breakfast"],
+    }).map((meal) => meal.name)).toContain("Protein pancakes");
+    expect(filterCoachMeals([pancakes, oats], {
+      text: "I just have eggs and vegetables",
+      priorAsks: ["no eggs this week"],
+      profile: { allergens: ["eggs"] },
+    }).map((meal) => meal.name)).toEqual(["Protein oatmeal"]);
+  });
+
   it("carries no eggs this week from an earlier ask", () => {
     const pancakes = {
       name: "Protein pancakes",
