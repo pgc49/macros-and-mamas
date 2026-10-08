@@ -40,6 +40,8 @@ describe("coachFlag", () => {
       { role: "coach", kind: "deflect", payload: { deflect: "care" }, source: "server" },
       "I've been dizzy since this morning",
     )).toBe("medical");
+    expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "emergency" }, source: "server" })).toBe("medical");
+    expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "medical" }, source: "server" })).toBe("medical");
     expect(coachFlag({ role: "coach", kind: "deflect", payload: { deflect: "ranges" }, source: "server" })).toBe("deflect");
     expect(coachFlag({ role: "coach", kind: "text", payload: null, source: "server" })).toBeNull();
   });
@@ -148,6 +150,7 @@ describe("COACH_MESSAGE_POLICIES", () => {
       select: "coach_messages_select_own_visible_or_admin",
       insert: "coach_messages_insert_own_mama",
       hide: "hide_coach_messages",
+      clear: "clear_coach_messages",
     });
   });
 });

@@ -690,16 +690,17 @@ describe("ranking", () => {
     const live = [{ id: "sausage", name: "Sausage, egg + whites scramble" }];
     const snapshot = live.map((meal) => ({ ...meal }));
     expect(pruneStaleMyMealCards(messages[0].cards, live).map((card) => card.name)).toEqual([
+      "Sheet Pan Chicken with Sweet Potato",
       "Sausage, egg + whites scramble",
       "Sheet pan chicken",
       "Leftover Pasta",
     ]);
     const shown = replayCoachMessages(messages, live);
-    expect(shown[0].cards.map((card) => card.name)).toEqual(["Sausage, egg + whites scramble"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual(["Sheet Pan Chicken with Sweet Potato"]);
     expect(live).toEqual(snapshot);
 
     const afterDelete = replayCoachMessages(messages, []);
-    expect(afterDelete[0].cards.map((card) => card.name)).toEqual(["Sheet pan chicken"]);
+    expect(afterDelete[0].cards.map((card) => card.name)).toEqual(["Sheet Pan Chicken with Sweet Potato"]);
   });
 
   it("keeps the saved list when a custom meals fetch fails", () => {

@@ -21,7 +21,7 @@ describe("sanitizeCoachReply", () => {
     expect(row.kind).toBe("text");
     expect(row.source).toBe("server");
     expect(row.local_date).toBe("2026-10-08");
-    expect(row.payload).toEqual({ cards: [], deflect: "again", aside: null, teach: null });
+    expect(row.payload).toEqual({ cards: [], deflect: "again", aside: null, teach: null, requestId: null });
   });
 
   it("strips deflects from client-source rows", () => {
@@ -46,16 +46,50 @@ describe("sanitizeCoachCards", () => {
       { name: "Dropped", cal: 1, p: 1, c: 1, f: 1 },
     ]);
     expect(cards).toHaveLength(3);
-    expect(cards[0]).toEqual({
+    expect(cards[0]).toMatchObject({
       name: "Chicken bowl",
+      title: "Chicken bowl",
       cal: 430,
       p: 45,
       c: 30,
       f: 12,
       reason: "Fits.",
+      servings: 1,
     });
     expect(cards[1].name).toBe("Yogurt");
+    expect(cards[1].title).toBe("Yogurt");
     expect(cards[2].name).toBe("Fourth");
+  });
+
+  it("keeps title, source, tag, id, basedOn, and servings through a save", () => {
+    const cards = sanitizeCoachCards([{
+      id: "live-1",
+      name: "Halibut + rice",
+      title: "Halibut + rice · 2 servings",
+      source: "bank",
+      tag: "Callie's bank",
+      basedOn: "Halibut + rice",
+      servings: 2,
+      cal: 910,
+      p: 88,
+      c: 100,
+      f: 14,
+      reason: "Fits tonight.",
+    }]);
+    expect(cards).toEqual([{
+      id: "live-1",
+      name: "Halibut + rice",
+      title: "Halibut + rice · 2 servings",
+      source: "bank",
+      tag: "Callie's bank",
+      basedOn: "Halibut + rice",
+      servings: 2,
+      cal: 910,
+      p: 88,
+      c: 100,
+      f: 14,
+      reason: "Fits tonight.",
+    }]);
   });
 });
 

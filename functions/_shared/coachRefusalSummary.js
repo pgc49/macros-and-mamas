@@ -8,7 +8,7 @@
    replaces that summary, and a later refresh keeps the line.
    ================================================================== */
 
-import { isClinicalUrgent } from "./coachGuardrails.js";
+import { isClinicalUrgent, isCrisisUrgent } from "./coachGuardrails.js";
 import { localCoachTeach } from "../../src/utils/coachTeach.js";
 import { COACH_CLOCK_TZ, wallClockParts } from "../../src/utils/mealSlots.js";
 
@@ -56,8 +56,11 @@ export function escalateDoor(asked, { escalate = null, scope = null } = {}) {
     const teach = localCoachTeach(question);
     return teach && STUCK_TOPICS.has(teach.topic) ? "stuck" : null;
   }
+  // Symptoms first. "I'm skipping dinner because I feel dizzy" and
+  // "I'm not logging because my chest hurts" must still reach Callie.
+  if (isCrisisUrgent(question) || isClinicalUrgent(question)) return "medical";
   if (isWontLogRefusal(question)) return null;
-  if (scope === "urgent" || scope === "medical" || isClinicalUrgent(question)) {
+  if (scope === "urgent" || scope === "medical") {
     return isClinicalUrgent(question) ? "medical" : null;
   }
   return null;

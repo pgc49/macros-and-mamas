@@ -21,28 +21,44 @@ const LOCAL_TEMPLATES = new Set([
   "local.text",
 ]);
 const MAX_CARDS = 4;
+const CARD_SOURCES = new Set(["bank", "my", "pantry", "menu", "kitchen", "new"]);
+
+function clipCardText(value, max) {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function cardServings(value) {
+  const n = Number(value);
+  if (n === 0.5) return 0.5;
+  if (Number.isFinite(n) && n > 0 && n <= 8) return Math.round(n * 4) / 4;
+  return 1;
+}
+
 export function sanitizeCoachCards(cards) {
   if (!Array.isArray(cards)) return [];
   const out = [];
   for (const card of cards.slice(0, MAX_CARDS)) {
     if (!card || typeof card !== "object" || Array.isArray(card)) continue;
-    const name = typeof card.name === "string"
-      ? card.name.trim().slice(0, 120)
-      : typeof card.title === "string"
-        ? card.title.trim().slice(0, 120)
-        : "";
+    const name = clipCardText(card.name, 120) || clipCardText(card.title, 120);
     if (!name) continue;
     const num = (value) => {
       const n = Number(value);
       return Number.isFinite(n) ? Math.round(n) : 0;
     };
-    const reason = typeof card.reason === "string"
-      ? card.reason.slice(0, 280)
-      : typeof card.shownReason === "string"
-        ? card.shownReason.slice(0, 280)
-        : "";
+    const reason = clipCardText(card.reason, 280) || clipCardText(card.shownReason, 280);
+    const source = clipCardText(card.source, 32);
+    const title = clipCardText(card.title, 160);
+    const tag = clipCardText(card.tag, 40);
+    const id = clipCardText(card.id, 80);
+    const basedOn = clipCardText(card.basedOn, 120);
     out.push({
       name,
+      title: title || name,
+      source: CARD_SOURCES.has(source) ? source : (source || ""),
+      tag,
+      id,
+      basedOn: basedOn || null,
+      servings: cardServings(card.servings),
       cal: num(card.cal),
       p: num(card.p),
       c: num(card.c),
@@ -72,8 +88,15 @@ export function sanitizeCoachReply({
       deflect,
       aside: payload.aside ? String(payload.aside).slice(0, 40) : null,
       teach: payload.teach ? String(payload.teach).slice(0, 40) : null,
+      requestId: payload.requestId ? String(payload.requestId).slice(0, 80) : null,
     };
-    if (!nextPayload.cards.length && !nextPayload.deflect && !nextPayload.aside && !nextPayload.teach) {
+    if (
+      !nextPayload.cards.length
+      && !nextPayload.deflect
+      && !nextPayload.aside
+      && !nextPayload.teach
+      && !nextPayload.requestId
+    ) {
       nextPayload = null;
     }
   }

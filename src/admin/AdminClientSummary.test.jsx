@@ -70,4 +70,17 @@ describe("AdminClientSummary", () => {
     expect(body.payload.week).toBeNull();
     expect(body.payload.started).toBe(false);
   });
+
+  it("writes the Pacific calendar day, not the UTC date", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-02T01:05:00.000Z"));
+    try {
+      render(<AdminClientSummary client={client} progress={{}} progressLoading={false} />);
+      fireEvent.click(await screen.findByRole("button", { name: "Write summary" }));
+      await waitFor(() => expect(db.saveClientSummary).toHaveBeenCalled());
+      expect(db.saveClientSummary.mock.calls[0][0].for_date).toBe("2026-10-01");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

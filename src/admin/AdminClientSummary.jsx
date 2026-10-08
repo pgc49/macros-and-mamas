@@ -5,9 +5,10 @@ import { db } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { buildClientSummaryPayload } from "./clientSummaryPayload";
 import { mamaProgramOpts, mamaProgramWeekNumber } from "../lib/cohorts";
+import { coachSummaryDateIso } from "../../functions/_shared/coachRefusalSummary.js";
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return coachSummaryDateIso();
 }
 
 function formatWhen(iso) {

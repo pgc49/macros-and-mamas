@@ -37,6 +37,7 @@ import {
 import {
   classifyAsk,
   deflectForScope,
+  deflectModelHandoff,
   macrosPlausible,
   replyIsClean,
   scopeIsRefused,
@@ -64,6 +65,7 @@ import { hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../../src/
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
 import { menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
+import { buildCoachCard } from "../../src/utils/coachRank.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 import {
   buildLocalCoachRecord,
@@ -146,26 +148,11 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "Add a photo first." }, 400);
     }
 
-    // The guardrail runs before anything is spent. The client shows the same
-    // handoff immediately and also posts here, so the refusal can be written
-    // onto her card. A photo of a menu is a food question by construction, so
-    // only free text is classified. Skip-the-log stays a teach, not a card.
-    const verdict = mode === "ask" ? classifyAsk(text) : { scope: "food", aside: null };
-
-    if (!isAdmin) {
-      const limit = await checkAiLimit(env, user.id, {
-        type: "coach",
-        max: MAX_PER_DAY,
-        busyMessage: "I can't think straight right now. Try again in a minute, or pick something from Meals.",
-        spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
-      });
-      if (!limit.ok) {
-        return json(
-          { error: "rate_limited", message: limit.message, retry_after_seconds: limit.retryAfterSeconds },
-          429,
-        );
-      }
-    }
+    // Classify free text on ask and on a photo note. A symptom typed under
+    // a menu shot must still reach Callie. An empty photo note stays food.
+    const verdict = (mode === "ask" || text.length >= 2)
+      ? classifyAsk(text)
+      : { scope: "food", aside: null };
 
     // Callie's own sentences. Same matcher the client runs, so a crafted
     // request cannot spend a model call on a question she already answered.
@@ -186,12 +173,20 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: true, scope: "stuck", deflect: "again", meals: [] });
     }
     if (scopeIsRefused(verdict.scope)) {
-      await appendCoachRefusal(env, user.id, { asked: text, scope: verdict.scope });
+      const noted = await appendCoachRefusal(env, user.id, { asked: text, scope: verdict.scope });
+      if (!noted.ok && !noted.skipped) {
+        await logAiFailure(env, {
+          userId: user.id,
+          label: "coach",
+          kind: "note",
+          detail: "client_summaries append failed",
+        });
+      }
       const deflect = deflectForScope(verdict.scope, text);
       await persistServerCoach(env, user.id, body, {
         body: "",
         kind: "deflect",
-        payload: { deflect },
+        payload: { deflect, requestId: String(body.requestId || "").slice(0, 80) || null },
       });
       return json({
         ok: true,
@@ -237,6 +232,22 @@ export async function onRequestPost({ request, env }) {
           reply,
           meals: [],
         });
+      }
+    }
+
+    if (!isAdmin) {
+      const limit = await checkAiLimit(env, user.id, {
+        type: "coach",
+        max: MAX_PER_DAY,
+        requestId: String(body.requestId || "").slice(0, 80) || null,
+        busyMessage: "I can't think straight right now. Try again in a minute, or pick something from Meals.",
+        spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
+      });
+      if (!limit.ok) {
+        return json(
+          { error: "rate_limited", message: limit.message, retry_after_seconds: limit.retryAfterSeconds },
+          429,
+        );
       }
     }
 
@@ -289,7 +300,8 @@ export async function onRequestPost({ request, env }) {
       models: resolveCoachModels(env),
       maxTokens: images.length ? 8000 : 4000,
       temperature: 0.5,
-      timeoutMs: images.length ? 55_000 : 45_000,
+      timeoutMs: images.length ? 30_000 : 25_000,
+      attempts: 1,
       reasoning: { effort: "low", exclude: true },
       messages: [
         { role: "system", content: COACH_SYSTEM },
@@ -326,9 +338,27 @@ export async function onRequestPost({ request, env }) {
       );
     }
 
-    // Second layer: the model gets to hand a question back too. The card
-    // records her question and the door, not the model's sentence.
+    // Second layer: the model gets to hand a question back too. Re-check
+    // the original ask for red flags — never answer a crisis with off-topic.
     if (String(parsed.value?.scope || "").toLowerCase() === "callie") {
+      const deflect = deflectModelHandoff(text);
+      if (deflect !== "offTopic") {
+        const noted = await appendCoachRefusal(env, user.id, { asked: text, scope: "urgent" });
+        if (!noted.ok && !noted.skipped) {
+          await logAiFailure(env, {
+            userId: user.id,
+            label: "coach",
+            kind: "note",
+            detail: "client_summaries append failed",
+          });
+        }
+        await persistServerCoach(env, user.id, body, {
+          body: "",
+          kind: "deflect",
+          payload: { deflect, requestId: String(body.requestId || "").slice(0, 80) || null },
+        });
+        return json({ ok: true, scope: "urgent", deflect, meals: [] });
+      }
       await persistServerCoach(env, user.id, body, {
         body: "",
         kind: "deflect",
@@ -357,20 +387,16 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
+    const mealSource = orderMode === "menu" ? "menu" : mode === "kitchen" ? "kitchen" : "new";
+    const shownMeals = sizeMealsForPersist(meals, budget, slot, mealSource);
     await persistServerCoach(env, user.id, body, {
       body: reply,
-      kind: meals.length ? "cards" : "text",
+      kind: shownMeals.length ? "cards" : "text",
       payload: {
-        cards: meals.map((meal) => ({
-          name: meal.name,
-          cal: meal.cal,
-          p: meal.p,
-          c: meal.c,
-          f: meal.f,
-          reason: meal.desc || "",
-        })),
+        cards: shownMeals,
         aside: verdict.aside || null,
         teach: teachTopic,
+        requestId: String(body.requestId || "").slice(0, 80) || null,
       },
     });
     return json({
@@ -380,7 +406,7 @@ export async function onRequestPost({ request, env }) {
       ...(teachTopic ? { teach: teachTopic } : {}),
       reply,
       meals,
-      mealSource: orderMode === "menu" ? "menu" : mode === "kitchen" ? "kitchen" : "new",
+      mealSource,
       aside: verdict.aside || null,
     });
   } catch (e) {
@@ -424,6 +450,31 @@ function parseRecent(value) {
  * Anything that reads like the model talking about itself, hedging like a
  * chatbot, or quoting her ranges back is dropped rather than shown.
  */
+function sizeMealsForPersist(meals, budget, slot, source) {
+  const out = [];
+  for (const meal of meals || []) {
+    const dressed = budget
+      ? buildCoachCard({ ...meal, source }, budget, { slot })
+      : null;
+    const card = dressed || meal;
+    out.push({
+      name: card.name,
+      title: card.title || card.name,
+      source: card.source || source || "",
+      tag: card.tag || "",
+      id: card.id || meal.id || "",
+      basedOn: card.basedOn || meal.basedOn || null,
+      servings: card.servings ?? meal.servings ?? 1,
+      cal: card.cal,
+      p: card.p,
+      c: card.c,
+      f: card.f,
+      reason: card.reason || meal.desc || "",
+    });
+  }
+  return out;
+}
+
 function cleanReply(raw) {
   const text = scrubCoachReply(String(raw || "").trim().slice(0, 400));
   if (!text) return "";

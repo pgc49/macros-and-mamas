@@ -50,6 +50,11 @@ function mockSupabase({
     if (value.includes("select=paid,refunded,role")) {
       return new Response(JSON.stringify([{ paid, refunded: false, role }]), { status: 200 });
     }
+    if (value.includes("rpc/reserve_estimate_call")) {
+      const body = JSON.parse(init?.body || "{}");
+      const used = body.p_type === "coach_record" ? recordCallsUsed : callsUsed;
+      return new Response(JSON.stringify(used < Number(body.p_max || 0)), { status: 200 });
+    }
     if (value.includes("estimate_calls") && init?.method !== "POST") {
       const used = value.includes("type=eq.coach_record") ? recordCallsUsed : callsUsed;
       return new Response("[]", {
@@ -66,7 +71,7 @@ function mockSupabase({
     }
     if (value.includes("/rest/v1/macros")) {
       if (!macros && !macrosRow) return new Response("[]", { status: 200 });
-      const row = macrosRow || { cal: 1750, protein: 140, carbs: 160, fat: 55 };
+      const row = macrosRow || { cal: 1750, protein: 140, carbs: 160, fat: 55, approved: true };
       return new Response(JSON.stringify([row]), { status: 200 });
     }
     if (value.includes("custom_meals")) return new Response(JSON.stringify(customMeals), { status: 200 });
@@ -100,7 +105,8 @@ const JANE_HTML = `<html><body>
 
 function postedCalls() {
   return globalThis.fetch.mock.calls.filter(([url, init]) => (
-    String(url).includes("estimate_calls") && init?.method === "POST"
+    init?.method === "POST"
+    && (String(url).includes("/estimate_calls") || String(url).includes("reserve_estimate_call"))
   ));
 }
 
@@ -132,6 +138,7 @@ const FILE = {
     protein: 140,
     carbs: 160,
     fat: 55,
+    approved: true,
     notes: ["keep fat at the low end", "no oats"],
   },
   customMeals: [{ name: "Sausage scramble", cal: 380, p: 32, c: 12, f: 18 }],
@@ -202,6 +209,12 @@ describe("access", () => {
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "what should I eat" }), env });
     expect(resp.status).toBe(409);
     expect((await resp.json()).error).toBe("macros_required");
+  });
+
+  it("ignores a macros row that exists but is not approved", async () => {
+    mockSupabase({ macrosRow: { cal: 1750, protein: 140, carbs: 160, fat: 55, approved: false } });
+    const resp = await onRequestPost({ request: request({ mode: "ask", text: "what should I eat" }), env });
+    expect(resp.status).toBe(409);
   });
 });
 
@@ -841,6 +854,38 @@ describe("an escalate lands on her card", () => {
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
 
+  it("classifies a photo note and refuses a red flag without a model call", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "menu",
+        slot: "dinner",
+        text: "I fainted after lunch",
+        images: [{ image_b64: "abc", media_type: "image/jpeg" }],
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.scope).toBe("urgent");
+    expect(data.deflect).toBe("emergency");
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(coachMessagePosts()[0].payload.deflect).toBe("emergency");
+  });
+
+  it("refuses a buried crisis before the model, never with the off-topic line", async () => {
+    mockSupabase();
+    modelReturns({ scope: "callie", reply: "I only do food and your ranges.", meals: [] });
+    const unclearCrisis = await onRequestPost({
+      request: request({ mode: "ask", text: "Chipotle, I want to die" }),
+      env,
+    });
+    const data = await unclearCrisis.json();
+    expect(data.deflect).toBe("emergency");
+    expect(data.reply).toBeUndefined();
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(coachMessagePosts()[0].payload.deflect).toBe("emergency");
+  });
+
   it("does not turn a model handoff into a summary", async () => {
     mockSupabase();
     modelReturns({ scope: "callie", reply: "You should talk to someone about this feeling.", meals: [] });
@@ -1022,14 +1067,17 @@ describe("ask persists the server's own reply", () => {
     }
   });
 
-  it("does not write a refusal when she is already at the cap", async () => {
+  it("still writes a medical refusal when she is already at the model cap", async () => {
     mockSupabase({ callsUsed: 30 });
     const resp = await onRequestPost({
       request: request({ mode: "ask", text: "I've been dizzy since this morning" }),
       env,
     });
-    expect(resp.status).toBe(429);
-    expect(coachMessagePosts()).toHaveLength(0);
+    expect(resp.status).toBe(200);
+    expect((await resp.json()).deflect).toBe("medical");
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(coachMessagePosts()).toHaveLength(1);
+    expect(postedCalls()).toHaveLength(0);
   });
 
   it("writes a model reply from its own output", async () => {

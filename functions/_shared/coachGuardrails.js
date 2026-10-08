@@ -31,13 +31,74 @@
  */
 export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "admin", "off_topic", "supply"];
 
+/**
+ * Crisis and postpartum warning signs. These get the emergency line, not
+ * the ordinary medical handoff. Idioms like "dying for tacos" or "this
+ * workout is killing me" must not match — keep the phrases specific.
+ */
+const CRISIS = [
+  // Suicide / self-harm — not "dying for" a food
+  /\bi want to die\b/,
+  /\bwant to die\b(?!\s+for\b)/,
+  /\b(thoughts of|thinking about) hurt(ing)? myself\b/,
+  /\bhurt(ing)? myself\b/,
+  /\bdon'?t want to be here\b/,
+  /\bdo not want to be here\b/,
+  /\bsuicid/,
+  /\bself[- ]harm/,
+  /\bend (it|my life)\b/,
+  /\bkill myself\b/,
+  // Harm the baby
+  /\bhurt(ing)? (the |my )?baby\b/,
+  /\bharm(ing)? (the |my )?baby\b/,
+  // Chest / breathing
+  /\bchest (pain|hurts?|tight)/,
+  /\b(trouble|difficulty|hard time) breath/,
+  /\bcan'?t breathe\b/,
+  /\bshort(ness)? of breath\b/,
+  // Faint — fainted, not only faint(ing)
+  /\bfaint(ed|ing)?\b/,
+  /\bpass(ed|ing) out\b/,
+  /\bblack(ed|ing)? out\b/,
+  // Heavy bleeding
+  /\bsoak(ing|ed)? (through )?(pads?|maxi)/,
+  /\b(large |big )clots?\b/,
+  /\bheavy bleed/,
+  /\bh(a)?emorrhag/,
+  // Headache + vision (preeclampsia warning)
+  /\b(severe |bad |worst )?headache\b.{0,40}\b(vision|blurry|blurred|spots)\b/,
+  /\b(vision|blurry|blurred).{0,40}\b(headache|head)\b/,
+  /\bblurred vision\b/,
+  /\bvision (is |got )?(blurry|changes?)\b/,
+  // DVT
+  /\b(one |my )?(left |right )?(swollen|painful) (and )?(painful |swollen )?(leg|calf)\b/,
+  /\b(leg|calf) (is |feels )?(swollen|painful)/,
+  /\b(legs?|calves|calf) (is|are|feels?) (swollen|painful)/,
+  /\bone of my legs?\b.{0,40}\b(swollen|painful)/,
+  // Seizure
+  /\bseizure/,
+  // Psychosis
+  /\bhearing things\b/,
+  /\bseeing things\b/,
+  /\b(hear|see)ing? (things |voices )?(that aren'?t|that are not) there\b/,
+  /\bhallucin/,
+  // Sleep collapse
+  /\b(haven'?t|have not|not) (been )?slept?\b.{0,24}\b(for )?(days|a few days|two days|2 days|3 days)\b/,
+  /\bnot sleep(ing)? for days\b/,
+  /\bhaven'?t slept in days\b/,
+];
+
 const URGENT = [
-  // Symptoms
-  /\bdizz(y|iness)\b/, /\bfaint(ing)?\b/, /\blight[- ]?headed\b/, /\bchest pain\b/,
-  /\bpalpitation/, /\bshort(ness)? of breath\b/, /\bbleed(ing)?\b/, /\bh(a)?emorrhag/,
-  /\bfever\b/, /\bmigraine/, /\bblurred vision\b/, /\bnumbness\b/, /\brash\b/,
+  ...CRISIS,
+  // Ordinary symptoms — medical line, not 911
+  /\bdizz(y|iness)\b/, /\blight[- ]?headed\b/,
+  /\bpalpitation/,
+  /\bbleed(ing)?\b/,
+  /\bfever\b/, /\bmigraine/, /\bnumbness\b/, /\brash\b/,
   /\bvomit/, /\bdiarrh/, /\bconstipat/, /\bcontractions\b/, /\bpreeclamp/,
-  /\bpassing out\b/, /\bblack(ing)? out\b/,
+  // Restriction that is not an idiom
+  /\bonly eating\b.{0,24}\b\d{2,4}\s*(calories?|cals?)\b/,
+  /\beating (only )?\d{2,4}\s*(calories?|cals?)\b/,
   // Medication and clinical management
   /\bmedication\b/, /\bprescri/, /\bantibiotic/, /\bmetformin\b/, /\bozempic\b/,
   /\bsemaglutide\b/, /\bwegovy\b/, /\bzoloft\b/, /\bssri\b/, /\bbirth control\b/,
@@ -48,9 +109,9 @@ const URGENT = [
   /\bdiabet/, /\bgestational\b/, /\bpcos\b/, /\bceliac\b/, /\bibs\b/, /\bgallbladder\b/,
   /\bdoctor\b/, /\bob[- ]?gyn\b/, /\bmidwife\b/, /\bpediatrician\b/,
   /\bpregnan/, /\btrimester\b/,
-  // Mental health
+  // Mental health (without the crisis phrases above)
   /\banxiety\b/, /\banxious\b/, /\bdepress/, /\bppd\b/, /\bpanic attack/,
-  /\btherapist\b/, /\bsuicid/, /\bself[- ]harm/,
+  /\btherapist\b/,
   // Restriction and disordered eating.
   //
   // Three of these are idioms before they are symptoms, and the literal
@@ -230,6 +291,12 @@ export function isClinicalUrgent(raw) {
   return Boolean(text) && hits(URGENT, text);
 }
 
+/** Crisis and postpartum warning signs. These get the emergency line. */
+export function isCrisisUrgent(raw) {
+  const text = String(raw || "").toLowerCase().trim();
+  return Boolean(text) && hits(CRISIS, text);
+}
+
 /** Which of Callie's handoff lines a refused scope gets. */
 const DEFLECT_FOR_SCOPE = {
   urgent: "medical",
@@ -242,9 +309,21 @@ const DEFLECT_FOR_SCOPE = {
 
 export function deflectForScope(scope, asked = "") {
   if (scope === "urgent") {
+    if (isCrisisUrgent(asked)) return "emergency";
     return isClinicalUrgent(asked) ? "medical" : "care";
   }
   return DEFLECT_FOR_SCOPE[scope] || "offTopic";
+}
+
+/**
+ * The model handed a question back. Re-check the original ask so a
+ * missed crisis is never answered with the off-topic line.
+ */
+export function deflectModelHandoff(text) {
+  if (isCrisisUrgent(text) || isClinicalUrgent(text) || classifyAsk(text).scope === "urgent") {
+    return deflectForScope("urgent", text);
+  }
+  return "offTopic";
 }
 
 /**

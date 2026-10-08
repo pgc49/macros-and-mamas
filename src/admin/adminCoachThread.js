@@ -12,6 +12,7 @@ export const COACH_MESSAGE_POLICIES = {
   select: "coach_messages_select_own_visible_or_admin",
   insert: "coach_messages_insert_own_mama",
   hide: "hide_coach_messages",
+  clear: "clear_coach_messages",
 };
 
 export function priorMamaBody(messages, index) {
@@ -32,7 +33,13 @@ export function coachFlag(message, asked = "") {
     || (message?.kind === "deflect" ? "offTopic" : null);
   if (message?.kind !== "deflect" && !deflect) return null;
   if (deflect === "again") return "stuck";
-  if (deflect === "care" && isClinicalUrgent(asked)) return "medical";
+  if (
+    deflect === "emergency"
+    || deflect === "medical"
+    || (deflect === "care" && isClinicalUrgent(asked))
+  ) {
+    return "medical";
+  }
   return "deflect";
 }
 

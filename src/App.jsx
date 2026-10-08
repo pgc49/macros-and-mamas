@@ -1331,12 +1331,21 @@ export default function App() {
    */
   const coachWriteRef = useRef(Promise.resolve());
   const appendCoachMessage = useCallback((message) => {
-    coachWriteRef.current = coachWriteRef.current
+    const next = coachWriteRef.current
       .then(() => db.appendCoachMessage({ ...message, localDate: localDateIso() }))
       .catch((e) => { console.warn("appendCoachMessage failed", e); });
+    coachWriteRef.current = next;
+    return next;
+  }, []);
+
+  const hideCoachMessage = useCallback(async (ids = []) => {
+    if (!Array.isArray(ids) || !ids.length) return false;
+    return db.hideCoachMessages(ids);
   }, []);
 
   const postCoach = async (payload) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 35_000);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -1345,6 +1354,7 @@ export default function App() {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
       const data = await resp.json().catch(() => null);
       if (!resp.ok) {
@@ -1352,8 +1362,17 @@ export default function App() {
       }
       return data;
     } catch (e) {
+      const timedOut = e?.name === "AbortError";
       console.error("postCoach failed", e);
-      return { ok: false, message: "I couldn't get to that. Try me again in a second." };
+      return {
+        ok: false,
+        timeout: timedOut,
+        message: timedOut
+          ? "That took too long. Try me again."
+          : "I couldn't get to that. Try me again in a second.",
+      };
+    } finally {
+      clearTimeout(timer);
     }
   };
 
@@ -1823,6 +1842,7 @@ export default function App() {
       onAskCallie={askCallie}
       onLoadCoachThread={loadCoachThread}
       onAppendCoachMessage={appendCoachMessage}
+      onHideCoachMessage={hideCoachMessage}
       postCoach={postCoach}
       messagesDraft={messagesDraft}
       onMessagesDraftUsed={() => setMessagesDraft("")}

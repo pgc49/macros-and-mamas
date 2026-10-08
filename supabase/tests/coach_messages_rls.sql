@@ -1,6 +1,6 @@
 begin;
 
-select plan(27);
+select plan(32);
 
 select ok(
   exists (
@@ -62,6 +62,28 @@ select ok(
 select ok(
   not has_function_privilege('anon', 'public.hide_coach_messages(uuid[])', 'execute'),
   'anon cannot execute hide_coach_messages'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'clear_coach_messages'
+      and p.prosecdef
+  ),
+  'clear_coach_messages is SECURITY DEFINER'
+);
+
+select ok(
+  has_function_privilege('authenticated', 'public.clear_coach_messages()', 'execute'),
+  'authenticated can execute clear_coach_messages'
+);
+
+select ok(
+  not has_function_privilege('anon', 'public.clear_coach_messages()', 'execute'),
+  'anon cannot execute clear_coach_messages'
 );
 
 insert into auth.users (id, email)
@@ -234,6 +256,17 @@ select is(
   public.hide_coach_messages(array['00000000-0000-0000-0000-0000000000c2']::uuid[]),
   0,
   'RPC cannot hide another mama''s rows'
+);
+
+select is(
+  public.hide_coach_messages(array[]::uuid[]),
+  0,
+  'empty hide_coach_messages hides nothing'
+);
+
+select ok(
+  public.clear_coach_messages() >= 1,
+  'clear_coach_messages hides her own remaining rows'
 );
 
 set local role anon;

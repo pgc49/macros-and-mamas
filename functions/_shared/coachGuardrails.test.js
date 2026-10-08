@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyAsk,
   deflectForScope,
+  deflectModelHandoff,
   macrosPlausible,
   replyHasJargon,
   replyIsClean,
@@ -264,7 +265,10 @@ describe("the reply itself", () => {
 
   it("hands a clinical ask to the medical line, not the care handoff", () => {
     expect(deflectForScope("urgent", "I've been dizzy since this morning")).toBe("medical");
+    expect(deflectForScope("urgent", "I want to die")).toBe("emergency");
     expect(deflectForScope("urgent", "I feel awful about what I ate")).toBe("care");
     expect(deflectForScope("supply")).toBe("supply");
+    expect(deflectModelHandoff("Chipotle, I want to die")).toBe("emergency");
+    expect(deflectModelHandoff("what should I eat before my run")).toBe("offTopic");
   });
 });

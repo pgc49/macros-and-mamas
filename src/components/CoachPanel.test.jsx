@@ -12,15 +12,17 @@ import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
-import { CoachPanel } from "./CoachPanel";
+import { CoachPanel, pairCoachThread } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
 import { COACH_COPY, COACH_DEFLECT } from "../content/coachVoice";
 import { localDateIso } from "../utils/dates";
+import { sanitizeCoachCards } from "../../functions/_shared/coachMessages.js";
 
 // jsdom has no canvas, so the real downscale resolves null and no preview
 // would ever render here.
 const downscaleMock = vi.hoisted(() => vi.fn(async () => "QUJD"));
 vi.mock("../utils/imageDownscale", () => ({ downscaleImage: downscaleMock }));
+vi.mock("@sentry/react", () => ({ captureMessage: vi.fn() }));
 
 afterEach(() => {
   cleanup();
@@ -254,8 +256,8 @@ describe("the coach answers on the device", () => {
       />,
     );
     expect(screen.queryByText("Rosemary crackers")).toBeNull();
-    expect(screen.queryByText("Sheet Pan Chicken with Sweet Potato")).toBeNull();
-    expect(cardTitles()).toEqual(["Sheet pan chicken"]);
+    expect(cardTitles()).toEqual(["Sheet Pan Chicken with Sweet Potato"]);
+    expect(screen.getByText("Sheet Pan Chicken with Sweet Potato")).toBeTruthy();
     expect(stillSaved.map((meal) => meal.name)).toEqual([
       "Live custom meal",
       "Sausage, egg + whites scramble",
@@ -594,7 +596,10 @@ describe("what isn't the coach's goes to Callie", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await screen.findByText(COACH_DEFLECT.weight.line);
-    expect(postCoach).not.toHaveBeenCalled();
+    expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "ask",
+      text: "why has the scale not moved in two weeks",
+    }));
     expect(onAskCallie).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: COACH_DEFLECT.weight.cta }));
@@ -616,7 +621,10 @@ describe("what isn't the coach's goes to Callie", () => {
       fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
       await screen.findByText(line);
-      expect(postCoach).not.toHaveBeenCalled();
+      expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
+        mode: "ask",
+        text: question,
+      }));
       cleanup();
     }
 
@@ -627,15 +635,17 @@ describe("what isn't the coach's goes to Callie", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
     await screen.findByText(COACH_DEFLECT.medical.line);
-    expect(postCoach).toHaveBeenCalledWith({
+    expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
       mode: "ask",
       text: "I've been dizzy since this morning",
       localDate: localDateIso(),
-    });
+    }));
     expect(COACH_DEFLECT.medical.line).toBe(
       "That's one for Callie, not me, and I don't want you waiting on it. Message her now.",
     );
     expect(COACH_DEFLECT.medical.line).not.toMatch(/call your doctor/i);
+    expect(COACH_DEFLECT.emergency.line).toMatch(/call 911/);
+    expect(COACH_DEFLECT.emergency.cta).toBe("Message Callie");
 
     cleanup();
     const guiltCoach = vi.fn();
@@ -645,11 +655,11 @@ describe("what isn't the coach's goes to Callie", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
     await screen.findByText(COACH_DEFLECT.care.line);
-    expect(guiltCoach).toHaveBeenCalledWith({
+    expect(guiltCoach).toHaveBeenCalledWith(expect.objectContaining({
       mode: "ask",
       text: "I feel awful about what I ate",
       localDate: localDateIso(),
-    });
+    }));
   });
 
   it("begins a nursing mention with the supply line, then still answers the food", async () => {
@@ -700,7 +710,11 @@ describe("what isn't the coach's goes to Callie", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await screen.findByText(COACH_DEFLECT.supply.line);
-    expect(postCoach).not.toHaveBeenCalled();
+    expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "ask",
+      text: "what should I eat for breakfast if I'm nursing, will it affect my supply",
+      requestId: expect.any(String),
+    }));
     expect(screen.queryByRole("button", { name: COACH_COPY.send })).toBeTruthy();
   });
 
@@ -732,12 +746,12 @@ describe("what isn't the coach's goes to Callie", () => {
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
     await screen.findByText(COACH_DEFLECT.again.line);
     expect(postCoach).toHaveBeenCalledTimes(1);
-    expect(postCoach).toHaveBeenCalledWith({
+    expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
       mode: "ask",
       text: "should I skip dinner, I'm way over",
       escalate: "stuck",
       localDate: localDateIso(),
-    });
+    }));
     const coachRecords = onAppendMessage.mock.calls
       .map(([message]) => message)
       .filter((message) => message.role === "coach");
@@ -1063,5 +1077,141 @@ describe("opening the coach twice over, the way React does", () => {
 
     rerender(tree(MACROS));
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+  });
+});
+
+describe("pairCoachThread", () => {
+  it("keeps each reply next to the question that produced it", () => {
+    const rows = [
+      { id: "m2", role: "mama", body: "second", requestId: "b" },
+      { id: "c1", role: "coach", body: "first answer", requestId: "a" },
+      { id: "m1", role: "mama", body: "first", requestId: "a" },
+      { id: "c2", role: "coach", body: "second answer", requestId: "b" },
+    ];
+    expect(pairCoachThread(rows).map((row) => row.id)).toEqual(["m2", "c2", "m1", "c1"]);
+  });
+});
+
+describe("priority pass: persist, crisis, reload, load error", () => {
+  it("keeps a sized title after a sanitized save and reload, and leaves a deleted My meal gone", async () => {
+    const saved = sanitizeCoachCards([
+      {
+        id: "deleted-1",
+        name: "Rosemary crackers",
+        title: "Rosemary crackers",
+        source: "my",
+        tag: "My meals",
+        servings: 1,
+        cal: 200,
+        p: 8,
+        c: 20,
+        f: 8,
+        reason: "Fits.",
+      },
+      {
+        id: "bank-1",
+        name: "Halibut + rice",
+        title: "Halibut + rice · 2 servings",
+        source: "bank",
+        tag: "Callie's bank",
+        basedOn: "Halibut + rice",
+        servings: 2,
+        cal: 910,
+        p: 88,
+        c: 100,
+        f: 14,
+        reason: "Fits tonight.",
+      },
+    ]);
+    expect(saved[1].title).toBe("Halibut + rice · 2 servings");
+    const onLoadThread = vi.fn(async () => [
+      {
+        id: "r2",
+        role: "coach",
+        body: "Earlier answer.",
+        kind: "cards",
+        payload: { cards: saved },
+      },
+    ]);
+    renderPanel({
+      postCoach: vi.fn(),
+      onLoadThread,
+      customMeals: [{ id: "live-1", name: "Live custom meal" }],
+    });
+    await screen.findByText("Earlier answer.");
+    expect(screen.queryByText("Rosemary crackers")).toBeNull();
+    expect(screen.getByTestId("coach-card-title").textContent).toBe("Halibut + rice · 2 servings");
+  });
+
+  it("persists her question with a request id so the answer stays paired", async () => {
+    const onAppendMessage = vi.fn();
+    const postCoach = vi.fn();
+    renderPanel({ postCoach, onAppendMessage });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "will this affect my milk supply" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.supply.line);
+    expect(onAppendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: "mama",
+      body: "will this affect my milk supply",
+      payload: expect.objectContaining({ requestId: expect.any(String) }),
+    }));
+  });
+
+  it("shows the emergency line and Message Callie for a crisis ask", async () => {
+    const postCoach = vi.fn();
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I want to die" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.emergency.line);
+    expect(screen.getByRole("button", { name: COACH_DEFLECT.emergency.cta })).toBeTruthy();
+    expect(postCoach).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "ask",
+      text: "I want to die",
+      requestId: expect.any(String),
+    }));
+  });
+
+  it("retries a timeout with the same request id so it is not billed twice", async () => {
+    const postCoach = vi.fn()
+      .mockResolvedValueOnce({ ok: false, timeout: true, message: COACH_COPY.askTimeout })
+      .mockResolvedValueOnce({ ok: true, reply: "Eggs and toast.", meals: [] });
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "what can I make with leftover chicken" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    expect(await screen.findByText(COACH_COPY.askTimeout)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.retryAsk }));
+    await screen.findByText("Eggs and toast.");
+    expect(postCoach).toHaveBeenCalledTimes(2);
+    expect(postCoach.mock.calls[0][0].requestId).toBe(postCoach.mock.calls[1][0].requestId);
+    expect(postCoach.mock.calls[0][0].text).toBe("what can I make with leftover chicken");
+  });
+
+  it("shows a retry when today's thread fails to load", async () => {
+    const onLoadThread = vi.fn(async () => {
+      throw new Error("network");
+    });
+    renderPanel({ postCoach: vi.fn(), onLoadThread });
+    expect(await screen.findByText(COACH_COPY.loadFailed)).toBeTruthy();
+    expect(screen.getByRole("button", { name: COACH_COPY.retryLoad })).toBeTruthy();
+    expect(cardTitles()).toHaveLength(0);
+  });
+
+  it("removes a saved message through the hide RPC", async () => {
+    const onHideMessage = vi.fn(async () => true);
+    const onLoadThread = vi.fn(async () => [
+      { id: "mama-1", role: "mama", body: "what should I eat", kind: "text", payload: null },
+      { id: "coach-1", role: "coach", body: "Earlier answer.", kind: "text", payload: null },
+    ]);
+    renderPanel({ postCoach: vi.fn(), onLoadThread, onHideMessage });
+    await screen.findByText("Earlier answer.");
+    fireEvent.click(screen.getAllByRole("button", { name: COACH_COPY.removeMessage })[0]);
+    await waitFor(() => expect(onHideMessage).toHaveBeenCalledWith(["mama-1"]));
+    await waitFor(() => expect(screen.queryByText("what should I eat")).toBeNull());
   });
 });

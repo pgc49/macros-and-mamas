@@ -55,6 +55,11 @@ export const COACH_COPY = {
     "Next meal, eating out, or a photo of the menu or fridge. Ranges, the scale, supply, and workouts stay with Callie.",
   callieReads:
     "Callie reads these chats too, including anything you delete, so she can step in when you need her.",
+  removeMessage: "Remove",
+  loadFailed: "I couldn't load today's chat. Try again.",
+  retryLoad: "Try again",
+  askTimeout: "That took too long. Try me again.",
+  retryAsk: "Try me again",
   entryTitle: "Not sure what to eat?",
   entryCta: "Ask the coach",
 
@@ -260,9 +265,21 @@ export const COACH_DOCTOR_SENTENCE = "If you feel faint or it's getting worse, c
 
 const COACH_MEDICAL_LINE = "That's one for Callie, not me, and I don't want you waiting on it. Message her now.";
 
+/**
+ * Crisis / postpartum warning signs. ON by default. One constant so
+ * Patrick and Callie can tweak it without hunting through the panel.
+ */
+export const INCLUDE_COACH_EMERGENCY_LINE = true;
+export const COACH_EMERGENCY_LINE =
+  "This needs a person right now, not me. If you're in danger or this is an emergency, call 911. If you're having thoughts of hurting yourself or your baby, call or text 988. For bleeding, chest pain, trouble breathing, or fainting, call your doctor or 911. I've let Callie know.";
+
 export const COACH_DEFLECT = {
   callie: {
     line: COACH_PASS,
+    cta: "Message Callie",
+  },
+  emergency: {
+    line: INCLUDE_COACH_EMERGENCY_LINE ? COACH_EMERGENCY_LINE : COACH_MEDICAL_LINE,
     cta: "Message Callie",
   },
   medical: {

@@ -3691,7 +3691,12 @@ export const db = {
   },
 
   async clearCoachThread() {
-    return this.hideCoachMessages([]);
+    const { error } = await supabase.rpc("clear_coach_messages");
+    if (error) {
+      console.warn("clearCoachThread failed", error);
+      return false;
+    }
+    return true;
   },
 
   /**

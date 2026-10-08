@@ -73,11 +73,10 @@ export function isBankCoachCard(card, bankNames = bankMealNameSet()) {
 export function cardIsGoneCustom(card, lookup, bankNames = bankMealNameSet()) {
   if (!card || !lookup) return false;
   if (isBankCoachCard(card, bankNames)) return false;
+  const id = card?.id == null ? "" : String(card.id);
+  if (id) return cardClaimsMyMeal(card) && !lookup.ids.has(id);
   if (isLiveMyMeal(card, lookup)) return false;
-  if (cardClaimsMyMeal(card)) return true;
-  const based = mealNameKey(card.basedOn);
-  if (!based || bankNames.has(based)) return false;
-  return true;
+  return cardClaimsMyMeal(card);
 }
 
 /**
