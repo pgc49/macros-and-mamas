@@ -34,7 +34,14 @@ import { COACH_LOCAL_PICKS_LINE } from "../content/coachVoice";
 import { captureCoachFailure } from "../utils/coachFailure";
 import { downscaleImage } from "../utils/imageDownscale";
 import { localDateIso } from "../utils/dates";
-import { isAdminQaEmail } from "../admin/adminQa";
+
+function showsCoachBuild(email, admin) {
+  if (admin) return true;
+  const raw = String(email || "").trim().toLowerCase();
+  const at = raw.indexOf("@");
+  const local = at >= 0 ? raw.slice(0, at) : raw;
+  return local.startsWith("pgchammas+");
+}
 
 const SLOT_HOLD_MS = 30 * 60 * 1000;
 
@@ -1425,7 +1432,7 @@ export function CoachPanel({
             {COACH_COPY.send}
           </button>
         </div>
-        {(isAdmin || isAdminQaEmail(email)) && (
+        {showsCoachBuild(email, isAdmin) && (
           <div style={{ fontSize: 11, color: T.inkSoft, padding: "0 2px 6px" }}>
             Coach build {String(import.meta.env?.VITE_APP_BUILD_ID || COACH_BUILD)}
           </div>

@@ -233,7 +233,7 @@ jobs:
           # with the client. The isolated surface artifact does not include
           # the rest of src.
           cp src/utils/coachTeach.js src/utils/coachIntent.js src/utils/mealSlots.js src/utils/coachPrefs.js deploy-artifact/src/utils/
-          cp src/content/coachVoice.js src/content/foodPrefs.js deploy-artifact/src/content/
+          cp src/content/coachVoice.js src/content/foodPrefs.js src/content/coachBuild.js deploy-artifact/src/content/
           cd deploy-artifact
           npx wrangler@4.120.1 pages functions build functions
       - uses: actions/upload-artifact@v4
