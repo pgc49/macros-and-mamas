@@ -45,7 +45,7 @@ create policy "coach_messages_hide_own"
   on public.coach_messages for update
   to authenticated
   using (profile_id = auth.uid() and hidden_at is null)
-  with check (profile_id = auth.uid() and role = 'mama');
+  with check (profile_id = auth.uid() and hidden_at is not null);
 
 create or replace function public.protect_coach_message_hide()
 returns trigger

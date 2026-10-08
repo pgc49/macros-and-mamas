@@ -117,7 +117,7 @@ select lives_ok(
   $$update public.coach_messages
       set hidden_at = now()
     where id = '00000000-0000-0000-0000-0000000000c1'$$,
-  'mama can hide her own row'
+  'mama can hide her own coach-role row'
 );
 
 select is(
