@@ -130,6 +130,7 @@ export function ClientApp({
   onAskCallie,
   onLoadCoachThread,
   onAppendCoachMessage,
+  onHideCoachMessage,
   postCoach,
   messagesDraft = "",
   onMessagesDraftUsed,
@@ -229,7 +230,17 @@ export function ClientApp({
   const coachReady = coachIsAvailable({ macros, mealLogDate: mealLogDate || todayLog?.date });
   // One instant for the Today card and the Coach tab. The door reads it as
   // Pacific wall time (`coachSlotFromTime`), not the browser's local hour.
-  const coachClock = useMemo(() => new Date(), []);
+  const [coachClock, setCoachClock] = useState(() => new Date());
+  useEffect(() => {
+    if (tab === "coach") setCoachClock(new Date());
+  }, [tab]);
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") setCoachClock(new Date());
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
   const coachAnswer = useMemo(
     () => (coachReady
       ? buildCoachAnswer({
@@ -815,6 +826,7 @@ export function ClientApp({
             mealHistoryByDate={mealHistoryByDate}
             customMeals={customMeals}
             now={coachClock}
+            onClockRefresh={(instant) => setCoachClock(instant instanceof Date ? instant : new Date())}
             onLogCard={onLogCoachCard}
             onPencilCard={onPencilCoachCard}
             onSaveCard={onSaveCoachCard}
@@ -824,6 +836,7 @@ export function ClientApp({
             }}
             onLoadThread={onLoadCoachThread}
             onAppendMessage={onAppendCoachMessage}
+            onHideMessage={onHideCoachMessage}
             postCoach={postCoach}
           />
         </ErrorBoundary>

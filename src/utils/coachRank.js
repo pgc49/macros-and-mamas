@@ -10,8 +10,17 @@
 
 import { COACH_COPY, COACH_SLOT_LABEL } from "../content/coachVoice.js";
 import { withRecipeDetail } from "../content/recipeDetails.js";
-import { mealFitsRemaining, mealMacros } from "./eatingOutImpact.js";
+import { mealMacros } from "./eatingOutImpact.js";
 import { snapServings } from "./servings.jsx";
+import {
+  PROTEIN_OVER_MUCH,
+  PROTEIN_OVER_OK,
+  SCALE_CANDIDATES,
+  coachMealFits,
+  pickScale,
+  portionTitle,
+  sourceTag,
+} from "./coachPlateScale.js";
 import {
   likeMatch,
   mealAllowedForDiet,
@@ -19,14 +28,18 @@ import {
   namesMatch,
   primaryProtein,
 } from "./coachPrefs.js";
-import { budgetAsRemaining } from "./coachBudget.js";
 import { mealMatchesQuery, mealSlotFilterKey } from "./mealSearch.js";
 import { buildLiveMyMealsLookup, isLiveMyMeal } from "./coachMyMeals.js";
 
-export const SCALE_CANDIDATES = [1, 1.5, 2];
-/** 10–20g over the day's protein high is fine. Past that is unnecessary. */
-export const PROTEIN_OVER_OK = 10;
-export const PROTEIN_OVER_MUCH = 20;
+export {
+  SCALE_CANDIDATES,
+  PROTEIN_OVER_OK,
+  PROTEIN_OVER_MUCH,
+  coachMealFits,
+  pickScale,
+  portionTitle,
+  sourceTag,
+};
 
 function hasMacros(meal) {
   const m = mealMacros(meal);
@@ -44,54 +57,6 @@ function scaleMeal(meal, servings) {
     c: c * snapped,
     f: f * snapped,
   };
-}
-
-export function coachMealFits(meal, budget) {
-  return mealFitsRemaining(meal, budgetAsRemaining(budget));
-}
-
-/**
- * 1× if it fits. A bigger portion only when a single serving leaves her
- * short on protein, the upscale still keeps fat in range, and it doesn't
- * pile on more than 20g past what she needs. If 1× does not fit and a half
- * does, offer the half — she can still be shown the full plate beside it.
- */
-export function pickScale(meal, budget) {
-  if (!budget) return null;
-  const fits = (s) => coachMealFits(scaleMeal(meal, s), budget);
-  const p1 = mealMacros(meal).p;
-  const pNeed = budget?.pNeed || 0;
-  if (fits(1)) {
-    let best = 1;
-    if (p1 < pNeed) {
-      for (const s of [1.5, 2]) {
-        if (!fits(s)) continue;
-        if (p1 * s < p1 + 15) continue;
-        if (p1 * s > pNeed + PROTEIN_OVER_MUCH) continue;
-        best = s;
-      }
-    }
-    return best;
-  }
-  if (fits(0.5)) return 0.5;
-  return null;
-}
-
-export function portionTitle(name, servings) {
-  const base = String(name || "Meal");
-  const s = snapServings(servings || 1);
-  if (s === 1) return base;
-  if (s === 0.5) return `${base} · half portion`;
-  return `${base} · ${s} servings`;
-}
-
-export function sourceTag(source) {
-  if (source === "my") return COACH_COPY.sourceMy;
-  if (source === "pantry") return COACH_COPY.sourcePantry;
-  if (source === "menu") return COACH_COPY.sourceMenu;
-  if (source === "kitchen") return COACH_COPY.sourceKitchen;
-  if (source === "new") return COACH_COPY.sourceNew;
-  return COACH_COPY.sourceBank;
 }
 
 function usualCount(name, historyNames) {

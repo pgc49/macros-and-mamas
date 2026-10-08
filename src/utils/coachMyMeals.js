@@ -67,17 +67,16 @@ export function isBankCoachCard(card, bankNames = bankMealNameSet()) {
 
 /**
  * A thread card that is one of her customs and that custom is no longer saved.
- * Chip text does not matter: "Built for what's left" still carries the saved
+ * Chip text does not matter: "Made for tonight" still carries the saved
  * name in `basedOn`. Bank recipes and live customs stay.
  */
 export function cardIsGoneCustom(card, lookup, bankNames = bankMealNameSet()) {
   if (!card || !lookup) return false;
   if (isBankCoachCard(card, bankNames)) return false;
+  const id = card?.id == null ? "" : String(card.id);
+  if (id) return cardClaimsMyMeal(card) && !lookup.ids.has(id);
   if (isLiveMyMeal(card, lookup)) return false;
-  if (cardClaimsMyMeal(card)) return true;
-  const based = mealNameKey(card.basedOn);
-  if (!based || bankNames.has(based)) return false;
-  return true;
+  return cardClaimsMyMeal(card);
 }
 
 /**

@@ -20,7 +20,9 @@ import { fullName, joinPersonName } from "../lib/personName";
 import { addDaysIso, localDateIso, wkStartOf } from "../utils/dates";
 import { ageFromDateOfBirth } from "../utils/dateOfBirth";
 import { sanitizeWeekMeals } from "../utils/planMealShape";
+import * as Sentry from "@sentry/react";
 import { preserveRefusalLines } from "../../functions/_shared/coachRefusalSummary.js";
+import { mamaCoachInsertRow } from "../../functions/_shared/coachMessages.js";
 import { roundMealLogMacros } from "../utils/mealLogMacros";
 
 export { ageFromDateOfBirth };
@@ -164,6 +166,22 @@ async function requireUserId() {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) throw new Error("Not signed in");
   return user.id;
+}
+
+function mapCoachMessageRow(r) {
+  return {
+    id: r.id,
+    role: r.role,
+    body: r.body || "",
+    kind: r.kind || "text",
+    payload: r.payload || null,
+    requestId: r.request_id || r.payload?.requestId || null,
+    localDate: r.local_date || null,
+    createdAt: r.created_at,
+    hiddenAt: r.hidden_at || null,
+    seq: r.seq ?? null,
+    source: r.source === "client" ? "client" : "server",
+  };
 }
 
 /**
@@ -2169,13 +2187,36 @@ export const db = {
   async saveClientSummary(row) {
     if (!row?.profile_id || !row?.for_date || !row?.summary) return null;
     const existing = await this.loadClientSummary(row.profile_id, row.for_date);
-    const summary = preserveRefusalLines(existing?.summary, String(row.summary).slice(0, 2000));
+    const kept = preserveRefusalLines(existing?.summary, String(row.summary).slice(0, 2000));
+    if (!kept.ok) {
+      try {
+        Sentry.captureMessage("coach_refusal_summary_full", {
+          level: "error",
+          tags: { surface: "admin", kind: "note" },
+        });
+      } catch {
+        /* Sentry must never take Refresh down */
+      }
+      console.warn("saveClientSummary refused lines would not fit");
+      return { ok: false, reason: kept.reason || "full" };
+    }
+    if (Number(kept.trimmed) > 0) {
+      try {
+        Sentry.captureMessage("coach_refusal_summary_trimmed", {
+          level: "warning",
+          tags: { surface: "admin", kind: "note" },
+          extra: { trimmed: kept.trimmed },
+        });
+      } catch {
+        /* Sentry must never take Refresh down */
+      }
+    }
     const { data, error } = await supabase
       .from("client_summaries")
       .upsert({
         profile_id: row.profile_id,
         for_date: row.for_date,
-        summary,
+        summary: kept.summary,
         suggested_touch: row.suggested_touch ? String(row.suggested_touch).slice(0, 500) : null,
         model: row.model ? String(row.model).slice(0, 120) : null,
       }, { onConflict: "profile_id,for_date" })
@@ -3566,9 +3607,10 @@ export const db = {
     const uid = await requireUserId();
     const { data, error } = await supabase
       .from("coach_messages")
-      .select("id, role, body, kind, payload, local_date, created_at")
+      .select("id, role, body, kind, payload, request_id, local_date, created_at, hidden_at, seq, source")
       .eq("profile_id", uid)
       .eq("local_date", localDate || localDateIso())
+      .is("hidden_at", null)
       // Arrival order, not clock order: her question and its answer are written
       // in the same tick and their timestamps tie.
       .order("seq", { ascending: false })
@@ -3577,51 +3619,105 @@ export const db = {
       console.warn("loadCoachThread failed", error);
       return [];
     }
-    return (data || [])
-      .map((r) => ({
-        id: r.id,
-        role: r.role,
-        body: r.body || "",
-        kind: r.kind || "text",
-        payload: r.payload || null,
-        localDate: r.local_date || null,
-        createdAt: r.created_at,
-      }))
-      .reverse();
+    return (data || []).map(mapCoachMessageRow).reverse();
   },
 
-  async appendCoachMessage({ role, body = "", kind = "text", payload = null, localDate = null }) {
-    const uid = await requireUserId();
+  /**
+   * Admin: full Coach history for any mama, including rows she hid.
+   * RLS still requires is_admin() — a non-admin gets an empty set.
+   */
+  async loadClientCoachThread(clientId, { limit = 200 } = {}) {
+    if (!clientId) throw new Error("clientId required");
     const { data, error } = await supabase
       .from("coach_messages")
-      .insert({
-        profile_id: uid,
-        role: role === "coach" ? "coach" : "mama",
+      .select("id, role, body, kind, payload, request_id, local_date, created_at, hidden_at, seq, source")
+      .eq("profile_id", clientId)
+      .order("seq", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("loadClientCoachThread failed", error);
+      return [];
+    }
+    return (data || []).map(mapCoachMessageRow);
+  },
+
+  async appendCoachMessage({
+    role,
+    body = "",
+    kind = "text",
+    payload = null,
+    requestId = null,
+    localDate = null,
+    template = null,
+    topic = null,
+  }) {
+    const uid = await requireUserId();
+    const day = localDate || localDateIso();
+    if (role === "coach") {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        console.warn("appendCoachMessage missing session");
+        return null;
+      }
+      const resp = await fetch("/api/coach", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          mode: "record",
+          template: template || "local.text",
+          topic,
+          body: String(body || "").slice(0, 4000),
+          payload,
+          localDate: day,
+        }),
+      });
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok || !data?.ok) {
+        console.warn("appendCoachMessage record failed", resp.status);
+        return null;
+      }
+      return data.message || {
+        role: "coach",
+        source: "client",
         body: String(body || "").slice(0, 4000),
         kind,
         payload,
-        local_date: localDate || localDateIso(),
-      })
-      .select("id, role, body, kind, payload, local_date, created_at")
+        localDate: day,
+      };
+    }
+    const { data, error } = await supabase
+      .from("coach_messages")
+      .insert(mamaCoachInsertRow({
+        profileId: uid,
+        body,
+        kind,
+        localDate: day,
+        requestId,
+      }))
+      .select("id, role, body, kind, payload, request_id, local_date, created_at, hidden_at, seq, source")
       .single();
     if (error) {
       console.warn("appendCoachMessage failed", error);
       return null;
     }
-    return {
-      id: data.id,
-      role: data.role,
-      body: data.body || "",
-      kind: data.kind || "text",
-      payload: data.payload || null,
-      localDate: data.local_date || null,
-      createdAt: data.created_at,
-    };
+    return mapCoachMessageRow(data);
+  },
+
+  async hideCoachMessages(ids = []) {
+    const { error } = await supabase.rpc("hide_coach_messages", { ids });
+    if (error) {
+      console.warn("hideCoachMessages failed", error);
+      return false;
+    }
+    return true;
   },
 
   async clearCoachThread() {
-    const uid = await requireUserId();
-    const { error } = await supabase.from("coach_messages").delete().eq("profile_id", uid);
+    const { error } = await supabase.rpc("clear_coach_messages");
     if (error) {
       console.warn("clearCoachThread failed", error);
       return false;

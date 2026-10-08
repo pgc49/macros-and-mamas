@@ -31,6 +31,7 @@ import { localDateIso, wkStartOf } from "../utils/dates";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 const noop = () => {};
@@ -185,6 +186,15 @@ describe("where the coach shows up", () => {
     expect(screen.queryByText(/keep fat in its band/i)).toBeNull();
     expect(screen.queryByText(/You need about/i)).toBeNull();
     expect(screen.queryByText(/Know what .+ is yet\?/)).toBeNull();
+  });
+
+  it("recomputes Dinner on a 6:30pm quick ask", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-05T01:30:00.000Z"));
+    renderApp({ tab: "coach" });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.askEat }));
+    expect(document.body.textContent).toMatch(/Dinner/);
+    vi.useRealTimers();
   });
 
   it("after lunch at night the Today card asks for dinner", () => {

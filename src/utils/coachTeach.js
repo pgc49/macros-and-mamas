@@ -135,8 +135,13 @@ export function teachBody(topic, ctx = {}) {
   if (topic === "menuLink") return COACH_COPY.teachMenuLink;
   if (topic === "menuClosed") return COACH_COPY.teachMenuClosed;
   if (topic === "menuMiss") return COACH_COPY.teachMenuMiss;
-  if (topic === "neverSkip") return COACH_COPY.teachNeverSkip;
-  if (topic === "realFood") return COACH_COPY.teachRealFood;
+  if (topic === "neverSkip") {
+    return ctx.again ? COACH_COPY.teachNeverSkipAgain : COACH_COPY.teachNeverSkip;
+  }
+  if (topic === "realFood") {
+    if (ctx.notLogging) return COACH_COPY.teachRealFood;
+    return `${COACH_COPY.teachRealFood} ${COACH_COPY.teachRealFoodLogAhead}`;
+  }
   if (topic === "alcohol") return COACH_COPY.teachAlcohol;
   if (topic === "coffee") return COACH_COPY.teachCoffee;
   if (topic === "fasting") return COACH_COPY.teachFasting;

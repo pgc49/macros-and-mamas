@@ -47,28 +47,31 @@ export function loggedSlotsFromEntries(entries) {
  * so an unlogged lunch is still lunch's room, not the snack's.
  *
  * A meal is still to come if it falls after the one she's asking about, or if
- * the clock hasn't passed it yet. A meal the clock has gone by and she never
- * logged was skipped, and holding room for it would shrink every meal left.
+ * the clock hasn't passed it yet. When nothing is logged today, earlier
+ * unlogged meals still get a share — she may have eaten and not logged.
+ * Only when she has logged something else do we treat a clock-past empty
+ * slot as skipped and stop holding room for it.
  */
 export function laterSlotsAfter(selected, loggedSlots = new Set(), now = new Date()) {
   const clock = coachSlotFromTime(now);
   const nowIdx = Math.max(0, MAIN_SLOTS.indexOf(clock === "snack" ? "lunch" : clock));
   // A snack has no place of its own in the order; the clock is all it has.
   const selectedIdx = selected === "snack" ? nowIdx - 1 : MAIN_SLOTS.indexOf(selected);
+  const nothingLogged = loggedSlots.size === 0;
   return MAIN_SLOTS.filter((s, i) => s !== selected
     && !loggedSlots.has(s)
-    && (i > selectedIdx || i >= nowIdx));
+    && (i > selectedIdx || i >= nowIdx || nothingLogged));
 }
 
 /**
  * Meals the clock has already gone past that she never logged.
  *
- * Callie does not want those calories quietly folded into lunch. Lunch can
- * have the room — she still has to eat — but the coach has to say it noticed
- * the skip, and then feed the rest of the day as a real lunch, a larger
- * snack, and a larger dinner.
+ * An empty log is not a skip. She may have eaten and not written it down.
+ * Only treat a past slot as skipped when she said she skipped it, or when
+ * she logged other meals today (so the empty one is the exception).
  */
-export function skippedSlotsBefore(selected, loggedSlots = new Set(), now = new Date()) {
+export function skippedSlotsBefore(selected, loggedSlots = new Set(), now = new Date(), { saidSkipped = false } = {}) {
+  if (!saidSkipped && loggedSlots.size === 0) return [];
   const clock = coachSlotFromTime(now);
   const nowIdx = Math.max(0, MAIN_SLOTS.indexOf(clock === "snack" ? "lunch" : clock));
   const selectedIdx = selected === "snack" ? nowIdx : MAIN_SLOTS.indexOf(selected);

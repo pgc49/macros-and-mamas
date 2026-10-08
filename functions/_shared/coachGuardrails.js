@@ -31,13 +31,95 @@
  */
 export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "admin", "off_topic", "supply"];
 
+/**
+ * Crisis and postpartum warning signs. These get the emergency line, not
+ * the ordinary medical handoff. Idioms like "dying for tacos" or "this
+ * workout is killing me" must not match — keep the phrases specific.
+ */
+const CRISIS = [
+  // Suicide / self-harm — not "die for" / "dying for" / "to die for" a food
+  /\bi want to die\b(?!\s+for\b)/,
+  /\bwant to die\b(?!\s+for\b)/,
+  /\b(thoughts of|thinking about) hurt(ing)? myself\b/,
+  /\bwant to hurt myself\b/,
+  /\bcut(ting)? myself\b/,
+  /\bdon'?t want to be here(?=\s+anymore\b|[.!?]|$)/,
+  /\bdo not want to be here(?=\s+anymore\b|[.!?]|$)/,
+  /\bsuicid/,
+  /\bself[- ]harm/,
+  /\bend my life\b|\bend it all\b/,
+  /\bkill myself\b/,
+  // Harm the baby
+  /\bhurt(ing)? (the |my )?baby\b/,
+  /\bharm(ing)? (the |my )?baby\b/,
+  // Chest / breathing
+  /\bchest (pain|hurts?|tight)/,
+  /\b(trouble|difficulty|hard time) breath/,
+  /\bcan'?t breathe\b/,
+  /\bshort(ness)? of breath\b/,
+  // Fainted / passed out stay crisis. Bare "faint" / "feel faint" are medical.
+  /\bfaint(ed|ing)\b/,
+  /\bpass(ed|ing) out\b/,
+  /\bblack(ed|ing)? out\b/,
+  // Heavy bleeding
+  /\bsoak(ing|ed)? (through )?(pads?|maxi)/,
+  /\b(large |big )clots?\b/,
+  /\bheavy bleed/,
+  /\bh(a)?emorrhag/,
+  // Headache + vision (preeclampsia warning)
+  /\b(severe |bad |worst )?headache\b.{0,40}\b(vision|blurry|blurred|spots)\b/,
+  /\b(vision|blurry|blurred).{0,40}\b(headache|head)\b/,
+  /\bblurred vision\b/,
+  /\bvision (is |got )?(blurry|changes?)\b/,
+  // DVT
+  /\b(one |my )?(left |right )?(swollen|painful) (and )?(painful |swollen )?(leg|calf)\b/,
+  /\b(leg|calf) (is |feels )?(swollen|painful)/,
+  /\b(legs?|calves|calf) (is|are|feels?) (swollen|painful)/,
+  /\bone of my legs?\b.{0,40}\b(swollen|painful)/,
+  // Seizure
+  /\bseizure/,
+  // Psychosis
+  /\bhearing things\b/,
+  /\bseeing things\b/,
+  /\b(hear|see)ing? (things |voices )?(that aren'?t|that are not) there\b/,
+  /\bhallucin/,
+  // Racing heart with chest pain or shortness of breath
+  /\b(racing|pounding) heart\b.{0,40}\b(chest|breath|breathe)/,
+  /\bheart (is )?(racing|pounding)\b.{0,40}\b(chest|breath|breathe)/,
+];
+
 const URGENT = [
-  // Symptoms
-  /\bdizz(y|iness)\b/, /\bfaint(ing)?\b/, /\blight[- ]?headed\b/, /\bchest pain\b/,
-  /\bpalpitation/, /\bshort(ness)? of breath\b/, /\bbleed(ing)?\b/, /\bh(a)?emorrhag/,
-  /\bfever\b/, /\bmigraine/, /\bblurred vision\b/, /\bnumbness\b/, /\brash\b/,
-  /\bvomit/, /\bdiarrh/, /\bconstipat/, /\bcontractions\b/, /\bpreeclamp/,
-  /\bpassing out\b/, /\bblack(ing)? out\b/,
+  ...CRISIS,
+  // Ordinary symptoms — medical line, not 911
+  /\bhurt(ing)? myself\b/,
+  /\bfaint\b/,
+  /\b(haven'?t|have not|not) (been )?slept?\b.{0,24}\b(for )?(days|a few days|two days|2 days|3 days)\b/,
+  /\bnot sleep(ing)? for days\b/,
+  /\bhaven'?t slept in days\b/,
+  /\bdizz(y|iness)\b/, /\blight[- ]?headed\b/,
+  /\bpalpitation/,
+  /\b(racing|pounding) heart\b/,
+  /\bheart (is )?(racing|pounding)\b/,
+  /\bheart races\b(?!\s+when\b)/,
+  /\bbleed(ing)?\b/,
+  /\bfever\b/, /\bmigraine/, /\bnumbness\b/, /\brash\b/,
+  /\bvomit/, /\bnause(a|ous|ated)\b/,
+  /\bthrow(s|ing|n)? up\b/, /\bthrew up\b/,
+  /\bdiarrh/, /\bconstipat/, /\bcontractions\b/, /\bpreeclamp/,
+  /\b(high blood pressure|hypertension)\b/,
+  /\bblood pressure is high\b/,
+  /\bblood pressure\b.{0,32}\b(was|is|got|has been)\b.{0,16}\bhigh\b/,
+  /\bmastitis\b/,
+  /\bbreast.{0,48}\b(red|hot|hard).{0,48}\bfever/,
+  /\b(red|hot) incision\b/,
+  /\bincision.{0,24}\b(red|hot|swollen|infected)/,
+  /\b(haven'?t|have not|not) (been )?eat(en|ing)? all day\b/,
+  /\b(didn'?t|did not) eat all day\b/,
+  /\b(haven'?t|have not|didn'?t|did not|not)\b.{0,32}\beat(en|ing)?\b.{0,24}\ball day\b/,
+  /\bcry(ing)? all day\b/,
+  // Restriction that is not an idiom
+  /\bonly eating\b.{0,24}\b\d{2,4}\s*(calories?|cals?)\b/,
+  /\beating (only )?\d{2,4}\s*(calories?|cals?)\b/,
   // Medication and clinical management
   /\bmedication\b/, /\bprescri/, /\bantibiotic/, /\bmetformin\b/, /\bozempic\b/,
   /\bsemaglutide\b/, /\bwegovy\b/, /\bzoloft\b/, /\bssri\b/, /\bbirth control\b/,
@@ -48,9 +130,9 @@ const URGENT = [
   /\bdiabet/, /\bgestational\b/, /\bpcos\b/, /\bceliac\b/, /\bibs\b/, /\bgallbladder\b/,
   /\bdoctor\b/, /\bob[- ]?gyn\b/, /\bmidwife\b/, /\bpediatrician\b/,
   /\bpregnan/, /\btrimester\b/,
-  // Mental health
+  // Mental health (without the crisis phrases above)
   /\banxiety\b/, /\banxious\b/, /\bdepress/, /\bppd\b/, /\bpanic attack/,
-  /\btherapist\b/, /\bsuicid/, /\bself[- ]harm/,
+  /\btherapist\b/,
   // Restriction and disordered eating.
   //
   // Three of these are idioms before they are symptoms, and the literal
@@ -135,6 +217,8 @@ const FOOD_ASK = new RegExp(
     "\\bprotein\\b", "\\bcarbs?\\b", "\\bcalories\\b", "\\btakeout\\b", "\\btake[- ]out\\b",
     "\\bgrocer", "\\bdelivery\\b", "\\bdoordash\\b", "\\buber eats\\b", "\\bgrubhub\\b",
     "\\bhave for\\b", "\\bportions?\\b", "\\bserving\\b", "\\bplate\\b", "\\bdish\\b",
+    "\\bleftovers?\\b", "\\bchicken\\b", "\\bturkey\\b", "\\bsalmon\\b", "\\beggs?\\b",
+    "\\byogurt\\b", "\\bpasta\\b", "\\brice\\b",
   ].join("|"),
   "i",
 );
@@ -153,8 +237,8 @@ const OFF_TOPIC = [
   // Fitness
   /\b(workout|exercise|gym|cardio|lifting|weights|treadmill|yoga|pilates|peloton)\b/,
   /\b(steps|running|jogging) (goal|target|per day)\b/,
-  // Sleep, the baby, the house
-  /\bsleep(ing)?\b/, /\bnaps?\b/, /\bbedtime\b/, /\binsomnia\b/,
+  // Sleep trouble and baby-care gear — not ordinary time-of-day or routine.
+  /\bcan'?t sleep\b/, /\bsleep through the night\b/, /\bsleep training\b/, /\binsomnia\b/,
   /\b(daycare|teething|diapers?|stroller|car seat|nursery)\b/,
   // Screens and downtime
   /\b(tv|netflix|movie|watch|podcast|playlist)\b/,
@@ -222,15 +306,44 @@ export function scopeIsRefused(scope) {
   return scope !== "food" && scope !== "unclear";
 }
 
+const PLATE_ASK = /\b(eat|eating|meal|lunch|dinner|breakfast|snack|hungry|cook|fridge|menu|order|recipe|plate|dish|chicken|eggs?|salmon|yogurt|leftover|ideas|pizza|italian|chinese|sushi|taco|burger)\b/i;
+const MEAL_TEACH_HINT = new Set([
+  "italian", "chinese", "sushi", "pizzaMeal", "inNOut", "psMethod",
+  "neverSkip", "realFood", "underDay", "fasting", "menuLink", "menuClosed", "menuMiss",
+]);
+
+/**
+ * She is asking for a plate she can make or order. Range-only talk
+ * ("raise my calories") is not this, even though it says calories.
+ */
+export function isMealAsk(raw, { mode = "ask", topic = null } = {}) {
+  if (mode === "menu" || mode === "kitchen") return true;
+  if (topic && MEAL_TEACH_HINT.has(topic)) return true;
+  const text = String(raw || "").toLowerCase().trim();
+  if (!text) return false;
+  if (NEXT_MEAL.test(text)) return true;
+  if (!PLATE_ASK.test(text) && !FOOD_ASK.test(text)) return false;
+  if (hits(RANGES, text) && !NEXT_MEAL.test(text) && !/\bwhat (should|can|do) i (eat|have|make|order|get)\b/.test(text)) {
+    return false;
+  }
+  return PLATE_ASK.test(text) || FOOD_ASK.test(text);
+}
+
 /** Symptoms, medication, and restriction. Guilt alone is a care handoff, not this. */
 export function isClinicalUrgent(raw) {
   const text = String(raw || "").toLowerCase().trim();
   return Boolean(text) && hits(URGENT, text);
 }
 
+/** Crisis and postpartum warning signs. These get the emergency line. */
+export function isCrisisUrgent(raw) {
+  const text = String(raw || "").toLowerCase().trim();
+  return Boolean(text) && hits(CRISIS, text);
+}
+
 /** Which of Callie's handoff lines a refused scope gets. */
 const DEFLECT_FOR_SCOPE = {
-  urgent: "care",
+  urgent: "medical",
   ranges: "ranges",
   weight: "weight",
   admin: "admin",
@@ -238,8 +351,23 @@ const DEFLECT_FOR_SCOPE = {
   supply: "supply",
 };
 
-export function deflectForScope(scope) {
+export function deflectForScope(scope, asked = "") {
+  if (scope === "urgent") {
+    if (isCrisisUrgent(asked)) return "emergency";
+    return isClinicalUrgent(asked) ? "medical" : "care";
+  }
   return DEFLECT_FOR_SCOPE[scope] || "offTopic";
+}
+
+/**
+ * The model handed a question back. Re-check the original ask so a
+ * missed crisis is never answered with the off-topic line.
+ */
+export function deflectModelHandoff(text) {
+  if (isCrisisUrgent(text) || isClinicalUrgent(text) || classifyAsk(text).scope === "urgent") {
+    return deflectForScope("urgent", text);
+  }
+  return "offTopic";
 }
 
 /**
@@ -269,6 +397,38 @@ const REPLY_BANNED = [
   /\bas an ai\b/i,
   /\bcheat (meal|day)\b/i,
 ];
+
+/** Internal jargon. cleanReply drops the whole reply and keeps the cards. */
+const REPLY_JARGON = [
+  /\b(from|in) (the|callie'?s) bank\b/gi,
+  /\bprotein floor\b/gi,
+  /\b(its|her|your) band\b/gi,
+  /\bslot\b/gi,
+];
+
+function tidyScrubbed(text) {
+  return String(text || "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.!?])/g, "$1")
+    .replace(/^\s*[,.;:]\s*/, "")
+    .trim();
+}
+
+export function scrubCoachReply(text) {
+  let out = String(text || "");
+  for (const re of REPLY_JARGON) {
+    out = out.replace(new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`), "");
+  }
+  return tidyScrubbed(out);
+}
+
+export function replyHasJargon(text) {
+  const s = String(text || "");
+  return REPLY_JARGON.some((re) => {
+    re.lastIndex = 0;
+    return re.test(s);
+  });
+}
 
 export function replyIsClean(text) {
   const s = String(text || "");

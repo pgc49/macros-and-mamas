@@ -2,9 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   classifyAsk,
+  isMealAsk,
+  deflectForScope,
+  deflectModelHandoff,
   macrosPlausible,
+  replyHasJargon,
   replyIsClean,
   scopeIsRefused,
+  scrubCoachReply,
 } from "./coachGuardrails.js";
 
 const scopeOf = (text) => classifyAsk(text).scope;
@@ -150,6 +155,13 @@ describe("a food question with no food word in it", () => {
     expect(scopeOf("what should I eat after the gym")).toBe("food");
     expect(scopeOf("breakfast ideas I can make while the baby naps")).toBe("food");
   });
+
+  it("does not treat bedtime or baby-routine time as off-scope", () => {
+    expect(scopeOf("something quick with chicken I can make in like 15 min after bedtime")).toBe("food");
+    expect(scopeOf("what should I eat after bedtime")).toBe("food");
+    expect(scopeOf("after the baby goes down what's for dinner")).toBe("food");
+    expect(scopeOf("how do I get the baby to sleep through the night")).toBe("off_topic");
+  });
 });
 
 describe("milk supply", () => {
@@ -238,5 +250,41 @@ describe("the reply itself", () => {
     expect(replyIsClean("I'm not a doctor, but you should eat more.")).toBe(false);
     expect(replyIsClean("As an AI, I can't help with that.")).toBe(false);
     expect(replyIsClean("Have a cheat meal, you earned it.")).toBe(false);
+  });
+
+  it("flags internal jargon so the coach can drop the whole reply", () => {
+    expect(replyHasJargon("Try the salmon from Callie's bank tonight.")).toBe(true);
+    expect(replyHasJargon("Keep fat in its band.")).toBe(true);
+    expect(replyHasJargon("Hit the protein floor.")).toBe(true);
+    expect(replyHasJargon("This slot is dinner.")).toBe(true);
+    expect(replyHasJargon("Chicken and rice. You'll like it.")).toBe(false);
+    expect(scrubCoachReply("Try the salmon from Callie's bank tonight.")).toBe("Try the salmon tonight.");
+    expect(scrubCoachReply("Chicken and rice. You'll like it.")).toBe("Chicken and rice. You'll like it.");
+  });
+
+  it("hands a clinical ask to the medical line, not the care handoff", () => {
+    expect(deflectForScope("urgent", "I've been dizzy since this morning")).toBe("medical");
+    expect(deflectForScope("urgent", "I want to die")).toBe("emergency");
+    expect(deflectForScope("urgent", "I feel awful about what I ate")).toBe("care");
+    expect(deflectForScope("supply")).toBe("supply");
+    expect(deflectModelHandoff("Chipotle, I want to die")).toBe("emergency");
+    expect(deflectModelHandoff("what should I eat before my run")).toBe("offTopic");
+  });
+});
+
+describe("isMealAsk", () => {
+  it("treats a plate question as a meal ask", () => {
+    expect(isMealAsk("I just have eggs and vegetables in my fridge.")).toBe(true);
+    expect(isMealAsk("what should I have for dinner")).toBe(true);
+    expect(isMealAsk("what should I eat before my run")).toBe(true);
+    expect(isMealAsk("is pizza ok")).toBe(true);
+    expect(isMealAsk("", { mode: "kitchen" })).toBe(true);
+    expect(isMealAsk("a short note", { mode: "menu" })).toBe(true);
+  });
+
+  it("does not treat range-only or crisis talk as a meal ask", () => {
+    expect(isMealAsk("can you raise my calories")).toBe(false);
+    expect(isMealAsk("I want to die")).toBe(false);
+    expect(isMealAsk("write me a poem")).toBe(false);
   });
 });

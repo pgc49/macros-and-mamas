@@ -5,6 +5,9 @@
      { mode: "ask",     text, slot, budget?, recent?[] }
      { mode: "menu",    text?, slot, budget?, images[] }   → what to order
      { mode: "kitchen", text?, slot, budget?, images[] }   → from what she has
+     { mode: "record",  template, topic?, body?, payload?, localDate }
+         → persist a local/teach reply. Arbitrary coach content is rejected.
+           Teach/noneFit are rebuilt here. Cards/read are source='client'.
 
    Three things this endpoint will not do:
 
@@ -34,14 +37,19 @@ import {
 import {
   classifyAsk,
   deflectForScope,
+  deflectModelHandoff,
+  isCrisisUrgent,
+  isMealAsk,
   macrosPlausible,
+  replyHasJargon,
   replyIsClean,
   scopeIsRefused,
 } from "../_shared/coachGuardrails.js";
+import { askedForMealOptions, limitAskMeals } from "../_shared/coachAskMeals.js";
+import { escalateDoor, isWontLogRefusal } from "../_shared/coachRefusalSummary.js";
 import {
   callOpenRouter,
   logAiFailure,
-  messageForKind,
   parseJsonLoose,
   resolveCoachModels,
 } from "../_shared/openrouter.js";
@@ -49,36 +57,97 @@ import {
   checkAiLimit,
   fetchEnrollment,
   json,
-  loadSelf,
+  loadCoachSelf,
   requireSupabaseUser,
 } from "../_shared/clientAiAccess.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
-import { hasMenuLink, localCoachTeach, teachBody } from "../../src/utils/coachTeach.js";
+import { hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../../src/utils/coachTeach.js";
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
-import { menuFromPageCopy } from "../../src/content/coachVoice.js";
+import { COACH_BUSY_LINE, leadFineTuningReply, menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
+import {
+  buildLocalCoachRecord,
+  clampCoachRequestId,
+  countPainTeachToday,
+  insertCoachReply,
+  isCoachRequestId,
+  isStuckPainCount,
+  noteReserveRequestId,
+  persistServerCoach,
+} from "../_shared/coachMessages.js";
+import { sizeMealsForPersist } from "../_shared/coachPlateScale.js";
+import { notifyCrisisEmail } from "../_shared/coachCrisisEmail.js";
+import { ensureFoodMeals, fallbackMealReply, MEAL_TEACH_TOPICS } from "../_shared/coachFoodFallback.js";
 
 const MAX_PER_DAY = 30;
+const MAX_RECORD_PER_DAY = 200;
+const MAX_NOTES_PER_DAY = 20;
+const COACH_NOTE_TYPE = "coach_note";
 const MAX_IMAGES = 3;
 const MAX_IMAGE_CHARS = 2_500_000;
 const MAX_TEXT = 600;
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
-const MODES = new Set(["ask", "menu", "kitchen"]);
+const MODES = new Set(["ask", "menu", "kitchen", "record"]);
 
-const COACH_FAILURE_COPY = {
-  retryLabel: "ask me again",
-  manualLabel: "pick something from Meals",
-};
+async function allowCoachNote(env, userId, { isAdmin, requestId }) {
+  if (isAdmin) return true;
+  const limit = await checkAiLimit(env, userId, {
+    type: COACH_NOTE_TYPE,
+    max: MAX_NOTES_PER_DAY,
+    requestId: noteReserveRequestId(requestId),
+    busyMessage: "I couldn't save that just now. Try again in a minute.",
+    spentMessage: "That's enough saved notes for today. I'll still answer here.",
+  });
+  return limit.ok;
+}
+
+async function persistCannedCoach(env, userId, body, message, {
+  isAdmin,
+  requestId,
+  asked = "",
+  scope = null,
+  escalate = null,
+}) {
+  const allowed = await allowCoachNote(env, userId, { isAdmin, requestId });
+  const door = escalateDoor(asked, { scope, escalate });
+  const crisis = door === "crisis";
+  if (!allowed && !crisis) return false;
+  if (door && (allowed || crisis)) {
+    const noted = await appendCoachRefusal(env, userId, { asked, scope, escalate });
+    if (!noted.ok && !noted.skipped) {
+      await logAiFailure(env, {
+        userId,
+        label: "coach",
+        kind: "note",
+        detail: noted.reason === "full"
+          ? "client_summaries append full"
+          : "client_summaries append failed",
+      });
+    } else if (noted.ok && Number(noted.trimmed) > 0) {
+      await logAiFailure(env, {
+        userId,
+        label: "coach",
+        kind: "note",
+        detail: `client_summaries append trimmed:${noted.trimmed}`,
+      });
+    }
+    if (door === "crisis" && noted.ok && !noted.skipped && !noted.capped && !noted.unchanged) {
+      await notifyCrisisEmail(env, { userId, asked });
+    }
+  }
+  if (allowed) {
+    await persistServerCoach(env, userId, body, {
+      ...message,
+      payload: { ...(message.payload || {}), requestId },
+    });
+  }
+  return allowed;
+}
 
 export async function onRequestPost({ request, env }) {
   try {
-    if (!env.OPENROUTER_API_KEY) {
-      console.error("missing OPENROUTER_API_KEY");
-      return json({ error: "coach unavailable" }, 503);
-    }
-
     const authHeader = request.headers.get("authorization") || "";
     const user = await requireSupabaseUser(request, env);
     if (!user) return json({ error: "unauthorized" }, 401);
@@ -90,6 +159,53 @@ export async function onRequestPost({ request, env }) {
 
     const body = await request.json().catch(() => ({}));
     const mode = MODES.has(body.mode) ? body.mode : "ask";
+    const isAdmin = access.role === "admin";
+    const requestId = clampCoachRequestId(body.requestId);
+
+    // Local cards/read/teach only. The client never sends a model reply
+    // back. Arbitrary coach content is rejected; pins never come from here.
+    if (mode === "record") {
+      if (!isAdmin) {
+        const limit = await checkAiLimit(env, user.id, {
+          type: "coach_record",
+          max: MAX_RECORD_PER_DAY,
+          busyMessage: "I couldn't save that just now. Try again in a minute.",
+          spentMessage: "That's enough saved replies for today. Tomorrow's a fresh start.",
+        });
+        if (!limit.ok) {
+          return json(
+            { error: "rate_limited", message: limit.message, retry_after_seconds: limit.retryAfterSeconds },
+            429,
+          );
+        }
+      }
+      const local = buildLocalCoachRecord(body);
+      if (!local) return json({ error: "invalid record" }, 400);
+      const saved = await insertCoachReply(env, user.id, {
+        ...local,
+        localDate: body.localDate,
+        requestId: clampCoachRequestId(body.requestId),
+      });
+      if (!saved.ok) return json({ error: "could not save" }, 502);
+      return json({
+        ok: true,
+        message: {
+          id: saved.id || null,
+          role: "coach",
+          source: local.source,
+          body: local.body,
+          kind: local.kind,
+          payload: local.payload,
+          requestId: isCoachRequestId(body.requestId) ? String(body.requestId).trim() : null,
+          localDate: body.localDate || null,
+        },
+      });
+    }
+
+    if (!env.OPENROUTER_API_KEY) {
+      console.error("missing OPENROUTER_API_KEY");
+      return json({ error: "coach unavailable" }, 503);
+    }
     const text = String(body.text || "").trim().slice(0, MAX_TEXT);
     const askedSlot = slotNamedInAsk(text);
     const slot = askedSlot
@@ -105,68 +221,158 @@ export async function onRequestPost({ request, env }) {
       return json({ error: "Add a photo first." }, 400);
     }
 
-    // The guardrail runs before anything is spent. The client shows the same
-    // handoff immediately and also posts here, so the refusal can be written
-    // onto her card. A photo of a menu is a food question by construction, so
-    // only free text is classified. Skip-the-log stays a teach, not a card.
-    const verdict = mode === "ask" ? classifyAsk(text) : { scope: "food", aside: null };
-    // A third ask of the same pain teach is a stuck escalate. The client
-    // already showed Callie. This post only writes the one-line brief.
-    if (body.escalate === "stuck") {
-      await appendCoachRefusal(env, user.id, { asked: text, escalate: "stuck" });
-      return json({ ok: true, scope: "stuck", deflect: "again", meals: [] });
-    }
-    if (scopeIsRefused(verdict.scope)) {
-      await appendCoachRefusal(env, user.id, { asked: text, scope: verdict.scope });
-      return json({
-        ok: true,
-        scope: verdict.scope,
-        deflect: deflectForScope(verdict.scope),
-        meals: [],
-      });
-    }
+    // Classify free text on ask and on a photo note. A symptom typed under
+    // a menu shot must still reach Callie. An empty photo note stays food.
+    const verdict = (mode === "ask" || text.length >= 2)
+      ? classifyAsk(text)
+      : { scope: "food", aside: null };
 
     // Callie's own sentences. Same matcher the client runs, so a crafted
     // request cannot spend a model call on a question she already answered.
     // A pasted link is not one of those sentences. It is fetched below.
     const teach = mode === "ask" && !hasMenuLink(text) ? localCoachTeach(text) : null;
+    // Ignore escalate:'stuck' from the client. The third pain ask today
+    // is stuck; anything earlier is just the teach again.
+    const painCount = teach && PAIN_TOPICS.has(teach.topic)
+      ? await countPainTeachToday(env, user.id, teach.topic)
+      : 0;
+    if (teach && PAIN_TOPICS.has(teach.topic) && isStuckPainCount(painCount)) {
+      const filled = isMealAsk(text, { mode, topic: teach.topic })
+        ? ensureFoodMeals([], { text, slot, mode, topic: teach.topic, safe: true })
+        : { meals: [] };
+      await persistCannedCoach(env, user.id, body, {
+        body: "",
+        kind: "deflect",
+        payload: { deflect: "again", cards: persistMeals(filled.meals, slot) },
+      }, {
+        isAdmin,
+        requestId,
+        asked: text,
+        escalate: "stuck",
+      });
+      return json({
+        ok: true,
+        scope: "stuck",
+        deflect: "again",
+        meals: filled.meals,
+        mealSource: filled.meals.length ? "new" : undefined,
+      });
+    }
+    if (scopeIsRefused(verdict.scope)) {
+      const deflect = deflectForScope(verdict.scope, text);
+      const crisis = deflect === "emergency" || isCrisisUrgent(text);
+      const filled = (!crisis && isMealAsk(text, { mode }))
+        ? ensureFoodMeals([], {
+          text,
+          slot,
+          mode,
+          safe: verdict.scope === "urgent" || verdict.scope === "supply",
+        })
+        : { meals: [] };
+      await persistCannedCoach(env, user.id, body, {
+        body: "",
+        kind: "deflect",
+        payload: { deflect, cards: persistMeals(filled.meals, slot) },
+      }, {
+        isAdmin,
+        requestId,
+        asked: text,
+        scope: verdict.scope,
+      });
+      return json({
+        ok: true,
+        scope: verdict.scope,
+        deflect,
+        meals: filled.meals,
+        mealSource: filled.meals.length ? "new" : undefined,
+      });
+    }
+
     if (teach) {
+      const reply = teachBody(teach.topic, {
+        again: teach.topic === "neverSkip" && painCount.total >= 1,
+        notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
+      });
+      const filled = MEAL_TEACH_TOPICS.has(teach.topic)
+        ? ensureFoodMeals([], { text, slot, mode, topic: teach.topic, reply })
+        : { meals: [], reply };
+      await persistCannedCoach(env, user.id, body, {
+        body: filled.reply || reply,
+        kind: filled.meals.length ? "cards" : "text",
+        payload: {
+          teach: teach.topic,
+          aside: verdict.aside || null,
+          cards: persistMeals(filled.meals, slot),
+        },
+      }, { isAdmin, requestId, asked: text });
       return json({
         ok: true,
         scope: "food",
         teach: teach.topic,
-        reply: teachBody(teach.topic),
-        meals: [],
+        reply: filled.reply || reply,
+        meals: filled.meals,
+        mealSource: filled.meals.length ? "new" : undefined,
         aside: verdict.aside || null,
       });
     }
 
-    // Fetch before the model, and before the daily cap. A link we cannot
-    // read must not become a guessed dish, and must not spend a call.
+    // A link we cannot read must not become a guessed dish.
+    // Reserve the note bucket before any fetch so a pasted URL cannot
+    // spend the hop budget after she is already over the cap.
     let menuPage = null;
     if (mode === "ask" && hasMenuLink(text)) {
-      const link = firstMenuLink(text);
-      menuPage = link ? await fetchMenuPage(link) : { ok: false, reason: "bad-url" };
-      if (!menuPage.ok) {
+      const noteOk = isAdmin || await allowCoachNote(env, user.id, { isAdmin, requestId });
+      if (!noteOk) {
+        const reply = teachBody("menuClosed");
+        const filled = ensureFoodMeals([], { text, slot, mode, topic: "menuClosed", reply });
         return json({
           ok: true,
           scope: "food",
           teach: "menuClosed",
-          reply: teachBody("menuClosed"),
-          meals: [],
+          reply: filled.reply,
+          meals: filled.meals,
+          mealSource: "new",
+        });
+      }
+      const link = firstMenuLink(text);
+      menuPage = link ? await fetchMenuPage(link) : { ok: false, reason: "bad-url" };
+      if (!menuPage.ok) {
+        const reply = teachBody("menuClosed");
+        const filled = ensureFoodMeals([], { text, slot, mode, topic: "menuClosed", reply });
+        await persistServerCoach(env, user.id, body, {
+          body: filled.reply,
+          kind: filled.meals.length ? "cards" : "text",
+          payload: { teach: "menuClosed", cards: persistMeals(filled.meals, slot), requestId },
+          requestId,
+        });
+        return json({
+          ok: true,
+          scope: "food",
+          teach: "menuClosed",
+          reply: filled.reply,
+          meals: filled.meals,
+          mealSource: "new",
         });
       }
     }
 
-    const isAdmin = access.role === "admin";
+    // A reused requestId is a second try at the same ask, not a cached
+    // reply. The reserve allows one extra model call; we do not skip it.
     if (!isAdmin) {
       const limit = await checkAiLimit(env, user.id, {
         type: "coach",
         max: MAX_PER_DAY,
-        busyMessage: "I can't think straight right now. Try again in a minute, or pick something from Meals.",
-        spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
+        requestId,
+        busyMessage: COACH_BUSY_LINE,
+        spentMessage: "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.",
       });
       if (!limit.ok) {
+        await persistServerCoach(env, user.id, body, {
+          body: limit.message,
+          kind: "text",
+          payload: { requestId },
+          requestId,
+        });
         return json(
           { error: "rate_limited", message: limit.message, retry_after_seconds: limit.retryAfterSeconds },
           429,
@@ -174,23 +380,27 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    const { profile, macros } = await loadSelf(env, user.id, authHeader);
-    if (!profile) return json({ error: "profile not found" }, 404);
-    if (!macros) {
-      return json(
-        {
-          error: "macros_required",
-          message: "Your ranges need Callie's approval before I can help with meals.",
-        },
-        409,
-      );
+    const { profile, macros, macrosStatus } = await loadCoachSelf(env, user.id, authHeader);
+    if (!profile) {
+      const message = "I couldn't load your file just now. Try again in a minute.";
+      await persistServerCoach(env, user.id, body, {
+        body: message,
+        kind: "text",
+        payload: { requestId },
+        requestId,
+      });
+      return json({ error: "profile not found", message }, 404);
     }
 
     const customMeals = await fetchCustomMeals(env, user.id, { authHeader });
     const budget = sanitizeBudget(body.budget);
     const recentNames = parseRecent(body.recent);
-    const day = sanitizeCoachContext(body.context);
-    const args = { profile, macros, budget, slot, customMeals, recentNames, day };
+    const day = sanitizeCoachContext({
+      ...body.context,
+      notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
+    });
+    const workingNumbers = macrosStatus === "draft" || macrosStatus === "none";
+    const args = { profile, macros, macrosStatus, budget, slot, customMeals, recentNames, day };
 
     let prompt;
     if (menuPage?.ok) {
@@ -219,8 +429,9 @@ export async function onRequestPost({ request, env }) {
       label: "coach",
       models: resolveCoachModels(env),
       maxTokens: images.length ? 8000 : 4000,
-      temperature: 0.3,
-      timeoutMs: images.length ? 55_000 : 45_000,
+      temperature: 0.5,
+      timeoutMs: images.length ? 30_000 : 25_000,
+      attempts: 1,
       reasoning: { effort: "low", exclude: true },
       messages: [
         { role: "system", content: COACH_SYSTEM },
@@ -236,8 +447,14 @@ export async function onRequestPost({ request, env }) {
         status: result.status,
         detail: result.detail,
       });
+      await persistServerCoach(env, user.id, body, {
+        body: COACH_BUSY_LINE,
+        kind: "text",
+        payload: { requestId },
+        requestId,
+      });
       return json(
-        { error: "coach unavailable", message: messageForKind(result.kind, COACH_FAILURE_COPY) },
+        { error: "coach unavailable", message: COACH_BUSY_LINE },
         502,
       );
     }
@@ -251,28 +468,124 @@ export async function onRequestPost({ request, env }) {
         model: result.model,
         detail: result.text.slice(0, 300),
       });
+      if (isMealAsk(text, { mode })) {
+        const filled = ensureFoodMeals([], { text, slot, mode, profile, customMeals });
+        let reply = filled.reply;
+        if (workingNumbers) reply = leadFineTuningReply(reply);
+        await persistServerCoach(env, user.id, body, {
+          body: reply,
+          kind: filled.meals.length ? "cards" : "text",
+          payload: {
+            cards: persistMeals(filled.meals, slot),
+            aside: verdict.aside || null,
+            requestId,
+          },
+          requestId,
+        });
+        return json({
+          ok: true,
+          scope: "food",
+          mode,
+          reply,
+          meals: filled.meals,
+          mealSource: "new",
+          aside: verdict.aside || null,
+        });
+      }
+      await persistServerCoach(env, user.id, body, {
+        body: COACH_BUSY_LINE,
+        kind: "text",
+        payload: { requestId },
+        requestId,
+      });
       return json(
-        { error: "could not read that", message: messageForKind("empty", COACH_FAILURE_COPY) },
+        { error: "could not read that", message: COACH_BUSY_LINE },
         502,
       );
     }
 
-    // Second layer: the model gets to hand a question back too. The card
-    // records her question and the door, not the model's sentence.
+    // Second layer: the model gets to hand a question back too. Re-check
+    // the original ask for red flags — never answer a crisis with off-topic.
+    let modelHandedOff = false;
     if (String(parsed.value?.scope || "").toLowerCase() === "callie") {
-      return json({ ok: true, scope: "off_topic", deflect: "offTopic", meals: [] });
+      const deflect = deflectModelHandoff(text);
+      if (deflect !== "offTopic") {
+        const noted = await appendCoachRefusal(env, user.id, { asked: text, scope: "urgent" });
+        if (!noted.ok && !noted.skipped) {
+          await logAiFailure(env, {
+            userId: user.id,
+            label: "coach",
+            kind: "note",
+            detail: noted.reason === "full"
+              ? "client_summaries append full"
+              : "client_summaries append failed",
+          });
+        } else if (noted.ok && Number(noted.trimmed) > 0) {
+          await logAiFailure(env, {
+            userId: user.id,
+            label: "coach",
+            kind: "note",
+            detail: `client_summaries append trimmed:${noted.trimmed}`,
+          });
+        }
+        if (noted.ok && !noted.skipped && !noted.capped && !noted.unchanged && deflect === "emergency") {
+          await notifyCrisisEmail(env, { userId: user.id, asked: text });
+        }
+        const crisis = deflect === "emergency" || isCrisisUrgent(text);
+        const filled = (!crisis && isMealAsk(text, { mode }))
+          ? ensureFoodMeals([], { text, slot, mode, profile, customMeals, safe: true })
+          : { meals: [] };
+        await persistServerCoach(env, user.id, body, {
+          body: "",
+          kind: "deflect",
+          payload: { deflect, cards: persistMeals(filled.meals, slot), requestId },
+          requestId,
+        });
+        return json({
+          ok: true,
+          scope: "urgent",
+          deflect,
+          meals: filled.meals,
+          mealSource: filled.meals.length ? "new" : undefined,
+        });
+      }
+      if (!isMealAsk(text, { mode })) {
+        await persistServerCoach(env, user.id, body, {
+          body: "",
+          kind: "deflect",
+          payload: { deflect: "offTopic", requestId },
+          requestId,
+        });
+        return json({ ok: true, scope: "off_topic", deflect: "offTopic", meals: [] });
+      }
+      modelHandedOff = true;
     }
 
-    let reply = cleanReply(parsed.value?.reply);
+    let reply = modelHandedOff ? "" : cleanReply(parsed.value?.reply);
     const orderMode = menuPage?.ok ? "menu" : mode;
-    let meals = normalizeMeals(parsed.value, slot, orderMode, { lockSlot: Boolean(askedSlot) });
+    let meals = modelHandedOff ? [] : normalizeMeals(parsed.value, slot, orderMode, {
+      lockSlot: Boolean(askedSlot),
+      estimate: workingNumbers,
+    });
+    if (mode === "ask" && !menuPage?.ok) {
+      meals = limitAskMeals(meals, { askedForOptions: askedForMealOptions(text) });
+    }
     let teachTopic = null;
 
     if (menuPage?.ok) {
       const kept = meals.filter((meal) => dishOnPage(meal.name, menuPage.text));
       if (!kept.length) {
-        reply = teachBody("menuMiss");
-        meals = [];
+        const filled = ensureFoodMeals([], {
+          text,
+          slot,
+          mode: "menu",
+          topic: "menuMiss",
+          profile,
+          customMeals,
+          reply: teachBody("menuMiss"),
+        });
+        reply = filled.reply;
+        meals = filled.meals;
         teachTopic = "menuMiss";
       } else {
         reply = menuFromPageCopy(kept.map((meal) => meal.name));
@@ -280,6 +593,35 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
+    if (isMealAsk(text, { mode, topic: teachTopic }) && !meals.length) {
+      const filled = ensureFoodMeals([], {
+        text,
+        slot,
+        mode: orderMode,
+        topic: teachTopic,
+        profile,
+        customMeals,
+        reply,
+      });
+      meals = filled.meals;
+      reply = filled.reply;
+    } else if (!reply && meals.length) {
+      reply = fallbackMealReply(meals);
+    }
+    if (workingNumbers) reply = leadFineTuningReply(reply);
+
+    const mealSource = orderMode === "menu" ? "menu" : mode === "kitchen" ? "kitchen" : "new";
+    const shownMeals = sizeMealsForPersist(meals, budget, slot, mealSource);
+    await persistServerCoach(env, user.id, body, {
+      body: reply,
+      kind: shownMeals.length ? "cards" : "text",
+      payload: {
+        cards: shownMeals,
+        aside: verdict.aside || null,
+        teach: teachTopic,
+        requestId,
+      },
+    });
     return json({
       ok: true,
       scope: "food",
@@ -287,13 +629,17 @@ export async function onRequestPost({ request, env }) {
       ...(teachTopic ? { teach: teachTopic } : {}),
       reply,
       meals,
-      mealSource: orderMode === "menu" ? "menu" : mode === "kitchen" ? "kitchen" : "new",
+      mealSource,
       aside: verdict.aside || null,
     });
   } catch (e) {
     console.error("coach failed", e);
     return json({ error: "coach failed" }, 500);
   }
+}
+
+function persistMeals(meals, slot, source = "new") {
+  return sizeMealsForPersist(meals, null, slot, source);
 }
 
 function parseImages(body) {
@@ -327,14 +673,10 @@ function parseRecent(value) {
     .slice(0, 25);
 }
 
-/**
- * Anything that reads like the model talking about itself, hedging like a
- * chatbot, or quoting her ranges back is dropped rather than shown.
- */
 function cleanReply(raw) {
   const text = String(raw || "").trim().slice(0, 400);
-  if (!text) return "";
-  return replyIsClean(text) ? text : "";
+  if (!text || replyHasJargon(text) || !replyIsClean(text)) return "";
+  return text;
 }
 
 /** Cooking steps are a recipe. A menu card only keeps an order. */
@@ -347,7 +689,7 @@ function orderStepsOnly(steps) {
     .slice(0, 6);
 }
 
-function normalizeMeals(parsed, fallbackSlot, mode, { lockSlot = false } = {}) {
+function normalizeMeals(parsed, fallbackSlot, mode, { lockSlot = false, estimate = false } = {}) {
   const raw = Array.isArray(parsed?.meals) ? parsed.meals : parsed?.meal ? [parsed.meal] : [];
   const out = [];
   for (const m of raw.slice(0, 3)) {
@@ -362,7 +704,7 @@ function normalizeMeals(parsed, fallbackSlot, mode, { lockSlot = false } = {}) {
     if (!macrosPlausible(macros)) continue;
 
     let desc = String(m.desc || "").slice(0, 280);
-    if (mode === "menu" && desc && !/estimate/i.test(desc)) {
+    if ((mode === "menu" || estimate) && desc && !/estimate/i.test(desc)) {
       desc = `Rough estimate — ${desc}`.slice(0, 280);
     }
 
@@ -374,7 +716,9 @@ function normalizeMeals(parsed, fallbackSlot, mode, { lockSlot = false } = {}) {
       basedOn: mode === "menu" ? null : (m.basedOn ? String(m.basedOn).slice(0, 120) : null),
       desc,
       ...macros,
-      servings: 1,
+      servings: Number(m.servings) === 0.5 || /half portion|\(half\)/i.test(String(m.name || ""))
+        ? 0.5
+        : 1,
       // A menu photo is an order, not a recipe we wrote. Ingredients here were
       // a made-up method for a dish we may not have read.
       ingredients: mode === "menu" ? [] : m.ingredients,

@@ -17,7 +17,8 @@ import {
   resolveCoachShares,
   unmatchedCoachPencils,
 } from "./coachBudget.js";
-import { buildCoachCard, cardsWithShownReason, coachReason, firstPaintPlates, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason } from "./coachRank.js";
+import { buildCoachCard, cardsWithShownReason, coachReason, firstPaintPlates, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason, sourceTag } from "./coachRank.js";
+import { sizeMealsForPersist } from "./coachPlateScale.js";
 import { buildCoachAnswer, pruneStaleMyMealCards, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
 import { nextCustomMeals } from "./coachMyMeals.js";
 import { coachSlotFromTime } from "./mealSlots.js";
@@ -33,7 +34,7 @@ import { coachEntryHint, coachRead, leftLine, macroStanding, shownCoachLead, slo
 import { formatRangeProgress } from "./rangeProgress.js";
 import { mealFitsRemaining } from "./eatingOutImpact.js";
 import { targetBands } from "./weekPlan.js";
-import { COACH_COPY } from "../content/coachVoice.js";
+import { COACH_COPY, skipMealCopy } from "../content/coachVoice.js";
 
 const MACROS = { cal: 1750, protein: 140, carbs: 160, fat: 55 };
 const BANDS = targetBands(MACROS);
@@ -115,6 +116,39 @@ describe("protein is a floor, not a wall", () => {
     });
     expect(budget.pNeed).toBeLessThan(45);
     expect(pickScale({ name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }, budget)).toBe(1);
+  });
+
+  it("drops or sizes the same nine plates the screen would", () => {
+    const dinner = budgetFor({ cal: 900, p: 120, c: 80, f: 25 }, {
+      slot: "dinner",
+      loggedSlots: new Set(["breakfast", "lunch"]),
+    });
+    const hungry = budgetFor({ cal: 300, p: 15, c: 25, f: 8 }, {
+      slot: "dinner",
+      loggedSlots: new Set(["breakfast", "lunch"]),
+    });
+    const cases = [
+      { label: "1x fits, protein covered", meal: { name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }, budget: dinner },
+      { label: "1x fits, protein short so upscale", meal: { name: "Small plate", cal: 300, p: 22, c: 20, f: 8 }, budget: hungry },
+      { label: "1x fits, stay 1 when protein is already covered", meal: { name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }, budget: dinner },
+      { label: "half when only half fits", meal: { name: "Big bowl", cal: dinner.cal + 40, p: 40, c: 40, f: Math.max(1, dinner.f - 2) }, budget: dinner },
+      { label: "drop calories", meal: { name: "Huge", cal: 2000, p: 40, c: 40, f: 20 }, budget: dinner },
+      { label: "drop fat", meal: { name: "Fatty", cal: 400, p: 40, c: 10, f: 90 }, budget: dinner },
+      { label: "keep carby when fat fits", meal: { name: "Carby", cal: 400, p: 10, c: 200, f: 5 }, budget: dinner },
+      { label: "drop when neither 1 nor 0.5 fits", meal: { name: "Giant", cal: 5000, p: 80, c: 80, f: 80 }, budget: dinner },
+      { label: "no calorie budget keeps 1", meal: { name: "Anything", cal: 2000, p: 40, c: 40, f: 90 }, budget: { pNeed: 40 } },
+    ];
+    expect(cases).toHaveLength(9);
+    for (const { label, meal, budget } of cases) {
+      const scale = budget?.cal ? pickScale(meal, budget) : 1;
+      const saved = sizeMealsForPersist([meal], budget, "dinner", "bank");
+      if (scale == null) {
+        expect(saved, label).toEqual([]);
+      } else {
+        expect(saved, label).toHaveLength(1);
+        expect(saved[0].servings, label).toBe(scale);
+      }
+    }
   });
 
   it("still offers a bigger portion when the single serving leaves her short", () => {
@@ -307,22 +341,39 @@ describe("slot order", () => {
     expect(laterSlotsAfter("breakfast", new Set(), MORNING)).toEqual(["lunch", "dinner"]);
   });
 
-  it("treats a meal the clock went past and she never logged as skipped", () => {
-    expect(laterSlotsAfter("dinner", new Set(), EVENING)).toEqual([]);
-    expect(laterSlotsAfter("lunch", new Set(), ONE_PM)).toEqual(["dinner"]);
+  it("holds earlier unlogged meals when nothing is logged, instead of treating them as skipped", () => {
+    expect(laterSlotsAfter("dinner", new Set(), EVENING)).toEqual(["breakfast", "lunch"]);
+    expect(laterSlotsAfter("lunch", new Set(), ONE_PM)).toEqual(["breakfast", "dinner"]);
+    expect(laterSlotsAfter("dinner", new Set(["breakfast"]), EVENING)).toEqual([]);
+    expect(laterSlotsAfter("lunch", new Set(["breakfast"]), ONE_PM)).toEqual(["dinner"]);
   });
 
-  it("names the skipped meal so the copy can say so, instead of folding it in quietly", () => {
+  it("names a skipped meal only when she logged other meals or said she skipped", () => {
     const onePm = ONE_PM;
-    expect(skippedSlotsBefore("lunch", new Set(), onePm)).toEqual(["breakfast"]);
-    expect(skippedSlotsBefore("dinner", new Set(), EVENING)).toEqual(["breakfast", "lunch"]);
+    expect(skippedSlotsBefore("lunch", new Set(), onePm)).toEqual([]);
+    expect(skippedSlotsBefore("dinner", new Set(), EVENING)).toEqual([]);
     expect(skippedSlotsBefore("lunch", new Set(["breakfast"]), onePm)).toEqual([]);
+    expect(skippedSlotsBefore("dinner", new Set(["breakfast"]), EVENING)).toEqual(["lunch"]);
+    expect(skippedSlotsBefore("dinner", new Set(), EVENING, { saidSkipped: true })).toEqual(["breakfast", "lunch"]);
     // 8am, asking about lunch: breakfast has not been skipped yet.
     expect(skippedSlotsBefore("lunch", new Set(), MORNING)).toEqual([]);
   });
 
+  it("sizes dinner to a normal dinner share when nothing is logged tonight", () => {
+    const budget = budgetFor({ cal: 0, p: 0, c: 0, f: 0 }, {
+      slot: "dinner",
+      loggedSlots: new Set(),
+      now: EVENING,
+    });
+    expect(budget.skipped).toEqual([]);
+    expect(budget.laterSlots).toEqual(["breakfast", "lunch"]);
+    expect(Math.round(budget.cal)).toBe(Math.round(BANDS.calHi * DEFAULT_MEAL_SHARES.dinner));
+    expect(budget.cal).toBeLessThan(BANDS.calHi * 0.55);
+    expect(budget.cal).toBeGreaterThan(BANDS.calHi * 0.25);
+  });
+
   it("keeps a meal she hasn't eaten out of a snack's budget", () => {
-    expect(laterSlotsAfter("snack", new Set(), AFTERNOON)).toEqual(["lunch", "dinner"]);
+    expect(laterSlotsAfter("snack", new Set(), AFTERNOON)).toEqual(["breakfast", "lunch", "dinner"]);
     expect(laterSlotsAfter("snack", new Set(["lunch"]), AFTERNOON)).toEqual(["dinner"]);
     expect(laterSlotsAfter("snack", new Set(["breakfast", "lunch", "dinner"]), AFTERNOON)).toEqual([]);
   });
@@ -510,7 +561,7 @@ describe("ranking", () => {
         { id: "deleted-1", name: "Rosemary crackers", source: "my", tag: "My meals", slot: "breakfast" },
         { id: "tag-only", name: "Old scramble", tag: "My meals", slot: "breakfast" },
         { id: "live-1", name: "Still saved meal", source: "my", tag: "My meals", slot: "lunch" },
-        { name: "Greek yogurt bowl", source: "bank", tag: "Callie's bank", slot: "breakfast" },
+        { name: "Greek yogurt bowl", source: "bank", tag: COACH_COPY.sourceBank, slot: "breakfast" },
       ],
     }];
     const live = [{ id: "live-1", name: "Still saved meal" }];
@@ -618,7 +669,7 @@ describe("ranking", () => {
       name: "Berry protein smoothie",
       title: "Berry protein smoothie",
       source: "bank",
-      tag: "Callie's bank",
+      tag: COACH_COPY.sourceBank,
       cal: 270,
       p: 28,
       c: 34,
@@ -666,23 +717,24 @@ describe("ranking", () => {
           tag: "My meals",
           slot: "breakfast",
         },
-        { name: "Sheet pan chicken", source: "bank", tag: "Callie's bank", slot: "dinner" },
+        { name: "Sheet pan chicken", source: "bank", tag: COACH_COPY.sourceBank, slot: "dinner" },
         { name: "Leftover Pasta", source: "new", tag: "Built for what's left", basedOn: null, slot: "dinner" },
       ],
     }];
     const live = [{ id: "sausage", name: "Sausage, egg + whites scramble" }];
     const snapshot = live.map((meal) => ({ ...meal }));
     expect(pruneStaleMyMealCards(messages[0].cards, live).map((card) => card.name)).toEqual([
+      "Sheet Pan Chicken with Sweet Potato",
       "Sausage, egg + whites scramble",
       "Sheet pan chicken",
       "Leftover Pasta",
     ]);
     const shown = replayCoachMessages(messages, live);
-    expect(shown[0].cards.map((card) => card.name)).toEqual(["Sausage, egg + whites scramble"]);
+    expect(shown[0].cards.map((card) => card.name)).toEqual(["Sheet Pan Chicken with Sweet Potato"]);
     expect(live).toEqual(snapshot);
 
     const afterDelete = replayCoachMessages(messages, []);
-    expect(afterDelete[0].cards.map((card) => card.name)).toEqual(["Sheet pan chicken"]);
+    expect(afterDelete[0].cards.map((card) => card.name)).toEqual(["Sheet Pan Chicken with Sweet Potato"]);
   });
 
   it("keeps the saved list when a custom meals fetch fails", () => {
@@ -734,6 +786,12 @@ describe("ranking", () => {
     });
     const { meals } = rankBankCards({ bankMeals: bank, budget: tiny, slot: "snack" });
     expect(meals).toHaveLength(0);
+  });
+
+  it("labels a bank plate as Callie's recipe", () => {
+    expect(sourceTag("bank")).toBe(COACH_COPY.sourceBank);
+    expect(sourceTag("bank")).toBe("Callie's recipe");
+    expect(sourceTag("my")).toBe(COACH_COPY.sourceMy);
   });
 
   it("offers a half portion when that is the only size that fits", () => {
@@ -951,6 +1009,13 @@ describe("copy matches the rest of the app", () => {
     const held = slotLeftRead(budget).held;
     expect(held).toMatch(/^Holding \d+ cal for lunch · \d+ for dinner/);
     expect(held).not.toMatch(/cal a snack/);
+  });
+
+  it("does not write a skip note when nothing is logged and she did not say she skipped", () => {
+    expect(skipMealCopy(["breakfast", "lunch"])).toBe("");
+    expect(skipMealCopy(["breakfast", "lunch"], { loggedOtherMeals: false, saidSkipped: false })).toBe("");
+    expect(skipMealCopy(["lunch"], { loggedOtherMeals: true })).toBe(COACH_COPY.skipNotice);
+    expect(skipMealCopy(["breakfast"], { saidSkipped: true })).toContain(COACH_COPY.skipNotice);
   });
 
   it("keeps the skip note and drops the leftover-math lead", () => {

@@ -53,6 +53,13 @@ export const COACH_COPY = {
   betaLabel: "Beta",
   betaNote:
     "Next meal, eating out, or a photo of the menu or fridge. Ranges, the scale, supply, and workouts stay with Callie.",
+  callieReads:
+    "Callie reads these chats too, including anything you delete, so she can step in when you need her.",
+  removeMessage: "Remove",
+  loadFailed: "I couldn't load today's chat. Try again.",
+  retryLoad: "Try again",
+  askTimeout: "That took too long. Try me again.",
+  retryAsk: "Try me again",
   entryTitle: "Not sure what to eat?",
   entryCta: "Ask the coach",
 
@@ -168,16 +175,16 @@ export const COACH_COPY = {
   knowsOffSlot: "Usually",
 
   // Sources
-  sourceBank: "Callie's bank",
+  sourceBank: "Callie's recipe",
   sourceMy: "My meals",
   sourcePantry: "Pantry",
   sourceMenu: "From the menu",
   sourceKitchen: "From your kitchen",
-  sourceNew: "Built for what's left",
+  sourceNew: "Made for tonight",
 
   // Results
   noneFit:
-    "Nothing in the bank fits what's left at a normal portion. Tell me what you've got and I'll build something.",
+    "None of Callie's recipes fit tonight at a normal portion. Tell me what you've got and I'll build something.",
   seenAll: "That's everything that fits, so here's the round again.",
   browseEverything: "Browse everything",
   fridgeThird: "Tell me what's in your kitchen and I'll build a third.",
@@ -213,8 +220,12 @@ export const COACH_COPY = {
     "I opened the link, but I won't name a dish I couldn't find on the page. Send a photo of the menu.",
   teachNeverSkip:
     "Absolutely not. You never skip a meal! The goal isn't to nail your macros every single time — it's to nourish yourself and learn how to fuel your body. Eat something simple and lower calorie: grilled chicken and rice, or even a protein shake. Follow your hunger, too. Some days you burned more, and those days need more.",
+  teachNeverSkipAgain:
+    "Still eat something tonight, even if it's small. Greek yogurt with berries or a protein shake is enough when nothing sounds good.",
   teachRealFood:
-    "Any real food can fit your macros. A slice of pizza is real food — water, yeast, flour, tomatoes, cheese. An Oreo is not; it's full of stuff made in a lab. We can make macros work for real food. If this one blows through fat, calories or carbs, next time log it ahead and keep breakfast and lunch lower fat or lower carb so it fits.",
+    "Any real food can fit your macros. A slice of pizza is real food — water, yeast, flour, tomatoes, cheese. An Oreo is not; it's full of stuff made in a lab. We can make macros work for real food.",
+  teachRealFoodLogAhead:
+    "If this one blows through fat, calories or carbs, next time log it ahead and keep breakfast and lunch lower fat or lower carb so it fits.",
   teachAlcohol:
     "Alcohol is up to you — no judgment either way. If you want a drink, we can fit it in your macros. Keep fat in range, that's the one that adds up, and have it with food, not on an empty stomach.",
   teachCoffee:
@@ -247,9 +258,48 @@ export const COACH_COPY = {
  * The coach answers food and ranges. Everything else goes to Callie.
  * These are the exact lines it uses to say so.
  */
+/**
+ * Off until Patrick/Callie approve. Do not append this to a mama-facing
+ * medical handoff without that yes.
+ */
+export const INCLUDE_COACH_DOCTOR_SENTENCE = false;
+export const COACH_DOCTOR_SENTENCE = "If you feel faint or it's getting worse, call your doctor.";
+
+const COACH_MEDICAL_LINE = "That's one for Callie, not me, and I don't want you waiting on it. Message her now.";
+
+/**
+ * Crisis / postpartum warning signs. ON by default. One constant so
+ * Patrick and Callie can tweak it without hunting through the panel.
+ */
+export const INCLUDE_COACH_EMERGENCY_LINE = true;
+export const COACH_BUSY_LINE =
+  "I can't think straight right now. Try again in a minute, or pick something from Meals.";
+export const COACH_FINE_TUNING_LINE =
+  "Callie's still fine-tuning your numbers, so here's an easy one for now.";
+
+export function leadFineTuningReply(reply) {
+  const rest = String(reply || "").trim();
+  if (!rest) return COACH_FINE_TUNING_LINE;
+  if (rest.startsWith(COACH_FINE_TUNING_LINE)) return rest.slice(0, 400);
+  return `${COACH_FINE_TUNING_LINE} ${rest}`.trim().slice(0, 400);
+}
+
+export const COACH_EMERGENCY_LINE =
+  "Please get help right now. If this feels like an emergency, call 911. If you're having thoughts of hurting yourself or your baby, call or text 988. Then call your doctor. Callie will see this, but maybe not right away, so please don't wait for her.";
+
 export const COACH_DEFLECT = {
   callie: {
     line: COACH_PASS,
+    cta: "Message Callie",
+  },
+  emergency: {
+    line: INCLUDE_COACH_EMERGENCY_LINE ? COACH_EMERGENCY_LINE : COACH_MEDICAL_LINE,
+    cta: "Message Callie too",
+  },
+  medical: {
+    line: INCLUDE_COACH_DOCTOR_SENTENCE
+      ? `${COACH_MEDICAL_LINE} ${COACH_DOCTOR_SENTENCE}`
+      : COACH_MEDICAL_LINE,
     cta: "Message Callie",
   },
   care: {
@@ -297,10 +347,14 @@ export function capitalizeLine(text) {
   return s.slice(0, i) + s.charAt(i).toUpperCase() + s.slice(i + 1);
 }
 
-/** Hormonal-health note when a meal the clock passed was never logged. */
-export function skipMealCopy(skipped = []) {
+/**
+ * Hormonal-health note when a meal was actually skipped.
+ * An empty log is not enough — she may have eaten and not logged.
+ */
+export function skipMealCopy(skipped = [], { saidSkipped = false, loggedOtherMeals = false } = {}) {
   const slots = (skipped || []).filter(Boolean);
   if (!slots.length) return "";
+  if (!saidSkipped && !loggedOtherMeals) return "";
   return slots.includes("breakfast")
     ? `${COACH_COPY.skipNotice} ${COACH_COPY.skipBreakfastHint}`
     : COACH_COPY.skipNotice;

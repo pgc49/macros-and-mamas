@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The card is where the coach's honesty is visible or isn't. A number the
- * model estimated has to be marked as one, a meal from Callie's bank must not
+ * model estimated has to be marked as one, a meal from Callie's recipe must not
  * be, and the recipe has to survive into the sheet — otherwise "Save to My
  * meals" keeps macros she can't reproduce.
  */
@@ -20,7 +20,7 @@ const bankCard = {
   p: 30,
   c: 40,
   f: 4,
-  tag: "Callie's bank",
+  tag: COACH_COPY.sourceBank,
   source: "bank",
   slot: "breakfast",
   reason: "Fills your protein, leaves 46g fat.",
@@ -44,9 +44,11 @@ describe("coach card honesty", () => {
     expect(screen.getByText(ESTIMATE)).toBeTruthy();
   });
 
-  it("does not mark a meal from Callie's bank as an estimate", () => {
+  it("does not mark a meal from Callie's recipe as an estimate", () => {
     render(<CoachMealCard card={bankCard} onLog={vi.fn()} />);
     expect(screen.queryByText(ESTIMATE)).toBeNull();
+    expect(screen.getByText(COACH_COPY.sourceBank)).toBeTruthy();
+    expect(screen.getByText("Callie's recipe")).toBeTruthy();
   });
 
   it("offers Save to My meals only for a meal she can't already find", () => {
@@ -68,7 +70,7 @@ describe("coach card honesty", () => {
           p: 28,
           c: 34,
           f: 4,
-          tag: "Callie's bank",
+          tag: COACH_COPY.sourceBank,
           source: "bank",
           reason: "",
           knowsYou: "Usually breakfast",

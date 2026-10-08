@@ -128,6 +128,48 @@ jobs:
           if [ -f supabase/tests/waitlist_no_anon_insert.sql ]; then
             cp supabase/tests/waitlist_no_anon_insert.sql "$DB_ROOT/supabase/tests/"
           fi
+          if [ -f supabase/tests/bootstrap_coach_messages.sql ]; then
+            cp supabase/tests/bootstrap_coach_messages.sql \
+              "$DB_ROOT/supabase/migrations/20260101000003_bootstrap_coach_messages.sql"
+          fi
+          if [ -f supabase/migrations/20261008060000_coach_messages_admin_hide.sql ]; then
+            cp supabase/migrations/20261008060000_coach_messages_admin_hide.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
+          if [ -f supabase/migrations/20261008070000_coach_messages_hide_rpc.sql ]; then
+            cp supabase/migrations/20261008070000_coach_messages_hide_rpc.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
+          if [ -f supabase/migrations/20261008080000_coach_messages_source_lock.sql ]; then
+            cp supabase/migrations/20261008080000_coach_messages_source_lock.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
+          if [ -f supabase/migrations/20261008090000_coach_priority_pass.sql ]; then
+            cp supabase/migrations/20261008090000_coach_priority_pass.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
+          if [ -f supabase/tests/bootstrap_estimate_calls.sql ]; then
+            cp supabase/tests/bootstrap_estimate_calls.sql \
+              "$DB_ROOT/supabase/migrations/20260101000004_bootstrap_estimate_calls.sql"
+          fi
+          if [ -f supabase/migrations/20261008091000_estimate_calls_reserve.sql ]; then
+            cp supabase/migrations/20261008091000_estimate_calls_reserve.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
+          if [ -f supabase/migrations/20261008100000_coach_request_id_and_refusal.sql ]; then
+            cp supabase/migrations/20261008100000_coach_request_id_and_refusal.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
+          if [ -f supabase/migrations/20261008110000_coach_refusal_summary_ceiling.sql ]; then
+            cp supabase/migrations/20261008110000_coach_refusal_summary_ceiling.sql \
+              "$DB_ROOT/supabase/migrations/"
+          fi
+          if [ -f supabase/tests/coach_messages_rls.sql ]; then
+            cp supabase/tests/coach_messages_rls.sql "$DB_ROOT/supabase/tests/"
+          fi
+          if [ -f supabase/tests/estimate_calls_reserve.sql ]; then
+            cp supabase/tests/estimate_calls_reserve.sql "$DB_ROOT/supabase/tests/"
+          fi
           echo "DB_ROOT=$DB_ROOT" >> "$GITHUB_ENV"
 
       - name: Start disposable Supabase

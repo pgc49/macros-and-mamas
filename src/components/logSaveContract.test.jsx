@@ -352,7 +352,7 @@ describe("log save contract — coach card Log it / Pencil in", () => {
     p: 30,
     c: 40,
     f: 4,
-    tag: "Callie's bank",
+    tag: "Callie's recipe",
     source: "bank",
     slot: "breakfast",
   };

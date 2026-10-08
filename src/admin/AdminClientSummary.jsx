@@ -5,9 +5,10 @@ import { db } from "../db/db";
 import { supabase } from "../lib/supabase";
 import { buildClientSummaryPayload } from "./clientSummaryPayload";
 import { mamaProgramOpts, mamaProgramWeekNumber } from "../lib/cohorts";
+import { coachSummaryDateIso } from "../../functions/_shared/coachRefusalSummary.js";
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return coachSummaryDateIso();
 }
 
 function formatWhen(iso) {
@@ -62,11 +63,12 @@ export function AdminClientSummary({ client, progress, progressLoading = false, 
         suggested_touch: data.suggested_touch,
         model: data.model,
       });
-      setRow(saved || {
-        summary: data.summary,
-        suggested_touch: data.suggested_touch,
-        created_at: new Date().toISOString(),
-      });
+      if (!saved || saved.ok === false) {
+        throw new Error(saved?.reason === "full"
+          ? "Could not save that summary without dropping a crisis line."
+          : "Could not save that summary.");
+      }
+      setRow(saved);
     } catch (e) {
       setError(e.message || "Summary unavailable");
     } finally {
@@ -115,7 +117,7 @@ export function AdminClientSummary({ client, progress, progressLoading = false, 
         </div>
         {row ? (
           <>
-            <p style={{ fontSize: 14.5, lineHeight: 1.55, color: T.ink, margin: "8px 0 0" }}>
+            <p style={{ fontSize: 14.5, lineHeight: 1.55, color: T.ink, margin: "8px 0 0", whiteSpace: "pre-line" }}>
               {row.summary}
             </p>
             {row.suggested_touch && (
