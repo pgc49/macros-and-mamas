@@ -2198,7 +2198,18 @@ export const db = {
         /* Sentry must never take Refresh down */
       }
       console.warn("saveClientSummary refused lines would not fit");
-      return null;
+      return { ok: false, reason: kept.reason || "full" };
+    }
+    if (Number(kept.trimmed) > 0) {
+      try {
+        Sentry.captureMessage("coach_refusal_summary_trimmed", {
+          level: "warning",
+          tags: { surface: "admin", kind: "note" },
+          extra: { trimmed: kept.trimmed },
+        });
+      } catch {
+        /* Sentry must never take Refresh down */
+      }
     }
     const { data, error } = await supabase
       .from("client_summaries")

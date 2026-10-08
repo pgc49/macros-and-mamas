@@ -412,41 +412,6 @@ select is(
 
 insert into public.client_summaries (profile_id, for_date, summary)
 values (
-  '00000000-0000-0000-0000-0000000000a3',
-  '2026-10-09',
-  'DROP-ME' || repeat('z', 388) || E'\n'
-    || (select string_agg(lpad(i::text, 395, 'o'), E'\n') from generate_series(2, 10) as i)
-);
-
-select is(
-  (
-    public.append_coach_refusal_line(
-      '00000000-0000-0000-0000-0000000000a3',
-      '2026-10-09',
-      'Coach refused (crisis): newest-crisis-must-survive',
-      'crisis',
-      10
-    )->>'ok'
-  ),
-  'true',
-  'append_coach_refusal_line keeps a crisis line that would overflow 4000'
-);
-
-select ok(
-  (
-    select
-      length(summary) <= 4000
-      and summary like '%Coach refused (crisis): newest-crisis-must-survive'
-      and position('DROP-ME' in summary) = 0
-    from public.client_summaries
-    where profile_id = '00000000-0000-0000-0000-0000000000a3'
-      and for_date = '2026-10-09'
-  ),
-  'overflow drops prose first and keeps the newest crisis intact'
-);
-
-insert into public.client_summaries (profile_id, for_date, summary)
-values (
   '00000000-0000-0000-0000-0000000000a1',
   '2026-10-10',
   repeat('p', 3969)
@@ -460,26 +425,59 @@ select is(
       'Coach refused (crisis): I want to die',
       'crisis',
       10
-    )->>'ok'
+    )->>'trimmed'
   ),
-  'true',
-  'crisis at ~3969 chars still writes'
+  null,
+  'a ~3969-character summary plus a crisis line trims nothing'
 );
 
 select ok(
   (
     select
-      char_length(summary) <= 4000
-      and (
-        select count(*)
-        from regexp_split_to_table(summary, E'\n') as line
-        where line = 'Coach refused (crisis): I want to die'
-      ) = 1
+      summary = repeat('p', 3969) || E'\n' || 'Coach refused (crisis): I want to die'
+      and char_length(summary) = 4007
     from public.client_summaries
     where profile_id = '00000000-0000-0000-0000-0000000000a1'
       and for_date = '2026-10-10'
   ),
-  'crisis line at ~3969 chars survives intact'
+  'a ~3969-character summary plus a crisis line keeps everything'
+);
+
+insert into public.client_summaries (profile_id, for_date, summary)
+values (
+  '00000000-0000-0000-0000-0000000000a3',
+  '2026-10-09',
+  repeat('q', 7900)
+    || E'\nCoach refused (medical): I have a fever'
+    || E'\nCoach refused (stuck): should I skip dinner'
+);
+
+select is(
+  (
+    public.append_coach_refusal_line(
+      '00000000-0000-0000-0000-0000000000a3',
+      '2026-10-09',
+      'Coach refused (crisis): I want to die',
+      'crisis',
+      10
+    )->>'trimmed'
+  )::integer,
+  1,
+  'trimmed:n appears when prose has to go'
+);
+
+select ok(
+  (
+    select
+      position('Coach refused (medical): I have a fever' in summary) > 0
+      and position('Coach refused (stuck): should I skip dinner' in summary) > 0
+      and position('Coach refused (crisis): I want to die' in summary) > 0
+      and position(repeat('q', 7900) in summary) = 0
+    from public.client_summaries
+    where profile_id = '00000000-0000-0000-0000-0000000000a3'
+      and for_date = '2026-10-09'
+  ),
+  'a medical or stuck line is never dropped'
 );
 
 select lives_ok(
@@ -671,13 +669,13 @@ select lives_ok(
     i integer;
     res jsonb;
   begin
-    for i in 1..13 loop
+    for i in 1..26 loop
       res := public.append_coach_refusal_line(
         '00000000-0000-0000-0000-0000000000a2',
         '2026-10-15',
         'Coach refused (crisis): ' || lpad(i::text, 276, 'x'),
         'crisis',
-        20
+        40
       );
       if (res->>'ok') is distinct from 'true' then
         raise exception 'expected write on long crisis %', i;
@@ -686,7 +684,7 @@ select lives_ok(
   end
   $body$;
   $$,
-  'fill the card with crisis lines that cannot be dropped'
+  'fill the card with refused lines that cannot be dropped'
 );
 
 select is(
@@ -694,13 +692,13 @@ select is(
     public.append_coach_refusal_line(
       '00000000-0000-0000-0000-0000000000a2',
       '2026-10-15',
-      'Coach refused (crisis): ' || lpad('14', 276, 'x'),
+      'Coach refused (crisis): ' || lpad('27', 276, 'x'),
       'crisis',
-      20
+      40
     )->>'reason'
   ),
   'full',
-  'returns ok false reason full when crisis cannot fit'
+  'returns full when only refused lines remain'
 );
 
 select * from finish();

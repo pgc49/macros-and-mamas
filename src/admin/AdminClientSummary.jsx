@@ -63,7 +63,11 @@ export function AdminClientSummary({ client, progress, progressLoading = false, 
         suggested_touch: data.suggested_touch,
         model: data.model,
       });
-      if (!saved) throw new Error("Could not save that summary without dropping a crisis line.");
+      if (!saved || saved.ok === false) {
+        throw new Error(saved?.reason === "full"
+          ? "Could not save that summary without dropping a crisis line."
+          : "Could not save that summary.");
+      }
       setRow(saved);
     } catch (e) {
       setError(e.message || "Summary unavailable");
@@ -113,7 +117,7 @@ export function AdminClientSummary({ client, progress, progressLoading = false, 
         </div>
         {row ? (
           <>
-            <p style={{ fontSize: 14.5, lineHeight: 1.55, color: T.ink, margin: "8px 0 0" }}>
+            <p style={{ fontSize: 14.5, lineHeight: 1.55, color: T.ink, margin: "8px 0 0", whiteSpace: "pre-line" }}>
               {row.summary}
             </p>
             {row.suggested_touch && (

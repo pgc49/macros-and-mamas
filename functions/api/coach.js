@@ -122,6 +122,13 @@ async function persistCannedCoach(env, userId, body, message, {
           ? "client_summaries append full"
           : "client_summaries append failed",
       });
+    } else if (noted.ok && Number(noted.trimmed) > 0) {
+      await logAiFailure(env, {
+        userId,
+        label: "coach",
+        kind: "note",
+        detail: `client_summaries append trimmed:${noted.trimmed}`,
+      });
     }
     if (door === "crisis" && noted.ok && !noted.skipped && !noted.capped && !noted.unchanged) {
       await notifyCrisisEmail(env, { userId, asked });
@@ -434,6 +441,13 @@ export async function onRequestPost({ request, env }) {
             detail: noted.reason === "full"
               ? "client_summaries append full"
               : "client_summaries append failed",
+          });
+        } else if (noted.ok && Number(noted.trimmed) > 0) {
+          await logAiFailure(env, {
+            userId: user.id,
+            label: "coach",
+            kind: "note",
+            detail: `client_summaries append trimmed:${noted.trimmed}`,
           });
         }
         if (noted.ok && !noted.skipped && !noted.capped && !noted.unchanged && deflect === "emergency") {

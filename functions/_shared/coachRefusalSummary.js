@@ -81,10 +81,9 @@ export const MAX_SUMMARY_ESCALATES = 5;
 /** Ordinary medical lines over the note cap. Crisis has its own ceiling. */
 export const MAX_MEDICAL_ESCALATES_PER_DAY = 3;
 
-const MAX_SUMMARY_CHARS = 4000;
+export const MAX_SUMMARY_CHARS = 8000;
 const MAX_LINE_CHARS = 300;
 const REFUSAL_PREFIX = "Coach refused (";
-const CRISIS_PREFIX = "Coach refused (crisis):";
 
 export function clipRefusalLine(line) {
   return String(line || "").trim().slice(0, MAX_LINE_CHARS);
@@ -94,38 +93,32 @@ function isRefusalLine(line) {
   return String(line).startsWith(REFUSAL_PREFIX);
 }
 
-function isCrisisRefusalLine(line) {
-  return String(line).startsWith(CRISIS_PREFIX);
-}
-
 function joinedLength(lines) {
   if (!lines.length) return 0;
   return lines.reduce((n, line) => n + String(line).length, 0) + (lines.length - 1);
 }
 
 /**
- * Fit under 4000 without cutting a Coach refused line.
- * Drop prose from the front, then oldest non-crisis refused lines.
- * Never drop a crisis line. null means it cannot fit.
+ * Fit under 8000. Safety net only: drop summary prose from the front.
+ * Never drop a Coach refused line. If the incoming line would be the
+ * one dropped, or only refused lines remain, return full.
  */
-export function fitRefusalSummary(lines) {
+export function fitRefusalSummary(lines, { incoming = null } = {}) {
   const next = [...lines];
+  let trimmed = 0;
   while (joinedLength(next) > MAX_SUMMARY_CHARS) {
     const proseIdx = next.findIndex((line) => !isRefusalLine(line));
-    if (proseIdx !== -1) {
-      next.splice(proseIdx, 1);
-      continue;
+    if (proseIdx === -1) return { ok: false, reason: "full" };
+    if (incoming != null && next[proseIdx] === incoming) {
+      return { ok: false, reason: "full" };
     }
-    const oldNonCrisis = next.findIndex((line) => (
-      isRefusalLine(line) && !isCrisisRefusalLine(line)
-    ));
-    if (oldNonCrisis !== -1) {
-      next.splice(oldNonCrisis, 1);
-      continue;
-    }
-    return null;
+    next.splice(proseIdx, 1);
+    trimmed += 1;
   }
-  return next.join("\n");
+  if (incoming != null && !next.includes(incoming)) {
+    return { ok: false, reason: "full" };
+  }
+  return { ok: true, summary: next.join("\n"), trimmed };
 }
 
 /** Distinct crisis lines. Identical text the same Pacific day is a no-op. */
@@ -152,9 +145,11 @@ export function mergeRefusalSummary(existing, line) {
   if (lines.some((row) => row === next)) {
     return { ok: true, summary: prior, unchanged: true };
   }
-  const fitted = fitRefusalSummary([...lines, next]);
-  if (fitted == null) return { ok: false, reason: "full", summary: prior };
-  return { ok: true, summary: fitted };
+  const fitted = fitRefusalSummary([...lines, next], { incoming: next });
+  if (!fitted.ok) return { ok: false, reason: fitted.reason || "full", summary: prior };
+  const result = { ok: true, summary: fitted.summary };
+  if (fitted.trimmed > 0) result.trimmed = fitted.trimmed;
+  return result;
 }
 
 /**
@@ -180,8 +175,10 @@ export function preserveRefusalLines(existing, fresh) {
     if (!combined.some((row) => row === line)) combined.push(line);
   }
   const fitted = fitRefusalSummary(combined);
-  if (fitted == null) return { ok: false, reason: "full" };
-  return { ok: true, summary: fitted };
+  if (!fitted.ok) return { ok: false, reason: fitted.reason || "full" };
+  const result = { ok: true, summary: fitted.summary };
+  if (fitted.trimmed > 0) result.trimmed = fitted.trimmed;
+  return result;
 }
 
 /**
@@ -258,5 +255,6 @@ export async function appendCoachRefusal(env, userId, { asked, scope, escalate =
     console.error("coach refusal summary write failed", write.status);
     return { ok: false };
   }
+  if (merged.trimmed > 0) return { ok: true, trimmed: merged.trimmed };
   return { ok: true };
 }

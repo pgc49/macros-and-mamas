@@ -11,6 +11,8 @@ import {
   saidSheSkipped,
   MAX_MEDICAL_ESCALATES_PER_DAY,
   MAX_SUMMARY_ESCALATES,
+  MAX_SUMMARY_CHARS,
+  fitRefusalSummary,
   mergeRefusalSummary,
   preserveRefusalLines,
   refusalDoor,
@@ -77,24 +79,42 @@ describe("a refusal line is factual", () => {
     ]);
   });
 
-  it("never cuts a Coach refused line and fails closed when crisis cannot fit", () => {
+  it("keeps a ~3969-character summary plus a crisis line with nothing trimmed", () => {
+    expect(MAX_SUMMARY_CHARS).toBe(8000);
     const crisis = "Coach refused (crisis): I want to die";
-    const padded = `${"p".repeat(3969)}\n${crisis}`;
     const kept = mergeRefusalSummary("p".repeat(3969), crisis);
-    expect(kept.ok).toBe(true);
-    expect(kept.summary).toContain(crisis);
-    expect(kept.summary).not.toMatch(new RegExp(`${crisis.slice(0, -1)}$`));
-    expect(kept.summary.split("\n").includes(crisis)).toBe(true);
-    expect(padded.includes(crisis)).toBe(true);
+    expect(kept).toEqual({
+      ok: true,
+      summary: `${"p".repeat(3969)}\n${crisis}`,
+    });
+    expect(kept.trimmed).toBeUndefined();
+  });
 
-    const wall = Array.from({ length: 14 }, (_, i) => (
+  it("never drops a medical or stuck line and reports trimmed prose", () => {
+    const medical = "Coach refused (medical): I have a fever";
+    const stuck = "Coach refused (stuck): should I skip dinner";
+    const crisis = "Coach refused (crisis): I want to die";
+    const kept = mergeRefusalSummary(`${"q".repeat(7900)}\n${medical}\n${stuck}`, crisis);
+    expect(kept.ok).toBe(true);
+    expect(kept.trimmed).toBeGreaterThan(0);
+    expect(kept.summary.split("\n")).toEqual([medical, stuck, crisis]);
+  });
+
+  it("never cuts a Coach refused line and fails closed when only refused lines remain", () => {
+    const wall = Array.from({ length: 27 }, (_, i) => (
       `Coach refused (crisis): ${String(i).padStart(276, "x")}`
     ));
-    const overflow = mergeRefusalSummary(wall.join("\n"), "Coach refused (crisis): newest-must-not-cut");
-    expect(overflow).toEqual({ ok: false, reason: "full", summary: wall.join("\n") });
+    const prior = wall.slice(0, 26).join("\n");
+    const overflow = mergeRefusalSummary(prior, wall[26]);
+    expect(overflow).toEqual({ ok: false, reason: "full", summary: prior });
 
     const refresh = preserveRefusalLines(wall.join("\n"), "Fresh snapshot from her logs.");
     expect(refresh).toEqual({ ok: false, reason: "full" });
+  });
+
+  it("returns full instead of ok when the incoming line is the one that would be dropped", () => {
+    const incoming = "p".repeat(8100);
+    expect(fitRefusalSummary([incoming], { incoming })).toEqual({ ok: false, reason: "full" });
   });
 
   it("uses the Pacific calendar day when UTC has already rolled over", () => {

@@ -71,6 +71,32 @@ describe("AdminClientSummary", () => {
     expect(body.payload.started).toBe(false);
   });
 
+  it("renders alert lines with pre-line so they do not run together", async () => {
+    db.loadLatestClientSummary.mockResolvedValue({
+      summary: "Quiet so far.\nCoach refused (crisis): I want to die",
+      suggested_touch: "Check in.",
+      created_at: "2026-09-03T12:00:00.000Z",
+    });
+    render(<AdminClientSummary client={client} progress={{}} progressLoading={false} />);
+    const card = await screen.findByText(/Coach refused \(crisis\): I want to die/);
+    expect(card.style.whiteSpace).toBe("pre-line");
+  });
+
+  it("shows the crisis error only when save returns full", async () => {
+    db.saveClientSummary.mockResolvedValue({ ok: false, reason: "full" });
+    render(<AdminClientSummary client={client} progress={{}} progressLoading={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Write summary" }));
+    expect(await screen.findByText("Could not save that summary without dropping a crisis line.")).toBeTruthy();
+  });
+
+  it("shows a generic save error otherwise", async () => {
+    db.saveClientSummary.mockResolvedValue(null);
+    render(<AdminClientSummary client={client} progress={{}} progressLoading={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Write summary" }));
+    expect(await screen.findByText("Could not save that summary.")).toBeTruthy();
+    expect(screen.queryByText(/dropping a crisis line/)).toBeNull();
+  });
+
   it("writes the Pacific calendar day, not the UTC date", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-02T01:05:00.000Z"));
