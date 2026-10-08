@@ -81,6 +81,10 @@ describe("Callie's own answers, before a model is called", () => {
     expect(localCoachTeach("can I have a protein bar")).toMatchObject({ topic: "realFood" });
     expect(teachBody("realFood")).toMatch(/real food/i);
     expect(teachBody("realFood")).toMatch(/Oreo/);
+    expect(teachBody("realFood")).toMatch(/next time log it ahead/);
+    expect(teachBody("realFood", { notLogging: true })).toMatch(/real food/i);
+    expect(teachBody("realFood", { notLogging: true })).not.toMatch(/next time log it ahead/);
+    expect(teachBody("realFood", { notLogging: true })).not.toMatch(/log it ahead/);
   });
 
   it("answers coffee, alcohol, fasting and sweeteners in her words", () => {

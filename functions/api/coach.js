@@ -39,9 +39,9 @@ import {
   deflectForScope,
   deflectModelHandoff,
   macrosPlausible,
+  replyHasJargon,
   replyIsClean,
   scopeIsRefused,
-  scrubCoachReply,
 } from "../_shared/coachGuardrails.js";
 import { askedForMealOptions, limitAskMeals } from "../_shared/coachAskMeals.js";
 import { escalateDoor, isWontLogRefusal } from "../_shared/coachRefusalSummary.js";
@@ -63,7 +63,7 @@ import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 import { hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../../src/utils/coachTeach.js";
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
-import { menuFromPageCopy } from "../../src/content/coachVoice.js";
+import { COACH_BUSY_LINE, menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 import {
@@ -91,6 +91,7 @@ const MODES = new Set(["ask", "menu", "kitchen", "record"]);
 const COACH_FAILURE_COPY = {
   retryLabel: "ask me again",
   manualLabel: "pick something from Meals",
+  unavailableLine: COACH_BUSY_LINE,
 };
 
 async function allowCoachNote(env, userId, { isAdmin, requestId }) {
@@ -263,7 +264,10 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (teach) {
-      const reply = teachBody(teach.topic, { again: teach.topic === "neverSkip" && painCount.total >= 1 });
+      const reply = teachBody(teach.topic, {
+        again: teach.topic === "neverSkip" && painCount.total >= 1,
+        notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
+      });
       await persistCannedCoach(env, user.id, body, {
         body: reply,
         kind: "text",
@@ -322,7 +326,7 @@ export async function onRequestPost({ request, env }) {
         type: "coach",
         max: MAX_PER_DAY,
         requestId,
-        busyMessage: "I can't think straight right now. Try again in a minute, or pick something from Meals.",
+        busyMessage: COACH_BUSY_LINE,
         spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
       });
       if (!limit.ok) {
@@ -400,7 +404,7 @@ export async function onRequestPost({ request, env }) {
         detail: result.detail,
       });
       return json(
-        { error: "coach unavailable", message: messageForKind(result.kind, COACH_FAILURE_COPY) },
+        { error: "coach unavailable", message: COACH_BUSY_LINE },
         502,
       );
     }
@@ -533,9 +537,9 @@ function parseRecent(value) {
 }
 
 function cleanReply(raw) {
-  const text = scrubCoachReply(String(raw || "").trim().slice(0, 400));
-  if (!text) return "";
-  return replyIsClean(text) ? text : "";
+  const text = String(raw || "").trim().slice(0, 400);
+  if (!text || replyHasJargon(text) || !replyIsClean(text)) return "";
+  return text;
 }
 
 /** Cooking steps are a recipe. A menu card only keeps an order. */

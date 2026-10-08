@@ -171,12 +171,13 @@ export function buildLocalCoachRecord(body = {}) {
 
   if (template === "local.teach") {
     const topic = String(body.topic || body.payload?.teach || "").slice(0, 40);
-    const rebuilt = teachBody(topic);
+    const notLogging = Boolean(body.payload?.notLogging || body.notLogging);
+    const rebuilt = teachBody(topic, { notLogging });
     if (!rebuilt) return null;
     return {
       body: rebuilt,
       kind: "text",
-      payload: { teach: topic },
+      payload: { teach: topic, ...(notLogging ? { notLogging: true } : {}) },
       // Client-chosen topic and day. Counting these as server writes
       // would let Record mint a Stuck pin.
       source: "client",

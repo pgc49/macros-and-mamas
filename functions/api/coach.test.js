@@ -410,6 +410,48 @@ describe("what comes back", () => {
     expect((await resp.json()).reply).toBe("");
   });
 
+  it("drops a jargon reply and keeps the cards", async () => {
+    mockSupabase();
+    modelReturns({
+      scope: "food",
+      reply: "Try the salmon from Callie's bank tonight.",
+      meals: [{ name: "Salmon bowl", cal: 430, p: 40, c: 28, f: 14, ingredients: [], steps: [] }],
+    });
+    const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
+    const data = await resp.json();
+    expect(data.reply).toBe("");
+    expect(data.meals).toHaveLength(1);
+    expect(data.meals[0].name).toBe("Salmon bowl");
+  });
+
+  it("uses the Coach busy line when the model is down, not AI or Callie-notified", async () => {
+    mockSupabase();
+    openrouter.callOpenRouter.mockResolvedValue({ ok: false, kind: "credits", status: 402 });
+    const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
+    expect(resp.status).toBe(502);
+    const data = await resp.json();
+    expect(data.message).toBe("I can't think straight right now. Try again in a minute, or pick something from Meals.");
+    expect(data.message).not.toMatch(/\bAI\b|Callie has been notified/);
+    expect(openrouter.messageForKind).not.toHaveBeenCalled();
+  });
+
+  it("skips the log-ahead sentence when she is not logging", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "is pizza ok",
+        context: { notLogging: true },
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.teach).toBe("realFood");
+    expect(data.reply).toMatch(/real food/i);
+    expect(data.reply).not.toMatch(/log it ahead/);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+
   it("asks for a photo when a pasted link cannot be read, and does not spend a call", async () => {
     mockSupabase();
     const resp = await onRequestPost({

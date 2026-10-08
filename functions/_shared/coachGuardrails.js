@@ -37,16 +37,17 @@ export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "a
  * workout is killing me" must not match — keep the phrases specific.
  */
 const CRISIS = [
-  // Suicide / self-harm — not "dying for" a food
-  /\bi want to die\b/,
+  // Suicide / self-harm — not "die for" / "dying for" / "to die for" a food
+  /\bi want to die\b(?!\s+for\b)/,
   /\bwant to die\b(?!\s+for\b)/,
   /\b(thoughts of|thinking about) hurt(ing)? myself\b/,
-  /\bhurt(ing)? myself\b/,
-  /\bdon'?t want to be here\b/,
-  /\bdo not want to be here\b/,
+  /\bwant to hurt myself\b/,
+  /\bcut(ting)? myself\b/,
+  /\bdon'?t want to be here(?=\s+anymore\b|[.!?]|$)/,
+  /\bdo not want to be here(?=\s+anymore\b|[.!?]|$)/,
   /\bsuicid/,
   /\bself[- ]harm/,
-  /\bend (it|my life)\b/,
+  /\bend my life\b|\bend it all\b/,
   /\bkill myself\b/,
   // Harm the baby
   /\bhurt(ing)? (the |my )?baby\b/,
@@ -56,8 +57,8 @@ const CRISIS = [
   /\b(trouble|difficulty|hard time) breath/,
   /\bcan'?t breathe\b/,
   /\bshort(ness)? of breath\b/,
-  // Faint — fainted, not only faint(ing)
-  /\bfaint(ed|ing)?\b/,
+  // Fainted / passed out stay crisis. Bare "faint" / "feel faint" are medical.
+  /\bfaint(ed|ing)\b/,
   /\bpass(ed|ing) out\b/,
   /\bblack(ed|ing)? out\b/,
   // Heavy bleeding
@@ -82,10 +83,6 @@ const CRISIS = [
   /\bseeing things\b/,
   /\b(hear|see)ing? (things |voices )?(that aren'?t|that are not) there\b/,
   /\bhallucin/,
-  // Sleep collapse
-  /\b(haven'?t|have not|not) (been )?slept?\b.{0,24}\b(for )?(days|a few days|two days|2 days|3 days)\b/,
-  /\bnot sleep(ing)? for days\b/,
-  /\bhaven'?t slept in days\b/,
   // Racing heart with chest pain or shortness of breath
   /\b(racing|pounding) heart\b.{0,40}\b(chest|breath|breathe)/,
   /\bheart (is )?(racing|pounding)\b.{0,40}\b(chest|breath|breathe)/,
@@ -94,6 +91,11 @@ const CRISIS = [
 const URGENT = [
   ...CRISIS,
   // Ordinary symptoms — medical line, not 911
+  /\bhurt(ing)? myself\b/,
+  /\bfaint\b/,
+  /\b(haven'?t|have not|not) (been )?slept?\b.{0,24}\b(for )?(days|a few days|two days|2 days|3 days)\b/,
+  /\bnot sleep(ing)? for days\b/,
+  /\bhaven'?t slept in days\b/,
   /\bdizz(y|iness)\b/, /\blight[- ]?headed\b/,
   /\bpalpitation/,
   /\b(racing|pounding) heart\b/,
@@ -370,7 +372,7 @@ const REPLY_BANNED = [
   /\bcheat (meal|day)\b/i,
 ];
 
-/** Internal jargon. Strip or rewrite — do not drop the whole reply. */
+/** Internal jargon. cleanReply drops the whole reply and keeps the cards. */
 const REPLY_JARGON = [
   /\b(from|in) (the|callie'?s) bank\b/gi,
   /\bprotein floor\b/gi,

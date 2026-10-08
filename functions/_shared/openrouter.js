@@ -192,13 +192,18 @@ export function parseJsonLoose(text) {
  * Client-safe copy per failure kind. Never dead-ends — every message
  * names the next thing she can do.
  */
-export function messageForKind(kind, { retryLabel = "try again", manualLabel = "log it manually" } = {}) {
+export function messageForKind(kind, {
+  retryLabel = "try again",
+  manualLabel = "log it manually",
+  unavailableLine = "",
+} = {}) {
   switch (kind) {
     case "config":
       return "The AI helper is offline for maintenance right now — you can still " + manualLabel + ".";
     case "auth":
     case "credits":
-      return "The AI helper is temporarily unavailable. Callie has been notified — you can still " + manualLabel + ".";
+      return unavailableLine
+        || "The AI helper is temporarily unavailable. Callie has been notified — you can still " + manualLabel + ".";
     case "rate_limited":
       return "The AI helper is busy right now. Give it a minute and " + retryLabel + ".";
     case "timeout":

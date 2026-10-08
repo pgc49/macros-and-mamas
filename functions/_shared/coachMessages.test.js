@@ -123,6 +123,17 @@ describe("buildLocalCoachRecord", () => {
     });
   });
 
+  it("rebuilds real food without the log-ahead sentence in no-logging mode", () => {
+    const row = buildLocalCoachRecord({
+      template: "local.teach",
+      topic: "realFood",
+      payload: { notLogging: true },
+    });
+    expect(row.body).toBe(teachBody("realFood", { notLogging: true }));
+    expect(row.body).not.toMatch(/log it ahead/);
+    expect(row.payload).toEqual({ teach: "realFood", notLogging: true });
+  });
+
   it("rebuilds noneFit from Callie's copy", () => {
     const row = buildLocalCoachRecord({ template: "local.noneFit", body: "forged" });
     expect(row.body).toBe(COACH_COPY.noneFit);

@@ -223,7 +223,9 @@ export const COACH_COPY = {
   teachNeverSkipAgain:
     "Still eat something tonight, even if it's small. Greek yogurt with berries or a protein shake is enough when nothing sounds good.",
   teachRealFood:
-    "Any real food can fit your macros. A slice of pizza is real food — water, yeast, flour, tomatoes, cheese. An Oreo is not; it's full of stuff made in a lab. We can make macros work for real food. If this one blows through fat, calories or carbs, next time log it ahead and keep breakfast and lunch lower fat or lower carb so it fits.",
+    "Any real food can fit your macros. A slice of pizza is real food — water, yeast, flour, tomatoes, cheese. An Oreo is not; it's full of stuff made in a lab. We can make macros work for real food.",
+  teachRealFoodLogAhead:
+    "If this one blows through fat, calories or carbs, next time log it ahead and keep breakfast and lunch lower fat or lower carb so it fits.",
   teachAlcohol:
     "Alcohol is up to you — no judgment either way. If you want a drink, we can fit it in your macros. Keep fat in range, that's the one that adds up, and have it with food, not on an empty stomach.",
   teachCoffee:
@@ -270,8 +272,10 @@ const COACH_MEDICAL_LINE = "That's one for Callie, not me, and I don't want you 
  * Patrick and Callie can tweak it without hunting through the panel.
  */
 export const INCLUDE_COACH_EMERGENCY_LINE = true;
+export const COACH_BUSY_LINE =
+  "I can't think straight right now. Try again in a minute, or pick something from Meals.";
 export const COACH_EMERGENCY_LINE =
-  "This needs real help now. If you're in danger or thinking about hurting yourself or your baby, call 911, or call or text 988. Then call your doctor. Callie will see this message, but she may not see it right away.";
+  "Please get help right now. If this feels like an emergency, call 911. If you're having thoughts of hurting yourself or your baby, call or text 988. Then call your doctor. Callie will see this, but maybe not right away, so please don't wait for her.";
 
 export const COACH_DEFLECT = {
   callie: {
@@ -280,7 +284,7 @@ export const COACH_DEFLECT = {
   },
   emergency: {
     line: INCLUDE_COACH_EMERGENCY_LINE ? COACH_EMERGENCY_LINE : COACH_MEDICAL_LINE,
-    cta: "Message Callie",
+    cta: "Message Callie too",
   },
   medical: {
     line: INCLUDE_COACH_DOCTOR_SENTENCE

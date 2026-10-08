@@ -251,15 +251,13 @@ describe("the reply itself", () => {
     expect(replyIsClean("Have a cheat meal, you earned it.")).toBe(false);
   });
 
-  it("strips internal jargon instead of dropping the whole reply", () => {
+  it("flags internal jargon so the coach can drop the whole reply", () => {
     expect(replyHasJargon("Try the salmon from Callie's bank tonight.")).toBe(true);
     expect(replyHasJargon("Keep fat in its band.")).toBe(true);
     expect(replyHasJargon("Hit the protein floor.")).toBe(true);
     expect(replyHasJargon("This slot is dinner.")).toBe(true);
+    expect(replyHasJargon("Chicken and rice. You'll like it.")).toBe(false);
     expect(scrubCoachReply("Try the salmon from Callie's bank tonight.")).toBe("Try the salmon tonight.");
-    expect(scrubCoachReply("Keep fat in its band and enjoy it.")).toBe("Keep fat in and enjoy it.");
-    expect(scrubCoachReply("Hit the protein floor with eggs.")).toBe("Hit the with eggs.");
-    expect(replyIsClean(scrubCoachReply("Try the salmon from Callie's bank tonight."))).toBe(true);
     expect(scrubCoachReply("Chicken and rice. You'll like it.")).toBe("Chicken and rice. You'll like it.");
   });
 

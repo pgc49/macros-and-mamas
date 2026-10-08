@@ -161,6 +161,7 @@ export function CoachPanel({
   // What she's already been shown. A ref, not state: it only ever feeds the
   // next answer she asks for, and as state it would be a render behind the tap.
   const skipRef = useRef([]);
+  const turnedDownRef = useRef([]);
   const wontLogRef = useRef(false);
   const skipLectureRef = useRef("");
   const loadGenRef = useRef(0);
@@ -277,12 +278,13 @@ export function CoachPanel({
         requestId: message.requestId || null,
         payload: message.role === "mama"
           ? null
-          : (message.cards?.length || message.deflect || message.aside || message.teach
+          : (message.cards?.length || message.deflect || message.aside || message.teach || message.notLogging
             ? {
               cards: message.cards || [],
               deflect: message.deflect || null,
               aside: message.aside || null,
               teach: message.teach || null,
+              ...(message.notLogging ? { notLogging: true } : {}),
             }
             : null),
       })).then((saved) => {
@@ -367,6 +369,9 @@ export function CoachPanel({
    * these" never hands her back a card she has just turned down.
    */
   const showMore = ({ askLabel = COACH_COPY.notThese, echo = true } = {}) => {
+    if (skipRef.current.length) {
+      turnedDownRef.current = [...new Set([...turnedDownRef.current, ...skipRef.current])];
+    }
     answerWithCards({ askLabel, echo });
   };
 
@@ -412,7 +417,7 @@ export function CoachPanel({
           slot: slotForAsk,
           skipped: fit?.skipped,
           snackCount: fit?.budget?.snackCount,
-          turnedDown: skipRef.current,
+          turnedDown: turnedDownRef.current,
           alreadySuggested: skipRef.current,
           notLogging: wontLogRef.current,
         }),
@@ -534,7 +539,13 @@ export function CoachPanel({
         : false;
       push({
         role: "coach",
-        body: teachBody(teach.topic, { totals, carbsShort, again: teach.topic === "neverSkip" && teachCount >= 1 }),
+        body: teachBody(teach.topic, {
+          totals,
+          carbsShort,
+          again: teach.topic === "neverSkip" && teachCount >= 1,
+          notLogging: wontLogRef.current,
+        }),
+        notLogging: wontLogRef.current,
         kind: "teach",
         teach: teach.topic,
         aside: verdict.aside,

@@ -647,7 +647,7 @@ describe("what isn't the coach's goes to Callie", () => {
     );
     expect(COACH_DEFLECT.medical.line).not.toMatch(/call your doctor/i);
     expect(COACH_DEFLECT.emergency.line).toMatch(/call 911/);
-    expect(COACH_DEFLECT.emergency.cta).toBe("Message Callie");
+    expect(COACH_DEFLECT.emergency.cta).toBe("Message Callie too");
 
     cleanup();
     const guiltCoach = vi.fn();
@@ -830,6 +830,16 @@ describe("what isn't the coach's goes to Callie", () => {
     expect(postCoach).toHaveBeenCalledTimes(1);
   });
 
+  it("skips the log-ahead sentence when she is not logging", async () => {
+    renderPanel({ postCoach: vi.fn() });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "is pizza ok and I won't log this" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_COPY.teachRealFood);
+    expect(document.body.textContent).not.toMatch(/log it ahead/);
+  });
+
   it("does not say she skipped a meal when nothing is logged tonight", async () => {
     renderPanel({
       now: new Date("2026-09-05T01:30:00.000Z"),
@@ -858,6 +868,7 @@ describe("what isn't the coach's goes to Callie", () => {
     await screen.findByText("Turkey skillet tonight.");
     expect(postCoach).toHaveBeenCalledTimes(1);
     expect(postCoach.mock.calls[0][0].context.alreadySuggested).toContain(firstPlate);
+    expect(postCoach.mock.calls[0][0].context.turnedDown).toEqual([]);
 
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
       target: { value: "something else easy, I'm still tired" },
@@ -866,6 +877,29 @@ describe("what isn't the coach's goes to Callie", () => {
     await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(2));
     expect(postCoach.mock.calls[1][0].context.alreadySuggested).toContain("Turkey skillet");
     expect(postCoach.mock.calls[1][0].context.alreadySuggested).toContain(firstPlate);
+    expect(postCoach.mock.calls[1][0].context.turnedDown).toEqual([]);
+  });
+
+  it("only marks plates as turned down after she dismisses them", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Eggs and toast.",
+      meals: [{ name: "Eggs and toast", cal: 420, p: 32, c: 28, f: 16, servings: 1 }],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    const firstPlate = cardTitles()[0];
+
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.notThese }));
+    await waitFor(() => expect(cardTitles().some((name) => name !== firstPlate)).toBe(true));
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "something easy with chicken" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await waitFor(() => expect(postCoach).toHaveBeenCalledTimes(1));
+    expect(postCoach.mock.calls[0][0].context.turnedDown).toContain(firstPlate);
+    expect(postCoach.mock.calls[0][0].context.alreadySuggested).toContain(firstPlate);
   });
 });
 
@@ -1225,7 +1259,7 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     vi.useRealTimers();
   });
 
-  it("shows the emergency line and Message Callie for a crisis ask", async () => {
+  it("shows the emergency line and Message Callie too for a crisis ask", async () => {
     const postCoach = vi.fn();
     renderPanel({ postCoach });
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
