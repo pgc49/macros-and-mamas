@@ -517,15 +517,16 @@ describe("what comes back", () => {
     expect(data.meals.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("uses the Coach busy line when the model is down, not AI or Callie-notified", async () => {
+  it("falls back to local plates when the model is down, not a busy wall", async () => {
     mockSupabase();
     openrouter.callOpenRouter.mockResolvedValue({ ok: false, kind: "credits", status: 402 });
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
-    expect(resp.status).toBe(502);
+    expect(resp.status).toBe(200);
     const data = await resp.json();
-    expect(data.message).toBe("I can't think straight right now. Try again in a minute, or pick something from Meals.");
-    expect(data.message).not.toMatch(/\bAI\b|Callie has been notified/);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(data.reply).not.toMatch(/\bAI\b|Callie has been notified/);
     expect(openrouter.messageForKind).not.toHaveBeenCalled();
+    expect(coachMessagePosts()[0].kind).toBe("cards");
   });
 
   it("fills plates when the model returns nothing on a food question", async () => {
@@ -540,6 +541,28 @@ describe("what comes back", () => {
     expect(data.meals.length).toBeGreaterThanOrEqual(2);
     expect(data.meals[0].name).toMatch(/scramble|egg/i);
     expect(data.reply).toMatch(/Here's /);
+    expect(coachMessagePosts()).toHaveLength(1);
+  });
+
+  it("offers a next meal when she photographs a plate she already logged", async () => {
+    mockSupabase();
+    modelReturns({
+      scope: "food",
+      reply: "That looks like last night's salmon.",
+      meals: [{ name: "Leftover salmon", cal: 420, p: 38, c: 28, f: 16, ingredients: [], steps: [] }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "kitchen",
+        text: "I already logged this",
+        images: [{ image_b64: "abc", media_type: "image/jpeg" }],
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.meals.length).toBeGreaterThanOrEqual(1);
+    expect(data.meals.some((meal) => meal.name !== "Leftover salmon")).toBe(true);
     expect(coachMessagePosts()).toHaveLength(1);
   });
 
@@ -1566,14 +1589,14 @@ describe("cost", () => {
     });
     expect(resp.status).toBe(429);
     const data = await resp.json();
-    expect(data.message).toBe(
-      "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.",
-    );
+    expect(data.message).toMatch(/That's all the thinking I've got for today/);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
     const posts = coachMessagePosts();
     expect(posts).toHaveLength(1);
     expect(posts[0].source).toBe("server");
-    expect(posts[0].body).toBe(data.message);
+    expect(posts[0].kind).toBe("cards");
+    expect(posts[0].payload.cards.length).toBeGreaterThanOrEqual(2);
     expect(posts[0].request_id).toBe("ask-rate-limit");
     expect(posts[0].payload.requestId).toBe("ask-rate-limit");
   });

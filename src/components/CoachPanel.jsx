@@ -428,7 +428,8 @@ export function CoachPanel({
         images,
       });
 
-      if (!data?.ok) {
+      const mealsIn = Array.isArray(data?.meals) ? data.meals.filter((meal) => meal?.name) : [];
+      if (!data?.ok && !mealsIn.length) {
         setError(data?.timeout ? COACH_COPY.askTimeout : (data?.message || "I couldn't get to that. Try me again in a second."));
         captureCoachFailure({ kind: data?.timeout ? "timeout" : "ask" });
         return;
@@ -448,13 +449,13 @@ export function CoachPanel({
 
       // The model's meals are re-checked against the real budget here. One that
       // no longer fits is dropped rather than shown with a caveat.
-      const suggested = cardsWithShownReason(buildSuggestedCards(data.meals, fit, {
+      const suggested = cardsWithShownReason(buildSuggestedCards(mealsIn.length ? mealsIn : data.meals, fit, {
         source: data.mealSource || "new",
         slot: slotForAsk,
       }));
       const cards = askedForMealOptions(text) ? suggested.slice(0, 3) : firstPaintPlates(suggested);
       skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
-      const body = data.reply || (cards.length ? "" : (
+      const body = data.reply || data.message || (cards.length ? "" : (
         (mode === "menu" || mode === "kitchen" || images?.length)
           ? COACH_COPY.cantSeeIt
           : COACH_BUSY_LINE

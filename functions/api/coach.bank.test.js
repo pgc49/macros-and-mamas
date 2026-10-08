@@ -18,6 +18,7 @@ vi.mock("../_shared/openrouter.js", () => openrouter);
 
 import { classifyAsk, isCrisisUrgent, isMealAsk } from "../_shared/coachGuardrails.js";
 import { onRequestPost } from "./coach.js";
+import { COACH_FINE_TUNING_LINE, COACH_LIMIT_LINE } from "../../src/content/coachVoice.js";
 import {
   bankContextFor,
   COACH_BANK_LAST_PLATE,
@@ -27,6 +28,7 @@ import {
   COACH_QUESTION_BANK,
   COACH_QUESTION_BANK_SETUPS,
   carefulQuestionPasses,
+  deadEndPathPasses,
   mealQuestionPasses,
 } from "../_shared/coachQuestionBank.js";
 
@@ -46,19 +48,21 @@ function request(body) {
   });
 }
 
-function mockSetup(setup) {
+function mockSetup(setup, { callsUsed = 0, noRanges = false } = {}) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
     const value = String(url);
     if (value.includes("/auth/v1/user")) return new Response(JSON.stringify({ id: USER_ID }), { status: 200 });
     if (value.includes("select=paid,refunded,role")) {
       return new Response(JSON.stringify([{ paid: true, refunded: false, role: "client" }]), { status: 200 });
     }
-    if (value.includes("rpc/reserve_estimate_call")) return new Response(JSON.stringify(true), { status: 200 });
+    if (value.includes("rpc/reserve_estimate_call")) {
+      return new Response(JSON.stringify(callsUsed < 30), { status: 200 });
+    }
     if (value.includes("/rest/v1/profiles?id=eq.")) {
       return new Response(JSON.stringify([{ id: USER_ID, ...setup.profile }]), { status: 200 });
     }
     if (value.includes("/rest/v1/macros")) {
-      if (!setup.macros && !setup.macrosRow) return new Response("[]", { status: 200 });
+      if (noRanges || (!setup.macros && !setup.macrosRow)) return new Response("[]", { status: 200 });
       return new Response(JSON.stringify([setup.macrosRow]), { status: 200 });
     }
     return new Response("[]", { status: 200 });
@@ -177,6 +181,94 @@ describe("R&D question bank v1", () => {
       if (question.excludeLast) {
         expect(prompt).toContain(COACH_BANK_LAST_PLATE);
       }
+    }
+  });
+});
+
+const DEAD_END_ASK = "what should I have for dinner";
+const DEAD_END_PATHS = [
+  {
+    id: "noRanges",
+    status: 200,
+    minMeals: 1,
+    lead: COACH_FINE_TUNING_LINE,
+    noModel: false,
+    mock: { noRanges: true },
+    body: { mode: "ask", text: DEAD_END_ASK },
+  },
+  {
+    id: "dailyLimit",
+    status: 429,
+    minMeals: 2,
+    lead: COACH_LIMIT_LINE,
+    noModel: true,
+    mock: { callsUsed: 30 },
+    body: { mode: "ask", text: DEAD_END_ASK },
+  },
+  {
+    id: "modelDown",
+    status: 200,
+    minMeals: 1,
+    lead: null,
+    noModel: false,
+    mock: {},
+    down: true,
+    body: { mode: "ask", text: DEAD_END_ASK },
+  },
+  {
+    id: "photoNoCards",
+    status: 200,
+    minMeals: 1,
+    lead: null,
+    noModel: false,
+    mock: {},
+    empty: true,
+    body: {
+      mode: "kitchen",
+      text: "I already logged this",
+      images: [{ image_b64: "abc", media_type: "image/jpeg" }],
+    },
+  },
+];
+
+describe("dead-end paths still return a meal", () => {
+  it.each(
+    DEAD_END_PATHS.flatMap((path) => (
+      COACH_QUESTION_BANK_SETUPS.map((setup) => [path.id, setup.id, path, setup])
+    )),
+  )("%s × %s", async (_pid, _sid, path, setup) => {
+    mockSetup(setup, path.mock);
+    if (path.down) {
+      openrouter.callOpenRouter.mockResolvedValue({ ok: false, kind: "timeout", status: 504 });
+    } else if (path.empty) {
+      applyShape("empty");
+    } else {
+      applyShape("good");
+    }
+    const requestId = `dead-${path.id}-${setup.id}`;
+    const resp = await onRequestPost({
+      request: request({
+        ...path.body,
+        slot: setup.slot || "dinner",
+        requestId,
+        context: setup.context,
+      }),
+      env,
+    });
+    const data = await resp.json();
+    const posts = coachPosts();
+    const result = deadEndPathPasses(resp, data, posts, {
+      status: path.status,
+      minMeals: path.minMeals,
+      lead: path.lead,
+      noModel: path.noModel,
+      modelCalled: openrouter.callOpenRouter.mock.calls.length > 0,
+    });
+    expect(result, JSON.stringify({ result, status: resp.status, data })).toEqual({ ok: true });
+    if (path.noModel) expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    if (setup.id === "E") {
+      const hay = (data.meals || []).map((meal) => `${meal.name} ${meal.desc}`).join(" ");
+      expect(hay).not.toMatch(/\b(yogurt|yoghurt|cheese|cottage|whey|shake)\b/i);
     }
   });
 });

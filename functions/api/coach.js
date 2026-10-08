@@ -65,7 +65,7 @@ import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 import { hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../../src/utils/coachTeach.js";
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
-import { COACH_BUSY_LINE, leadFineTuningReply, menuFromPageCopy } from "../../src/content/coachVoice.js";
+import { COACH_BUSY_LINE, COACH_LIMIT_SPENT, leadFineTuningReply, leadLimitReply, menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 import {
@@ -126,6 +126,20 @@ function stripLogNag(reply) {
     .replace(/\s{2,}/g, " ")
     .replace(/\s+([,.!?])/g, "$1")
     .trim();
+}
+
+const LOGGED_MEAL_PHOTO = /\b(already (ate|logged)|just (ate|logged)|logged this|ate this|i logged)\b/i;
+
+function isLoggedMealPhoto(text, mode) {
+  return (mode === "menu" || mode === "kitchen") && LOGGED_MEAL_PHOTO.test(String(text || ""));
+}
+
+function finishLocalPicks(filled, { day, workingNumbers = false, lead = null } = {}) {
+  let reply = filled?.reply || "";
+  if (day?.notLogging) reply = stripLogNag(reply);
+  if (typeof lead === "function") reply = lead(reply);
+  else if (workingNumbers) reply = leadFineTuningReply(reply);
+  return { meals: filled?.meals || [], reply };
 }
 
 async function allowCoachNote(env, userId, { isAdmin, requestId }) {
@@ -410,17 +424,46 @@ export async function onRequestPost({ request, env }) {
         max: MAX_PER_DAY,
         requestId,
         busyMessage: COACH_BUSY_LINE,
-        spentMessage: "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.",
+        spentMessage: COACH_LIMIT_SPENT,
       });
       if (!limit.ok) {
+        const crisis = isCrisisUrgent(text);
+        const canFill = Boolean(earlyProfile) && wantsFoodFill(text, { mode, scope: verdict.scope, crisis });
+        const customMeals = canFill
+          ? await fetchCustomMeals(env, user.id, { authHeader })
+          : [];
+        const filled = canFill
+          ? finishLocalPicks(
+            ensureFoodMeals([], coachFillArgs({
+              text,
+              slot,
+              mode,
+              profile: earlyProfile,
+              customMeals,
+              day: earlyDay,
+            })),
+            { day: earlyDay, lead: leadLimitReply },
+          )
+          : { meals: [], reply: limit.message };
         await persistServerCoach(env, user.id, body, {
-          body: limit.message,
-          kind: "text",
-          payload: { requestId },
+          body: filled.reply || limit.message,
+          kind: filled.meals.length ? "cards" : "text",
+          payload: {
+            cards: persistMeals(filled.meals, slot),
+            requestId,
+            limited: true,
+          },
           requestId,
         });
         return json(
-          { error: "rate_limited", message: limit.message, retry_after_seconds: limit.retryAfterSeconds },
+          {
+            error: "rate_limited",
+            message: filled.reply || limit.message,
+            reply: filled.reply || limit.message,
+            meals: filled.meals,
+            mealSource: filled.meals.length ? "new" : undefined,
+            retry_after_seconds: limit.retryAfterSeconds,
+          },
           429,
         );
       }
@@ -493,6 +536,31 @@ export async function onRequestPost({ request, env }) {
         status: result.status,
         detail: result.detail,
       });
+      if (wantsFoodFill(text, { mode, scope: verdict.scope })) {
+        const filled = finishLocalPicks(
+          ensureFoodMeals([], coachFillArgs({ text, slot, mode, profile, customMeals, day })),
+          { day, workingNumbers },
+        );
+        await persistServerCoach(env, user.id, body, {
+          body: filled.reply,
+          kind: filled.meals.length ? "cards" : "text",
+          payload: {
+            cards: persistMeals(filled.meals, slot),
+            aside: verdict.aside || null,
+            requestId,
+          },
+          requestId,
+        });
+        return json({
+          ok: true,
+          scope: "food",
+          mode,
+          reply: filled.reply,
+          meals: filled.meals,
+          mealSource: "new",
+          aside: verdict.aside || null,
+        });
+      }
       await persistServerCoach(env, user.id, body, {
         body: COACH_BUSY_LINE,
         kind: "text",
@@ -648,7 +716,15 @@ export async function onRequestPost({ request, env }) {
       meals = padCoachMeals(meals, { ...fill, count: want });
     }
 
-    if (wantsFoodFill(text, { mode, topic: teachTopic, scope: "food" }) && !meals.length) {
+    if (isLoggedMealPhoto(text, mode)) {
+      const filled = ensureFoodMeals([], {
+        ...fill,
+        skipNames: [...(fill.skipNames || []), ...meals.map((meal) => meal.name)],
+        reply: reply || "Here's a next one.",
+      });
+      meals = filled.meals;
+      reply = filled.reply;
+    } else if (wantsFoodFill(text, { mode, topic: teachTopic, scope: "food" }) && !meals.length) {
       const filled = ensureFoodMeals([], { ...fill, topic: teachTopic, reply });
       meals = filled.meals;
       reply = filled.reply;

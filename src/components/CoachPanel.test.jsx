@@ -1023,16 +1023,39 @@ describe("the photo she attached", () => {
     expect(screen.queryByText("Photo of the menu", { selector: "div" })).toBeNull();
   });
 
-  it("keeps cantSeeIt when a photo comes back with no cards", async () => {
-    const postCoach = vi.fn(async () => ({ ok: true, reply: "", meals: [] }));
+  it("renders fallback plates when a photo comes back with cards", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "Here's a next one.",
+      meals: [{ name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, servings: 1 }],
+    }));
     renderPanel({ postCoach, onLoadThread: async () => [] });
     await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
     const file = new File(["x"], "menu.jpg", { type: "image/jpeg" });
     fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } });
     await screen.findByAltText("Menu photo");
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    await screen.findByText(COACH_COPY.cantSeeIt);
-    expect(screen.queryByText(COACH_BUSY_LINE)).toBeNull();
+    await screen.findByText("Here's a next one.");
+    expect(cardTitles().some((title) => title.includes("Turkey skillet"))).toBe(true);
+    expect(screen.queryByText(COACH_COPY.cantSeeIt)).toBeNull();
+  });
+
+  it("renders cards that come back on a 429", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      error: "rate_limited",
+      message: "That's all the thinking I've got for today. Here's Turkey skillet.",
+      meals: [{ name: "Turkey skillet", cal: 430, p: 40, c: 28, f: 14, servings: 1 }],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm tired, something easy with chicken" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(/That's all the thinking I've got for today/);
+    expect(cardTitles().some((title) => title.includes("Turkey skillet"))).toBe(true);
   });
 });
 

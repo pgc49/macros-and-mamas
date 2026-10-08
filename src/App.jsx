@@ -14,6 +14,7 @@ import { coachCardVia, coachLogFromCard, unscaleRankedCard } from "./utils/coach
 import { nextCustomMeals } from "./utils/coachMyMeals";
 import { clearCoachPencil, removeCoachPencilMatchingLog, writeCoachPencil } from "./utils/coachPencil";
 import { stripPortionSuffix } from "./utils/coachPrefs";
+import { readCoachClientData } from "./utils/coachClientResult";
 import { ingredientsToText } from "./utils/planMealShape";
 import { COACH_ASK_CALLIE_PREFILL } from "./content/coachVoice";
 import {
@@ -1357,10 +1358,7 @@ export default function App() {
         signal: controller.signal,
       });
       const data = await resp.json().catch(() => null);
-      if (!resp.ok) {
-        return { ok: false, message: data?.message || "I couldn't get to that. Try me again in a second." };
-      }
-      return data;
+      return readCoachClientData(resp, data);
     } catch (e) {
       const timedOut = e?.name === "AbortError";
       console.error("postCoach failed", e);

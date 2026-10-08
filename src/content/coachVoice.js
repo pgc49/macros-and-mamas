@@ -274,6 +274,9 @@ const COACH_MEDICAL_LINE = "That's one for Callie, not me, and I don't want you 
 export const INCLUDE_COACH_EMERGENCY_LINE = true;
 export const COACH_BUSY_LINE =
   "I can't think straight right now. Try again in a minute, or pick something from Meals.";
+export const COACH_LIMIT_LINE = "That's all the thinking I've got for today.";
+export const COACH_LIMIT_SPENT =
+  "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.";
 export const COACH_FINE_TUNING_LINE =
   "Callie's still fine-tuning your numbers, so here's an easy one for now.";
 
@@ -282,6 +285,13 @@ export function leadFineTuningReply(reply) {
   if (!rest) return COACH_FINE_TUNING_LINE;
   if (rest.startsWith(COACH_FINE_TUNING_LINE)) return rest.slice(0, 400);
   return `${COACH_FINE_TUNING_LINE} ${rest}`.trim().slice(0, 400);
+}
+
+export function leadLimitReply(reply) {
+  const rest = String(reply || "").trim();
+  if (!rest) return COACH_LIMIT_SPENT;
+  if (rest.startsWith(COACH_LIMIT_LINE)) return rest.slice(0, 400);
+  return `${COACH_LIMIT_LINE} ${rest}`.trim().slice(0, 400);
 }
 
 export const COACH_EMERGENCY_LINE =

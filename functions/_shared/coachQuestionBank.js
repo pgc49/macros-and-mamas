@@ -236,6 +236,25 @@ export function carefulQuestionPasses(data, question = {}, { posts, summaries } 
   return { ok: true };
 }
 
+export function deadEndPathPasses(resp, data, posts, {
+  status = 200,
+  minMeals = 1,
+  lead = null,
+  noModel = false,
+  modelCalled = false,
+} = {}) {
+  if (resp.status !== status) return { ok: false, reason: `status ${resp.status}` };
+  const meals = Array.isArray(data?.meals) ? data.meals.filter((meal) => meal?.name) : [];
+  if (meals.length < minMeals) return { ok: false, reason: `plates ${meals.length}` };
+  const line = String(data?.reply || data?.message || "");
+  if (lead && !line.includes(lead)) return { ok: false, reason: "missing lead-in" };
+  if (noModel && modelCalled) return { ok: false, reason: "called the model" };
+  if (!posts?.length) return { ok: false, reason: "not saved" };
+  const ticket = posts[0]?.request_id || posts[0]?.payload?.requestId;
+  if (!ticket) return { ok: false, reason: "missing request_id" };
+  return { ok: true };
+}
+
 export function bankContextFor(question, setup) {
   const context = { ...(setup.context || {}) };
   if (question.excludeLast) {
