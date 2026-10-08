@@ -764,6 +764,54 @@ describe("an escalate lands on her card", () => {
   });
 });
 
+describe("record persists a coach reply with the service role", () => {
+  it("writes role=coach and does not call a model", async () => {
+    const posts = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      const value = String(url);
+      if (value.includes("/auth/v1/user")) {
+        return new Response(JSON.stringify({ id: USER_ID }), { status: 200 });
+      }
+      if (value.includes("select=paid,refunded,role")) {
+        return new Response(JSON.stringify([{ paid: true, refunded: false, role: "client" }]), { status: 200 });
+      }
+      if (value.includes("coach_messages") && init?.method === "POST") {
+        posts.push(JSON.parse(init.body));
+        return new Response(null, { status: 201 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+
+    const resp = await onRequestPost({
+      request: request({
+        mode: "record",
+        body: "Tonight.",
+        kind: "cards",
+        payload: { cards: [{ name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }] },
+        localDate: "2026-10-08",
+      }),
+      env: { ...env, OPENROUTER_API_KEY: "" },
+    });
+    expect(resp.status).toBe(200);
+    expect((await resp.json()).ok).toBe(true);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].profile_id).toBe(USER_ID);
+    expect(posts[0].role).toBe("coach");
+    expect(posts[0].kind).toBe("cards");
+  });
+
+  it("refuses a record from someone who is not paid", async () => {
+    mockSupabase({ paid: false });
+    const resp = await onRequestPost({
+      request: request({ mode: "record", body: "Tonight." }),
+      env,
+    });
+    expect(resp.status).toBe(403);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+});
+
 describe("cost", () => {
   it("stops her at the daily cap", async () => {
     mockSupabase({ callsUsed: 30 });

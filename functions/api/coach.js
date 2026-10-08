@@ -5,6 +5,7 @@
      { mode: "ask",     text, slot, budget?, recent?[] }
      { mode: "menu",    text?, slot, budget?, images[] }   → what to order
      { mode: "kitchen", text?, slot, budget?, images[] }   → from what she has
+     { mode: "record",  body, kind, payload, localDate }   → persist a coach reply
 
    Three things this endpoint will not do:
 
@@ -59,13 +60,14 @@ import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js
 import { menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
+import { insertCoachReply } from "../_shared/coachMessages.js";
 
 const MAX_PER_DAY = 30;
 const MAX_IMAGES = 3;
 const MAX_IMAGE_CHARS = 2_500_000;
 const MAX_TEXT = 600;
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
-const MODES = new Set(["ask", "menu", "kitchen"]);
+const MODES = new Set(["ask", "menu", "kitchen", "record"]);
 
 const COACH_FAILURE_COPY = {
   retryLabel: "ask me again",
@@ -74,11 +76,6 @@ const COACH_FAILURE_COPY = {
 
 export async function onRequestPost({ request, env }) {
   try {
-    if (!env.OPENROUTER_API_KEY) {
-      console.error("missing OPENROUTER_API_KEY");
-      return json({ error: "coach unavailable" }, 503);
-    }
-
     const authHeader = request.headers.get("authorization") || "";
     const user = await requireSupabaseUser(request, env);
     if (!user) return json({ error: "unauthorized" }, 401);
@@ -90,6 +87,24 @@ export async function onRequestPost({ request, env }) {
 
     const body = await request.json().catch(() => ({}));
     const mode = MODES.has(body.mode) ? body.mode : "ask";
+
+    // Local answers persist through this path so a mama JWT cannot insert
+    // a coach-role row. Service role writes; RLS still blocks the client.
+    if (mode === "record") {
+      const saved = await insertCoachReply(env, user.id, {
+        body: body.body,
+        kind: body.kind,
+        payload: body.payload,
+        localDate: body.localDate,
+      });
+      if (!saved.ok) return json({ error: "could not save" }, 502);
+      return json({ ok: true, message: { role: "coach" } });
+    }
+
+    if (!env.OPENROUTER_API_KEY) {
+      console.error("missing OPENROUTER_API_KEY");
+      return json({ error: "coach unavailable" }, 503);
+    }
     const text = String(body.text || "").trim().slice(0, MAX_TEXT);
     const askedSlot = slotNamedInAsk(text);
     const slot = askedSlot
