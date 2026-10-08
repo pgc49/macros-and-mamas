@@ -157,10 +157,17 @@ food, feed the food she has and call it what it is. If she said tonight, dinner,
 a cuisine, her words beat the clock.`;
 }
 
-function fileBlock(profile, macros) {
+function fileBlock(profile, macros, macrosStatus = "approved") {
   const parts = [];
   const n = (v) => Math.round(Number(v) || 0);
-  if (macros && [macros.cal, macros.protein, macros.carbs, macros.fat].some((v) => Number(v) > 0)) {
+  const hasNumbers = macros && [macros.cal, macros.protein, macros.carbs, macros.fat].some((v) => Number(v) > 0);
+  if (hasNumbers && macrosStatus === "draft") {
+    parts.push(`## Working numbers — Callie has not finished these. Use them only as a rough size. Keep portions simple. Make no promises about exact macros. Do not recite them.
+- Calories: ${n(macros.cal)}
+- Protein: ${n(macros.protein)} g
+- Carbs: ${n(macros.carbs)} g
+- Fat: ${n(macros.fat)} g`);
+  } else if (hasNumbers && macrosStatus !== "none") {
     parts.push(`## Approved ranges — Callie's numbers for the day. Use them. Do not recite them.
 - Calories: ${n(macros.cal)}
 - Protein: ${n(macros.protein)} g
@@ -181,6 +188,18 @@ ${notes.map((note) => `- ${note.slice(0, 240)}`).join("\n")}`);
 ${months} months postpartum. Choose the plate from that. Do not mention her stage.`);
   }
   return parts.join("\n\n");
+}
+
+function fineTuningBlock(macrosStatus) {
+  if (macrosStatus === "draft") {
+    return `## Fine-tuning
+Callie hasn't finished her numbers. The figures above are working numbers only. Keep portions simple. Make no promises about exact macros. Do not recite them. Start the reply with: "Callie's still fine-tuning your numbers, so here's an easy one for now."`;
+  }
+  if (macrosStatus === "none") {
+    return `## Fine-tuning
+Callie has not set her numbers yet. Do not mention calories, protein, carbs, fat, grams, or ranges. Suggest one simple plate from what she said she has. Keep portions ordinary. Card macros may be an honest ingredient sum; the reply has no numbers. Start the reply with: "Callie's still fine-tuning your numbers, so here's an easy one for now."`;
+  }
+  return "";
 }
 
 function budgetBlock(budget, slot) {
@@ -251,14 +270,16 @@ const SHARED_RULES = `## Rules
    meals empty, and let the app do the handoff — do not answer it yourself.
 10. Return ONLY JSON.`;
 
-export function buildCoachAskPrompt({ profile, macros = null, budget, slot, question, customMeals = [], recentNames = [], day = null }) {
+export function buildCoachAskPrompt({ profile, macros = null, macrosStatus = "approved", budget, slot, question, customMeals = [], recentNames = [], day = null }) {
   return `A mama in the program is asking you something. Answer it, or hand it back.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
 
-${fileBlock(profile, macros)}
+${fileBlock(profile, macros, macrosStatus)}
+
+${fineTuningBlock(macrosStatus)}
 
 ${dayBlock(day)}
 
@@ -282,14 +303,16 @@ ${SHARED_RULES}
 Return JSON: ${REPLY_SCHEMA}`;
 }
 
-export function buildCoachMenuPrompt({ profile, macros = null, budget, slot, note, customMeals = [], recentNames = [], day = null }) {
+export function buildCoachMenuPrompt({ profile, macros = null, macrosStatus = "approved", budget, slot, note, customMeals = [], recentNames = [], day = null }) {
   return `She is out and sent a photo of the menu. Tell her what to order.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
 
-${fileBlock(profile, macros)}
+${fileBlock(profile, macros, macrosStatus)}
+
+${fineTuningBlock(macrosStatus)}
 
 ${dayBlock(day)}
 
@@ -317,14 +340,16 @@ ${SHARED_RULES}
 Return JSON: ${REPLY_SCHEMA}`;
 }
 
-export function buildCoachMenuLinkPrompt({ profile, macros = null, budget, slot, question, pageUrl, pageText, customMeals = [], recentNames = [], day = null }) {
+export function buildCoachMenuLinkPrompt({ profile, macros = null, macrosStatus = "approved", budget, slot, question, pageUrl, pageText, customMeals = [], recentNames = [], day = null }) {
   return `She pasted a link to a menu. The page was fetched for you. You cannot see anything that is not in the page text.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
 
-${fileBlock(profile, macros)}
+${fileBlock(profile, macros, macrosStatus)}
+
+${fineTuningBlock(macrosStatus)}
 
 ${dayBlock(day)}
 
@@ -353,14 +378,16 @@ ${SHARED_RULES}
 Return JSON: ${REPLY_SCHEMA}`;
 }
 
-export function buildCoachKitchenPrompt({ profile, macros = null, budget, slot, note, customMeals = [], recentNames = [], day = null }) {
+export function buildCoachKitchenPrompt({ profile, macros = null, macrosStatus = "approved", budget, slot, note, customMeals = [], recentNames = [], day = null }) {
   return `She sent a photo of what she has in. Build her something from it.
 
 ${slotBlock(slot)}
 
 ${budgetBlock(budget, slot)}
 
-${fileBlock(profile, macros)}
+${fileBlock(profile, macros, macrosStatus)}
+
+${fineTuningBlock(macrosStatus)}
 
 ${dayBlock(day)}
 

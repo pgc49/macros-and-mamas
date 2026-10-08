@@ -55,14 +55,14 @@ import {
   checkAiLimit,
   fetchEnrollment,
   json,
-  loadSelf,
+  loadCoachSelf,
   requireSupabaseUser,
 } from "../_shared/clientAiAccess.js";
 import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 import { hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../../src/utils/coachTeach.js";
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
-import { COACH_BUSY_LINE, menuFromPageCopy } from "../../src/content/coachVoice.js";
+import { COACH_BUSY_LINE, leadFineTuningReply, menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 import {
@@ -333,6 +333,12 @@ export async function onRequestPost({ request, env }) {
         spentMessage: "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.",
       });
       if (!limit.ok) {
+        await persistServerCoach(env, user.id, body, {
+          body: limit.message,
+          kind: "text",
+          payload: { requestId },
+          requestId,
+        });
         return json(
           { error: "rate_limited", message: limit.message, retry_after_seconds: limit.retryAfterSeconds },
           429,
@@ -340,16 +346,16 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    const { profile, macros } = await loadSelf(env, user.id, authHeader);
-    if (!profile) return json({ error: "profile not found" }, 404);
-    if (!macros) {
-      return json(
-        {
-          error: "macros_required",
-          message: "Your ranges need Callie's approval before I can help with meals.",
-        },
-        409,
-      );
+    const { profile, macros, macrosStatus } = await loadCoachSelf(env, user.id, authHeader);
+    if (!profile) {
+      const message = "I couldn't load your file just now. Try again in a minute.";
+      await persistServerCoach(env, user.id, body, {
+        body: message,
+        kind: "text",
+        payload: { requestId },
+        requestId,
+      });
+      return json({ error: "profile not found", message }, 404);
     }
 
     const customMeals = await fetchCustomMeals(env, user.id, { authHeader });
@@ -359,7 +365,8 @@ export async function onRequestPost({ request, env }) {
       ...body.context,
       notLogging: Boolean(body.context?.notLogging) || isWontLogRefusal(text),
     });
-    const args = { profile, macros, budget, slot, customMeals, recentNames, day };
+    const workingNumbers = macrosStatus === "draft" || macrosStatus === "none";
+    const args = { profile, macros, macrosStatus, budget, slot, customMeals, recentNames, day };
 
     let prompt;
     if (menuPage?.ok) {
@@ -406,6 +413,12 @@ export async function onRequestPost({ request, env }) {
         status: result.status,
         detail: result.detail,
       });
+      await persistServerCoach(env, user.id, body, {
+        body: COACH_BUSY_LINE,
+        kind: "text",
+        payload: { requestId },
+        requestId,
+      });
       return json(
         { error: "coach unavailable", message: COACH_BUSY_LINE },
         502,
@@ -420,6 +433,12 @@ export async function onRequestPost({ request, env }) {
         kind: "parse",
         model: result.model,
         detail: result.text.slice(0, 300),
+      });
+      await persistServerCoach(env, user.id, body, {
+        body: COACH_BUSY_LINE,
+        kind: "text",
+        payload: { requestId },
+        requestId,
       });
       return json(
         { error: "could not read that", message: COACH_BUSY_LINE },
@@ -464,14 +483,19 @@ export async function onRequestPost({ request, env }) {
       await persistServerCoach(env, user.id, body, {
         body: "",
         kind: "deflect",
-        payload: { deflect: "offTopic" },
+        payload: { deflect: "offTopic", requestId },
+        requestId,
       });
       return json({ ok: true, scope: "off_topic", deflect: "offTopic", meals: [] });
     }
 
     let reply = cleanReply(parsed.value?.reply);
+    if (workingNumbers) reply = leadFineTuningReply(reply);
     const orderMode = menuPage?.ok ? "menu" : mode;
-    let meals = normalizeMeals(parsed.value, slot, orderMode, { lockSlot: Boolean(askedSlot) });
+    let meals = normalizeMeals(parsed.value, slot, orderMode, {
+      lockSlot: Boolean(askedSlot),
+      estimate: workingNumbers,
+    });
     if (mode === "ask" && !menuPage?.ok) {
       meals = limitAskMeals(meals, { askedForOptions: askedForMealOptions(text) });
     }
@@ -488,6 +512,7 @@ export async function onRequestPost({ request, env }) {
         meals = kept;
       }
     }
+    if (workingNumbers) reply = leadFineTuningReply(reply);
 
     const mealSource = orderMode === "menu" ? "menu" : mode === "kitchen" ? "kitchen" : "new";
     const shownMeals = sizeMealsForPersist(meals, budget, slot, mealSource);
@@ -564,7 +589,7 @@ function orderStepsOnly(steps) {
     .slice(0, 6);
 }
 
-function normalizeMeals(parsed, fallbackSlot, mode, { lockSlot = false } = {}) {
+function normalizeMeals(parsed, fallbackSlot, mode, { lockSlot = false, estimate = false } = {}) {
   const raw = Array.isArray(parsed?.meals) ? parsed.meals : parsed?.meal ? [parsed.meal] : [];
   const out = [];
   for (const m of raw.slice(0, 3)) {
@@ -579,7 +604,7 @@ function normalizeMeals(parsed, fallbackSlot, mode, { lockSlot = false } = {}) {
     if (!macrosPlausible(macros)) continue;
 
     let desc = String(m.desc || "").slice(0, 280);
-    if (mode === "menu" && desc && !/estimate/i.test(desc)) {
+    if ((mode === "menu" || estimate) && desc && !/estimate/i.test(desc)) {
       desc = `Rough estimate — ${desc}`.slice(0, 280);
     }
 

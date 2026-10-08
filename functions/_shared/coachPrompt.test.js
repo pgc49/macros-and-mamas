@@ -137,7 +137,36 @@ describe("the prompt says what meal she is deciding", () => {
       expect(prompt).toContain("keep fat at the low end");
       expect(prompt).toContain("Do not quote them");
       expect(prompt).toContain("She is nursing");
+      expect(prompt).not.toContain("Fine-tuning");
     }
+  });
+
+  it("uses working numbers and the fine-tuning rule when ranges are not approved", () => {
+    const prompt = buildCoachAskPrompt({
+      ...ARGS,
+      slot: "dinner",
+      macros: { cal: 1750, protein: 140, carbs: 160, fat: 55 },
+      macrosStatus: "draft",
+      question: "I just have eggs and vegetables in my fridge",
+    });
+    expect(prompt).toContain("Working numbers");
+    expect(prompt).toContain("Callie has not finished these");
+    expect(prompt).toContain("Callie's still fine-tuning your numbers, so here's an easy one for now.");
+    expect(prompt).not.toContain("Approved ranges");
+  });
+
+  it("skips numbers when she has no macros row", () => {
+    const prompt = buildCoachAskPrompt({
+      ...ARGS,
+      slot: "dinner",
+      macros: null,
+      macrosStatus: "none",
+      question: "I just have eggs and vegetables in my fridge",
+    });
+    expect(prompt).not.toContain("Approved ranges");
+    expect(prompt).not.toContain("Working numbers");
+    expect(prompt).toContain("Do not mention calories");
+    expect(prompt).toContain("Callie's still fine-tuning your numbers, so here's an easy one for now.");
   });
 });
 

@@ -175,7 +175,7 @@ export const COACH_COPY = {
   knowsOffSlot: "Usually",
 
   // Sources
-  sourceBank: "Callie's bank",
+  sourceBank: "Callie's recipe",
   sourceMy: "My meals",
   sourcePantry: "Pantry",
   sourceMenu: "From the menu",
@@ -274,6 +274,16 @@ const COACH_MEDICAL_LINE = "That's one for Callie, not me, and I don't want you 
 export const INCLUDE_COACH_EMERGENCY_LINE = true;
 export const COACH_BUSY_LINE =
   "I can't think straight right now. Try again in a minute, or pick something from Meals.";
+export const COACH_FINE_TUNING_LINE =
+  "Callie's still fine-tuning your numbers, so here's an easy one for now.";
+
+export function leadFineTuningReply(reply) {
+  const rest = String(reply || "").trim();
+  if (!rest) return COACH_FINE_TUNING_LINE;
+  if (rest.startsWith(COACH_FINE_TUNING_LINE)) return rest.slice(0, 400);
+  return `${COACH_FINE_TUNING_LINE} ${rest}`.trim().slice(0, 400);
+}
+
 export const COACH_EMERGENCY_LINE =
   "Please get help right now. If this feels like an emergency, call 911. If you're having thoughts of hurting yourself or your baby, call or text 988. Then call your doctor. Callie will see this, but maybe not right away, so please don't wait for her.";
 

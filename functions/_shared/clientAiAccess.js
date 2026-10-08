@@ -85,8 +85,22 @@ export function selfFromRows(row, macrosRow) {
   };
 }
 
-/** Everything the prompt needs about her, and the ranges Callie approved. */
-export async function loadSelf(env, userId, authHeader) {
+/** Approved row only. Coach uses pickCoachMacros / loadCoachSelf instead. */
+export function pickApprovedMacros(rows) {
+  return (Array.isArray(rows) ? rows : []).find((row) => row?.approved === true) || null;
+}
+
+/** Coach may work from a draft row. Other endpoints keep approved-only. */
+export function pickCoachMacros(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const approved = pickApprovedMacros(list);
+  if (approved) return { row: approved, status: "approved" };
+  const draft = list.find((row) => row) || null;
+  if (draft) return { row: draft, status: "draft" };
+  return { row: null, status: "none" };
+}
+
+async function loadSelfRows(env, userId, authHeader) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const anon = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || "";
   if (!base || !anon) throw new Error("missing supabase config");
@@ -102,8 +116,24 @@ export async function loadSelf(env, userId, authHeader) {
 
   const profiles = await pResp.json().catch(() => []);
   const macrosRows = await mResp.json().catch(() => []);
-  const approved = (Array.isArray(macrosRows) ? macrosRows : []).find((row) => row?.approved === true) || null;
-  return selfFromRows(profiles[0], approved);
+  return {
+    profileRow: Array.isArray(profiles) ? profiles[0] : null,
+    macrosRows: Array.isArray(macrosRows) ? macrosRows : [],
+  };
+}
+
+/** Everything the prompt needs about her, and the ranges Callie approved. */
+export async function loadSelf(env, userId, authHeader) {
+  const { profileRow, macrosRows } = await loadSelfRows(env, userId, authHeader);
+  return selfFromRows(profileRow, pickApprovedMacros(macrosRows));
+}
+
+/** Coach-only. Draft or missing ranges still get a meal. */
+export async function loadCoachSelf(env, userId, authHeader) {
+  const { profileRow, macrosRows } = await loadSelfRows(env, userId, authHeader);
+  const picked = pickCoachMacros(macrosRows);
+  const self = selfFromRows(profileRow, picked.row);
+  return { ...self, macrosStatus: picked.status };
 }
 
 /**

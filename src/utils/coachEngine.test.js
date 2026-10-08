@@ -17,7 +17,7 @@ import {
   resolveCoachShares,
   unmatchedCoachPencils,
 } from "./coachBudget.js";
-import { buildCoachCard, cardsWithShownReason, coachReason, firstPaintPlates, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason } from "./coachRank.js";
+import { buildCoachCard, cardsWithShownReason, coachReason, firstPaintPlates, pickScale, plateTiedReason, rankBankCards, proteinOverNote, shownCoachReason, sourceTag } from "./coachRank.js";
 import { sizeMealsForPersist } from "./coachPlateScale.js";
 import { buildCoachAnswer, pruneStaleMyMealCards, replayCoachMessages, resolveCoachSlot } from "./coachSession.js";
 import { nextCustomMeals } from "./coachMyMeals.js";
@@ -561,7 +561,7 @@ describe("ranking", () => {
         { id: "deleted-1", name: "Rosemary crackers", source: "my", tag: "My meals", slot: "breakfast" },
         { id: "tag-only", name: "Old scramble", tag: "My meals", slot: "breakfast" },
         { id: "live-1", name: "Still saved meal", source: "my", tag: "My meals", slot: "lunch" },
-        { name: "Greek yogurt bowl", source: "bank", tag: "Callie's bank", slot: "breakfast" },
+        { name: "Greek yogurt bowl", source: "bank", tag: COACH_COPY.sourceBank, slot: "breakfast" },
       ],
     }];
     const live = [{ id: "live-1", name: "Still saved meal" }];
@@ -669,7 +669,7 @@ describe("ranking", () => {
       name: "Berry protein smoothie",
       title: "Berry protein smoothie",
       source: "bank",
-      tag: "Callie's bank",
+      tag: COACH_COPY.sourceBank,
       cal: 270,
       p: 28,
       c: 34,
@@ -717,7 +717,7 @@ describe("ranking", () => {
           tag: "My meals",
           slot: "breakfast",
         },
-        { name: "Sheet pan chicken", source: "bank", tag: "Callie's bank", slot: "dinner" },
+        { name: "Sheet pan chicken", source: "bank", tag: COACH_COPY.sourceBank, slot: "dinner" },
         { name: "Leftover Pasta", source: "new", tag: "Built for what's left", basedOn: null, slot: "dinner" },
       ],
     }];
@@ -786,6 +786,12 @@ describe("ranking", () => {
     });
     const { meals } = rankBankCards({ bankMeals: bank, budget: tiny, slot: "snack" });
     expect(meals).toHaveLength(0);
+  });
+
+  it("labels a bank plate as Callie's recipe", () => {
+    expect(sourceTag("bank")).toBe(COACH_COPY.sourceBank);
+    expect(sourceTag("bank")).toBe("Callie's recipe");
+    expect(sourceTag("my")).toBe(COACH_COPY.sourceMy);
   });
 
   it("offers a half portion when that is the only size that fits", () => {

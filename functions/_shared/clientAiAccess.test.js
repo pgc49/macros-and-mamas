@@ -4,7 +4,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-import { checkAiLimit, loadSelf, selfFromRows } from "./clientAiAccess.js";
+import { checkAiLimit, loadCoachSelf, loadSelf, pickCoachMacros, selfFromRows } from "./clientAiAccess.js";
 
 describe("loadSelf keeps the fields the coach already stores", () => {
   it("keeps months postpartum, approved ranges, and Callie's notes", () => {
@@ -64,6 +64,61 @@ describe("loadSelf requires approved ranges", () => {
     expect(self.profile.name).toBe("QA");
     expect(self.macros).toBeNull();
     vi.restoreAllMocks();
+  });
+});
+
+describe("loadCoachSelf can work from a draft row", () => {
+  it("keeps an unapproved macros row as working numbers", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      if (String(url).includes("/rest/v1/profiles")) {
+        return new Response(JSON.stringify([{ name: "QA", breastfeeding: false }]), { status: 200 });
+      }
+      if (String(url).includes("/rest/v1/macros")) {
+        return new Response(JSON.stringify([{ cal: 1700, protein: 120, carbs: 150, fat: 50, approved: false }]), { status: 200 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+    const self = await loadCoachSelf(
+      { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "anon" },
+      "user-1",
+      "Bearer token",
+    );
+    expect(self.macrosStatus).toBe("draft");
+    expect(self.macros).toEqual({
+      cal: 1700,
+      protein: 120,
+      carbs: 150,
+      fat: 50,
+      notes: [],
+    });
+    vi.restoreAllMocks();
+  });
+
+  it("reports none when there is no macros row", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      if (String(url).includes("/rest/v1/profiles")) {
+        return new Response(JSON.stringify([{ name: "QA", breastfeeding: false }]), { status: 200 });
+      }
+      if (String(url).includes("/rest/v1/macros")) {
+        return new Response("[]", { status: 200 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+    const self = await loadCoachSelf(
+      { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "anon" },
+      "user-1",
+      "Bearer token",
+    );
+    expect(self.macrosStatus).toBe("none");
+    expect(self.macros).toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it("still prefers an approved row when both exist", () => {
+    expect(pickCoachMacros([
+      { cal: 1600, approved: false },
+      { cal: 1800, approved: true },
+    ])).toEqual({ row: { cal: 1800, approved: true }, status: "approved" });
   });
 });
 

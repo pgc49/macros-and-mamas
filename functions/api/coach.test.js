@@ -254,17 +254,92 @@ describe("access", () => {
     expect(resp.status).toBe(403);
   });
 
-  it("waits for Callie to approve her ranges", async () => {
-    mockSupabase({ macros: false });
-    const resp = await onRequestPost({ request: request({ mode: "ask", text: "what should I eat" }), env });
-    expect(resp.status).toBe(409);
-    expect((await resp.json()).error).toBe("macros_required");
+  it("answers a typed food question from unapproved working numbers", async () => {
+    mockSupabase({ macrosRow: { cal: 1750, protein: 140, carbs: 160, fat: 55, approved: false } });
+    modelReturns({
+      scope: "food",
+      reply: "A veggie scramble with two or three eggs and the vegetables you have.",
+      meals: [{
+        name: "Veggie scramble",
+        desc: "Eggs and whatever vegetables are in the fridge.",
+        cal: 320,
+        p: 22,
+        c: 8,
+        f: 20,
+        ingredients: [{ item: "eggs", amount: "2–3" }, { item: "mixed vegetables", amount: "1 cup" }],
+        steps: ["Scramble the eggs with the vegetables."],
+      }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "I want something new. I just have eggs and vegetables in my fridge.",
+        requestId: "ask-eggs-unapproved",
+      }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    const data = await resp.json();
+    expect(data.reply).toBe(
+      "Callie's still fine-tuning your numbers, so here's an easy one for now. A veggie scramble with two or three eggs and the vegetables you have.",
+    );
+    expect(data.meals).toHaveLength(1);
+    expect(data.meals[0].name).toBe("Veggie scramble");
+    expect(data.meals[0].desc).toMatch(/estimate/i);
+    expect(data.mealSource).toBe("new");
+    const prompt = promptText();
+    expect(prompt).toContain("Working numbers");
+    expect(prompt).toContain("Callie has not finished");
+    expect(prompt).not.toContain("Approved ranges");
+    const posts = coachMessagePosts();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].source).toBe("server");
+    expect(posts[0].body).toBe(data.reply);
+    expect(posts[0].request_id).toBe("ask-eggs-unapproved");
+    expect(posts[0].payload.requestId).toBe("ask-eggs-unapproved");
   });
 
-  it("ignores a macros row that exists but is not approved", async () => {
-    mockSupabase({ macrosRow: { cal: 1750, protein: 140, carbs: 160, fat: 55, approved: false } });
-    const resp = await onRequestPost({ request: request({ mode: "ask", text: "what should I eat" }), env });
-    expect(resp.status).toBe(409);
+  it("answers a typed food question when she has no macros row", async () => {
+    mockSupabase({ macros: false });
+    modelReturns({
+      scope: "food",
+      reply: "A veggie scramble with two or three eggs and the vegetables you have.",
+      meals: [{
+        name: "Veggie scramble",
+        desc: "Eggs and whatever vegetables are in the fridge.",
+        cal: 320,
+        p: 22,
+        c: 8,
+        f: 20,
+        ingredients: [{ item: "eggs", amount: "2–3" }, { item: "mixed vegetables", amount: "1 cup" }],
+        steps: ["Scramble the eggs with the vegetables."],
+      }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "I want something new. I just have eggs and vegetables in my fridge.",
+        requestId: "ask-eggs-none",
+      }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    const data = await resp.json();
+    expect(data.reply).toBe(
+      "Callie's still fine-tuning your numbers, so here's an easy one for now. A veggie scramble with two or three eggs and the vegetables you have.",
+    );
+    expect(data.meals).toHaveLength(1);
+    expect(data.meals[0].name).toBe("Veggie scramble");
+    expect(data.meals[0].desc).toMatch(/estimate/i);
+    const prompt = promptText();
+    expect(prompt).not.toContain("Approved ranges");
+    expect(prompt).not.toContain("Working numbers");
+    expect(prompt).toContain("Do not mention calories");
+    const posts = coachMessagePosts();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].source).toBe("server");
+    expect(posts[0].body).toBe(data.reply);
+    expect(posts[0].request_id).toBe("ask-eggs-none");
   });
 });
 
@@ -1448,12 +1523,22 @@ describe("cost", () => {
 
   it("stops her at the daily cap", async () => {
     mockSupabase({ callsUsed: 30 });
-    const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "dinner ideas", requestId: "ask-rate-limit" }),
+      env,
+    });
     expect(resp.status).toBe(429);
-    expect((await resp.json()).message).toBe(
+    const data = await resp.json();
+    expect(data.message).toBe(
       "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.",
     );
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    const posts = coachMessagePosts();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].source).toBe("server");
+    expect(posts[0].body).toBe(data.message);
+    expect(posts[0].request_id).toBe("ask-rate-limit");
+    expect(posts[0].payload.requestId).toBe("ask-rate-limit");
   });
 
   it("does not cap Callie", async () => {
