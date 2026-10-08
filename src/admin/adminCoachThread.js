@@ -4,7 +4,7 @@
  * skim before she reads the chat.
  */
 
-import { COACH_DEFLECT } from "../content/coachVoice";
+import { coachDeflectLine } from "../content/coachVoice";
 import { isClinicalUrgent } from "../../functions/_shared/coachGuardrails.js";
 import { coachSummaryDateIso } from "../../functions/_shared/coachRefusalSummary.js";
 
@@ -74,8 +74,7 @@ export function flagLabel(flag) {
 }
 
 export function deflectLine(message) {
-  const key = message?.payload?.deflect;
-  return (COACH_DEFLECT[key] || COACH_DEFLECT.offTopic).line;
+  return coachDeflectLine(message?.payload?.deflect, { noted: message?.payload?.noted === true });
 }
 
 function asDisplayString(value) {

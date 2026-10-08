@@ -149,6 +149,7 @@ export function sanitizeCoachReply({
       teach: payload.teach ? String(payload.teach).slice(0, 40) : null,
       requestId: ticket,
       ...(payload.limited === true ? { limited: true } : {}),
+      ...(payload.noted === true ? { noted: true } : {}),
     };
     if (
       !nextPayload.cards.length

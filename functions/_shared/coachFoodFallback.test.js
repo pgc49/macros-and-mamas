@@ -76,7 +76,7 @@ describe("ensureFoodMeals", () => {
     expect(filled.filled).toBe(true);
     expect(filled.meals.length).toBeGreaterThanOrEqual(2);
     expect(new Set(filled.meals.map((meal) => meal.name)).size).toBe(filled.meals.length);
-    expect(filled.reply).toMatch(/Here's |Here are a few that fit what's left/);
+    expect(filled.reply).toMatch(/Here's |Here are a few easy ones that work for today/);
   });
 
   it("never puts a custom meal name in the reply body", () => {
@@ -86,7 +86,7 @@ describe("ensureFoodMeals", () => {
       customMeals: [{ name: "Grandma's Secret Casserole XYZ", cal: 380, p: 32, c: 12, f: 18 }],
     });
     expect(filled.meals.some((meal) => meal.fromSaved)).toBe(true);
-    expect(filled.reply).toBe("Here are a few that fit what's left.");
+    expect(filled.reply).toBe("Here are a few easy ones that work for today.");
     expect(filled.reply).not.toMatch(/Grandma's Secret Casserole XYZ/);
     expect(fallbackMealReply(filled.meals)).not.toMatch(/Grandma's Secret/);
   });

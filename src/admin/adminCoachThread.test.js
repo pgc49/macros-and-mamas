@@ -4,11 +4,13 @@ import {
   buildAdminCoachView,
   coachDisplayDate,
   coachFlag,
+  deflectLine,
   flagLabel,
   pairedMamaBody,
   priorMamaBody,
   plainCoachPlates,
 } from "./adminCoachThread.js";
+import { COACH_DISORDERED_LINE, COACH_DISORDERED_LINE_NOTED } from "../content/coachVoice";
 
 const mama = (id, body, extra = {}) => ({
   id,
@@ -69,6 +71,14 @@ describe("coachFlag", () => {
       payload: { deflect: "care" },
       source: "client",
     }, "I've been dizzy since this morning")).toBeNull();
+  });
+});
+
+describe("deflectLine", () => {
+  it("uses the noted disordered line only when the pin write succeeded", () => {
+    expect(deflectLine({ payload: { deflect: "disordered", noted: true } })).toBe(COACH_DISORDERED_LINE_NOTED);
+    expect(deflectLine({ payload: { deflect: "disordered", noted: false } })).toBe(COACH_DISORDERED_LINE);
+    expect(deflectLine({ payload: { deflect: "disordered" } })).toBe(COACH_DISORDERED_LINE);
   });
 });
 

@@ -54,6 +54,7 @@ function mockSupabase({
   macrosRow = null,
   customMeals = [],
   summary = null,
+  refusalWrite = true,
 } = {}) {
   let summaryRow = summary;
   const claimedTickets = new Map();
@@ -117,6 +118,9 @@ function mockSupabase({
     if (value.includes("custom_meals")) return new Response(JSON.stringify(customMeals), { status: 200 });
     if (value.includes("api.resend.com")) {
       return new Response(JSON.stringify({ id: "re_test" }), { status: 200 });
+    }
+    if (value.includes("rpc/append_coach_refusal_line") && !refusalWrite) {
+      return new Response(JSON.stringify({ ok: false }), { status: 200 });
     }
     if (value.includes("client_summaries") && init?.method === "POST") {
       summaryRow = JSON.parse(init.body);
@@ -1725,9 +1729,9 @@ describe("preview follow-ups and teach fills", () => {
     expect(resp.status).toBe(200);
     expect(data.deflect).toBe("supply");
     expect(data.meals.length).toBeGreaterThanOrEqual(2);
-    expect(COACH_DEFLECT.supply.line).toMatch(/I'm sorry you're dealing with this/);
-    expect(COACH_DEFLECT.supply.line).not.toMatch(/That's one for Callie, not me/);
-    expect(COACH_DEFLECT.supply.line).not.toMatch(/directly immediately/);
+    expect(COACH_DEFLECT.supply.line).toBe(
+      "I'm sorry, that's really stressful. Your supply always comes first. If you think it's dropping, message Callie and she'll get back to you. In the meantime, here are a few easy ones:",
+    );
     expect(data.meals.every((meal) => meal.desc && meal.desc.toLowerCase() !== meal.name.toLowerCase())).toBe(true);
   });
 
@@ -1931,9 +1935,48 @@ describe("reviewer follow-ups", () => {
     });
     const data = await resp.json();
     expect(data.deflect).toBe("disordered");
+    expect(data.noted).toBe(true);
     expect(data.meals.length).toBeGreaterThanOrEqual(2);
     expect(data.meals.every((meal) => meal.hideMacros && !meal.cal && !meal.p)).toBe(true);
-    expect(COACH_DEFLECT.disordered.line).toMatch(/I'm glad you told me/);
+    expect(COACH_DEFLECT.disordered.lineNoted).toBe(
+      "I'm really glad you told me. I've added a note for Callie, and she'd love to hear from you directly too. Message her whenever you're ready. For now, here's something simple:",
+    );
+  });
+
+  it("does not claim a Callie note when the pin write fails", async () => {
+    mockSupabase({ refusalWrite: false });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "I've been making myself throw up after meals",
+        requestId: "ask-disordered-fail",
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.deflect).toBe("disordered");
+    expect(data.noted).toBe(false);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(COACH_DEFLECT.disordered.line).toBe(
+      "I'm really glad you told me. Callie would love to hear from you directly. Message her whenever you're ready. For now, here's something simple:",
+    );
+  });
+
+  it("hides numbers on careful plates in no-logging mode", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "should I take ibuprofen",
+        requestId: "ask-ibu-nolog",
+        context: { notLogging: true },
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.deflect).toBe("medication");
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(data.meals.every((meal) => meal.hideMacros && !meal.cal && !meal.p)).toBe(true);
   });
 
   it("hands a medication question to Callie with simple food, never off-topic", async () => {
@@ -1946,7 +1989,9 @@ describe("reviewer follow-ups", () => {
     expect(data.deflect).toBe("medication");
     expect(data.deflect).not.toBe("offTopic");
     expect(data.meals.length).toBeGreaterThanOrEqual(2);
-    expect(COACH_DEFLECT.medication.line).toMatch(/doctor or pharmacist/);
+    expect(COACH_DEFLECT.medication.line).toBe(
+      "That one's for your doctor or pharmacist, not me. Let Callie know too so she can plan around it. Here's something easy in the meantime:",
+    );
   });
 
   it("only adds the draft line when a plate follows and does not double curly apostrophes", async () => {

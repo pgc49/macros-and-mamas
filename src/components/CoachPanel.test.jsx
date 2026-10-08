@@ -15,7 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import * as Sentry from "@sentry/react";
 import { CoachPanel, pairCoachThread } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
-import { COACH_COPY, COACH_DEFLECT, COACH_EMERGENCY_LINE } from "../content/coachVoice";
+import { COACH_COPY, COACH_DEFLECT, COACH_DISORDERED_LINE_NOTED, COACH_EMERGENCY_LINE } from "../content/coachVoice";
 import { localDateIso } from "../utils/dates";
 import { sanitizeCoachCards } from "../../functions/_shared/coachMessages.js";
 
@@ -1454,6 +1454,40 @@ describe("priority pass: persist, crisis, reload, load error", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
     await screen.findByText(COACH_DEFLECT.disordered.line);
+    expect(latestCardTitles().length).toBeGreaterThanOrEqual(2);
+    const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
+    expect(latestTurn?.textContent).not.toMatch(/\d+ cal ·/);
+    expect(screen.queryByText(COACH_DISORDERED_LINE_NOTED)).toBeNull();
+  });
+
+  it("shows the noted disordered line only when the pin write succeeded", async () => {
+    const postCoach = vi.fn(async () => ({
+      ok: true,
+      deflect: "disordered",
+      noted: true,
+      meals: [
+        { name: "Rice and fruit", cal: 0, p: 0, c: 0, f: 0, hideMacros: true, desc: "Rice and fruit." },
+        { name: "Cucumber and rice", cal: 0, p: 0, c: 0, f: 0, hideMacros: true, desc: "Cucumber and rice." },
+      ],
+    }));
+    renderPanel({ postCoach, onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I only eat once a day so I lose faster" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DISORDERED_LINE_NOTED);
+    expect(screen.queryByText(COACH_DEFLECT.disordered.line)).toBeNull();
+  });
+
+  it("hides numbers on careful cards in no-logging mode", async () => {
+    renderPanel({ postCoach: vi.fn(), onLoadThread: async () => [] });
+    await waitFor(() => expect(cardTitles().length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I'm not logging. should I take ibuprofen" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.medication.line);
     expect(latestCardTitles().length).toBeGreaterThanOrEqual(2);
     const latestTurn = [...document.querySelectorAll("[data-coach-turn='coach']")].at(-1);
     expect(latestTurn?.textContent).not.toMatch(/\d+ cal ·/);

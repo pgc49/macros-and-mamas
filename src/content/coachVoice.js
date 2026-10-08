@@ -255,16 +255,7 @@ export const COACH_COPY = {
 
   // Only when she raises supply or a supply drop — not every nursing mention.
   nursingPreface:
-    "Callie builds your macros with your supply at the center, and it is always protected. If you ever notice a negative shift in your supply, please reach out to Callie right away.",
-  // Lifecycle: new mama-facing supply strings. Warm first, then the handoff.
-  supplyWarm: "I'm sorry you're dealing with this.",
-  supplyHandoff:
-    "We protect your supply first, always. If you think it's dropping, Callie should hear it from you.",
-  // Lifecycle + Patrick: disordered-eating and medication careful lines.
-  disorderedWarm: "I'm glad you told me.",
-  disorderedHandoff: "This is one Callie needs to hear from you.",
-  medicationLine:
-    "I can't advise on medication. Ask your doctor or pharmacist, and message Callie so she knows.",
+    "Callie builds your plan around your supply, and protecting it always comes first. If you ever notice it dropping, message her right away.",
   snackAsk:
     "Do you want me to suggest three meals and one snack, or three meals and two snacks? I can make both work with your macros.",
 };
@@ -294,7 +285,27 @@ export const COACH_LIMIT_SPENT =
   "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.";
 export const COACH_FINE_TUNING_LINE =
   "Callie's still fine-tuning your numbers, so here's an easy one for now.";
-export const COACH_LOCAL_PICKS_LINE = "Here are a few that fit what's left.";
+export const COACH_LOCAL_PICKS_LINE = "Here are a few easy ones that work for today.";
+
+/** Careful lines. Each ends by leading into plates so she never hits a stop. */
+export const COACH_SUPPLY_LINE =
+  "I'm sorry, that's really stressful. Your supply always comes first. If you think it's dropping, message Callie and she'll get back to you. In the meantime, here are a few easy ones:";
+export const COACH_DISORDERED_LINE =
+  "I'm really glad you told me. Callie would love to hear from you directly. Message her whenever you're ready. For now, here's something simple:";
+export const COACH_DISORDERED_LINE_NOTED =
+  "I'm really glad you told me. I've added a note for Callie, and she'd love to hear from you directly too. Message her whenever you're ready. For now, here's something simple:";
+export const COACH_MEDICATION_LINE =
+  "That one's for your doctor or pharmacist, not me. Let Callie know too so she can plan around it. Here's something easy in the meantime:";
+
+/** Only claim the note when the pin or flag write succeeded on this request. */
+export function disorderedDeflectLine(noted) {
+  return noted ? COACH_DISORDERED_LINE_NOTED : COACH_DISORDERED_LINE;
+}
+
+export function coachDeflectLine(deflect, { noted = false } = {}) {
+  if (deflect === "disordered") return disorderedDeflectLine(noted === true);
+  return (COACH_DEFLECT[deflect] || COACH_DEFLECT.offTopic).line;
+}
 
 function normalizeCoachApostrophes(text) {
   return String(text || "").replace(/[\u2018\u2019\u201B]/g, "'");
@@ -359,17 +370,16 @@ export const COACH_DEFLECT = {
     cta: "Message Callie",
   },
   supply: {
-    line:
-      `${COACH_COPY.supplyWarm} ${COACH_COPY.supplyHandoff} ${COACH_MESSAGE_HER}`,
+    line: COACH_SUPPLY_LINE,
     cta: "Message Callie",
   },
   disordered: {
-    line:
-      `${COACH_COPY.disorderedWarm} ${COACH_COPY.disorderedHandoff} ${COACH_MESSAGE_HER}`,
+    line: COACH_DISORDERED_LINE,
+    lineNoted: COACH_DISORDERED_LINE_NOTED,
     cta: "Message Callie",
   },
   medication: {
-    line: `${COACH_COPY.medicationLine}`,
+    line: COACH_MEDICATION_LINE,
     cta: "Message Callie",
   },
   again: {

@@ -8,6 +8,7 @@ import {
   COACH_DEFLECT,
   COACH_SLOT_TITLE,
   askForSlotCopy,
+  coachDeflectLine,
   skipMealCopy,
 } from "../content/coachVoice";
 import { shownCoachLead } from "../utils/coachLines";
@@ -247,6 +248,7 @@ export function CoachPanel({
           kind: r.kind,
           cards: r.payload?.cards || [],
           deflect: r.payload?.deflect || null,
+          noted: r.payload?.noted === true,
           aside: r.payload?.aside || null,
           requestId: r.requestId || r.payload?.requestId || null,
         }));
@@ -294,6 +296,7 @@ export function CoachPanel({
             ? {
               cards: message.cards || [],
               deflect: message.deflect || null,
+              noted: message.noted === true,
               aside: message.aside || null,
               teach: message.teach || null,
               ...(message.notLogging ? { notLogging: true } : {}),
@@ -462,6 +465,7 @@ export function CoachPanel({
           body: "",
           kind: "deflect",
           deflect: data.deflect,
+          noted: data.noted === true,
           cards: extra,
         }, { persist: false });
         return;
@@ -569,6 +573,9 @@ export function CoachPanel({
     if (scopeIsRefused(verdict.scope)) {
       const deflect = deflectForScope(verdict.scope, text);
       const crisis = deflect === "emergency" || isCrisisUrgent(text);
+      const hideNumbers = verdict.scope === "disordered"
+        || wontLogRef.current
+        || isWontLogRefusal(text);
       const extra = (!crisis && (
         isMealAsk(text)
         || verdict.scope === "urgent"
@@ -577,7 +584,7 @@ export function CoachPanel({
         || verdict.scope === "medication"
       ))
         ? sizeMealsForPersist(
-          (verdict.scope === "disordered"
+          (hideNumbers
             ? hideCoachMealMacros
             : (meals) => meals)(buildCoachFallbackMeals({
             text,
@@ -591,12 +598,24 @@ export function CoachPanel({
           "new",
         )
         : [];
-      noteEscalation(text, null, requestId);
+      let noted = false;
+      if (verdict.scope === "disordered") {
+        const result = await postCoach?.({
+          mode: "ask",
+          text,
+          localDate: localDateIso(clockRef.current),
+          requestId,
+        });
+        noted = result?.noted === true;
+      } else {
+        noteEscalation(text, null, requestId);
+      }
       push({
         role: "coach",
         body: "",
         kind: "deflect",
         deflect,
+        noted,
         cards: extra,
         requestId,
       }, { persist: false });
@@ -897,7 +916,7 @@ export function CoachPanel({
 
               {m.kind === "deflect" && (
                 <div style={{ ...bubble(false), background: T.amberSoft, border: "none" }}>
-                  <div style={{ marginBottom: 10 }}>{(COACH_DEFLECT[m.deflect] || COACH_DEFLECT.offTopic).line}</div>
+                  <div style={{ marginBottom: 10 }}>{coachDeflectLine(m.deflect, { noted: m.noted })}</div>
                   <button
                     type="button"
                     onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}

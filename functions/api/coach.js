@@ -202,6 +202,10 @@ async function allowCoachNote(env, userId, { isAdmin, requestId }) {
   return limit.ok;
 }
 
+function noteWriteSucceeded(wrote) {
+  return Boolean(wrote?.ok && !wrote.skipped && !wrote.capped && !wrote.unchanged);
+}
+
 async function persistCannedCoach(env, userId, body, message, {
   isAdmin,
   requestId,
@@ -212,37 +216,43 @@ async function persistCannedCoach(env, userId, body, message, {
   const allowed = await allowCoachNote(env, userId, { isAdmin, requestId });
   const door = escalateDoor(asked, { scope, escalate });
   const crisis = door === "crisis";
-  if (!allowed && !crisis) return false;
-  if (door && (allowed || crisis)) {
-    const noted = await appendCoachRefusal(env, userId, { asked, scope, escalate });
-    if (!noted.ok && !noted.skipped) {
+  const pinAnyway = crisis
+    || door === "disordered"
+    || door === "medication"
+    || door === "supply";
+  let noted = false;
+  if (!allowed && !pinAnyway) return { allowed: false, noted: false };
+  if (door && (allowed || pinAnyway)) {
+    const wrote = await appendCoachRefusal(env, userId, { asked, scope, escalate });
+    noted = noteWriteSucceeded(wrote);
+    if (!wrote.ok && !wrote.skipped) {
       await logAiFailure(env, {
         userId,
         label: "coach",
         kind: "note",
-        detail: noted.reason === "full"
+        detail: wrote.reason === "full"
           ? "client_summaries append full"
           : "client_summaries append failed",
       });
-    } else if (noted.ok && Number(noted.trimmed) > 0) {
+    } else if (wrote.ok && Number(wrote.trimmed) > 0) {
       await logAiFailure(env, {
         userId,
         label: "coach",
         kind: "note",
-        detail: `client_summaries append trimmed:${noted.trimmed}`,
+        detail: `client_summaries append trimmed:${wrote.trimmed}`,
       });
     }
-    if (door === "crisis" && noted.ok && !noted.skipped && !noted.capped && !noted.unchanged) {
+    if (door === "crisis" && noted) {
       await notifyCrisisEmail(env, { userId, asked });
     }
   }
   if (allowed) {
     await persistServerCoach(env, userId, body, {
       ...message,
-      payload: { ...(message.payload || {}), requestId },
+      payload: { ...(message.payload || {}), requestId, noted },
     });
   }
-  return allowed;
+  return { allowed: Boolean(allowed), noted };
 }
 
 export async function onRequestPost({ request, env }) {
@@ -401,7 +411,7 @@ export async function onRequestPost({ request, env }) {
     }
     if (scopeIsRefused(verdict.scope)) {
       const deflect = deflectForScope(verdict.scope, text);
-      const hideNumbers = verdict.scope === "disordered";
+      const hideNumbers = verdict.scope === "disordered" || Boolean(earlyDay?.notLogging);
       const filled = fillForScope(text, {
         mode,
         scope: verdict.scope,
@@ -410,7 +420,7 @@ export async function onRequestPost({ request, env }) {
         profile: await getFillProfile(),
         hideNumbers,
       });
-      await persistCannedCoach(env, user.id, body, {
+      const persist = await persistCannedCoach(env, user.id, body, {
         body: "",
         kind: "deflect",
         payload: { deflect, cards: persistMeals(filled.meals, slot) },
@@ -424,6 +434,7 @@ export async function onRequestPost({ request, env }) {
         ok: true,
         scope: verdict.scope,
         deflect,
+        noted: persist.noted === true,
         meals: filled.meals,
         mealSource: filled.meals.length ? "new" : undefined,
       });
