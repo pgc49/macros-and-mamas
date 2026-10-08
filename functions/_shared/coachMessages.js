@@ -3,32 +3,144 @@
 
    A mama session may insert her own mama-role rows. Coach replies are
    written here with the service role from /api/coach so Callie can
-   trust the role column.
+   trust the role column. Ask/menu/kitchen persist the server's own
+   output. Local templates are rebuilt when we can, otherwise marked
+   source='client' and never pinned as Stuck/Medical.
    ================================================================== */
 
-const COACH_KINDS = new Set(["text", "cards", "deflect", "photo", "read"]);
+import { COACH_COPY } from "../../src/content/coachVoice.js";
+import { teachBody } from "../../src/utils/coachTeach.js";
 
-export function sanitizeCoachReply({ body = "", kind = "text", payload = null, localDate = null } = {}) {
+const COACH_KINDS = new Set(["text", "cards", "deflect", "photo", "read"]);
+const LOCAL_TEMPLATES = new Set([
+  "local.cards",
+  "local.read",
+  "local.noneFit",
+  "local.teach",
+  "local.text",
+]);
+const MAX_CARDS = 4;
+export function sanitizeCoachCards(cards) {
+  if (!Array.isArray(cards)) return [];
+  const out = [];
+  for (const card of cards.slice(0, MAX_CARDS)) {
+    if (!card || typeof card !== "object" || Array.isArray(card)) continue;
+    const name = typeof card.name === "string"
+      ? card.name.trim().slice(0, 120)
+      : typeof card.title === "string"
+        ? card.title.trim().slice(0, 120)
+        : "";
+    if (!name) continue;
+    const num = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? Math.round(n) : 0;
+    };
+    const reason = typeof card.reason === "string"
+      ? card.reason.slice(0, 280)
+      : typeof card.shownReason === "string"
+        ? card.shownReason.slice(0, 280)
+        : "";
+    out.push({
+      name,
+      cal: num(card.cal),
+      p: num(card.p),
+      c: num(card.c),
+      f: num(card.f),
+      reason,
+    });
+  }
+  return out;
+}
+
+export function sanitizeCoachReply({
+  body = "",
+  kind = "text",
+  payload = null,
+  localDate = null,
+  source = "server",
+} = {}) {
   const nextKind = COACH_KINDS.has(kind) ? kind : "text";
+  const nextSource = source === "client" ? "client" : "server";
   let nextPayload = null;
   if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    const deflect = nextSource === "client"
+      ? null
+      : (payload.deflect ? String(payload.deflect).slice(0, 40) : null);
     nextPayload = {
-      cards: Array.isArray(payload.cards) ? payload.cards.slice(0, 6) : [],
-      deflect: payload.deflect ? String(payload.deflect).slice(0, 40) : null,
+      cards: sanitizeCoachCards(payload.cards),
+      deflect,
       aside: payload.aside ? String(payload.aside).slice(0, 40) : null,
+      teach: payload.teach ? String(payload.teach).slice(0, 40) : null,
     };
-    if (!nextPayload.cards.length && !nextPayload.deflect && !nextPayload.aside) {
+    if (!nextPayload.cards.length && !nextPayload.deflect && !nextPayload.aside && !nextPayload.teach) {
       nextPayload = null;
     }
   }
   const day = String(localDate || "").trim();
   return {
     role: "coach",
+    source: nextSource,
     body: String(body || "").slice(0, 4000),
     kind: nextKind,
     payload: nextPayload,
     local_date: /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null,
   };
+}
+
+/**
+ * Local / teach persist. Rebuild from a template id when we can.
+ * Otherwise mark source=client. Arbitrary coach content is rejected.
+ */
+export function buildLocalCoachRecord(body = {}) {
+  const template = String(body.template || "");
+  if (!LOCAL_TEMPLATES.has(template)) return null;
+
+  if (template === "local.teach") {
+    const topic = String(body.topic || body.payload?.teach || "").slice(0, 40);
+    const rebuilt = teachBody(topic);
+    if (!rebuilt) return null;
+    return {
+      body: rebuilt,
+      kind: "text",
+      payload: { teach: topic },
+      source: "server",
+    };
+  }
+
+  if (template === "local.noneFit") {
+    return {
+      body: COACH_COPY.noneFit,
+      kind: "text",
+      payload: null,
+      source: "server",
+    };
+  }
+
+  if (template === "local.cards") {
+    const cards = sanitizeCoachCards(body.payload?.cards || body.cards);
+    if (!cards.length) return null;
+    const aside = body.payload?.aside ? String(body.payload.aside).slice(0, 40) : null;
+    return {
+      body: String(body.body || "").slice(0, 400),
+      kind: "cards",
+      payload: { cards, aside },
+      source: "client",
+    };
+  }
+
+  const text = String(body.body || "").trim().slice(0, 4000);
+  if (!text) return null;
+  return {
+    body: text,
+    kind: template === "local.read" ? "read" : "text",
+    payload: null,
+    source: "client",
+  };
+}
+
+export function replyLocalDate(body) {
+  const day = String(body?.localDate || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
 }
 
 export async function insertCoachReply(env, userId, message) {
@@ -51,7 +163,12 @@ export async function insertCoachReply(env, userId, message) {
     },
     body: JSON.stringify({
       profile_id: userId,
-      ...row,
+      role: row.role,
+      source: row.source,
+      body: row.body,
+      kind: row.kind,
+      payload: row.payload,
+      local_date: row.local_date,
     }),
   });
   if (!write.ok) {
@@ -59,4 +176,17 @@ export async function insertCoachReply(env, userId, message) {
     return { ok: false };
   }
   return { ok: true };
+}
+
+export async function persistServerCoach(env, userId, requestBody, message) {
+  try {
+    return await insertCoachReply(env, userId, {
+      ...message,
+      localDate: message.localDate || replyLocalDate(requestBody),
+      source: "server",
+    });
+  } catch (error) {
+    console.error("coach persist failed", error);
+    return { ok: false };
+  }
 }

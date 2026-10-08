@@ -24,6 +24,7 @@ import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
 import { classifyAsk, deflectForScope, isClinicalUrgent, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
 import { downscaleImage } from "../utils/imageDownscale";
+import { localDateIso } from "../utils/dates";
 
 const QUICK_ASKS = [
   { id: "eat", label: COACH_COPY.askEat, kind: "cards" },
@@ -173,17 +174,26 @@ export function CoachPanel({
     endRef.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
   }, [thread.length, busy]);
 
-  const push = (message) => {
+  const push = (message, { persist = true } = {}) => {
     const entry = { id: nextId(), ...message };
     setThread((list) => [...list, entry]);
-    onAppendMessage?.({
-      role: message.role,
-      body: message.body || "",
-      kind: message.kind || "text",
-      payload: message.cards?.length || message.deflect || message.aside
-        ? { cards: message.cards || [], deflect: message.deflect || null, aside: message.aside || null }
-        : null,
-    });
+    if (persist) {
+      onAppendMessage?.({
+        role: message.role,
+        body: message.body || "",
+        kind: message.kind || "text",
+        template: message.template || (message.role === "coach" ? "local.text" : null),
+        topic: message.teach || null,
+        payload: message.cards?.length || message.deflect || message.aside || message.teach
+          ? {
+            cards: message.cards || [],
+            deflect: message.deflect || null,
+            aside: message.aside || null,
+            teach: message.teach || null,
+          }
+          : null,
+      });
+    }
     return entry;
   };
 
@@ -223,7 +233,7 @@ export function CoachPanel({
     }
 
     if (!cards.length) {
-      push({ role: "coach", body: COACH_COPY.noneFit, kind: "text", aside });
+      push({ role: "coach", body: COACH_COPY.noneFit, kind: "text", aside, template: "local.noneFit" });
       return;
     }
 
@@ -232,14 +242,14 @@ export function CoachPanel({
     skipRef.current = [...new Set([...skipRef.current, ...cards.map((c) => c.name)])];
     const skipLine = skipMealCopy(next.skipped);
     lead += skipLine || "";
-    push({ role: "coach", body: shownCoachLead(lead.trim()), kind: "cards", cards, aside });
+    push({ role: "coach", body: shownCoachLead(lead.trim()), kind: "cards", cards, aside, template: "local.cards" });
   };
 
   const answerWithRead = ({ askLabel = COACH_COPY.askDay, echo = true, aside = null } = {}) => {
     if (!answer) return;
     if (echo) push({ role: "mama", body: askLabel });
     const lines = [answer.left, answer.why].filter(Boolean).join("\n\n");
-    push({ role: "coach", body: lines, kind: "read", aside });
+    push({ role: "coach", body: lines, kind: "read", aside, template: "local.read" });
   };
 
   /**
@@ -291,6 +301,7 @@ export function CoachPanel({
           snackCount: fit?.budget?.snackCount,
           turnedDown: skipRef.current,
         }),
+        localDate: localDateIso(clock),
         images,
       });
 
@@ -300,7 +311,7 @@ export function CoachPanel({
       }
 
       if (data.deflect) {
-        push({ role: "coach", body: "", kind: "deflect", deflect: data.deflect });
+        push({ role: "coach", body: "", kind: "deflect", deflect: data.deflect }, { persist: false });
         return;
       }
 
@@ -317,7 +328,7 @@ export function CoachPanel({
         kind: cards.length ? "cards" : "text",
         cards,
         aside: data.aside || null,
-      });
+      }, { persist: false });
     } catch (e) {
       console.error("coach send failed", e);
       setError("I couldn't get to that. Try me again in a second.");
@@ -356,7 +367,7 @@ export function CoachPanel({
     push({ role: "mama", body: text });
     if (verdict.scope === "urgent") {
       if (isClinicalUrgent(text)) noteEscalation(text);
-      push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
+      push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) }, { persist: false });
       return;
     }
 
@@ -378,6 +389,7 @@ export function CoachPanel({
         kind: "teach",
         teach: teach.topic,
         aside: verdict.aside,
+        template: "local.teach",
       });
       return;
     }
@@ -395,7 +407,7 @@ export function CoachPanel({
     }
 
     if (scopeIsRefused(verdict.scope)) {
-      push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
+      push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) }, { persist: false });
       return;
     }
 

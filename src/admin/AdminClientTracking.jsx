@@ -10,6 +10,7 @@ import { Card, RangeBand, rangeState } from "../components/ui";
 import { formatRangeProgress } from "../utils/rangeProgress";
 import { db } from "../db/db";
 import { AdminCoachConversations } from "./AdminCoachConversations";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import {
   addDaysIso,
   formatLongDay,
@@ -374,7 +375,14 @@ export function AdminClientTracking({ client }) {
         )}
       </Card>
 
-      <AdminCoachConversations client={client} />
+      <ErrorBoundary
+        name="AdminCoachConversations"
+        title="Coach conversations couldn’t load"
+        message="Her Coach chats hit a snag. The rest of her day is still here — refresh to try this section again."
+        resetKeys={[client?.id]}
+      >
+        <AdminCoachConversations client={client} />
+      </ErrorBoundary>
     </div>
   );
 }

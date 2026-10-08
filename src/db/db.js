@@ -177,6 +177,7 @@ function mapCoachMessageRow(r) {
     createdAt: r.created_at,
     hiddenAt: r.hidden_at || null,
     seq: r.seq ?? null,
+    source: r.source === "client" ? "client" : "server",
   };
 }
 
@@ -3580,7 +3581,7 @@ export const db = {
     const uid = await requireUserId();
     const { data, error } = await supabase
       .from("coach_messages")
-      .select("id, role, body, kind, payload, local_date, created_at, hidden_at, seq")
+      .select("id, role, body, kind, payload, local_date, created_at, hidden_at, seq, source")
       .eq("profile_id", uid)
       .eq("local_date", localDate || localDateIso())
       .is("hidden_at", null)
@@ -3603,7 +3604,7 @@ export const db = {
     if (!clientId) throw new Error("clientId required");
     const { data, error } = await supabase
       .from("coach_messages")
-      .select("id, role, body, kind, payload, local_date, created_at, hidden_at, seq")
+      .select("id, role, body, kind, payload, local_date, created_at, hidden_at, seq, source")
       .eq("profile_id", clientId)
       .order("seq", { ascending: false })
       .limit(limit);
@@ -3614,7 +3615,15 @@ export const db = {
     return (data || []).map(mapCoachMessageRow);
   },
 
-  async appendCoachMessage({ role, body = "", kind = "text", payload = null, localDate = null }) {
+  async appendCoachMessage({
+    role,
+    body = "",
+    kind = "text",
+    payload = null,
+    localDate = null,
+    template = null,
+    topic = null,
+  }) {
     const uid = await requireUserId();
     const day = localDate || localDateIso();
     if (role === "coach") {
@@ -3632,8 +3641,9 @@ export const db = {
         },
         body: JSON.stringify({
           mode: "record",
+          template: template || "local.text",
+          topic,
           body: String(body || "").slice(0, 4000),
-          kind,
           payload,
           localDate: day,
         }),
@@ -3645,6 +3655,7 @@ export const db = {
       }
       return data.message || {
         role: "coach",
+        source: "client",
         body: String(body || "").slice(0, 4000),
         kind,
         payload,
@@ -3661,7 +3672,7 @@ export const db = {
         payload,
         local_date: day,
       })
-      .select("id, role, body, kind, payload, local_date, created_at, hidden_at, seq")
+      .select("id, role, body, kind, payload, local_date, created_at, hidden_at, seq, source")
       .single();
     if (error) {
       console.warn("appendCoachMessage failed", error);
@@ -3670,18 +3681,17 @@ export const db = {
     return mapCoachMessageRow(data);
   },
 
-  async clearCoachThread() {
-    const uid = await requireUserId();
-    const { error } = await supabase
-      .from("coach_messages")
-      .update({ hidden_at: new Date().toISOString() })
-      .eq("profile_id", uid)
-      .is("hidden_at", null);
+  async hideCoachMessages(ids = []) {
+    const { error } = await supabase.rpc("hide_coach_messages", { ids });
     if (error) {
-      console.warn("clearCoachThread failed", error);
+      console.warn("hideCoachMessages failed", error);
       return false;
     }
     return true;
+  },
+
+  async clearCoachThread() {
+    return this.hideCoachMessages([]);
   },
 
   /**

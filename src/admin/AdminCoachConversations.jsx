@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { T, F, FD } from "../theme/tokens";
 import { Card } from "../components/ui";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { db } from "../db/db";
 import { formatLongDay } from "../utils/dates";
 import {
@@ -76,6 +77,7 @@ function ChatBubble({ message }) {
         <div style={{ fontSize: 11.5, fontWeight: 700, color: T.inkSoft, marginBottom: 4 }}>
           {mine ? "Mama" : "Coach"}
           {message.hiddenAt ? " · removed by her" : ""}
+          {!mine && message.source === "client" ? " · unverified" : ""}
         </div>
         {message.body ? (
           <div style={{ fontSize: 14, lineHeight: 1.5, color: T.ink }}>{message.body}</div>
@@ -134,6 +136,12 @@ export function AdminCoachConversations({ client }) {
   const view = useMemo(() => buildAdminCoachView(messages), [messages]);
 
   return (
+    <ErrorBoundary
+      name="AdminCoachConversations"
+      title="Coach conversations couldn’t load"
+      message="Her Coach chats hit a snag. The rest of her day is still here — refresh to try this section again."
+      resetKeys={[client?.id]}
+    >
     <div style={{ marginTop: 12 }} data-admin-coach-conversations>
       <Card>
         <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 4 }}>
@@ -208,5 +216,6 @@ export function AdminCoachConversations({ client }) {
         </div>
       </Card>
     </div>
+    </ErrorBoundary>
   );
 }

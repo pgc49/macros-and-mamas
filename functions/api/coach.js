@@ -5,7 +5,9 @@
      { mode: "ask",     text, slot, budget?, recent?[] }
      { mode: "menu",    text?, slot, budget?, images[] }   → what to order
      { mode: "kitchen", text?, slot, budget?, images[] }   → from what she has
-     { mode: "record",  body, kind, payload, localDate }   → persist a coach reply
+     { mode: "record",  template, topic?, body?, payload?, localDate }
+         → persist a local/teach reply. Arbitrary coach content is rejected.
+           Teach/noneFit are rebuilt here. Cards/read are source='client'.
 
    Three things this endpoint will not do:
 
@@ -60,7 +62,11 @@ import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js
 import { menuFromPageCopy } from "../../src/content/coachVoice.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
-import { insertCoachReply } from "../_shared/coachMessages.js";
+import {
+  buildLocalCoachRecord,
+  insertCoachReply,
+  persistServerCoach,
+} from "../_shared/coachMessages.js";
 
 const MAX_PER_DAY = 30;
 const MAX_IMAGES = 3;
@@ -87,18 +93,33 @@ export async function onRequestPost({ request, env }) {
 
     const body = await request.json().catch(() => ({}));
     const mode = MODES.has(body.mode) ? body.mode : "ask";
+    const isAdmin = access.role === "admin";
 
-    // Local answers persist through this path so a mama JWT cannot insert
-    // a coach-role row. Service role writes; RLS still blocks the client.
+    // Local cards/read/teach only. The client never sends a model reply
+    // back. Arbitrary coach content is rejected; pins never come from here.
     if (mode === "record") {
+      if (!isAdmin) {
+        const limit = await checkAiLimit(env, user.id, {
+          type: "coach",
+          max: MAX_PER_DAY,
+          busyMessage: "I can't think straight right now. Try again in a minute, or pick something from Meals.",
+          spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
+        });
+        if (!limit.ok) {
+          return json(
+            { error: "rate_limited", message: limit.message, retry_after_seconds: limit.retryAfterSeconds },
+            429,
+          );
+        }
+      }
+      const local = buildLocalCoachRecord(body);
+      if (!local) return json({ error: "invalid record" }, 400);
       const saved = await insertCoachReply(env, user.id, {
-        body: body.body,
-        kind: body.kind,
-        payload: body.payload,
+        ...local,
         localDate: body.localDate,
       });
       if (!saved.ok) return json({ error: "could not save" }, 502);
-      return json({ ok: true, message: { role: "coach" } });
+      return json({ ok: true, message: { role: "coach", source: local.source } });
     }
 
     if (!env.OPENROUTER_API_KEY) {
@@ -129,14 +150,25 @@ export async function onRequestPost({ request, env }) {
     // already showed Callie. This post only writes the one-line brief.
     if (body.escalate === "stuck") {
       await appendCoachRefusal(env, user.id, { asked: text, escalate: "stuck" });
+      await persistServerCoach(env, user.id, body, {
+        body: "",
+        kind: "deflect",
+        payload: { deflect: "again" },
+      });
       return json({ ok: true, scope: "stuck", deflect: "again", meals: [] });
     }
     if (scopeIsRefused(verdict.scope)) {
       await appendCoachRefusal(env, user.id, { asked: text, scope: verdict.scope });
+      const deflect = deflectForScope(verdict.scope);
+      await persistServerCoach(env, user.id, body, {
+        body: "",
+        kind: "deflect",
+        payload: { deflect },
+      });
       return json({
         ok: true,
         scope: verdict.scope,
-        deflect: deflectForScope(verdict.scope),
+        deflect,
         meals: [],
       });
     }
@@ -146,11 +178,17 @@ export async function onRequestPost({ request, env }) {
     // A pasted link is not one of those sentences. It is fetched below.
     const teach = mode === "ask" && !hasMenuLink(text) ? localCoachTeach(text) : null;
     if (teach) {
+      const reply = teachBody(teach.topic);
+      await persistServerCoach(env, user.id, body, {
+        body: reply,
+        kind: "text",
+        payload: { teach: teach.topic, aside: verdict.aside || null },
+      });
       return json({
         ok: true,
         scope: "food",
         teach: teach.topic,
-        reply: teachBody(teach.topic),
+        reply,
         meals: [],
         aside: verdict.aside || null,
       });
@@ -163,17 +201,22 @@ export async function onRequestPost({ request, env }) {
       const link = firstMenuLink(text);
       menuPage = link ? await fetchMenuPage(link) : { ok: false, reason: "bad-url" };
       if (!menuPage.ok) {
+        const reply = teachBody("menuClosed");
+        await persistServerCoach(env, user.id, body, {
+          body: reply,
+          kind: "text",
+          payload: { teach: "menuClosed" },
+        });
         return json({
           ok: true,
           scope: "food",
           teach: "menuClosed",
-          reply: teachBody("menuClosed"),
+          reply,
           meals: [],
         });
       }
     }
 
-    const isAdmin = access.role === "admin";
     if (!isAdmin) {
       const limit = await checkAiLimit(env, user.id, {
         type: "coach",
@@ -275,6 +318,11 @@ export async function onRequestPost({ request, env }) {
     // Second layer: the model gets to hand a question back too. The card
     // records her question and the door, not the model's sentence.
     if (String(parsed.value?.scope || "").toLowerCase() === "callie") {
+      await persistServerCoach(env, user.id, body, {
+        body: "",
+        kind: "deflect",
+        payload: { deflect: "offTopic" },
+      });
       return json({ ok: true, scope: "off_topic", deflect: "offTopic", meals: [] });
     }
 
@@ -295,6 +343,22 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
+    await persistServerCoach(env, user.id, body, {
+      body: reply,
+      kind: meals.length ? "cards" : "text",
+      payload: {
+        cards: meals.map((meal) => ({
+          name: meal.name,
+          cal: meal.cal,
+          p: meal.p,
+          c: meal.c,
+          f: meal.f,
+          reason: meal.desc || "",
+        })),
+        aside: verdict.aside || null,
+        teach: teachTopic,
+      },
+    });
     return json({
       ok: true,
       scope: "food",

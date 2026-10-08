@@ -10,7 +10,7 @@ import { isClinicalUrgent } from "../../functions/_shared/coachGuardrails.js";
 export const COACH_MESSAGE_POLICIES = {
   select: "coach_messages_select_own_visible_or_admin",
   insert: "coach_messages_insert_own_mama",
-  update: "coach_messages_hide_own",
+  hide: "hide_coach_messages",
 };
 
 export function priorMamaBody(messages, index) {
@@ -21,7 +21,12 @@ export function priorMamaBody(messages, index) {
   return "";
 }
 
+export function isServerVerified(message) {
+  return message?.source !== "client";
+}
+
 export function coachFlag(message, asked = "") {
+  if (!isServerVerified(message)) return null;
   const deflect = message?.payload?.deflect
     || (message?.kind === "deflect" ? "offTopic" : null);
   if (message?.kind !== "deflect" && !deflect) return null;
@@ -41,20 +46,31 @@ export function deflectLine(message) {
   return (COACH_DEFLECT[key] || COACH_DEFLECT.offTopic).line;
 }
 
+function asDisplayString(value) {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
+
 export function plainCoachPlates(payload) {
   const cards = Array.isArray(payload?.cards) ? payload.cards : [];
   return cards
-    .filter((card) => card && (card.name || card.title))
-    .map((card) => ({
-      name: card.name || card.title,
-      macros: [
-        `${Math.round(Number(card.cal) || 0)} cal`,
-        `P${Math.round(Number(card.p) || 0)}`,
-        `C${Math.round(Number(card.c) || 0)}`,
-        `F${Math.round(Number(card.f) || 0)}`,
-      ].join(" · "),
-      reason: String(card.reason || card.shownReason || "").trim(),
-    }));
+    .map((card) => {
+      if (!card || typeof card !== "object") return null;
+      const name = asDisplayString(card.name).trim() || asDisplayString(card.title).trim();
+      if (!name) return null;
+      return {
+        name,
+        macros: [
+          `${Math.round(Number(card.cal) || 0)} cal`,
+          `P${Math.round(Number(card.p) || 0)}`,
+          `C${Math.round(Number(card.c) || 0)}`,
+          `F${Math.round(Number(card.f) || 0)}`,
+        ].join(" · "),
+        reason: asDisplayString(card.reason || card.shownReason).trim(),
+      };
+    })
+    .filter(Boolean);
 }
 
 function byNewest(a, b) {

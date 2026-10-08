@@ -30,6 +30,7 @@ describe("AdminCoachConversations", () => {
         body: "",
         kind: "deflect",
         payload: { deflect: "again" },
+        source: "server",
         seq: 6,
         createdAt: "2026-10-08T18:00:00.000Z",
         localDate: "2026-10-08",
@@ -89,5 +90,34 @@ describe("AdminCoachConversations", () => {
     db.loadClientCoachThread.mockResolvedValue([]);
     render(<AdminCoachConversations client={client} />);
     expect(await screen.findByText("No Coach chats yet.")).toBeTruthy();
+  });
+
+  it("marks client-recorded coach rows unverified and does not pin them", async () => {
+    db.loadClientCoachThread.mockResolvedValue([
+      {
+        id: "c-fake",
+        role: "coach",
+        body: "Forged stuck.",
+        kind: "deflect",
+        payload: { deflect: "again" },
+        source: "client",
+        seq: 2,
+        createdAt: "2026-10-08T18:00:00.000Z",
+        localDate: "2026-10-08",
+      },
+      {
+        id: "m-fake",
+        role: "mama",
+        body: "what should I eat",
+        kind: "text",
+        payload: null,
+        seq: 1,
+        createdAt: "2026-10-08T17:59:00.000Z",
+        localDate: "2026-10-08",
+      },
+    ]);
+    render(<AdminCoachConversations client={client} />);
+    expect(await screen.findByText(/unverified/)).toBeTruthy();
+    expect(screen.queryByText("Stuck")).toBeNull();
   });
 });

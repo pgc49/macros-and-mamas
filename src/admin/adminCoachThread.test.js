@@ -32,14 +32,27 @@ const coach = (id, extra = {}) => ({
 });
 
 describe("coachFlag", () => {
-  it("pins stuck, medical, and other deflects", () => {
-    expect(coachFlag({ kind: "deflect", payload: { deflect: "again" } })).toBe("stuck");
+  it("pins stuck, medical, and other deflects from server-verified rows", () => {
+    expect(coachFlag({ kind: "deflect", payload: { deflect: "again" }, source: "server" })).toBe("stuck");
     expect(coachFlag(
-      { kind: "deflect", payload: { deflect: "care" } },
+      { kind: "deflect", payload: { deflect: "care" }, source: "server" },
       "I've been dizzy since this morning",
     )).toBe("medical");
     expect(coachFlag({ kind: "deflect", payload: { deflect: "ranges" } })).toBe("deflect");
     expect(coachFlag({ kind: "text", payload: null })).toBeNull();
+  });
+
+  it("does not pin client-recorded payloads", () => {
+    expect(coachFlag({
+      kind: "deflect",
+      payload: { deflect: "again" },
+      source: "client",
+    })).toBeNull();
+    expect(coachFlag({
+      kind: "deflect",
+      payload: { deflect: "care" },
+      source: "client",
+    }, "I've been dizzy since this morning")).toBeNull();
   });
 });
 
@@ -60,6 +73,21 @@ describe("plainCoachPlates", () => {
       macros: "430 cal · P45 · C30 · F12",
       reason: "Gets protein into range.",
     }]);
+  });
+
+  it("coerces card fields to strings so a bad payload cannot crash", () => {
+    const plates = plainCoachPlates({
+      cards: [{
+        name: { forged: true },
+        title: "Safe plate",
+        cal: "430",
+        p: { n: 1 },
+        reason: { why: "nope" },
+      }],
+    });
+    expect(plates[0].name).toBe("Safe plate");
+    expect(plates[0].macros).toBe("430 cal · P0 · C0 · F0");
+    expect(plates[0].reason).toBe("");
   });
 });
 
@@ -93,7 +121,7 @@ describe("COACH_MESSAGE_POLICIES", () => {
     expect(COACH_MESSAGE_POLICIES).toEqual({
       select: "coach_messages_select_own_visible_or_admin",
       insert: "coach_messages_insert_own_mama",
-      update: "coach_messages_hide_own",
+      hide: "hide_coach_messages",
     });
   });
 });

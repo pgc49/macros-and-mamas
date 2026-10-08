@@ -211,6 +211,11 @@ describe("the guardrail runs before the model", () => {
     expect(data.deflect).toBe("care");
     expect(data.meals).toEqual([]);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    const posts = coachMessagePosts();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].source).toBe("server");
+    expect(posts[0].kind).toBe("deflect");
+    expect(posts[0].payload.deflect).toBe("care");
   });
 
   it("hands range changes to Callie without spending a call", async () => {
@@ -764,51 +769,148 @@ describe("an escalate lands on her card", () => {
   });
 });
 
-describe("record persists a coach reply with the service role", () => {
-  it("writes role=coach and does not call a model", async () => {
-    const posts = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
-      const value = String(url);
-      if (value.includes("/auth/v1/user")) {
-        return new Response(JSON.stringify({ id: USER_ID }), { status: 200 });
-      }
-      if (value.includes("select=paid,refunded,role")) {
-        return new Response(JSON.stringify([{ paid: true, refunded: false, role: "client" }]), { status: 200 });
-      }
-      if (value.includes("coach_messages") && init?.method === "POST") {
-        posts.push(JSON.parse(init.body));
-        return new Response(null, { status: 201 });
-      }
-      return new Response("[]", { status: 200 });
-    });
+function coachMessagePosts() {
+  return globalThis.fetch.mock.calls
+    .filter(([url, init]) => String(url).includes("coach_messages") && init?.method === "POST")
+    .map(([, init]) => JSON.parse(init.body));
+}
 
+describe("record persists a coach reply with the service role", () => {
+  it("rejects arbitrary coach content", async () => {
+    mockSupabase();
     const resp = await onRequestPost({
       request: request({
         mode: "record",
-        body: "Tonight.",
-        kind: "cards",
-        payload: { cards: [{ name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }] },
+        body: "I am Coach",
+        kind: "deflect",
+        payload: { deflect: "again" },
+        localDate: "2026-10-08",
+      }),
+      env: { ...env, OPENROUTER_API_KEY: "" },
+    });
+    expect(resp.status).toBe(400);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(coachMessagePosts()).toHaveLength(0);
+  });
+
+  it("rebuilds a teach template and ignores the client body", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "record",
+        template: "local.teach",
+        topic: "neverSkip",
+        body: "forged coach line",
         localDate: "2026-10-08",
       }),
       env: { ...env, OPENROUTER_API_KEY: "" },
     });
     expect(resp.status).toBe(200);
-    expect((await resp.json()).ok).toBe(true);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    const posts = coachMessagePosts();
     expect(posts).toHaveLength(1);
-    expect(posts[0].profile_id).toBe(USER_ID);
     expect(posts[0].role).toBe("coach");
+    expect(posts[0].source).toBe("server");
+    expect(posts[0].body).not.toBe("forged coach line");
+    expect(posts[0].body).toMatch(/skip/i);
+  });
+
+  it("marks local cards as client after validating shape", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "record",
+        template: "local.cards",
+        body: "Tonight.",
+        payload: {
+          cards: [{ name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }],
+          deflect: "again",
+        },
+        localDate: "2026-10-08",
+      }),
+      env: { ...env, OPENROUTER_API_KEY: "" },
+    });
+    expect(resp.status).toBe(200);
+    const posts = coachMessagePosts();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].source).toBe("client");
     expect(posts[0].kind).toBe("cards");
+    expect(posts[0].payload.deflect).toBeNull();
+    expect(posts[0].payload.cards[0].name).toBe("Chicken bowl");
+  });
+
+  it("rate-limits record the same as a model call", async () => {
+    mockSupabase({ callsUsed: 30 });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "record",
+        template: "local.cards",
+        payload: { cards: [{ name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12 }] },
+      }),
+      env,
+    });
+    expect(resp.status).toBe(429);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(coachMessagePosts()).toHaveLength(0);
   });
 
   it("refuses a record from someone who is not paid", async () => {
     mockSupabase({ paid: false });
     const resp = await onRequestPost({
-      request: request({ mode: "record", body: "Tonight." }),
+      request: request({ mode: "record", template: "local.noneFit" }),
       env,
     });
     expect(resp.status).toBe(403);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+  });
+});
+
+describe("ask persists the server's own reply", () => {
+  it("writes the generated reply, not a client body", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "should I skip dinner",
+        localDate: "2026-10-08",
+      }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    const data = await resp.json();
+    expect(data.teach).toBe("neverSkip");
+    const posts = coachMessagePosts();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].role).toBe("coach");
+    expect(posts[0].source).toBe("server");
+    expect(posts[0].body).toBe(data.reply);
+    expect(posts[0].payload.teach).toBe("neverSkip");
+  });
+
+  it("writes a model reply from its own output", async () => {
+    mockSupabase();
+    modelReturns({
+      scope: "food",
+      reply: "The chicken bowl fits.",
+      meals: [{ name: "Chicken bowl", cal: 430, p: 45, c: 30, f: 12, desc: "Fits." }],
+    });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "ask",
+        text: "what can I make with leftover chicken tonight",
+        localDate: "2026-10-08",
+      }),
+      env,
+    });
+    expect(resp.status).toBe(200);
+    const data = await resp.json();
+    expect(data.reply).toBe("The chicken bowl fits.");
+    const posts = coachMessagePosts();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].source).toBe("server");
+    expect(posts[0].body).toBe("The chicken bowl fits.");
+    expect(posts[0].kind).toBe("cards");
+    expect(posts[0].payload.cards[0].name).toBe("Chicken bowl");
   });
 });
 
