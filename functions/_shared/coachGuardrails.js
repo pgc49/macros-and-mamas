@@ -306,6 +306,29 @@ export function scopeIsRefused(scope) {
   return scope !== "food" && scope !== "unclear";
 }
 
+const PLATE_ASK = /\b(eat|eating|meal|lunch|dinner|breakfast|snack|hungry|cook|fridge|menu|order|recipe|plate|dish|chicken|eggs?|salmon|yogurt|leftover|ideas|pizza|italian|chinese|sushi|taco|burger)\b/i;
+const MEAL_TEACH_HINT = new Set([
+  "italian", "chinese", "sushi", "pizzaMeal", "inNOut", "psMethod",
+  "neverSkip", "realFood", "underDay", "fasting", "menuLink", "menuClosed", "menuMiss",
+]);
+
+/**
+ * She is asking for a plate she can make or order. Range-only talk
+ * ("raise my calories") is not this, even though it says calories.
+ */
+export function isMealAsk(raw, { mode = "ask", topic = null } = {}) {
+  if (mode === "menu" || mode === "kitchen") return true;
+  if (topic && MEAL_TEACH_HINT.has(topic)) return true;
+  const text = String(raw || "").toLowerCase().trim();
+  if (!text) return false;
+  if (NEXT_MEAL.test(text)) return true;
+  if (!PLATE_ASK.test(text) && !FOOD_ASK.test(text)) return false;
+  if (hits(RANGES, text) && !NEXT_MEAL.test(text) && !/\bwhat (should|can|do) i (eat|have|make|order|get)\b/.test(text)) {
+    return false;
+  }
+  return PLATE_ASK.test(text) || FOOD_ASK.test(text);
+}
+
 /** Symptoms, medication, and restriction. Guilt alone is a care handoff, not this. */
 export function isClinicalUrgent(raw) {
   const text = String(raw || "").toLowerCase().trim();

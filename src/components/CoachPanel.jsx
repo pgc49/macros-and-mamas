@@ -22,7 +22,9 @@ import { cardsWithShownReason, firstPaintPlates } from "../utils/coachRank";
 import { CoachMealCard, CoachMealSheet } from "./CoachMealCard";
 import { loggedSlotsFromEntries, nextCoachSlot } from "../utils/coachBudget";
 import { localCoachIntent, slotNamedInAsk } from "../utils/coachIntent";
-import { classifyAsk, deflectForScope, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
+import { classifyAsk, deflectForScope, isCrisisUrgent, isMealAsk, scopeIsRefused } from "../../functions/_shared/coachGuardrails";
+import { buildCoachFallbackMeals, MEAL_TEACH_TOPICS } from "../../functions/_shared/coachFoodFallback";
+import { sizeMealsForPersist } from "../../functions/_shared/coachPlateScale";
 import { askedForMealOptions } from "../../functions/_shared/coachAskMeals";
 import { isWontLogRefusal } from "../../functions/_shared/coachRefusalSummary";
 import { countTeachInThread, hasMenuLink, localCoachTeach, PAIN_TOPICS, teachBody } from "../utils/coachTeach";
@@ -433,7 +435,14 @@ export function CoachPanel({
       }
 
       if (data.deflect) {
-        push({ role: "coach", body: "", kind: "deflect", deflect: data.deflect }, { persist: false });
+        const extra = sizeMealsForPersist(data.meals || [], null, slotForAsk, data.mealSource || "new");
+        push({
+          role: "coach",
+          body: "",
+          kind: "deflect",
+          deflect: data.deflect,
+          cards: extra,
+        }, { persist: false });
         return;
       }
 
@@ -515,12 +524,29 @@ export function CoachPanel({
     const verdict = classifyAsk(text);
     const mama = push({ role: "mama", body: text, requestId });
     if (scopeIsRefused(verdict.scope)) {
+      const deflect = deflectForScope(verdict.scope, text);
+      const crisis = deflect === "emergency" || isCrisisUrgent(text);
+      const extra = (!crisis && isMealAsk(text))
+        ? sizeMealsForPersist(
+          buildCoachFallbackMeals({
+            text,
+            slot: answerRef.current?.slot,
+            profile,
+            customMeals,
+            safe: verdict.scope === "urgent" || verdict.scope === "supply",
+          }),
+          null,
+          answerRef.current?.slot,
+          "new",
+        )
+        : [];
       noteEscalation(text, null, requestId);
       push({
         role: "coach",
         body: "",
         kind: "deflect",
-        deflect: deflectForScope(verdict.scope, text),
+        deflect,
+        cards: extra,
         requestId,
       }, { persist: false });
       return;
@@ -542,6 +568,20 @@ export function CoachPanel({
       const carbsShort = answer?.bands
         ? (totals?.c || 0) < (answer.bands.cLo || 0)
         : false;
+      const extra = MEAL_TEACH_TOPICS.has(teach.topic)
+        ? sizeMealsForPersist(
+          buildCoachFallbackMeals({
+            text,
+            slot: answerRef.current?.slot,
+            topic: teach.topic,
+            profile,
+            customMeals,
+          }),
+          null,
+          answerRef.current?.slot,
+          "new",
+        )
+        : [];
       push({
         role: "coach",
         body: teachBody(teach.topic, {
@@ -551,11 +591,13 @@ export function CoachPanel({
           notLogging: wontLogRef.current,
         }),
         notLogging: wontLogRef.current,
-        kind: "teach",
+        kind: extra.length ? "cards" : "teach",
         teach: teach.topic,
+        cards: extra,
         aside: verdict.aside,
         requestId,
         template: PAIN_TOPICS.has(teach.topic) ? null : "local.teach",
+        payload: extra.length ? { cards: extra, teach: teach.topic } : undefined,
       }, { persist: !PAIN_TOPICS.has(teach.topic) });
       if (PAIN_TOPICS.has(teach.topic)) {
         Promise.resolve(postCoach?.({

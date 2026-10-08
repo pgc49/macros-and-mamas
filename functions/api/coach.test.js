@@ -353,7 +353,7 @@ describe("the guardrail runs before the model", () => {
     const data = await resp.json();
     expect(data.scope).toBe("urgent");
     expect(data.deflect).toBe("medical");
-    expect(data.meals).toEqual([]);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
     const posts = coachMessagePosts();
     expect(posts).toHaveLength(1);
@@ -383,8 +383,8 @@ describe("the guardrail runs before the model", () => {
     modelReturns({ scope: "callie", reply: "", meals: [] });
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "what should I eat before my run" }), env });
     const data = await resp.json();
-    expect(data.scope).toBe("off_topic");
-    expect(data.meals).toEqual([]);
+    expect(data.scope).toBe("food");
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
   });
 
   it("hands a supply question to Callie instead of answering around it", async () => {
@@ -396,7 +396,7 @@ describe("the guardrail runs before the model", () => {
     const data = await resp.json();
     expect(data.scope).toBe("supply");
     expect(data.deflect).toBe("supply");
-    expect(data.meals).toEqual([]);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
 
@@ -458,7 +458,7 @@ describe("the guardrail runs before the model", () => {
     expect(data.teach).toBe("neverSkip");
     expect(data.reply).toMatch(/never skip a meal/i);
     expect(data.reply).not.toMatch(/Still eat something tonight/);
-    expect(data.meals).toEqual([]);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
 
@@ -498,7 +498,9 @@ describe("what comes back", () => {
     mockSupabase();
     modelReturns({ scope: "food", reply: "Your ranges are 1750-1900 calories, so eat light.", meals: [] });
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
-    expect((await resp.json()).reply).toBe("");
+    const quoted = await resp.json();
+    expect(quoted.reply).toMatch(/Here's /);
+    expect(quoted.meals.length).toBeGreaterThanOrEqual(2);
   });
 
   it("drops a jargon reply and keeps the cards", async () => {
@@ -510,7 +512,7 @@ describe("what comes back", () => {
     });
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
     const data = await resp.json();
-    expect(data.reply).toBe("");
+    expect(data.reply).toMatch(/Salmon bowl/);
     expect(data.meals).toHaveLength(1);
     expect(data.meals[0].name).toBe("Salmon bowl");
   });
@@ -526,15 +528,48 @@ describe("what comes back", () => {
     expect(openrouter.messageForKind).not.toHaveBeenCalled();
   });
 
-  it("uses the Coach busy line when the model answer is unreadable", async () => {
+  it("fills plates when the model returns nothing on a food question", async () => {
+    mockSupabase();
+    modelReturns({ scope: "food", reply: "", meals: [] });
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "I just have eggs and vegetables in my fridge." }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(data.meals[0].name).toMatch(/scramble|egg/i);
+    expect(data.reply).toMatch(/Here's /);
+    expect(coachMessagePosts()).toHaveLength(1);
+  });
+
+  it("fills plates for a kitchen photo with only a short note", async () => {
+    mockSupabase();
+    modelReturns({ scope: "food", reply: "", meals: [] });
+    const resp = await onRequestPost({
+      request: request({
+        mode: "kitchen",
+        text: "this",
+        images: [{ image_b64: "abc", media_type: "image/jpeg" }],
+      }),
+      env,
+    });
+    const data = await resp.json();
+    expect(resp.status).toBe(200);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(coachMessagePosts()).toHaveLength(1);
+  });
+
+  it("fills a plate when the model answer is unreadable, instead of the busy line", async () => {
     mockSupabase();
     openrouter.callOpenRouter.mockResolvedValue({ ok: true, text: "not json", model: "google/gemini-3.5-flash" });
     openrouter.parseJsonLoose.mockReturnValue({ ok: false, error: new Error("bad json") });
     const resp = await onRequestPost({ request: request({ mode: "ask", text: "dinner ideas" }), env });
-    expect(resp.status).toBe(502);
+    expect(resp.status).toBe(200);
     const data = await resp.json();
-    expect(data.message).toBe("I can't think straight right now. Try again in a minute, or pick something from Meals.");
-    expect(data.message).not.toMatch(/\bAI\b|Callie has been notified/);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(data.reply).toMatch(/Here's /);
+    expect(coachMessagePosts()).toHaveLength(1);
     expect(openrouter.messageForKind).not.toHaveBeenCalled();
   });
 
@@ -566,7 +601,7 @@ describe("what comes back", () => {
     });
     const data = await resp.json();
     expect(data.teach).toBe("menuClosed");
-    expect(data.meals).toEqual([]);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
     expect(data.reply).toMatch(/couldn't open that link/i);
     expect(data.reply).toMatch(/photo/i);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
@@ -702,7 +737,7 @@ describe("what comes back", () => {
     });
     const data = await resp.json();
     expect(data.teach).toBe("menuMiss");
-    expect(data.meals).toEqual([]);
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
     expect(data.reply).toMatch(/couldn't find on the page/i);
     expect(data.reply).not.toMatch(/Jane Salad/i);
   });
@@ -1250,7 +1285,9 @@ describe("an escalate lands on her card", () => {
       request: request({ mode: "ask", text: "what should I eat before my run" }),
       env,
     });
-    expect((await resp.json()).deflect).toBe("offTopic");
+    const data = await resp.json();
+    expect(data.scope).toBe("food");
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
     const write = globalThis.fetch.mock.calls.find(([url, init]) => (
       String(url).includes("client_summaries") && init?.method === "POST"
     ));

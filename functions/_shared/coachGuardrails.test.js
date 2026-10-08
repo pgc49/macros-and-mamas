@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   classifyAsk,
+  isMealAsk,
   deflectForScope,
   deflectModelHandoff,
   macrosPlausible,
@@ -268,5 +269,22 @@ describe("the reply itself", () => {
     expect(deflectForScope("supply")).toBe("supply");
     expect(deflectModelHandoff("Chipotle, I want to die")).toBe("emergency");
     expect(deflectModelHandoff("what should I eat before my run")).toBe("offTopic");
+  });
+});
+
+describe("isMealAsk", () => {
+  it("treats a plate question as a meal ask", () => {
+    expect(isMealAsk("I just have eggs and vegetables in my fridge.")).toBe(true);
+    expect(isMealAsk("what should I have for dinner")).toBe(true);
+    expect(isMealAsk("what should I eat before my run")).toBe(true);
+    expect(isMealAsk("is pizza ok")).toBe(true);
+    expect(isMealAsk("", { mode: "kitchen" })).toBe(true);
+    expect(isMealAsk("a short note", { mode: "menu" })).toBe(true);
+  });
+
+  it("does not treat range-only or crisis talk as a meal ask", () => {
+    expect(isMealAsk("can you raise my calories")).toBe(false);
+    expect(isMealAsk("I want to die")).toBe(false);
+    expect(isMealAsk("write me a poem")).toBe(false);
   });
 });
