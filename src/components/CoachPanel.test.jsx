@@ -660,24 +660,31 @@ describe("what isn't the coach's goes to Callie", () => {
       localDate: localDateIso(),
     }));
     expect(COACH_DEFLECT.medical.line).toBe(
-      "That's one for Callie, not me, and I don't want you waiting on it. Message her now.",
+      "Oh no, I'm sorry you're feeling that way. That one's for Callie, not me, and I don't want you waiting on it, so please message her now. In the meantime, sip some water and have something simple:",
     );
     expect(COACH_DEFLECT.medical.line).not.toMatch(/call your doctor/i);
     expect(COACH_DEFLECT.emergency.line).toMatch(/call 911/);
     expect(COACH_DEFLECT.emergency.cta).toBe("Message Callie too");
 
     cleanup();
-    const guiltCoach = vi.fn();
+    const guiltCoach = vi.fn(async () => ({
+      ok: true,
+      reply: "One day doesn't change anything, and you still eat. Here's turkey and rice.",
+      meals: [
+        { name: "Turkey and rice", cal: 430, p: 32, c: 48, f: 10, desc: "Turkey, rice, and veg." },
+        { name: "Beef and potatoes", cal: 460, p: 36, c: 32, f: 18, desc: "Beef and potatoes." },
+      ],
+    }));
     renderPanel({ postCoach: guiltCoach });
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
       target: { value: "I feel awful about what I ate" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
-    await screen.findByText(COACH_DEFLECT.care.line);
+    await screen.findByText(/One day doesn't change anything/);
+    expect(screen.queryByText(COACH_DEFLECT.care.line)).toBeNull();
     expect(guiltCoach).toHaveBeenCalledWith(expect.objectContaining({
       mode: "ask",
       text: "I feel awful about what I ate",
-      localDate: localDateIso(),
     }));
   });
 
@@ -699,12 +706,14 @@ describe("what isn't the coach's goes to Callie", () => {
     expect(screen.queryByText(COACH_DEFLECT.supply.line)).toBeNull();
   });
 
-  it("answers the next meal, then hands the guilt to Callie", async () => {
+  it("answers a guilt meal without a Callie handoff", async () => {
     const postCoach = vi.fn(async () => ({
       ok: true,
-      reply: "Chicken and rice.",
-      meals: [],
-      aside: "care",
+      reply: "One day doesn't change anything, and you still eat. Here's turkey and rice.",
+      meals: [
+        { name: "Turkey and rice", cal: 430, p: 32, c: 48, f: 10, desc: "Turkey, rice, and veg." },
+        { name: "Beef and potatoes", cal: 460, p: 36, c: 32, f: 18, desc: "Beef and potatoes." },
+      ],
     }));
     renderPanel({ postCoach });
 
@@ -713,9 +722,20 @@ describe("what isn't the coach's goes to Callie", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
-    await screen.findByText("Chicken and rice.");
-    await screen.findByText(COACH_DEFLECT.care.line);
-    expect(screen.getByRole("button", { name: COACH_DEFLECT.care.cta })).toBeTruthy();
+    await screen.findByText(/One day doesn't change anything/);
+    expect(screen.queryByText(COACH_DEFLECT.care.line)).toBeNull();
+  });
+
+  it("hands a crying ask to Callie on the phone with no model call", async () => {
+    const postCoach = vi.fn(async () => ({ ok: true, noted: true, deflect: "mood" }));
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "ive been crying every day this week" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.mood.line);
+    expect(screen.getByRole("button", { name: COACH_DEFLECT.mood.cta })).toBeTruthy();
+    expect(screen.queryByText(/I only do food/)).toBeNull();
   });
 
   it("hands a supply question to Callie instead of answering around it", async () => {

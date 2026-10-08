@@ -22,7 +22,7 @@
 export const COACH_NAME = "Meal Coach";
 
 /** She has to tap Message Callie. The bot does not send this for her. */
-export const COACH_MESSAGE_HER = "Message her and she'll get back to you.";
+export const COACH_MESSAGE_HER = "Message Callie and she'll get back to you.";
 
 export const COACH_PASS =
   `That's something Callie might be better able to answer than me. ${COACH_MESSAGE_HER}`;
@@ -70,7 +70,10 @@ export const COACH_COPY = {
   addPhoto: "Attach a photo",
   photoMenu: "Menu",
   photoFridge: "Fridge",
+  photoReadyMenu: "Menu photo ready",
+  photoReadyKitchen: "Kitchen photo ready",
   photoRemove: "Remove photo",
+  showNumbers: "Show numbers again",
   thinking: "Thinking",
 
   // Openers
@@ -269,9 +272,44 @@ export const COACH_COPY = {
  * medical handoff without that yes.
  */
 export const INCLUDE_COACH_DOCTOR_SENTENCE = false;
-export const COACH_DOCTOR_SENTENCE = "If you feel faint or it's getting worse, call your doctor.";
+export const COACH_DOCTOR_SENTENCE = "If it feels serious or gets worse, call your doctor.";
+export const INCLUDE_MATERNAL_MENTAL_HEALTH_HOTLINE = false;
+export const COACH_MATERNAL_HOTLINE =
+  "The National Maternal Mental Health Hotline is 1-833-852-6262 (call or text, 24/7, free).";
 
-const COACH_MEDICAL_LINE = "That's one for Callie, not me, and I don't want you waiting on it. Message her now.";
+const COACH_MEDICAL_CORE =
+  "Oh no, I'm sorry you're feeling that way. That one's for Callie, not me, and I don't want you waiting on it, so please message her now.";
+const COACH_MEDICAL_TAIL = "In the meantime, sip some water and have something simple:";
+
+export function medicalDeflectLine() {
+  return INCLUDE_COACH_DOCTOR_SENTENCE
+    ? `${COACH_MEDICAL_CORE} ${COACH_DOCTOR_SENTENCE} ${COACH_MEDICAL_TAIL}`
+    : `${COACH_MEDICAL_CORE} ${COACH_MEDICAL_TAIL}`;
+}
+
+const COACH_MEDICAL_LINE = medicalDeflectLine();
+
+export const COACH_MOOD_LINE =
+  "I'm so sorry. That's a lot to carry, and you don't have to push through it alone. Crying a lot in the weeks after a baby is really common, and it's very treatable. Please tell Callie, and your doctor or midwife too. Postpartum Support International's helpline is 1-800-944-4773 (call or text). If you ever feel unsafe, call or text 988.";
+export const COACH_MOOD_FOOD = "And whenever you're ready, here's something easy to eat:";
+
+export function moodDeflectLine(noted = false, { hasFood = false } = {}) {
+  let line = COACH_MOOD_LINE;
+  if (noted === true) {
+    line = line.replace(
+      "Please tell Callie, and your doctor or midwife too.",
+      "I've added a note for Callie, and please tell her, and your doctor or midwife too.",
+    );
+  }
+  if (INCLUDE_MATERNAL_MENTAL_HEALTH_HOTLINE) {
+    line = line.replace(
+      "1-800-944-4773 (call or text).",
+      `1-800-944-4773 (call or text). ${COACH_MATERNAL_HOTLINE}`,
+    );
+  }
+  if (hasFood) line = `${line} ${COACH_MOOD_FOOD}`;
+  return line;
+}
 
 /**
  * Crisis / postpartum warning signs. ON by default. One constant so
@@ -283,6 +321,12 @@ export const COACH_BUSY_LINE =
 export const COACH_LIMIT_LINE = "That's all the thinking I've got for today.";
 export const COACH_LIMIT_SPENT =
   "That's all the thinking I've got for today. Callie's recipes are all in Meals whenever you want them.";
+export const COACH_LIMIT_FOOD =
+  "That's all the thinking I've got for today, but here are a few easy ones.";
+export const COACH_LIMIT_PHOTO =
+  "I can't look at photos again until tonight, but here are a few easy ones.";
+export const COACH_GUILT_LINE = "One day doesn't change anything, and you still eat.";
+export const COACH_WATER_SNACK = "Have some water.";
 export const COACH_FINE_TUNING_LINE =
   "Callie's still fine-tuning your numbers, so here's an easy one for now.";
 export const COACH_LOCAL_PICKS_LINE = "Here are a few easy ones that work for today.";
@@ -302,8 +346,9 @@ export function disorderedDeflectLine(noted) {
   return noted ? COACH_DISORDERED_LINE_NOTED : COACH_DISORDERED_LINE;
 }
 
-export function coachDeflectLine(deflect, { noted = false } = {}) {
+export function coachDeflectLine(deflect, { noted = false, hasFood = false } = {}) {
   if (deflect === "disordered") return disorderedDeflectLine(noted === true);
+  if (deflect === "mood") return moodDeflectLine(noted === true, { hasFood });
   return (COACH_DEFLECT[deflect] || COACH_DEFLECT.offTopic).line;
 }
 
@@ -324,8 +369,20 @@ export function leadFineTuningReply(reply, { hasPlates = false } = {}) {
   return `${lead} ${rest}`.trim().slice(0, 400);
 }
 
-export function leadLimitReply(reply) {
+export function leadLimitReply(reply, { hasPlates = false, photo = false } = {}) {
   const rest = String(reply || "").trim();
+  if (photo && hasPlates) {
+    if (!rest || rest.startsWith(COACH_LIMIT_PHOTO) || rest.startsWith(COACH_LIMIT_LINE)) {
+      return COACH_LIMIT_PHOTO;
+    }
+    return `${COACH_LIMIT_PHOTO} ${rest}`.trim().slice(0, 400);
+  }
+  if (hasPlates) {
+    if (!rest || rest.startsWith(COACH_LIMIT_FOOD) || rest.startsWith(COACH_LIMIT_LINE)) {
+      return COACH_LIMIT_FOOD;
+    }
+    return `${COACH_LIMIT_FOOD} ${rest}`.trim().slice(0, 400);
+  }
   if (!rest) return COACH_LIMIT_SPENT;
   if (rest.startsWith(COACH_LIMIT_LINE)) return rest.slice(0, 400);
   return `${COACH_LIMIT_LINE} ${rest}`.trim().slice(0, 400);
@@ -344,9 +401,11 @@ export const COACH_DEFLECT = {
     cta: "Message Callie too",
   },
   medical: {
-    line: INCLUDE_COACH_DOCTOR_SENTENCE
-      ? `${COACH_MEDICAL_LINE} ${COACH_DOCTOR_SENTENCE}`
-      : COACH_MEDICAL_LINE,
+    line: medicalDeflectLine(),
+    cta: "Message Callie",
+  },
+  mood: {
+    line: COACH_MOOD_LINE,
     cta: "Message Callie",
   },
   care: {
@@ -366,7 +425,7 @@ export const COACH_DEFLECT = {
     cta: "Message Callie",
   },
   offTopic: {
-    line: `I only do food and your ranges. ${COACH_MESSAGE_HER}`,
+    line: `That's something Callie can sit with better than I can. ${COACH_MESSAGE_HER}`,
     cta: "Message Callie",
   },
   supply: {

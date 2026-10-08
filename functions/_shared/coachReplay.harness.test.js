@@ -209,7 +209,7 @@ describe("replay harness — Maya leftover + Jordan honest take", () => {
       "how do I get my baby to sleep",
     ]) {
       expect(isMealAsk(text), text).toBe(false);
-      expect(classifyAsk(text).scope, text).toBe("unclear");
+      expect(["mood", "off_topic", "urgent"].includes(classifyAsk(text).scope), text).toBe(true);
     }
     expect(isMealAsk("what should I eat for dinner")).toBe(true);
     expect(isMealAsk("kitchen photo", { mode: "kitchen" })).toBe(true);

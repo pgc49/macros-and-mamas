@@ -14,6 +14,7 @@
 import { CALLIE_RECIPES } from "./callieRecipes.js";
 import { buildCustomMealsBlock } from "./customMealsPrompt.js";
 import { buildDietSafetyBlock, dietPromptLabel } from "./foodPrefs.js";
+import { threadPriorAsks } from "./coachMealFilter.js";
 
 export const COACH_SYSTEM =
   "You are the meal coach inside Macros and Mamas, Callie's postpartum macro coaching program. "
@@ -57,13 +58,15 @@ function recipesBlock() {
 
 const SLOTS = new Set(["breakfast", "lunch", "dinner", "snack"]);
 
-function cleanList(raw, max, itemMax) {
+function cleanList(raw, max, itemMax, { newest = false } = {}) {
   if (!Array.isArray(raw)) return [];
   const out = [];
-  for (const item of raw) {
+  const items = newest ? [...raw].reverse() : raw;
+  for (const item of items) {
     const text = String(item || "").replace(/\s+/g, " ").trim().slice(0, itemMax);
     if (!text || out.includes(text)) continue;
-    out.push(text);
+    if (newest) out.unshift(text);
+    else out.push(text);
     if (out.length === max) break;
   }
   return out;
@@ -80,7 +83,7 @@ export function sanitizeCoachContext(raw) {
     skipped: cleanList(raw.skipped, 4, 20).filter((slot) => SLOTS.has(slot)),
     turnedDown: cleanList(raw.turnedDown, 8, 80),
     alreadySuggested: cleanList(raw.alreadySuggested, 12, 80),
-    priorAsks: cleanList(raw.priorAsks, 8, 200),
+    priorAsks: threadPriorAsks(cleanList(raw.priorAsks, 40, 200, { newest: true }), { limit: 8 }),
     notLogging: raw.notLogging === true,
     snackCount: Number.isFinite(snacks) ? Math.max(0, Math.min(4, snacks)) : 1,
   };

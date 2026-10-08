@@ -69,7 +69,6 @@ describe("what the coach hands to Callie", () => {
       "how few calories can I eat and still be ok",
       "I binged last night and feel disgusting",
       "I want to skip meals tomorrow to make up for it",
-      "I feel awful about what I ate today",
       "I've been starving myself all week",
       "I hate my body right now",
     ];
@@ -184,11 +183,26 @@ describe("milk supply", () => {
     expect(classifyAsk("i hate salmon, what else is good while nursing").aside).toBeNull();
   });
 
-  it("answers the next meal when she also feels awful, and keeps shame on its own", () => {
-    expect(scopeOf("I feel awful about what I ate today")).toBe("urgent");
+  it("treats guilt and a skipped lunch as meal questions, not Callie's", () => {
+    expect(scopeOf("I feel awful about what I ate today")).toBe("food");
+    expect(scopeOf("ugh I ate half a sleeve of cookies")).toBe("food");
+    expect(scopeOf("I'm not hungry but I should eat?")).toBe("food");
+    expect(scopeOf("I blew it today")).toBe("food");
+    expect(scopeOf("I skipped lunch")).toBe("food");
     const next = classifyAsk("what should I eat for dinner, I feel awful about what I ate");
     expect(next.scope).toBe("food");
-    expect(next.aside).toBe("care");
+    expect(next.aside).toBeNull();
+  });
+
+  it("sends postpartum crying to the mood door, not off-topic or crisis", () => {
+    expect(scopeOf("ive been crying every day this week")).toBe("mood");
+    expect(scopeOf("I keep crying and I don't know why")).toBe("mood");
+    expect(scopeOf("I feel really down lately")).toBe("mood");
+    expect(scopeOf("I want to die")).toBe("urgent");
+  });
+
+  it("keeps a supply drop plus not-eating-enough on the supply door", () => {
+    expect(scopeOf("i feel like my milk supply dropped this week. am i not eating enough?")).toBe("supply");
   });
 
   it("leaves workout calories to Callie and still answers food after the gym", () => {

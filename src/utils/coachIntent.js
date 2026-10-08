@@ -103,6 +103,37 @@ export function slotNamedInAsk(raw) {
   return null;
 }
 
+export const FOLLOW_UP_ASK = /\b(something else|anything else|what else|another( one)?|not that|none of these)\b/i;
+
+export function isFollowUpAsk(raw, { lastAt = 0, now = Date.now() } = {}) {
+  if (!FOLLOW_UP_ASK.test(String(raw || ""))) return false;
+  if (!lastAt) return true;
+  return now - Number(lastAt) <= 30 * 60 * 1000;
+}
+
+const CHAINS = [
+  [/\bchipotle\b/i, "chipotle"],
+  [/\bthai\b/i, "thai"],
+  [/\bstarbucks\b/i, "starbucks"],
+  [/\btrader joe/i, "traderJoes"],
+  [/\bchick[- ]?fil[- ]?a\b/i, "chickFilA"],
+  [/\bmcdonalds\b/i, "mcdonalds"],
+  [/\bin[- ]?n[- ]?out\b/i, "inNOut"],
+];
+
+/** A named chain or a takeout/order ask. Never a hungry ask with no restaurant. */
+export function restaurantFromAsk(raw) {
+  const text = String(raw || "").toLowerCase();
+  if (!text) return null;
+  for (const [re, id] of CHAINS) {
+    if (re.test(text)) return id;
+  }
+  if (/\b(takeout|take[- ]out|picking up|getting)\b/.test(text) && /\b(order|food|dinner|lunch)\b/.test(text)) {
+    return "generic";
+  }
+  return null;
+}
+
 export function localCoachIntent(raw) {
   const text = normalize(raw);
   if (!text || text.length > 60) return null;

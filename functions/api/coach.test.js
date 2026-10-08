@@ -386,6 +386,38 @@ describe("the guardrail runs before the model", () => {
     expect(posts[0].source).toBe("server");
     expect(posts[0].kind).toBe("deflect");
     expect(posts[0].payload.deflect).toBe("medical");
+    expect(data.meals.every((meal) => meal.hideMacros && meal.noMealActions)).toBe(true);
+    expect(COACH_DEFLECT.medical.line).toMatch(/please message her now/);
+    expect(COACH_DEFLECT.medical.line).not.toMatch(/chicken|yogurt|eggs?/i);
+  });
+
+  it("hands a crying ask to the mood door with no cards", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "ive been crying every day this week" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.scope).toBe("mood");
+    expect(data.deflect).toBe("mood");
+    expect(data.meals).toEqual([]);
+    expect(data.noted).toBe(true);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(COACH_DEFLECT.mood.line).toMatch(/Postpartum Support International/);
+  });
+
+  it("adds easy plates when a mood ask also mentions food", async () => {
+    mockSupabase();
+    const resp = await onRequestPost({
+      request: request({ mode: "ask", text: "ive been crying every day this week but I still need dinner" }),
+      env,
+    });
+    const data = await resp.json();
+    expect(data.scope).toBe("mood");
+    expect(data.deflect).toBe("mood");
+    expect(data.meals.length).toBeGreaterThanOrEqual(2);
+    expect(data.meals.every((meal) => meal.hideMacros && meal.noMealActions)).toBe(true);
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
   });
 
   it("hands range changes to Callie without spending a call", async () => {
@@ -1303,10 +1335,10 @@ describe("an escalate lands on her card", () => {
     });
     expect((await supply.json()).deflect).toBe("supply");
     const care = await onRequestPost({
-      request: request({ mode: "ask", text: "I feel awful about what I ate" }),
+      request: request({ mode: "ask", text: "how do I get my baby to sleep" }),
       env,
     });
-    expect((await care.json()).deflect).toBe("care");
+    expect((await care.json()).deflect).toBe("offTopic");
     const scale = await onRequestPost({
       request: request({ mode: "ask", text: "why has the scale not moved" }),
       env,
@@ -1968,7 +2000,7 @@ describe("reviewer follow-ups", () => {
     expect(data.deflect).toBe("disordered");
     expect(data.noted).toBe(true);
     expect(data.meals.length).toBeGreaterThanOrEqual(2);
-    expect(data.meals.every((meal) => meal.hideMacros && meal.cal > 0 && meal.p > 0)).toBe(true);
+    expect(data.meals.every((meal) => meal.hideMacros && meal.noMealActions && meal.cal === 0)).toBe(true);
     expect(COACH_DEFLECT.disordered.lineNoted).toBe(
       "I'm really glad you told me. I've added a note for Callie, and she'd love to hear from you directly too. Message her whenever you're ready. For now, here's something simple:",
     );

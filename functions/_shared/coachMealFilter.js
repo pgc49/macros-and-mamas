@@ -10,7 +10,7 @@ import {
   mealHitsDislike,
 } from "../../src/utils/coachPrefs.js";
 
-const DAIRY = /\b(dairy|yogurt|yoghurt|cheese|milk|butter|whey|cream|cottage|shake)\b/i;
+const DAIRY = /\b(dairy|yogurt|yoghurt|cheese|milk|butter|whey|cream|cottage|shake|ricotta|mozzarella|parmesan)\b/i;
 const CHICKEN = /\bchicken\b/i;
 const EGGS = /\beggs?\b|\begg whites?\b/i;
 const SMOOTHIE = /\bsmoothie\b/i;
@@ -105,14 +105,19 @@ export function mealBreaksConstraints(meal, constraints = {}, skipNames = []) {
   return false;
 }
 
-export const COACH_THREAD_ASK_LIMIT = 10;
+export const COACH_THREAD_ASK_LIMIT = 8;
+
+const CONSTRAINT_KEEP = /\b(no dairy|dairy[- ]free|i'?m dairy free|no eggs|no more eggs|sick of|hate |don'?t (?:want|like)|without more|besides|no chicken|no salmon|no spinach|vegetarian|vegan|not the smoothie)\b/i;
 
 export function threadPriorAsks(asks = [], { limit = COACH_THREAD_ASK_LIMIT } = {}) {
-  return (Array.isArray(asks) ? asks : []).map((row) => String(row || "").trim()).filter(Boolean).slice(-limit);
+  const list = (Array.isArray(asks) ? asks : []).map((row) => String(row || "").trim()).filter(Boolean);
+  const newest = list.slice(-limit);
+  const extras = list.filter((ask) => CONSTRAINT_KEEP.test(ask) && !newest.includes(ask));
+  return [...extras, ...newest];
 }
 
 export function constraintTextFrom(text = "", priorAsks = []) {
-  return [text, ...threadPriorAsks(priorAsks)].filter(Boolean).join(" ");
+  return [text, ...threadPriorAsks(priorAsks)].filter(Boolean).join(". ");
 }
 
 /** Saved diet + allergens + Food prefs avoids. Same gate the ranker uses. */

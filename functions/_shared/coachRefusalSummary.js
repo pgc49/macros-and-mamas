@@ -74,6 +74,7 @@ export function escalateDoor(asked, { escalate = null, scope = null } = {}) {
   if (isCrisisUrgent(question)) return "crisis";
   if (scope === "disordered") return "disordered";
   if (scope === "medication") return "medication";
+  if (scope === "mood") return "mood";
   if (isClinicalUrgent(question)) return "medical";
   if (isWontLogRefusal(question)) return null;
   if (scope === "urgent" || scope === "medical") {
@@ -97,10 +98,11 @@ export const MAX_SUMMARY_ESCALATES = 5;
 export const MAX_MEDICAL_ESCALATES_PER_DAY = 3;
 
 export const MAX_SUMMARY_CHARS = 8000;
-export const MAX_LINE_CHARS = 300;
+export const MAX_LINE_CHARS = 295;
 export const MAX_SUPPLY_ESCALATES_PER_DAY = 3;
 export const MAX_DISORDERED_ESCALATES_PER_DAY = 3;
 export const MAX_MEDICATION_ESCALATES_PER_DAY = 3;
+export const MAX_MOOD_ESCALATES_PER_DAY = 3;
 const REFUSAL_PREFIX = "Coach refused (";
 
 export function clipRefusalLine(line) {
@@ -149,6 +151,7 @@ export function doorCap(door) {
   if (door === "supply") return MAX_SUPPLY_ESCALATES_PER_DAY;
   if (door === "disordered") return MAX_DISORDERED_ESCALATES_PER_DAY;
   if (door === "medication") return MAX_MEDICATION_ESCALATES_PER_DAY;
+  if (door === "mood") return MAX_MOOD_ESCALATES_PER_DAY;
   return MAX_SUMMARY_ESCALATES;
 }
 
@@ -160,6 +163,7 @@ export function doorCaps() {
     supply: doorCap("supply"),
     disordered: doorCap("disordered"),
     medication: doorCap("medication"),
+    mood: doorCap("mood"),
   };
 }
 
@@ -227,7 +231,9 @@ export function preserveRefusalLines(existing, fresh) {
     .split("\n")
     .filter((line) => line.startsWith(REFUSAL_PREFIX));
   const prose = String(fresh || "").trim();
-  const proseLines = prose ? prose.split("\n") : [];
+  const proseLines = prose
+    ? prose.split("\n").filter((line) => !line.startsWith(REFUSAL_PREFIX))
+    : [];
   const combined = [...proseLines];
   for (const line of refused) {
     if (!combined.some((row) => row === line)) combined.push(line);

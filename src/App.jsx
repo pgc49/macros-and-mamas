@@ -1346,7 +1346,7 @@ export default function App() {
 
   const postCoach = async (payload) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 35_000);
+    const timer = setTimeout(() => controller.abort(), 22_000);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;

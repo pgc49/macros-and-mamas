@@ -29,7 +29,7 @@
  * The four refusal lists are what carry the guarantee, and they run first.
  * Nothing that is Callie's reaches a model regardless of how the rest reads.
  */
-export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "admin", "off_topic", "supply", "disordered", "medication"];
+export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "admin", "off_topic", "supply", "disordered", "medication", "mood"];
 
 /**
  * Crisis and postpartum warning signs. These get the emergency line, not
@@ -113,10 +113,13 @@ const URGENT = [
   /\bbreast.{0,48}\b(red|hot|hard).{0,48}\bfever/,
   /\b(red|hot) incision\b/,
   /\bincision.{0,24}\b(red|hot|swollen|infected)/,
+  /\b(c-?section )?scar\b.{0,28}\booz/,
+  /\boozing\b.{0,28}\b(c-?section )?scar/,
+  /\buti\b/,
+  /\burinary tract\b/,
   /\b(haven'?t|have not|not) (been )?eat(en|ing)? all day\b/,
   /\b(didn'?t|did not) eat all day\b/,
   /\b(haven'?t|have not|didn'?t|did not|not)\b.{0,32}\beat(en|ing)?\b.{0,24}\ball day\b/,
-  /\bcry(ing)? all day\b/,
   // Restriction that is not an idiom
   /\bonly eating\b.{0,24}\b\d{2,4}\s*(calories?|cals?)\b/,
   /\beating (only )?\d{2,4}\s*(calories?|cals?)\b/,
@@ -142,7 +145,7 @@ const URGENT = [
   // of the app. And a food she finds disgusting is a preference, not shame.
   /\bbinge/, /\bpurge/, /\bpurging\b/, /\banorexi/, /\bbulimi/,
   /\bstarv(e|es|ed|ing)\s+(myself|my ?self|my body)\b/, /\bstarvation\b/,
-  /\bnot eating\b(?![^.?!]{0,24}\b(protein|carbs?|fats?|fibre|fiber|veg|vegetables|breakfast|lunch|dinner|meat|dairy|gluten)\b)/,
+  /\bnot eating\b(?![^.?!]{0,24}\b(enough|protein|carbs?|fats?|fibre|fiber|veg|vegetables|breakfast|lunch|dinner|meat|dairy|gluten)\b)/,
   /\bstop eating\b/, /\bskip(ping)? meals\b/, /\bfast(ing)? all day\b/,
   /\bhate my body\b/, /\bpunish/,
   /\b(i (feel|look|am)|feeling|felt)\b[^.?!]{0,18}\bdisgusting\b/,
@@ -198,9 +201,19 @@ const GUILT = [
   /\bfeel guilty\b/,
   /\bfeel(ing)? (awful|bad|terrible|so bad) about\b/,
   /\bguilty (about|for)\b/,
+  /\bblew it\b/,
+  /\b(half )?a sleeve of cookies\b/,
+  /\bate half a sleeve\b/,
+  /\bnot hungry but i should eat\b/,
+  /\bskipped (lunch|breakfast|dinner|a meal)\b/,
 ];
 
 const NEXT_MEAL = /\b(what should i eat|what (do|can|should) i (eat|have|get|order)|what to eat next|eat next|for (breakfast|lunch|dinner)|what'?s for (breakfast|lunch|dinner))\b/;
+
+/** Shame or a skipped meal — still a food question. Not Callie's unless she is restricting. */
+export function isGuiltAsk(raw) {
+  return hits(GUILT, String(raw || "").toLowerCase().trim());
+}
 
 /** Eating the workout back is Callie's. A walk or steps is not this. */
 const EXERCISE_CAL = [
@@ -215,6 +228,9 @@ const SUPPLY = [
   /\bmilk (supply|production)\b/, /\bmy supply\b/, /\bdry(ing)? up\b/,
   /\b(breast ?feed|breastfeeding|nursing|pumping)\b[^.?!]{0,30}\b(enough|affect|hurt|drop|boost|increase|impact|safe)\b/,
   /\b(enough|affect|hurt|drop|boost|increase|impact)\b[^.?!]{0,30}\b(milk|supply)\b/,
+  /\bpumping less than usual\b/,
+  /\blos(ing|t) my milk\b/,
+  /\bsupply went down\b/,
 ];
 
 /**
@@ -262,7 +278,67 @@ const MEAL_INTENT = [
   /\bwhat (can|should|could|do) i make\b/,
   /\bthis is what i have\b/,
   /\bwhat i have\b/,
+  /\bany suggestions?\b/,
+  /\bwhat do you suggest\b/,
+  /\banother one\b/,
+  /\bdessert\??\b/,
+  /\bgive me (a few )?options\b/,
+  /\bwhat'?s quick\b/,
+  /\bsomething (sweet|filling|warm|salty|crunchy|else)\b/,
+  /\bwhat now\b/,
+  /\bwhat'?s next\b/,
+  /\bwhat would you pick\b/,
+  /\b(you )?pick for me\b/,
+  /\bnothing sounds good\b/,
+  /\bi need (something|fuel)\b/,
+  /\brunning on empty\b/,
+  /\bwhat'?s easy\b/,
+  /\bquick bite\b/,
+  /\bgrab and go\b/,
+  /\bon the go\b/,
+  /\bwhat can i grab\b/,
+  /\bi want a treat\b/,
 ];
+
+const SHORT_FOOD = /^(any suggestions?|suggestions\??|what do you suggest|another( one)?|dessert\??|more|next|what now|what'?s next|options\??|give me (a few )?options|what'?s quick|something (sweet|filling|warm|salty|crunchy|else)|what would you pick|you pick|pick for me|nothing sounds good|i need (something|fuel)|running on empty|low effort tonight|lazy night|what'?s easy|easy please|quick bite|grab and go|on the go|treat\??|can i have dessert|i want a treat|after my walk\??|before bed\??|family friendly\??|not that one|what can i grab)$/i;
+
+export function isShortFoodAsk(raw) {
+  const text = String(raw || "").toLowerCase().trim().replace(/[.!]+$/, "");
+  if (!text || text.length > 80) return false;
+  return SHORT_FOOD.test(text) || hits(MEAL_INTENT, text);
+}
+
+/** Postpartum mood — Callie's, not crisis. Food in the same ask still gets plates. */
+const MOOD = [
+  /\bcry(ing)? (every day|a lot|all (day|week|the time))\b/,
+  /\bkeep crying\b/,
+  /\bcan'?t stop crying\b/,
+  /\bi'?ve been crying\b/,
+  /\bive been crying\b/,
+  /\bcry(ing)? and i don'?t know why\b/,
+  /\bfeel(ing)? (really )?(down|low|hopeless)( lately)?\b/,
+  /\bnot myself\b/,
+  /\banxious all the time\b/,
+  /\banxiety all the time\b/,
+  /\bnot bonding\b/,
+];
+
+export function isMoodAsk(raw) {
+  return hits(MOOD, String(raw || "").toLowerCase().trim());
+}
+
+/** Feelings with no food in them that are not the mood door. */
+const EMOTIONAL = [
+  /\b(get|getting) (my |the )?baby to sleep\b/,
+  /\bbaby sleep\b/,
+];
+
+export function isEmotionalAsk(raw) {
+  const text = String(raw || "").toLowerCase().trim();
+  if (!text) return false;
+  if (FOOD_ASK.test(text) || hits(MEAL_INTENT, text) || isGuiltAsk(text)) return false;
+  return hits(EMOTIONAL, text) || (isMoodAsk(text) && !FOOD_ASK.test(text) && !hits(MEAL_INTENT, text));
+}
 
 /**
  * Plainly not food. Narrow on purpose: this list refuses outright, so anything
@@ -280,6 +356,7 @@ const OFF_TOPIC = [
   /\b(steps|running|jogging) (goal|target|per day)\b/,
   // Sleep trouble and baby-care gear — not ordinary time-of-day or routine.
   /\bcan'?t sleep\b/, /\bsleep through the night\b/, /\bsleep training\b/, /\binsomnia\b/,
+  /\b(get|getting) (my |the )?baby to sleep\b/, /\bbaby sleep\b/,
   /\b(daycare|teething|diapers?|stroller|car seat|nursery)\b/,
   // Screens and downtime
   /\b(tv|netflix|movie|watch|podcast|playlist)\b/,
@@ -309,15 +386,14 @@ export function classifyAsk(raw, { mode = "ask" } = {}) {
   // Never answered, never softened into an aside.
   if (hits(DISORDERED, text)) return { scope: "disordered", aside: null };
   if (hits(MEDICATION, text)) return { scope: "medication", aside: null };
+  if (isCrisisUrgent(text)) return { scope: "urgent", aside: null };
+  if (hits(MOOD, text)) return { scope: "mood", aside: null };
   if (hits(URGENT, text)) return { scope: "urgent", aside: null };
 
-  // Guilt with no next-meal question is still hers. Guilt plus "what do I
-  // eat next" gets the food, then the handoff.
+  // Guilt and low appetite are meal questions. Restriction language
+  // already returned disordered above.
   const guilt = hits(GUILT, text);
-  const nextMeal = NEXT_MEAL.test(text);
-  if (guilt && !nextMeal) return { scope: "urgent", aside: null };
-
-  const foodAsk = FOOD_ASK.test(text) || hits(MEAL_INTENT, text);
+  const foodAsk = FOOD_ASK.test(text) || hits(MEAL_INTENT, text) || isShortFoodAsk(text);
 
   // Supply is always Callie's. Cards plus a footnote was too cute — she
   // said protect it first, and if a mama thinks it's being affected, write
@@ -328,20 +404,14 @@ export function classifyAsk(raw, { mode = "ask" } = {}) {
   if (hits(WEIGHT, text)) return { scope: "weight", aside: null };
   if (hits(ADMIN, text)) return { scope: "admin", aside: null };
   if (hits(EXERCISE_CAL, text)) return { scope: "off_topic", aside: null };
-  if (foodAsk || (guilt && nextMeal)) return foodWithAside(text, guilt, nextMeal);
-  if (hits(OFF_TOPIC, text)) return { scope: "off_topic", aside: null };
+  if (foodAsk || guilt) return { scope: "food", aside: null };
+  if (hits(OFF_TOPIC, text) || isEmotionalAsk(text)) return { scope: "off_topic", aside: null };
   // A kitchen or menu photo plus a "what can I make" caption is food,
   // even when the caption itself has no food word.
   if (mode === "kitchen" || mode === "menu") return { scope: "food", aside: null };
 
   // No refusal matched and no food word either. The model looks at it.
   return { scope: "unclear", aside: null };
-}
-
-function foodWithAside(text, guilt, nextMeal) {
-  const care = guilt && nextMeal;
-  if (care) return { scope: "food", aside: "care" };
-  return { scope: "food", aside: null };
 }
 
 /** True when the ask is Callie's and the coach must not put it to a model. */
@@ -366,10 +436,12 @@ export function isMealAsk(raw, { mode = "ask", topic = null } = {}) {
   const text = String(raw || "").toLowerCase().trim();
   if (!text) return false;
   if (isCrisisUrgent(text)) return false;
+  if (isEmotionalAsk(text)) return false;
   const verdict = classifyAsk(text);
   if (verdict.scope === "off_topic" || verdict.scope === "ranges" || verdict.scope === "weight" || verdict.scope === "admin") {
     return false;
   }
+  if (isGuiltAsk(text) || isShortFoodAsk(text)) return true;
   if (NEXT_MEAL.test(text)) return true;
   if (hits(MEAL_INTENT, text)) return true;
   if (/\b(something else|anything else|what else)\b/.test(text)) return true;
@@ -412,6 +484,7 @@ const DEFLECT_FOR_SCOPE = {
   supply: "supply",
   disordered: "disordered",
   medication: "medication",
+  mood: "mood",
 };
 
 export function deflectForScope(scope, asked = "") {
@@ -430,6 +503,7 @@ export function deflectModelHandoff(text) {
   if (isCrisisUrgent(text) || isClinicalUrgent(text) || classifyAsk(text).scope === "urgent") {
     return deflectForScope("urgent", text);
   }
+  if (isMoodAsk(text) || classifyAsk(text).scope === "mood") return "mood";
   return "offTopic";
 }
 

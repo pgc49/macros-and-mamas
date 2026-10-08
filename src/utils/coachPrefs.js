@@ -24,7 +24,7 @@ const FISH = [
 const EGGS = ["egg", "eggs", "whites"];
 const DAIRY = [
   "yogurt", "yoghurt", "cottage", "cheese", "milk", "whey", "butter", "cream",
-  "feta", "parmesan",
+  "feta", "parmesan", "ricotta", "mozzarella",
 ];
 const HONEY = ["honey"];
 
@@ -35,7 +35,7 @@ const ALLERGEN_WORDS = {
   tree_nuts: ["almond", "cashew", "walnut", "pecan", "hazelnut", "pistachio", "nut"],
   shellfish: ["shrimp", "prawn", "crab", "lobster", "shellfish"],
   fish: ["salmon", "tuna", "halibut", "cod", "fish", "tilapia", "nigiri", "sashimi", "poke", "sushi"],
-  gluten: ["wheat", "barley", "rye", "gluten", "sourdough", "bread", "flour", "pasta", "toast", "cracker", "crackers", "tortilla"],
+  gluten: ["wheat", "barley", "rye", "gluten", "sourdough", "bread", "flour", "pasta", "toast", "cracker", "crackers", "tortilla", "pizza", "noodles", "noodle", "ramen", "udon", "couscous", "flour tortilla", "lasagna"],
   soy: ["soy", "tofu", "tempeh", "edamame", "miso", "sofritas"],
   sesame: ["sesame", "tahini"],
 };

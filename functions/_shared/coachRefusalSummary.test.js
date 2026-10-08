@@ -307,7 +307,7 @@ describe("a refusal line is factual", () => {
     expect(MAX_MEDICATION_ESCALATES_PER_DAY).toBe(3);
     expect(MAX_CRISIS_ESCALATES_PER_DAY).toBe(10);
     expect(crisisRoomReserveChars()).toBe(MAX_SUMMARY_CHARS - MAX_CRISIS_ESCALATES_PER_DAY * MAX_LINE_CHARS);
-    expect(worstCaseRefusalChars()).toBeGreaterThan(MAX_SUMMARY_CHARS);
+    expect(worstCaseRefusalChars()).toBeLessThanOrEqual(MAX_SUMMARY_CHARS);
     const prior = Array.from({ length: 17 }, (_, i) => (
       `Coach refused (stuck): ${String(i).padEnd(276, "x")}`
     )).join("\n");

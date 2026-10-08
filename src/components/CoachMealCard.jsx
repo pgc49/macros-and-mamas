@@ -89,6 +89,7 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
   };
 
   const hideNumbers = card.hideMacros === true;
+  const noActions = card.noMealActions === true || (hideNumbers && Number(card.cal) === 0);
   const isEstimate = !hideNumbers && AI_SOURCES.has(card.source);
   const done = phase === "logged" || phase === "pencilled";
   const why = shownCoachReason(card);
@@ -151,7 +152,7 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
           </span>
         ) : (
           <>
-            {!logHidden && (
+            {!logHidden && !noActions && (
               <button
                 type="button"
                 style={actionBtn("primary", phase === "busy")}
@@ -161,7 +162,7 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
                 {COACH_COPY.logIt}
               </button>
             )}
-            {onPencil && (
+            {onPencil && !noActions && (
               <button
                 type="button"
                 style={actionBtn(logHidden ? "primary" : "ghost", phase === "busy")}
@@ -183,7 +184,7 @@ export function CoachMealCard({ card, onLog, onPencil, onSave, onOpen, compact =
           </button>
         )}
       </div>
-      {onSave && !done && (isEstimate || hideNumbers) && (
+      {onSave && !done && !noActions && (isEstimate || hideNumbers) && (
         <button
           type="button"
           style={{

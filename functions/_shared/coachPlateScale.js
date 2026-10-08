@@ -105,6 +105,11 @@ export function portionTitle(name, servings) {
   const s = snapServings(servings || 1);
   if (s === 1) return base;
   if (s === 0.5) return `${base} · half portion`;
+  if (s === 2) return `${base} · a double portion`;
+  if (s === 1.5) {
+    const bowl = /\b(bowl|soup|chili|stew|oatmeal|yogurt|smoothie|salad)\b/i.test(base);
+    return `${base} · a bigger ${bowl ? "bowl" : "plate"}`;
+  }
   return `${base} · ${s} servings`;
 }
 
@@ -149,6 +154,7 @@ export function sizeMealsForPersist(meals, budget, slot, source) {
       basedOn: meal.basedOn || null,
       fromSaved: Boolean(meal.fromSaved),
       hideMacros: meal.hideMacros === true,
+      noMealActions: meal.noMealActions === true,
       servings: scale,
       cal: Math.round(macros.cal * scale),
       p: Math.round(macros.p * scale),
