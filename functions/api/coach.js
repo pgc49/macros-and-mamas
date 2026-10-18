@@ -18,8 +18,9 @@
       4/4/9, and the client re-checks fit against the real budget before
       any card is drawn.
 
-   Soft rate limit: 30 model calls / rolling 24h via estimate_calls
-   type='coach'. Deterministic answers never reach this endpoint.
+   Soft rate limit: 30 model calls / rolling 24h, and 8 in any 10 minutes,
+   via estimate_calls type='coach'. Deterministic answers, refusals, and
+   content-free asks never spend one.
    Secrets: OPENROUTER_API_KEY, SUPABASE_*, optional MEAL_PLAN_MODEL
    ================================================================== */
 
@@ -56,11 +57,13 @@ import { sanitizePlanMeal } from "../_shared/planMealShape.js";
 import { fetchCustomMeals } from "../_shared/customMealsPrompt.js";
 import { hasMenuLink, localCoachTeach, teachBody } from "../../src/utils/coachTeach.js";
 import { dishOnPage, fetchMenuPage, firstMenuLink } from "../_shared/menuPage.js";
-import { menuFromPageCopy } from "../../src/content/coachVoice.js";
+import { COACH_COPY, menuFromPageCopy } from "../../src/content/coachVoice.js";
+import { localCoachHowTo } from "../../src/utils/coachHowTo.js";
 import { slotNamedInAsk } from "../../src/utils/coachIntent.js";
 import { appendCoachRefusal } from "../_shared/coachRefusalSummary.js";
 
 const MAX_PER_DAY = 30;
+const BURST = { max: 8, windowMs: 10 * 60 * 1000 };
 const MAX_IMAGES = 3;
 const MAX_IMAGE_CHARS = 2_500_000;
 const MAX_TEXT = 600;
@@ -116,6 +119,12 @@ export async function onRequestPost({ request, env }) {
       await appendCoachRefusal(env, user.id, { asked: text, escalate: "stuck" });
       return json({ ok: true, scope: "stuck", deflect: "again", meals: [] });
     }
+    // How to use the app. The matcher already steps aside for anything a
+    // guardrail owns, so a crisis or a symptom never gets a tour.
+    const howTo = mode === "ask" && !hasMenuLink(text) ? localCoachHowTo(text) : null;
+    if (howTo) {
+      return json({ ok: true, scope: "food", teach: howTo.topic, reply: teachBody(howTo.topic), meals: [] });
+    }
     if (scopeIsRefused(verdict.scope)) {
       await appendCoachRefusal(env, user.id, { asked: text, scope: verdict.scope });
       return json({
@@ -124,6 +133,9 @@ export async function onRequestPost({ request, env }) {
         deflect: deflectForScope(verdict.scope),
         meals: [],
       });
+    }
+    if (verdict.scope === "junk") {
+      return json({ ok: true, scope: "junk", reply: COACH_COPY.junkReply, meals: [] });
     }
 
     // Callie's own sentences. Same matcher the client runs, so a crafted
@@ -165,6 +177,10 @@ export async function onRequestPost({ request, env }) {
         max: MAX_PER_DAY,
         busyMessage: "I can't think straight right now. Try again in a minute, or pick something from Meals.",
         spentMessage: "That's all the thinking I've got for today. Meals has the full bank whenever you want it.",
+        burst: {
+          ...BURST,
+          message: "That's a lot of questions in a few minutes. Give me ten, or pick something from Meals.",
+        },
       });
       if (!limit.ok) {
         return json(
@@ -259,8 +275,13 @@ export async function onRequestPost({ request, env }) {
 
     // Second layer: the model gets to hand a question back too. The card
     // records her question and the door, not the model's sentence.
-    if (String(parsed.value?.scope || "").toLowerCase() === "callie") {
-      return json({ ok: true, scope: "off_topic", deflect: "offTopic", meals: [] });
+    const handedBack = String(parsed.value?.scope || "").toLowerCase();
+    if (handedBack === "crisis") {
+      await appendCoachRefusal(env, user.id, { asked: text, scope: "crisis" });
+      return json({ ok: true, scope: "crisis", deflect: "crisis", meals: [] });
+    }
+    if (handedBack === "callie") {
+      return json({ ok: true, scope: "callie", deflect: "callie", meals: [] });
     }
 
     let reply = cleanReply(parsed.value?.reply);

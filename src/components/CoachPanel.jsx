@@ -354,8 +354,8 @@ export function CoachPanel({
     // is only as trustworthy as the browser.
     const verdict = classifyAsk(text);
     push({ role: "mama", body: text });
-    if (verdict.scope === "urgent") {
-      if (isClinicalUrgent(text)) noteEscalation(text);
+    if (verdict.scope === "crisis" || verdict.scope === "urgent") {
+      if (verdict.scope === "crisis" || isClinicalUrgent(text)) noteEscalation(text);
       push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
       return;
     }
@@ -396,6 +396,12 @@ export function CoachPanel({
 
     if (scopeIsRefused(verdict.scope)) {
       push({ role: "coach", body: "", kind: "deflect", deflect: deflectForScope(verdict.scope) });
+      return;
+    }
+
+    // Nothing to answer. Not worth a model call, and not worth a handoff.
+    if (verdict.scope === "junk") {
+      push({ role: "coach", body: COACH_COPY.junkReply, kind: "text" });
       return;
     }
 
@@ -500,7 +506,9 @@ export function CoachPanel({
               {COACH_COPY.betaLabel}
             </span>
           </div>
-          <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "6px 0 0", lineHeight: 1.45 }}>{COACH_COPY.betaNote}</p>
+          <p style={{ fontSize: 13.5, color: T.inkSoft, margin: "6px 0 0", lineHeight: 1.45 }}>
+            {COACH_COPY.betaNote} {COACH_COPY.betaNoteCallie}
+          </p>
         </div>
 
         <div
@@ -536,6 +544,33 @@ export function CoachPanel({
               {m.kind === "deflect" && (
                 <div style={{ ...bubble(false), background: T.amberSoft, border: "none" }}>
                   <div style={{ marginBottom: 10 }}>{(COACH_DEFLECT[m.deflect] || COACH_DEFLECT.offTopic).line}</div>
+                  {(COACH_DEFLECT[m.deflect]?.links || []).length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                      {COACH_DEFLECT[m.deflect].links.map((link) => (
+                        <a
+                          key={link.href}
+                          href={link.href}
+                          style={{
+                            fontFamily: F,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            padding: "9px 14px",
+                            minHeight: 40,
+                            boxSizing: "border-box",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            borderRadius: 999,
+                            border: `1.5px solid ${T.accent}`,
+                            background: "#fff",
+                            color: T.accentDeep,
+                            textDecoration: "none",
+                          }}
+                        >
+                          {link.label}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => onAskCallie?.(lastMamaBody(thread, m.id))}

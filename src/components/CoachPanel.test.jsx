@@ -14,7 +14,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 
 import { CoachPanel } from "./CoachPanel";
 import { CoachMealCard } from "./CoachMealCard";
-import { COACH_COPY, COACH_DEFLECT } from "../content/coachVoice";
+import { COACH_COPY, COACH_DEFLECT, COACH_HOW_TO } from "../content/coachVoice";
 
 // jsdom has no canvas, so the real downscale resolves null and no preview
 // would ever render here.
@@ -24,7 +24,15 @@ vi.mock("../utils/imageDownscale", () => ({ downscaleImage: downscaleMock }));
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
+
+// The door reads Pacific wall time. Around noon lunch adds a half-portion card
+// beside the full one, so a test that counts cards has to say what time it is.
+function atPacificEvening() {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-17T03:00:00.000Z"));
+}
 
 const MACROS = { cal: 1750, protein: 140, carbs: 160, fat: 55 };
 const TOTALS = { cal: 520, p: 42, c: 55, f: 16 };
@@ -85,6 +93,7 @@ describe("the coach answers on the device", () => {
   });
 
   it("drops replayed My meals cards that were deleted from live custom meals", async () => {
+    atPacificEvening();
     const onLoadThread = vi.fn(async () => [
       {
         id: "r2",
@@ -269,6 +278,7 @@ describe("the coach answers on the device", () => {
   });
 
   it("gives her cards for What should I eat? without calling the model", async () => {
+    atPacificEvening();
     const postCoach = vi.fn();
     renderPanel({ postCoach, onLoadThread: async () => [] });
     const opening = await waitFor(() => {
@@ -520,10 +530,13 @@ describe("the coach answers on the device", () => {
     renderPanel({ onLoadThread: async () => [] });
     await screen.findByText(COACH_COPY.title);
     expect(screen.getByText(COACH_COPY.betaLabel)).toBeTruthy();
-    expect(screen.getByText(COACH_COPY.betaNote)).toBeTruthy();
-    expect(COACH_COPY.betaNote).toMatch(/next meal/i);
-    expect(COACH_COPY.betaNote).toMatch(/Callie/);
-    expect(COACH_COPY.betaNote).not.toMatch(/\bAI\b|model|prompt/i);
+    const note = `${COACH_COPY.betaNote} ${COACH_COPY.betaNoteCallie}`;
+    expect(screen.getByText(note)).toBeTruthy();
+    expect(note).toMatch(/^Automated, not Callie\./);
+    expect(note).toMatch(/next meal/i);
+    expect(note).toMatch(/how to use the app/i);
+    expect(note).toMatch(/ranges.*scale.*supply.*feeling.*message Callie/i);
+    expect(note).not.toMatch(/fridge|\bAI\b|\bbot\b|model|prompt/i);
   });
 
   it("sends a question it can't answer itself to the model", async () => {
@@ -616,6 +629,62 @@ describe("what isn't the coach's goes to Callie", () => {
       mode: "ask",
       text: "I've been dizzy since this morning",
     });
+  });
+
+  it("meets a crisis with tappable crisis lines and Callie, and tells Callie", async () => {
+    const postCoach = vi.fn();
+    const onAskCallie = vi.fn();
+    renderPanel({ postCoach, onAskCallie });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "I don't want to be here anymore, what should I eat" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+    await screen.findByText(COACH_DEFLECT.crisis.line);
+    expect(COACH_DEFLECT.crisis.line).toMatch(/988/);
+    expect(COACH_DEFLECT.crisis.line).toMatch(/1-833-852-6262/);
+    expect(COACH_DEFLECT.crisis.line).toMatch(/911/);
+    expect(screen.getByRole("link", { name: "Call 988" }).getAttribute("href")).toBe("tel:988");
+    expect(screen.getByRole("link", { name: "Text 988" }).getAttribute("href")).toBe("sms:988");
+    expect(screen.getByRole("link", { name: "Call 1-833-852-6262" }).getAttribute("href")).toBe("tel:18338526262");
+    expect(postCoach).toHaveBeenCalledTimes(1);
+    expect(postCoach).toHaveBeenCalledWith({ mode: "ask", text: "I don't want to be here anymore, what should I eat" });
+
+    fireEvent.click(screen.getByRole("button", { name: COACH_DEFLECT.crisis.cta }));
+    expect(onAskCallie).toHaveBeenCalledWith("I don't want to be here anymore, what should I eat");
+  });
+
+  it("answers a greeting or a mash on the phone, with no model call", async () => {
+    const postCoach = vi.fn();
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), { target: { value: "asdfghjkl" } });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_COPY.junkReply);
+    expect(postCoach).not.toHaveBeenCalled();
+  });
+
+  it("answers how to use the app on the phone", async () => {
+    const postCoach = vi.fn();
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), { target: { value: "how do I log my weight" } });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_HOW_TO.howWeight);
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), { target: { value: "are you Callie?" } });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_HOW_TO.howCoach);
+    expect(postCoach).not.toHaveBeenCalled();
+  });
+
+  it("shows Callie's handoff when the model hands a question back", async () => {
+    const postCoach = vi.fn(async () => ({ ok: true, scope: "callie", deflect: "callie", meals: [] }));
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "what should I eat before my run" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.callie.line);
+    expect(screen.queryByText(COACH_DEFLECT.offTopic.line)).toBeNull();
   });
 
   it("begins a nursing mention with the supply line, then still answers the food", async () => {

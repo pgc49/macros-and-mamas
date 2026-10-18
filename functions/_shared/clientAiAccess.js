@@ -110,7 +110,7 @@ export async function loadSelf(env, userId, authHeader) {
  * through: an outage that silently uncaps spending is worse than an
  * outage that tells her to try again in a minute.
  */
-export async function checkAiLimit(env, userId, { type, max, busyMessage, spentMessage }) {
+export async function checkAiLimit(env, userId, { type, max, busyMessage, spentMessage, burst = null }) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key) {
@@ -118,27 +118,44 @@ export async function checkAiLimit(env, userId, { type, max, busyMessage, spentM
     return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
   }
 
-  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const url = `${base}/rest/v1/estimate_calls?profile_id=eq.${encodeURIComponent(userId)}`
-    + `&type=eq.${encodeURIComponent(type)}&created_at=gte.${encodeURIComponent(dayAgo)}&select=id`;
-  const resp = await fetch(url, {
-    headers: {
-      apikey: key,
-      authorization: `Bearer ${key}`,
-      prefer: "count=exact",
-      "range-unit": "items",
-      range: "0-0",
-    },
-  });
-  if (!resp.ok) {
-    console.error(`${type} rate limit count failed`, resp.status);
-    return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
-  }
+  const countSince = async (sinceMs) => {
+    const since = new Date(Date.now() - sinceMs).toISOString();
+    const url = `${base}/rest/v1/estimate_calls?profile_id=eq.${encodeURIComponent(userId)}`
+      + `&type=eq.${encodeURIComponent(type)}&created_at=gte.${encodeURIComponent(since)}&select=id`;
+    const resp = await fetch(url, {
+      headers: {
+        apikey: key,
+        authorization: `Bearer ${key}`,
+        prefer: "count=exact",
+        "range-unit": "items",
+        range: "0-0",
+      },
+    });
+    if (!resp.ok) {
+      console.error(`${type} rate limit count failed`, resp.status);
+      return null;
+    }
+    const match = (resp.headers.get("content-range") || "").match(/\/(\d+|\*)/);
+    return match && match[1] !== "*" ? Number(match[1]) || 0 : 0;
+  };
 
-  const match = (resp.headers.get("content-range") || "").match(/\/(\d+|\*)/);
-  const used = match && match[1] !== "*" ? Number(match[1]) || 0 : 0;
+  const used = await countSince(24 * 60 * 60 * 1000);
+  if (used == null) return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
   if (used >= max) {
     return { ok: false, message: spentMessage, retryAfterSeconds: 86400 };
+  }
+
+  // A daily cap alone lets someone spend the whole day in a minute.
+  if (burst?.max && burst?.windowMs) {
+    const recent = await countSince(burst.windowMs);
+    if (recent == null) return { ok: false, message: busyMessage, retryAfterSeconds: 60 };
+    if (recent >= burst.max) {
+      return {
+        ok: false,
+        message: burst.message || busyMessage,
+        retryAfterSeconds: Math.ceil(burst.windowMs / 1000),
+      };
+    }
   }
 
   await fetch(`${base}/rest/v1/estimate_calls`, {
