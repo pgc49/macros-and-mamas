@@ -12,6 +12,7 @@
  */
 
 import { COACH_COPY, underDayCopy } from "../content/coachVoice.js";
+import { HOW_TO_TOPICS, howToBody, localCoachHowTo } from "./coachHowTo.js";
 
 const TEACH_FIRST = [
   // Never skip — before the restaurant patterns, so "skip dinner because I'm
@@ -101,6 +102,8 @@ export function localCoachTeach(raw) {
   // no photo is still a guess, so that one stays here.
   if (hasMenuLink(raw)) return null;
   if (menuUnseen(raw)) return { kind: "teach", topic: "menuLink" };
+  const howTo = localCoachHowTo(raw);
+  if (howTo) return howTo;
   const text = normalize(raw);
   if (!text || text.length > 180) return null;
   for (const [topic, pattern] of TEACH_FIRST) {
@@ -125,6 +128,7 @@ export function localCoachTeach(raw) {
 }
 
 export function teachBody(topic, ctx = {}) {
+  if (HOW_TO_TOPICS.has(topic)) return howToBody(topic);
   if (topic === "psMethod") return COACH_COPY.teachPs;
   if (topic === "italian") return COACH_COPY.teachItalian;
   if (topic === "chinese") return COACH_COPY.teachChinese;

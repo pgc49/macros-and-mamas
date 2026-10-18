@@ -51,8 +51,15 @@ export const COACH_SLOT_TITLE = {
 export const COACH_COPY = {
   title: "Meal Coach",
   betaLabel: "Beta",
+  // What it's for, that it isn't Callie, and where the rest goes. Kept to the
+  // two lines a phone shows above the fold.
   betaNote:
-    "Next meal, eating out, or a photo of the menu or fridge. Ranges, the scale, supply, and workouts stay with Callie.",
+    "Automated, not Callie. Ask about your next meal, eating out, a menu photo, or how to use the app.",
+  betaNoteCallie:
+    "Your ranges, the scale, supply, or how you're feeling: message Callie.",
+  // A greeting, a test, a keyboard mash. No model call, one honest line.
+  junkReply:
+    "I'm here for your next meal. Ask me what to eat, send a photo of a menu, or ask how something in the app works.",
   entryTitle: "Not sure what to eat?",
   entryCta: "Ask the coach",
 
@@ -244,10 +251,63 @@ export const COACH_COPY = {
 };
 
 /**
+ * How to use the app. Every quoted label is on screen today. Rename a button
+ * and this has to change with it. `coachHowTo.test.js` checks the labels.
+ */
+export const COACH_HOW_TO = {
+  howCoach:
+    "I'm the Meal Coach. I'm automated, not Callie. She doesn't read these chats, but if something sounds medical or like you're struggling, she gets a short note so she can check in. I'm best at your next meal: what to eat with what's left today, what to order when you're out, or a photo of a menu. I can point you around the app, too. Your ranges, the scale, supply, or how you're feeling go to Callie in Messages.",
+  howLog:
+    "On Today, go to Log a meal. Snap reads a photo of your plate or a menu, Describe lets you type it, My plan has your planned and saved meals, and Macros is for when you already know the numbers. Pick which meal it was, then save.",
+  howEdit:
+    "On Today, scroll to Today's log and tap the item. You can adjust it, move it to another meal, or tap remove.",
+  howPast:
+    "On Today, tap a day in the week strip above Log a meal, or use the arrows for another week. Anything you log then goes to that day.",
+  howMyMeals:
+    "Go to Meals, then My meals, then ＋ Add meal. You can create a recipe, describe a meal, or generate options. Saved meals show up under My plan when you log.",
+  howPlan:
+    "Go to Meals, then Weekly Planner. Add meals day by day, or tap Suggest my week. When you eat a planned meal, tap Add to Today.",
+  howPencil:
+    "Tap Pencil in on one of my meal cards to hold room for it before you eat. It shows in Today's log. Tap Ate it once you've had it, or Clear to drop it.",
+  howRanges:
+    "Your ranges are at the top of Today: Protein, Carbs, Fat, and Calories, each with what you've logged and what's left.",
+  howProgress:
+    "Progress has your weight by day and a chart of your macros against your ranges.",
+  howWeight:
+    "Go to Progress, pick the day, enter your Weight (lbs), and tap Log it.",
+  howMessage:
+    "Go to Messages and tap Callie. You can attach a photo or a PDF with the +.",
+  howFoodPrefs:
+    "Go to Meals, then Food prefs. That's where your preferences and allergies live, and I use them too.",
+  howProfile:
+    "Tap the circle at the top right to open Account, then Profile. Your name, photo, birthday, and goals are there.",
+  howPassword:
+    "Tap the circle at the top right to open Account. Password is under Profile, and Sign out is on Account.",
+  howNotify:
+    "Go to Messages. If notifications are off you'll see Turn on notifications; tap it and allow them. On iPhone, open the app from your Home Screen icon first.",
+  howHelp:
+    "Tap the circle at the top right, then Report a problem. Or use App help & feedback at the bottom of Today, Meals, or Progress.",
+};
+
+/**
  * The coach answers food and ranges. Everything else goes to Callie.
  * These are the exact lines it uses to say so.
+ *
+ * `links` are tappable lines drawn under the text, ahead of Message Callie.
  */
 export const COACH_DEFLECT = {
+  // She may be in danger. A person right now first, then Callie. No food, no
+  // softening, nothing for the model to add.
+  crisis: {
+    line:
+      "I'm really glad you told me. This is bigger than a meal, and you deserve a real person right now. Call or text 988 any time, day or night. The National Maternal Mental Health Hotline is 1-833-852-6262, call or text. If you or your baby are in danger, call 911. Please message Callie too.",
+    links: [
+      { label: "Call 988", href: "tel:988" },
+      { label: "Text 988", href: "sms:988" },
+      { label: "Call 1-833-852-6262", href: "tel:18338526262" },
+    ],
+    cta: "Message Callie",
+  },
   callie: {
     line: COACH_PASS,
     cta: "Message Callie",
