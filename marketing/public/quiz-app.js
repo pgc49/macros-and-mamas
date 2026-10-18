@@ -660,7 +660,7 @@
     return `<div class="q-fast-offer">
       <div class="q-fast-kicker">Your quiz unlocked the early rate</div>
       <p class="q-fast-line">$${offerPrice} · full rate $${fullPrice}</p>
-      <p class="q-fast-deliverable">8 weeks 1:1 with Callie. She builds your ranges by hand and adjusts them as your body changes.</p>
+      <p class="q-fast-deliverable">8 weeks 1:1 with Callie. She builds your ranges by hand and adjusts them as your body changes. This group starts Monday, November 2.</p>
       <p class="q-fast-split">Split it at checkout: 4 interest-free payments of $62.25.</p>
       <a class="btn q-fast-btn" href="${href}">Lock my spot · $${offerPrice}</a>
       <p class="q-fast-micro">Callie builds every set of ranges by hand. Not ready? Your ranges are already in your inbox.</p>
@@ -777,7 +777,7 @@
     return `<div class="q-offer-card" id="qOfferCard">
       <div class="q-offer-kicker">Exclusive · early rate from your quiz</div>
       <h2 class="q-offer-title">Ready to lock your spot?</h2>
-      <p class="q-offer-lede">Callie builds every set of ranges by hand, in the order mamas lock in.</p>
+      <p class="q-offer-lede">Callie builds every set of ranges by hand, in the order mamas lock in. This group starts Monday, November 2. Join in the first weeks of November and you're still in.</p>
       <div class="q-offer-price-row">
         <span class="q-offer-now">$${offerPrice}</span>
         <span class="q-offer-full">Full rate $${fullPrice}</span>

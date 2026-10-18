@@ -28,8 +28,10 @@ describe("August cohort program clock", () => {
     expect(resolveProgramStartWeekIso("2026-07", "2026-08-18T15:00:00.000Z")).toBe("2026-07-27");
   });
 
-  it("does not treat an unlabeled September signup as Founding week 6", () => {
-    expect(resolveProgramStartWeekIso(null, "2026-09-04T18:00:00.000Z")).toBe("2026-08-31");
+  it("does not treat an unlabeled signup as Founding week 6", () => {
+    expect(resolveProgramStartWeekIso(null, "2026-09-04T18:00:00.000Z")).toBe("2026-11-02");
+    expect(resolveProgramStartWeekIso("2026-08", "2026-10-18T18:00:00.000Z")).toBe("2026-08-31");
+    expect(resolveProgramStartWeekIso(null, "2026-10-18T18:00:00.000Z")).toBe("2026-11-02");
   });
 });
 
@@ -91,12 +93,14 @@ describe("defaultVoiceDropCohort", () => {
 
   it("does not default All groups to every cohort", () => {
     expect(defaultVoiceDropCohort("all", "2026-08-18T15:00:00.000Z")).toBe("2026-07");
+    expect(defaultVoiceDropCohort("all", "2026-10-18T15:00:00.000Z")).toBe("2026-08");
+    expect(defaultVoiceDropCohort("all", "2026-10-27T15:00:00.000Z")).toBe("2026-11");
   });
 });
 
 describe("parseLiveChannelCohorts", () => {
-  it("includes August when the env default is used", () => {
-    expect([...parseLiveChannelCohorts()]).toEqual(["2026-07", "2026-08"]);
+  it("includes August and November when the env default is used", () => {
+    expect([...parseLiveChannelCohorts()]).toEqual(["2026-07", "2026-08", "2026-11"]);
     expect(parseLiveChannelCohorts("2026-07").has("2026-08")).toBe(false);
   });
 });

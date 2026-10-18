@@ -7,7 +7,7 @@
    the cohort-open email (CTA → /signin → create account → pay).
 
    Body (JSON, optional):
-     { "cohort": "cohort_2", "dryRun": true, "limit": 25 }
+     { "cohort": "cohort_3", "dryRun": true, "limit": 25 }
 
    Do NOT schedule this — invoke manually when enrollment opens:
      curl -X POST https://www.macrosandmamas.com/api/cohort-waitlist-blast \
@@ -31,7 +31,7 @@ export async function onRequestPost({ request, env }) {
     if (!base || !key) return json({ error: "missing supabase config" }, 503);
 
     const body = await request.json().catch(() => ({}));
-    const cohort = String(body.cohort || env.WAITLIST_COHORT || "cohort_2").slice(0, 40);
+    const cohort = String(body.cohort || env.WAITLIST_COHORT || "cohort_3").slice(0, 40);
     const dryRun = body.dryRun === true;
     const limit = Math.min(Math.max(Number(body.limit) || 500, 1), 2000);
 

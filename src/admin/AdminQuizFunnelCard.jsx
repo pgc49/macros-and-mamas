@@ -8,6 +8,7 @@ import { Card, Btn } from "../components/ui";
 import { supabase } from "../lib/supabase";
 import { loadQuizFunnelPulse } from "./quizFunnel";
 import { unpaidOneMorePreviewText } from "../../functions/_shared/unpaidLeadsBlast.js";
+import { cohortOpenPreviewText } from "../../functions/_shared/cohortOpenAnnounce.js";
 
 function PulsePill({ label, value, bg, color, onClick }) {
   const style = {
@@ -57,6 +58,11 @@ export function AdminQuizFunnelCard({ onOpenLeads }) {
   const [mailBusy, setMailBusy] = useState(false);
   const [mailErr, setMailErr] = useState("");
   const [mailOk, setMailOk] = useState("");
+  const [showNovember, setShowNovember] = useState(false);
+  const [novPreview, setNovPreview] = useState(null);
+  const [novBusy, setNovBusy] = useState(false);
+  const [novErr, setNovErr] = useState("");
+  const [novOk, setNovOk] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +141,61 @@ export function AdminQuizFunnelCard({ onOpenLeads }) {
     }
   };
 
+  const loadNovember = async () => {
+    setNovBusy(true);
+    setNovErr("");
+    setNovOk("");
+    try {
+      const headers = await authHeaders();
+      const resp = await fetch("/api/cohort-open-announce", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ dryRun: true }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || "Couldn't preview this send.");
+      setNovPreview(data);
+    } catch (e) {
+      setNovErr(e.message || "Couldn't preview this send.");
+    } finally {
+      setNovBusy(false);
+    }
+  };
+
+  const onToggleNovember = async () => {
+    const next = !showNovember;
+    setShowNovember(next);
+    if (next && !novPreview) await loadNovember();
+  };
+
+  const onSendNovember = async () => {
+    const n = novPreview?.candidates ?? 0;
+    if (!n) return;
+    const ok = window.confirm(
+      `Send the November 2 note to ${n} unpaid ${n === 1 ? "person" : "people"}? Each address gets it once.`,
+    );
+    if (!ok) return;
+    setNovBusy(true);
+    setNovErr("");
+    setNovOk("");
+    try {
+      const headers = await authHeaders();
+      const resp = await fetch("/api/cohort-open-announce", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || "Send failed.");
+      setNovPreview(data);
+      setNovOk(`Sent ${data.sent}. ${data.errors ? `${data.errors} failed.` : ""}`.trim());
+    } catch (e) {
+      setNovErr(e.message || "Send failed.");
+    } finally {
+      setNovBusy(false);
+    }
+  };
+
   return (
     <Card style={{ marginBottom: 16 }}>
       <div style={{ fontFamily: FD, fontSize: 18, marginBottom: 6 }}>Funnel</div>
@@ -202,9 +263,12 @@ export function AdminQuizFunnelCard({ onOpenLeads }) {
             />
           </div>
 
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Btn ghost onClick={onToggleMail} disabled={mailBusy}>
               {showMail ? "Hide email" : "Email unpaid leads"}
+            </Btn>
+            <Btn ghost onClick={onToggleNovember} disabled={novBusy}>
+              {showNovember ? "Hide November note" : "Email November group"}
             </Btn>
           </div>
         </>
@@ -247,6 +311,46 @@ export function AdminQuizFunnelCard({ onOpenLeads }) {
           ) : null}
           <Btn onClick={onSend} disabled={mailBusy || !preview?.candidates}>
             {mailBusy ? "Sending…" : `Send to ${preview?.candidates ?? "…"}`}
+          </Btn>
+        </div>
+      )}
+
+      {showNovember && (
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+          <div style={{ fontFamily: FD, fontSize: 16, marginBottom: 8 }}>November 2 group</div>
+          <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 10px" }}>
+            Unpaid quiz leads and accounts that signed up and have not paid.
+            Skips paid, complimentary, refunded, unsubscribed, and QA addresses.
+            Pregnancy and plant-based leads with no account stay off this send.
+          </p>
+          <pre
+            style={{
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              fontFamily: F,
+              fontSize: 14,
+              lineHeight: 1.5,
+              margin: "0 0 12px",
+              color: T.ink,
+            }}
+          >
+            {novPreview?.preview || cohortOpenPreviewText("Mama")}
+          </pre>
+          {novBusy && !novPreview ? (
+            <div style={{ fontSize: 13.5, color: T.inkSoft }}>Counting who would get this…</div>
+          ) : novPreview ? (
+            <div style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.45, marginBottom: 10 }}>
+              {novPreview.candidates} will get this.
+            </div>
+          ) : null}
+          {novErr ? (
+            <div style={{ fontSize: 13.5, color: T.amber, lineHeight: 1.45, marginBottom: 10 }}>{novErr}</div>
+          ) : null}
+          {novOk ? (
+            <div style={{ fontSize: 13.5, color: T.sage, lineHeight: 1.45, marginBottom: 10 }}>{novOk}</div>
+          ) : null}
+          <Btn onClick={onSendNovember} disabled={novBusy || !novPreview?.candidates}>
+            {novBusy ? "Sending…" : `Send November note to ${novPreview?.candidates ?? "…"}`}
           </Btn>
         </div>
       )}

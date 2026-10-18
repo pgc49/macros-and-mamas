@@ -25,6 +25,13 @@ export const queuePositionCopy =
 export const postPayQueueCopy =
   `After you lock your spot, you'll set a password and fill out a short intake. Callie builds ranges in the order they come in.`;
 
+/**
+ * Official Week 1 for the group now enrolling.
+ * Early-November joiners keep this Monday. No public doors-close date.
+ */
+export const cohortStartLabel = 'Monday, November 2';
+export const cohortStartShort = 'November 2';
+
 /** Early rate — revealed only after an eligible quiz finish (Strategy A). */
 export const waitlistPrice = 249;
 /**

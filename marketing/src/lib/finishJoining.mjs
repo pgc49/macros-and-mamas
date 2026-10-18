@@ -1,6 +1,6 @@
 /**
  * Track B — account created, still unpaid. Finish-joining only.
- * +1h / +24h, then one last note on Wed Aug 26 PT. Stop after that.
+ * +1h / +24h, then one last note on Sun Nov 15 PT. Stop after that.
  * A profiles row already stopped Track A (quiz drip).
  */
 import {
@@ -34,7 +34,7 @@ export function finishJoiningEmailType(variant) {
 
 /**
  * Prefer the latest due step so a late cron does not dump 1h+24h+close.
- * Close is calendar-based (Wed Aug 26 PT) and never sends on or after Aug 27 PT.
+ * Close is calendar-based (Sun Nov 15 PT) and never sends on or after Nov 16 PT.
  */
 export function pickDueFinishJoiningStep({ ageMs, sentTypes, now } = {}) {
   const sent = sentTypes instanceof Set ? sentTypes : new Set(sentTypes || []);

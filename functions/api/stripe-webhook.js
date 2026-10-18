@@ -247,9 +247,9 @@ async function handleCheckoutSessionCompleted(env, event) {
   const wasPaid = await profileAlreadyPaid(env, userId);
   await markPaid(env, userId, session);
 
-  // Stage 3: join open enrollment cohort channel (or ensure existing label membership).
+  // First payment uses paid_at. A replay keeps the label already stored.
   try {
-    await ensureCohortChannelAfterPaid(env, userId);
+    await ensureCohortChannelAfterPaid(env, userId, { firstPayment: !wasPaid });
   } catch (channelErr) {
     console.error("cohort channel join failed", userId, channelErr);
   }
@@ -581,9 +581,11 @@ function timingSafeEqual(a, b) {
   return out === 0;
 }
 
-/** Join the right cohort channel after paid unlock (idempotent). Uses paid_at. */
-async function ensureCohortChannelAfterPaid(env, userId) {
-  await handlePaidEnrollmentChannel(env, userId);
+/** Join the right cohort channel after paid unlock. First payment uses paid_at. */
+async function ensureCohortChannelAfterPaid(env, userId, opts = {}) {
+  await handlePaidEnrollmentChannel(env, userId, {
+    firstPayment: opts.firstPayment === true,
+  });
 }
 
 function json(obj, status = 200) {

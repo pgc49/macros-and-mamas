@@ -1,4 +1,4 @@
-import { AUGUST_COHORT_LABEL } from "./cohorts";
+import { NOVEMBER_COHORT_LABEL } from "./cohorts";
 
 /**
  * Catalog of cards that can appear at the top of Today.
@@ -33,7 +33,7 @@ export const TODAY_BANNERS = [
     tone: "accent",
     automated: false,
     newUsers: "Yes if a drop is live for her audience the first time she opens Today.",
-    who: "Mamas who match the drop’s audience (Founding, Cohort 2 / August Group, all mamas, or admins-only).",
+    who: "Mamas who match the drop’s audience (Founding, Cohort 2, Cohort 3, all mamas, or admins-only).",
     trigger: "Callie publishes a drop on Announcements (or Home). It stays until it expires.",
     hidesWhen: "She taps × (remembered per drop id). Next week’s drop uses a new id so it comes back.",
     callieControls: "Announcements → Monday voice drop.",
@@ -54,9 +54,9 @@ export const TODAY_BANNERS = [
     title: "Turn on notifications",
     tone: "accent",
     automated: true,
-    newUsers: `Yes for Cohort 2 (${AUGUST_COHORT_LABEL} / August Group) only. Founding does not see this.`,
-    who: "Cohort 2 mamas who have not allowed notifications and have not dismissed the card.",
-    trigger: "Automatic on Today when cohort_label is 2026-08.",
+    newUsers: `Yes for every group after Founding, including Cohort 3 (${NOVEMBER_COHORT_LABEL}). Founding does not see this.`,
+    who: "Mamas outside Founding who have not allowed notifications and have not dismissed the card.",
+    trigger: "Automatic on Today when cohort_label is set and is not Founding (2026-07).",
     hidesWhen: "Got it / × (this device), or the browser already has notification permission granted.",
     callieControls: "None. Founding was skipped on purpose — they already saw the first-week cards.",
   },

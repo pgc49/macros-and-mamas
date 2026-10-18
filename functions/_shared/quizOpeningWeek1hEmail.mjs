@@ -5,7 +5,7 @@
  */
 import { APP_URL } from "./emailLayout.mjs";
 import { finishJoinUrl } from "./finishJoiningEmail.mjs";
-import { quizJoinUrl, EARLY_PRICE } from "./rangesEmail.mjs";
+import { quizJoinUrl, EARLY_PRICE, COHORT_SHORT } from "./rangesEmail.mjs";
 import { safeDisplayName } from "./quizDripEmail.mjs";
 import { QUIZ_OPENING_WEEK_1H } from "./quizOpeningWeek1h.mjs";
 
@@ -22,7 +22,7 @@ export function safeFirstName(raw) {
 }
 
 export function openingWeek1hSubject(name) {
-  return `${safeFirstName(name)}, opening week is underway`;
+  return `${safeFirstName(name)}, the next group starts ${COHORT_SHORT}`;
 }
 
 export function withOpeningWeekAttribution(url) {
@@ -47,7 +47,7 @@ export function openingWeek1hCtaUrl(email, { hasProfile = false } = {}) {
 
 export function buildOpeningWeek1hBody() {
   return `
-<p>You have your ranges. September's opening week is already underway, and if you want to start with this group, join today so you don't miss more of the kickoff.</p>
+<p>You have your ranges. This group starts Monday, ${COHORT_SHORT}. Your quiz rate is still $${EARLY_PRICE}. Join when you're ready. If you come in during the first weeks of November, you're still in this group.</p>
 <p>You'll have the mama community when you need it, plus me coaching you through the week.</p>
 <p>Questions? Just reply. It comes to me.</p>
 <p>Callie<br/>Macros and Mamas</p>
@@ -74,7 +74,7 @@ export function openingWeek1hPreviewText(firstName = "Mama", { hasProfile = fals
   return [
     `Hi ${name},`,
     "",
-    "You have your ranges. September's opening week is already underway, and if you want to start with this group, join today so you don't miss more of the kickoff.",
+    `You have your ranges. This group starts Monday, ${COHORT_SHORT}. Your quiz rate is still $${EARLY_PRICE}. Join when you're ready. If you come in during the first weeks of November, you're still in this group.`,
     "",
     "You'll have the mama community when you need it, plus me coaching you through the week.",
     "",

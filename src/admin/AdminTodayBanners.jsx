@@ -65,8 +65,8 @@ export function AdminTodayBanners() {
       </h2>
       <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 16px", lineHeight: 1.5 }}>
         These stack at the top of a mama&apos;s Today tab, in this order.
-        Pin-to-home-screen and the Cohort 2 notifications card are automatic for
-        new users. What&apos;s new is automatic when we ship notes.
+        Pin-to-home-screen is automatic for every new mama. The notifications
+        card is automatic for Cohort 2, Cohort 3, and later groups. What&apos;s new is automatic when we ship notes.
         The voice drop only appears after you publish one.
         Got it / × on a preview here does not change a mama&apos;s device.
       </p>

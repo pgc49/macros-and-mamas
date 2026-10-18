@@ -22,7 +22,7 @@ function isAdminProfile(c) {
 
 /**
  * Admin: record + publish Monday voice drop (Today PSA).
- * Founding and Cohort 2 can each have a live drop at the same time.
+ * Each group can have a live drop at the same time.
  * Default audience = that cohort's actives — forgetting the dropdown must not
  * notify admins-only or blast every cohort.
  * Draft audio is persisted in IndexedDB so a failed publish doesn’t lose the take.
@@ -360,7 +360,7 @@ export function AdminVoiceDropCard({
     <Card style={{ marginBottom: 14, padding: 14 }}>
       <div style={{ fontFamily: FD, fontSize: 20, marginBottom: 4 }}>Monday voice drop</div>
       <p style={{ fontSize: 13, color: T.inkSoft, margin: "0 0 10px", lineHeight: 1.45 }}>
-        Founding and Cohort 2 can each have their own live drop at the same time.
+        Founding, Cohort 2, and Cohort 3 can each have their own live drop at the same time.
         Set <strong style={{ fontWeight: 700, color: T.ink }}>To: Active mamas</strong> and pick the
         {" "}<strong style={{ fontWeight: 700, color: T.ink }}>Group</strong> — publishing one
         does not replace the other.
@@ -560,7 +560,7 @@ export function AdminVoiceDropCard({
         )}
         {audience === "active" ? (
           <p style={{ fontSize: 12.5, color: T.inkSoft, margin: "0 0 8px", lineHeight: 1.4, width: "100%" }}>
-            Monday: publish once for Founding, then switch Group to Cohort 2 and publish again.
+            Monday: publish once for each group. Switch Group and publish again.
           </p>
         ) : null}
         <label style={{

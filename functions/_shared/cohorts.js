@@ -27,11 +27,29 @@ export const COHORT_CALENDAR = [
     label: "2026-08",
     displayName: "August Group",
     windowStart: "2026-08-10T00:00:00.000Z",
-    windowEnd: "2026-09-21T00:00:00.000Z",
+    /** Exclusive. Extended so the Sep 21–Oct 18 gap stays Cohort 2, not Cohort 3. */
+    windowEnd: "2026-10-18T00:00:00.000Z",
     /** Monday of official Week 1 — matches join/marketing copy. */
     programStart: "2026-08-31T00:00:00.000Z",
     /** Exclusive end (last program day = Oct 25). No post-program free month. */
     programEnd: "2026-10-26T00:00:00.000Z",
+  },
+  {
+    label: "2026-11",
+    displayName: "November Group",
+    /** Inclusive. New paid checkouts from Oct 18 stamp Cohort 3. */
+    windowStart: "2026-10-18T00:00:00.000Z",
+    /**
+     * Exclusive handoff if a later cohort is added.
+     * Through Nov 15 UTC. After this, until the next row exists, cohortForDate
+     * still returns Cohort 3 (same fallback August used after its window).
+     * Program start stays Nov 2 for early-November joiners.
+     */
+    windowEnd: "2026-11-16T00:00:00.000Z",
+    /** Monday of official Week 1. */
+    programStart: "2026-11-02T00:00:00.000Z",
+    /** Exclusive end (last program day = Dec 27). No post-program free month. */
+    programEnd: "2026-12-28T00:00:00.000Z",
   },
 ];
 
@@ -41,7 +59,7 @@ export const FOUNDING_COHORT_LABEL = "2026-07";
 /** Free alumni month length after programEnd (founding: Sep 21 → Oct 21). */
 export const FREE_MONTH_DAYS = 30;
 
-/** Currently enrolling cohort for new paid checkouts (C2). */
+/** Currently enrolling cohort for new paid checkouts (last calendar row = Cohort 3). */
 export function openEnrollmentCohort(env) {
   const fromEnv = String(env?.OPEN_COHORT_LABEL || "").trim();
   if (fromEnv) {
@@ -56,7 +74,7 @@ export function openEnrollmentCohort(env) {
       programEnd: null,
     };
   }
-  return COHORT_CALENDAR.find((c) => c.label === "2026-08") || COHORT_CALENDAR[COHORT_CALENDAR.length - 1];
+  return COHORT_CALENDAR[COHORT_CALENDAR.length - 1];
 }
 
 /** Resolve cohort from a timestamp (activation or paid_at). */

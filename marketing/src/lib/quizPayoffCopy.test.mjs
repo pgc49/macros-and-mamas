@@ -34,6 +34,7 @@ describe("quiz payoff copy", () => {
     assert.doesNotMatch(quizJs, /lock your Aug 31 spot/i);
     assert.doesNotMatch(quizJs, /The whole group starts together/);
     assert.match(quizJs, /Callie builds every set of ranges by hand, in the order mamas lock in/);
+    assert.match(quizJs, /This group starts Monday, November 2/);
     assert.match(quizJs, /Ready to lock your spot\?/);
     assert.match(quizJs, /Checkout can split it into 4 interest-free payments of \$62\.25/);
     assert.match(quizJs, /custom ranges built by Callie · 1:1 messaging · the app · weekly check-ins/);

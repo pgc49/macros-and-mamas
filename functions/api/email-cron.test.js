@@ -112,8 +112,8 @@ describe("runQuizLeadDrip", () => {
     expect(sent.errors).toBe(0);
   });
 
-  it("plans the last quiz email on Aug 26 PT for a lead younger than +6 days", async () => {
-    const now = Date.parse("2026-08-26T18:00:00.000-07:00");
+  it("plans the last quiz email on Nov 15 PT for a lead younger than +6 days", async () => {
+    const now = Date.parse("2026-11-15T18:00:00.000-08:00");
     const rangesAt = new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString();
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       const href = String(url);

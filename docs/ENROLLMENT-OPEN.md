@@ -42,8 +42,9 @@ SUPABASE_SERVICE_ROLE_KEY=…
 
 Edit both (keep in sync):
 
-- `marketing/src/config.ts` — `cohortStartDate`, `doorsCloseDate`, prices
-- `src/config.js` — `COHORT_LABEL`, `COHORT_START`, …
+- `marketing/src/config.ts` — `cohortStartLabel` (Monday, November 2), prices
+- `src/config.js` — `COHORT_LABEL`, `COHORT_START` (`Monday, November 2`)
+- `functions/_shared/cohorts.js` and `src/lib/cohorts.js` — Cohort 3 label `2026-11`, Week 1 `2026-11-02`, enrollment window Oct 18 through Nov 15
 
 Never sell seats without an expected start date + doors-close date on the page.
 

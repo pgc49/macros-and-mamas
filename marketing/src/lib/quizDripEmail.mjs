@@ -57,7 +57,7 @@ export function buildQuizDrip7Body({ joinUrl } = {}) {
 <p>I want to gently say something to you: later keeps not coming. And you deserve better than that.</p>
 <p>Here's what I know after doing this work for years: timing is never going to feel perfect. There will always be a reason to wait: a sleep regression, a busy season at work, a kid who needs you at 2am. But your health isn't a reward you get after everything else is handled. It's the thing that lets you handle everything else.</p>
 <p>Your macros were just the starting point. The real transformation happens inside Macros and Mamas, where you're not figuring this out alone at 11pm with fifteen browser tabs open. You'll have me in your corner, plus a whole cohort of women who get it, for accountability, for troubleshooting the hard weeks, for celebrating the wins that feel small but aren't.</p>
-<p>The group starts Monday, ${COHORT_SHORT}. Because you took the quiz, your spot is $${EARLY_PRICE} (that's $50 off, already applied).</p>
+<p>The group starts Monday, ${COHORT_SHORT}. If you join in the first weeks of November, you're still in. Because you took the quiz, your spot is $${EARLY_PRICE} (that's $50 off, already applied).</p>
 <p>If you've been waiting for a sign that it's your turn, this is it.</p>
 ${emailCtaButton(`Lock my spot · $${EARLY_PRICE}`, joinUrl)}
 <p>I'd be so honored to walk this with you.</p>

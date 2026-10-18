@@ -1,6 +1,5 @@
-import { AUGUST_COHORT_LABEL } from "./cohorts";
+import { FOUNDING_COHORT_LABEL } from "./cohorts";
 
-export const NOTIFICATIONS_TIP_COHORT = AUGUST_COHORT_LABEL;
 export const NOTIFICATIONS_TIP_STORAGE_KEY = "mm_notifications_tip_dismissed";
 
 export function queryFlag(name) {
@@ -12,7 +11,7 @@ export function queryFlag(name) {
   }
 }
 
-/** Today-page notify tip is Cohort 2 only — Founding already saw the first-week cards. */
+/** Today-page notify tip is every group after Founding. Founding already saw the first-week cards. */
 export function shouldShowNotificationsTip({
   cohortLabel,
   permission,
@@ -20,7 +19,8 @@ export function shouldShowNotificationsTip({
   demo = false,
 } = {}) {
   if (demo) return permission !== "granted" && !dismissedLocally;
-  if (String(cohortLabel || "").trim() !== NOTIFICATIONS_TIP_COHORT) return false;
+  const label = String(cohortLabel || "").trim();
+  if (!label || label === FOUNDING_COHORT_LABEL) return false;
   if (dismissedLocally) return false;
   if (permission === "granted") return false;
   return true;

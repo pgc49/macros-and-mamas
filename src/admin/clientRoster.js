@@ -29,11 +29,12 @@ export function listRosterCohorts(all) {
   for (const row of [
     { id: "2026-07", label: adminCohortName("2026-07") },
     { id: "2026-08", label: adminCohortName("2026-08") },
+    { id: "2026-11", label: adminCohortName("2026-11") },
   ]) {
     if (present.has(row.id)) options.push(row);
   }
   for (const id of [...present].sort()) {
-    if (id === "2026-07" || id === "2026-08" || id === UNASSIGNED_COHORT) continue;
+    if (id === "2026-07" || id === "2026-08" || id === "2026-11" || id === UNASSIGNED_COHORT) continue;
     options.push({ id, label: adminCohortName(id) });
   }
   if (present.has(UNASSIGNED_COHORT)) {
@@ -42,7 +43,7 @@ export function listRosterCohorts(all) {
   return options;
 }
 
-/** Always offer Founding / Cohort 2 / Unassigned so leftover + group compose. */
+/** Always offer Founding / Cohort 2 / Cohort 3 / Unassigned so leftover + group compose. */
 export function listLeadCohorts(leads) {
   const present = new Set();
   for (const row of leads || []) {
@@ -52,9 +53,10 @@ export function listLeadCohorts(leads) {
     { id: "all", label: "All groups" },
     { id: "2026-07", label: adminCohortName("2026-07") },
     { id: "2026-08", label: adminCohortName("2026-08") },
+    { id: "2026-11", label: adminCohortName("2026-11") },
   ];
   for (const id of [...present].sort()) {
-    if (id === "2026-07" || id === "2026-08" || id === UNASSIGNED_COHORT) continue;
+    if (id === "2026-07" || id === "2026-08" || id === "2026-11" || id === UNASSIGNED_COHORT) continue;
     options.push({ id, label: adminCohortName(id) });
   }
   options.push({ id: UNASSIGNED_COHORT, label: "Unassigned" });

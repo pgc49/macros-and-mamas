@@ -19,7 +19,7 @@ import {
 } from "./finishJoiningEmail.mjs";
 
 const AUG25 = Date.parse("2026-08-25T18:00:00.000-07:00");
-const AUG26 = Date.parse("2026-08-26T18:00:00.000-07:00");
+const NOV15 = Date.parse("2026-11-15T18:00:00.000-08:00");
 const AUG27 = Date.parse("2026-08-27T00:30:00.000-07:00");
 
 describe("pickDueFinishJoiningStep", () => {
@@ -36,16 +36,16 @@ describe("pickDueFinishJoiningStep", () => {
     })).toBe(FINISH_JOINING_24H);
   });
 
-  it("prefers the Aug 26 last note when it is also due", () => {
+  it("prefers the Nov 15 last note when it is also due", () => {
     expect(pickDueFinishJoiningStep({
       ageMs: 2 * HOUR_MS,
       sentTypes: new Set(),
-      now: AUG26,
+      now: NOV15,
     })).toBe(FINISH_JOINING_CLOSE);
     expect(pickDueFinishJoiningStep({
       ageMs: 30 * HOUR_MS,
       sentTypes: new Set([FINISH_JOINING_1H]),
-      now: AUG26,
+      now: NOV15,
     })).toBe(FINISH_JOINING_CLOSE);
   });
 
@@ -66,7 +66,7 @@ describe("pickDueFinishJoiningStep", () => {
     expect(pickDueFinishJoiningStep({
       ageMs: 48 * HOUR_MS,
       sentTypes: new Set([FINISH_JOINING_CLOSE]),
-      now: AUG26,
+      now: NOV15,
     })).toBeNull();
   });
 });
@@ -122,9 +122,9 @@ describe("decideFinishJoiningAction", () => {
     }).stopReason).toBe("unsubscribed");
   });
 
-  it("plans the Wednesday last note for an unpaid profile", () => {
+  it("plans the Nov 15 last note for an unpaid profile", () => {
     expect(decideFinishJoiningAction({
-      now: AUG26,
+      now: NOV15,
       profile: unpaid,
       sentTypes: new Set(),
     })).toEqual(expect.objectContaining({
@@ -140,7 +140,7 @@ describe("finish joining copy", () => {
     const two = buildFinishJoining24hBody();
     expect(one).toContain("You started joining Macros and Mamas. I'm glad you're here.");
     expect(one).toContain("our group Mon through Fri");
-    expect(one).toContain("We start Aug 31. Doors close Aug 27.");
+    expect(one).toContain("We start Monday, November 2. If you join in the first weeks of November, you're still in this group.");
     expect(one).not.toMatch(/\$249/);
     expect(two).toContain("I'd still love to have you in this group.");
     expect(two).toContain("macros built by me, not a calculator");
@@ -176,7 +176,7 @@ describe("finish joining copy", () => {
 
   it("builds the Wednesday last note with a safe first-name subject", () => {
     const html = buildFinishJoiningCloseBody();
-    expect(html).toContain("Last note from me. Doors close Aug 27. We start Monday.");
+    expect(html).toContain("Last note from me. This group starts Monday, November 2, and I'm still taking mamas through November 15.");
     expect(html).toContain("If something's unclear, reply. I read everything.");
     expect(html).not.toMatch(/—/);
     expect(finishJoiningCloseSubject("Dolly Chammas")).toBe("Dolly, last note from me");

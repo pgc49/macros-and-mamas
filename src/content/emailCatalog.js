@@ -20,7 +20,7 @@ export const EMAIL_CATALOG = [
 
 You started joining Macros and Mamas. I'm glad you're here.
 
-When you're ready: macros I build myself, our group Mon through Fri, and a short Monday voice note to keep the week simple. We start Aug 31. Doors close Aug 27.
+When you're ready: macros I build myself, our group Mon through Fri, and a short Monday voice note to keep the week simple. We start Monday, November 2. If you join in the first weeks of November, you're still in this group.
 
 Finish signing up below to lock in your spot.
 
@@ -47,7 +47,7 @@ Just checking in. I'd still love to have you in this group.
 
 Inside: macros built by me, not a calculator. Our group Mon through Fri. A short Monday voice note to set the week.
 
-We start Aug 31. Doors close Aug 27 so I can hand-build ranges before day one. Finish signing up when you're ready.
+We start Monday, November 2. If you join in the first weeks of November, you're still in this group. Finish signing up when you're ready.
 
 Your quiz rate is $249.
 
@@ -62,13 +62,13 @@ Callie
     number: "1c",
     name: "Finish joining · last note",
     status: "live",
-    trigger: "Track B last unpaid note — one send on Wed Aug 26 PT for unpaid profiles who have not paid and have not already received this type. Then stop. Never sent on or after Aug 27 PT. Idempotent via email_events. Prefer this over +1h / +24h if both are due.",
+    trigger: "Track B last unpaid note — one send on Sun Nov 15 PT for unpaid profiles who have not paid and have not already received this type. Then stop. Never sent on or after Nov 16 PT. Idempotent via email_events. Prefer this over +1h / +24h if both are due.",
     subject: "[First name], last note from me",
     audience: "Client",
     cta: "Finish signing up, lock in your spot",
     bodyPreview: `Hi [First name],
 
-Last note from me. Doors close Aug 27. We start Monday.
+Last note from me. This group starts Monday, November 2, and I'm still taking mamas through November 15.
 
 If you still want in, finish signing up. If something's unclear, reply. I read everything.
 
@@ -108,6 +108,8 @@ Once your macros are approved, you'll find me in Messages in the app, your group
 While you're at it, do these two things, today if you can:
 1. Take your before photos. Same outfit, same spot, same lighting. Front, side, and back. Your face doesn't need to be in them. You will not believe how much you'll want these in eight weeks!
 2. Weigh yourself tomorrow morning, first thing, before coffee, before your morning hydration, and right after you pee! That's your starting point, and it's the last time that number gets to feel like a verdict. From here on, it's just data.
+
+Put Macros and Mamas on your home screen. Open macrosandmamas.com in Safari (iPhone) or Chrome (Android), tap Share, then Add to Home Screen. You'll get an icon on your phone. Tap it anytime and you're right back here. No App Store needed. The same steps show up on Today once your ranges are approved.
 
 That's it. No prep, no pantry purge, no guilt about whatever you ate today.
 
@@ -256,12 +258,12 @@ Callie
     name: "Quiz opening week · +1h",
     status: "live",
     trigger: "Track A sales quiz leads (main / early_pp_nurture). +1 hour after quiz_ranges (hourly cron, 8h recovery lookback). Distinct event quiz_opening_week_1h, not quiz_drip_2d. Suppress paid and unsubscribe only. Account-unpaid stays eligible with Finish checkout. No-account uses the quiz join path. CTA links carry utm_campaign=quiz_opening_week_1h for quiz-to-pay attribution. Idempotent via email_events + Resend key quiz_opening_week_1h/<lead-id>.",
-    subject: "[First name], opening week is underway",
+    subject: "[First name], the next group starts November 2",
     audience: "Lead",
     cta: "Join for $249 after your quiz · Finish checkout if they already have an unpaid account",
     bodyPreview: `Hi [First name],
 
-You have your ranges. September's opening week is already underway, and if you want to start with this group, join today so you don't miss more of the kickoff.
+You have your ranges. This group starts Monday, November 2. Your quiz rate is still $249. Join when you're ready. If you come in during the first weeks of November, you're still in this group.
 
 You'll have the mama community when you need it, plus me coaching you through the week.
 
@@ -304,7 +306,7 @@ Callie
     number: "Q7",
     name: "Quiz drip · last",
     status: "live",
-    trigger: "Track A last unpaid quiz-lead sales nudge — due on Wed Aug 26 PT after 8:00 AM, or at +6 days after quiz_ranges once that morning window is open, whichever comes first. Never sent on or after Aug 27 PT. Prefer last over +2d if both are due. Then stop. Never sent if a profiles row exists.",
+    trigger: "Track A last unpaid quiz-lead sales nudge — due on Sun Nov 15 PT after 8:00 AM, or at +6 days after quiz_ranges once that morning window is open, whichever comes first. Never sent on or after Nov 16 PT. Prefer last over +2d if both are due. Then stop. Never sent if a profiles row exists.",
     subject: "[First name], still want in?",
     audience: "Lead",
     cta: "Finish signing up, lock in your spot",
@@ -318,7 +320,7 @@ Here's what I know after doing this work for years: timing is never going to fee
 
 Your macros were just the starting point. The real transformation happens inside Macros and Mamas, where you're not figuring this out alone at 11pm with fifteen browser tabs open. You'll have me in your corner, plus a whole cohort of women who get it, for accountability, for troubleshooting the hard weeks, for celebrating the wins that feel small but aren't.
 
-The group starts Monday, Aug 31. Because you took the quiz, your spot is $249 (that's $50 off, already applied).
+The group starts Monday, November 2. If you join in the first weeks of November, you're still in. Because you took the quiz, your spot is $249 (that's $50 off, already applied).
 
 If you've been waiting for a sign that it's your turn, this is it.
 
@@ -354,6 +356,30 @@ With gratitude,
 Callie
 
 (First name from the quiz. Reply anytime. Unsubscribe in the footer. No money-back promise. Terms still say purchases are final except eligibility declines.)`,
+  },
+  {
+    id: "cohort_3_open",
+    number: "N",
+    name: "November group open",
+    status: "manual",
+    trigger: "Manual admin blast from Overview → Funnel. Unpaid quiz leads plus accounts that signed up and have not paid. Skips paid, comp, refunded, unsubscribed, QA plus-addresses, and pregnancy / plant-based leads with no account. Idempotent via email_events (cohort_3_open).",
+    subject: "[First name], a new group starts November 2",
+    audience: "Lead + unpaid signup",
+    cta: "Lock my spot · Finish checkout if they already have an account",
+    bodyPreview: `Hi [First name],
+
+I'm opening the next Macros and Mamas group. We start Monday, November 2. If you join in the first weeks of November, you're still in.
+
+The founding group has finished. Those mamas came in for a health reset and someone in their corner. You can read some of their stories.
+
+If you already finished the quiz, your rate is still $249, $50 off the $299 full rate.
+
+[Lock my spot]
+
+With love,
+Callie
+
+(Account-unpaid CTA is Finish checkout. Reply anytime. Unsubscribe in the footer. Stories link to /#stories. Does not say nearly 80 graduated.)`,
   },
   {
     id: "quiz_pregnancy_note",
@@ -438,7 +464,7 @@ export const EMAIL_JOURNEYS = [
     id: "unpaid",
     title: "Signed up, no payment",
     track: "Track B",
-    note: "+1 hour, +24 hours, then one last note on Wed Aug 26 PT. Tracks stay separate from the quiz drip.",
+    note: "+1 hour, +24 hours, then one last note on Sun Nov 15 PT. Tracks stay separate from the quiz drip.",
     ids: ["finish_joining_1h", "finish_joining_24h", "finish_joining_close"],
   },
   {
@@ -452,8 +478,8 @@ export const EMAIL_JOURNEYS = [
     id: "other",
     title: "Other",
     track: null,
-    note: "Waitlist open and the unpaid-ranges one-more note are manual blasts, not cron. Eligibility refund is only if Callie refunds in Stripe.",
-    ids: ["eligibility_refund", "cohort_open", "quiz_one_more"],
+    note: "Waitlist open, the unpaid-ranges one-more note, and the November group announcement are manual blasts, not cron. Eligibility refund is only if Callie refunds in Stripe.",
+    ids: ["eligibility_refund", "cohort_open", "quiz_one_more", "cohort_3_open"],
   },
   {
     id: "callie",
@@ -493,6 +519,7 @@ export const EMAIL_TYPE_LABELS = {
   quiz_drip_2d: "Quiz drip (+2d)",
   quiz_drip_7d: "Quiz drip (last)",
   quiz_one_more: "Quiz one more note",
+  cohort_3_open: "November group open",
   quiz_pregnancy_note: "Quiz pregnancy note (+3d)",
   callie_payment: "Callie: new payment",
   callie_intake: "Callie: intake ready",

@@ -50,7 +50,7 @@ describe("sendQuizOpeningWeek1hEmail", () => {
     expect(result.idempotencyKey).toBe("quiz_opening_week_1h/lead-1");
     expect(mocks.resend).toHaveBeenCalledTimes(1);
     const [, payload, opts] = mocks.resend.mock.calls[0];
-    expect(payload.subject).toBe("Dolly, opening week is underway");
+    expect(payload.subject).toBe("Dolly, the next group starts November 2");
     expect(payload.to).toEqual(["mama@example.com"]);
     expect(payload.reply_to).toBe("calista@nourishwithcalista.com");
     expect(opts.idempotencyKey).toBe("quiz_opening_week_1h/lead-1");

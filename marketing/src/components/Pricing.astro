@@ -11,6 +11,7 @@ import {
   programWeeks,
   queuePositionCopy,
   quizUrl,
+  cohortStartLabel,
   waitlistPrice,
   weeklyPrice,
 } from '../config';
@@ -27,8 +28,8 @@ const saveAmount = fullPrice - waitlistPrice;
         {
           isWaitlist ? (
             <>
-              Full rate ${fullPrice} · ${waitlistPrice} after the free quiz.{' '}
-              {handBuiltRangesCopy}
+              Full rate ${fullPrice} · ${waitlistPrice} after the free quiz.
+              Starts {cohortStartLabel}. {handBuiltRangesCopy}
             </>
           ) : (
             <>
@@ -44,7 +45,8 @@ const saveAmount = fullPrice - waitlistPrice;
       {
         isWaitlist ? (
           <span class="cohort"
-            >Full rate · early ${waitlistPrice} after the free quiz</span
+            >Starts {cohortStartLabel} · early ${waitlistPrice} after the free
+            quiz</span
           >
         ) : (
           <span class="cohort">8 weeks · ranges built by hand</span>

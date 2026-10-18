@@ -108,7 +108,7 @@ export function enrollmentClosedAt(env) {
 }
 
 export function waitlistCohort(env) {
-  return String(env.WAITLIST_COHORT || "cohort_2").slice(0, 40);
+  return String(env.WAITLIST_COHORT || "cohort_3").slice(0, 40);
 }
 
 export function isFoundingAccount(createdAtIso, env) {

@@ -14,6 +14,7 @@ import {
 import { urlQuizEmail } from "../auth/quizAuthHandoff";
 import { captureQuizSignupBounce } from "../auth/quizSignupBounce";
 import { PATHS } from "../routing";
+import { CONFIG } from "../config";
 
 const LAB_ADDON_PRICE = 349;
 const HAND_BUILT_RANGES =
@@ -209,10 +210,10 @@ export function JoinPage({ profileCreatedAt = null }) {
   const openBlurb = isFounding
     ? `Founding rate $${amount}. After checkout you’ll complete a short intake so Callie can build your macros.`
     : isEarly && amount != null
-      ? `You’re locking your spot. Early rate $${amount} for 8 weeks. ${HAND_BUILT_RANGES} After checkout you’ll complete a short intake.`
+      ? `You’re locking your spot. Early rate $${amount} for 8 weeks. This group starts ${CONFIG.COHORT_START}. ${HAND_BUILT_RANGES} After checkout you’ll complete a short intake.`
       : isFull && amount != null
-        ? `You’re locking your spot. Full rate $${amount} for 8 weeks. ${HAND_BUILT_RANGES} After checkout you’ll complete a short intake so Callie can build your macros.`
-        : `You’re locking your spot. ${HAND_BUILT_RANGES} After checkout you’ll complete a short intake so Callie can build your macros.`;
+        ? `You’re locking your spot. Full rate $${amount} for 8 weeks. This group starts ${CONFIG.COHORT_START}. ${HAND_BUILT_RANGES} After checkout you’ll complete a short intake so Callie can build your macros.`
+        : `You’re locking your spot. This group starts ${CONFIG.COHORT_START}. ${HAND_BUILT_RANGES} After checkout you’ll complete a short intake so Callie can build your macros.`;
 
   return (
     <Shell>

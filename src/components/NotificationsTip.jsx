@@ -30,7 +30,7 @@ function persistDismissedLocally() {
 }
 
 /**
- * Cohort 2 Today card: how to get lock-screen pings.
+ * Today card for every group after Founding: how to get lock-screen pings.
  * Hidden for Founding, after Got it, or once notifications are already on.
  */
 export function NotificationsTip({

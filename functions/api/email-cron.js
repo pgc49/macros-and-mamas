@@ -5,9 +5,9 @@
    Auth: Authorization: Bearer $CRON_SECRET  (Cloudflare secret)
    Or invoke via GitHub Actions schedule (no local CLI needed).
 
-   #1 Finish joining: unpaid, created ≥1h / ≥24h, plus one Aug 26 PT last note
+   #1 Finish joining: unpaid, created ≥1h / ≥24h, plus one Nov 15 PT last note
    #3 Intake reminder: paid, no macros, paid_at ≥24h / ≥72h (max two)
-   Track A quiz drip: marketing_leads with no profile, +2d / last (+6d or Aug 26 PT)
+   Track A quiz drip: marketing_leads with no profile, +2d / last (+6d or Nov 15 PT)
    Track A opening-week +1h: quiz_opening_week_1h (distinct from quiz_drip_2d)
    Track B finish-joining: unpaid profiles only — do not merge the tracks
    ================================================================== */

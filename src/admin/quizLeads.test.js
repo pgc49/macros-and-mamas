@@ -406,10 +406,12 @@ describe("enrichQuizLeads + filterQuizLeads", () => {
       "all",
       "2026-07",
       "2026-08",
+      "2026-11",
       "unassigned",
     ]);
     expect(listLeadCohorts([quizOnly]).find((o) => o.id === "2026-07").label).toBe("Founding");
     expect(listLeadCohorts([quizOnly]).find((o) => o.id === "2026-08").label).toBe("Cohort 2");
+    expect(listLeadCohorts([quizOnly]).find((o) => o.id === "2026-11").label).toBe("Cohort 3");
   });
 });
 

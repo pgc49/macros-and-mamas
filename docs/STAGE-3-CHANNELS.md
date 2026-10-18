@@ -30,7 +30,7 @@ Migrations `047`–`051` (`channels`, stamp founding, prompts seed, harden, revo
 
 ## Hooks
 
-- Paid checkout → join open enrollment cohort if unlabeled (`OPEN_COHORT_LABEL` or `2026-08`)
+- Paid checkout → join open enrollment cohort if unlabeled (`OPEN_COHORT_LABEL`, or the last calendar row — currently `2026-11`)
 - Callie approve (`/api/macros-approved`) → `handleActivationCohort`
 - Push: `/api/channel-notify` respects mute / highlights / all
 - Prompts: `/api/channel-prompts-cron` + `CRON_SECRET`

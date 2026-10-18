@@ -6,8 +6,8 @@ import { escapeHtml, APP_URL } from "./emailLayout.mjs";
 
 export const EARLY_PRICE = 249;
 export const FULL_PRICE = 299;
-export const DOORS_CLOSE = "Aug 27";
-export const COHORT_SHORT = "Aug 31";
+export const DOORS_CLOSE = "November 15";
+export const COHORT_SHORT = "November 2";
 /** Klarna pay-in-4 on the $249 session. Do not attach "interest-free" to monthly. */
 export const PAY_IN_4_AMOUNT = "62.25";
 export const SPLIT_AT_CHECKOUT =

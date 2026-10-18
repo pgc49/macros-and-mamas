@@ -28,6 +28,11 @@ describe("NotificationsTip", () => {
     expect(view.getByRole("button", { name: "Turn on notifications" })).toBeTruthy();
   });
 
+  it("shows instructions for Cohort 3", () => {
+    const view = render(<NotificationsTip cohortLabel="2026-11" />);
+    expect(view.getByRole("heading", { name: "Turn on notifications" })).toBeTruthy();
+  });
+
   it("does not show for Founding", () => {
     const view = render(<NotificationsTip cohortLabel="2026-07" />);
     expect(view.queryByText("Turn on notifications")).toBeNull();

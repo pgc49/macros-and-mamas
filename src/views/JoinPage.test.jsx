@@ -54,6 +54,7 @@ describe("JoinPage public copy", () => {
     expect(text).not.toMatch(/enrollment is open/i);
     expect(text).not.toMatch(/8 weeks start when/i);
     expect(text).toMatch(/Callie builds every set of ranges by hand, in the order mamas lock in/);
+    expect(text).toMatch(/This group starts Monday, November 2/);
     expect(text).toMatch(/\$249/);
   });
 });

@@ -38,6 +38,7 @@ serve(async (req) => {
             <li><b>Take your before photos.</b> Same outfit, same spot, same lighting. Front, side, and back. Your face doesn't need to be in them. You will not believe how much you'll want these in eight weeks!</li>
             <li><b>Weigh yourself tomorrow morning</b>, first thing, before coffee, before your morning hydration, and right after you pee! That's your starting point, and it's the last time that number gets to feel like a verdict. From here on, it's just data.</li>
           </ol>
+          <p><b>Put Macros and Mamas on your home screen.</b> Open macrosandmamas.com in Safari (iPhone) or Chrome (Android), tap Share, then Add to Home Screen. You'll get an icon on your phone. Tap it anytime and you're right back here. No App Store needed. The same steps show up on Today once your ranges are approved.</p>
           <p>That's it. No prep, no pantry purge, no guilt about whatever you ate today.</p>
           <p>I'll see you inside, mama! We're going to do this together! I am truly so honored to spend the next 8 weeks with you!</p>
           <p>Blessings,<br/>Callie</p>
