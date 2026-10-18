@@ -98,15 +98,20 @@ export async function ensureChannelMembership(env, {
 }
 
 /**
- * Pay-time / approve-time stamp: keep an existing label, else use paid_at.
- * Never force-open the current enrollment cohort — a late-activated Founding
- * mama must stay on her payment window.
- * @param {{ cohort_label?: string|null, paid_at?: string|Date|null }} profile
+ * Pay-time stamp.
+ * A first payment from someone who has not paid and is not complimentary
+ * uses paid_at. A leftover signup label (Founding or August) does not keep
+ * her out of the group that is open when she pays. Complimentary accounts
+ * keep the label already on the profile. A webhook replay keeps an existing
+ * label so a mama who already paid stays on that cohort.
+ * @param {{ cohort_label?: string|null, paid_at?: string|Date|null, comp?: boolean }} profile
  * @param {string|Date} [now]
+ * @param {{ firstPayment?: boolean }} [opts]
  */
-export function cohortAssignOptsForPaidProfile(profile, now = new Date()) {
+export function cohortAssignOptsForPaidProfile(profile, now = new Date(), opts = {}) {
   const existing = String(profile?.cohort_label || "").trim();
-  if (existing) return { existingLabel: existing };
+  if (profile?.comp && existing) return { existingLabel: existing };
+  if (opts.firstPayment !== true && existing) return { existingLabel: existing };
   return { at: profile?.paid_at || now };
 }
 
@@ -146,17 +151,19 @@ export async function assignCohortAndJoinChannel(env, userId, opts = {}) {
   return { label, conversationId: conv.id, membership };
 }
 
-/** Paid checkout — stamp from paid_at window if unlabeled. */
-export async function handlePaidEnrollmentChannel(env, userId) {
+/** Paid checkout — first payment uses paid_at, ignoring a stale signup label. */
+export async function handlePaidEnrollmentChannel(env, userId, opts = {}) {
   const rows = await sbFetch(
     env,
-    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,cohort_label,paid_at&limit=1`,
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,cohort_label,paid_at,comp&limit=1`,
     { method: "GET" },
   );
   const profile = Array.isArray(rows) ? rows[0] : null;
-  const opts = cohortAssignOptsForPaidProfile(profile);
-  if (opts.existingLabel) {
-    const conv = await getCohortConversation(env, opts.existingLabel);
+  const assignOpts = cohortAssignOptsForPaidProfile(profile, new Date(), {
+    firstPayment: opts.firstPayment === true,
+  });
+  if (assignOpts.existingLabel) {
+    const conv = await getCohortConversation(env, assignOpts.existingLabel);
     if (conv) {
       await ensureChannelMembership(env, {
         conversationId: conv.id,
@@ -164,9 +171,9 @@ export async function handlePaidEnrollmentChannel(env, userId) {
         notifyLevel: "highlights",
       });
     }
-    return { label: opts.existingLabel, existed: true };
+    return { label: assignOpts.existingLabel, existed: true };
   }
-  return assignCohortAndJoinChannel(env, userId, { at: opts.at });
+  return assignCohortAndJoinChannel(env, userId, { at: assignOpts.at });
 }
 
 /** Callie activation — stamp from calendar if not already labeled. */
