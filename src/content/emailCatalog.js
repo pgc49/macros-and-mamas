@@ -362,7 +362,7 @@ Callie
     number: "N",
     name: "November group open",
     status: "manual",
-    trigger: "Manual admin blast from Overview → Funnel. Unpaid quiz leads plus accounts that signed up and have not paid. Skips paid, comp, refunded, unsubscribed, QA plus-addresses, and pregnancy / plant-based leads with no account. Idempotent via email_events (cohort_3_open).",
+    trigger: "One-shot from the hourly email cron through 9:00 AM PT on October 20, 2026, plus the Overview → Funnel button. Every unpaid quiz lead (every segment, including pregnancy and plant-based) and every account that signed up and has not paid. Skips paid, comp, refunded, unsubscribed, and QA plus-addresses. Idempotent via email_events (cohort_3_open). The regular drips still skip pregnancy and plant-based.",
     subject: "[First name], a new group starts November 2",
     audience: "Lead + unpaid signup",
     cta: "Lock my spot · Finish checkout if they already have an account",
