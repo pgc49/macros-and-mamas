@@ -106,6 +106,11 @@ describe("runCohortOpenAnnounce", () => {
       now: new Date("2026-10-18T21:00:00.000Z"),
     });
 
+    const leadUrl = fetchMock.mock.calls
+      .map(([url]) => String(url))
+      .find((href) => href.includes("/marketing_leads"));
+    expect(leadUrl).toBeTruthy();
+    expect(leadUrl).not.toContain("profile_id");
     expect(result.open).toBe(true);
     expect(result.candidates).toBe(4);
     expect(result.sent).toBe(4);

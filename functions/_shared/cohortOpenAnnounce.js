@@ -250,7 +250,7 @@ export async function runCohortOpenAnnounce(env, { now = new Date(), force = fal
   let events;
   try {
     [leads, profiles, events] = await Promise.all([
-      sbGet(env, "/rest/v1/marketing_leads?select=id,email,first_name,segment,created_at,profile_id&order=created_at.desc&limit=5000"),
+      sbGet(env, "/rest/v1/marketing_leads?select=id,email,first_name,segment,created_at&order=created_at.desc&limit=5000"),
       sbGet(env, "/rest/v1/profiles?select=id,email,name,paid,comp,refunded,role&limit=5000"),
       sbGet(
         env,
