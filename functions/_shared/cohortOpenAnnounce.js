@@ -1,12 +1,11 @@
 /**
  * Manual announcement: next group starts November 2.
  * Quiz leads who have not paid, plus accounts that signed up and have not paid.
- * Skips paid, comp, refunded, admin, QA plus-addresses, unsubscribed,
- * and pregnancy / plant-based leads who never created an account.
+ * Skips paid, comp, refunded, admin, QA plus-addresses, and unsubscribed.
+ * Every quiz segment is included, including pregnancy and plant-based.
  */
 import { FROM_CALLIE, renderEmail } from "./emailLayout.mjs";
 import { quizJoinUrl } from "./rangesEmail.mjs";
-import { QUIZ_NO_SALES_SEGMENTS } from "./quizDrip.mjs";
 import {
   firstNameFromLead,
   latestLeadByEmail,
@@ -16,6 +15,7 @@ import {
 } from "./unpaidLeadsBlast.js";
 import {
   buildUnsubscribeUrl,
+  fetchUnsubscribedEmails,
   quizMailHeaders,
 } from "./emailUnsubscribe.mjs";
 import { logEmailEvent } from "./emailEvents.mjs";
@@ -26,10 +26,6 @@ export const STORIES_URL = "https://www.macrosandmamas.com/#stories";
 export function isQaBlastEmail(email) {
   const local = normalizeLeadEmail(email).split("@")[0] || "";
   return local.startsWith("pgchammas+");
-}
-
-export function isSalesEligibleSegment(segment) {
-  return !QUIZ_NO_SALES_SEGMENTS.has(String(segment || ""));
 }
 
 /** Emails that must not get a sales note: paid, comp, refunded, admin. */
@@ -52,9 +48,17 @@ function unpaidProfile(profile) {
 }
 
 /**
- * One row per address. Unpaid accounts are included even if their quiz
- * segment was pregnancy or plant-based, because they already started signup.
+ * One row per address. Every quiz lead who has not paid is included,
+ * plus accounts that signed up and have not paid.
+ * Automatic sends stop after 9:00 AM PT on Monday, October 20, 2026.
  */
+export const COHORT_OPEN_ANNOUNCE_UNTIL = "2026-10-20T16:00:00.000Z";
+
+export function cohortOpenAnnounceOpen(now = new Date()) {
+  const t = now instanceof Date ? now.getTime() : Date.parse(now);
+  return Number.isFinite(t) && t <= Date.parse(COHORT_OPEN_ANNOUNCE_UNTIL);
+}
+
 export function selectCohortOpenRecipients({
   leads,
   profiles,
@@ -64,7 +68,6 @@ export function selectCohortOpenRecipients({
   const skipped = {
     paid: 0,
     unsubscribed: 0,
-    not_sales: 0,
     already_sent: 0,
     qa: 0,
   };
@@ -73,7 +76,7 @@ export function selectCohortOpenRecipients({
   const seen = new Set();
   const recipients = [];
 
-  const take = (email, row, { fromProfile, segment }) => {
+  const take = (email, row, { fromProfile }) => {
     if (!email || seen.has(email)) return;
     if (excluded.has(email)) {
       skipped.paid += 1;
@@ -87,11 +90,6 @@ export function selectCohortOpenRecipients({
     }
     if (unsubscribed.has(email)) {
       skipped.unsubscribed += 1;
-      seen.add(email);
-      return;
-    }
-    if (!fromProfile && !isSalesEligibleSegment(segment)) {
-      skipped.not_sales += 1;
       seen.add(email);
       return;
     }
@@ -115,10 +113,10 @@ export function selectCohortOpenRecipients({
 
   for (const profile of profiles || []) {
     if (!unpaidProfile(profile)) continue;
-    take(normalizeLeadEmail(profile.email), profile, { fromProfile: true, segment: "" });
+    take(normalizeLeadEmail(profile.email), profile, { fromProfile: true });
   }
   for (const [email, lead] of latestLeadByEmail(leads)) {
-    take(email, lead, { fromProfile: false, segment: lead?.segment || "" });
+    take(email, lead, { fromProfile: false });
   }
 
   return { recipients, skipped };
@@ -222,4 +220,83 @@ export async function sendCohortOpenEmail(env, { email, firstName, profileId, le
     console.error("cohort open announce Resend error", e);
     return { ok: false, error: String(e?.message || e) };
   }
+}
+
+const SEND_CHUNK = 5;
+
+/**
+ * One-shot send for the hourly cron. Stops after COHORT_OPEN_ANNOUNCE_UNTIL.
+ * Pass force to send from the admin button after that window.
+ * Idempotent: an address with email_events status=sent for this type is skipped.
+ */
+export async function runCohortOpenAnnounce(env, { now = new Date(), force = false } = {}) {
+  const closed = {
+    open: false,
+    sent: 0,
+    errors: 0,
+    candidates: 0,
+    skipped: { paid: 0, unsubscribed: 0, already_sent: 0, qa: 0 },
+  };
+  if (!force && !cohortOpenAnnounceOpen(now)) return closed;
+
+  const unsub = await fetchUnsubscribedEmails(env);
+  if (!unsub.ok) {
+    console.error("cohort open announce skipped: unsubscribe list unavailable");
+    return { ...closed, open: true, errors: 1 };
+  }
+
+  let leads;
+  let profiles;
+  let events;
+  try {
+    [leads, profiles, events] = await Promise.all([
+      sbGet(env, "/rest/v1/marketing_leads?select=id,email,first_name,segment,created_at,profile_id&order=created_at.desc&limit=5000"),
+      sbGet(env, "/rest/v1/profiles?select=id,email,name,paid,comp,refunded,role&limit=5000"),
+      sbGet(
+        env,
+        `/rest/v1/email_events?email_type=eq.${encodeURIComponent(COHORT_OPEN_ANNOUNCE_TYPE)}&status=eq.sent&select=to_email&limit=5000`,
+      ),
+    ]);
+  } catch (e) {
+    console.error("cohort open announce load failed", e);
+    return { ...closed, open: true, errors: 1 };
+  }
+
+  const alreadySent = new Set(
+    (events || []).map((row) => normalizeLeadEmail(row.to_email)).filter(Boolean),
+  );
+  const { recipients, skipped } = selectCohortOpenRecipients({
+    leads,
+    profiles,
+    unsubscribed: unsub.emails,
+    alreadySent,
+  });
+
+  let sent = 0;
+  let errors = 0;
+  for (let i = 0; i < recipients.length; i += SEND_CHUNK) {
+    const chunk = recipients.slice(i, i + SEND_CHUNK);
+    const results = await Promise.all(chunk.map((row) => sendCohortOpenEmail(env, row)));
+    for (const result of results) {
+      if (result?.ok) sent += 1;
+      else errors += 1;
+    }
+  }
+
+  return { open: true, sent, errors, candidates: recipients.length, skipped };
+}
+
+async function sbGet(env, path) {
+  const base = (env?.SUPABASE_URL || env?.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env?.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!base || !key) throw new Error("missing supabase config");
+  const resp = await fetch(`${base}${path}`, {
+    headers: { apikey: key, authorization: `Bearer ${key}` },
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`supabase ${resp.status}: ${text.slice(0, 200)}`);
+  }
+  const data = await resp.json().catch(() => []);
+  return Array.isArray(data) ? data : [];
 }

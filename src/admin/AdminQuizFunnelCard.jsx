@@ -319,9 +319,9 @@ export function AdminQuizFunnelCard({ onOpenLeads }) {
         <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
           <div style={{ fontFamily: FD, fontSize: 16, marginBottom: 8 }}>November 2 group</div>
           <p style={{ fontSize: 13.5, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 10px" }}>
-            Unpaid quiz leads and accounts that signed up and have not paid.
-            Skips paid, complimentary, refunded, unsubscribed, and QA addresses.
-            Pregnancy and plant-based leads with no account stay off this send.
+            Every unpaid quiz lead, including pregnancy and plant-based, plus accounts
+            that signed up and have not paid. Skips paid, complimentary, refunded,
+            unsubscribed, and QA addresses.
           </p>
           <pre
             style={{

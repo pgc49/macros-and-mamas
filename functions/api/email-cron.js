@@ -10,6 +10,7 @@
    Track A quiz drip: marketing_leads with no profile, +2d / last (+6d or Nov 15 PT)
    Track A opening-week +1h: quiz_opening_week_1h (distinct from quiz_drip_2d)
    Track B finish-joining: unpaid profiles only — do not merge the tracks
+   November group note: one-shot cohort_3_open through 9:00 AM PT Oct 20, 2026
    ================================================================== */
 
 import {
@@ -35,6 +36,7 @@ import { emailHasQuizUnlock } from "../_shared/pricing.js";
 import { sendQuizDripEmail } from "../_shared/quizDripSend.js";
 import { QUIZ_OPENING_WEEK_1H } from "../_shared/quizOpeningWeek1h.mjs";
 import { runQuizOpeningWeek1h } from "../_shared/quizOpeningWeek1hRun.js";
+import { runCohortOpenAnnounce } from "../_shared/cohortOpenAnnounce.js";
 
 export { runQuizOpeningWeek1h };
 
@@ -59,6 +61,7 @@ export async function onRequestPost({ request, env }) {
       quiz_drip_7d: 0,
       quiz_pregnancy_note: 0,
       quiz_opening_week_1h: 0,
+      cohort_3_open: 0,
       skipped: 0,
       errors: 0,
     };
@@ -166,6 +169,15 @@ export async function onRequestPost({ request, env }) {
     sent.quiz_pregnancy_note += drip.quiz_pregnancy_note;
     sent.skipped += drip.skipped;
     sent.errors += drip.errors;
+
+    try {
+      const announce = await runCohortOpenAnnounce(env, { now: new Date(now) });
+      sent.cohort_3_open += announce.sent || 0;
+      sent.errors += announce.errors || 0;
+    } catch (e) {
+      console.error("email-cron cohort open announce failed", e);
+      sent.errors += 1;
+    }
 
     return json({ ok: true, sent }, 200);
   } catch (e) {

@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   COHORT_OPEN_ANNOUNCE_TYPE,
   buildCohortOpenPayload,
+  cohortOpenAnnounceOpen,
   cohortOpenPreviewText,
   cohortOpenSubject,
+  runCohortOpenAnnounce,
   selectCohortOpenRecipients,
 } from "./cohortOpenAnnounce.js";
 
@@ -37,13 +39,16 @@ describe("selectCohortOpenRecipients", () => {
     });
     expect(recipients.map((row) => row.email).sort()).toEqual([
       "amy@example.com",
+      "plant@example.com",
+      "preg@example.com",
       "summer@example.com",
     ]);
     const summer = recipients.find((row) => row.email === "summer@example.com");
     expect(summer.hasAccount).toBe(true);
     expect(summer.firstName).toBe("Summer");
+    const preg = recipients.find((row) => row.email === "preg@example.com");
+    expect(preg.hasAccount).toBe(false);
     expect(skipped.paid).toBe(1);
-    expect(skipped.not_sales).toBe(2);
     expect(skipped.qa).toBe(2);
     expect(skipped.unsubscribed).toBe(1);
   });
@@ -57,6 +62,93 @@ describe("selectCohortOpenRecipients", () => {
       ],
     });
     expect(recipients).toEqual([]);
+  });
+});
+
+describe("cohortOpenAnnounceOpen", () => {
+  it("stays open through 9:00 AM PT on October 20 and then stops", () => {
+    expect(cohortOpenAnnounceOpen(new Date("2026-10-18T20:00:00.000Z"))).toBe(true);
+    expect(cohortOpenAnnounceOpen(new Date("2026-10-20T16:00:00.000Z"))).toBe(true);
+    expect(cohortOpenAnnounceOpen(new Date("2026-10-20T16:00:01.000Z"))).toBe(false);
+  });
+});
+
+describe("runCohortOpenAnnounce", () => {
+  const env = {
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "service-secret",
+    RESEND_API_KEY: "re_test",
+  };
+
+  function json(rows, status = 200) {
+    return new Response(JSON.stringify(rows), { status });
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("sends to every unpaid quiz segment and unpaid account while the window is open", async () => {
+    const fetchMock = vi.fn(async (url, init) => {
+      const href = String(url);
+      if (href.includes("/email_unsubscribes")) return json([{ email: "unsub@example.com" }]);
+      if (href.includes("/marketing_leads")) return json(leads);
+      if (href.includes("/profiles")) return json(profiles);
+      if (href.includes("/email_events") && init?.method === "POST") return new Response(null, { status: 201 });
+      if (href.includes("/email_events")) return json([]);
+      if (href.includes("api.resend.com")) return json({ id: "re_1" });
+      return json([]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runCohortOpenAnnounce(env, {
+      now: new Date("2026-10-18T21:00:00.000Z"),
+    });
+
+    expect(result.open).toBe(true);
+    expect(result.candidates).toBe(4);
+    expect(result.sent).toBe(4);
+    expect(result.errors).toBe(0);
+    const sentTo = fetchMock.mock.calls
+      .filter(([url]) => String(url).includes("api.resend.com"))
+      .map(([, init]) => JSON.parse(init.body).to[0])
+      .sort();
+    expect(sentTo).toEqual([
+      "amy@example.com",
+      "plant@example.com",
+      "preg@example.com",
+      "summer@example.com",
+    ]);
+    const summerBody = fetchMock.mock.calls
+      .filter(([url]) => String(url).includes("api.resend.com"))
+      .map(([, init]) => JSON.parse(init.body))
+      .find((body) => body.to[0] === "summer@example.com");
+    expect(summerBody.html).toMatch(/Finish checkout/);
+    expect(summerBody.html).toMatch(/\/api\/unsubscribe\?/);
+  });
+
+  it("does not send after the window, and does not send when the unsubscribe list is down", async () => {
+    const fetchMock = vi.fn(async () => json([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const closed = await runCohortOpenAnnounce(env, {
+      now: new Date("2026-10-21T00:00:00.000Z"),
+    });
+    expect(closed.open).toBe(false);
+    expect(closed.sent).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fetchMock.mockImplementation(async (url) => {
+      if (String(url).includes("/email_unsubscribes")) return json([], 500);
+      return json([]);
+    });
+    const blocked = await runCohortOpenAnnounce(env, {
+      now: new Date("2026-10-18T21:00:00.000Z"),
+    });
+    expect(blocked.open).toBe(true);
+    expect(blocked.sent).toBe(0);
+    expect(blocked.errors).toBe(1);
   });
 });
 
