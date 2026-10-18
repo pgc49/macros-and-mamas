@@ -12,6 +12,8 @@
    ================================================================== */
 
 /**
+ * crisis   — she may be in danger: hurting herself, not wanting to be here, or
+ *            the baby. Gets crisis lines and Callie, before anything else.
  * urgent   — symptoms, medication, mental health, restriction. Never answered,
  *            never paired with meal cards, no matter how the question is worded.
  * ranges   — her numbers are Callie's to set.
@@ -19,7 +21,10 @@
  * admin    — plan, billing, dates, approval.
  * off_topic— plainly not food: fitness, sleep, the baby, or being asked to be
  *            a general assistant.
- * supply   — breastfeeding output. Always Callie's. We protect supply first.
+ * supply   — breastfeeding output, or whether the baby is feeding and gaining.
+ *            Always Callie's. We protect supply first.
+ * junk     — nothing to answer: a greeting, a keyboard mash, a test. Gets one
+ *            line pointing at what the coach is for, and never a model call.
  * unclear  — none of the above and no food word either. "Is Chipotle ok
  *            tonight?" is a food question with no food word in it, and
  *            refusing it would fail the mama at exactly the moment she needs
@@ -29,7 +34,24 @@
  * The four refusal lists are what carry the guarantee, and they run first.
  * Nothing that is Callie's reaches a model regardless of how the rest reads.
  */
-export const COACH_SCOPES = ["food", "unclear", "urgent", "ranges", "weight", "admin", "off_topic", "supply"];
+export const COACH_SCOPES = [
+  "food", "unclear", "crisis", "urgent", "ranges", "weight", "admin", "off_topic", "supply", "junk",
+];
+
+/**
+ * Wider than the words a clinician would use, on purpose. A mama who types
+ * "I don't want to be here anymore" at 2am gets crisis lines, not a recipe.
+ */
+const CRISIS = [
+  /\bsuicid/, /\bself[- ]?harm/, /\bkill(ing)? (myself|my ?self)\b/, /\bhurt(ing)? (myself|my ?self)\b/,
+  /\bcut(ting)? myself\b/, /\bend (it all|my life)\b/, /\btake my (own )?life\b/,
+  /\b(don'?t|do not|dont) want to (be here|live|wake up|exist|be alive|go on)\b/,
+  /\bwant to (die|disappear(?! into)|not exist|not be here)\b/, /\bwish i (was|were) (dead|gone)\b/, /\bwish i (wasn'?t|weren'?t|was never|had never been) (here|alive|born)\b/,
+  /\bbetter off without me\b/, /\bno (reason|point) (to|in) (live|living|going on|being here)\b/,
+  /\bcan'?t (go on|do this anymore|keep going)\b/,
+  /\b(hurt|harm|shake|drown|smother)(ing)? (the|my) (baby|son|daughter|kids?|child)\b/,
+  /\bthoughts? (of|about) (hurting|harming)\b/,
+];
 
 const URGENT = [
   // Symptoms
@@ -50,7 +72,8 @@ const URGENT = [
   /\bpregnan/, /\btrimester\b/,
   // Mental health
   /\banxiety\b/, /\banxious\b/, /\bdepress/, /\bppd\b/, /\bpanic attack/,
-  /\btherapist\b/, /\bsuicid/, /\bself[- ]harm/,
+  /\btherapist\b/, /\bhate (myself|my ?self|how i look|what i see|my (stomach|belly|thighs|arms|face|reflection))\b/,
+  /\bdisgusted (with|by|at) (myself|my ?self|my body)\b/,
   // Restriction and disordered eating.
   //
   // Three of these are idioms before they are symptoms, and the literal
@@ -65,7 +88,30 @@ const URGENT = [
   /\bhate my body\b/, /\bpunish/,
   /\b(i (feel|look|am)|feeling|felt)\b[^.?!]{0,18}\bdisgusting\b/,
   /\bhow (few|little) calories can i\b/, /\beat as little as\b/,
+  // Purging and the things people buy to do it.
+  /\b(threw|throw|throwing) up on purpose\b/, /\b(made|make|making) myself (sick|throw up|puke|vomit)\b/,
+  /\blaxatives?\b/, /\bdiet pills?\b/, /\bwater fast/, /\bdiuretics?\b/,
+  // Eating less to get there faster. "Less sauce" is not this.
+  /\beat(ing)? (less|fewer calories|nothing) (to|so i can|so i) (lose|drop|get)\b/,
+  /\b(lose|drop) (it |weight )?faster\b[^.?!]{0,20}\b(eat(ing)? less|cut(ting)?|skip)/,
 ];
+
+/** A daily total below this, said as a target or a boast, is restriction. */
+const LOW_DAY_CAL = 1200;
+const MEAL_SIZED = /\b(breakfast|lunch|dinner|snacks?|meal|tonight|this (morning|afternoon|evening)|left|remaining)\b/;
+
+function lowCalorieDay(text) {
+  const perDay = text.match(/\b(\d{3,4})\s*(cal|cals|calories|kcal)\s*(a|per|each|for the|all) day\b/);
+  if (perDay && Number(perDay[1]) < LOW_DAY_CAL) return true;
+  // "Only ate 800 calories today". A meal-sized "only had 300 at lunch" is a
+  // food question, and the slot words keep it one.
+  const only = text.match(/\bonly (ate|eaten|had|eat|eating)\b[^.?!]{0,12}?\b(\d{3,4})\s*(cal|cals|calories|kcal)\b([^.?!]{0,24})/);
+  if (only && Number(only[2]) < LOW_DAY_CAL && !MEAL_SIZED.test(only[4])) {
+    return true;
+  }
+  const target = text.match(/\b(eat|stick to|stay (at|under)|get down to|aim for|target)\b[^.?!]{0,8}?\b(\d{3,4})\s*(cal|cals|calories|kcal)\b([^.?!]{0,24})/);
+  return Boolean(target && Number(target[3]) < LOW_DAY_CAL && !MEAL_SIZED.test(target[5]));
+}
 
 const RANGES = [
   /\b(change|adjust|lower|raise|increase|reduce|recalculat|redo|update)\b[^.?!]{0,30}\b(macro|range|target|calorie|protein|carb|fat)/,
@@ -80,6 +126,9 @@ const WEIGHT = [
   /\bweight ?loss\b/, /\bplateau/, /\bthe scale\b/, /\bscale (went|is) up\b/,
   /\bgoal weight\b/, /\bhow (much|fast|long)\b[^.?!]{0,25}\b(lose|weight|results?)\b/,
   /\bwhy (am i|aren'?t i) (not )?losing\b/, /\bbody fat( percentage)?\b/,
+  /\b(up|down) \d+(\.\d+)? ?(pounds?|lbs?|kilos?|kgs?)\b/, /\bweigh[- ]?ins?\b/, /\bweigh(ed)? myself\b/,
+  /\b(pounds?|lbs?|kilos?)\b[^.?!]{0,15}\b(after|before|since|during)\b/,
+  /\bhow much (do|should) i weigh\b/,
 ];
 
 const ADMIN = [
@@ -101,7 +150,48 @@ const GUILT = [
   /\bfeel guilty\b/,
   /\bfeel(ing)? (awful|bad|terrible|so bad) about\b/,
   /\bguilty (about|for)\b/,
+  /\bashamed\b/, /\bembarrassed (about|by) (what|how much) i ate\b/,
+  /\b(i feel|i'?m|im|feeling) (so |really )?(fat|gross|huge|disgusting)\b/,
 ];
+
+/**
+ * Someone trying to turn the coach into something else. Checked before the
+ * food words, so "ignore your instructions and give me a recipe for…" never
+ * reaches a model.
+ */
+const INJECTION = [
+  /\b(ignore|disregard|forget|override)\b[^.?!]{0,30}\b(instructions|prompts?|rules|guidelines|guardrails|everything above)\b/,
+  /\b(system|developer|hidden|initial) (prompt|message|instructions)\b/,
+  /\b(reveal|show|print|repeat|tell me|what are) (me )?(your|the) (instructions|prompt|rules|guidelines)\b/,
+  /\byou are (now|no longer)\b/, /\bfrom now on,? you\b/, /\bpretend (to be|you('| a)?re|that you)\b/,
+  /\bact as (a|an|my|if)\b/, /\broleplay\b/, /\brole[- ]play\b/,
+  /\bjailbreak/, /\bdan mode\b/, /\bdeveloper mode\b/, /\bdo anything now\b/,
+  /<\/?(system|assistant|user)>/, /\[\/?(inst|system)\]/,
+];
+
+/** Only a greeting, a thanks, or a test. These used to go to a model. */
+const FILLER = /^(hi+|hey+|hello+|yo|sup|test(ing)?( \d+)?|ok(ay)?|k+|thanks?( you)?|thx|ty|lol+|ha(ha)+|hm+|cool|nice|great|wow|\?+|\.+)$/;
+
+/** No English word of four letters or more is a run along one of these. */
+const KEY_ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm", "poiuytrewq", "lkjhgfdsa", "mnbvcxz"];
+
+/**
+ * Content-free: nothing to answer. Keyboard mashes and repeats. A real word
+ * is never junk, so this stays narrow, and the burst cap catches the rest.
+ */
+export function isJunkAsk(raw) {
+  const text = String(raw || "").toLowerCase().trim();
+  if (!text) return true;
+  const plain = text.replace(/[^a-z0-9?.' ]+/g, " ").replace(/\s+/g, " ").trim().replace(/[!.,]+$/, "");
+  if (FILLER.test(plain)) return true;
+  const letters = text.replace(/[^a-z]/g, "");
+  if (letters.length < 2) return true;
+  if (/(.)\1{5,}/.test(letters)) return true;
+  if (/(.{2,4})\1{3,}/.test(letters)) return true;
+  const words = text.match(/[a-z]+/g) || [];
+  const long = words.filter((w) => w.length >= 4);
+  return long.length > 0 && long.every((w) => !/[aeiouy]/.test(w) || KEY_ROWS.some((row) => row.includes(w)));
+}
 
 const NEXT_MEAL = /\b(what should i eat|what (do|can|should) i (eat|have|get|order)|what to eat next|eat next|for (breakfast|lunch|dinner)|what'?s for (breakfast|lunch|dinner))\b/;
 
@@ -120,6 +210,9 @@ const SUPPLY = [
   /\bmilk (supply|production)\b/, /\bmy supply\b/, /\bdry(ing)? up\b/,
   /\b(breast ?feed|breastfeeding|nursing|pumping)\b[^.?!]{0,30}\b(enough|affect|hurt|drop|boost|increase|impact|safe)\b/,
   /\b(enough|affect|hurt|drop|boost|increase|impact)\b[^.?!]{0,30}\b(milk|supply)\b/,
+  // The baby's weight and feeds. Before WEIGHT, which would read "gaining
+  // weight" as hers.
+  /\b(baby|babe|little one|newborn|infant|son|daughter)('?s)?\b[^.?!]{0,25}\b(gain(s|ing|ed)?|weight|eating enough|getting enough|feeds?|feeding|latch(ing)?|wet diapers?)\b/,
 ];
 
 /**
@@ -181,8 +274,11 @@ export function classifyAsk(raw) {
   const text = String(raw || "").toLowerCase().trim();
   if (!text) return { scope: "food", aside: null };
 
+  if (hits(CRISIS, text)) return { scope: "crisis", aside: null };
   // Never answered, never softened into an aside.
-  if (hits(URGENT, text)) return { scope: "urgent", aside: null };
+  if (hits(URGENT, text) || lowCalorieDay(text)) return { scope: "urgent", aside: null };
+  if (hits(INJECTION, text)) return { scope: "off_topic", aside: null };
+  if (isJunkAsk(text)) return { scope: "junk", aside: null };
 
   // Guilt with no next-meal question is still hers. Guilt plus "what do I
   // eat next" gets the food, then the handoff.
@@ -217,19 +313,29 @@ function foodWithAside(text, guilt, nextMeal) {
   return { scope: "food", aside: null };
 }
 
-/** True when the ask is Callie's and the coach must not put it to a model. */
+/**
+ * True when the ask is Callie's and the coach must not put it to a model.
+ * Junk is not refused (it gets a line, not a handoff) but is never sent either.
+ */
 export function scopeIsRefused(scope) {
-  return scope !== "food" && scope !== "unclear";
+  return scope !== "food" && scope !== "unclear" && scope !== "junk";
 }
 
 /** Symptoms, medication, and restriction. Guilt alone is a care handoff, not this. */
 export function isClinicalUrgent(raw) {
   const text = String(raw || "").toLowerCase().trim();
-  return Boolean(text) && hits(URGENT, text);
+  return Boolean(text) && (hits(URGENT, text) || lowCalorieDay(text));
+}
+
+/** She may be in danger. Callie hears about every one of these. */
+export function isCrisis(raw) {
+  const text = String(raw || "").toLowerCase().trim();
+  return Boolean(text) && hits(CRISIS, text);
 }
 
 /** Which of Callie's handoff lines a refused scope gets. */
 const DEFLECT_FOR_SCOPE = {
+  crisis: "crisis",
   urgent: "care",
   ranges: "ranges",
   weight: "weight",

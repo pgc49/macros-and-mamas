@@ -2,13 +2,13 @@
    An escalate lands on Callie's card as one factual line.
 
    Ordinary supply, care, and off-scope refusals stay in coach_messages.
-   Only a stuck repeat (the same pain point a third time) or a clinical
-   urgent ask is appended. client_summaries is one row per mama per day.
+   Only a crisis, a stuck repeat (the same pain point a third time), or a
+   clinical urgent ask is appended. client_summaries is one row per mama per day.
    The line is added to whatever summary is already there. It never
    replaces that summary, and a later refresh keeps the line.
    ================================================================== */
 
-import { isClinicalUrgent } from "./coachGuardrails.js";
+import { isClinicalUrgent, isCrisis } from "./coachGuardrails.js";
 import { localCoachTeach } from "../../src/utils/coachTeach.js";
 import { COACH_CLOCK_TZ, wallClockParts } from "../../src/utils/mealSlots.js";
 
@@ -16,6 +16,7 @@ import { COACH_CLOCK_TZ, wallClockParts } from "../../src/utils/mealSlots.js";
 const STUCK_TOPICS = new Set(["neverSkip", "fasting"]);
 
 const DOORS = {
+  crisis: "crisis",
   urgent: "medical",
   medical: "medical",
   stuck: "stuck",
@@ -34,7 +35,7 @@ export function isLoggingRefusal(text) {
 }
 
 /**
- * Stuck or medical, or nothing. Supply, care, scale, ranges, admin, and
+ * Crisis, stuck, or medical, or nothing. Supply, care, scale, ranges, admin, and
  * off-scope are mama-facing refusals. They are not a Callie brief.
  */
 export function escalateDoor(asked, { escalate = null, scope = null } = {}) {
@@ -44,6 +45,9 @@ export function escalateDoor(asked, { escalate = null, scope = null } = {}) {
     const teach = localCoachTeach(question);
     return teach && STUCK_TOPICS.has(teach.topic) ? "stuck" : null;
   }
+  // She may be in danger. The model can say so too, after the phrase lists
+  // missed it, so its word is enough here.
+  if (scope === "crisis" || isCrisis(question)) return "crisis";
   if (isLoggingRefusal(question)) return null;
   if (scope === "urgent" || scope === "medical" || isClinicalUrgent(question)) {
     return isClinicalUrgent(question) ? "medical" : null;

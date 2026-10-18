@@ -16,6 +16,15 @@ afterEach(() => {
 });
 
 describe("a refusal line is factual", () => {
+  it("names a crisis, from her words or from the model", () => {
+    expect(refusalDoor("crisis")).toBe("crisis");
+    expect(escalateDoor("I don't want to be here anymore", { scope: "crisis" })).toBe("crisis");
+    expect(escalateDoor("I want to hurt myself")).toBe("crisis");
+    expect(escalateDoor("everything feels pointless", { scope: "crisis" })).toBe("crisis");
+    expect(escalateDoor("I made myself throw up", { scope: "urgent" })).toBe("medical");
+    expect(coachRefusalLine("I want to hurt myself", "crisis")).toBe("Coach refused (crisis): I want to hurt myself");
+  });
+
   it("names only a stuck or medical escalate", () => {
     expect(refusalDoor("urgent")).toBe("medical");
     expect(refusalDoor("stuck")).toBe("stuck");

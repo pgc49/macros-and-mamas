@@ -44,7 +44,7 @@ const MEAL_SCHEMA = `{
 }`;
 
 const REPLY_SCHEMA = `{
-  "scope": "food" | "callie",
+  "scope": "food" | "callie" | "crisis",
   "reply": "one or two short sentences",
   "meals": [ ${MEAL_SCHEMA} ]
 }`;
@@ -232,6 +232,9 @@ const SHARED_RULES = `## Rules
    to build from the real menu.
 9. If the question turns out not to be about food and her ranges, set scope to "callie", leave
    meals empty, and let the app do the handoff — do not answer it yourself.
+   If she says anything about hurting herself, not wanting to be here, harming her baby,
+   or not feeling safe, set scope to "crisis", leave reply and meals empty. The app
+   shows crisis lines and Callie. Do not counsel her yourself.
 10. Return ONLY JSON.`;
 
 export function buildCoachAskPrompt({ profile, macros = null, budget, slot, question, customMeals = [], recentNames = [], day = null }) {
