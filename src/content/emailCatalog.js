@@ -358,6 +358,30 @@ Callie
 (First name from the quiz. Reply anytime. Unsubscribe in the footer. No money-back promise. Terms still say purchases are final except eligibility declines.)`,
   },
   {
+    id: "cohort_3_open",
+    number: "N",
+    name: "November group open",
+    status: "manual",
+    trigger: "Manual admin blast from Overview → Funnel. Unpaid quiz leads plus accounts that signed up and have not paid. Skips paid, comp, refunded, unsubscribed, QA plus-addresses, and pregnancy / plant-based leads with no account. Idempotent via email_events (cohort_3_open).",
+    subject: "[First name], a new group starts November 2",
+    audience: "Lead + unpaid signup",
+    cta: "Lock my spot · Finish checkout if they already have an account",
+    bodyPreview: `Hi [First name],
+
+I'm opening the next Macros and Mamas group. We start Monday, November 2. If you join in the first weeks of November, you're still in.
+
+The founding group has finished. Those mamas came in for a health reset and someone in their corner. You can read some of their stories.
+
+If you already finished the quiz, your rate is still $249, $50 off the $299 full rate.
+
+[Lock my spot]
+
+With love,
+Callie
+
+(Account-unpaid CTA is Finish checkout. Reply anytime. Unsubscribe in the footer. Stories link to /#stories. Does not say nearly 80 graduated.)`,
+  },
+  {
     id: "quiz_pregnancy_note",
     number: "QP",
     name: "Quiz pregnancy note · day 3",
@@ -454,8 +478,8 @@ export const EMAIL_JOURNEYS = [
     id: "other",
     title: "Other",
     track: null,
-    note: "Waitlist open and the unpaid-ranges one-more note are manual blasts, not cron. Eligibility refund is only if Callie refunds in Stripe.",
-    ids: ["eligibility_refund", "cohort_open", "quiz_one_more"],
+    note: "Waitlist open, the unpaid-ranges one-more note, and the November group announcement are manual blasts, not cron. Eligibility refund is only if Callie refunds in Stripe.",
+    ids: ["eligibility_refund", "cohort_open", "quiz_one_more", "cohort_3_open"],
   },
   {
     id: "callie",
@@ -495,6 +519,7 @@ export const EMAIL_TYPE_LABELS = {
   quiz_drip_2d: "Quiz drip (+2d)",
   quiz_drip_7d: "Quiz drip (last)",
   quiz_one_more: "Quiz one more note",
+  cohort_3_open: "November group open",
   quiz_pregnancy_note: "Quiz pregnancy note (+3d)",
   callie_payment: "Callie: new payment",
   callie_intake: "Callie: intake ready",

@@ -138,7 +138,7 @@ describe("email catalog journey", () => {
       "intake_received",
       "macros_live",
     ]);
-    expect(journeys[3].ids).toEqual(["eligibility_refund", "cohort_open", "quiz_one_more"]);
+    expect(journeys[3].ids).toEqual(["eligibility_refund", "cohort_open", "quiz_one_more", "cohort_3_open"]);
     expect(journeys[4].ids).toEqual([
       "callie_payment",
       "callie_intake",
