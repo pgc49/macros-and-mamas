@@ -1,7 +1,7 @@
 /**
  * Track A — quiz submitted, no account (marketing_leads, no profiles row).
  * Immediate ranges email is #1 (quiz_ranges). Follow-ups: +2d, then last
- * at +6d or Wed Aug 26 PT (whichever first). Never send last on/after Aug 27 PT.
+ * at +6d or Sun Nov 15 PT (whichever first). Never send last on/after Nov 16 PT.
  * Pregnancy gets one soft +3d note. Plant-based gets no follow-up.
  *
  * Track B — signed up, unpaid — is finish-joining only. A profiles row
@@ -16,7 +16,7 @@ import {
 } from "./cohortEmailWindow.mjs";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
-/** Last quiz sales email: +6 days, or Aug 26 PT if that comes first. */
+/** Last quiz sales email: +6 days, or Nov 15 PT if that comes first. */
 export const QUIZ_LAST_MIN_AGE_MS = 6 * DAY_MS;
 /** Recent leads whose #1 send was not logged can still enter the drip. */
 export const ANCHOR_FALLBACK_MS = 8 * DAY_MS;

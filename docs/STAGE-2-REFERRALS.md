@@ -36,7 +36,7 @@ See `supabase/migrations/045_referrals.sql`.
 
 ```
 COUPON_REFERRAL_25=REFERRAL_25
-REFERRAL_COHORT_LABEL=2026-08   # optional; default 2026-08
+REFERRAL_COHORT_LABEL=2026-11   # optional; default 2026-11
 VESTING_DAYS=3                  # already set in stage 1
 CALLIE_NOTIFY_EMAIL=...         # ambassador notify (with RESEND_API_KEY)
 ```

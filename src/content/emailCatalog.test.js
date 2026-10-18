@@ -12,6 +12,9 @@ describe("product comms emails", () => {
     }
     const macros = EMAIL_CATALOG.find((e) => e.id === "macros_live");
     expect(macros.bodyPreview).toMatch(/Open Messages/);
+    expect(macros.bodyPreview).toMatch(/Add to Home Screen/);
+    const welcome = EMAIL_CATALOG.find((e) => e.id === "welcome");
+    expect(welcome.bodyPreview).toMatch(/Add to Home Screen/);
   });
 });
 
@@ -51,7 +54,7 @@ describe("quiz drip catalog", () => {
     expect(ids).not.toContain("quiz_drip_1h");
 
     const opening = EMAIL_CATALOG.find((e) => e.id === "quiz_opening_week_1h");
-    expect(opening.subject).toBe("[First name], opening week is underway");
+    expect(opening.subject).toBe("[First name], the next group starts November 2");
     expect(opening.trigger).toMatch(/quiz_opening_week_1h/);
     expect(opening.trigger).not.toMatch(/quiz_drip_2d follow-up/);
     expect(opening.bodyPreview).toMatch(/Join for \$249 after your quiz/);
@@ -81,12 +84,12 @@ describe("quiz drip catalog", () => {
 
     const last = EMAIL_CATALOG.find((e) => e.id === "quiz_drip_7d");
     expect(last.status).toBe("live");
-    expect(last.trigger).toMatch(/Aug 26/);
+    expect(last.trigger).toMatch(/Nov 15/);
     expect(last.trigger).toMatch(/8:00 AM/);
-    expect(last.trigger).toMatch(/Aug 27/);
+    expect(last.trigger).toMatch(/Nov 16/);
     expect(last.bodyPreview).not.toMatch(/capped at 50/);
     expect(last.bodyPreview).toMatch(/later keeps not coming/);
-    expect(last.bodyPreview).toMatch(/The group starts Monday, Aug 31/);
+    expect(last.bodyPreview).toMatch(/The group starts Monday, November 2/);
     expect(last.bodyPreview).not.toMatch(/Doors close Thursday/);
     expect(last.bodyPreview).not.toMatch(/Aug 27/);
     expect(last.bodyPreview).toMatch(/your spot is \$249/);
@@ -101,7 +104,7 @@ describe("quiz drip catalog", () => {
     const finish = EMAIL_CATALOG.find((e) => e.id === "finish_joining_1h");
     expect(finish.trigger).toMatch(/Track B/);
     expect(finish.bodyPreview).toMatch(/Checkout offers 4 interest-free payments of \$62\.25/);
-    expect(EMAIL_CATALOG.find((e) => e.id === "finish_joining_close").trigger).toMatch(/Aug 26/);
+    expect(EMAIL_CATALOG.find((e) => e.id === "finish_joining_close").trigger).toMatch(/Nov 15/);
   });
 });
 

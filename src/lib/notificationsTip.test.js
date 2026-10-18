@@ -10,6 +10,14 @@ describe("shouldShowNotificationsTip", () => {
     })).toBe(true);
   });
 
+  it("shows for Cohort 3 until they enable or dismiss", () => {
+    expect(shouldShowNotificationsTip({
+      cohortLabel: "2026-11",
+      permission: "default",
+      dismissedLocally: false,
+    })).toBe(true);
+  });
+
   it("hides for Founding", () => {
     expect(shouldShowNotificationsTip({
       cohortLabel: "2026-07",

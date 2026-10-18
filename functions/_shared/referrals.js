@@ -17,7 +17,7 @@ export const REFERRAL_CREDIT_CENTS = 2500;
 export const AMBASSADOR_PAID_THRESHOLD = 3;
 
 export function referralCohortLabel(env) {
-  return String(env.REFERRAL_COHORT_LABEL || "2026-08").slice(0, 40);
+  return String(env.REFERRAL_COHORT_LABEL || "2026-11").slice(0, 40);
 }
 
 function supabaseConfig(env) {

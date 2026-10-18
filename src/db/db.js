@@ -1250,7 +1250,7 @@ export const db = {
     lastName,
     email,
     phone,
-    cohort = "cohort_2",
+    cohort = "cohort_3",
     source = "homepage",
     attribution = null,
   }) {
@@ -1259,7 +1259,7 @@ export const db = {
       last_name: String(lastName || "").trim().slice(0, 80),
       email: String(email || "").trim().toLowerCase().slice(0, 200),
       phone: String(phone || "").trim().slice(0, 40),
-      cohort: String(cohort || "cohort_2").slice(0, 40),
+      cohort: String(cohort || "cohort_3").slice(0, 40),
       source: String(source || "homepage").slice(0, 40),
     };
     if (attribution && typeof attribution === "object") {
@@ -2191,7 +2191,7 @@ export const db = {
   },
 
   /** Admin: cohort waitlist rows for the next open blast. */
-  async loadCohortWaitlist(cohort = "cohort_2", limit = 200) {
+  async loadCohortWaitlist(cohort = "cohort_3", limit = 200) {
     const { data, error } = await supabase
       .from("cohort_waitlist")
       .select("id, email, first_name, last_name, phone, cohort, converted_at, paid_at, created_at")

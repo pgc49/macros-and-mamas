@@ -69,7 +69,7 @@ The app also has project fallbacks for Supabase URL/publishable key in `src/conf
 | `STRIPE_PRICE_ID_LAB_ADDON` / `PRICE_LAB_REVIEW` | $349 Lab Review add-on Price ID | Cloudflare env |
 | `PRICE_ALUMNI_49` | $49/mo Alumni Membership Price ID (stage 4; Checkout opt-in) | Cloudflare env |
 | `COUPON_REFERRAL_25` | Referral $25-off coupon id (stage 2) | Cloudflare env |
-| `REFERRAL_COHORT_LABEL` | Optional cohort stamp on referrals (default `2026-08`) | Cloudflare env |
+| `REFERRAL_COHORT_LABEL` | Optional cohort stamp on referrals (default `2026-11`) | Cloudflare env |
 | `STRIPE_BILLING_PORTAL_CONFIGURATION` | Optional Customer Portal config (`bpc_…`) | Cloudflare env |
 | `VESTING_DAYS` | Credit vesting window (default `3`) — stage 1 | Cloudflare env |
 | `STRIPE_WEBHOOK_SECRET` | Verify webhook signatures (`whsec_…`) | Cloudflare secret |

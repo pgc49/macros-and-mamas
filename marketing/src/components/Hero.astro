@@ -8,6 +8,7 @@ import {
   isWaitlist,
   offerPrice,
   quizUrl,
+  cohortStartLabel,
   waitlistPrice,
   weeklyPrice,
 } from '../config';
@@ -37,8 +38,9 @@ import {
             </a>
             <p class="price-note">
               <strong>Free ranges</strong> — then the ${waitlistPrice} early
-              rate (full rate ${fullPrice}) when you finish the quiz.{' '}
-              {handBuiltRangesCopy} About ${weeklyPrice}/week at the early rate.
+              rate (full rate ${fullPrice}) when you finish the quiz. This
+              group starts {cohortStartLabel}. {handBuiltRangesCopy} About $
+              {weeklyPrice}/week at the early rate.
             </p>
           </div>
         ) : (
@@ -47,7 +49,8 @@ import {
               Join now · ${offerPrice}
             </a>
             <p class="price-note">
-              {handBuiltRangesCopy} Pay now, then a short intake.
+              This group starts {cohortStartLabel}. {handBuiltRangesCopy} Pay
+              now, then a short intake.
             </p>
             <a class="btn-secondary" href={quizUrl}>
               Get your macro ranges

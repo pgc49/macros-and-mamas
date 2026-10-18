@@ -125,7 +125,7 @@ export function clientHealthByCohort(roster, todayIso, nowMs = Date.now()) {
     }
     counts.get(key)[band] += 1;
   }
-  const preferred = ["2026-07", "2026-08"];
+  const preferred = ["2026-07", "2026-08", "2026-11"];
   const rest = [...counts.keys()].filter((id) => !preferred.includes(id)).sort();
   return [...preferred, ...rest]
     .filter((id) => counts.has(id))

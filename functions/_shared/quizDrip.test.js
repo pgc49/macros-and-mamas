@@ -75,7 +75,7 @@ describe("pickDueQuizDripStep timing", () => {
 
   it("sends the last sales email at +6 days after the morning window opens", () => {
     expect(QUIZ_LAST_MIN_AGE_MS).toBe(6 * DAY_MS);
-    const morning = Date.parse("2026-08-26T08:15:00.000-07:00");
+    const morning = Date.parse("2026-11-15T08:15:00.000-08:00");
     expect(pickDueQuizDripStep({
       ageMs: 6 * DAY_MS,
       sentTypes: new Set([QUIZ_DRIP_2D]),
@@ -84,11 +84,11 @@ describe("pickDueQuizDripStep timing", () => {
     })).toBe(QUIZ_DRIP_7D_PAUSED ? null : QUIZ_DRIP_7D);
   });
 
-  it("makes last due on Aug 26 PT after 8am, and never on Aug 27 PT", () => {
-    const beforeMorning = Date.parse("2026-08-26T07:45:00.000-07:00");
-    const morning = Date.parse("2026-08-26T08:15:00.000-07:00");
-    const aug26eve = Date.parse("2026-08-26T18:00:00.000-07:00");
-    const aug27 = Date.parse("2026-08-27T00:30:00.000-07:00");
+  it("makes last due on Nov 15 PT after 8am, and never on Nov 16 PT", () => {
+    const beforeMorning = Date.parse("2026-11-15T07:45:00.000-08:00");
+    const morning = Date.parse("2026-11-15T08:15:00.000-08:00");
+    const nov15eve = Date.parse("2026-11-15T18:00:00.000-08:00");
+    const nov16 = Date.parse("2026-11-16T00:30:00.000-08:00");
     expect(quizLastSalesDue({ ageMs: 5 * DAY_MS, now: beforeMorning })).toBe(false);
     expect(quizLastSalesDue({ ageMs: 6 * DAY_MS, now: beforeMorning })).toBe(false);
     expect(quizLastSalesDue({ ageMs: 5 * DAY_MS, now: morning })).toBe(true);
@@ -98,13 +98,13 @@ describe("pickDueQuizDripStep timing", () => {
       segment: "main",
       now: morning,
     })).toBe(QUIZ_DRIP_7D_PAUSED ? null : QUIZ_DRIP_7D);
-    expect(quizLastSalesDue({ ageMs: 5 * DAY_MS, now: aug26eve })).toBe(true);
-    expect(quizLastSalesDue({ ageMs: 7 * DAY_MS, now: aug27 })).toBe(false);
+    expect(quizLastSalesDue({ ageMs: 5 * DAY_MS, now: nov15eve })).toBe(true);
+    expect(quizLastSalesDue({ ageMs: 7 * DAY_MS, now: nov16 })).toBe(false);
     expect(pickDueQuizDripStep({
       ageMs: 7 * DAY_MS,
       sentTypes: new Set(),
       segment: "main",
-      now: aug27,
+      now: nov16,
     })).toBe(QUIZ_DRIP_2D);
   });
 
@@ -113,13 +113,13 @@ describe("pickDueQuizDripStep timing", () => {
       ageMs: 8 * DAY_MS,
       sentTypes: new Set(),
       segment: "main",
-      now: Date.parse("2026-08-26T08:15:00.000-07:00"),
+      now: Date.parse("2026-11-15T08:15:00.000-08:00"),
     })).toBe(QUIZ_DRIP_7D_PAUSED ? null : QUIZ_DRIP_7D);
   });
 
   it("resumes the last sales email when that step is not paused", () => {
     expect(QUIZ_DRIP_7D_PAUSED).toBe(false);
-    const morning = Date.parse("2026-08-26T08:15:00.000-07:00");
+    const morning = Date.parse("2026-11-15T08:15:00.000-08:00");
     expect(pickDueQuizDripStep({
       ageMs: 2 * DAY_MS,
       sentTypes: new Set(),
@@ -334,7 +334,7 @@ describe("quiz drip copy", () => {
       joinUrl: "https://www.macrosandmamas.com/join?from=quiz&email=x",
     });
     expect(html).toContain("later keeps not coming");
-    expect(html).toContain("The group starts Monday, Aug 31.");
+    expect(html).toContain("The group starts Monday, November 2.");
     expect(html).not.toMatch(/Doors close/i);
     expect(html).not.toContain("Aug 27");
     expect(html).toContain(`your spot is $${EARLY_PRICE}`);

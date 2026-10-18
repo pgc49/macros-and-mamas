@@ -1,5 +1,5 @@
-/** Admin Messages pills — Founding + August are both live. */
-export const DEFAULT_LIVE_CHANNEL_COHORTS = "2026-07,2026-08";
+/** Admin Messages pills — Founding, August, and November are all live. */
+export const DEFAULT_LIVE_CHANNEL_COHORTS = "2026-07,2026-08,2026-11";
 
 export function parseLiveChannelCohorts(raw) {
   const source = raw == null || String(raw).trim() === ""

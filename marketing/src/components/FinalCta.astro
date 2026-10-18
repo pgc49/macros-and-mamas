@@ -7,6 +7,7 @@ import {
   offerPrice,
   queuePositionCopy,
   quizUrl,
+  cohortStartLabel,
   waitlistPrice,
 } from '../config';
 ---
@@ -20,8 +21,9 @@ import {
         <div class="open-cta" style="position:relative;z-index:2">
           <p class="lede">
             Take the free quiz to see your ranges — and get the exclusive $
-            {waitlistPrice} early rate (full rate ${fullPrice}). Lock your spot
-            after the quiz. {handBuiltRangesCopy}
+            {waitlistPrice} early rate (full rate ${fullPrice}). This group
+            starts {cohortStartLabel}. Lock your spot after the quiz.{' '}
+            {handBuiltRangesCopy}
           </p>
           <p class="lede" style="margin-top:14px">
             {queuePositionCopy}

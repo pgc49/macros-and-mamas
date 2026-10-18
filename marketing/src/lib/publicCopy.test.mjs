@@ -41,6 +41,17 @@ describe("public marketing + quiz copy", () => {
     }
   });
 
+  it("names the November 2 start without a doors-close date", () => {
+    const config = readFileSync(join(root, "src/config.ts"), "utf8");
+    assert.match(config, /Monday, November 2/);
+    for (const rel of ["src/components/Hero.astro", "src/components/Pricing.astro", "src/components/Faq.astro", "src/components/FinalCta.astro"]) {
+      const text = readFileSync(join(root, rel), "utf8");
+      assert.match(text, /cohortStartLabel/, rel);
+    }
+    const quizJs = readFileSync(join(root, "public/quiz-app.js"), "utf8");
+    assert.match(quizJs, /This group starts Monday, November 2/);
+  });
+
   it("uses hand-built ranges, in lock-in order", () => {
     const config = readFileSync(join(root, "src/config.ts"), "utf8");
     assert.match(

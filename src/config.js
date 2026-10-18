@@ -58,16 +58,16 @@ export const CONFIG = {
   ENROLLMENT_OPEN: true,
   /** ISO cutoff: accounts created before this may still finish paying while closed. */
   ENROLLMENT_CLOSED_AT: "2026-07-26T02:00:00.000Z",
-  WAITLIST_COHORT: "cohort_2",
+  WAITLIST_COHORT: "cohort_3",
   /**
    * Next cohort — keep in sync with marketing/src/config.ts.
-   * Always set an expected start date before selling seats.
+   * Week 1 stays Monday, November 2 even when someone joins in early November.
    */
-  /** Customer-facing label — no numbered “Cohort 2”; dates carry the meaning. */
+  /** Customer-facing label — no numbered “Cohort 3”; the date carries the meaning. */
   COHORT_LABEL: "your spot",
-  COHORT_START: "Monday, Aug 31",
-  COHORT_START_SHORT: "August 31",
-  COHORT_START_COMPACT: "Aug 31",
+  COHORT_START: "Monday, November 2",
+  COHORT_START_SHORT: "November 2",
+  COHORT_START_COMPACT: "Nov 2",
 
   /**
    * Meta Pixel (browser). Public ID 1078367721716098 is the live pixel.

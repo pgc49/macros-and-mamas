@@ -3,7 +3,7 @@ import { NotificationsTip } from "../components/NotificationsTip";
 import { Fonts } from "../theme/Fonts";
 import { T, F, FD } from "../theme/tokens";
 
-/** Local-only preview of the Cohort 2 Today getting-started cards. */
+/** Local-only preview of the Today getting-started cards for a new cohort. */
 export function OnboardingBannersPreview() {
   return (
     <div style={{
@@ -39,10 +39,10 @@ export function OnboardingBannersPreview() {
         Hi Mama.
       </h1>
       <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px", fontFamily: F }}>
-        Cohort 2 Today cards — pin the app, then turn on notifications.
+        Cohort 3 Today cards — pin the app, then turn on notifications.
       </p>
       <HomeScreenTip />
-      <NotificationsTip cohortLabel="2026-08" />
+      <NotificationsTip cohortLabel="2026-11" />
     </div>
   );
 }

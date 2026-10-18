@@ -134,7 +134,7 @@ describe("AdminEmails", () => {
     expect(screen.queryByText("Sent emails")).toBeNull();
 
     await waitFor(() => {
-      expect(screen.getByText("Waitlist roster · cohort 2")).toBeTruthy();
+      expect(screen.getByText("Waitlist roster · cohort 3")).toBeTruthy();
     });
     expect(screen.getByText("waitlist@example.com")).toBeTruthy();
     expect(screen.getByText(/The blast itself is template W above/)).toBeTruthy();

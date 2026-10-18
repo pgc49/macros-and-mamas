@@ -19,6 +19,14 @@ export const COHORT_CALENDAR = [
     /** Exclusive end (last program day = Oct 25). No post-program free month. */
     programEnd: "2026-10-26T00:00:00.000Z",
   },
+  {
+    label: "2026-11",
+    displayName: "November Group",
+    /** Monday of official Week 1. Early-November joiners keep this start. */
+    programStart: "2026-11-02T00:00:00.000Z",
+    /** Exclusive end (last program day = Dec 27). No post-program free month. */
+    programEnd: "2026-12-28T00:00:00.000Z",
+  },
 ];
 
 /** Founding Members only — post-program free month is not a later-cohort perk. */
@@ -26,6 +34,9 @@ export const FOUNDING_COHORT_LABEL = "2026-07";
 
 /** Cohort 2 / August Group. */
 export const AUGUST_COHORT_LABEL = "2026-08";
+
+/** Cohort 3 / November Group. Open enrollment from Oct 18 through mid-November. */
+export const NOVEMBER_COHORT_LABEL = "2026-11";
 
 export const FREE_MONTH_DAYS = 30;
 
@@ -41,6 +52,7 @@ export function adminCohortName(label) {
   if (!key) return "Unassigned";
   if (key === "2026-07") return "Founding";
   if (key === "2026-08") return "Cohort 2";
+  if (key === "2026-11") return "Cohort 3";
   return cohortByLabel(key)?.displayName || key;
 }
 

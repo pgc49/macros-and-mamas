@@ -123,6 +123,10 @@ export function WelcomePage({ onPaid, navigate, paid = false, loaded = false }) 
             <Btn style={{ width: "100%", marginTop: 8 }} onClick={() => navigate(PATHS.onboarding)}>
               Start my intake
             </Btn>
+            <p style={{ fontSize: 13.5, lineHeight: 1.5, color: T.inkSoft, marginTop: 16 }}>
+              <strong style={{ color: T.ink }}>Put this on your home screen.</strong>
+              {" "}iPhone (Safari): tap Share, then Add to Home Screen. Android (Chrome): tap the menu, then Install. No App Store. The same steps are on Today once your ranges are approved.
+            </p>
           </>
         )}
         {status === "stuck" && (

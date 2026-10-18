@@ -8,8 +8,8 @@ import { assertServiceRole } from "../_shared/assertServiceRole.ts";
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 const EARLY_PRICE = 249;
-const DOORS_CLOSE = "Aug 27";
-const COHORT_SHORT = "Aug 31";
+const DOORS_CLOSE = "November 15";
+const COHORT_SHORT = "November 2";
 const CTA = "Finish signing up, lock in your spot";
 const SPLIT_AT_CHECKOUT =
   "Want to split it? Checkout offers 4 interest-free payments of $62.25, about $31 a week.";
@@ -40,7 +40,7 @@ function fallbackBody(variant: string, quizUnlock: boolean) {
   const rate = quizRateLine(quizUnlock);
   if (variant === "close") {
     return `
-          <p>Last note from me. Doors close ${DOORS_CLOSE}. We start Monday.</p>
+          <p>Last note from me. This group starts Monday, ${COHORT_SHORT}, and I'm still taking mamas through ${DOORS_CLOSE}.</p>
           <p>If you still want in, finish signing up. If something's unclear, reply. I read everything.</p>
           ${rate}
           <p>Callie</p>
@@ -51,7 +51,7 @@ function fallbackBody(variant: string, quizUnlock: boolean) {
     return `
           <p>Just checking in. I'd still love to have you in this group.</p>
           <p>Inside: macros built by me, not a calculator. Our group Mon through Fri. A short Monday voice note to set the week.</p>
-          <p>We start ${COHORT_SHORT}. Doors close ${DOORS_CLOSE} so I can hand-build ranges before day one. Finish signing up when you're ready.</p>
+          <p>We start Monday, ${COHORT_SHORT}. If you join in the first weeks of November, you're still in this group. Finish signing up when you're ready.</p>
           ${rate}
           <p>Callie</p>
           ${FOOTNOTE}
@@ -59,7 +59,7 @@ function fallbackBody(variant: string, quizUnlock: boolean) {
   }
   return `
           <p>You started joining Macros and Mamas. I'm glad you're here.</p>
-          <p>When you're ready: macros I build myself, our group Mon through Fri, and a short Monday voice note to keep the week simple. We start ${COHORT_SHORT}. Doors close ${DOORS_CLOSE}.</p>
+          <p>When you're ready: macros I build myself, our group Mon through Fri, and a short Monday voice note to keep the week simple. We start Monday, ${COHORT_SHORT}. If you join in the first weeks of November, you're still in this group.</p>
           <p>Finish signing up below to lock in your spot.</p>
           ${rate}
           <p>Callie</p>

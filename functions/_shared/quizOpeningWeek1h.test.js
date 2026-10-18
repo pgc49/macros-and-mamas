@@ -205,13 +205,13 @@ describe("admin remaining", () => {
 describe("opening week copy", () => {
   it("uses the approved short note and distinct subject", () => {
     const html = buildOpeningWeek1hBody();
-    expect(html).toMatch(/opening week is already underway/i);
-    expect(html).toMatch(/join today so you don't miss more of the kickoff/i);
+    expect(html).toMatch(/This group starts Monday, November 2/i);
+    expect(html).toMatch(/you're still in this group/i);
     expect(html).toMatch(/Questions\? Just reply\. It comes to me\./);
     expect(html).toContain("Macros and Mamas");
     expect(html).not.toMatch(/—/);
     expect(html).not.toMatch(/Doors close|Aug 27|Aug 31/);
-    expect(openingWeek1hSubject("Dolly")).toBe("Dolly, opening week is underway");
+    expect(openingWeek1hSubject("Dolly")).toBe("Dolly, the next group starts November 2");
     expect(openingWeek1hSubject("Dolly")).not.toMatch(/your ranges/i);
   });
 

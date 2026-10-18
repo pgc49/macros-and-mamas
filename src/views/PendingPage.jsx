@@ -13,6 +13,10 @@ export function PendingPage() {
         <p style={{ fontSize: 15, lineHeight: 1.6, color: T.inkSoft }}>
           Your answers are with her now. She reviews every mama&apos;s numbers personally before they go live — usually within a day. The moment she approves, your dashboard unlocks and you can say hi in Messages — that&apos;s your group with Callie and the other mamas.
         </p>
+        <p style={{ fontSize: 13.5, lineHeight: 1.5, color: T.inkSoft, marginTop: 14 }}>
+          <strong style={{ color: T.ink }}>Put this on your home screen while you wait.</strong>
+          {" "}iPhone (Safari): tap Share, then Add to Home Screen. Android (Chrome): tap the menu, then Install. No App Store.
+        </p>
       </Card>
     </Shell>
   );

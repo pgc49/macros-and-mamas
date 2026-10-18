@@ -6,7 +6,7 @@
  * Env:
  *   SUPABASE_URL / VITE_SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY (required for inserts; anon insert policy removed)
- *   WAITLIST_COHORT (default cohort_2)
+ *   WAITLIST_COHORT (default cohort_3)
  *   META_PIXEL_ID + META_CAPI_ACCESS_TOKEN (optional Lead CAPI)
  *   WAITLIST KV (required — rate limit fails closed if unbound)
  */
@@ -281,7 +281,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       first_name: body.first_name.slice(0, 80),
       last_name: body.last_name.slice(0, 80),
       phone: body.phone.slice(0, 40),
-      cohort: (body.cohort || env.WAITLIST_COHORT || "cohort_2").slice(0, 40),
+      cohort: (body.cohort || env.WAITLIST_COHORT || "cohort_3").slice(0, 40),
       source: (body.source || "astro_waitlist").slice(0, 40),
       event_id: eventId.slice(0, 120),
     };
