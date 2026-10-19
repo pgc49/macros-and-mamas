@@ -13,7 +13,7 @@ import {
   cohortOpenPreviewText,
   cohortOpenSubject,
   selectCohortOpenRecipients,
-  sendCohortOpenEmail,
+  sendCohortOpenBatch,
 } from "../_shared/cohortOpenAnnounce.js";
 import { loadUnsubscribedSet } from "../_shared/unpaidLeadsBlast.js";
 
@@ -74,11 +74,9 @@ export async function onRequestPost({ request, env }) {
       return json(summary, 200);
     }
 
-    for (const row of recipients) {
-      const result = await sendCohortOpenEmail(env, row);
-      if (result.ok) summary.sent += 1;
-      else summary.errors += 1;
-    }
+    const batch = await sendCohortOpenBatch(env, recipients);
+    summary.sent = batch.sent;
+    summary.errors = batch.errors;
 
     return json(summary, 200);
   } catch (e) {

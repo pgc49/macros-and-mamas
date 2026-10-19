@@ -97,7 +97,10 @@ describe("runCohortOpenAnnounce", () => {
       if (href.includes("/profiles")) return json(profiles);
       if (href.includes("/email_events") && init?.method === "POST") return new Response(null, { status: 201 });
       if (href.includes("/email_events")) return json([]);
-      if (href.includes("api.resend.com")) return json({ id: "re_1" });
+      if (href.includes("api.resend.com/emails/batch")) {
+        const body = JSON.parse(init.body);
+        return json({ data: body.map((_, index) => ({ id: `re_${index}` })) });
+      }
       return json([]);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -115,22 +118,22 @@ describe("runCohortOpenAnnounce", () => {
     expect(result.candidates).toBe(4);
     expect(result.sent).toBe(4);
     expect(result.errors).toBe(0);
-    const sentTo = fetchMock.mock.calls
-      .filter(([url]) => String(url).includes("api.resend.com"))
-      .map(([, init]) => JSON.parse(init.body).to[0])
-      .sort();
-    expect(sentTo).toEqual([
+    const batchCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes("api.resend.com/emails/batch"));
+    expect(batchCalls).toHaveLength(1);
+    const batch = JSON.parse(batchCalls[0][1].body);
+    expect(batch.map((row) => row.to[0]).sort()).toEqual([
       "amy@example.com",
       "plant@example.com",
       "preg@example.com",
       "summer@example.com",
     ]);
-    const summerBody = fetchMock.mock.calls
-      .filter(([url]) => String(url).includes("api.resend.com"))
-      .map(([, init]) => JSON.parse(init.body))
-      .find((body) => body.to[0] === "summer@example.com");
+    const summerBody = batch.find((row) => row.to[0] === "summer@example.com");
     expect(summerBody.html).toMatch(/Finish checkout/);
     expect(summerBody.html).toMatch(/\/api\/unsubscribe\?/);
+    const logged = fetchMock.mock.calls.find(([url, init]) => (
+      String(url).includes("/email_events") && init?.method === "POST"
+    ));
+    expect(JSON.parse(logged[1].body)).toHaveLength(4);
   });
 
   it("does not send after the window, and does not send when the unsubscribe list is down", async () => {
