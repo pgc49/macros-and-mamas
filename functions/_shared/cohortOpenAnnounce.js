@@ -222,7 +222,144 @@ export async function sendCohortOpenEmail(env, { email, firstName, profileId, le
   }
 }
 
-const SEND_CHUNK = 5;
+const BATCH_LIMIT = 100;
+
+async function cohortOpenMessage(env, row) {
+  const to = normalizeLeadEmail(row?.email);
+  if (!to) return null;
+  const payload = buildCohortOpenPayload({
+    firstName: row.firstName,
+    email: to,
+    hasAccount: row.hasAccount,
+  });
+  const unsubscribeUrl = await buildUnsubscribeUrl(env, to);
+  const html = renderEmail({
+    header: payload.header,
+    body: payload.body,
+    cta_text: payload.cta_text,
+    cta_url: payload.cta_url,
+    unsubscribe_url: unsubscribeUrl || undefined,
+  });
+  return {
+    to,
+    subject: payload.subject,
+    profileId: row.profileId || null,
+    leadId: row.leadId || null,
+    hasAccount: Boolean(row.hasAccount),
+    resend: {
+      from: env.LEAD_FROM_EMAIL || FROM_CALLIE,
+      to: [to],
+      reply_to: "calista@nourishwithcalista.com",
+      subject: payload.subject,
+      html,
+      ...(unsubscribeUrl ? { headers: quizMailHeaders(unsubscribeUrl) } : {}),
+    },
+  };
+}
+
+async function logCohortOpenEvents(env, rows) {
+  const base = (env?.SUPABASE_URL || env?.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+  const key = env?.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!base || !key || !rows?.length) return false;
+  const body = rows.map((row) => ({
+    profile_id: row.profileId || null,
+    email_type: COHORT_OPEN_ANNOUNCE_TYPE,
+    to_email: normalizeLeadEmail(row.to),
+    subject: row.subject || null,
+    resend_id: row.resendId || null,
+    status: row.status || "sent",
+    meta: {
+      source: "cohort-open-announce",
+      lead_id: row.leadId || null,
+      has_account: Boolean(row.hasAccount),
+    },
+  }));
+  try {
+    const resp = await fetch(`${base}/rest/v1/email_events`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        apikey: key,
+        authorization: `Bearer ${key}`,
+        prefer: "return=minimal",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      console.error("cohort open announce log failed", resp.status, await resp.text());
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("cohort open announce log error", e);
+    return false;
+  }
+}
+
+/**
+ * One Resend batch for the whole list. A per-address send burns the worker's
+ * outbound request budget after the first handful, which is what stopped the
+ * 1:10 AM run at 10 sent.
+ */
+export async function sendCohortOpenBatch(env, recipients) {
+  if (!env?.RESEND_API_KEY) return { sent: 0, errors: (recipients || []).length };
+  const messages = [];
+  for (const row of recipients || []) {
+    const message = await cohortOpenMessage(env, row);
+    if (message) messages.push(message);
+  }
+  let sent = 0;
+  let errors = 0;
+  for (let i = 0; i < messages.length; i += BATCH_LIMIT) {
+    const result = await postCohortOpenBatch(env, messages.slice(i, i + BATCH_LIMIT));
+    sent += result.sent;
+    errors += result.errors;
+  }
+  return { sent, errors };
+}
+
+async function postCohortOpenBatch(env, messages) {
+  if (!messages.length) return { sent: 0, errors: 0 };
+  let resp;
+  let data = {};
+  try {
+    resp = await fetch("https://api.resend.com/emails/batch", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(messages.map((message) => message.resend)),
+    });
+    data = await resp.json().catch(() => ({}));
+  } catch (e) {
+    console.error("cohort open announce batch error", e);
+    return { sent: 0, errors: messages.length };
+  }
+
+  if (resp.ok) {
+    const ids = Array.isArray(data?.data) ? data.data : [];
+    await logCohortOpenEvents(env, messages.map((message, index) => ({
+      ...message,
+      resendId: ids[index]?.id || null,
+      status: "sent",
+    })));
+    return { sent: messages.length, errors: 0 };
+  }
+
+  console.error("cohort open announce batch failed", resp.status, data);
+  if ((resp.status === 400 || resp.status === 422) && messages.length > 1) {
+    const mid = Math.ceil(messages.length / 2);
+    const left = await postCohortOpenBatch(env, messages.slice(0, mid));
+    const right = await postCohortOpenBatch(env, messages.slice(mid));
+    return { sent: left.sent + right.sent, errors: left.errors + right.errors };
+  }
+
+  if (messages.length === 1 && (resp.status === 400 || resp.status === 422)) {
+    await logCohortOpenEvents(env, [{ ...messages[0], status: "failed" }]);
+  }
+  return { sent: 0, errors: messages.length };
+}
 
 /**
  * One-shot send for the hourly cron. Stops after COHORT_OPEN_ANNOUNCE_UNTIL.
@@ -272,18 +409,14 @@ export async function runCohortOpenAnnounce(env, { now = new Date(), force = fal
     alreadySent,
   });
 
-  let sent = 0;
-  let errors = 0;
-  for (let i = 0; i < recipients.length; i += SEND_CHUNK) {
-    const chunk = recipients.slice(i, i + SEND_CHUNK);
-    const results = await Promise.all(chunk.map((row) => sendCohortOpenEmail(env, row)));
-    for (const result of results) {
-      if (result?.ok) sent += 1;
-      else errors += 1;
-    }
-  }
-
-  return { open: true, sent, errors, candidates: recipients.length, skipped };
+  const batch = await sendCohortOpenBatch(env, recipients);
+  return {
+    open: true,
+    sent: batch.sent,
+    errors: batch.errors,
+    candidates: recipients.length,
+    skipped,
+  };
 }
 
 async function sbGet(env, path) {
