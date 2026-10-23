@@ -125,6 +125,13 @@ export function MessagesThread({
   threadKey = "",
   onComposerFocusChange,
   /**
+   * Text to drop into an empty composer once — the coach hands a question over
+   * this way. Never overwrites something she has already started typing, and
+   * never sends: she still reads it and presses send herself.
+   */
+  initialDraft = "",
+  onInitialDraftUsed,
+  /**
    * Prepend the page of history before the oldest loaded message. Threads open
    * on a window, so a long-running cohort group needs a way back through it.
    */
@@ -206,8 +213,21 @@ export function MessagesThread({
   const atLatestRef = useRef(atLatest);
   const focusPendingRef = useRef(focusPending);
   const initialFocusRef = useRef(focusMessageId);
+  const draftSeededRef = useRef("");
 
   const bumpOutbox = () => setOutboxTick((n) => n + 1);
+
+  useEffect(() => {
+    const seed = String(initialDraft || "").trim();
+    if (!seed) {
+      draftSeededRef.current = "";
+      return;
+    }
+    if (draftSeededRef.current === seed) return;
+    draftSeededRef.current = seed;
+    setDraft((current) => (current.trim() ? current : seed));
+    onInitialDraftUsed?.();
+  }, [initialDraft, onInitialDraftUsed]);
 
   useEffect(() => {
     registerMessageServiceWorker();

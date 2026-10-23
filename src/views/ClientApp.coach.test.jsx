@@ -1,0 +1,304 @@
+// @vitest-environment jsdom
+/**
+ * How the coach sits in the app: it only shows up once Callie has approved
+ * her ranges, and handing a question to Callie puts her in Messages with the
+ * question already typed — never sent for her, and never by a bot account.
+ */
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+
+vi.mock("../auth/useAuth.jsx", () => ({
+  useAuth: () => ({
+    user: { email: "qa@example.com" },
+    profile: { name: "QA" },
+    isAdmin: false,
+  }),
+}));
+
+vi.mock("../components/MessagesPanel", () => ({
+  MessagesPanel: ({ initialDraft }) => <div data-testid="messages-draft">{initialDraft}</div>,
+}));
+
+import { ClientApp } from "./ClientApp";
+import { CoachEntry } from "../components/CoachEntry";
+import { COACH_COPY, COACH_DEFLECT, askForSlotCopy } from "../content/coachVoice";
+import { coachEntryHint } from "../utils/coachLines";
+import { buildCoachAnswer } from "../utils/coachSession";
+import { localDateIso, wkStartOf } from "../utils/dates";
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+const noop = () => {};
+// The coach only speaks about today, so the fixture has to actually be today.
+const TODAY = localDateIso();
+const WEEK = wkStartOf();
+
+function renderApp(props = {}) {
+  let tab = props.tab || "today";
+  let draft = "";
+  const setTab = vi.fn((next) => { tab = next; });
+  const onAskCallie = vi.fn((text) => { draft = text; });
+
+  const view = render(
+    <MemoryRouter>
+      <ClientApp
+        tab={tab}
+        setTab={setTab}
+        profile={{ name: "QA" }}
+        macros={{ protein: 140, carbs: 160, fat: 55, cal: 1750 }}
+        totals={{ p: 42, c: 55, f: 16, cal: 520 }}
+        waterOz={80}
+        estimateBusy={false}
+        estimate={null}
+        analyzePhoto={noop}
+        analyzeText={noop}
+        confirmEstimate={noop}
+        discardEstimate={noop}
+        logManualMeal={noop}
+        logRecipe={noop}
+        todayLog={{ date: TODAY, entries: [] }}
+        deleteMealEntry={noop}
+        updateMealEntry={noop}
+        mealLogDate={TODAY}
+        mealLogWeekStart={WEEK}
+        mealLogsByDate={{}}
+        selectMealLogDate={noop}
+        changeMealWeek={noop}
+        waterLogsByDate={{}}
+        waterBusy={false}
+        onAddWater={noop}
+        onUndoWater={noop}
+        onChangeBottleOz={noop}
+        viewWk={WEEK}
+        setViewWk={noop}
+        curWk={WEEK}
+        editPast={false}
+        setEditPast={noop}
+        checksByWeek={{}}
+        toggleCheck={noop}
+        adherenceFor={() => 0}
+        progWeekNum={() => 1}
+        earliestWk={WEEK}
+        weighins={[]}
+        logWeighin={noop}
+        deleteWeighin={noop}
+        weeklyRate={0}
+        trends={{ locked: true, items: [] }}
+        macroHistory={[]}
+        mealFilter="All meals"
+        setMealFilter={noop}
+        customMeals={[]}
+        onAskCallie={onAskCallie}
+        {...props}
+      />
+    </MemoryRouter>,
+  );
+  return { view, setTab, onAskCallie, getTab: () => tab, getDraft: () => draft };
+}
+
+describe("where the coach shows up", () => {
+  it("adds the tab and the Today entry point once her ranges exist", () => {
+    renderApp();
+    expect(screen.getByRole("button", { name: "Coach" })).toBeTruthy();
+    expect(screen.getByText(COACH_COPY.entryTitle)).toBeTruthy();
+  });
+
+  it("stays out of the way when Callie hasn't approved ranges yet", () => {
+    renderApp({ macros: null });
+    expect(screen.queryByRole("button", { name: "Coach" })).toBeNull();
+    expect(screen.queryByText(COACH_COPY.entryTitle)).toBeNull();
+  });
+
+  it("keeps every tab label on one line when the coach makes five", () => {
+    renderApp();
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    const labels = Array.from(nav.querySelectorAll("button")).map((b) => b.textContent);
+    expect(labels).toEqual(["Today", "Meals", "Coach", "Progress", "Messages"]);
+    for (const button of nav.querySelectorAll("button")) {
+      expect(button.style.whiteSpace).toBe("nowrap");
+    }
+  });
+
+  it("gives the five tabs the width the phone has", () => {
+    renderApp();
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    // Fixed padding left a 430px phone with 110px unused around a huddle of
+    // small text in the middle. jsdom has no layout, so the contract under
+    // test is that the buttons are allowed to grow.
+    for (const button of nav.querySelectorAll("button")) {
+      expect(button.style.flex).toBe("1 1 auto");
+      expect(button.style.fontSize).toBe("13.5px");
+    }
+  });
+
+  it("locks the coach's height like Messages, and leaves other tabs scrolling", () => {
+    // Both chat tabs fill the leftover viewport so the composer stays put.
+    // The page scroller must not scroll, or the composer goes with it.
+    const { view } = renderApp({ tab: "coach" });
+    expect(document.querySelector("[data-shell-content]").dataset.lockScroll).toBe("true");
+    expect(document.querySelector("[data-shell-fill]")).toBeTruthy();
+    view.unmount();
+
+    renderApp({ tab: "today" });
+    expect(document.querySelector("[data-shell-content]").dataset.lockScroll).toBeUndefined();
+    expect(document.querySelector("[data-shell-fill]")).toBeNull();
+  });
+
+  it("opens the coach from the Today card", () => {
+    const { setTab } = renderApp();
+    fireEvent.click(screen.getByText(COACH_COPY.entryTitle).closest("button"));
+    expect(setTab).toHaveBeenCalledWith("coach");
+  });
+
+  it("keeps the empty-day title and uses Patrick's slot ask once something is logged", () => {
+    expect(COACH_COPY.entryTitle).toBe("Not sure what to eat?");
+    expect(askForSlotCopy("breakfast")).toBe("Looking for a breakfast idea?");
+    expect(askForSlotCopy("lunch")).toBe("Looking for a lunch idea?");
+    expect(askForSlotCopy("dinner")).toBe("Looking for a dinner idea?");
+    expect(askForSlotCopy("snack")).toBe("Looking for a snack idea?");
+    const evening = new Date("2026-10-01T04:07:00.000Z");
+    const morning = new Date("2026-09-04T15:00:00.000Z");
+    expect(coachEntryHint({
+      loggedSlots: new Set(["lunch"]),
+      plannedMeals: [],
+      now: evening,
+    })).toBe("Looking for a dinner idea? I'll size it to what's left.");
+    expect(coachEntryHint({
+      loggedSlots: new Set(["lunch"]),
+      plannedMeals: [],
+      now: morning,
+    })).toBe("Looking for a breakfast idea? I'll size it to what's left.");
+
+    renderApp({
+      todayLog: {
+        date: TODAY,
+        entries: [{ id: "e1", name: "Eggs", slot: "breakfast", cal: 300, p: 25, c: 10, f: 15 }],
+      },
+      totals: { p: 25, c: 10, f: 15, cal: 300 },
+    });
+    expect(screen.getAllByText(/Looking for a (breakfast|lunch|dinner|snack) idea\?/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/keep fat in its band/i)).toBeNull();
+    expect(screen.queryByText(/You need about/i)).toBeNull();
+    expect(screen.queryByText(/Know what .+ is yet\?/)).toBeNull();
+  });
+
+  it("after lunch at night the Today card asks for dinner", () => {
+    const evening = new Date("2026-10-01T04:07:00.000Z");
+    const entries = [{ slot: "lunch", name: "Salad" }];
+    const answer = buildCoachAnswer({
+      macros: { protein: 140, carbs: 160, fat: 55, cal: 1750 },
+      totals: { p: 42, c: 55, f: 16, cal: 520 },
+      entries,
+      now: evening,
+    });
+    render(<CoachEntry answer={answer} entries={entries} now={evening} onOpen={() => {}} />);
+    expect(screen.getByText("Looking for a dinner idea?")).toBeTruthy();
+    expect(screen.queryByText("Looking for a breakfast idea?")).toBeNull();
+    expect(screen.getByText("Looking for a dinner idea? I'll size it to what's left.")).toBeTruthy();
+    expect(answer.slot).toBe("dinner");
+  });
+
+  it("hides the Today card once breakfast, lunch, dinner and a snack are logged", () => {
+    renderApp({
+      todayLog: {
+        date: TODAY,
+        entries: [
+          { id: "b", name: "Eggs", slot: "breakfast", cal: 300, p: 25, c: 10, f: 15 },
+          { id: "l", name: "Salad", slot: "lunch", cal: 500, p: 40, c: 30, f: 18 },
+          { id: "d", name: "Steak", slot: "dinner", cal: 700, p: 50, c: 40, f: 28 },
+          { id: "s", name: "Yogurt", slot: "snack", cal: 150, p: 15, c: 12, f: 5 },
+        ],
+      },
+      totals: { p: 130, c: 92, f: 66, cal: 1650 },
+    });
+    expect(screen.getByRole("button", { name: "Coach" })).toBeTruthy();
+    expect(screen.queryByText(COACH_COPY.entryTitle)).toBeNull();
+    expect(screen.queryByText(/Looking for a .+ idea\?/)).toBeNull();
+    expect(screen.queryByText(COACH_COPY.entryCta)).toBeNull();
+  });
+});
+
+describe("pencilled meals against the range bands", () => {
+  const pencil = {
+    id: "p-coach",
+    name: "Chicken bowl",
+    cal: 430,
+    p: 45,
+    c: 30,
+    f: 12,
+    qty: 1,
+    slot: "dinner",
+    via: "coach",
+  };
+
+  it("hides the include toggle until something is still pencilled", () => {
+    renderApp();
+    expect(screen.queryByLabelText(COACH_COPY.countPencilled)).toBeNull();
+    expect(screen.getByText("42g logged")).toBeTruthy();
+  });
+
+  it("offers Clear on a grey pencil without logging it", async () => {
+    const onClearCoachPencil = vi.fn(async () => true);
+    const logRecipe = vi.fn(async () => true);
+    renderApp({
+      planMealsForLogDate: [pencil],
+      onClearCoachPencil,
+      logRecipe,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.clearPencil }));
+    await screen.findByRole("button", { name: COACH_COPY.clearPencil });
+    expect(onClearCoachPencil).toHaveBeenCalledTimes(1);
+    expect(onClearCoachPencil.mock.calls[0][0]).toMatchObject({
+      name: "Chicken bowl",
+      slot: "dinner",
+    });
+    expect(logRecipe).not.toHaveBeenCalled();
+  });
+
+  it("lets her add pencilled macros to the bands and the log footer", () => {
+    renderApp({ planMealsForLogDate: [pencil] });
+
+    const toggle = screen.getByLabelText(COACH_COPY.countPencilled);
+    expect(toggle.checked).toBe(false);
+    expect(screen.getByText("42g logged")).toBeTruthy();
+    expect(screen.queryByText(COACH_COPY.countPencilledHint)).toBeNull();
+
+    fireEvent.click(toggle);
+
+    expect(toggle.checked).toBe(true);
+    expect(screen.getByText(COACH_COPY.countPencilledHint)).toBeTruthy();
+    expect(screen.getAllByText("87g").length).toBeGreaterThan(0);
+    expect(screen.getByText(COACH_COPY.totalsWithPencilsUnder)).toBeTruthy();
+    expect(screen.queryByText("42g logged")).toBeNull();
+  });
+});
+
+describe("handing a question to Callie", () => {
+  it("moves her to Messages with the question waiting in the composer", async () => {
+    const postCoach = vi.fn(async () => ({ ok: true, deflect: "ranges", meals: [] }));
+    const { setTab, onAskCallie } = renderApp({ tab: "coach", postCoach });
+
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
+      target: { value: "can my calories go up" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+
+    await screen.findByText(COACH_DEFLECT.ranges.line);
+    fireEvent.click(screen.getByRole("button", { name: COACH_DEFLECT.ranges.cta }));
+
+    expect(onAskCallie).toHaveBeenCalledWith("can my calories go up");
+    expect(setTab).toHaveBeenCalledWith("messages");
+  });
+
+  it("puts the draft in the composer rather than sending it", () => {
+    renderApp({ tab: "messages", messagesDraft: "Hi Callie — can my calories go up" });
+    expect(screen.getByTestId("messages-draft").textContent)
+      .toBe("Hi Callie — can my calories go up");
+  });
+});

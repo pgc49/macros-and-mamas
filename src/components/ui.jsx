@@ -107,9 +107,9 @@ function rangeDotPos(eaten, lo, hi) {
   return Math.min(pos, 96);
 }
 
-export const RangeBand = ({ label, lo, hi, unit = "g", eaten }) => {
+export const RangeBand = ({ label, lo, hi, unit = "g", eaten, eatenWord = "logged" }) => {
   const st = rangeState(eaten, lo, hi);
-  const progress = formatRangeProgress(eaten, lo, hi, unit);
+  const progress = formatRangeProgress(eaten, lo, hi, unit, eatenWord);
   const dot = rangeDotPos(eaten, lo, hi);
   const fillColor = st === "over" ? T.amber : st === "in" ? T.sage : T.accent;
   const bandBg = st === "in" ? T.sageSoft : T.accentSoft;

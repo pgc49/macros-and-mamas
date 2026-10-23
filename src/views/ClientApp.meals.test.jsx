@@ -101,7 +101,7 @@ function renderMeals(filter = "All meals", extras = {}) {
         macroHistory={[]}
         mealFilter={filter}
         setMealFilter={setMealFilter}
-        customMeals={[{ id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 }]}
+        customMeals={extras.customMeals || [{ id: "c1", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 }]}
       />
     </MemoryRouter>,
   );
@@ -172,6 +172,19 @@ describe("Meals tab search filter", () => {
     expect(screen.getByRole("option", { name: "Pantry" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Pantry" })).toBeNull();
     expect(screen.getByRole("button", { name: "Weekly Planner" })).toBeTruthy();
+  });
+
+  it("lists every live saved meal and does not show an empty kitchen", () => {
+    renderMeals("My meals", {
+      customMeals: [
+        { id: "sausage", name: "Sausage, egg + whites scramble", cal: 420, p: 36, c: 20, f: 18 },
+        { id: "other", name: "Turkey and Bacon", cal: 400, p: 40, c: 10, f: 18 },
+      ],
+    });
+
+    expect(screen.getByText("Sausage, egg + whites scramble")).toBeTruthy();
+    expect(screen.getByText("Turkey and Bacon")).toBeTruthy();
+    expect(screen.queryByText(/Nothing saved yet/)).toBeNull();
   });
 
   it("filters the bank to meals that fit remaining room from today's log", () => {
