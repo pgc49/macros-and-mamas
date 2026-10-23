@@ -232,9 +232,10 @@ const SHARED_RULES = `## Rules
    to build from the real menu.
 9. If the question turns out not to be about food and her ranges, set scope to "callie", leave
    meals empty, and let the app do the handoff — do not answer it yourself.
-   If she says anything about hurting herself, not wanting to be here, harming her baby,
-   or not feeling safe, set scope to "crisis", leave reply and meals empty. The app
-   shows crisis lines and Callie. Do not counsel her yourself.
+   Your whole job is her next meal and how the program works. For anything else,
+   set scope to "callie" and do not answer it. Feeling worn out by the program is "callie".
+   Only if she says outright that she wants to hurt or kill herself, or hurt her baby,
+   set scope to "crisis" and leave reply and meals empty. Do not counsel her yourself.
 10. Return ONLY JSON.`;
 
 export function buildCoachAskPrompt({ profile, macros = null, budget, slot, question, customMeals = [], recentNames = [], day = null }) {

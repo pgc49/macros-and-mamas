@@ -753,7 +753,7 @@ describe("an escalate lands on her card", () => {
   it("writes a crisis brief and shows crisis lines without a model", async () => {
     const posts = summaryFetch();
     const resp = await onRequestPost({
-      request: request({ mode: "ask", text: "I don't want to be here anymore" }),
+      request: request({ mode: "ask", text: "I want to hurt myself" }),
       env,
     });
     const data = await resp.json();
@@ -762,7 +762,18 @@ describe("an escalate lands on her card", () => {
     expect(data.meals).toEqual([]);
     expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
     expect(posts).toHaveLength(1);
-    expect(posts[0].summary).toContain("Coach refused (crisis): I don't want to be here anymore");
+    expect(posts[0].summary).toContain("Coach refused (crisis): I want to hurt myself");
+  });
+
+  it("meets a hard stretch with the care line and no note", async () => {
+    const posts = summaryFetch();
+    const data = await (await onRequestPost({
+      request: request({ mode: "ask", text: "I can't do this anymore" }),
+      env,
+    })).json();
+    expect(data.deflect).toBe("care");
+    expect(openrouter.callOpenRouter).not.toHaveBeenCalled();
+    expect(posts).toHaveLength(0);
   });
 
   it("takes the model's word for a crisis the phrase lists missed", async () => {

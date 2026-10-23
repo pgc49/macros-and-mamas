@@ -20,6 +20,8 @@ describe("a refusal line is factual", () => {
     expect(refusalDoor("crisis")).toBe("crisis");
     expect(escalateDoor("I don't want to be here anymore", { scope: "crisis" })).toBe("crisis");
     expect(escalateDoor("I want to hurt myself")).toBe("crisis");
+    expect(escalateDoor("I can't do this anymore", { scope: "urgent" })).toBeNull();
+    expect(escalateDoor("I hate how I look", { scope: "urgent" })).toBeNull();
     expect(escalateDoor("everything feels pointless", { scope: "crisis" })).toBe("crisis");
     expect(escalateDoor("I made myself throw up", { scope: "urgent" })).toBe("medical");
     expect(coachRefusalLine("I want to hurt myself", "crisis")).toBe("Coach refused (crisis): I want to hurt myself");

@@ -245,39 +245,63 @@ describe("the reply itself", () => {
   });
 });
 
-describe("she may be in danger", () => {
-  const CRISIS = [
-    "I don't want to be here anymore",
-    "honestly I dont want to wake up tomorrow",
-    "I want to disappear",
-    "I've been thinking about killing myself",
-    "I want to hurt myself",
-    "everyone would be better off without me",
-    "I can't do this anymore",
-    "I'm having thoughts of hurting the baby",
-    "I wish I wasn't alive",
-    "is this suicidal thinking or just tired",
-    "I want to die, what should I eat",
-  ];
-
-  it("gets crisis lines before anything else, food word or not", () => {
-    for (const ask of CRISIS) {
+describe("only a real danger gets crisis lines", () => {
+  it("gets crisis lines when she says outright she might hurt herself or the baby", () => {
+    for (const ask of [
+      "I've been thinking about killing myself",
+      "I want to hurt myself",
+      "I'm having thoughts of self harm",
+      "I want to die, what should I eat",
+      "I'm scared I'll hurt my baby",
+      "is this suicidal thinking or just tired",
+    ]) {
       expect(scopeOf(ask), ask).toBe("crisis");
       expect(isCrisis(ask), ask).toBe(true);
-      expect(scopeIsRefused("crisis")).toBe(true);
     }
+    expect(scopeIsRefused("crisis")).toBe(true);
     expect(deflectForScope("crisis")).toBe("crisis");
   });
 
-  it("does not read ordinary tiredness or food as a crisis", () => {
+  it("does not read a hard stretch, tiredness, or food as a crisis", () => {
     for (const ask of [
+      "I can't do this anymore",
+      "I don't want to be here anymore",
+      "I want to disappear",
+      "everyone would be better off without me eating like this",
       "I'm so tired, what's a quick dinner",
       "I could kill for a burger",
       "this day is killing me, what should I eat",
-      "I want to disappear into a bowl of pasta tonight",
       "I wish I was here more often for lunch",
     ]) {
       expect(isCrisis(ask), ask).toBe(false);
+      expect(scopeOf(ask), ask).not.toBe("crisis");
+    }
+  });
+});
+
+describe("a hard stretch with the program", () => {
+  it("goes to Callie's care line, not a hotline and not a note on her card", () => {
+    for (const ask of [
+      "I can't do this anymore",
+      "I don't want to do this anymore",
+      "I'm so overwhelmed",
+      "I want to give up on this",
+      "what's the point",
+      "I feel defeated",
+    ]) {
+      expect(scopeOf(ask), ask).toBe("urgent");
+      expect(deflectForScope(scopeOf(ask))).toBe("care");
+      expect(isClinicalUrgent(ask), ask).toBe(false);
+    }
+  });
+
+  it("still feeds her when she also asks what to eat", () => {
+    expect(classifyAsk("I can't do this anymore, what should I eat for dinner")).toEqual({ scope: "food", aside: "care" });
+  });
+
+  it("leaves ordinary giving-up talk about food alone", () => {
+    for (const ask of ["I'm giving up sugar, what's a good snack", "I want to quit coffee", "what's the point of logging snacks"]) {
+      expect(scopeOf(ask), ask).not.toBe("urgent");
     }
   });
 });
@@ -300,9 +324,10 @@ describe("restriction, purging, and shame are Callie's", () => {
     }
   });
 
-  it("hands self-loathing to Callie", () => {
+  it("hands self-loathing to Callie's care line without a note on her card", () => {
     for (const ask of ["I hate myself", "I hate how I look", "I'm disgusted with myself", "I hate my stomach"]) {
       expect(scopeOf(ask), ask).toBe("urgent");
+      expect(isClinicalUrgent(ask), ask).toBe(false);
     }
   });
 

@@ -636,22 +636,32 @@ describe("what isn't the coach's goes to Callie", () => {
     const onAskCallie = vi.fn();
     renderPanel({ postCoach, onAskCallie });
     fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), {
-      target: { value: "I don't want to be here anymore, what should I eat" },
+      target: { value: "I want to hurt myself" },
     });
     fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
 
     await screen.findByText(COACH_DEFLECT.crisis.line);
     expect(COACH_DEFLECT.crisis.line).toMatch(/988/);
-    expect(COACH_DEFLECT.crisis.line).toMatch(/1-833-852-6262/);
     expect(COACH_DEFLECT.crisis.line).toMatch(/911/);
     expect(screen.getByRole("link", { name: "Call 988" }).getAttribute("href")).toBe("tel:988");
     expect(screen.getByRole("link", { name: "Text 988" }).getAttribute("href")).toBe("sms:988");
-    expect(screen.getByRole("link", { name: "Call 1-833-852-6262" }).getAttribute("href")).toBe("tel:18338526262");
+    expect(screen.getAllByRole("link")).toHaveLength(2);
     expect(postCoach).toHaveBeenCalledTimes(1);
-    expect(postCoach).toHaveBeenCalledWith({ mode: "ask", text: "I don't want to be here anymore, what should I eat" });
+    expect(postCoach).toHaveBeenCalledWith({ mode: "ask", text: "I want to hurt myself" });
 
     fireEvent.click(screen.getByRole("button", { name: COACH_DEFLECT.crisis.cta }));
-    expect(onAskCallie).toHaveBeenCalledWith("I don't want to be here anymore, what should I eat");
+    expect(onAskCallie).toHaveBeenCalledWith("I want to hurt myself");
+  });
+
+  it("meets a hard stretch with Callie's care line, no hotline and no note", async () => {
+    const postCoach = vi.fn();
+    renderPanel({ postCoach });
+    fireEvent.change(screen.getByLabelText(COACH_COPY.placeholder), { target: { value: "I can't do this anymore" } });
+    fireEvent.click(screen.getByRole("button", { name: COACH_COPY.send }));
+    await screen.findByText(COACH_DEFLECT.care.line);
+    expect(screen.queryByText(/988/)).toBeNull();
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(postCoach).not.toHaveBeenCalled();
   });
 
   it("answers a greeting or a mash on the phone, with no model call", async () => {

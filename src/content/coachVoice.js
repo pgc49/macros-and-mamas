@@ -256,7 +256,7 @@ export const COACH_COPY = {
  */
 export const COACH_HOW_TO = {
   howCoach:
-    "I'm the Meal Coach. I'm automated, not Callie. She doesn't read these chats, but if something sounds medical or like you're struggling, she gets a short note so she can check in. I'm best at your next meal: what to eat with what's left today, what to order when you're out, or a photo of a menu. I can point you around the app, too. Your ranges, the scale, supply, or how you're feeling go to Callie in Messages.",
+    "I'm the Meal Coach. I'm automated, not Callie. She doesn't read these chats, but if something sounds medical or serious, she gets a short note so she can check in. I'm here for your next meal: what to eat with what's left today, what to order when you're out, or a photo of a menu. I can point you around the app, too. Anything else, like your ranges, the scale, supply, or how you're feeling, goes to Callie in Messages.",
   howLog:
     "On Today, go to Log a meal. Snap reads a photo of your plate or a menu, Describe lets you type it, My plan has your planned and saved meals, and Macros is for when you already know the numbers. Pick which meal it was, then save.",
   howEdit:
@@ -296,15 +296,14 @@ export const COACH_HOW_TO = {
  * `links` are tappable lines drawn under the text, ahead of Message Callie.
  */
 export const COACH_DEFLECT = {
-  // She may be in danger. A person right now first, then Callie. No food, no
-  // softening, nothing for the model to add.
+  // Only when she says outright she might hurt herself or the baby. Calm, short,
+  // and a person first. Never paired with food.
   crisis: {
     line:
-      "I'm really glad you told me. This is bigger than a meal, and you deserve a real person right now. Call or text 988 any time, day or night. The National Maternal Mental Health Hotline is 1-833-852-6262, call or text. If you or your baby are in danger, call 911. Please message Callie too.",
+      "I'm glad you said something. This is bigger than a meal, and you deserve to talk to a real person. You can call or text 988 any time. If you're in danger right now, call 911. And please message Callie too.",
     links: [
       { label: "Call 988", href: "tel:988" },
       { label: "Text 988", href: "sms:988" },
-      { label: "Call 1-833-852-6262", href: "tel:18338526262" },
     ],
     cta: "Message Callie",
   },
@@ -329,7 +328,7 @@ export const COACH_DEFLECT = {
     cta: "Message Callie",
   },
   offTopic: {
-    line: `I only do food and your ranges. ${COACH_MESSAGE_HER}`,
+    line: `That one's outside what I can help with. I'm here for your next meal and how the program works. Callie's your person for the rest. ${COACH_MESSAGE_HER}`,
     cta: "Message Callie",
   },
   supply: {

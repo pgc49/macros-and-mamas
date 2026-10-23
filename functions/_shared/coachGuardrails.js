@@ -12,8 +12,8 @@
    ================================================================== */
 
 /**
- * crisis   — she may be in danger: hurting herself, not wanting to be here, or
- *            the baby. Gets crisis lines and Callie, before anything else.
+ * crisis   — she says outright she might hurt herself or the baby. 988 and
+ *            Callie, before anything else. Nothing softer than that lands here.
  * urgent   — symptoms, medication, mental health, restriction. Never answered,
  *            never paired with meal cards, no matter how the question is worded.
  * ranges   — her numbers are Callie's to set.
@@ -39,18 +39,15 @@ export const COACH_SCOPES = [
 ];
 
 /**
- * Wider than the words a clinician would use, on purpose. A mama who types
- * "I don't want to be here anymore" at 2am gets crisis lines, not a recipe.
+ * Only words that say outright she might hurt herself or the baby. "I can't
+ * do this anymore" is almost always the program, and a hotline there reads as
+ * an overreaction. Those go to Callie's care line (PROGRAM_HARD) instead.
  */
 const CRISIS = [
   /\bsuicid/, /\bself[- ]?harm/, /\bkill(ing)? (myself|my ?self)\b/, /\bhurt(ing)? (myself|my ?self)\b/,
-  /\bcut(ting)? myself\b/, /\bend (it all|my life)\b/, /\btake my (own )?life\b/,
-  /\b(don'?t|do not|dont) want to (be here|live|wake up|exist|be alive|go on)\b/,
-  /\bwant to (die|disappear(?! into)|not exist|not be here)\b/, /\bwish i (was|were) (dead|gone)\b/, /\bwish i (wasn'?t|weren'?t|was never|had never been) (here|alive|born)\b/,
-  /\bbetter off without me\b/, /\bno (reason|point) (to|in) (live|living|going on|being here)\b/,
-  /\bcan'?t (go on|do this anymore|keep going)\b/,
-  /\b(hurt|harm|shake|drown|smother)(ing)? (the|my) (baby|son|daughter|kids?|child)\b/,
-  /\bthoughts? (of|about) (hurting|harming)\b/,
+  /\bcut(ting)? myself\b/, /\bend(ing)? my (own )?life\b/, /\btake my (own )?life\b/,
+  /\bwant to die\b/, /\bwish i (was|were) dead\b/,
+  /\b(hurt|harm)(ing)? (the|my) (baby|son|daughter|kids?|child)\b/,
 ];
 
 const URGENT = [
@@ -72,8 +69,7 @@ const URGENT = [
   /\bpregnan/, /\btrimester\b/,
   // Mental health
   /\banxiety\b/, /\banxious\b/, /\bdepress/, /\bppd\b/, /\bpanic attack/,
-  /\btherapist\b/, /\bhate (myself|my ?self|how i look|what i see|my (stomach|belly|thighs|arms|face|reflection))\b/,
-  /\bdisgusted (with|by|at) (myself|my ?self|my body)\b/,
+  /\btherapist\b/,
   // Restriction and disordered eating.
   //
   // Three of these are idioms before they are symptoms, and the literal
@@ -152,6 +148,21 @@ const GUILT = [
   /\bguilty (about|for)\b/,
   /\bashamed\b/, /\bembarrassed (about|by) (what|how much) i ate\b/,
   /\b(i feel|i'?m|im|feeling) (so |really )?(fat|gross|huge|disgusting)\b/,
+  /\bhate (myself|my ?self|how i look|what i see|my (stomach|belly|thighs|arms|face|reflection))\b/,
+  /\bdisgusted (with|by|at) (myself|my ?self|my body)\b/,
+];
+
+/**
+ * A hard stretch with the program. Callie's care line, said kindly, with no
+ * hotline and no note on her card. With a meal question it still gets food.
+ */
+const PROGRAM_HARD = [
+  /\bcan'?t (do this|keep (doing )?this|keep going|go on)( anymore)?\b/,
+  /\b(don'?t|do not|dont) want to (do this|be here) anymore\b/,
+  /\b(want to|going to|ready to|about to) (quit|give up)( on)? (this|the program|it all|everything|myself)\b/,
+  /\bgiving up on (this|the program|myself|everything)\b/,
+  /\b(i'?m|im|feeling|i feel) (so |really )?(overwhelmed|burn(ed|t) out|defeated|hopeless|done with this)\b/,
+  /\bwhat'?s the point( anymore)?[.?!]*$/,
 ];
 
 /**
@@ -282,7 +293,7 @@ export function classifyAsk(raw) {
 
   // Guilt with no next-meal question is still hers. Guilt plus "what do I
   // eat next" gets the food, then the handoff.
-  const guilt = hits(GUILT, text);
+  const guilt = hits(GUILT, text) || hits(PROGRAM_HARD, text);
   const nextMeal = NEXT_MEAL.test(text);
   if (guilt && !nextMeal) return { scope: "urgent", aside: null };
 
@@ -327,7 +338,7 @@ export function isClinicalUrgent(raw) {
   return Boolean(text) && (hits(URGENT, text) || lowCalorieDay(text));
 }
 
-/** She may be in danger. Callie hears about every one of these. */
+/** She said she might hurt herself or the baby. Callie hears about every one. */
 export function isCrisis(raw) {
   const text = String(raw || "").toLowerCase().trim();
   return Boolean(text) && hits(CRISIS, text);
