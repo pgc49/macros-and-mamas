@@ -23,6 +23,7 @@ import { FoodPrefsEditor } from "../components/FoodPrefsEditor";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { TechHelpFooter } from "../components/TechHelpFooter";
 import { MembershipPaused, MembershipPayPrompt } from "../components/MembershipPayPrompt";
+import { CourtesyMonthCard } from "../components/CourtesyMonthCard";
 import { MessagesPanel } from "../components/MessagesPanel";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals, targetBands } from "../utils/weekPlan";
@@ -282,7 +283,9 @@ export function ClientApp({
 
           {membershipPaywall ? (
             <MembershipPayPrompt profile={profile} onPay={onMembershipPay} />
-          ) : null}
+          ) : (
+            <CourtesyMonthCard profile={profile} onPay={onMembershipPay} />
+          )}
           <MembershipPaused paused={membershipPaywall}>
           <AppUpdateBanner />
           <MondayVoiceDropBanner />

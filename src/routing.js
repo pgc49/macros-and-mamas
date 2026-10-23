@@ -14,7 +14,7 @@ export function goMarketingHome() {
 /**
  * Where a signed-in user should land after auth / cold load.
  * Pay-first: account → pay → intake → Callie approve → dashboard.
- * After founding free month (or programEnd for later cohorts) without a sub,
+ * After a post-program free month (Founding, or August's courtesy month) without a sub,
  * home is still Today. The dashboard shows the pay prompt and pauses logging.
  * /membership stays a direct checkout link.
  *

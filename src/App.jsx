@@ -40,6 +40,7 @@ import { MealsTabPreview } from "./views/MealsTabPreview";
 import { RecipeBankPreview } from "./views/RecipeBankPreview";
 import { MessagesThreadPreview } from "./views/MessagesThreadPreview";
 import { MembershipHomePreview } from "./views/MembershipHomePreview";
+import { CourtesyMonthPreview } from "./views/CourtesyMonthPreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
@@ -1677,6 +1678,7 @@ export default function App() {
           <Route path="/dev/recipe-bank" element={<RecipeBankPreview />} />
           <Route path="/dev/messages-thread" element={<MessagesThreadPreview />} />
           <Route path="/dev/membership-home" element={<MembershipHomePreview />} />
+          <Route path="/dev/courtesy-month" element={<CourtesyMonthPreview />} />
           {AdminMessagesPreview ? (
             <Route
               path="/dev/admin-messages"

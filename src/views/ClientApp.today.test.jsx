@@ -171,4 +171,30 @@ describe("ClientApp membership pay prompt", () => {
     expect(screen.getByText(/Messages open again once membership is on/)).toBeTruthy();
     expect(messages.container.querySelector("[data-messages-panel]")).toBeNull();
   });
+
+  it("shows Callie's courtesy month on Today for August and not for Founding", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-23T18:00:00.000Z"));
+    try {
+      const august = renderClient("today", {
+        profile: {
+          name: "Pat",
+          paid: true,
+          homescreenTipDismissedAt: "2026-08-01T00:00:00Z",
+          cohort_label: "2026-08",
+        },
+      });
+      expect(screen.getByRole("heading", { name: "A courtesy month of the new membership" })).toBeTruthy();
+      expect(screen.getByText(/one month free of the new tier/)).toBeTruthy();
+      expect(screen.getByText("Alumni chat with Callie and the other grads")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Add my membership" }));
+      expect(startMembershipCheckout).toHaveBeenCalledWith({ cancelPath: "/dashboard" });
+      august.unmount();
+
+      renderClient("today");
+      expect(screen.queryByText("From Callie")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

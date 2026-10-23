@@ -2,17 +2,19 @@
    Alumni membership helpers (stage 4)
    ==================================================================
    Opt-in only — never create a Stripe subscription without a mama tap.
-   Founding free month: programEnd → programEnd+30d access without a sub;
-   after that, login/app requires trialing|active (or alumni_19 save tier).
-   August and later: no post-program free month; paywall at programEnd.
+   Founding free month: programEnd → programEnd+30d access without a sub.
+   August courtesy month: same window, framed as one free month of the $49 tier.
+   After either window, the app requires trialing|active (or alumni_19).
+   November and later: no post-program free month; paywall at programEnd.
    ================================================================== */
 
 import {
   cohortByLabel,
   displayNameForCohortLabel,
   freeMonthEndsAt,
-  hasFoundingFreeMonth,
+  hasPostProgramFreeMonth,
   isProgramComplete,
+  postProgramFreeMonthKind,
   programLastDayIso,
   programWeekNumber,
 } from "./cohorts.js";
@@ -168,13 +170,13 @@ export function membershipAccess(profile, now = new Date()) {
 
 /**
  * Trial end unix for Checkout.
- * Founding: pin to free-month end (~Oct 21) so nothing charges during the perk.
+ * Founding and August: pin to free-month end so nothing charges during that month.
  * Later cohorts: pin to programEnd only (so they are not charged during the
- * 8 weeks they already paid for). After programEnd, no trial.
+ * 8 weeks they already paid for). After that date, no trial.
  */
 export function trialEndUnixForCheckout(profile, now = new Date()) {
   const cohort = cohortByLabel(profile?.cohort_label);
-  const endIso = hasFoundingFreeMonth(cohort)
+  const endIso = hasPostProgramFreeMonth(cohort)
     ? freeMonthEndsAt(cohort)
     : (cohort?.programEnd || null);
   if (!endIso) return null;
@@ -225,13 +227,22 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
   const priceId = alumniPriceId(env);
   const status = String(profile.subscription_status || "");
   const active = hasActiveMembership(profile);
+  const kind = postProgramFreeMonthKind(profile.cohort_label);
+  const courtesy = kind === "courtesy";
 
-  const benefits = [
-    "Keep your macros, meal logging, and full progress history",
-    "Alumni community chat with Callie and other grads",
-    "Founding Mama rate: $49/mo locked in while you stay subscribed",
-    "Q&A Library (monthly audio + weekly notes) as it rolls out",
-  ];
+  const benefits = courtesy
+    ? [
+      "Your ranges, meal logging, and progress history",
+      "Alumni chat with Callie and other grads",
+      "$49/mo after the courtesy month, while you stay subscribed",
+      "Q&A Library (monthly audio + weekly notes) as it rolls out",
+    ]
+    : [
+      "Keep your macros, meal logging, and full progress history",
+      "Alumni community chat with Callie and other grads",
+      "Founding Mama rate: $49/mo locked in while you stay subscribed",
+      "Q&A Library (monthly audio + weekly notes) as it rolls out",
+    ];
 
   if (active && (status === "trialing" || status === "active" || status === "past_due")) {
     const periodEnd = profile.subscription_current_period_end || profile.subscription_trial_end;
@@ -243,7 +254,7 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
         : "active";
     return {
       status: displayStatus,
-      priceLabel: "Founding Mama membership",
+      priceLabel: courtesy ? "Monthly membership" : "Founding Mama membership",
       amount: 49,
       currency: "usd",
       renewsAt: periodEnd || null,
@@ -251,23 +262,28 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
       cancelAtPeriodEnd: false,
       periodLabel: periodEnd
         ? (status === "trialing"
-          ? (hasFoundingFreeMonth(profile.cohort_label)
+          ? (kind === "founding"
             ? `Free month through ${formatShortDate(trialEnd || periodEnd)} · first charge after that`
-            : `First charge after ${formatShortDate(trialEnd || periodEnd)}`)
+            : kind === "courtesy"
+              ? `Courtesy month through ${formatShortDate(trialEnd || periodEnd)} · first charge after that`
+              : `First charge after ${formatShortDate(trialEnd || periodEnd)}`)
           : `Current period through ${formatShortDate(periodEnd)}`)
         : null,
       canSubscribe: false,
       benefits,
       note: status === "trialing"
-        ? (hasFoundingFreeMonth(profile.cohort_label)
+        ? (kind === "founding"
           ? "You're in your free month — nothing charges until the trial ends."
-          : "Nothing charges until the trial ends.")
+          : kind === "courtesy"
+            ? "Callie's courtesy month is on this membership. Nothing charges until the trial ends."
+            : "Nothing charges until the trial ends.")
         : status === "past_due"
           ? "Your latest membership payment didn’t go through. Update your card — access stays open while Stripe retries."
           : "Your monthly membership is active.",
       access,
       priceConfigured: !!priceId,
-      hasFreeMonth: hasFoundingFreeMonth(profile.cohort_label),
+      hasFreeMonth: kind != null,
+      freeMonthKind: kind,
     };
   }
 
@@ -286,13 +302,14 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
       note: "You're on the $19 app-access save rate. Alumni chat and Library stay off this plan.",
       access,
       priceConfigured: !!priceId,
-      hasFreeMonth: hasFoundingFreeMonth(profile.cohort_label),
+      hasFreeMonth: kind != null,
+      freeMonthKind: kind,
     };
   }
 
-  // Eligible to opt in (during program, founding free month, or after — resubscribe).
+  // Eligible to opt in (during program, free month, or after — resubscribe).
   const freeEnd = access.freeMonthEndsAt;
-  const founding = hasFoundingFreeMonth(access.cohortLabel);
+  const founding = kind === "founding";
   const inFreeMonth = access.reason === "free_month";
   const beforeProgramEnd = access.reason === "in_program";
   const afterProgram = access.paywall;
@@ -301,35 +318,44 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
   let note;
   if (founding && (beforeProgramEnd || inFreeMonth)) {
     note = `Founding Members get one month of monthly membership free starting ${formatShortDate(access.programEnd)} (through ${formatShortDate(freeEnd)}). Opt in below — nothing charges until that free month ends. You can subscribe early; the free period still applies.`;
+  } else if (courtesy && inFreeMonth) {
+    note = `You're in Callie's courtesy month, through ${formatShortDate(freeEnd)}. This is one month free of the $49 monthly membership — your ranges, meal log, progress, and Alumni chat. After that date, it is $49/mo if you keep it. Opt in below to continue; nothing charges until the courtesy month ends.`;
+  } else if (courtesy && beforeProgramEnd) {
+    note = `Callie is giving August Group one month of the monthly membership, free. That is the new tier after the 8 weeks: your ranges, meal log, progress, and Alumni chat. The courtesy month starts ${formatShortDate(access.programEnd)} and runs through ${formatShortDate(freeEnd)}. After that, it is $49/mo if you keep it. Opt in below to continue it — nothing charges until the courtesy month ends. The app stays open through that month either way.`;
   } else if (beforeProgramEnd) {
     note = `You can opt in to $49/mo anytime. If you subscribe during the 8 weeks, your first charge waits until the program ends${programLastDay ? ` (${formatShortDate(programLastDay)})` : ""}.`;
   } else if (afterProgram) {
     note = founding
       ? "Your free month has ended. Pay $49/mo to keep logging, your ranges, and Alumni chat. This does not include another free month."
-      : "Your 8-week program has ended. Pay $49/mo to keep logging, your ranges, and Alumni chat.";
+      : courtesy
+        ? "Your courtesy month has ended. Pay $49/mo to keep logging, your ranges, and Alumni chat. That was one month free of this membership."
+        : "Your 8-week program has ended. Pay $49/mo to keep logging, your ranges, and Alumni chat.";
   } else {
     note = "Opt in to monthly membership when you're ready. Nothing charges until you do.";
   }
 
-  const freeMonthStillAhead = founding && (beforeProgramEnd || inFreeMonth);
+  const freeMonthStillAhead = (founding || courtesy) && (beforeProgramEnd || inFreeMonth);
 
   return {
     status: afterProgram ? "required" : "available",
-    priceLabel: "Founding Mama membership",
+    priceLabel: founding ? "Founding Mama membership" : "Monthly membership",
     amount: 49,
     currency: "usd",
     renewsAt: null,
     trialEndsAt: freeMonthStillAhead ? freeEnd : (beforeProgramEnd ? access.programEnd : null),
     cancelAtPeriodEnd: false,
     periodLabel: freeMonthStillAhead && freeEnd
-      ? `Free month covers ${formatShortDate(access.programEnd)} – ${formatShortDate(freeEnd)}`
+      ? (courtesy
+        ? `Courtesy month covers ${formatShortDate(access.programEnd)} – ${formatShortDate(freeEnd)}`
+        : `Free month covers ${formatShortDate(access.programEnd)} – ${formatShortDate(freeEnd)}`)
       : null,
     canSubscribe: !!priceId && !!profile.paid && !profile.refunded,
     benefits,
     note,
     access,
     priceConfigured: !!priceId,
-    hasFreeMonth: founding,
+    hasFreeMonth: founding || courtesy,
+    freeMonthKind: kind,
   };
 }
 

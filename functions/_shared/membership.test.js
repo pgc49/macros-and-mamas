@@ -8,6 +8,7 @@ import {
 
 const FOUNDING_FREE_END = "2026-10-21T00:00:00.000Z";
 const AUGUST_PROGRAM_END = "2026-10-26T00:00:00.000Z";
+const AUGUST_COURTESY_END = "2026-11-25T00:00:00.000Z";
 
 function mama(overrides = {}) {
   return {
@@ -67,29 +68,52 @@ describe("membershipAccess — Founding free month", () => {
   });
 });
 
-describe("membershipAccess — August has no free month", () => {
+describe("membershipAccess — August courtesy month", () => {
   const august = () => mama({ cohort_label: "2026-08" });
 
   it("allows in-program access through the last program day", () => {
     const during = membershipAccess(august(), "2026-10-25T12:00:00.000Z");
-    expect(during).toMatchObject({ allowed: true, reason: "in_program", paywall: false });
-    expect(during.freeMonthEndsAt).toBeNull();
+    expect(during).toMatchObject({
+      allowed: true,
+      reason: "in_program",
+      paywall: false,
+      freeMonthEndsAt: AUGUST_COURTESY_END,
+    });
   });
 
-  it("paywalls at programEnd with no 30-day window", () => {
+  it("keeps August in the courtesy month after programEnd", () => {
     const access = membershipAccess(august(), "2026-10-26T00:00:00.000Z");
+    expect(access).toMatchObject({
+      allowed: true,
+      reason: "free_month",
+      paywall: false,
+      freeMonthEndsAt: AUGUST_COURTESY_END,
+    });
+    expect(membershipAccess(august(), "2026-11-10T12:00:00.000Z")).toMatchObject({
+      allowed: true,
+      reason: "free_month",
+      paywall: false,
+    });
+  });
+
+  it("paywalls August after the courtesy month without a sub", () => {
+    const access = membershipAccess(august(), AUGUST_COURTESY_END);
     expect(access).toMatchObject({
       allowed: false,
       reason: "membership_required",
       paywall: true,
+      freeMonthEndsAt: AUGUST_COURTESY_END,
     });
-    expect(access.freeMonthEndsAt).toBeNull();
   });
 
-  it("does not grant free_month in the 30 days after programEnd", () => {
-    const access = membershipAccess(august(), "2026-11-10T12:00:00.000Z");
-    expect(access.reason).toBe("membership_required");
-    expect(access.paywall).toBe(true);
+  it("does not give November a courtesy month", () => {
+    const november = mama({ cohort_label: "2026-11" });
+    expect(membershipAccess(november, "2026-12-28T00:00:00.000Z")).toMatchObject({
+      allowed: false,
+      reason: "membership_required",
+      paywall: true,
+      freeMonthEndsAt: null,
+    });
   });
 
   it("still allows a subscribed August mama after programEnd", () => {
@@ -111,22 +135,34 @@ describe("trialEndUnixForCheckout", () => {
     expect(trialEndUnixForCheckout(mama(), "2026-10-21T00:00:00.000Z")).toBeNull();
   });
 
-  it("pins August Checkout to programEnd when she opts in during the 8 weeks", () => {
-    const expected = Math.floor(Date.parse(AUGUST_PROGRAM_END) / 1000);
+  it("pins August Checkout to the courtesy-month end during the program and the courtesy month", () => {
+    const expected = Math.floor(Date.parse(AUGUST_COURTESY_END) / 1000);
     expect(trialEndUnixForCheckout(
       mama({ cohort_label: "2026-08" }),
       "2026-09-15T12:00:00.000Z",
     )).toBe(expected);
-  });
-
-  it("does not give August a 30-day post-program trial", () => {
-    expect(trialEndUnixForCheckout(
-      mama({ cohort_label: "2026-08" }),
-      "2026-10-26T00:00:00.000Z",
-    )).toBeNull();
     expect(trialEndUnixForCheckout(
       mama({ cohort_label: "2026-08" }),
       "2026-11-10T12:00:00.000Z",
+    )).toBe(expected);
+  });
+
+  it("does not pin August after the courtesy month", () => {
+    expect(trialEndUnixForCheckout(
+      mama({ cohort_label: "2026-08" }),
+      AUGUST_COURTESY_END,
+    )).toBeNull();
+  });
+
+  it("still pins November to programEnd and does not add 30 days", () => {
+    const programEnd = "2026-12-28T00:00:00.000Z";
+    expect(trialEndUnixForCheckout(
+      mama({ cohort_label: "2026-11" }),
+      "2026-11-15T12:00:00.000Z",
+    )).toBe(Math.floor(Date.parse(programEnd) / 1000));
+    expect(trialEndUnixForCheckout(
+      mama({ cohort_label: "2026-11" }),
+      programEnd,
     )).toBeNull();
   });
 });
@@ -134,7 +170,7 @@ describe("trialEndUnixForCheckout", () => {
 describe("buildSubscriptionPayload copy", () => {
   const env = { PRICE_ALUMNI_49: "price_alumni_membership_49" };
 
-  it("tells Founding about the free month and does not tell August", async () => {
+  it("tells Founding about their free month and August about the courtesy month", async () => {
     const founding = await buildSubscriptionPayload(
       env,
       mama(),
@@ -151,14 +187,18 @@ describe("buildSubscriptionPayload copy", () => {
       mama({ cohort_label: "2026-08" }),
       "2026-08-18T15:00:00.000Z",
     );
-    expect(august.hasFreeMonth).toBe(false);
+    expect(august.hasFreeMonth).toBe(true);
+    expect(august.freeMonthKind).toBe("courtesy");
+    expect(august.note).toMatch(/Callie is giving August Group/);
+    expect(august.note).toMatch(/one month of the monthly membership, free/);
+    expect(august.note).toMatch(/new tier/);
     expect(august.note).not.toMatch(/free month/i);
-    expect(august.periodLabel).toBeNull();
-    expect(august.trialEndsAt).toBe(AUGUST_PROGRAM_END);
+    expect(august.periodLabel).toMatch(/Courtesy month covers/);
+    expect(august.trialEndsAt).toBe(AUGUST_COURTESY_END);
     expect(august.status).toBe("available");
   });
 
-  it("does not tell August the program ended with a free month", async () => {
+  it("keeps August's courtesy month separate from Founding's ended perk", async () => {
     const founding = await buildSubscriptionPayload(
       env,
       mama(),
@@ -170,18 +210,26 @@ describe("buildSubscriptionPayload copy", () => {
     expect(founding.periodLabel).toBeNull();
     expect(founding.trialEndsAt).toBeNull();
 
-    const august = await buildSubscriptionPayload(
+    const duringCourtesy = await buildSubscriptionPayload(
       env,
       mama({ cohort_label: "2026-08" }),
       "2026-10-26T00:00:00.000Z",
     );
-    expect(august.status).toBe("required");
-    expect(august.hasFreeMonth).toBe(false);
-    expect(august.note).toBe(
-      "Your 8-week program has ended. Pay $49/mo to keep logging, your ranges, and Alumni chat.",
+    expect(duringCourtesy.status).toBe("available");
+    expect(duringCourtesy.note).toMatch(/You're in Callie's courtesy month/);
+    expect(duringCourtesy.note).toMatch(/one month free of the \$49 monthly membership/);
+    expect(duringCourtesy.trialEndsAt).toBe(AUGUST_COURTESY_END);
+
+    const afterCourtesy = await buildSubscriptionPayload(
+      env,
+      mama({ cohort_label: "2026-08" }),
+      AUGUST_COURTESY_END,
     );
-    expect(august.note).not.toMatch(/free month/i);
-    expect(august.trialEndsAt).toBeNull();
+    expect(afterCourtesy.status).toBe("required");
+    expect(afterCourtesy.note).toMatch(/Your courtesy month has ended/);
+    expect(afterCourtesy.note).toMatch(/one month free of this membership/);
+    expect(afterCourtesy.note).not.toMatch(/free month/i);
+    expect(afterCourtesy.trialEndsAt).toBeNull();
   });
 
   it("does not call August a free-month trial while she is trialing to programEnd", async () => {
@@ -195,10 +243,25 @@ describe("buildSubscriptionPayload copy", () => {
       }),
       "2026-09-15T12:00:00.000Z",
     );
-    expect(august.note).toBe("Nothing charges until the trial ends.");
+    expect(august.note).toBe(
+      "Callie's courtesy month is on this membership. Nothing charges until the trial ends.",
+    );
     expect(august.note).not.toMatch(/free month/i);
-    expect(august.periodLabel).toMatch(/First charge after/);
+    expect(august.periodLabel).toMatch(/Courtesy month through/);
+    expect(august.periodLabel).toMatch(/first charge after/);
     expect(august.periodLabel).not.toMatch(/Free month/);
+  });
+
+  it("does not offer November a courtesy month", async () => {
+    const november = await buildSubscriptionPayload(
+      env,
+      mama({ cohort_label: "2026-11" }),
+      "2026-11-15T12:00:00.000Z",
+    );
+    expect(november.hasFreeMonth).toBe(false);
+    expect(november.freeMonthKind).toBeNull();
+    expect(november.note).not.toMatch(/courtesy|free month/i);
+    expect(november.trialEndsAt).toBe("2026-12-28T00:00:00.000Z");
   });
 });
 

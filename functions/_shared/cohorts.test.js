@@ -3,7 +3,9 @@ import {
   cohortByLabel,
   cohortForDate,
   freeMonthEndsAt,
+  hasCourtesyFreeMonth,
   hasFoundingFreeMonth,
+  hasPostProgramFreeMonth,
   mamaProgramWeekNumber,
   openEnrollmentCohort,
   programWeekNumber,
@@ -25,16 +27,20 @@ describe("shared August cohort dates", () => {
   });
 });
 
-describe("founding-only free month", () => {
+describe("post-program free month", () => {
   it("gives Founding programEnd + 30 days (~Oct 21)", () => {
     expect(hasFoundingFreeMonth("2026-07")).toBe(true);
+    expect(hasCourtesyFreeMonth("2026-07")).toBe(false);
     expect(freeMonthEndsAt("2026-07")).toBe("2026-10-21T00:00:00.000Z");
   });
 
-  it("does not give August or later a post-program free month", () => {
+  it("gives August a courtesy month through Nov 25 and not November", () => {
     expect(hasFoundingFreeMonth("2026-08")).toBe(false);
-    expect(freeMonthEndsAt("2026-08")).toBeNull();
-    expect(hasFoundingFreeMonth("2026-11")).toBe(false);
+    expect(hasCourtesyFreeMonth("2026-08")).toBe(true);
+    expect(hasPostProgramFreeMonth("2026-08")).toBe(true);
+    expect(freeMonthEndsAt("2026-08")).toBe("2026-11-25T00:00:00.000Z");
+    expect(hasCourtesyFreeMonth("2026-11")).toBe(false);
+    expect(hasPostProgramFreeMonth("2026-11")).toBe(false);
     expect(freeMonthEndsAt("2026-11")).toBeNull();
   });
 });
