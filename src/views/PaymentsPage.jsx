@@ -10,7 +10,8 @@ import {
   openBillingPortal,
   startMembershipCheckout,
 } from "../lib/billing";
-import { membershipOptInButtonLabel } from "../lib/membershipAccess";
+import { membershipCheckoutFinePrint, membershipOptInButtonLabel } from "../lib/membershipAccess";
+import { MembershipPayPrompt } from "../components/MembershipPayPrompt";
 
 function money(amount, currency = "usd") {
   if (amount == null || Number.isNaN(Number(amount))) return "—";
@@ -186,6 +187,10 @@ export function PaymentsPage() {
         </Card>
       )}
 
+      {subscription?.status === "required" && (
+        <MembershipPayPrompt profile={profile} sticky={false} />
+      )}
+
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: T.inkSoft }}>
           Current plan
@@ -282,8 +287,7 @@ export function PaymentsPage() {
               </div>
             )}
             <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.45 }}>
-              You’ll confirm in Stripe. Nothing charges until you opt in — and for Founding Members,
-              the first charge waits until your free month ends.
+              {membershipCheckoutFinePrint(subscription)}
             </div>
           </>
         )}

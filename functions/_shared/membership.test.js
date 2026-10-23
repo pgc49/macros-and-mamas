@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSubscriptionPayload,
   membershipAccess,
+  membershipCheckoutCancelPath,
   trialEndUnixForCheckout,
 } from "./membership.js";
 
@@ -165,6 +166,9 @@ describe("buildSubscriptionPayload copy", () => {
     );
     expect(founding.status).toBe("required");
     expect(founding.note).toMatch(/Your free month has ended/);
+    expect(founding.note).toMatch(/Pay \$49\/mo/);
+    expect(founding.periodLabel).toBeNull();
+    expect(founding.trialEndsAt).toBeNull();
 
     const august = await buildSubscriptionPayload(
       env,
@@ -173,7 +177,9 @@ describe("buildSubscriptionPayload copy", () => {
     );
     expect(august.status).toBe("required");
     expect(august.hasFreeMonth).toBe(false);
-    expect(august.note).toBe("Your 8-week program has ended. Subscribe to keep using the app.");
+    expect(august.note).toBe(
+      "Your 8-week program has ended. Pay $49/mo to keep logging, your ranges, and Alumni chat.",
+    );
     expect(august.note).not.toMatch(/free month/i);
     expect(august.trialEndsAt).toBeNull();
   });
@@ -193,5 +199,19 @@ describe("buildSubscriptionPayload copy", () => {
     expect(august.note).not.toMatch(/free month/i);
     expect(august.periodLabel).toMatch(/First charge after/);
     expect(august.periodLabel).not.toMatch(/Free month/);
+  });
+});
+
+describe("membershipCheckoutCancelPath", () => {
+  it("returns the mama to Today, Payments, or the membership link", () => {
+    expect(membershipCheckoutCancelPath({ cancelPath: "/dashboard" })).toBe("/dashboard");
+    expect(membershipCheckoutCancelPath({ cancelPath: "/membership" })).toBe("/membership");
+    expect(membershipCheckoutCancelPath({ cancelPath: "/account/payments" })).toBe("/account/payments");
+  });
+
+  it("ignores any other return path", () => {
+    expect(membershipCheckoutCancelPath({ cancelPath: "https://evil.example" })).toBe("/account/payments");
+    expect(membershipCheckoutCancelPath({})).toBe("/account/payments");
+    expect(membershipCheckoutCancelPath(null)).toBe("/account/payments");
   });
 });

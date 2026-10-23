@@ -54,17 +54,65 @@ export function needsMembershipPaywall(profile, now = new Date()) {
   return membershipAccess(profile, now).paywall === true;
 }
 
-/** Membership gate body — founding mentions the ended free month; later cohorts do not. */
-export function membershipGateMessage(profile) {
-  if (hasFoundingFreeMonth(profile?.cohort_label)) {
-    return "Your free month of Founding Mama membership has ended. Subscribe at $49/mo to keep logging meals, your ranges, progress history, and Alumni community access.";
+/** Public alumni rate. Manual alumni_19 is a save tier, not this price. */
+export const ALUMNI_MONTHLY_AMOUNT = 49;
+
+/**
+ * Home-dashboard pay card.
+ * Founding copy names the ended free month. Later cohorts do not.
+ */
+export function membershipPayPromptCopy(profile) {
+  const founding = hasFoundingFreeMonth(profile?.cohort_label);
+  const price = `$${ALUMNI_MONTHLY_AMOUNT}`;
+  const button = `Pay ${price}/mo`;
+  if (founding) {
+    return {
+      eyebrow: "Founding Mama membership",
+      price,
+      period: "per month",
+      title: "Your free month has ended",
+      body: `Pay ${price} a month to keep logging meals, your ranges, progress, and Alumni chat. This Founding rate stays while you stay subscribed.`,
+      button,
+      fine: "Opens Stripe checkout. It starts today — no second free month. Cancel anytime from Payments.",
+    };
   }
-  return "Your 8-week program has ended. Subscribe at $49/mo to keep logging meals, your ranges, progress history, and Alumni community access.";
+  return {
+    eyebrow: "Monthly membership",
+    price,
+    period: "per month",
+    title: "Your 8 weeks have ended",
+    body: `Pay ${price} a month to keep logging meals, your ranges, progress, and Alumni chat.`,
+    button,
+    fine: "Opens Stripe checkout. Cancel anytime from Payments.",
+  };
+}
+
+/** Membership gate body — same sentences as the home pay card. */
+export function membershipGateMessage(profile) {
+  return membershipPayPromptCopy(profile).body;
+}
+
+/**
+ * Stripe footnote on Payments.
+ * After the free month (or program end), do not say the first charge is still waiting.
+ */
+export function membershipCheckoutFinePrint(subscription) {
+  const price = `$${ALUMNI_MONTHLY_AMOUNT}/mo`;
+  if (subscription?.status === "required") {
+    return `You'll confirm ${price} in Stripe. Membership starts when you pay.`;
+  }
+  if (subscription?.hasFreeMonth) {
+    return "You'll confirm in Stripe. Nothing charges until you opt in — and the first charge waits until your free month ends.";
+  }
+  if (subscription?.trialEndsAt) {
+    return "You'll confirm in Stripe. Nothing charges until you opt in — the first charge waits until the program ends.";
+  }
+  return "You'll confirm in Stripe. Nothing charges until you opt in.";
 }
 
 /** Payments opt-in CTA — do not promise a free month to August+. */
 export function membershipOptInButtonLabel(subscription) {
-  if (subscription?.status === "required") return "Subscribe to continue — $49/mo";
-  if (subscription?.hasFreeMonth) return "Start free month — then $49/mo";
-  return "Subscribe — $49/mo";
+  if (subscription?.status === "required") return `Pay $${ALUMNI_MONTHLY_AMOUNT}/mo`;
+  if (subscription?.hasFreeMonth) return `Start free month — then $${ALUMNI_MONTHLY_AMOUNT}/mo`;
+  return `Subscribe — $${ALUMNI_MONTHLY_AMOUNT}/mo`;
 }

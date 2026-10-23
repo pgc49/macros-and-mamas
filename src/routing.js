@@ -14,7 +14,9 @@ export function goMarketingHome() {
 /**
  * Where a signed-in user should land after auth / cold load.
  * Pay-first: account → pay → intake → Callie approve → dashboard.
- * After founding free month (or programEnd for later cohorts) without a sub → membership gate.
+ * After founding free month (or programEnd for later cohorts) without a sub,
+ * home is still Today. The dashboard shows the pay prompt and pauses logging.
+ * /membership stays a direct checkout link.
  *
  * www (customer surface) has no coach portal — admins stay in the mama app.
  * Coach UI is https://admin.macrosandmamas.com.
@@ -34,7 +36,8 @@ export function homePathFor({
   if (!paid) return PATHS.join;
   if (!macros) return PATHS.onboarding;
   if (!approved) return PATHS.pending;
-  if (membershipPaywall) return PATHS.membership;
+  // Paywalled mamas land on Today, where the pay prompt is the first action.
+  if (membershipPaywall) return PATHS.dashboard;
   return PATHS.dashboard;
 }
 

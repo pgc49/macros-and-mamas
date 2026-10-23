@@ -52,12 +52,12 @@ export async function openBillingPortal() {
 }
 
 /** Start alumni membership Checkout (opt-in only; trial pinned when eligible). */
-export async function startMembershipCheckout() {
+export async function startMembershipCheckout({ cancelPath } = {}) {
   const headers = await authHeaders();
   const resp = await fetch(CONFIG.MEMBERSHIP_CHECKOUT_ENDPOINT, {
     method: "POST",
     headers,
-    body: JSON.stringify({}),
+    body: JSON.stringify(cancelPath ? { cancelPath } : {}),
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {

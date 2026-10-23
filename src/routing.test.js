@@ -30,6 +30,15 @@ describe("homePathFor", () => {
   it("still sends mamas to dashboard when enrolled", () => {
     expect(homePathFor({ isAdmin: false, ...enrolled, surface: "customer" })).toBe(PATHS.dashboard);
   });
+
+  it("keeps a paywalled mama on Today instead of a separate gate", () => {
+    expect(homePathFor({
+      isAdmin: false,
+      ...enrolled,
+      membershipPaywall: true,
+      surface: "customer",
+    })).toBe(PATHS.dashboard);
+  });
 });
 
 describe("adminPortalHref", () => {

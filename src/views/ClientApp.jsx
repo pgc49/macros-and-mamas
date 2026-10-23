@@ -22,6 +22,7 @@ import { WeekPlanner } from "../components/WeekPlanner";
 import { FoodPrefsEditor } from "../components/FoodPrefsEditor";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { TechHelpFooter } from "../components/TechHelpFooter";
+import { MembershipPaused, MembershipPayPrompt } from "../components/MembershipPayPrompt";
 import { MessagesPanel } from "../components/MessagesPanel";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals, targetBands } from "../utils/weekPlan";
@@ -116,6 +117,8 @@ export function ClientApp({
   userId = null,
   unreadMessages = 0,
   onUnreadMessagesChange,
+  membershipPaywall = false,
+  onMembershipPay,
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
   const [mealQuery, setMealQuery] = useState("");
@@ -270,11 +273,17 @@ export function ClientApp({
             {profile.name ? `Hi ${profile.name}.` : "Your ranges."}
           </h2>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "0 0 14px" }}>
-            {viewingToday
-              ? "Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win."
-              : `Ranges below show ${formatLongDay(mealLogDate)} — switch days in the meal log to compare.`}
+            {membershipPaywall
+              ? "Your ranges are still here. Logging stays paused until membership is on."
+              : viewingToday
+                ? "Live inside the bands. Busy, active day? Eat the top. Slow day? The bottom. Both count as a win."
+                : `Ranges below show ${formatLongDay(mealLogDate)} — switch days in the meal log to compare.`}
           </p>
 
+          {membershipPaywall ? (
+            <MembershipPayPrompt profile={profile} onPay={onMembershipPay} />
+          ) : null}
+          <MembershipPaused paused={membershipPaywall}>
           <AppUpdateBanner />
           <MondayVoiceDropBanner />
           <HomeScreenTip
@@ -441,11 +450,16 @@ export function ClientApp({
           </Card>
           <TechHelpFooter />
           </AfterFirstPaint>
+          </MembershipPaused>
         </div>
       )}
 
       {tab === "meals" && (
         <>
+          {membershipPaywall ? (
+            <MembershipPayPrompt profile={profile} onPay={onMembershipPay} />
+          ) : null}
+          <MembershipPaused paused={membershipPaywall}>
           {logFlash ? (
             <Card style={{ marginBottom: 10, padding: 12, background: T.sageSoft, border: "none" }}>
               <div style={{ fontSize: 13.5, color: "#3E5A46", fontWeight: 700 }}>{logFlash}</div>
@@ -687,10 +701,20 @@ export function ClientApp({
             <MealRecipeCard key={`${m.name}-${idx}`} meal={m} onLog={logRecipe} />
           ))}
           <TechHelpFooter />
+          </MembershipPaused>
         </>
       )}
 
-      {tab === "messages" && (
+      {tab === "messages" && membershipPaywall && (
+        <>
+          <MembershipPayPrompt profile={profile} onPay={onMembershipPay} />
+          <p style={{ fontSize: 14.5, color: T.inkSoft, lineHeight: 1.55, margin: "4px 0 0" }}>
+            Messages open again once membership is on. Your threads stay saved.
+          </p>
+        </>
+      )}
+
+      {tab === "messages" && !membershipPaywall && (
         <ErrorBoundary
           name="CustomerMessages"
           title="Messages hit a snag"
@@ -707,6 +731,10 @@ export function ClientApp({
 
       {tab === "progress" && (
         <>
+          {membershipPaywall ? (
+            <MembershipPayPrompt profile={profile} onPay={onMembershipPay} />
+          ) : null}
+          <MembershipPaused paused={membershipPaywall}>
           <p style={{ fontSize: 14, color: T.inkSoft, margin: "6px 0 14px" }}>
             Pick a day, log your weight, edit anytime — same rhythm as meal logging. The trend matters; any single number doesn't.
           </p>
@@ -781,6 +809,7 @@ export function ClientApp({
             </Card>
           )}
           <TechHelpFooter />
+          </MembershipPaused>
         </>
       )}
     </Shell>

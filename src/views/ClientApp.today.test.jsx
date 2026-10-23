@@ -25,6 +25,11 @@ vi.mock("../components/MessagesPanel", () => ({
 }));
 
 import { ClientApp } from "./ClientApp";
+import { startMembershipCheckout } from "../lib/billing";
+
+vi.mock("../lib/billing", () => ({
+  startMembershipCheckout: vi.fn(async () => ({ url: "https://checkout.stripe.test/session" })),
+}));
 
 afterEach(() => {
   cleanup();
@@ -138,5 +143,32 @@ describe("ClientApp Today keep-alive", () => {
     expect(view.container.querySelector('[data-tab-panel="today"]')).toBe(panel);
     expect(view.container.querySelector('[data-tab-panel="today"]').hidden).toBe(false);
     expect(screen.getByRole("heading", { name: "Hi Pat." })).toBeTruthy();
+  });
+});
+
+describe("ClientApp membership pay prompt", () => {
+  it("puts Pay $49/mo on Today and pauses logging", async () => {
+    renderClient("today", { membershipPaywall: true });
+    expect(screen.getByRole("heading", { name: "Hi Pat." })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Your free month has ended" })).toBeTruthy();
+    expect(screen.getByText(/Logging stays paused until membership is on/)).toBeTruthy();
+    const paused = document.querySelector("[data-membership-paused='true']");
+    expect(paused).toBeTruthy();
+    expect(paused.hasAttribute("inert")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Pay $49/mo" }));
+    expect(startMembershipCheckout).toHaveBeenCalledWith({ cancelPath: "/dashboard" });
+  });
+
+  it("shows the same pay step on Meals and keeps Messages closed", () => {
+    const meals = renderClient("meals", { membershipPaywall: true });
+    expect(screen.getByRole("heading", { name: "Your free month has ended" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Pay $49/mo" })).toBeTruthy();
+    expect(meals.container.querySelector("[data-membership-paused='true']")).toBeTruthy();
+    meals.unmount();
+
+    const messages = renderClient("messages", { membershipPaywall: true });
+    expect(screen.getByText(/Messages open again once membership is on/)).toBeTruthy();
+    expect(messages.container.querySelector("[data-messages-panel]")).toBeNull();
   });
 });

@@ -305,11 +305,13 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
     note = `You can opt in to $49/mo anytime. If you subscribe during the 8 weeks, your first charge waits until the program ends${programLastDay ? ` (${formatShortDate(programLastDay)})` : ""}.`;
   } else if (afterProgram) {
     note = founding
-      ? "Your free month has ended. Subscribe to keep using the app — resubscribing does not include another free trial."
-      : "Your 8-week program has ended. Subscribe to keep using the app.";
+      ? "Your free month has ended. Pay $49/mo to keep logging, your ranges, and Alumni chat. This does not include another free month."
+      : "Your 8-week program has ended. Pay $49/mo to keep logging, your ranges, and Alumni chat.";
   } else {
     note = "Opt in to monthly membership when you're ready. Nothing charges until you do.";
   }
+
+  const freeMonthStillAhead = founding && (beforeProgramEnd || inFreeMonth);
 
   return {
     status: afterProgram ? "required" : "available",
@@ -317,9 +319,9 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
     amount: 49,
     currency: "usd",
     renewsAt: null,
-    trialEndsAt: founding ? freeEnd : (beforeProgramEnd ? access.programEnd : null),
+    trialEndsAt: freeMonthStillAhead ? freeEnd : (beforeProgramEnd ? access.programEnd : null),
     cancelAtPeriodEnd: false,
-    periodLabel: founding && freeEnd
+    periodLabel: freeMonthStillAhead && freeEnd
       ? `Free month covers ${formatShortDate(access.programEnd)} – ${formatShortDate(freeEnd)}`
       : null,
     canSubscribe: !!priceId && !!profile.paid && !profile.refunded,
@@ -329,6 +331,19 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
     priceConfigured: !!priceId,
     hasFreeMonth: founding,
   };
+}
+
+const MEMBERSHIP_CANCEL_PATHS = new Set([
+  "/dashboard",
+  "/account/payments",
+  "/membership",
+]);
+
+/** Allowlisted Checkout cancel return. Unknown values stay on Payments. */
+export function membershipCheckoutCancelPath(body) {
+  const requested = String(body?.cancelPath || "");
+  if (MEMBERSHIP_CANCEL_PATHS.has(requested)) return requested;
+  return "/account/payments";
 }
 
 function formatShortDate(iso) {

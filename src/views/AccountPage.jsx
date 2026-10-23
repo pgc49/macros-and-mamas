@@ -4,6 +4,7 @@ import { Shell, Card } from "../components/ui";
 import { PATHS, goMarketingHome } from "../routing";
 import { useAuth } from "../auth/useAuth.jsx";
 import { fullName } from "../db/db";
+import { needsMembershipPaywall } from "../lib/membershipAccess";
 
 const ROWS = [
   {
@@ -143,7 +144,11 @@ export function AccountPage() {
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {ROWS.map((row) => (
+        {ROWS.map((row) => {
+          const body = row.to === PATHS.accountPayments && needsMembershipPaywall(profile)
+            ? "Pay $49/mo to keep logging, your ranges, and Alumni chat."
+            : row.body;
+          return (
           <Link
             key={row.to}
             to={row.to}
@@ -154,14 +159,15 @@ export function AccountPage() {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 16 }}>{row.title}</div>
                   <div style={{ fontSize: 13.5, color: T.inkSoft, marginTop: 3, lineHeight: 1.45 }}>
-                    {row.body}
+                    {body}
                   </div>
                 </div>
                 <span style={{ color: T.inkSoft, fontSize: 22, lineHeight: 1 }} aria-hidden>›</span>
               </div>
             </Card>
           </Link>
-        ))}
+          );
+        })}
       </div>
 
       {signOutBtn}

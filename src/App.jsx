@@ -39,6 +39,7 @@ import { MealLogPreview } from "./views/MealLogPreview";
 import { MealsTabPreview } from "./views/MealsTabPreview";
 import { RecipeBankPreview } from "./views/RecipeBankPreview";
 import { MessagesThreadPreview } from "./views/MessagesThreadPreview";
+import { MembershipHomePreview } from "./views/MembershipHomePreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { T, FD } from "./theme/tokens";
@@ -1649,6 +1650,7 @@ export default function App() {
       userId={user?.id || null}
       unreadMessages={unreadMessages}
       onUnreadMessagesChange={setUnreadMessages}
+      membershipPaywall={membershipPaywall}
     />
   );
 
@@ -1674,6 +1676,7 @@ export default function App() {
           <Route path="/dev/meals-tab" element={<MealsTabPreview />} />
           <Route path="/dev/recipe-bank" element={<RecipeBankPreview />} />
           <Route path="/dev/messages-thread" element={<MessagesThreadPreview />} />
+          <Route path="/dev/membership-home" element={<MembershipHomePreview />} />
           {AdminMessagesPreview ? (
             <Route
               path="/dev/admin-messages"
@@ -1786,7 +1789,7 @@ export default function App() {
           !user
             ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.accountShare }} />
             : membershipPaywall
-              ? <Navigate to={PATHS.membership} replace />
+              ? <Navigate to={PATHS.dashboard} replace />
               : (
                 <Suspense fallback={<AccountRouteFallback />}>
                   <SharePage />
@@ -1930,10 +1933,10 @@ export default function App() {
             ? <Navigate to={PATHS.signin} replace />
             : refunded
               ? <Navigate to={PATHS.goodbye} replace />
-              : membershipPaywall
-                ? <Navigate to={PATHS.membership} replace />
-                : dashboardUnlocked
-                  ? clientApp
+              : (dashboardUnlocked || (membershipPaywall && paid && macros && approved))
+                ? clientApp
+                : membershipPaywall
+                  ? <Navigate to={PATHS.membership} replace />
                   : (
                     <Navigate
                       to={homePathFor({

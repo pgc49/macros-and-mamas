@@ -7,7 +7,7 @@
    ================================================================== */
 
 import { alumniPriceId } from "../_shared/pricing.js";
-import { trialEndUnixForCheckout } from "../_shared/membership.js";
+import { membershipCheckoutCancelPath, trialEndUnixForCheckout } from "../_shared/membership.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -40,10 +40,12 @@ export async function onRequestPost({ request, env }) {
     if (!secret) return json({ error: "membership unavailable" }, 503);
 
     const origin = new URL(request.url).origin;
+    const incoming = await request.json().catch(() => ({}));
+    const cancelPath = membershipCheckoutCancelPath(incoming);
     const body = new URLSearchParams();
     body.set("mode", "subscription");
     body.set("success_url", `${origin}/account/payments?membership=success`);
-    body.set("cancel_url", `${origin}/account/payments?membership=cancel`);
+    body.set("cancel_url", `${origin}${cancelPath}?membership=cancel`);
     body.set("client_reference_id", user.id);
     body.set("line_items[0][price]", priceId);
     body.set("line_items[0][quantity]", "1");
