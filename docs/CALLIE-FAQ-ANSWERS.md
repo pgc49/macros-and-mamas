@@ -1,5 +1,7 @@
 # How the Meal Coach answers the inbox FAQs
 
+> **Replaced.** Callie reviews `docs/CALLIE-COACH-REVIEW-SHEET.md` now. The open rows from this answer key moved there.
+
 **For Callie.** This is the answer key for the questions in `docs/CALLIE-MESSAGE-FAQ.md`, run through the coach as it works today. Nothing new was added to the product to write this.
 
 Mark each row **Keep**, **Rewrite** (paste your line), **Mine** (handoff, the model never sees it), or **Model** (the model may answer, using only the prompt at the bottom). A row marked Rewrite or Model does not go live until you send the line back.

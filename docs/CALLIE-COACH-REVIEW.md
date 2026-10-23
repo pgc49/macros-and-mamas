@@ -1,5 +1,7 @@
 # Coach layer — review for Callie
 
+> **Replaced.** Callie reviews `docs/CALLIE-COACH-REVIEW-SHEET.md` now. This older file is kept for history; its open questions moved there.
+
 **Who this is for:** Callie.
 **What we need back:** edits to the sentences below, plus answers to the questions at the end.
 **How to reply:** comment on the GitHub file, a Google Doc copy, or a voice note / text to Patrick. Numbered replies are easiest (Q1, Q2…). You do not need to write code.
