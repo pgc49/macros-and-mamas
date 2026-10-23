@@ -80,7 +80,7 @@ export function membershipPayPromptCopy(profile) {
       title: "Your free month has ended",
       body: `Pay ${price} a month to keep logging meals, your ranges, progress, and Alumni chat. This Founding rate stays while you stay subscribed.`,
       button,
-      fine: "Opens Stripe checkout. It starts today — no second free month. Cancel anytime from Payments.",
+      fine: "Opens Stripe checkout. It starts today. Cancel anytime from Payments.",
     };
   }
   if (kind === "courtesy") {

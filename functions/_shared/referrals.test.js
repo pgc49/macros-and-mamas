@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   extractPromotionCodeId,
   promotionCodeIdFromSessionObject,
+  shareBlurb,
 } from "./referrals.js";
 import { chargedAmountUsd } from "../api/stripe-webhook.js";
 
@@ -22,6 +23,14 @@ function jsonResp(body, { ok = true, status = 200 } = {}) {
     text: async () => JSON.stringify(body),
   };
 }
+
+describe("shareBlurb", () => {
+  it("sends friends to the 8-week program and names the $25 savings", () => {
+    expect(shareBlurb("pat25")).toBe(
+      "Use code PAT25 to join Callie in her Macros and Mamas 8-week transformation program — you'll save $25. www.macrosandmamas.com",
+    );
+  });
+});
 
 describe("promotionCodeIdFromSessionObject", () => {
   it("reads a typed-on-Checkout promo string from session.discounts", () => {
