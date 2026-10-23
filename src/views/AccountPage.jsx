@@ -20,7 +20,7 @@ const ROWS = [
   {
     to: PATHS.accountShare,
     title: "Share Macros and Mamas",
-    body: "Your referral code, share text, and friend tally.",
+    body: "Each friend is $25. Two friends cover a free month, and credits stack.",
   },
   {
     to: PATHS.support,

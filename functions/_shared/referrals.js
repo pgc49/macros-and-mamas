@@ -101,7 +101,7 @@ export function normalizeReferralCode(raw) {
 export function shareBlurb(code) {
   const c = normalizeReferralCode(code);
   return (
-    `Use code ${c} to join Callie in her Macros and Mamas 8-week transformation program! `
+    `Use code ${c} to join Callie in her Macros and Mamas 8-week transformation program — you'll save $25. `
     + `www.macrosandmamas.com`
   );
 }

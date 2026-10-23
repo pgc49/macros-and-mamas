@@ -158,6 +158,10 @@ describe("ClientApp membership pay prompt", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Pay $49/mo" }));
     expect(startMembershipCheckout).toHaveBeenCalledWith({ cancelPath: "/dashboard" });
+
+    const share = screen.getByRole("link", { name: "Share my code" });
+    expect(paused.contains(share)).toBe(false);
+    expect(screen.getByText(/one free month of the \$49 membership/)).toBeTruthy();
   });
 
   it("shows the same pay step on Meals and keeps Messages closed", () => {
@@ -186,6 +190,8 @@ describe("ClientApp membership pay prompt", () => {
       });
       expect(screen.getByRole("heading", { name: "A courtesy month of the new membership" })).toBeTruthy();
       expect(screen.getByText(/one month free of the new tier/)).toBeTruthy();
+      expect(screen.getByRole("heading", { name: "Two friends cover a month" })).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Share my code" }).getAttribute("href")).toBe("/account/share");
       expect(screen.getByText("Alumni chat with Callie and the other grads")).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Add my membership" }));
       expect(startMembershipCheckout).toHaveBeenCalledWith({ cancelPath: "/dashboard" });

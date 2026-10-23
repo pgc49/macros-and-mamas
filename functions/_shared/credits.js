@@ -96,7 +96,8 @@ export function creditsPayloadForUi(rows) {
     availableDollars: availableCents / 100,
     pendingDollars: pendingCents / 100,
     lineItems: rows.map(formatLineItem),
-    copy: "Credits apply automatically to your membership or a Lab Review.",
+    // Keep in sync with REFERRAL_CREDITS_LINE in src/lib/referralMembership.js
+    copy: "Two referrals are $50, which covers one month of the $49 membership. Credits stack and apply automatically to your membership or a Lab Review.",
   };
 }
 

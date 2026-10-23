@@ -11,6 +11,7 @@ import {
   startMembershipCheckout,
 } from "../lib/billing";
 import { membershipCheckoutFinePrint, membershipOptInButtonLabel } from "../lib/membershipAccess";
+import { REFERRAL_CREDITS_LINE } from "../lib/referralMembership";
 import { MembershipPayPrompt } from "../components/MembershipPayPrompt";
 
 function money(amount, currency = "usd") {
@@ -309,7 +310,7 @@ export function PaymentsPage() {
             {credits.pendingCents > 0 ? ` · ${moneyCents(credits.pendingCents)} pending` : ""}
           </div>
           <p style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, margin: "10px 0 0" }}>
-            {credits.copy || "Credits apply automatically to your membership or a Lab Review."}
+            {credits.copy || REFERRAL_CREDITS_LINE}
           </p>
           {(credits.lineItems || []).length > 0 && (
             <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 0 }}>

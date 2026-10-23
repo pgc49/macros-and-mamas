@@ -24,6 +24,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { TechHelpFooter } from "../components/TechHelpFooter";
 import { MembershipPaused, MembershipPayPrompt } from "../components/MembershipPayPrompt";
 import { CourtesyMonthCard } from "../components/CourtesyMonthCard";
+import { ReferralMonthCard } from "../components/ReferralMonthCard";
 import { MessagesPanel } from "../components/MessagesPanel";
 import { mealToCard } from "../content/recipeDetails";
 import { countPlannedMeals, targetBands } from "../utils/weekPlan";
@@ -286,6 +287,7 @@ export function ClientApp({
           ) : (
             <CourtesyMonthCard profile={profile} onPay={onMembershipPay} />
           )}
+          <ReferralMonthCard />
           <MembershipPaused paused={membershipPaywall}>
           <AppUpdateBanner />
           <MondayVoiceDropBanner />
