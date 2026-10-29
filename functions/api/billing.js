@@ -18,6 +18,7 @@ import {
   buildSubscriptionPayload,
   membershipAccess,
 } from "../_shared/membership.js";
+import { reusableStripeCustomerId } from "../_shared/stripeCustomer.js";
 
 export async function onRequestGet({ request, env }) {
   try {
@@ -70,7 +71,8 @@ export async function onRequestPost({ request, env }) {
     }
 
     const profile = await fetchBillingProfile(env, user.id);
-    if (!profile?.stripe_customer_id || profile.comp) {
+    const customerId = reusableStripeCustomerId(profile?.stripe_customer_id);
+    if (!customerId || profile?.comp) {
       return json({ error: "no billing customer" }, 404);
     }
     if (profile.refunded) return json({ error: "enrollment refunded" }, 403);
@@ -80,7 +82,7 @@ export async function onRequestPost({ request, env }) {
 
     const origin = new URL(request.url).origin;
     const params = new URLSearchParams();
-    params.set("customer", profile.stripe_customer_id);
+    params.set("customer", customerId);
     params.set("return_url", `${origin}/account/payments`);
     if (env.STRIPE_BILLING_PORTAL_CONFIGURATION) {
       params.set("configuration", env.STRIPE_BILLING_PORTAL_CONFIGURATION);
@@ -114,7 +116,7 @@ async function listCustomerPayments(env, profile) {
   if (!secret) return fallbackFromProfile(profile);
 
   const out = [];
-  const customerId = profile.stripe_customer_id;
+  const customerId = reusableStripeCustomerId(profile.stripe_customer_id);
   const seen = new Set();
 
   if (customerId) {

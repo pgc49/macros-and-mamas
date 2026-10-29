@@ -23,6 +23,7 @@ import {
   getAlumniConversation,
 } from "./channels.js";
 import { alumniPriceId } from "./pricing.js";
+import { reusableStripeCustomerId } from "./stripeCustomer.js";
 
 /** Access-granting statuses (past_due keeps access while Stripe retries). */
 const ACTIVE_SUB_STATUSES = new Set(["trialing", "active", "past_due"]);
@@ -416,8 +417,9 @@ export async function syncSubscriptionToProfile(env, subscription, { userId: hin
     subscription_current_period_end: isoFromStripeSeconds(subscription.current_period_end),
     subscription_trial_end: isoFromStripeSeconds(subscription.trial_end),
   };
-  if (customerId) {
-    patch.stripe_customer_id = customerId;
+  const reusableCustomer = reusableStripeCustomerId(customerId);
+  if (reusableCustomer) {
+    patch.stripe_customer_id = reusableCustomer;
   }
 
   const active = ACTIVE_SUB_STATUSES.has(status);

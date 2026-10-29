@@ -37,6 +37,10 @@ describe("comp helpers", () => {
     expect(stripePortalAvailable({ ...compMama, stripe_customer_id: "cus_x" }, { stripeSecret: "sk_test" })).toBe(false);
     expect(stripePortalAvailable(stripePaid, { stripeSecret: "sk_test" })).toBe(true);
     expect(stripePortalAvailable(stripePaid, { stripeSecret: "" })).toBe(false);
+    expect(stripePortalAvailable(
+      { ...stripePaid, stripe_customer_id: "gcus_guestcustomer" },
+      { stripeSecret: "sk_test" },
+    )).toBe(false);
   });
 
   it("does not invent a Stripe payment row for comps", () => {

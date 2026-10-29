@@ -34,6 +34,7 @@ import {
   fetchStripeSubscription,
   syncSubscriptionToProfile,
 } from "../_shared/membership.js";
+import { nextStoredStripeCustomerId } from "../_shared/stripeCustomer.js";
 
 /**
  * Dollars Stripe actually charged. amount_total is cents.
@@ -403,12 +404,15 @@ async function markPaid(env, userId, session) {
   };
   // Preserve original paid_at across completed → async retries.
   if (!existing?.paid_at) patch.paid_at = paidAt;
-  // Fill Stripe ids when missing (do not clobber an existing customer id).
+  // Fill a real Customer id when missing. Guest ids (gcus_) are not Customers
+  // and must not be stored — they make the next Checkout Session fail.
+  // Do not clobber an existing real Customer id.
   const customerId = typeof session.customer === "string"
     ? session.customer
     : session.customer?.id;
-  if (customerId && !existing?.stripe_customer_id) {
-    patch.stripe_customer_id = customerId;
+  const nextCustomer = nextStoredStripeCustomerId(existing?.stripe_customer_id, customerId);
+  if (nextCustomer) {
+    patch.stripe_customer_id = nextCustomer;
   }
   const pi = typeof session.payment_intent === "string"
     ? session.payment_intent
@@ -467,7 +471,8 @@ async function patchCustomerIdIfMissing(env, userId, customerId) {
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key || !userId || !customerId) return;
   const existing = await fetchProfilePaymentFields(env, userId);
-  if (existing?.stripe_customer_id) return;
+  const next = nextStoredStripeCustomerId(existing?.stripe_customer_id, customerId);
+  if (!next) return;
   const resp = await fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
     method: "PATCH",
     headers: {
@@ -476,7 +481,7 @@ async function patchCustomerIdIfMissing(env, userId, customerId) {
       authorization: `Bearer ${key}`,
       prefer: "return=minimal",
     },
-    body: JSON.stringify({ stripe_customer_id: customerId }),
+    body: JSON.stringify({ stripe_customer_id: next }),
   });
   if (!resp.ok) {
     console.error("patchCustomerIdIfMissing failed", resp.status, await resp.text());

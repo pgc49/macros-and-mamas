@@ -3,6 +3,8 @@
  * but did not pay through Stripe. Do not treat them as Stripe customers.
  */
 
+import { reusableStripeCustomerId } from "./stripeCustomer.js";
+
 export function isComplimentary(profile) {
   return !!profile?.comp;
 }
@@ -16,7 +18,7 @@ export function isStripeCollected(profile) {
 export function stripePortalAvailable(profile, { stripeSecret } = {}) {
   if (profile?.comp) return false;
   if (stripeSecret !== undefined && !stripeSecret) return false;
-  return !!profile?.stripe_customer_id;
+  return !!reusableStripeCustomerId(profile?.stripe_customer_id);
 }
 
 /**

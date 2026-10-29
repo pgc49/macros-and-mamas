@@ -6,6 +6,8 @@
    Never mirror pending rows. Do not hand-edit balances in Dashboard.
    ================================================================== */
 
+import { reusableStripeCustomerId } from "./stripeCustomer.js";
+
 export function vestingDays(env) {
   const n = Number(env.VESTING_DAYS);
   // Default 3 days — enough for Callie to catch a bad enrollment without
@@ -289,7 +291,7 @@ export async function stripeCustomerIdForUser(env, userId) {
     { method: "GET" },
   );
   const id = Array.isArray(rows) ? rows[0]?.stripe_customer_id : null;
-  return id ? String(id) : "";
+  return reusableStripeCustomerId(id);
 }
 
 export async function postCustomerBalanceTransaction(env, customerId, {

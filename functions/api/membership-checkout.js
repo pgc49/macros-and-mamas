@@ -8,6 +8,10 @@
 
 import { alumniPriceId } from "../_shared/pricing.js";
 import { membershipCheckoutCancelPath, trialEndUnixForCheckout } from "../_shared/membership.js";
+import {
+  reusableStripeCustomerId,
+  stripeReportedMissingCustomer,
+} from "../_shared/stripeCustomer.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -59,24 +63,26 @@ export async function onRequestPost({ request, env }) {
       body.set("subscription_data[trial_end]", String(trialEnd));
     }
 
-    if (profile.stripe_customer_id) {
-      body.set("customer", profile.stripe_customer_id);
-    } else {
-      body.set("customer_email", user.email || "");
-      body.set("customer_creation", "always");
+    // Guest ids (gcus_) are not Customers. Stripe rejects them on Checkout.
+    const storedCustomer = String(profile.stripe_customer_id || "");
+    if (storedCustomer && !reusableStripeCustomerId(storedCustomer)) {
+      console.warn("membership checkout skipping unusable stripe customer id");
     }
-
-    const resp = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${secret}`,
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body,
+    applyCheckoutCustomer(body, {
+      customerId: storedCustomer,
+      email: user.email || "",
     });
-    const data = await resp.json().catch(() => ({}));
+
+    let resp = await postCheckoutSession(secret, body);
+    let data = await resp.json().catch(() => ({}));
+    if (!resp.ok && stripeReportedMissingCustomer(data)) {
+      console.warn("membership checkout customer missing; creating a new customer");
+      applyCheckoutCustomer(body, { customerId: "", email: user.email || "" });
+      resp = await postCheckoutSession(secret, body);
+      data = await resp.json().catch(() => ({}));
+    }
     if (!resp.ok) {
-      console.error("membership checkout error", data);
+      console.error("membership checkout error", data?.error?.code || data?.error?.type || "stripe");
       return json({ error: "checkout failed" }, 502);
     }
     return json({ url: data.url, sessionId: data.id }, 200);
@@ -84,6 +90,30 @@ export async function onRequestPost({ request, env }) {
     console.error("membership-checkout failed", e);
     return json({ error: "membership unavailable" }, 500);
   }
+}
+
+function applyCheckoutCustomer(body, { customerId, email }) {
+  body.delete("customer");
+  body.delete("customer_email");
+  body.delete("customer_creation");
+  const reusable = reusableStripeCustomerId(customerId);
+  if (reusable) {
+    body.set("customer", reusable);
+    return;
+  }
+  body.set("customer_email", email || "");
+  body.set("customer_creation", "always");
+}
+
+function postCheckoutSession(secret, body) {
+  return fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${secret}`,
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
 }
 
 async function requireUser(request, env) {
