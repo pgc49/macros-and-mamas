@@ -159,12 +159,17 @@ function LeadInsights({ lead }) {
 
 function CopyNoteButton({ text, onCopied }) {
   const [copied, setCopied] = useState(false);
+  const resetTimer = useRef(null);
+  useEffect(() => () => {
+    if (resetTimer.current != null) window.clearTimeout(resetTimer.current);
+  }, []);
   const onCopy = async () => {
     try {
       await copyText(text);
       setCopied(true);
       onCopied?.();
-      window.setTimeout(() => setCopied(false), 1600);
+      if (resetTimer.current != null) window.clearTimeout(resetTimer.current);
+      resetTimer.current = window.setTimeout(() => setCopied(false), 1600);
     } catch (err) {
       console.error("clipboard write failed", err);
     }
@@ -223,12 +228,17 @@ function LeadPersonalNote({ lead, onCopied }) {
 
 function CopyEmailButton({ email, onCopied }) {
   const [copied, setCopied] = useState(false);
+  const resetTimer = useRef(null);
+  useEffect(() => () => {
+    if (resetTimer.current != null) window.clearTimeout(resetTimer.current);
+  }, []);
   const onCopy = async () => {
     try {
       await copyText(email);
       setCopied(true);
       onCopied?.();
-      window.setTimeout(() => setCopied(false), 1600);
+      if (resetTimer.current != null) window.clearTimeout(resetTimer.current);
+      resetTimer.current = window.setTimeout(() => setCopied(false), 1600);
     } catch (err) {
       console.error("clipboard write failed", err);
     }
