@@ -13,6 +13,7 @@ export function CourtesyMonthPreview() {
     <ClientApp
       tab={tab}
       setTab={setTab}
+      referralPreviewCode="PAT25"
       onMembershipPay={async () => "Stripe checkout would open next. The first charge waits until November 25. This preview does not charge a card."}
       profile={{
         name: "Pat",
