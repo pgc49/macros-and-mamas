@@ -67,12 +67,87 @@ export function boardReason(client, todayIso) {
   return null;
 }
 
+export function overrideEmailKey(row) {
+  return normalizeEmailLower(row?.email_lower || row?.email);
+}
+
+/**
+ * Keep a just-pressed skip when the server reload is empty or mid-write.
+ * Local active snoozes win over a missing/expired server row.
+ */
+export function mergeOverrideRows(serverRows = [], localRows = [], now = Date.now()) {
+  const map = new Map();
+  for (const row of serverRows || []) {
+    const key = overrideEmailKey(row);
+    if (!key) continue;
+    map.set(key, { ...row, email_lower: key });
+  }
+  for (const row of localRows || []) {
+    const key = overrideEmailKey(row);
+    if (!key) continue;
+    const server = map.get(key);
+    const localActive = isSnoozed(row, now);
+    const serverActive = isSnoozed(server, now);
+    if (localActive && !serverActive) {
+      map.set(key, {
+        ...server,
+        email_lower: key,
+        snoozed_until: row.snoozed_until,
+        last_touch_at: row.last_touch_at || server?.last_touch_at || null,
+      });
+    } else if (!server && (localActive || row.marked_cold || row.last_touch_at)) {
+      map.set(key, { ...row, email_lower: key });
+    }
+  }
+  return [...map.values()];
+}
+
+const LOCAL_SKIP_KEY = "mm_admin_daily_skip_v1";
+
+function readLocalSkipStore() {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(LOCAL_SKIP_KEY) || "[]");
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalSkipStore(rows) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_SKIP_KEY, JSON.stringify(rows));
+  } catch {
+    /* private mode / quota — skip still lives in React state */
+  }
+}
+
+export function loadLocalSkips(now = Date.now()) {
+  const kept = readLocalSkipStore().filter((row) => isSnoozed(row, now));
+  writeLocalSkipStore(kept);
+  return kept;
+}
+
+export function writeLocalSkip(email, patch, now = Date.now()) {
+  const key = normalizeEmailLower(email);
+  if (!key) return;
+  const rest = loadLocalSkips(now).filter((row) => overrideEmailKey(row) !== key);
+  writeLocalSkipStore([...rest, { email_lower: key, ...patch }]);
+}
+
+export function clearLocalSkip(email, now = Date.now()) {
+  const key = normalizeEmailLower(email);
+  if (!key) return;
+  writeLocalSkipStore(loadLocalSkips(now).filter((row) => overrideEmailKey(row) !== key));
+}
+
 export function stampRosterOverrides(roster, overrides) {
   const list = Array.isArray(overrides) ? overrides : [];
   return (roster || []).map((client) => {
     const key = normalizeEmailLower(client?.email);
     if (!key) return client;
-    const override = list.find((row) => normalizeEmailLower(row.email_lower || row.email) === key);
+    const override = list.find((row) => overrideEmailKey(row) === key);
     if (!override) return client;
     return {
       ...client,
