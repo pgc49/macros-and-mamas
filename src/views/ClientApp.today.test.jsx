@@ -148,7 +148,7 @@ describe("ClientApp Today keep-alive", () => {
 
 describe("ClientApp membership pay prompt", () => {
   it("puts Pay $49/mo on Today and pauses logging", async () => {
-    renderClient("today", { membershipPaywall: true });
+    renderClient("today", { membershipPaywall: true, referralPreviewCode: "PAT25" });
     expect(screen.getByRole("heading", { name: "Hi Pat." })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Your free month has ended" })).toBeTruthy();
     expect(screen.getByText(/Logging stays paused until membership is on/)).toBeTruthy();
@@ -161,6 +161,11 @@ describe("ClientApp membership pay prompt", () => {
 
     const share = screen.getByRole("link", { name: "Share my code" });
     expect(paused.contains(share)).toBe(false);
+    const code = screen.getByLabelText("Your referral code");
+    expect(code.value).toBe("PAT25");
+    const copy = screen.getByRole("button", { name: "Copy code" });
+    expect(paused.contains(code)).toBe(false);
+    expect(paused.contains(copy)).toBe(false);
     expect(screen.getByText(/one free month of the \$49 membership/)).toBeTruthy();
   });
 

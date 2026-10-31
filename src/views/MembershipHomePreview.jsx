@@ -14,6 +14,7 @@ export function MembershipHomePreview() {
       tab={tab}
       setTab={setTab}
       membershipPaywall
+      referralPreviewCode="PAT25"
       onMembershipPay={async () => "Stripe checkout would open next. This preview does not charge a card."}
       profile={{
         name: "Pat",

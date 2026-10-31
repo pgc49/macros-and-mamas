@@ -121,6 +121,7 @@ export function ClientApp({
   onUnreadMessagesChange,
   membershipPaywall = false,
   onMembershipPay,
+  referralPreviewCode = "",
 }) {
   const [pantryGroup, setPantryGroup] = useState("all");
   const [mealQuery, setMealQuery] = useState("");
@@ -287,7 +288,7 @@ export function ClientApp({
           ) : (
             <CourtesyMonthCard profile={profile} onPay={onMembershipPay} />
           )}
-          <ReferralMonthCard />
+          <ReferralMonthCard previewCode={referralPreviewCode} />
           <MembershipPaused paused={membershipPaywall}>
           <AppUpdateBanner />
           <MondayVoiceDropBanner />

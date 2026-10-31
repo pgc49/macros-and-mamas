@@ -1792,9 +1792,7 @@ export default function App() {
         element={
           !user
             ? <Navigate to={PATHS.signin} replace state={{ from: PATHS.accountShare }} />
-            : membershipPaywall
-              ? <Navigate to={PATHS.dashboard} replace />
-              : (
+            : (
                 <Suspense fallback={<AccountRouteFallback />}>
                   <SharePage />
                 </Suspense>
