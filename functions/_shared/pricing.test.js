@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  clearBlockedStripeProductDescription,
+  isBlockedCheckoutDescription,
   stripeNicknameForTier,
   syncStripePriceNickname,
 } from "./pricing.js";
@@ -62,5 +64,71 @@ describe("syncStripePriceNickname", () => {
     const [, patch] = fetchMock.mock.calls[1];
     expect(patch.method).toBe("POST");
     expect(String(patch.body)).toBe("nickname=Early+rate");
+  });
+});
+
+describe("isBlockedCheckoutDescription", () => {
+  it("matches the waitlist subtitle Checkout was showing", () => {
+    expect(isBlockedCheckoutDescription("Priority Waitlist Special")).toBe(true);
+    expect(isBlockedCheckoutDescription("  priority waitlist special  ")).toBe(true);
+  });
+
+  it("leaves real product descriptions alone", () => {
+    expect(isBlockedCheckoutDescription("")).toBe(false);
+    expect(isBlockedCheckoutDescription(null)).toBe(false);
+    expect(isBlockedCheckoutDescription("8-week course")).toBe(false);
+  });
+});
+
+describe("clearBlockedStripeProductDescription", () => {
+  it("no-ops without credentials", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(clearBlockedStripeProductDescription("", "price_x")).resolves.toEqual({
+      ok: false,
+      skipped: true,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves a blank or unrelated description unchanged", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        product: { id: "prod_course", description: "8-week course" },
+      }),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      clearBlockedStripeProductDescription("sk_test", "price_waitlist"),
+    ).resolves.toEqual({ ok: true, unchanged: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears Priority Waitlist Special from the product", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          product: { id: "prod_course", description: "Priority Waitlist Special" },
+        }),
+        text: async () => "",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "prod_course", description: null }),
+        text: async () => "",
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      clearBlockedStripeProductDescription("sk_test", "price_waitlist"),
+    ).resolves.toEqual({ ok: true, updated: true });
+    expect(fetchMock.mock.calls[0][0]).toContain("/v1/prices/price_waitlist?expand");
+    const [, patch] = fetchMock.mock.calls[1];
+    expect(patch.method).toBe("POST");
+    expect(String(fetchMock.mock.calls[1][0])).toContain("/v1/products/prod_course");
+    expect(String(patch.body)).toBe("description=");
   });
 });

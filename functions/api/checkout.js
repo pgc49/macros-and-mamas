@@ -15,6 +15,7 @@ import {
   LAB_ADDON_AMOUNT,
   labAddonPriceId,
   resolveCheckoutOffer,
+  clearBlockedStripeProductDescription,
   stripeNicknameForTier,
   syncStripePriceNickname,
 } from "../_shared/pricing.js";
@@ -53,6 +54,12 @@ export async function onRequestPost({ request, env }) {
     if (!secret) {
       console.error("missing STRIPE_SECRET_KEY");
       return json({ error: "checkout unavailable" }, 503);
+    }
+
+    try {
+      await clearBlockedStripeProductDescription(secret, offer.priceId);
+    } catch (descErr) {
+      console.error("stripe product description clear failed", descErr);
     }
 
     if (offer.tier === "waitlist") {
