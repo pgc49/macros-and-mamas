@@ -77,7 +77,7 @@ describe("POST /api/membership-checkout", () => {
     expect(stripeCalls).toHaveLength(1);
     const params = new URLSearchParams(stripeCalls[0]);
     expect(params.get("customer")).toBeNull();
-    expect(params.get("customer_creation")).toBe("always");
+    expect(params.get("customer_creation")).toBeNull();
     expect(params.get("customer_email")).toBe("mama@example.com");
     expect(params.get("mode")).toBe("subscription");
     expect(params.get("line_items[0][price]")).toBe("price_alumni_49");
@@ -123,7 +123,7 @@ describe("POST /api/membership-checkout", () => {
     expect(new URLSearchParams(stripeCalls[0]).get("customer")).toBe("cus_deletedcustomer");
     const retry = new URLSearchParams(stripeCalls[1]);
     expect(retry.get("customer")).toBeNull();
-    expect(retry.get("customer_creation")).toBe("always");
+    expect(retry.get("customer_creation")).toBeNull();
     expect(retry.get("customer_email")).toBe("mama@example.com");
   });
 });

@@ -82,7 +82,11 @@ export async function onRequestPost({ request, env }) {
       data = await resp.json().catch(() => ({}));
     }
     if (!resp.ok) {
-      console.error("membership checkout error", data?.error?.code || data?.error?.type || "stripe");
+      console.error(
+        "membership checkout error",
+        data?.error?.code || data?.error?.type || "stripe",
+        data?.error?.param || "",
+      );
       return json({ error: "checkout failed" }, 502);
     }
     return json({ url: data.url, sessionId: data.id }, 200);
@@ -101,8 +105,11 @@ function applyCheckoutCustomer(body, { customerId, email }) {
     body.set("customer", reusable);
     return;
   }
-  body.set("customer_email", email || "");
-  body.set("customer_creation", "always");
+  // Subscription Checkout creates the Customer when `customer` is omitted.
+  // `customer_creation` is only valid in payment and setup mode; Stripe
+  // rejects the Session if it is sent here.
+  const address = String(email || "").trim();
+  if (address) body.set("customer_email", address);
 }
 
 function postCheckoutSession(secret, body) {
