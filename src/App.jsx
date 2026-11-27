@@ -41,6 +41,7 @@ import { RecipeBankPreview } from "./views/RecipeBankPreview";
 import { MessagesThreadPreview } from "./views/MessagesThreadPreview";
 import { MembershipHomePreview } from "./views/MembershipHomePreview";
 import { CourtesyMonthPreview } from "./views/CourtesyMonthPreview";
+import { PaymentsPreview } from "./views/PaymentsPreview";
 import { ShareReferralPreview } from "./views/ShareReferralPreview";
 import { Shell, Card } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -1681,6 +1682,7 @@ export default function App() {
           <Route path="/dev/membership-home" element={<MembershipHomePreview />} />
           <Route path="/dev/courtesy-month" element={<CourtesyMonthPreview />} />
           <Route path="/dev/share-referral" element={<ShareReferralPreview />} />
+          <Route path="/dev/payments" element={<PaymentsPreview />} />
           {AdminMessagesPreview ? (
             <Route
               path="/dev/admin-messages"

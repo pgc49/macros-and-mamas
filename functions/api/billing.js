@@ -3,6 +3,8 @@
    ==================================================================
    GET  → payment history, program (week from cohort dates), membership
    POST { action: "portal" } → Stripe Customer Portal URL
+   POST { action: "cancel" } → cancel the monthly membership at period end
+   POST { action: "resume" } → undo that cancel so it renews again
    ================================================================== */
 
 import {
@@ -16,7 +18,13 @@ import {
 import {
   buildProgramSummaryFromCohort,
   buildSubscriptionPayload,
+  fetchStripeSubscription,
   membershipAccess,
+  profileWithLiveSubscription,
+  setSubscriptionCancelAtPeriodEnd,
+  stripeCancelScheduled,
+  subscriptionOwnedByProfile,
+  syncSubscriptionToProfile,
 } from "../_shared/membership.js";
 import { reusableStripeCustomerId } from "../_shared/stripeCustomer.js";
 
@@ -32,10 +40,25 @@ export async function onRequestGet({ request, env }) {
       return json({ error: "not enrolled" }, 403);
     }
 
-    const payments = await listCustomerPayments(env, profile);
-    const program = buildProgramSummaryFromCohort(profile, payments);
-    const subscription = await buildSubscriptionPayload(env, profile);
-    const access = membershipAccess(profile);
+    const subId = String(profile.stripe_subscription_id || "").trim();
+    const [payments, stripeSub] = await Promise.all([
+      listCustomerPayments(env, profile),
+      subId ? fetchStripeSubscription(env, subId) : Promise.resolve(null),
+    ]);
+    const viewed = profileWithLiveSubscription(profile, stripeSub) || profile;
+    if (
+      stripeSub?.status
+      && String(stripeSub.status) !== String(profile.subscription_status || "")
+    ) {
+      try {
+        await syncSubscriptionToProfile(env, stripeSub, { userId: user.id });
+      } catch (syncErr) {
+        console.error("billing subscription sync failed", syncErr);
+      }
+    }
+    const program = buildProgramSummaryFromCohort(viewed, payments);
+    const subscription = await buildSubscriptionPayload(env, viewed, new Date(), stripeSub);
+    const access = membershipAccess(viewed);
     let credits = null;
     try {
       const ledger = await listLedgerForUser(env, user.id);
@@ -66,7 +89,18 @@ export async function onRequestPost({ request, env }) {
     if (!user) return json({ error: "unauthorized" }, 401);
 
     const body = await request.json().catch(() => ({}));
-    if (body?.action !== "portal") {
+    const action = body?.action;
+    if (action === "cancel" || action === "resume") {
+      const profile = await fetchBillingProfile(env, user.id);
+      if (!profile) return json({ error: "profile not found" }, 404);
+      return handleMembershipChange({
+        env,
+        user,
+        profile,
+        cancel: action === "cancel",
+      });
+    }
+    if (action !== "portal") {
       return json({ error: "unknown action" }, 400);
     }
 
@@ -277,6 +311,50 @@ async function fetchBillingProfile(env, userId) {
   if (!resp.ok) return null;
   const rows = await resp.json().catch(() => []);
   return Array.isArray(rows) ? rows[0] : null;
+}
+
+const OPEN_SUB_STATUSES = new Set(["trialing", "active", "past_due"]);
+
+async function handleMembershipChange({ env, user, profile, cancel }) {
+  if (profile.refunded) return json({ error: "enrollment refunded" }, 403);
+  const subId = String(profile.stripe_subscription_id || "").trim();
+  if (!subId) {
+    return json({ error: "There’s no monthly membership on this account." }, 404);
+  }
+  if (!env.STRIPE_SECRET_KEY) return json({ error: "billing unavailable" }, 503);
+
+  const stripeSub = await fetchStripeSubscription(env, subId);
+  if (!stripeSub?.id) {
+    return json({ error: "Couldn't update membership. Try again in a moment." }, 502);
+  }
+  if (!subscriptionOwnedByProfile(profile, stripeSub, user.id)) {
+    return json({ error: "This membership doesn’t match your account." }, 403);
+  }
+
+  const liveStatus = String(stripeSub.status || "");
+  if (!OPEN_SUB_STATUSES.has(liveStatus)) {
+    return json({
+      error: "This membership has already ended. Subscribe again from this page.",
+    }, 409);
+  }
+
+  let current = stripeSub;
+  if (stripeCancelScheduled(stripeSub) !== cancel) {
+    const updated = await setSubscriptionCancelAtPeriodEnd(env, subId, cancel, stripeSub);
+    if (!updated.ok || !updated.subscription) {
+      return json({ error: "Couldn't update membership. Try again in a moment." }, 502);
+    }
+    current = updated.subscription;
+    try {
+      await syncSubscriptionToProfile(env, current, { userId: user.id });
+    } catch (syncErr) {
+      console.error("membership manage sync failed", syncErr);
+    }
+  }
+
+  const viewed = profileWithLiveSubscription(profile, current) || profile;
+  const subscription = await buildSubscriptionPayload(env, viewed, new Date(), current);
+  return json({ subscription }, 200);
 }
 
 function json(body, status = 200) {

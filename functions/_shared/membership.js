@@ -28,6 +28,14 @@ import { reusableStripeCustomerId } from "./stripeCustomer.js";
 /** Access-granting statuses (past_due keeps access while Stripe retries). */
 const ACTIVE_SUB_STATUSES = new Set(["trialing", "active", "past_due"]);
 
+/** Stripe statuses that mean the monthly membership is over. */
+const ENDED_SUB_STATUSES = new Set([
+  "canceled",
+  "cancelled",
+  "unpaid",
+  "incomplete_expired",
+]);
+
 function supabaseConfig(env) {
   const base = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
   const key = env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -223,7 +231,91 @@ export function buildProgramSummaryFromCohort(profile, payments = []) {
   };
 }
 
-export async function buildSubscriptionPayload(env, profile, now = new Date()) {
+/**
+ * True when Stripe will end this subscription without another charge.
+ * `cancel_at_period_end` is the usual flag. A future `cancel_at` counts too.
+ */
+export function stripeCancelScheduled(stripeSub) {
+  if (!stripeSub || typeof stripeSub !== "object") return false;
+  if (stripeSub.cancel_at_period_end === true) return true;
+  const cancelAt = Number(stripeSub.cancel_at);
+  if (!Number.isFinite(cancelAt) || cancelAt <= 0) return false;
+  return ACTIVE_SUB_STATUSES.has(String(stripeSub.status || ""));
+}
+
+/**
+ * What the Payments page may offer.
+ * Without a live Stripe subscription, an active profile can still cancel;
+ * resume only appears once Stripe says the cancel is scheduled.
+ */
+export function membershipManageState(profile, stripeSub = null) {
+  const status = String(stripeSub?.status || profile?.subscription_status || "");
+  const subId = String(stripeSub?.id || profile?.stripe_subscription_id || "").trim();
+  const manageable = ACTIVE_SUB_STATUSES.has(status);
+  const scheduled = manageable && stripeCancelScheduled(stripeSub);
+  const endSeconds = scheduled
+    ? (stripeSub.cancel_at || stripeSub.current_period_end)
+    : null;
+  return {
+    canCancel: manageable && !!subId && !scheduled,
+    canResume: manageable && !!subId && scheduled,
+    cancelAtPeriodEnd: scheduled,
+    endsAt: isoFromStripeSeconds(endSeconds),
+  };
+}
+
+/** Overlay Stripe's subscription onto the profile fields the payload reads. */
+export function profileWithLiveSubscription(profile, stripeSub) {
+  if (!profile || !stripeSub) return profile;
+  const status = String(stripeSub.status || "").trim();
+  const periodEnd = isoFromStripeSeconds(stripeSub.current_period_end);
+  const trialEnd = isoFromStripeSeconds(stripeSub.trial_end);
+  return {
+    ...profile,
+    stripe_subscription_id: stripeSub.id || profile.stripe_subscription_id,
+    subscription_status: status || profile.subscription_status,
+    subscription_current_period_end: periodEnd || profile.subscription_current_period_end,
+    subscription_trial_end: trialEnd || profile.subscription_trial_end,
+  };
+}
+
+/**
+ * The subscription on this profile belongs to this mama.
+ * A stored Customer id must match. If we never stored one, Checkout metadata
+ * (`supabase_user_id`) is enough.
+ */
+export function subscriptionOwnedByProfile(profile, stripeSub, userId) {
+  if (!stripeSub?.id) return false;
+  const subCustomer = typeof stripeSub.customer === "string"
+    ? stripeSub.customer
+    : stripeSub.customer?.id || "";
+  const profileCustomer = reusableStripeCustomerId(profile?.stripe_customer_id);
+  if (profileCustomer && subCustomer) return profileCustomer === subCustomer;
+  const metaUser = String(stripeSub.metadata?.supabase_user_id || "");
+  return !!(userId && metaUser && metaUser === userId);
+}
+
+/**
+ * Block a second Checkout while a membership is still open.
+ * A scheduled cancel should be turned back on, not replaced with a new sub.
+ * A live canceled subscription does not block. No live object + an open
+ * profile status blocks, so a Stripe outage cannot start a duplicate.
+ */
+export function openMembershipBlocksCheckout(profile, stripeSub) {
+  if (stripeSub && stripeSub.status) {
+    const live = String(stripeSub.status);
+    if (!ACTIVE_SUB_STATUSES.has(live)) return null;
+    if (stripeCancelScheduled(stripeSub)) return "resume_available";
+    return "already_subscribed";
+  }
+  if (ACTIVE_SUB_STATUSES.has(String(profile?.subscription_status || ""))) {
+    return "already_subscribed";
+  }
+  return null;
+}
+
+export async function buildSubscriptionPayload(env, profile, now = new Date(), stripeSub = null) {
+  profile = profileWithLiveSubscription(profile, stripeSub) || profile;
   const access = membershipAccess(profile, now);
   const priceId = alumniPriceId(env);
   const status = String(profile.subscription_status || "");
@@ -253,6 +345,42 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
       : status === "past_due"
         ? "past_due"
         : "active";
+    const manage = membershipManageState(profile, stripeSub);
+    const endLabel = formatShortDate(manage.endsAt);
+    let periodLabel = periodEnd
+      ? (status === "trialing"
+        ? (kind === "founding"
+          ? `Free month through ${formatShortDate(trialEnd || periodEnd)} · first charge after that`
+          : kind === "courtesy"
+            ? `Courtesy month through ${formatShortDate(trialEnd || periodEnd)} · first charge after that`
+            : `First charge after ${formatShortDate(trialEnd || periodEnd)}`)
+        : `Current period through ${formatShortDate(periodEnd)}`)
+      : null;
+    let note = status === "trialing"
+      ? (kind === "founding"
+        ? "You're in your free month — nothing charges until the trial ends."
+        : kind === "courtesy"
+          ? "Callie's courtesy month is on this membership. Nothing charges until the trial ends."
+          : "Nothing charges until the trial ends.")
+      : status === "past_due"
+        ? "Your latest membership payment didn’t go through. Update your card — access stays open while Stripe retries."
+        : "Your monthly membership is active.";
+    if (manage.cancelAtPeriodEnd) {
+      periodLabel = endLabel ? `Access through ${endLabel}` : "Access through the end of this period";
+      if (status === "trialing") {
+        note = endLabel
+          ? `This membership ends ${endLabel}. Nothing will charge. You can turn it back on before then.`
+          : "This membership is set to end. Nothing will charge. You can turn it back on before then.";
+      } else if (status === "past_due") {
+        note = endLabel
+          ? `This membership ends ${endLabel}. You won’t be charged again. You can turn it back on before then.`
+          : "This membership is set to end. You won’t be charged again. You can turn it back on before then.";
+      } else {
+        note = endLabel
+          ? `This membership ends ${endLabel}. You keep access until then, and you won’t be charged again. You can turn it back on before then.`
+          : "This membership is set to end. You keep access until then, and you won’t be charged again. You can turn it back on before then.";
+      }
+    }
     return {
       status: displayStatus,
       priceLabel: courtesy ? "Monthly membership" : "Founding Mama membership",
@@ -260,27 +388,15 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
       currency: "usd",
       renewsAt: periodEnd || null,
       trialEndsAt: status === "trialing" ? (trialEnd || null) : null,
-      cancelAtPeriodEnd: false,
-      periodLabel: periodEnd
-        ? (status === "trialing"
-          ? (kind === "founding"
-            ? `Free month through ${formatShortDate(trialEnd || periodEnd)} · first charge after that`
-            : kind === "courtesy"
-              ? `Courtesy month through ${formatShortDate(trialEnd || periodEnd)} · first charge after that`
-              : `First charge after ${formatShortDate(trialEnd || periodEnd)}`)
-          : `Current period through ${formatShortDate(periodEnd)}`)
-        : null,
+      cancelAtPeriodEnd: manage.cancelAtPeriodEnd,
+      canCancel: manage.canCancel,
+      canResume: manage.canResume,
+      endsAt: manage.endsAt,
+      resubscribe: false,
+      periodLabel,
       canSubscribe: false,
       benefits,
-      note: status === "trialing"
-        ? (kind === "founding"
-          ? "You're in your free month — nothing charges until the trial ends."
-          : kind === "courtesy"
-            ? "Callie's courtesy month is on this membership. Nothing charges until the trial ends."
-            : "Nothing charges until the trial ends.")
-        : status === "past_due"
-          ? "Your latest membership payment didn’t go through. Update your card — access stays open while Stripe retries."
-          : "Your monthly membership is active.",
+      note,
       access,
       priceConfigured: !!priceId,
       hasFreeMonth: kind != null,
@@ -297,6 +413,10 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
       renewsAt: profile.subscription_current_period_end || null,
       trialEndsAt: null,
       cancelAtPeriodEnd: false,
+      canCancel: false,
+      canResume: false,
+      endsAt: null,
+      resubscribe: false,
       periodLabel: null,
       canSubscribe: false,
       benefits,
@@ -336,6 +456,12 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
   }
 
   const freeMonthStillAhead = (founding || courtesy) && (beforeProgramEnd || inFreeMonth);
+  const ended = ENDED_SUB_STATUSES.has(String(profile.subscription_status || ""));
+  if (ended && afterProgram) {
+    note = "Your monthly membership has ended. Subscribe again to keep logging, your ranges, and Alumni chat.";
+  } else if (ended) {
+    note = `Your monthly membership has ended. You can subscribe again below. ${note}`;
+  }
 
   return {
     status: afterProgram ? "required" : "available",
@@ -345,6 +471,10 @@ export async function buildSubscriptionPayload(env, profile, now = new Date()) {
     renewsAt: null,
     trialEndsAt: freeMonthStillAhead ? freeEnd : (beforeProgramEnd ? access.programEnd : null),
     cancelAtPeriodEnd: false,
+    canCancel: false,
+    canResume: false,
+    endsAt: null,
+    resubscribe: ended,
     periodLabel: freeMonthStillAhead && freeEnd
       ? (courtesy
         ? `Courtesy month covers ${formatShortDate(access.programEnd)} – ${formatShortDate(freeEnd)}`
@@ -487,6 +617,41 @@ export async function removeAlumniMembership(env, userId) {
   } catch (e) {
     console.error("removeAlumniMembership failed", userId, e);
   }
+}
+
+/**
+ * Schedule or undo cancel-at-period-end.
+ * Stripe treats `cancel_at` and `cancel_at_period_end` as mutually exclusive,
+ * so a timestamp cancel is cleared with an empty `cancel_at`.
+ */
+export async function setSubscriptionCancelAtPeriodEnd(env, subscriptionId, cancelAtPeriodEnd, stripeSub) {
+  const secret = env?.STRIPE_SECRET_KEY;
+  if (!secret || !subscriptionId) return { ok: false, status: 503 };
+  const params = new URLSearchParams();
+  if (cancelAtPeriodEnd) {
+    params.set("cancel_at_period_end", "true");
+  } else if (stripeSub?.cancel_at && stripeSub?.cancel_at_period_end !== true) {
+    params.set("cancel_at", "");
+  } else {
+    params.set("cancel_at_period_end", "false");
+  }
+  const resp = await fetch(
+    `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${secret}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: params,
+    },
+  );
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    console.error("stripe subscription update failed", data?.error?.code || resp.status);
+    return { ok: false, status: resp.status };
+  }
+  return { ok: true, subscription: data };
 }
 
 /** Fetch subscription from Stripe by id. */

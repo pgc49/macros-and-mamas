@@ -120,6 +120,8 @@ describe("membership copy helpers", () => {
       .toBe("Pay $49/mo");
     expect(membershipOptInButtonLabel({ status: "available", freeMonthKind: "courtesy" }))
       .toBe("Add membership — courtesy month, then $49/mo");
+    expect(membershipOptInButtonLabel({ status: "required", resubscribe: true }))
+      .toBe("Subscribe again — $49/mo");
   });
 
   it("stops telling her the first charge is waiting once membership is required", () => {

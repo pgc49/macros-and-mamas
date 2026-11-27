@@ -35,19 +35,37 @@ export async function fetchBillingSummary() {
 
 /** Open Stripe Customer Portal when configured. */
 export async function openBillingPortal() {
+  const data = await postBillingAction("portal");
+  if (data.url) window.location.assign(data.url);
+  return data;
+}
+
+/** Stop the monthly membership at the end of the current period. */
+export async function cancelMembership() {
+  return postBillingAction("cancel");
+}
+
+/** Undo a scheduled cancel so the membership renews again. */
+export async function resumeMembership() {
+  return postBillingAction("resume");
+}
+
+async function postBillingAction(action) {
   const headers = await authHeaders();
   const resp = await fetch(CONFIG.BILLING_ENDPOINT, {
     method: "POST",
     headers,
-    body: JSON.stringify({ action: "portal" }),
+    body: JSON.stringify({ action }),
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    const err = new Error(data.detail || data.error || "Portal unavailable.");
+    const err = new Error(
+      data.detail || data.error || "Couldn't update membership.",
+    );
     err.status = resp.status;
+    err.code = data.code || null;
     throw err;
   }
-  if (data.url) window.location.assign(data.url);
   return data;
 }
 

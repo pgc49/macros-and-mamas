@@ -195,6 +195,7 @@ export function membershipCheckoutFinePrint(subscription) {
 
 /** Payments opt-in CTA. August's courtesy month is named; November is not offered one. */
 export function membershipOptInButtonLabel(subscription) {
+  if (subscription?.resubscribe) return `Subscribe again — $${ALUMNI_MONTHLY_AMOUNT}/mo`;
   if (subscription?.status === "required") return `Pay $${ALUMNI_MONTHLY_AMOUNT}/mo`;
   if (subscription?.freeMonthKind === "courtesy") {
     return `Add membership — courtesy month, then $${ALUMNI_MONTHLY_AMOUNT}/mo`;
