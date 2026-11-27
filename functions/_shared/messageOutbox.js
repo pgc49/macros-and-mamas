@@ -32,20 +32,31 @@ export async function claimNotificationJob(env, messageType, messageId) {
   return rows[0] || null;
 }
 
+async function postOutboxRpc(url, key, body) {
+  const options = {
+    method: "POST",
+    headers: headers(key),
+    body: JSON.stringify(body),
+  };
+  const first = await fetch(url, options);
+  if (first.ok) return first;
+  return fetch(url, options);
+}
+
 export async function finishNotificationJob(env, job, { success, error = "" }) {
   if (!job?.id || !job?.claim_token) throw new Error("missing outbox claim token");
   const { base, key } = config(env);
   if (!base || !key) throw new Error("missing outbox configuration");
-  const resp = await fetch(`${base}/rest/v1/rpc/finish_message_notification_job`, {
-    method: "POST",
-    headers: headers(key),
-    body: JSON.stringify({
+  const resp = await postOutboxRpc(
+    `${base}/rest/v1/rpc/finish_message_notification_job`,
+    key,
+    {
       p_job_id: job.id,
       p_claim_token: job.claim_token,
       p_success: success === true,
       p_error: String(error || "").slice(0, 500) || null,
-    }),
-  });
+    },
+  );
   if (!resp.ok) throw new Error(`outbox finish failed (${resp.status})`);
   const rows = await resp.json().catch(() => []);
   if (!rows.length) throw new Error("outbox claim expired before completion");
@@ -109,6 +120,19 @@ export async function releaseNotificationDelivery(env, messageType, messageId, p
   return (await resp.json()) === true;
 }
 
+async function fetchOutboxList(url, key) {
+  const options = { headers: headers(key) };
+  const first = await fetch(url, options);
+  if (first.ok) return first;
+  return fetch(url, options);
+}
+
+async function readOutboxRows(resp) {
+  if (!resp?.ok) return [];
+  const rows = await resp.json().catch(() => []);
+  return Array.isArray(rows) ? rows : [];
+}
+
 export async function listDueNotificationJobs(env, limit = 20) {
   const { base, key } = config(env);
   if (!base || !key) throw new Error("missing outbox configuration");
@@ -121,20 +145,23 @@ export async function listDueNotificationJobs(env, limit = 20) {
     + "?select=id,message_type,message_id,status,attempts,available_at,locked_at"
     + "&order=created_at.asc";
   const [dueResp, staleResp] = await Promise.all([
-    fetch(
+    fetchOutboxList(
       `${base}${basePath}&status=in.(pending,retry)&available_at=lte.${now}&limit=${freshLimit}`,
-      { headers: headers(key) },
+      key,
     ),
-    fetch(
+    fetchOutboxList(
       `${base}${basePath}&status=eq.processing&locked_at=lt.${stale}&limit=${Math.max(1, staleLimit)}`,
-      { headers: headers(key) },
+      key,
     ),
   ]);
-  if (!dueResp.ok || !staleResp.ok) {
+  if (!dueResp.ok) {
     throw new Error(`outbox list failed (${dueResp.status}/${staleResp.status})`);
   }
-  const due = (await dueResp.json().catch(() => [])) || [];
-  const staleJobs = (await staleResp.json().catch(() => [])) || [];
+  if (!staleResp.ok) {
+    console.warn("outbox stale list failed; continuing with due jobs", staleResp.status);
+  }
+  const due = await readOutboxRows(dueResp);
+  const staleJobs = await readOutboxRows(staleResp);
   // Reserve most of every batch for fresh work so repeatedly stale jobs
   // cannot monopolize recovery.
   return [

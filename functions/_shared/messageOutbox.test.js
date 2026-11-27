@@ -72,6 +72,30 @@ describe("message notification outbox", () => {
     expect(dead.status).toBe("dead");
   });
 
+  it("retries a transient finish 401 and still schedules retry", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ id: 10, status: "retry" }]), { status: 200 }));
+
+    const retry = await finishNotificationJob(env, {
+      id: 10,
+      attempts: 2,
+      claim_token: "10000000-0000-4000-8000-000000000010",
+    }, {
+      success: false,
+      error: "push fanout incomplete",
+    });
+
+    expect(retry.status).toBe("retry");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      p_job_id: 10,
+      p_claim_token: "10000000-0000-4000-8000-000000000010",
+      p_success: false,
+      p_error: "push fanout incomplete",
+    });
+  });
+
   it("uses constant-time cron secret comparison", () => {
     const request = new Request("https://example.com/api/cron", {
       headers: { authorization: "Bearer cron-secret" },
@@ -101,6 +125,46 @@ describe("message notification outbox", () => {
     expect(jobs).toHaveLength(12);
     expect(jobs.filter((job) => job.status === "pending")).toHaveLength(9);
     expect(jobs.filter((job) => job.status === "processing")).toHaveLength(3);
+  });
+
+  it("retries a transient stale-list 401 and still recovers abandoned jobs", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        { id: 1, status: "pending" },
+      ]), { status: 200 }))
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        { id: 9, status: "processing" },
+      ]), { status: 200 }));
+
+    const jobs = await listDueNotificationJobs(env, 4);
+    expect(jobs.map((job) => job.id)).toEqual([1, 9]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps due jobs when the stale list stays unauthorized", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        { id: 2, status: "retry" },
+      ]), { status: 200 }))
+      .mockResolvedValue(new Response("unauthorized", { status: 401 }));
+
+    const jobs = await listDueNotificationJobs(env, 4);
+    expect(jobs).toEqual([{ id: 2, status: "retry" }]);
+    expect(warn).toHaveBeenCalledWith(
+      "outbox stale list failed; continuing with due jobs",
+      401,
+    );
+  });
+
+  it("still fails closed when the due list cannot be read", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }));
+
+    await expect(listDueNotificationJobs(env, 4)).rejects.toThrow("outbox list failed (401/200)");
   });
 
   it("rejects with timeout when the job deadline aborts after claim", async () => {
