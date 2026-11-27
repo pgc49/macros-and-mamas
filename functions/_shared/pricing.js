@@ -26,12 +26,21 @@ export const PRICE_TIERS = {
 };
 
 /**
- * Stripe Checkout shows Price.nickname under the product name.
- * Keep the $249 nickname in lockstep with PRICE_TIERS.waitlist.label —
- * "Priority Waitlist Special" reads like a hold, not a paid seat.
+ * Price.nickname is the Dashboard label only. Hosted Checkout does not print it.
+ * Checkout prints Product.description under the amount — that is the gray line
+ * under $249. Keep that line blank. "Priority Waitlist Special" reads like a hold.
  */
+const BLOCKED_CHECKOUT_DESCRIPTIONS = new Set([
+  "priority waitlist special",
+]);
+
 export function stripeNicknameForTier(tier) {
   return PRICE_TIERS[tier]?.label || "";
+}
+
+export function isBlockedCheckoutDescription(description) {
+  const text = String(description || "").trim().toLowerCase();
+  return BLOCKED_CHECKOUT_DESCRIPTIONS.has(text);
 }
 
 /**
@@ -68,6 +77,53 @@ export async function syncStripePriceNickname(secret, priceId, nickname) {
   });
   if (!patch.ok) {
     console.error("stripe price nickname update failed", patch.status, await patch.text());
+    return { ok: false };
+  }
+  return { ok: true, updated: true };
+}
+
+/**
+ * Best-effort: blank a product description Checkout would show under the price.
+ * Only the blocked phrases are removed. Other descriptions (Lab Review, founding)
+ * stay. Failures must not block paying.
+ */
+export async function clearBlockedStripeProductDescription(secret, priceId) {
+  const key = String(secret || "").trim();
+  const id = String(priceId || "").trim();
+  if (!key || !id) return { ok: false, skipped: true };
+
+  const headers = { authorization: `Bearer ${key}` };
+  const priceUrl =
+    `https://api.stripe.com/v1/prices/${encodeURIComponent(id)}?expand[]=product`;
+  const get = await fetch(priceUrl, { headers });
+  if (!get.ok) {
+    console.error("stripe price get failed", get.status, await get.text());
+    return { ok: false };
+  }
+  const price = await get.json();
+  const product = price?.product;
+  if (!product || typeof product === "string" || !product.id) {
+    return { ok: false, skipped: true };
+  }
+  if (!isBlockedCheckoutDescription(product.description)) {
+    return { ok: true, unchanged: true };
+  }
+
+  const body = new URLSearchParams();
+  body.set("description", "");
+  const patch = await fetch(
+    `https://api.stripe.com/v1/products/${encodeURIComponent(product.id)}`,
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body,
+    },
+  );
+  if (!patch.ok) {
+    console.error("stripe product description clear failed", patch.status, await patch.text());
     return { ok: false };
   }
   return { ok: true, updated: true };
