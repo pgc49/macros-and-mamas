@@ -3,6 +3,9 @@ import {
   buildSubscriptionPayload,
   membershipAccess,
   membershipCheckoutCancelPath,
+  membershipManageState,
+  openMembershipBlocksCheckout,
+  subscriptionOwnedByProfile,
   trialEndUnixForCheckout,
 } from "./membership.js";
 
@@ -262,6 +265,131 @@ describe("buildSubscriptionPayload copy", () => {
     expect(november.freeMonthKind).toBeNull();
     expect(november.note).not.toMatch(/courtesy|free month/i);
     expect(november.trialEndsAt).toBe("2026-12-28T00:00:00.000Z");
+  });
+});
+
+describe("membership cancel and resubscribe", () => {
+  const env = { PRICE_ALUMNI_49: "price_alumni_membership_49" };
+  const periodEnd = "2026-12-27T00:00:00.000Z";
+  const periodEndSec = Math.floor(Date.parse(periodEnd) / 1000);
+
+  it("offers cancel while the membership is open", async () => {
+    const payload = await buildSubscriptionPayload(
+      env,
+      mama({
+        subscription_status: "active",
+        stripe_subscription_id: "sub_123",
+        subscription_current_period_end: periodEnd,
+        cohort_label: "2026-11",
+      }),
+      "2026-12-01T00:00:00.000Z",
+      {
+        id: "sub_123",
+        status: "active",
+        cancel_at_period_end: false,
+        current_period_end: periodEndSec,
+        customer: "cus_123",
+      },
+    );
+    expect(payload.canCancel).toBe(true);
+    expect(payload.canResume).toBe(false);
+    expect(payload.cancelAtPeriodEnd).toBe(false);
+    expect(payload.canSubscribe).toBe(false);
+    expect(payload.note).toBe("Your monthly membership is active.");
+  });
+
+  it("keeps access and offers to turn a scheduled cancel back on", async () => {
+    const payload = await buildSubscriptionPayload(
+      env,
+      mama({
+        subscription_status: "active",
+        stripe_subscription_id: "sub_123",
+        subscription_current_period_end: periodEnd,
+        cohort_label: "2026-11",
+      }),
+      "2026-12-01T00:00:00.000Z",
+      {
+        id: "sub_123",
+        status: "active",
+        cancel_at_period_end: true,
+        cancel_at: periodEndSec,
+        current_period_end: periodEndSec,
+        customer: "cus_123",
+      },
+    );
+    expect(payload.cancelAtPeriodEnd).toBe(true);
+    expect(payload.canResume).toBe(true);
+    expect(payload.canCancel).toBe(false);
+    expect(payload.canSubscribe).toBe(false);
+    expect(payload.endsAt).toBe(periodEnd);
+    expect(payload.note).toMatch(/won.t be charged again/);
+    expect(payload.note).toMatch(/turn it back on/i);
+    expect(payload.periodLabel).toMatch(/Access through/);
+  });
+
+  it("offers subscribe again after the membership has ended", async () => {
+    const payload = await buildSubscriptionPayload(
+      env,
+      mama({
+        subscription_status: "canceled",
+        stripe_subscription_id: "sub_old",
+        cohort_label: "2026-11",
+      }),
+      "2026-12-28T00:00:00.000Z",
+    );
+    expect(payload.resubscribe).toBe(true);
+    expect(payload.canSubscribe).toBe(true);
+    expect(payload.canCancel).toBe(false);
+    expect(payload.status).toBe("required");
+    expect(payload.note).toMatch(/has ended/);
+    expect(payload.note).toMatch(/Subscribe again/);
+  });
+
+  it("does not treat a scheduled cancel as a second subscription", () => {
+    const scheduled = {
+      id: "sub_123",
+      status: "active",
+      cancel_at_period_end: true,
+    };
+    expect(openMembershipBlocksCheckout(
+      mama({ subscription_status: "active", stripe_subscription_id: "sub_123" }),
+      scheduled,
+    )).toBe("resume_available");
+    expect(openMembershipBlocksCheckout(
+      mama({ subscription_status: "active" }),
+      { id: "sub_123", status: "active", cancel_at_period_end: false },
+    )).toBe("already_subscribed");
+    expect(openMembershipBlocksCheckout(
+      mama({ subscription_status: "active" }),
+      { id: "sub_123", status: "canceled", cancel_at_period_end: false },
+    )).toBeNull();
+    expect(openMembershipBlocksCheckout(
+      mama({ subscription_status: "past_due" }),
+      null,
+    )).toBe("already_subscribed");
+  });
+
+  it("matches the subscription to this mama's Stripe customer", () => {
+    const profile = mama({ stripe_customer_id: "cus_mama" });
+    expect(subscriptionOwnedByProfile(
+      profile,
+      { id: "sub_123", customer: "cus_mama" },
+      "user-1",
+    )).toBe(true);
+    expect(subscriptionOwnedByProfile(
+      profile,
+      { id: "sub_123", customer: "cus_other", metadata: { supabase_user_id: "user-1" } },
+      "user-1",
+    )).toBe(false);
+    expect(subscriptionOwnedByProfile(
+      mama({ stripe_customer_id: null }),
+      { id: "sub_123", customer: "cus_mama", metadata: { supabase_user_id: "user-1" } },
+      "user-1",
+    )).toBe(true);
+    expect(membershipManageState(
+      mama({ subscription_status: "trialing", stripe_subscription_id: "sub_123" }),
+      null,
+    ).canCancel).toBe(true);
   });
 });
 

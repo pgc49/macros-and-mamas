@@ -15,7 +15,7 @@ const ROWS = [
   {
     to: PATHS.accountPayments,
     title: "Payments",
-    body: "Past charges and upcoming membership options.",
+    body: "Charges, monthly membership, cancel, or subscribe again.",
   },
   {
     to: PATHS.accountShare,

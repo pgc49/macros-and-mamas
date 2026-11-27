@@ -35,8 +35,9 @@ function profile(stripeCustomerId) {
   };
 }
 
-function mockFetch({ stripeCustomerId, stripeResponses }) {
+function mockFetch({ stripeCustomerId, stripeResponses, profileOverrides = {}, subscription = null }) {
   const stripeCalls = [];
+  const subscriptionGets = [];
   let stripeIndex = 0;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options = {}) => {
     const value = String(url);
@@ -44,7 +45,12 @@ function mockFetch({ stripeCustomerId, stripeResponses }) {
       return new Response(JSON.stringify({ id: USER_ID, email: "mama@example.com" }), { status: 200 });
     }
     if (value.includes("/rest/v1/profiles")) {
-      return new Response(JSON.stringify([profile(stripeCustomerId)]), { status: 200 });
+      return new Response(JSON.stringify([{ ...profile(stripeCustomerId), ...profileOverrides }]), { status: 200 });
+    }
+    if (value.includes("/v1/subscriptions/")) {
+      subscriptionGets.push(value);
+      if (!subscription) return new Response(JSON.stringify({ error: { code: "resource_missing" } }), { status: 404 });
+      return new Response(JSON.stringify(subscription), { status: 200 });
     }
     if (value.includes("api.stripe.com/v1/checkout/sessions")) {
       stripeCalls.push(String(options.body || ""));
@@ -54,7 +60,7 @@ function mockFetch({ stripeCustomerId, stripeResponses }) {
     }
     return new Response("not found", { status: 404 });
   });
-  return stripeCalls;
+  return { stripeCalls, subscriptionGets };
 }
 
 beforeEach(() => {
@@ -63,7 +69,7 @@ beforeEach(() => {
 
 describe("POST /api/membership-checkout", () => {
   it("does not send a guest customer id to Stripe", async () => {
-    const stripeCalls = mockFetch({
+    const { stripeCalls } = mockFetch({
       stripeCustomerId: "gcus_guestcustomer",
       stripeResponses: [{ status: 200, body: { id: "cs_test", url: "https://checkout.stripe.test/session" } }],
     });
@@ -84,7 +90,7 @@ describe("POST /api/membership-checkout", () => {
   });
 
   it("passes a real Customer id through", async () => {
-    const stripeCalls = mockFetch({
+    const { stripeCalls } = mockFetch({
       stripeCustomerId: "cus_realcustomer",
       stripeResponses: [{ status: 200, body: { id: "cs_test", url: "https://checkout.stripe.test/session" } }],
     });
@@ -98,7 +104,7 @@ describe("POST /api/membership-checkout", () => {
   });
 
   it("retries without the customer when Stripe says that customer does not exist", async () => {
-    const stripeCalls = mockFetch({
+    const { stripeCalls } = mockFetch({
       stripeCustomerId: "cus_deletedcustomer",
       stripeResponses: [
         {
@@ -125,5 +131,62 @@ describe("POST /api/membership-checkout", () => {
     expect(retry.get("customer")).toBeNull();
     expect(retry.get("customer_creation")).toBeNull();
     expect(retry.get("customer_email")).toBe("mama@example.com");
+  });
+
+  it("refuses a second checkout while a cancel is only scheduled", async () => {
+    const { stripeCalls } = mockFetch({
+      stripeCustomerId: "cus_realcustomer",
+      stripeResponses: [],
+      profileOverrides: {
+        subscription_status: "active",
+        stripe_subscription_id: "sub_open",
+      },
+      subscription: {
+        id: "sub_open",
+        status: "active",
+        customer: "cus_realcustomer",
+        cancel_at_period_end: true,
+      },
+    });
+
+    const res = await onRequestPost({ request: request(), env });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "resume_available" });
+    expect(stripeCalls).toHaveLength(0);
+  });
+
+  it("starts checkout again when Stripe says the old membership has ended", async () => {
+    const { stripeCalls } = mockFetch({
+      stripeCustomerId: "cus_realcustomer",
+      stripeResponses: [{ status: 200, body: { id: "cs_again", url: "https://checkout.stripe.test/again" } }],
+      profileOverrides: {
+        subscription_status: "active",
+        stripe_subscription_id: "sub_old",
+      },
+      subscription: {
+        id: "sub_old",
+        status: "canceled",
+        customer: "cus_realcustomer",
+        cancel_at_period_end: false,
+      },
+    });
+
+    const res = await onRequestPost({ request: request(), env });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ url: "https://checkout.stripe.test/again" });
+    expect(stripeCalls).toHaveLength(1);
+  });
+
+  it("does not open a second subscription while one is past due", async () => {
+    const { stripeCalls } = mockFetch({
+      stripeCustomerId: "cus_realcustomer",
+      stripeResponses: [],
+      profileOverrides: { subscription_status: "past_due" },
+    });
+
+    const res = await onRequestPost({ request: request(), env });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "already_subscribed" });
+    expect(stripeCalls).toHaveLength(0);
   });
 });

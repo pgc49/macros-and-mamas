@@ -6,8 +6,10 @@ import { PATHS } from "../routing";
 import { useAuth } from "../auth/useAuth.jsx";
 import {
   canOpenBillingPortal,
+  cancelMembership,
   fetchBillingSummary,
   openBillingPortal,
+  resumeMembership,
   startMembershipCheckout,
 } from "../lib/billing";
 import { membershipCheckoutFinePrint, membershipOptInButtonLabel } from "../lib/membershipAccess";
@@ -49,19 +51,30 @@ function when(iso) {
 
 /**
  * Payments — 8-week program history + alumni membership opt-in / status.
+ * `preview` is the local /dev/payments harness. Production never passes it.
  */
-export function PaymentsPage() {
+export function PaymentsPage({ preview = null }) {
   const { user, profile, loading: authLoading, isAdmin, refreshProfile } = useAuth();
   const [searchParams] = useSearchParams();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(preview?.summary || null);
+  const [loading, setLoading] = useState(!preview);
   const [err, setErr] = useState("");
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalNote, setPortalNote] = useState("");
   const [subBusy, setSubBusy] = useState(false);
   const [subNote, setSubNote] = useState("");
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [manageBusy, setManageBusy] = useState(false);
+  const [manageNote, setManageNote] = useState("");
+  const [manageIsError, setManageIsError] = useState(false);
 
   useEffect(() => {
+    if (preview) {
+      setData(preview.summary);
+      setLoading(false);
+      setConfirmCancel(false);
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       if (authLoading || !user) {
@@ -82,9 +95,9 @@ export function PaymentsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [user, authLoading, searchParams, refreshProfile]);
+  }, [user, authLoading, searchParams, refreshProfile, preview]);
 
-  if (authLoading || loading) {
+  if ((authLoading && !preview) || loading) {
     return (
       <Shell>
         <Card style={{ marginTop: 24 }}>
@@ -94,11 +107,11 @@ export function PaymentsPage() {
     );
   }
 
-  if (!user) {
+  if (!preview && !user) {
     return <Navigate to={PATHS.signin} replace state={{ from: PATHS.accountPayments }} />;
   }
-  if (profile?.refunded) return <Navigate to={PATHS.goodbye} replace />;
-  if (!profile?.paid && !isAdmin) return <Navigate to={PATHS.join} replace />;
+  if (!preview && profile?.refunded) return <Navigate to={PATHS.goodbye} replace />;
+  if (!preview && !profile?.paid && !isAdmin) return <Navigate to={PATHS.join} replace />;
 
   const program = data?.program;
   const subscription = data?.subscription;
@@ -139,12 +152,77 @@ export function PaymentsPage() {
     setSubNote("");
     setSubBusy(true);
     try {
+      if (preview?.onSubscribe) {
+        const note = await preview.onSubscribe();
+        setManageIsError(false);
+        setManageNote(typeof note === "string" && note
+          ? note
+          : "Checkout would open next.");
+        setSubBusy(false);
+        return;
+      }
       await startMembershipCheckout();
     } catch (e) {
       setSubNote(e?.message || "Couldn't start membership checkout.");
       setSubBusy(false);
     }
   };
+
+  const applyManagedSubscription = (result, note) => {
+    if (result?.subscription) {
+      setData((prev) => ({ ...(prev || {}), subscription: result.subscription }));
+    }
+    setConfirmCancel(false);
+    setManageIsError(false);
+    setManageNote(note);
+  };
+
+  const confirmCancelMembership = async () => {
+    setManageNote("");
+    setManageBusy(true);
+    try {
+      if (preview?.onCancel) {
+        const result = await preview.onCancel();
+        applyManagedSubscription(result, "Membership will end on the date above. You can turn it back on until then.");
+        return;
+      }
+      const result = await cancelMembership();
+      applyManagedSubscription(
+        result,
+        "Membership will end on the date above. You can turn it back on until then.",
+      );
+      await refreshProfile?.();
+    } catch (e) {
+      setManageIsError(true);
+      setManageNote(e?.message || "Couldn't cancel membership.");
+    } finally {
+      setManageBusy(false);
+    }
+  };
+
+  const resume = async () => {
+    setManageNote("");
+    setManageBusy(true);
+    try {
+      if (preview?.onResume) {
+        const result = await preview.onResume();
+        applyManagedSubscription(result, "Membership is back on. It will renew as usual.");
+        return;
+      }
+      const result = await resumeMembership();
+      applyManagedSubscription(result, "Membership is back on. It will renew as usual.");
+      await refreshProfile?.();
+    } catch (e) {
+      setManageIsError(true);
+      setManageNote(e?.message || "Couldn't turn membership back on.");
+    } finally {
+      setManageBusy(false);
+    }
+  };
+
+  const accessUntil = subscription?.cancelAtPeriodEnd
+    ? subscription?.endsAt
+    : (subscription?.renewsAt || subscription?.trialEndsAt);
 
   const benefits = subscription?.benefits || [
     "Keep your macros, meal logging, and full progress history",
@@ -188,8 +266,12 @@ export function PaymentsPage() {
         </Card>
       )}
 
-      {subscription?.status === "required" && (
-        <MembershipPayPrompt profile={profile} sticky={false} />
+      {subscription?.status === "required" && !subscription?.resubscribe && (
+        <MembershipPayPrompt
+          profile={profile}
+          sticky={false}
+          onPay={preview?.onSubscribe}
+        />
       )}
 
       <Card style={{ marginBottom: 14 }}>
@@ -249,7 +331,7 @@ export function PaymentsPage() {
             {subscription.periodLabel}
           </div>
         )}
-        {(subscription?.status === "trialing" || subscription?.status === "active") && (
+        {(subscription?.status === "trialing" || subscription?.status === "active") && !subscription?.cancelAtPeriodEnd && (
           <div style={{ fontSize: 14, color: T.inkSoft, marginTop: 10, lineHeight: 1.45 }}>
             {subscription.status === "trialing" && subscription.trialEndsAt
               ? (subscription.hasFreeMonth
@@ -271,6 +353,97 @@ export function PaymentsPage() {
             ))}
           </ul>
         </div>
+        {subscription?.canResume && (
+          <Btn
+            style={{ width: "100%", marginTop: 16 }}
+            disabled={manageBusy}
+            onClick={resume}
+          >
+            {manageBusy ? "Turning it back on…" : "Turn membership back on"}
+          </Btn>
+        )}
+        {subscription?.canCancel && !confirmCancel && (
+          <button
+            type="button"
+            onClick={() => {
+              setManageNote("");
+              setConfirmCancel(true);
+            }}
+            style={{
+              display: "block",
+              marginTop: 16,
+              padding: 0,
+              border: "none",
+              background: "none",
+              color: T.inkSoft,
+              fontWeight: 700,
+              fontSize: 14,
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
+          >
+            Cancel membership
+          </button>
+        )}
+        {subscription?.canCancel && confirmCancel && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: "12px 14px",
+              borderRadius: 12,
+              background: T.bg,
+              border: `1px solid ${T.border}`,
+            }}
+          >
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>
+              Cancel monthly membership?
+            </div>
+            <p style={{ fontSize: 14, color: T.inkSoft, lineHeight: 1.5, margin: "0 0 12px" }}>
+              {accessUntil
+                ? `You keep your ranges, logging, and Alumni chat through ${when(accessUntil)}. After that, membership stops and you won’t be charged again. You can turn it back on from this page anytime before then.`
+                : "You keep access through the end of this paid period. After that, membership stops and you won’t be charged again. You can turn it back on from this page anytime before then."}
+            </p>
+            <Btn
+              style={{ width: "100%" }}
+              disabled={manageBusy}
+              onClick={() => setConfirmCancel(false)}
+            >
+              Keep membership
+            </Btn>
+            <button
+              type="button"
+              disabled={manageBusy}
+              onClick={confirmCancelMembership}
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: 8,
+                padding: "13px 22px",
+                borderRadius: 999,
+                border: `1.5px solid ${T.border}`,
+                background: "#fff",
+                color: T.ink,
+                fontWeight: 700,
+                fontSize: 15,
+                cursor: manageBusy ? "default" : "pointer",
+              }}
+            >
+              {manageBusy ? "Canceling…" : "Cancel membership"}
+            </button>
+          </div>
+        )}
+        {manageNote && (
+          <div
+            style={{
+              fontSize: 13.5,
+              color: manageIsError ? T.amber : T.ink,
+              marginTop: 10,
+              lineHeight: 1.45,
+            }}
+          >
+            {manageNote}
+          </div>
+        )}
         {showOptIn && (
           <>
             <Btn

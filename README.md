@@ -104,7 +104,7 @@ where id = (select id from auth.users where email = 'CALLIE_EMAIL_HERE');
    - Account created before `ENROLLMENT_CLOSED_AT` → founding $149  
    - Email has an eligible `marketing_leads` row (quiz unlock) → early $249  
    - Else → full $299 (set `OPEN_WITHOUT_QUIZ=true` only to sell $249 without the quiz)  
-5. Customer Portal: Dashboard → enable card update + invoice history; **disable** cancel + plan switch. Payments → **Open billing portal**.
+5. Customer Portal: Dashboard → enable card update + invoice history; **disable** cancel + plan switch. Card updates stay in the portal (Payments → **Open billing portal**). Canceling and turning a membership back on happen on Payments, not in the portal. After it has fully ended, Payments offers **Subscribe again**.
 6. Before real charges: switch to live keys, live prices, and a live webhook.
 7. See `docs/ENROLLMENT-OPEN.md` and `docs/WWW-CUTOVER.md` for www marketing cutover.
 

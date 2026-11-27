@@ -7,7 +7,12 @@
    ================================================================== */
 
 import { alumniPriceId } from "../_shared/pricing.js";
-import { membershipCheckoutCancelPath, trialEndUnixForCheckout } from "../_shared/membership.js";
+import {
+  fetchStripeSubscription,
+  membershipCheckoutCancelPath,
+  openMembershipBlocksCheckout,
+  trialEndUnixForCheckout,
+} from "../_shared/membership.js";
 import {
   reusableStripeCustomerId,
   stripeReportedMissingCustomer,
@@ -27,12 +32,8 @@ export async function onRequestPost({ request, env }) {
     if (profile.tier === "alumni_19") {
       return json({ error: "already on save rate" }, 409);
     }
-    if (
-      profile.subscription_status === "trialing"
-      || profile.subscription_status === "active"
-    ) {
-      return json({ error: "already subscribed" }, 409);
-    }
+    const block = await membershipCheckoutBlock(env, profile);
+    if (block) return json({ error: block.error, code: block.code }, 409);
 
     const priceId = alumniPriceId(env);
     if (!priceId) {
@@ -94,6 +95,26 @@ export async function onRequestPost({ request, env }) {
     console.error("membership-checkout failed", e);
     return json({ error: "membership unavailable" }, 500);
   }
+}
+
+async function membershipCheckoutBlock(env, profile) {
+  const watched = new Set(["trialing", "active", "past_due"]);
+  const profileStatus = String(profile?.subscription_status || "");
+  const subId = String(profile?.stripe_subscription_id || "").trim();
+  if (!subId && !watched.has(profileStatus)) return null;
+
+  const stripeSub = subId ? await fetchStripeSubscription(env, subId) : null;
+  const code = openMembershipBlocksCheckout(profile, stripeSub);
+  if (code === "resume_available") {
+    return {
+      code,
+      error: "This membership is set to end. Turn it back on from Payments instead of starting a new one.",
+    };
+  }
+  if (code === "already_subscribed") {
+    return { code, error: "You’re already subscribed." };
+  }
+  return null;
 }
 
 function applyCheckoutCustomer(body, { customerId, email }) {
