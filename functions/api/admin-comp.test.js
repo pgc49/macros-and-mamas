@@ -3,11 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   contact: vi.fn(),
   welcome: vi.fn(),
+  cohort: vi.fn(),
 }));
 
 vi.mock("../_shared/supabaseEmail.js", () => ({
   loadUserContact: mocks.contact,
   sendWelcomeMamaEmail: mocks.welcome,
+}));
+
+vi.mock("../_shared/channels.js", () => ({
+  handlePaidEnrollmentChannel: mocks.cohort,
 }));
 
 import { onRequestPost } from "./admin-comp.js";
@@ -56,6 +61,7 @@ beforeEach(() => {
     profile: { id: CLIENT_ID, name: null },
   });
   mocks.welcome.mockResolvedValue({ ok: true });
+  mocks.cohort.mockResolvedValue({ label: "2026-08" });
 });
 
 describe("POST /api/admin-comp", () => {
@@ -106,7 +112,9 @@ describe("POST /api/admin-comp", () => {
       comp: true,
       paid: true,
       welcome: "sent",
+      cohort_label: "2026-08",
     });
+    expect(mocks.cohort).toHaveBeenCalledWith(env, CLIENT_ID);
 
     const patchCall = globalThis.fetch.mock.calls.find(([, options]) => options?.method === "PATCH");
     expect(JSON.parse(patchCall[1].body)).toEqual({ comp: true, paid: true });
@@ -150,10 +158,12 @@ describe("POST /api/admin-comp", () => {
       comp: false,
       paid: true,
       welcome: "skipped",
+      cohort_label: null,
     });
     const patchCall = globalThis.fetch.mock.calls.find(([, options]) => options?.method === "PATCH");
     expect(JSON.parse(patchCall[1].body)).toEqual({ comp: false });
     expect(mocks.welcome).not.toHaveBeenCalled();
+    expect(mocks.cohort).not.toHaveBeenCalled();
   });
 
   it("keeps the seat when the welcome was already sent", async () => {
@@ -169,6 +179,8 @@ describe("POST /api/admin-comp", () => {
       comp: true,
       paid: true,
       welcome: "already_sent",
+      cohort_label: "2026-08",
     });
+    expect(mocks.cohort).toHaveBeenCalledWith(env, CLIENT_ID);
   });
 });
